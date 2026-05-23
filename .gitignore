@@ -1,0 +1,40 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Godot
+.godot/
+.import/
+export.cfg
+export_presets.cfg
+*.translation
+*.import
+
+# gdext built dylibs (built on demand)
+/game/addons/anabios/*.dylib
+/game/addons/anabios/*.so
+/game/addons/anabios/*.dll
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Brainstorm working files
+.superpowers/
+
+# Local runs
+/runs/
+*.codex.db
+*.codex.db-wal
+*.codex.db-shm
+
+# Profiling artifacts
+*.flamegraph.svg
+trace-*.json
