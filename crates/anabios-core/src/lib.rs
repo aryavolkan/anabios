@@ -8,6 +8,7 @@ pub mod agent;
 pub mod behavior;
 pub mod biome;
 pub mod genome;
+pub mod integrate;
 pub mod rng;
 pub mod scenario;
 pub mod sense;
