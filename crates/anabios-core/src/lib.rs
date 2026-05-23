@@ -22,6 +22,11 @@ pub mod world;
 #[allow(dead_code)]
 mod prelude;
 
+#[doc(hidden)]
+pub mod prelude_test {
+    pub use glam::Vec2;
+}
+
 pub use agent::AgentId;
 pub use genome::{Genome, GenomeSlot};
 pub use scenario::Scenario;
