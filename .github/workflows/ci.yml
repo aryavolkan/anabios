@@ -8,6 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
+  RUSTDOCFLAGS: "-D warnings"
 
 jobs:
   rust:
@@ -27,10 +28,16 @@ jobs:
         run: cargo fmt --all --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: doc
+        run: cargo doc --workspace --no-deps --document-private-items
       - name: test (lib + unit)
         run: cargo test --workspace --lib
       - name: test (integration)
         run: cargo test --workspace --tests
+      - name: test (doc tests)
+        run: cargo test --workspace --doc
+      - name: bench compile check
+        run: cargo bench --workspace --no-run
 
   determinism:
     name: determinism smoke
