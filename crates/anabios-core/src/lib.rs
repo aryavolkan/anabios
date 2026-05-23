@@ -30,6 +30,7 @@ pub mod prelude_test {
 }
 
 pub use agent::AgentId;
+pub use agent::{LineageId, SpeciesId, LINEAGE_NONE};
 pub use genome::{Genome, GenomeSlot};
 pub use scenario::Scenario;
 pub use world::World;
