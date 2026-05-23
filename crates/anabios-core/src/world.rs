@@ -2,9 +2,10 @@
 //! the RNG, biome field, agent buffers, spatial hash, and tick counter.
 //! Nothing outside this struct holds simulation state.
 
+use bitvec::vec::BitVec;
 use serde::{Deserialize, Serialize};
 
-use crate::agent::{AgentBuffers, AgentId};
+use crate::agent::{AgentBuffers, AgentId, LineageId, LINEAGE_NONE};
 use crate::biome::{BiomeField, WORLD_SIZE};
 use crate::genome::Genome;
 use crate::prelude::Vec2;
@@ -19,12 +20,20 @@ pub struct World {
     pub rng: Rng,
     pub biome: BiomeField,
     pub agents: AgentBuffers,
+    /// Next lineage id to allocate. Monotonically increasing.
+    /// Lineage id 0 is reserved as `LINEAGE_NONE` (no parent).
+    pub next_lineage_id: LineageId,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
     pub desired_velocity: Vec<crate::prelude::Vec2>,
+    /// Per-agent BitVec marking who has already mated this tick.
+    /// Cleared at the start of `reproduce_all`.
+    // allow: filled by Task 6
+    #[serde(skip)]
+    pub reproduced_this_tick: BitVec,
 }
 
 impl World {
@@ -37,15 +46,31 @@ impl World {
             rng: Rng::from_seed(seed),
             biome: BiomeField::generate(seed),
             agents: AgentBuffers::new(),
+            // Start at 1 — id 0 is reserved as LINEAGE_NONE for founder parents.
+            next_lineage_id: 1,
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_velocity: Vec::new(),
+            reproduced_this_tick: BitVec::new(),
         }
     }
 
-    /// Convenience: spawn an agent with starting energy at the given position.
+    /// Allocate a fresh, globally-unique lineage id. Never reuses values.
+    #[inline]
+    pub fn next_lineage(&mut self) -> LineageId {
+        let id = self.next_lineage_id;
+        self.next_lineage_id = self
+            .next_lineage_id
+            .checked_add(1)
+            .expect("lineage id overflow: 2^64 births is implausible");
+        id
+    }
+
+    /// Spawn a founder agent (no modelled parents) into the world. Lineage
+    /// id is allocated here; species id is 0 (the founder species).
     pub fn spawn_agent(&mut self, position: Vec2, genome: Genome) -> AgentId {
-        self.agents.spawn(position, genome)
+        let lineage = self.next_lineage();
+        self.agents.spawn(position, genome, lineage, [LINEAGE_NONE; 2], 0)
     }
 
     /// World dimensions (for callers that want the constant without
@@ -77,6 +102,9 @@ impl World {
         }
         if self.desired_velocity.len() < cap {
             self.desired_velocity.resize(cap, crate::prelude::Vec2::ZERO);
+        }
+        if self.reproduced_this_tick.len() < cap {
+            self.reproduced_this_tick.resize(cap, false);
         }
     }
 }
