@@ -20,5 +20,5 @@ mod prelude;
 
 pub use agent::AgentId;
 pub use genome::{Genome, GenomeSlot};
-// TODO(task-9): pub use world::World;
+pub use world::World;
 // TODO(task-17): pub use scenario::Scenario;
