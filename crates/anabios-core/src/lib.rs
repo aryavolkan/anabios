@@ -17,6 +17,7 @@ pub mod scenario;
 pub mod sense;
 pub mod snapshot;
 pub mod spatial;
+pub mod species;
 pub mod tick;
 pub mod world;
 

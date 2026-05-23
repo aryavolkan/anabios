@@ -23,6 +23,16 @@ pub struct World {
     /// Next lineage id to allocate. Monotonically increasing.
     /// Lineage id 0 is reserved as `LINEAGE_NONE` (no parent).
     pub next_lineage_id: LineageId,
+    /// Per-species mean genome. Indexed by `SpeciesId`. Empty entries
+    /// (extinct species) are kept in place so existing ids stay stable;
+    /// `species_member_counts[id] == 0` marks them.
+    pub species_centroids: Vec<crate::genome::Genome>,
+    pub species_member_counts: Vec<u32>,
+    /// Parent species id for each species. `None` for founder species
+    /// (initially only species 0). Indexed by `SpeciesId`.
+    pub species_parents: Vec<Option<u32>>,
+    /// Next species id to allocate.
+    pub next_species_id: u32,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     #[serde(skip)]
@@ -48,6 +58,12 @@ impl World {
             agents: AgentBuffers::new(),
             // Start at 1 — id 0 is reserved as LINEAGE_NONE for founder parents.
             next_lineage_id: 1,
+            // Species 0 is the founder; centroid will be initialized by
+            // the first call to `species_step` once agents exist.
+            species_centroids: vec![Genome::neutral()],
+            species_member_counts: vec![0],
+            species_parents: vec![None],
+            next_species_id: 1,
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_velocity: Vec::new(),
