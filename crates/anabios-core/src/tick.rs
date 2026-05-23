@@ -30,10 +30,14 @@ pub fn step(world: &mut World) {
     // Stage 5: interact (feeding).
     interact_all(&mut world.agents, &mut world.biome);
 
-    // Stage 6: age + starve.
+    // Stage 6: reproduce. Mutates the alive set; do not rely on `cap` after
+    // this point.
+    crate::reproduce::reproduce_all(world);
+
+    // Stage 7: age + starve.
     age_and_starve(&mut world.agents);
 
-    // Stage 7: periodic biome regrowth.
+    // Stage 8: periodic biome regrowth.
     if world.tick.is_multiple_of(BIOME_STEP_INTERVAL) {
         world.biome.regrow_step();
     }
