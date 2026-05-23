@@ -21,6 +21,11 @@ pub const SPAWN_ENERGY: f32 = 50.0;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AgentBuffers {
     pub position: Vec<Vec2>,
+    /// Most-recently-applied velocity. Recorded by the integrate stage but
+    /// not yet read by any sensor. Reserved for M3 correlated-wander
+    /// behavior, which will read this as `last_velocity` to bias new
+    /// directions toward recent motion. Included in the persistent
+    /// snapshot to keep golden hashes stable across that change.
     pub velocity: Vec<Vec2>,
     pub energy: Vec<f32>,
     pub age: Vec<u32>,
