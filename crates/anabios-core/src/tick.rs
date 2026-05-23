@@ -49,7 +49,8 @@ fn decide_all(world: &mut World) {
         let genome = world.agents.genome[i];
         let sensor = world.sensors[i];
         let energy = world.agents.energy[i];
-        world.desired_velocity[i] = decide(&genome, &sensor, energy, &mut world.rng);
+        let own_species = world.agents.species_id[i];
+        world.desired_velocity[i] = decide(&genome, &sensor, energy, own_species, &mut world.rng);
     }
     // Dead slots keep their old velocities; they're never read because
     // `integrate_all` only iterates alive ids.
