@@ -119,6 +119,36 @@ impl BiomeField {
         let (col, row) = Self::cell_coords(pos);
         self.at(col, row)
     }
+
+    /// Apply logistic regrowth: `b += r * b * (1 - b / K)` clamped to `[0, K]`.
+    /// Empty cells stay empty (no spontaneous regeneration) — recolonization
+    /// requires neighbour cells with biomass and is added in M3.
+    pub fn regrow_step(&mut self) {
+        for cell in self.cells.iter_mut() {
+            let capacity = cell.terrain.carrying_capacity();
+            if capacity <= 0.0 || cell.plant_biomass <= 0.0 {
+                continue;
+            }
+            let r = cell.terrain.regrowth_rate();
+            let b = cell.plant_biomass;
+            let next = b + r * b * (1.0 - b / capacity);
+            cell.plant_biomass = next.clamp(0.0, capacity);
+        }
+    }
+
+    /// Consume up to `desired` biomass from the cell containing `pos`,
+    /// returning how much was actually consumed. The biome's biomass is
+    /// reduced by the same amount.
+    pub fn graze(&mut self, pos: Vec2, desired: f32) -> f32 {
+        if desired <= 0.0 {
+            return 0.0;
+        }
+        let (col, row) = Self::cell_coords(pos);
+        let cell = self.at_mut(col, row);
+        let taken = desired.min(cell.plant_biomass);
+        cell.plant_biomass -= taken;
+        taken
+    }
 }
 
 fn elevation_to_terrain(n: f32) -> TerrainType {
@@ -218,5 +248,89 @@ mod tests {
         for cell in &b.cells {
             assert!((cell.plant_biomass - cell.terrain.carrying_capacity()).abs() < 1e-6);
         }
+    }
+
+    #[test]
+    fn regrow_increases_partial_biomass_toward_capacity() {
+        let mut b = BiomeField::generate(13);
+        // Drain every grass cell to 1.0 biomass.
+        for cell in b.cells.iter_mut() {
+            if cell.terrain == TerrainType::Grass {
+                cell.plant_biomass = 1.0;
+            }
+        }
+        let before_total: f32 = b
+            .cells
+            .iter()
+            .filter(|c| c.terrain == TerrainType::Grass)
+            .map(|c| c.plant_biomass)
+            .sum();
+        for _ in 0..50 {
+            b.regrow_step();
+        }
+        let after_total: f32 = b
+            .cells
+            .iter()
+            .filter(|c| c.terrain == TerrainType::Grass)
+            .map(|c| c.plant_biomass)
+            .sum();
+        assert!(after_total > before_total, "biomass should grow: {before_total} -> {after_total}");
+    }
+
+    #[test]
+    fn regrow_does_not_exceed_carrying_capacity() {
+        let mut b = BiomeField::generate(13);
+        for _ in 0..1000 {
+            b.regrow_step();
+        }
+        for cell in &b.cells {
+            let cap = cell.terrain.carrying_capacity();
+            assert!(
+                cell.plant_biomass <= cap + 1e-4,
+                "biomass {} > cap {}",
+                cell.plant_biomass,
+                cap
+            );
+        }
+    }
+
+    #[test]
+    fn regrow_leaves_dead_cells_dead() {
+        let mut b = BiomeField::generate(13);
+        for cell in b.cells.iter_mut() {
+            if cell.terrain == TerrainType::Grass {
+                cell.plant_biomass = 0.0;
+            }
+        }
+        for _ in 0..100 {
+            b.regrow_step();
+        }
+        for cell in &b.cells {
+            if cell.terrain == TerrainType::Grass {
+                assert_eq!(cell.plant_biomass, 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn graze_reduces_biomass_and_returns_taken_amount() {
+        let mut b = BiomeField::generate(31);
+        // Find a grass cell so we know biomass > 0.
+        let mut target = Vec2::ZERO;
+        'outer: for row in 0..BIOME_RES {
+            for col in 0..BIOME_RES {
+                if b.at(col, row).terrain == TerrainType::Grass {
+                    target =
+                        Vec2::new((col as f32 + 0.5) * CELL_SIZE, (row as f32 + 0.5) * CELL_SIZE);
+                    break 'outer;
+                }
+            }
+        }
+        let before = b.sample(target).plant_biomass;
+        assert!(before > 0.0, "expected biomass at grass cell");
+        let taken = b.graze(target, 2.0);
+        assert!(taken > 0.0 && taken <= 2.0);
+        let after = b.sample(target).plant_biomass;
+        assert!((before - after - taken).abs() < 1e-5);
     }
 }
