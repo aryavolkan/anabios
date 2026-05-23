@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+members = ["crates/anabios-core", "crates/anabios-headless"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/aryasen/anabios"
+
+[workspace.dependencies]
+glam = { version = "0.27", features = ["serde"] }
+rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
+rand_xoshiro = { version = "0.6", features = ["serde1"] }
+serde = { version = "1", features = ["derive"] }
+bincode = "1.3"
+smallvec = { version = "1.13", features = ["serde", "const_generics"] }
+bitvec = { version = "1", features = ["serde"] }
+rayon = "1.10"
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+
+[workspace.dependencies.proptest]
+version = "1.4"
+
+[workspace.dependencies.criterion]
+version = "0.5"
+features = ["html_reports"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+opt-level = 3
+
+[profile.bench]
+inherits = "release"
+debug = true
