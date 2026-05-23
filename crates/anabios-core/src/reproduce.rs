@@ -1,10 +1,16 @@
 //! Reproduction stage.
 //!
-//! Two same-species agents in close proximity (≤ MATING_RANGE) with energy
+//! Two same-species agents in close proximity (≤ `MATING_RANGE`) with energy
 //! above `reproduction_threshold * SPAWN_ENERGY * 1.5` may produce one
-//! offspring per tick. Each parent pays `OFFSPRING_INVESTMENT * SPAWN_ENERGY
-//! / 2` energy; the offspring is seeded with `SPAWN_ENERGY` from the world.
-//! (Energy is approximately conserved within the family-pair exchange.)
+//! offspring per tick. Each parent pays `PARENT_ENERGY_COST_FRAC *
+//! SPAWN_ENERGY` energy; the offspring is seeded with `SPAWN_ENERGY` energy.
+//! The fraction is tuned to be **energy-conserving** within the family-pair
+//! exchange (parents collectively pay exactly the offspring's spawn energy).
+//!
+//! Reproduction is hard-capped at `MAX_POPULATION` agents to prevent runaway
+//! growth in over-fertile scenarios; this is a coarse backstop, not a
+//! carrying-capacity model (a proper Lotka-Volterra equilibrium is left to
+//! M5 codex tuning).
 
 use crate::agent::{AgentBuffers, SPAWN_ENERGY};
 use crate::genome::{Genome, GenomeSlot};
@@ -15,8 +21,13 @@ use crate::world::World;
 /// Maximum distance between two parents at the moment of mating, in world units.
 pub const MATING_RANGE: f32 = 2.0;
 
-/// Fraction of `SPAWN_ENERGY` that each parent pays to produce an offspring.
-pub const PARENT_ENERGY_COST_FRAC: f32 = 0.25;
+/// Fraction of `SPAWN_ENERGY` each parent pays to produce an offspring.
+/// 0.5 means parents collectively pay `SPAWN_ENERGY` total (energy-conserving).
+pub const PARENT_ENERGY_COST_FRAC: f32 = 0.5;
+
+/// Hard upper bound on alive agents. Reproduction skips above this cap.
+/// Sized to the simulation perf budget (see bench `tick_bench`).
+pub const MAX_POPULATION: u32 = 2_000;
 
 /// Run the reproduce stage. Each alive agent at most mates once per tick.
 /// Order: ascending agent id. Each agent A checks its same-cell neighbours
@@ -36,6 +47,11 @@ pub fn reproduce_all(world: &mut World) {
     let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
 
     for &a_id in &alive_ids {
+        if world.agents.live_count() >= MAX_POPULATION {
+            // Backstop: stop producing offspring above the cap. Iteration
+            // order is deterministic (ascending id), so the cutoff is too.
+            break;
+        }
         let i = a_id as usize;
         if world.reproduced_this_tick[i] {
             continue;
