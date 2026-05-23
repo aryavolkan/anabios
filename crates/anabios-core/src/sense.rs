@@ -12,8 +12,12 @@ use crate::genome::{Genome, GenomeSlot};
 use crate::prelude::{wrap_torus, Vec2};
 use crate::spatial::{torus_distance, UniformSpatialHash, PERCEPTION_MAX_RADIUS};
 
+/// Sentinel value in `SensorRegister.nearest_neighbor_species` meaning
+/// "no neighbor". `Default` initializes the field to this value.
+pub const NO_NEIGHBOR_SPECIES: u32 = u32::MAX;
+
 /// Per-agent sensor outputs computed each tick.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SensorRegister {
     /// Plant biomass in the agent's own cell.
     pub local_plant_biomass: f32,
@@ -26,6 +30,24 @@ pub struct SensorRegister {
     pub nearest_neighbor_dir: Vec2,
     /// Whether the agent currently has any alive neighbor in perception.
     pub has_neighbor: bool,
+    /// Species id of the nearest neighbor, or `u32::MAX` if no neighbor.
+    /// `u32::MAX` is chosen as a sentinel so the default-initialized state
+    /// of an uninhabited sensor register doesn't accidentally look like
+    /// "compatible with species 0".
+    pub nearest_neighbor_species: u32,
+}
+
+impl Default for SensorRegister {
+    fn default() -> Self {
+        Self {
+            local_plant_biomass: 0.0,
+            plant_direction: Vec2::ZERO,
+            nearest_neighbor_dist: f32::INFINITY,
+            nearest_neighbor_dir: Vec2::ZERO,
+            has_neighbor: false,
+            nearest_neighbor_species: NO_NEIGHBOR_SPECIES,
+        }
+    }
 }
 
 /// Effective perception radius for an agent given its genome.
@@ -59,6 +81,7 @@ pub fn sense_all(
         let mut nearest_dist = f32::INFINITY;
         let mut nearest_dir = Vec2::ZERO;
         let mut has_neighbor = false;
+        let mut nearest_species: u32 = NO_NEIGHBOR_SPECIES;
         spatial.query(pos, radius, |other_id| {
             if other_id == id {
                 return;
@@ -69,6 +92,7 @@ pub fn sense_all(
                 nearest_dist = d;
                 nearest_dir = torus_direction(pos, other_pos);
                 has_neighbor = true;
+                nearest_species = agents.species_id[other_id as usize];
             }
         });
 
@@ -78,6 +102,7 @@ pub fn sense_all(
             nearest_neighbor_dist: nearest_dist,
             nearest_neighbor_dir: nearest_dir,
             has_neighbor,
+            nearest_neighbor_species: nearest_species,
         };
     }
 }
@@ -179,6 +204,7 @@ mod tests {
         assert!(regs[0].has_neighbor);
         assert!((regs[0].nearest_neighbor_dist - 4.0).abs() < 1e-3);
         assert!(regs[0].nearest_neighbor_dir.x > 0.9);
+        assert_eq!(regs[0].nearest_neighbor_species, 0);
     }
 
     #[test]
@@ -190,5 +216,6 @@ mod tests {
         sense_all(&w.agents, &w.biome, &w.spatial, &mut regs);
         assert!(!regs[0].has_neighbor);
         assert_eq!(regs[0].nearest_neighbor_dist, f32::INFINITY);
+        assert_eq!(regs[0].nearest_neighbor_species, NO_NEIGHBOR_SPECIES);
     }
 }
