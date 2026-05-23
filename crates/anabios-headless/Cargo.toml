@@ -1,0 +1,17 @@
+[package]
+name = "anabios-headless"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Headless CLI runner for anabios scenarios."
+
+[dependencies]
+anabios-core = { path = "../anabios-core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+
+[[bin]]
+name = "anabios-headless"
+path = "src/main.rs"

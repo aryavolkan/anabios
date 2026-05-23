@@ -1,0 +1,15 @@
+name = "minimal"
+seed = 12345
+
+[[agents]]
+count = 200
+placement = { kind = "uniform" }
+
+[agents.traits]
+speed_max = 0.4
+perception_radius = 0.5
+size = 0.4
+diet_carnivory = 0.0
+basal_metabolism = 0.4
+lifespan_bias = 0.6
+reproduction_threshold = 0.5
