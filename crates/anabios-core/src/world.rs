@@ -21,6 +21,10 @@ pub struct World {
     pub agents: AgentBuffers,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
+    #[serde(skip)]
+    pub sensors: Vec<crate::sense::SensorRegister>,
+    #[serde(skip)]
+    pub desired_velocity: Vec<crate::prelude::Vec2>,
 }
 
 impl World {
@@ -34,6 +38,8 @@ impl World {
             biome: BiomeField::generate(seed),
             agents: AgentBuffers::new(),
             spatial: UniformSpatialHash::new(),
+            sensors: Vec::new(),
+            desired_velocity: Vec::new(),
         }
     }
 
@@ -61,6 +67,17 @@ impl World {
     /// Sum of plant biomass across the biome.
     pub fn plant_biomass_total(&self) -> f32 {
         self.biome.cells.iter().map(|c| c.plant_biomass).sum()
+    }
+
+    /// Resize scratch buffers to match agent capacity. Called by the tick.
+    pub(crate) fn resize_scratch(&mut self) {
+        let cap = self.agents.capacity();
+        if self.sensors.len() < cap {
+            self.sensors.resize(cap, crate::sense::SensorRegister::default());
+        }
+        if self.desired_velocity.len() < cap {
+            self.desired_velocity.resize(cap, crate::prelude::Vec2::ZERO);
+        }
     }
 }
 
