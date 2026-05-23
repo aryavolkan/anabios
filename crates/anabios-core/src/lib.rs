@@ -10,6 +10,7 @@ pub mod biome;
 pub mod genome;
 pub mod rng;
 pub mod scenario;
+pub mod sense;
 pub mod snapshot;
 pub mod spatial;
 pub mod tick;
