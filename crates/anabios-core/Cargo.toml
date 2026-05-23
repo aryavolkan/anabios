@@ -23,3 +23,7 @@ toml = { workspace = true }
 proptest = { workspace = true }
 criterion = { workspace = true }
 anyhow = { workspace = true }
+
+[[bench]]
+name = "tick_bench"
+harness = false
