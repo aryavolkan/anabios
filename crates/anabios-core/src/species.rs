@@ -74,6 +74,17 @@ pub fn species_step(world: &mut World) {
             world.remove_from_species(cur_species as u32);
             world.add_to_species(new_id);
             world.agents.species_id[i] = new_id;
+
+            // Emit a SpeciationEvent to the codex. `value` carries the
+            // parent species id so consumers can rebuild the phylogeny
+            // from the event stream alone.
+            let tick = world.tick;
+            world.codex.push_event(crate::codex::CodexEvent {
+                event_type: crate::codex::EventType::SpeciationEvent,
+                tick,
+                species_id: new_id,
+                value: cur_species as f32,
+            });
         }
     }
 

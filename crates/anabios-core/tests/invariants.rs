@@ -189,6 +189,24 @@ proptest! {
                 "agent {id} program length {len}");
         }
     }
+
+    /// All codex events reference valid species ids (or the global sentinel).
+    #[test]
+    fn codex_events_reference_valid_species(
+        seed in 0u64..1_000,
+        ticks in 0u64..500,
+        count in 1usize..30,
+    ) {
+        let mut w = build_world(seed, count);
+        for _ in 0..ticks {
+            step(&mut w);
+        }
+        let max_id = w.species_centroids.len() as u32;
+        for ev in &w.codex.events {
+            prop_assert!(ev.species_id == u32::MAX || ev.species_id < max_id,
+                "event references invalid species {}", ev.species_id);
+        }
+    }
 }
 
 fn combined_energy(w: &World) -> f32 {
