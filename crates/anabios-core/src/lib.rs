@@ -11,11 +11,14 @@ pub mod biome;
 pub mod genome;
 pub mod integrate;
 pub mod interact;
+pub mod mathf;
+pub mod reproduce;
 pub mod rng;
 pub mod scenario;
 pub mod sense;
 pub mod snapshot;
 pub mod spatial;
+pub mod species;
 pub mod tick;
 pub mod world;
 
@@ -28,6 +31,7 @@ pub mod prelude_test {
 }
 
 pub use agent::AgentId;
+pub use agent::{LineageId, SpeciesId, LINEAGE_NONE};
 pub use genome::{Genome, GenomeSlot};
 pub use scenario::Scenario;
 pub use world::World;

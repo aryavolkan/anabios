@@ -1,0 +1,37 @@
+name = "divergent"
+seed = 4242
+
+# Population A: low-speed, low-aggression, low-perception herbivores
+# clustered near the world origin.
+[[agents]]
+count = 60
+[agents.placement]
+kind = "cluster"
+center_x = 100.0
+center_y = 100.0
+radius = 30.0
+[agents.traits]
+speed_max = 0.1
+perception_radius = 0.1
+size = 0.2
+diet_carnivory = 0.0
+basal_metabolism = 0.2
+lifespan_bias = 0.7
+reproduction_threshold = 0.4
+
+# Population B: high-speed, high-perception herbivores clustered far away.
+[[agents]]
+count = 60
+[agents.placement]
+kind = "cluster"
+center_x = 900.0
+center_y = 900.0
+radius = 30.0
+[agents.traits]
+speed_max = 0.95
+perception_radius = 0.95
+size = 0.8
+diet_carnivory = 0.0
+basal_metabolism = 0.8
+lifespan_bias = 0.7
+reproduction_threshold = 0.4

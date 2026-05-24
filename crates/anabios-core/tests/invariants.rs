@@ -74,6 +74,67 @@ proptest! {
         sorted.dedup();
         prop_assert_eq!(alive.len(), sorted.len());
     }
+
+    /// Every alive agent has a non-zero lineage_id (zero is reserved as
+    /// LINEAGE_NONE for "no parent"). Newborns get fresh ids from
+    /// `World.next_lineage()`.
+    #[test]
+    fn alive_agents_have_nonzero_lineage_id(
+        seed in 0u64..1_000,
+        ticks in 0u64..500,
+        count in 1usize..30,
+    ) {
+        let mut w = build_world(seed, count);
+        for _ in 0..ticks {
+            step(&mut w);
+        }
+        for id in w.agents.iter_alive() {
+            let lin = w.agents.lineage_id[id as usize];
+            prop_assert_ne!(lin, anabios_core::agent::LINEAGE_NONE,
+                "agent {} has LINEAGE_NONE", id);
+        }
+    }
+
+    /// Every alive agent's species_id refers to a slot in the species table.
+    /// (Both empty and populated species are valid; out-of-range ids are not.)
+    #[test]
+    fn agent_species_ids_are_valid(
+        seed in 0u64..1_000,
+        ticks in 0u64..500,
+        count in 1usize..30,
+    ) {
+        let mut w = build_world(seed, count);
+        for _ in 0..ticks {
+            step(&mut w);
+        }
+        let max_id = w.species_centroids.len() as u32;
+        for id in w.agents.iter_alive() {
+            let sid = w.agents.species_id[id as usize];
+            prop_assert!(sid < max_id,
+                "agent {id} has species_id {sid} but table has {max_id}");
+        }
+    }
+
+    /// Every non-founder species has a parent recorded in the phylogeny.
+    /// Species 0 is the founder.
+    #[test]
+    fn non_founder_species_have_parents(
+        seed in 0u64..1_000,
+        ticks in 0u64..500,
+        count in 1usize..30,
+    ) {
+        let mut w = build_world(seed, count);
+        for _ in 0..ticks {
+            step(&mut w);
+        }
+        for (sid, parent) in w.species_parents.iter().enumerate() {
+            if sid == 0 {
+                prop_assert_eq!(*parent, None, "species 0 should have no parent");
+            } else {
+                prop_assert!(parent.is_some(), "species {sid} has no recorded parent");
+            }
+        }
+    }
 }
 
 fn combined_energy(w: &World) -> f32 {

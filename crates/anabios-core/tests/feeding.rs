@@ -22,7 +22,7 @@ fn population_persists_for_500_ticks() {
 
     let final_alive = world.agents.live_count();
     let final_biomass = world.plant_biomass_total();
-    // We expect attrition, but not extinction.
+    // Population must persist (M2 dynamic: reproduction sustains the pop).
     assert!(
         final_alive > 0,
         "population went extinct in 500 ticks: {} -> {}",

@@ -2,9 +2,10 @@
 //! the RNG, biome field, agent buffers, spatial hash, and tick counter.
 //! Nothing outside this struct holds simulation state.
 
+use bitvec::vec::BitVec;
 use serde::{Deserialize, Serialize};
 
-use crate::agent::{AgentBuffers, AgentId};
+use crate::agent::{AgentBuffers, AgentId, LineageId, LINEAGE_NONE};
 use crate::biome::{BiomeField, WORLD_SIZE};
 use crate::genome::Genome;
 use crate::prelude::Vec2;
@@ -19,12 +20,36 @@ pub struct World {
     pub rng: Rng,
     pub biome: BiomeField,
     pub agents: AgentBuffers,
+    /// Next lineage id to allocate. Monotonically increasing.
+    /// Lineage id 0 is reserved as `LINEAGE_NONE` (no parent).
+    pub next_lineage_id: LineageId,
+    /// Per-species mean genome. Indexed by `SpeciesId`. Empty entries
+    /// (extinct species) are kept in place so existing ids stay stable;
+    /// `species_member_counts[id] == 0` marks them.
+    pub species_centroids: Vec<crate::genome::Genome>,
+    /// **Only authoritative immediately after `species::species_step` has
+    /// run.** Between any `agents.spawn` / `agents.kill` and the next
+    /// `species_step` (which recomputes from `iter_alive`), these counts
+    /// may be stale. M3 will track counts incrementally on spawn/kill;
+    /// until then, do not read this field from gameplay code outside of
+    /// `species_step` itself.
+    pub species_member_counts: Vec<u32>,
+    /// Parent species id for each species. `None` for founder species
+    /// (initially only species 0). Indexed by `SpeciesId`.
+    pub species_parents: Vec<Option<u32>>,
+    /// Next species id to allocate.
+    pub next_species_id: u32,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
     pub desired_velocity: Vec<crate::prelude::Vec2>,
+    /// Per-agent BitVec marking who has already mated this tick.
+    /// Cleared at the start of `reproduce_all`.
+    // allow: filled by Task 6
+    #[serde(skip)]
+    pub reproduced_this_tick: BitVec,
 }
 
 impl World {
@@ -37,15 +62,37 @@ impl World {
             rng: Rng::from_seed(seed),
             biome: BiomeField::generate(seed),
             agents: AgentBuffers::new(),
+            // Start at 1 — id 0 is reserved as LINEAGE_NONE for founder parents.
+            next_lineage_id: 1,
+            // Species 0 is the founder; centroid will be initialized by
+            // the first call to `species_step` once agents exist.
+            species_centroids: vec![Genome::neutral()],
+            species_member_counts: vec![0],
+            species_parents: vec![None],
+            next_species_id: 1,
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_velocity: Vec::new(),
+            reproduced_this_tick: BitVec::new(),
         }
     }
 
-    /// Convenience: spawn an agent with starting energy at the given position.
+    /// Allocate a fresh, globally-unique lineage id. Never reuses values.
+    #[inline]
+    pub fn next_lineage(&mut self) -> LineageId {
+        let id = self.next_lineage_id;
+        self.next_lineage_id = self
+            .next_lineage_id
+            .checked_add(1)
+            .expect("lineage id overflow: 2^64 births is implausible");
+        id
+    }
+
+    /// Spawn a founder agent (no modelled parents) into the world. Lineage
+    /// id is allocated here; species id is 0 (the founder species).
     pub fn spawn_agent(&mut self, position: Vec2, genome: Genome) -> AgentId {
-        self.agents.spawn(position, genome)
+        let lineage = self.next_lineage();
+        self.agents.spawn(position, genome, lineage, [LINEAGE_NONE; 2], 0)
     }
 
     /// World dimensions (for callers that want the constant without
@@ -77,6 +124,9 @@ impl World {
         }
         if self.desired_velocity.len() < cap {
             self.desired_velocity.resize(cap, crate::prelude::Vec2::ZERO);
+        }
+        if self.reproduced_this_tick.len() < cap {
+            self.reproduced_this_tick.resize(cap, false);
         }
     }
 }

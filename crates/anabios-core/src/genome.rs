@@ -188,6 +188,21 @@ impl Genome {
             self.0[i] = (self.0[i] + delta).clamp(0.0, 1.0);
         }
     }
+
+    /// Uniform crossover: each slot is independently inherited from one of
+    /// the two parents with equal probability. The RNG is consumed in slot
+    /// order so the output is deterministic given the seed.
+    pub fn crossover(a: &Genome, b: &Genome, rng: &mut Rng) -> Genome {
+        let mut out = [0.0_f32; GENOME_LEN];
+        for (i, slot) in out.iter_mut().enumerate() {
+            // Bit-packed source select: one RNG draw, 32 binary decisions
+            // per draw. Cheaper than calling f32_unit 50 times.
+            // Simplified for clarity: just use f32_unit each slot.
+            let from_a = rng.f32_unit() < 0.5;
+            *slot = if from_a { a.0[i] } else { b.0[i] };
+        }
+        Genome(out)
+    }
 }
 
 #[cfg(test)]
@@ -269,6 +284,56 @@ mod tests {
             for v in g.0.iter() {
                 assert!(*v >= 0.0 && *v <= 1.0);
             }
+        }
+    }
+
+    #[test]
+    fn crossover_with_identical_parents_yields_same_genome() {
+        let mut rng = Rng::from_seed(1);
+        let g = Genome::neutral();
+        let child = Genome::crossover(&g, &g, &mut rng);
+        assert_eq!(child, g);
+    }
+
+    #[test]
+    fn crossover_yields_per_slot_values_from_one_parent() {
+        let mut rng = Rng::from_seed(7);
+        let mut a = Genome::neutral();
+        let mut b = Genome::neutral();
+        for i in 0..GENOME_LEN {
+            a.0[i] = 0.1;
+            b.0[i] = 0.9;
+        }
+        let child = Genome::crossover(&a, &b, &mut rng);
+        for i in 0..GENOME_LEN {
+            let v = child.0[i];
+            assert!(v == 0.1 || v == 0.9, "slot {i} was {v}");
+        }
+    }
+
+    #[test]
+    fn crossover_is_deterministic() {
+        let a = Genome::neutral();
+        let mut b = Genome::neutral();
+        b.set(GenomeSlot::SpeedMax, 0.9);
+
+        let mut rng1 = Rng::from_seed(42);
+        let mut rng2 = Rng::from_seed(42);
+        let c1 = Genome::crossover(&a, &b, &mut rng1);
+        let c2 = Genome::crossover(&a, &b, &mut rng2);
+        assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn crossover_output_stays_in_unit_range() {
+        let mut rng = Rng::from_seed(99);
+        let mut a = Genome::neutral();
+        let mut b = Genome::neutral();
+        a.set(GenomeSlot::MutationRate, 1.0);
+        b.set(GenomeSlot::Aggression, 1.0);
+        let child = Genome::crossover(&a, &b, &mut rng);
+        for v in child.0.iter() {
+            assert!(*v >= 0.0 && *v <= 1.0);
         }
     }
 }

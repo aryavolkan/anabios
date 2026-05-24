@@ -18,6 +18,18 @@ pub const AGENT_NULL: AgentId = u32::MAX;
 /// Maximum starting energy for newly-spawned agents.
 pub const SPAWN_ENERGY: f32 = 50.0;
 
+/// Unique lineage identifier. Each agent gets a fresh value at birth; never
+/// reused even after death. Used for ancestry, kin recognition, and codex
+/// lineage-hall entries.
+pub type LineageId = u64;
+/// Stable species identifier. Initially every agent is species 0; speciation
+/// (M2) assigns new species ids over time.
+pub type SpeciesId = u32;
+
+/// Lineage id used for ancestors of seeded (founder) agents that have no
+/// modelled parent. Stored in `parent_ids` slots to mean "no parent".
+pub const LINEAGE_NONE: LineageId = 0;
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AgentBuffers {
     pub position: Vec<Vec2>,
@@ -30,6 +42,9 @@ pub struct AgentBuffers {
     pub energy: Vec<f32>,
     pub age: Vec<u32>,
     pub genome: Vec<Genome>,
+    pub lineage_id: Vec<LineageId>,
+    pub parent_ids: Vec<[LineageId; 2]>,
+    pub species_id: Vec<SpeciesId>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -60,9 +75,19 @@ impl AgentBuffers {
         i < self.alive.len() && self.alive[i]
     }
 
-    /// Spawn an agent at the given position with the given genome. Reuses a
-    /// dead slot if available, otherwise extends every buffer by one.
-    pub fn spawn(&mut self, position: Vec2, genome: Genome) -> AgentId {
+    /// Spawn an agent. Reuses a dead slot if available; otherwise extends
+    /// every buffer by one. `lineage_id` must be globally unique across the
+    /// world's lifetime (allocate via `World::next_lineage()`). `parent_ids`
+    /// = `[LINEAGE_NONE; 2]` for founders; otherwise the lineage ids of the
+    /// two parents.
+    pub fn spawn(
+        &mut self,
+        position: Vec2,
+        genome: Genome,
+        lineage_id: LineageId,
+        parent_ids: [LineageId; 2],
+        species_id: SpeciesId,
+    ) -> AgentId {
         let id = if let Some(id) = self.free_list.pop() {
             let i = id as usize;
             self.position[i] = position;
@@ -70,6 +95,9 @@ impl AgentBuffers {
             self.energy[i] = SPAWN_ENERGY;
             self.age[i] = 0;
             self.genome[i] = genome;
+            self.lineage_id[i] = lineage_id;
+            self.parent_ids[i] = parent_ids;
+            self.species_id[i] = species_id;
             self.alive.set(i, true);
             id
         } else {
@@ -79,6 +107,9 @@ impl AgentBuffers {
             self.energy.push(SPAWN_ENERGY);
             self.age.push(0);
             self.genome.push(genome);
+            self.lineage_id.push(lineage_id);
+            self.parent_ids.push(parent_ids);
+            self.species_id.push(species_id);
             self.alive.push(true);
             i as AgentId
         };
@@ -116,8 +147,8 @@ mod tests {
     #[test]
     fn spawn_increases_capacity_and_live_count() {
         let mut a = AgentBuffers::new();
-        let id0 = a.spawn(Vec2::new(1.0, 2.0), neutral());
-        let id1 = a.spawn(Vec2::new(3.0, 4.0), neutral());
+        let id0 = a.spawn(Vec2::new(1.0, 2.0), neutral(), 1, [LINEAGE_NONE; 2], 0);
+        let id1 = a.spawn(Vec2::new(3.0, 4.0), neutral(), 2, [LINEAGE_NONE; 2], 0);
         assert_eq!(id0, 0);
         assert_eq!(id1, 1);
         assert_eq!(a.capacity(), 2);
@@ -129,7 +160,7 @@ mod tests {
     #[test]
     fn kill_marks_slot_dead_and_decrements_live_count() {
         let mut a = AgentBuffers::new();
-        let id = a.spawn(Vec2::ZERO, neutral());
+        let id = a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0);
         a.kill(id);
         assert!(!a.is_alive(id));
         assert_eq!(a.live_count(), 0);
@@ -138,10 +169,10 @@ mod tests {
     #[test]
     fn spawn_after_kill_reuses_slot() {
         let mut a = AgentBuffers::new();
-        let id0 = a.spawn(Vec2::ZERO, neutral());
-        let id1 = a.spawn(Vec2::ZERO, neutral());
+        let id0 = a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0);
+        let id1 = a.spawn(Vec2::ZERO, neutral(), 2, [LINEAGE_NONE; 2], 0);
         a.kill(id0);
-        let id2 = a.spawn(Vec2::new(5.0, 6.0), neutral());
+        let id2 = a.spawn(Vec2::new(5.0, 6.0), neutral(), 3, [LINEAGE_NONE; 2], 0);
         assert_eq!(id2, id0, "slot 0 should have been reused");
         assert_eq!(a.live_count(), 2);
         assert!(a.is_alive(id1));
@@ -151,9 +182,9 @@ mod tests {
     #[test]
     fn iter_alive_skips_dead_slots() {
         let mut a = AgentBuffers::new();
-        let id0 = a.spawn(Vec2::ZERO, neutral());
-        let _id1 = a.spawn(Vec2::ZERO, neutral());
-        let id2 = a.spawn(Vec2::ZERO, neutral());
+        let id0 = a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0);
+        let _id1 = a.spawn(Vec2::ZERO, neutral(), 2, [LINEAGE_NONE; 2], 0);
+        let id2 = a.spawn(Vec2::ZERO, neutral(), 3, [LINEAGE_NONE; 2], 0);
         a.kill(id0);
         let alive: Vec<AgentId> = a.iter_alive().collect();
         assert_eq!(alive, vec![1, id2]);
@@ -162,7 +193,7 @@ mod tests {
     #[test]
     fn double_kill_is_a_noop() {
         let mut a = AgentBuffers::new();
-        let id = a.spawn(Vec2::ZERO, neutral());
+        let id = a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0);
         a.kill(id);
         a.kill(id);
         assert_eq!(a.live_count(), 0);

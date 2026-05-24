@@ -30,10 +30,19 @@ pub fn step(world: &mut World) {
     // Stage 5: interact (feeding).
     interact_all(&mut world.agents, &mut world.biome);
 
-    // Stage 6: age + starve.
+    // Stage 6: reproduce. Mutates the alive set; do not rely on `cap` after
+    // this point.
+    crate::reproduce::reproduce_all(world);
+
+    // Stage 7: age + starve.
     age_and_starve(&mut world.agents);
 
-    // Stage 7: periodic biome regrowth.
+    // Stage 8: periodic species clustering.
+    if world.tick.is_multiple_of(crate::species::SPECIES_STEP_INTERVAL) {
+        crate::species::species_step(world);
+    }
+
+    // Stage 9: periodic biome regrowth.
     if world.tick.is_multiple_of(BIOME_STEP_INTERVAL) {
         world.biome.regrow_step();
     }
@@ -49,7 +58,8 @@ fn decide_all(world: &mut World) {
         let genome = world.agents.genome[i];
         let sensor = world.sensors[i];
         let energy = world.agents.energy[i];
-        world.desired_velocity[i] = decide(&genome, &sensor, energy, &mut world.rng);
+        let own_species = world.agents.species_id[i];
+        world.desired_velocity[i] = decide(&genome, &sensor, energy, own_species, &mut world.rng);
     }
     // Dead slots keep their old velocities; they're never read because
     // `integrate_all` only iterates alive ids.
