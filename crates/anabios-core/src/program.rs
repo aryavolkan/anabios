@@ -168,11 +168,30 @@ impl Program {
 /// to a unit direction, so the magnitude of the components doesn't
 /// matter — only the sign / ratio.
 pub fn starter_grazer() -> Program {
+    // Strategy:
+    //   well_fed = energy > 30
+    //   move_x   = well_fed ? nearest_dir.x : plant_dir.x
+    //   move_y   = well_fed ? nearest_dir.y : plant_dir.y
+    //   mate_intent = energy > 35
+    //
+    // Stack order for IfThenElse: cond pushed first, then "then", then "else".
+    // IfThenElse pops in reverse: else, then, cond; result = cond > 0 ? then : else.
     Program::from_slice(&[
-        Node::SensePlantDirX,
+        // x axis
+        Node::SenseEnergy,
+        Node::ThresholdGt(30.0), // cond: well_fed
+        Node::SenseNearestDirX,  // then: mate-seek
+        Node::SensePlantDirX,    // else: forage
+        Node::IfThenElse,
         Node::MoveTowardX,
+        // y axis
+        Node::SenseEnergy,
+        Node::ThresholdGt(30.0),
+        Node::SenseNearestDirY,
         Node::SensePlantDirY,
+        Node::IfThenElse,
         Node::MoveTowardY,
+        // mate intent
         Node::SenseEnergy,
         Node::ThresholdGt(35.0),
         Node::Mate,
