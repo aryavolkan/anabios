@@ -90,7 +90,14 @@ impl World {
     /// id is allocated here; species id is 0 (the founder species).
     pub fn spawn_agent(&mut self, position: Vec2, genome: Genome) -> AgentId {
         let lineage = self.next_lineage();
-        let id = self.agents.spawn(position, genome, lineage, [LINEAGE_NONE; 2], 0);
+        let id = self.agents.spawn(
+            position,
+            genome,
+            lineage,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+        );
         self.add_to_species(0);
         id
     }

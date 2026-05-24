@@ -9,6 +9,7 @@ use bitvec::vec::BitVec;
 use serde::{Deserialize, Serialize};
 
 use crate::genome::Genome;
+use crate::module::ModuleList;
 use crate::prelude::Vec2;
 
 /// Stable agent identifier. `u32::MAX` is reserved as a null sentinel.
@@ -45,6 +46,7 @@ pub struct AgentBuffers {
     pub lineage_id: Vec<LineageId>,
     pub parent_ids: Vec<[LineageId; 2]>,
     pub species_id: Vec<SpeciesId>,
+    pub modules: Vec<ModuleList>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -87,6 +89,7 @@ impl AgentBuffers {
         lineage_id: LineageId,
         parent_ids: [LineageId; 2],
         species_id: SpeciesId,
+        modules: ModuleList,
     ) -> AgentId {
         let id = if let Some(id) = self.free_list.pop() {
             let i = id as usize;
@@ -98,6 +101,7 @@ impl AgentBuffers {
             self.lineage_id[i] = lineage_id;
             self.parent_ids[i] = parent_ids;
             self.species_id[i] = species_id;
+            self.modules[i] = modules;
             self.alive.set(i, true);
             id
         } else {
@@ -110,6 +114,7 @@ impl AgentBuffers {
             self.lineage_id.push(lineage_id);
             self.parent_ids.push(parent_ids);
             self.species_id.push(species_id);
+            self.modules.push(modules);
             self.alive.push(true);
             i as AgentId
         };
@@ -147,8 +152,22 @@ mod tests {
     #[test]
     fn spawn_increases_capacity_and_live_count() {
         let mut a = AgentBuffers::new();
-        let id0 = a.spawn(Vec2::new(1.0, 2.0), neutral(), 1, [LINEAGE_NONE; 2], 0);
-        let id1 = a.spawn(Vec2::new(3.0, 4.0), neutral(), 2, [LINEAGE_NONE; 2], 0);
+        let id0 = a.spawn(
+            Vec2::new(1.0, 2.0),
+            neutral(),
+            1,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+        );
+        let id1 = a.spawn(
+            Vec2::new(3.0, 4.0),
+            neutral(),
+            2,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+        );
         assert_eq!(id0, 0);
         assert_eq!(id1, 1);
         assert_eq!(a.capacity(), 2);
@@ -160,7 +179,8 @@ mod tests {
     #[test]
     fn kill_marks_slot_dead_and_decrements_live_count() {
         let mut a = AgentBuffers::new();
-        let id = a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0);
+        let id =
+            a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0, crate::module::starter_kit());
         a.kill(id);
         assert!(!a.is_alive(id));
         assert_eq!(a.live_count(), 0);
@@ -169,10 +189,19 @@ mod tests {
     #[test]
     fn spawn_after_kill_reuses_slot() {
         let mut a = AgentBuffers::new();
-        let id0 = a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0);
-        let id1 = a.spawn(Vec2::ZERO, neutral(), 2, [LINEAGE_NONE; 2], 0);
+        let id0 =
+            a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0, crate::module::starter_kit());
+        let id1 =
+            a.spawn(Vec2::ZERO, neutral(), 2, [LINEAGE_NONE; 2], 0, crate::module::starter_kit());
         a.kill(id0);
-        let id2 = a.spawn(Vec2::new(5.0, 6.0), neutral(), 3, [LINEAGE_NONE; 2], 0);
+        let id2 = a.spawn(
+            Vec2::new(5.0, 6.0),
+            neutral(),
+            3,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+        );
         assert_eq!(id2, id0, "slot 0 should have been reused");
         assert_eq!(a.live_count(), 2);
         assert!(a.is_alive(id1));
@@ -182,9 +211,12 @@ mod tests {
     #[test]
     fn iter_alive_skips_dead_slots() {
         let mut a = AgentBuffers::new();
-        let id0 = a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0);
-        let _id1 = a.spawn(Vec2::ZERO, neutral(), 2, [LINEAGE_NONE; 2], 0);
-        let id2 = a.spawn(Vec2::ZERO, neutral(), 3, [LINEAGE_NONE; 2], 0);
+        let id0 =
+            a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0, crate::module::starter_kit());
+        let _id1 =
+            a.spawn(Vec2::ZERO, neutral(), 2, [LINEAGE_NONE; 2], 0, crate::module::starter_kit());
+        let id2 =
+            a.spawn(Vec2::ZERO, neutral(), 3, [LINEAGE_NONE; 2], 0, crate::module::starter_kit());
         a.kill(id0);
         let alive: Vec<AgentId> = a.iter_alive().collect();
         assert_eq!(alive, vec![1, id2]);
@@ -193,7 +225,8 @@ mod tests {
     #[test]
     fn double_kill_is_a_noop() {
         let mut a = AgentBuffers::new();
-        let id = a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0);
+        let id =
+            a.spawn(Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0, crate::module::starter_kit());
         a.kill(id);
         a.kill(id);
         assert_eq!(a.live_count(), 0);

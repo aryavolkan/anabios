@@ -99,9 +99,16 @@ pub fn reproduce_all(world: &mut World) {
         // Spawn at midpoint of parents on the torus (account for wrap).
         let child_pos = midpoint_torus(a_pos, b_pos);
 
+        let child_modules = world.agents.modules[i].clone();
         let lineage = world.next_lineage();
-        let child_id =
-            world.agents.spawn(child_pos, child_genome, lineage, [a_lineage, b_lineage], a_species);
+        let child_id = world.agents.spawn(
+            child_pos,
+            child_genome,
+            lineage,
+            [a_lineage, b_lineage],
+            a_species,
+            child_modules,
+        );
         world.add_to_species(a_species);
 
         // Ensure the bitvec covers the new slot, mark the child as
