@@ -99,9 +99,21 @@ pub fn reproduce_all(world: &mut World) {
         // Spawn at midpoint of parents on the torus (account for wrap).
         let child_pos = midpoint_torus(a_pos, b_pos);
 
+        let a_modules = world.agents.modules[i].clone();
+        let b_modules = world.agents.modules[j].clone();
+        let child_modules =
+            crate::module::crossover_and_mutate(&a_modules, &b_modules, &mut world.rng);
+
         let lineage = world.next_lineage();
-        let child_id =
-            world.agents.spawn(child_pos, child_genome, lineage, [a_lineage, b_lineage], a_species);
+        let child_id = world.agents.spawn(
+            child_pos,
+            child_genome,
+            lineage,
+            [a_lineage, b_lineage],
+            a_species,
+            child_modules,
+        );
+        world.add_to_species(a_species);
 
         // Ensure the bitvec covers the new slot, mark the child as
         // "reproduced this tick" so they cannot immediately mate again.
@@ -115,6 +127,10 @@ pub fn reproduce_all(world: &mut World) {
 fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
     let i = id as usize;
     if !agents.is_alive(id) {
+        return false;
+    }
+    // Action gating: must have Reproductive module to mate.
+    if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Reproductive) {
         return false;
     }
     let threshold = SPAWN_ENERGY * agents.genome[i].get(GenomeSlot::ReproductionThreshold) * 1.5;
@@ -309,5 +325,26 @@ mod tests {
             }
         }
         assert!(found, "offspring with parent ids not found");
+    }
+
+    #[test]
+    fn agent_without_reproductive_does_not_mate() {
+        let mut w = World::new(13);
+        let pos = find_grass_cell_center(&w);
+        let id0 = w.spawn_agent(pos, fertile_genome());
+        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+
+        // Strip Reproductive from id0 only.
+        w.agents.modules[id0 as usize]
+            .retain(|m| !matches!(m, crate::module::Module::Reproductive { .. }));
+
+        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
+        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+
+        let before = w.agents.live_count();
+        reproduce_all(&mut w);
+        let after = w.agents.live_count();
+        assert_eq!(after, before, "missing Reproductive must block mating");
     }
 }

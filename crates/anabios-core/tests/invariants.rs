@@ -135,6 +135,42 @@ proptest! {
             }
         }
     }
+
+    /// Every alive agent has at least one module (the structural_mutate
+    /// operator preserves the "never empty" invariant).
+    #[test]
+    fn alive_agents_have_at_least_one_module(
+        seed in 0u64..1_000,
+        ticks in 0u64..500,
+        count in 1usize..30,
+    ) {
+        let mut w = build_world(seed, count);
+        for _ in 0..ticks {
+            step(&mut w);
+        }
+        for id in w.agents.iter_alive() {
+            let n = w.agents.modules[id as usize].len();
+            prop_assert!(n >= 1, "agent {id} has 0 modules");
+        }
+    }
+
+    /// Module lists never exceed MODULE_LIST_MAX.
+    #[test]
+    fn modules_respect_max_list_size(
+        seed in 0u64..1_000,
+        ticks in 0u64..500,
+        count in 1usize..30,
+    ) {
+        let mut w = build_world(seed, count);
+        for _ in 0..ticks {
+            step(&mut w);
+        }
+        for id in w.agents.iter_alive() {
+            let n = w.agents.modules[id as usize].len();
+            prop_assert!(n <= anabios_core::module::MODULE_LIST_MAX,
+                "agent {id} has {n} modules");
+        }
+    }
 }
 
 fn combined_energy(w: &World) -> f32 {

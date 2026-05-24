@@ -50,12 +50,18 @@ impl Default for SensorRegister {
     }
 }
 
-/// Effective perception radius for an agent given its genome.
-#[inline]
-pub fn perception_radius(genome: &Genome) -> f32 {
-    // Perception radius scales between 25% and 100% of the engine cap.
-    let frac = 0.25 + 0.75 * genome.get(GenomeSlot::PerceptionRadius);
-    PERCEPTION_MAX_RADIUS * frac
+/// Effective perception radius for an agent given its module list and
+/// genome. Combines the max Sensor radius with the genome's
+/// `PerceptionRadius` slot (the genome acts as a modulator on top of
+/// module capability). Capped at `PERCEPTION_MAX_RADIUS` for the
+/// spatial-hash one-ring guarantee.
+pub fn perception_radius(modules: &crate::module::ModuleList, genome: &Genome) -> f32 {
+    let sensor_radius = crate::module::effective_perception_radius(modules);
+    if sensor_radius <= 0.0 {
+        return 0.0;
+    }
+    let modulator = 0.25 + 0.75 * genome.get(GenomeSlot::PerceptionRadius);
+    (PERCEPTION_MAX_RADIUS * sensor_radius * modulator).min(PERCEPTION_MAX_RADIUS)
 }
 
 /// Run the sense stage. `registers[i]` is populated for every alive agent;
@@ -73,7 +79,11 @@ pub fn sense_all(
         let i = id as usize;
         let pos = agents.position[i];
         let genome = &agents.genome[i];
-        let radius = perception_radius(genome);
+        let radius = perception_radius(&agents.modules[i], genome);
+        if radius <= 0.0 {
+            registers[i] = SensorRegister::default();
+            continue;
+        }
 
         let local_cell = biome.sample(pos);
         let plant_direction = best_plant_direction(biome, pos, radius);
@@ -205,6 +215,19 @@ mod tests {
         assert!((regs[0].nearest_neighbor_dist - 4.0).abs() < 1e-3);
         assert!(regs[0].nearest_neighbor_dir.x > 0.9);
         assert_eq!(regs[0].nearest_neighbor_species, 0);
+    }
+
+    #[test]
+    fn agent_without_sensor_perceives_nothing() {
+        let mut w = World::new(1);
+        let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        w.agents.modules[id as usize]
+            .retain(|m| !matches!(m, crate::module::Module::Sensor { .. }));
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
+        sense_all(&w.agents, &w.biome, &w.spatial, &mut regs);
+        assert_eq!(regs[id as usize].local_plant_biomass, 0.0);
+        assert!(!regs[id as usize].has_neighbor);
     }
 
     #[test]

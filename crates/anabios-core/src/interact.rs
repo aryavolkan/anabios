@@ -12,19 +12,24 @@ pub const BITE_MAX: f32 = 0.5;
 pub const FOOD_ENERGY_PER_BIOMASS: f32 = 4.0;
 
 pub fn interact_all(agents: &mut AgentBuffers, biome: &mut BiomeField) {
-    // Iterate in ascending id order for determinism. Two agents in the same
-    // cell graze in id order, sharing the available biomass.
     let alive_ids: Vec<u32> = agents.iter_alive().collect();
     for id in alive_ids {
         let i = id as usize;
-        let pos = agents.position[i];
-        let genome = &agents.genome[i];
-        let herbivory = 1.0 - genome.get(GenomeSlot::DietCarnivory);
-        if herbivory <= 0.0 {
+
+        // Action gating: no Mouth → can't eat.
+        if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Mouth) {
             continue;
         }
-        let size = genome.get(GenomeSlot::Size).max(0.1);
-        let desired_bite = BITE_MAX * size * herbivory;
+
+        let pos = agents.position[i];
+        let bite_cap = crate::module::effective_bite_size(&agents.modules[i]);
+        let diet_carn = crate::module::effective_diet_carnivory(&agents.modules[i]);
+        let herbivory = (1.0 - diet_carn).clamp(0.0, 1.0);
+        if herbivory <= 0.0 || bite_cap <= 0.0 {
+            continue;
+        }
+        let size = agents.genome[i].get(GenomeSlot::Size).max(0.1);
+        let desired_bite = BITE_MAX * size * bite_cap * herbivory;
         let taken = biome.graze(pos, desired_bite);
         if taken > 0.0 {
             agents.energy[i] += taken * FOOD_ENERGY_PER_BIOMASS;
@@ -74,9 +79,26 @@ mod tests {
     fn obligate_carnivore_does_not_eat_plants() {
         let mut w = World::new(11);
         let pos = find_grass_cell_center(&w);
-        let mut genome = Genome::neutral();
-        genome.set(GenomeSlot::DietCarnivory, 1.0);
-        let id = w.spawn_agent(pos, genome);
+        let id = w.spawn_agent(pos, Genome::neutral());
+        // Replace Mouth with a pure carnivore.
+        for m in w.agents.modules[id as usize].iter_mut() {
+            if let crate::module::Module::Mouth { diet_affinity, .. } = m {
+                *diet_affinity = 1.0;
+            }
+        }
+        let energy_before = w.agents.energy[id as usize];
+        let biomass_before = w.biome.sample(pos).plant_biomass;
+        interact_all(&mut w.agents, &mut w.biome);
+        assert_eq!(w.agents.energy[id as usize], energy_before);
+        assert_eq!(w.biome.sample(pos).plant_biomass, biomass_before);
+    }
+
+    #[test]
+    fn agent_without_mouth_does_not_eat() {
+        let mut w = World::new(11);
+        let pos = find_grass_cell_center(&w);
+        let id = w.spawn_agent(pos, Genome::neutral());
+        w.agents.modules[id as usize].retain(|m| !matches!(m, crate::module::Module::Mouth { .. }));
         let energy_before = w.agents.energy[id as usize];
         let biomass_before = w.biome.sample(pos).plant_biomass;
         interact_all(&mut w.agents, &mut w.biome);

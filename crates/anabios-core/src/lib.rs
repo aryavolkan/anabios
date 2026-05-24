@@ -12,6 +12,7 @@ pub mod genome;
 pub mod integrate;
 pub mod interact;
 pub mod mathf;
+pub mod module;
 pub mod reproduce;
 pub mod rng;
 pub mod scenario;
@@ -33,5 +34,6 @@ pub mod prelude_test {
 pub use agent::AgentId;
 pub use agent::{LineageId, SpeciesId, LINEAGE_NONE};
 pub use genome::{Genome, GenomeSlot};
+pub use module::{Module, ModuleType};
 pub use scenario::Scenario;
 pub use world::World;

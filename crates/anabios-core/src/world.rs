@@ -27,12 +27,10 @@ pub struct World {
     /// (extinct species) are kept in place so existing ids stay stable;
     /// `species_member_counts[id] == 0` marks them.
     pub species_centroids: Vec<crate::genome::Genome>,
-    /// **Only authoritative immediately after `species::species_step` has
-    /// run.** Between any `agents.spawn` / `agents.kill` and the next
-    /// `species_step` (which recomputes from `iter_alive`), these counts
-    /// may be stale. M3 will track counts incrementally on spawn/kill;
-    /// until then, do not read this field from gameplay code outside of
-    /// `species_step` itself.
+    /// Per-species live member count. Tracked incrementally by
+    /// `World::add_to_species` / `remove_from_species` on every spawn,
+    /// kill, and `species_step` reassignment, so it is authoritative
+    /// outside of `species_step` itself.
     pub species_member_counts: Vec<u32>,
     /// Parent species id for each species. `None` for founder species
     /// (initially only species 0). Indexed by `SpeciesId`.
@@ -44,7 +42,7 @@ pub struct World {
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
-    pub desired_velocity: Vec<crate::prelude::Vec2>,
+    pub desired_direction: Vec<crate::prelude::Vec2>,
     /// Per-agent BitVec marking who has already mated this tick.
     /// Cleared at the start of `reproduce_all`.
     // allow: filled by Task 6
@@ -72,7 +70,7 @@ impl World {
             next_species_id: 1,
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
-            desired_velocity: Vec::new(),
+            desired_direction: Vec::new(),
             reproduced_this_tick: BitVec::new(),
         }
     }
@@ -92,7 +90,40 @@ impl World {
     /// id is allocated here; species id is 0 (the founder species).
     pub fn spawn_agent(&mut self, position: Vec2, genome: Genome) -> AgentId {
         let lineage = self.next_lineage();
-        self.agents.spawn(position, genome, lineage, [LINEAGE_NONE; 2], 0)
+        let id = self.agents.spawn(
+            position,
+            genome,
+            lineage,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+        );
+        self.add_to_species(0);
+        id
+    }
+
+    /// Increment the species member count, growing the table if needed.
+    /// Called by every spawn path.
+    pub fn add_to_species(&mut self, species_id: u32) {
+        let idx = species_id as usize;
+        if idx >= self.species_member_counts.len() {
+            // Caller created a species via the species_step split-off path
+            // and is responsible for pushing centroid + parent first; this
+            // helper only grows the count vec.
+            self.species_member_counts.resize(idx + 1, 0);
+        }
+        self.species_member_counts[idx] =
+            self.species_member_counts[idx].checked_add(1).expect("species member count overflow");
+    }
+
+    /// Decrement the species member count. Saturating: if the count is
+    /// already zero (bookkeeping bug), do not underflow.
+    pub fn remove_from_species(&mut self, species_id: u32) {
+        let idx = species_id as usize;
+        if idx >= self.species_member_counts.len() {
+            return;
+        }
+        self.species_member_counts[idx] = self.species_member_counts[idx].saturating_sub(1);
     }
 
     /// World dimensions (for callers that want the constant without
@@ -122,8 +153,8 @@ impl World {
         if self.sensors.len() < cap {
             self.sensors.resize(cap, crate::sense::SensorRegister::default());
         }
-        if self.desired_velocity.len() < cap {
-            self.desired_velocity.resize(cap, crate::prelude::Vec2::ZERO);
+        if self.desired_direction.len() < cap {
+            self.desired_direction.resize(cap, crate::prelude::Vec2::ZERO);
         }
         if self.reproduced_this_tick.len() < cap {
             self.reproduced_this_tick.resize(cap, false);

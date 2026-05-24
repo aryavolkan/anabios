@@ -25,17 +25,20 @@ pub fn step(world: &mut World) {
     decide_all(world);
 
     // Stage 4: integrate (motion + per-tick metabolism).
-    integrate_all(&mut world.agents, &world.desired_velocity[..cap]);
+    integrate_all(&mut world.agents, &world.desired_direction[..cap]);
 
     // Stage 5: interact (feeding).
     interact_all(&mut world.agents, &mut world.biome);
+
+    // M3: module upkeep — every alive agent pays for its modules.
+    crate::module::upkeep_all(&mut world.agents);
 
     // Stage 6: reproduce. Mutates the alive set; do not rely on `cap` after
     // this point.
     crate::reproduce::reproduce_all(world);
 
     // Stage 7: age + starve.
-    age_and_starve(&mut world.agents);
+    age_and_starve(world);
 
     // Stage 8: periodic species clustering.
     if world.tick.is_multiple_of(crate::species::SPECIES_STEP_INTERVAL) {
@@ -59,7 +62,7 @@ fn decide_all(world: &mut World) {
         let sensor = world.sensors[i];
         let energy = world.agents.energy[i];
         let own_species = world.agents.species_id[i];
-        world.desired_velocity[i] = decide(&genome, &sensor, energy, own_species, &mut world.rng);
+        world.desired_direction[i] = decide(&genome, &sensor, energy, own_species, &mut world.rng);
     }
     // Dead slots keep their old velocities; they're never read because
     // `integrate_all` only iterates alive ids.
@@ -129,9 +132,11 @@ mod tests {
                 }
             }
         }
-        let mut g = Genome::neutral();
-        g.set(GenomeSlot::SpeedMax, 0.0);
+        let g = Genome::neutral();
         let id = w.spawn_agent(spawn, g);
+        // Strip Locomotor so the agent can't graze its way back to life.
+        w.agents.modules[id as usize]
+            .retain(|m| !matches!(m, crate::module::Module::Locomotor { .. }));
         w.agents.energy[id as usize] = 0.5;
         for _ in 0..200 {
             step(&mut w);
