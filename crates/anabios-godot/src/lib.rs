@@ -4,6 +4,10 @@
 //! advance with `step_n()`, and query for per-tick agent buffers + codex
 //! events. UI logic lives in GDScript; this crate is purely the bridge.
 
+// gdext's #[godot_api] expands to glue that returns a large CallError
+// enum variant. We can't change that, so silence the lint crate-wide.
+#![allow(clippy::result_large_err)]
+
 use godot::prelude::*;
 
 struct AnabiosExtension;
