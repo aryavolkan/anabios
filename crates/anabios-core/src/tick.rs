@@ -54,18 +54,21 @@ pub fn step(world: &mut World) {
 }
 
 fn decide_all(world: &mut World) {
-    // Deterministic order: ascending id.
+    // Deterministic order: ascending id. Programs are evaluated against the
+    // shared `world.eval_stack` scratch buffer.
     let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
     for id in alive_ids {
         let i = id as usize;
-        let genome = world.agents.genome[i];
-        let sensor = world.sensors[i];
-        let energy = world.agents.energy[i];
-        let own_species = world.agents.species_id[i];
-        world.desired_direction[i] = decide(&genome, &sensor, energy, own_species, &mut world.rng);
+        let dir = decide(
+            &world.agents.program[i],
+            &world.agents.genome[i],
+            &world.sensors[i],
+            world.agents.energy[i],
+            world.agents.age[i],
+            &mut world.eval_stack,
+        );
+        world.desired_direction[i] = dir;
     }
-    // Dead slots keep their old velocities; they're never read because
-    // `integrate_all` only iterates alive ids.
 }
 
 #[cfg(test)]

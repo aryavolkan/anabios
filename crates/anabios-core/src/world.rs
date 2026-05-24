@@ -48,6 +48,9 @@ pub struct World {
     // allow: filled by Task 6
     #[serde(skip)]
     pub reproduced_this_tick: BitVec,
+    /// Scratch value stack reused by the program evaluator each tick.
+    #[serde(skip)]
+    pub eval_stack: Vec<f32>,
 }
 
 impl World {
@@ -72,6 +75,7 @@ impl World {
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             reproduced_this_tick: BitVec::new(),
+            eval_stack: Vec::new(),
         }
     }
 
