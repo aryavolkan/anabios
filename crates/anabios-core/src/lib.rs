@@ -11,6 +11,7 @@ pub mod biome;
 pub mod genome;
 pub mod integrate;
 pub mod interact;
+pub mod mathf;
 pub mod reproduce;
 pub mod rng;
 pub mod scenario;

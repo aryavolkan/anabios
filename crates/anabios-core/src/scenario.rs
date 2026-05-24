@@ -107,7 +107,10 @@ impl Scenario {
                     Placement::Cluster { center_x, center_y, radius } => {
                         let theta = w.rng.f32_range(0.0, std::f32::consts::TAU);
                         let r = w.rng.f32_range(0.0, radius);
-                        Vec2::new(center_x + r * theta.cos(), center_y + r * theta.sin())
+                        Vec2::new(
+                            center_x + r * crate::mathf::cosf(theta),
+                            center_y + r * crate::mathf::sinf(theta),
+                        )
                     }
                 };
                 let mut g = Genome::neutral();

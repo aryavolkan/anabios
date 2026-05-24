@@ -22,6 +22,7 @@ toml = "0.8"
 anyhow = "1"
 thiserror = "1"
 tracing = "0.1"
+libm = "0.2"
 
 [workspace.dependencies.proptest]
 version = "1.4"

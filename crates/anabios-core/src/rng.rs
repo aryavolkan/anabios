@@ -43,8 +43,8 @@ impl Rng {
         // Two uniforms in (0, 1] for Box–Muller.
         let u1 = (1.0 - self.f32_unit()).max(f32::MIN_POSITIVE);
         let u2 = self.f32_unit();
-        let mag = (-2.0_f32 * u1.ln()).sqrt();
-        let z0 = mag * (std::f32::consts::TAU * u2).cos();
+        let mag = (-2.0_f32 * crate::mathf::lnf(u1)).sqrt();
+        let z0 = mag * crate::mathf::cosf(std::f32::consts::TAU * u2);
         mean + std_dev * z0
     }
 

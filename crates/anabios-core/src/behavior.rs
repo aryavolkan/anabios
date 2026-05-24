@@ -55,7 +55,7 @@ pub fn decide(
     } else {
         // Wander: random unit vector.
         let theta = rng.f32_unit() * std::f32::consts::TAU;
-        Vec2::new(theta.cos(), theta.sin())
+        Vec2::new(crate::mathf::cosf(theta), crate::mathf::sinf(theta))
     };
 
     direction * speed_max
