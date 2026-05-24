@@ -45,7 +45,10 @@ pub fn step(world: &mut World) {
         crate::species::species_step(world);
     }
 
-    // Stage 9: periodic biome regrowth.
+    // Stage 9: codex detectors (extinction, population crash, etc.).
+    crate::codex::observe_all(world);
+
+    // Stage 10: periodic biome regrowth.
     if world.tick.is_multiple_of(BIOME_STEP_INTERVAL) {
         world.biome.regrow_step();
     }

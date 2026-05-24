@@ -37,6 +37,9 @@ pub struct World {
     pub species_parents: Vec<Option<u32>>,
     /// Next species id to allocate.
     pub next_species_id: u32,
+    /// Codex event bus + per-detector scratch. Part of the deterministic
+    /// snapshot (not `#[serde(skip)]`).
+    pub codex: crate::codex::CodexState,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     #[serde(skip)]
@@ -71,6 +74,7 @@ impl World {
             species_member_counts: vec![0],
             species_parents: vec![None],
             next_species_id: 1,
+            codex: crate::codex::CodexState::default(),
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
