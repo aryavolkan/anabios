@@ -13,8 +13,7 @@
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
-// Task 5 adds: use crate::genome::{GenomeSlot, GENOME_LEN};
-// Task 5 adds: use crate::rng::Rng;
+use crate::genome::GENOME_LEN;
 
 /// Hard cap on program node count. Programs exceeding this are truncated.
 pub const PROGRAM_MAX_NODES: usize = 64;
@@ -184,6 +183,115 @@ pub fn starter_library() -> &'static [fn() -> Program] {
     &[starter_grazer]
 }
 
+/// Per-agent inputs read by the evaluator. Caller fills this each tick.
+#[derive(Debug, Clone, Copy)]
+pub struct EvalContext<'a> {
+    pub energy: f32,
+    pub age: u32,
+    pub genome: &'a crate::genome::Genome,
+    pub nearest_distance: f32,
+    pub nearest_dir: glam::Vec2,
+    pub plant_dir: glam::Vec2,
+    pub local_biomass: f32,
+}
+
+/// Evaluate `program` against `ctx`. Returns the populated action register.
+/// `scratch` is the value stack — caller owns and reuses it across agents.
+/// Underflow is silent: a node whose arity exceeds the current stack
+/// depth is skipped, keeping malformed mutants safe.
+pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> ActionRegister {
+    scratch.clear();
+    let mut action = ActionRegister::default();
+
+    for node in program.nodes.iter().copied() {
+        let arity = Program::arity(node);
+        if scratch.len() < arity {
+            continue;
+        }
+        match node {
+            Node::SenseEnergy => scratch.push(ctx.energy),
+            Node::SenseAge => scratch.push(ctx.age as f32),
+            Node::SenseGenome(slot) => {
+                let s = (slot as usize).min(GENOME_LEN - 1);
+                scratch.push(ctx.genome.0[s]);
+            }
+            Node::SenseNearestDistance => scratch.push(ctx.nearest_distance.min(1e6)),
+            Node::SenseNearestDirX => scratch.push(ctx.nearest_dir.x),
+            Node::SenseNearestDirY => scratch.push(ctx.nearest_dir.y),
+            Node::SensePlantDirX => scratch.push(ctx.plant_dir.x),
+            Node::SensePlantDirY => scratch.push(ctx.plant_dir.y),
+            Node::SenseLocalBiomass => scratch.push(ctx.local_biomass),
+            Node::SenseMeme(_) => scratch.push(0.0),
+            Node::Const(v) => scratch.push(v),
+
+            Node::Add => {
+                let b = scratch.pop().unwrap();
+                let a = scratch.pop().unwrap();
+                scratch.push(a + b);
+            }
+            Node::Sub => {
+                let b = scratch.pop().unwrap();
+                let a = scratch.pop().unwrap();
+                scratch.push(a - b);
+            }
+            Node::Mul => {
+                let b = scratch.pop().unwrap();
+                let a = scratch.pop().unwrap();
+                scratch.push(a * b);
+            }
+            Node::Min => {
+                let b = scratch.pop().unwrap();
+                let a = scratch.pop().unwrap();
+                scratch.push(a.min(b));
+            }
+            Node::Max => {
+                let b = scratch.pop().unwrap();
+                let a = scratch.pop().unwrap();
+                scratch.push(a.max(b));
+            }
+            Node::Neg => {
+                let a = scratch.pop().unwrap();
+                scratch.push(-a);
+            }
+            Node::Tanh => {
+                let a = scratch.pop().unwrap();
+                let e2x = crate::mathf::expf(2.0 * a);
+                scratch.push((e2x - 1.0) / (e2x + 1.0));
+            }
+            Node::ThresholdGt(thr) => {
+                let a = scratch.pop().unwrap();
+                scratch.push(if a > thr { 1.0 } else { 0.0 });
+            }
+            Node::IfThenElse => {
+                // Stack (bottom→top) is cond, then, else; we pop in reverse.
+                let else_v = scratch.pop().unwrap();
+                let then_v = scratch.pop().unwrap();
+                let cond = scratch.pop().unwrap();
+                scratch.push(if cond > 0.0 { then_v } else { else_v });
+            }
+            Node::Lerp => {
+                // Stack (bottom→top) is t, a, b. Result: a + (b-a)*t.
+                let b = scratch.pop().unwrap();
+                let a = scratch.pop().unwrap();
+                let t = scratch.pop().unwrap().clamp(0.0, 1.0);
+                scratch.push(a + (b - a) * t);
+            }
+
+            Node::MoveTowardX => action.move_x += scratch.pop().unwrap(),
+            Node::MoveTowardY => action.move_y += scratch.pop().unwrap(),
+            Node::MoveAwayX => action.move_x -= scratch.pop().unwrap(),
+            Node::MoveAwayY => action.move_y -= scratch.pop().unwrap(),
+            Node::Feed => action.feed_intent += scratch.pop().unwrap(),
+            Node::Mate => action.mate_intent += scratch.pop().unwrap(),
+            Node::FireWeapon | Node::EmitPheromone(_) | Node::Broadcast(_) | Node::Idle => {
+                scratch.pop();
+            }
+        }
+    }
+
+    action
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,5 +325,98 @@ mod tests {
         let huge = vec![Node::Const(0.0); 200];
         let p = Program::from_slice(&huge);
         assert_eq!(p.len(), PROGRAM_MAX_NODES);
+    }
+
+    use crate::genome::Genome;
+
+    fn dummy_ctx(genome: &Genome) -> EvalContext<'_> {
+        EvalContext {
+            energy: 30.0,
+            age: 100,
+            genome,
+            nearest_distance: 5.0,
+            nearest_dir: glam::Vec2::new(1.0, 0.0),
+            plant_dir: glam::Vec2::new(0.0, 1.0),
+            local_biomass: 8.0,
+        }
+    }
+
+    #[test]
+    fn empty_program_yields_zero_action() {
+        let p = Program::empty();
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert_eq!(a.move_x, 0.0);
+        assert_eq!(a.move_y, 0.0);
+    }
+
+    #[test]
+    fn const_plus_move_writes_action_register() {
+        let p = Program::from_slice(&[Node::Const(1.0), Node::MoveTowardX]);
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert_eq!(a.move_x, 1.0);
+    }
+
+    #[test]
+    fn arithmetic_chain_works() {
+        // Compute 1 + 2 * 3 = 7, then MoveTowardX of that.
+        let p = Program::from_slice(&[
+            Node::Const(1.0),
+            Node::Const(2.0),
+            Node::Const(3.0),
+            Node::Mul,
+            Node::Add,
+            Node::MoveTowardX,
+        ]);
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert_eq!(a.move_x, 7.0);
+    }
+
+    #[test]
+    fn ifthenelse_semantics() {
+        // Stack order: cond, then, else
+        let p = Program::from_slice(&[
+            Node::Const(1.0),  // cond (truthy)
+            Node::Const(42.0), // then
+            Node::Const(99.0), // else
+            Node::IfThenElse,
+            Node::MoveTowardX,
+        ]);
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert_eq!(a.move_x, 42.0);
+    }
+
+    #[test]
+    fn underflow_is_safe() {
+        let p = Program::from_slice(&[Node::Add, Node::MoveTowardX]);
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let _ = evaluate(&p, dummy_ctx(&g), &mut stack);
+    }
+
+    #[test]
+    fn grazer_heads_toward_plant() {
+        let p = starter_grazer();
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert!(a.move_y > 0.0, "grazer should head +y toward plant_dir: {:?}", a);
+    }
+
+    #[test]
+    fn grazer_mates_when_well_fed() {
+        let p = starter_grazer();
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let ctx = EvalContext { energy: 50.0, ..dummy_ctx(&g) };
+        let a = evaluate(&p, ctx, &mut stack);
+        assert!(a.mate_intent > 0.0);
     }
 }
