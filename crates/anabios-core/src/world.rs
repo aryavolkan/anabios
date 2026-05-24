@@ -42,7 +42,7 @@ pub struct World {
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
-    pub desired_velocity: Vec<crate::prelude::Vec2>,
+    pub desired_direction: Vec<crate::prelude::Vec2>,
     /// Per-agent BitVec marking who has already mated this tick.
     /// Cleared at the start of `reproduce_all`.
     // allow: filled by Task 6
@@ -70,7 +70,7 @@ impl World {
             next_species_id: 1,
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
-            desired_velocity: Vec::new(),
+            desired_direction: Vec::new(),
             reproduced_this_tick: BitVec::new(),
         }
     }
@@ -153,8 +153,8 @@ impl World {
         if self.sensors.len() < cap {
             self.sensors.resize(cap, crate::sense::SensorRegister::default());
         }
-        if self.desired_velocity.len() < cap {
-            self.desired_velocity.resize(cap, crate::prelude::Vec2::ZERO);
+        if self.desired_direction.len() < cap {
+            self.desired_direction.resize(cap, crate::prelude::Vec2::ZERO);
         }
         if self.reproduced_this_tick.len() < cap {
             self.reproduced_this_tick.resize(cap, false);
