@@ -60,8 +60,8 @@ pub fn species_step(world: &mut World) {
 
         if best_d <= SPECIATION_THRESHOLD {
             // Reassign to the existing closer species.
-            world.species_member_counts[cur_species] -= 1;
-            world.species_member_counts[best_id] += 1;
+            world.remove_from_species(cur_species as u32);
+            world.add_to_species(best_id as u32);
             world.agents.species_id[i] = best_id as u32;
         } else {
             // Allocate a new species with this agent's genome as centroid.
@@ -69,9 +69,10 @@ pub fn species_step(world: &mut World) {
             world.next_species_id =
                 world.next_species_id.checked_add(1).expect("species id overflow");
             world.species_centroids.push(g);
-            world.species_member_counts.push(1);
+            world.species_member_counts.push(0); // helper increments below
             world.species_parents.push(Some(cur_species as u32));
-            world.species_member_counts[cur_species] -= 1;
+            world.remove_from_species(cur_species as u32);
+            world.add_to_species(new_id);
             world.agents.species_id[i] = new_id;
         }
     }
@@ -83,11 +84,9 @@ pub fn species_step(world: &mut World) {
 fn recompute_centroids(world: &mut World) {
     let num_species = world.species_centroids.len();
 
-    // Accumulator: sum of each genome slot per species, plus member counts.
+    // Sum genome slots per species in deterministic agent id order.
     let mut sums: Vec<[f64; GENOME_LEN]> = vec![[0.0_f64; GENOME_LEN]; num_species];
-    let mut counts: Vec<u32> = vec![0_u32; num_species];
 
-    // Iterate alive agents in ascending id order for determinism.
     for id in world.agents.iter_alive() {
         let i = id as usize;
         let sid = world.agents.species_id[i] as usize;
@@ -95,22 +94,18 @@ fn recompute_centroids(world: &mut World) {
         for k in 0..GENOME_LEN {
             sums[sid][k] += g[k] as f64;
         }
-        counts[sid] += 1;
     }
 
-    for sid in 0..num_species {
-        world.species_member_counts[sid] = counts[sid];
-        if counts[sid] > 0 {
+    for (sid, sum) in sums.iter().enumerate().take(num_species) {
+        let n = world.species_member_counts[sid];
+        if n > 0 {
             let mut centroid = [0.0_f32; GENOME_LEN];
-            let n = counts[sid] as f64;
+            let nf = n as f64;
             for k in 0..GENOME_LEN {
-                centroid[k] = (sums[sid][k] / n) as f32;
+                centroid[k] = (sum[k] / nf) as f32;
             }
             world.species_centroids[sid] = Genome(centroid);
         }
-        // Empty species keep their last-known centroid; this is fine for
-        // history and the recompute on next step will refresh if members
-        // return.
     }
 }
 

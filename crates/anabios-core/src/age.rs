@@ -1,6 +1,5 @@
 //! Ageing and death of agents at the end of each tick.
 
-use crate::agent::AgentBuffers;
 use crate::genome::GenomeSlot;
 
 /// Maximum lifespan in ticks at `LifespanBias = 1.0`.
@@ -9,18 +8,20 @@ pub const LIFESPAN_MAX_TICKS: u32 = 5_000;
 /// instantly senescent).
 pub const LIFESPAN_MIN_TICKS: u32 = 500;
 
-pub fn age_and_starve(agents: &mut AgentBuffers) {
-    let alive_ids: Vec<u32> = agents.iter_alive().collect();
+pub fn age_and_starve(world: &mut crate::world::World) {
+    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
     for id in alive_ids {
         let i = id as usize;
-        agents.age[i] = agents.age[i].saturating_add(1);
+        world.agents.age[i] = world.agents.age[i].saturating_add(1);
 
-        let lifespan = lifespan_of(&agents.genome[i]);
-        #[allow(clippy::if_same_then_else)]
-        if agents.energy[i] <= 0.0 {
-            agents.kill(id);
-        } else if agents.age[i] >= lifespan {
-            agents.kill(id);
+        let lifespan = lifespan_of(&world.agents.genome[i]);
+        let died =
+            if world.agents.energy[i] <= 0.0 { true } else { world.agents.age[i] >= lifespan };
+
+        if died {
+            let sid = world.agents.species_id[i];
+            world.agents.kill(id);
+            world.remove_from_species(sid);
         }
     }
 }
@@ -43,9 +44,9 @@ mod tests {
     fn age_increments_each_call() {
         let mut w = World::new(1);
         let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
-        age_and_starve(&mut w.agents);
-        age_and_starve(&mut w.agents);
-        age_and_starve(&mut w.agents);
+        age_and_starve(&mut w);
+        age_and_starve(&mut w);
+        age_and_starve(&mut w);
         assert_eq!(w.agents.age[id as usize], 3);
         assert!(w.agents.is_alive(id));
     }
@@ -55,7 +56,7 @@ mod tests {
         let mut w = World::new(1);
         let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
         w.agents.energy[id as usize] = 0.0;
-        age_and_starve(&mut w.agents);
+        age_and_starve(&mut w);
         assert!(!w.agents.is_alive(id));
     }
 
@@ -66,7 +67,7 @@ mod tests {
         g.set(GenomeSlot::LifespanBias, 0.0);
         let id = w.spawn_agent(Vec2::new(500.0, 500.0), g);
         for _ in 0..LIFESPAN_MIN_TICKS as usize {
-            age_and_starve(&mut w.agents);
+            age_and_starve(&mut w);
             if !w.agents.is_alive(id) {
                 break;
             }

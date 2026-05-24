@@ -27,12 +27,10 @@ pub struct World {
     /// (extinct species) are kept in place so existing ids stay stable;
     /// `species_member_counts[id] == 0` marks them.
     pub species_centroids: Vec<crate::genome::Genome>,
-    /// **Only authoritative immediately after `species::species_step` has
-    /// run.** Between any `agents.spawn` / `agents.kill` and the next
-    /// `species_step` (which recomputes from `iter_alive`), these counts
-    /// may be stale. M3 will track counts incrementally on spawn/kill;
-    /// until then, do not read this field from gameplay code outside of
-    /// `species_step` itself.
+    /// Per-species live member count. Tracked incrementally by
+    /// `World::add_to_species` / `remove_from_species` on every spawn,
+    /// kill, and `species_step` reassignment, so it is authoritative
+    /// outside of `species_step` itself.
     pub species_member_counts: Vec<u32>,
     /// Parent species id for each species. `None` for founder species
     /// (initially only species 0). Indexed by `SpeciesId`.
@@ -92,7 +90,33 @@ impl World {
     /// id is allocated here; species id is 0 (the founder species).
     pub fn spawn_agent(&mut self, position: Vec2, genome: Genome) -> AgentId {
         let lineage = self.next_lineage();
-        self.agents.spawn(position, genome, lineage, [LINEAGE_NONE; 2], 0)
+        let id = self.agents.spawn(position, genome, lineage, [LINEAGE_NONE; 2], 0);
+        self.add_to_species(0);
+        id
+    }
+
+    /// Increment the species member count, growing the table if needed.
+    /// Called by every spawn path.
+    pub fn add_to_species(&mut self, species_id: u32) {
+        let idx = species_id as usize;
+        if idx >= self.species_member_counts.len() {
+            // Caller created a species via the species_step split-off path
+            // and is responsible for pushing centroid + parent first; this
+            // helper only grows the count vec.
+            self.species_member_counts.resize(idx + 1, 0);
+        }
+        self.species_member_counts[idx] =
+            self.species_member_counts[idx].checked_add(1).expect("species member count overflow");
+    }
+
+    /// Decrement the species member count. Saturating: if the count is
+    /// already zero (bookkeeping bug), do not underflow.
+    pub fn remove_from_species(&mut self, species_id: u32) {
+        let idx = species_id as usize;
+        if idx >= self.species_member_counts.len() {
+            return;
+        }
+        self.species_member_counts[idx] = self.species_member_counts[idx].saturating_sub(1);
     }
 
     /// World dimensions (for callers that want the constant without

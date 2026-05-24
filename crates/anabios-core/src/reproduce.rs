@@ -102,6 +102,7 @@ pub fn reproduce_all(world: &mut World) {
         let lineage = world.next_lineage();
         let child_id =
             world.agents.spawn(child_pos, child_genome, lineage, [a_lineage, b_lineage], a_species);
+        world.add_to_species(a_species);
 
         // Ensure the bitvec covers the new slot, mark the child as
         // "reproduced this tick" so they cannot immediately mate again.

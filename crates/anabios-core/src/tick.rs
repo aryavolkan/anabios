@@ -35,7 +35,7 @@ pub fn step(world: &mut World) {
     crate::reproduce::reproduce_all(world);
 
     // Stage 7: age + starve.
-    age_and_starve(&mut world.agents);
+    age_and_starve(world);
 
     // Stage 8: periodic species clustering.
     if world.tick.is_multiple_of(crate::species::SPECIES_STEP_INTERVAL) {
