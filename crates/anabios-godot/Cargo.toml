@@ -1,0 +1,14 @@
+[package]
+name = "anabios-godot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Godot 4.6 extension exposing anabios-core as a Simulation node."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anabios-core = { path = "../anabios-core" }
+godot = { workspace = true }
+glam = { workspace = true }

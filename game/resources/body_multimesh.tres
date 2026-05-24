@@ -1,0 +1,12 @@
+[gd_resource type="MultiMesh" load_steps=2 format=3]
+
+[sub_resource type="QuadMesh" id="QuadMesh_body"]
+size = Vector2(1, 1)
+
+[resource]
+transform_format = 0
+use_colors = true
+use_custom_data = false
+instance_count = 10000
+visible_instance_count = 0
+mesh = SubResource("QuadMesh_body")

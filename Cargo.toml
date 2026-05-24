@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/anabios-core", "crates/anabios-headless"]
+members = ["crates/anabios-core", "crates/anabios-godot", "crates/anabios-headless"]
 
 [workspace.package]
 version = "0.1.0"
@@ -24,6 +24,7 @@ thiserror = "1"
 tracing = "0.1"
 libm = "0.2"
 serde_json = "1"
+godot = "0.2"
 
 [workspace.dependencies.proptest]
 version = "1.4"
