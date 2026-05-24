@@ -1,0 +1,86 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="MultiMesh" path="res://resources/body_multimesh.tres" id="2_mm"]
+[ext_resource type="Script" path="res://scripts/camera_controller.gd" id="3_cam"]
+[ext_resource type="Script" path="res://scripts/time_controls.gd" id="4_time"]
+[ext_resource type="Script" path="res://scripts/inspector_panel.gd" id="5_insp"]
+[ext_resource type="Script" path="res://scripts/event_ticker.gd" id="6_tick"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("3_cam")
+position = Vector2(512, 512)
+zoom = Vector2(1, 1)
+
+[node name="Simulation" type="Simulation" parent="."]
+
+[node name="Bodies" type="MultiMeshInstance2D" parent="."]
+multimesh = ExtResource("2_mm")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="HUD" type="Label" parent="UI"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 400.0
+offset_bottom = 60.0
+text = "tick=0 alive=0"
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_font_sizes/font_size = 16
+
+[node name="TimeControls" type="HBoxContainer" parent="UI"]
+script = ExtResource("4_time")
+offset_left = 10.0
+offset_top = 760.0
+offset_right = 380.0
+offset_bottom = 790.0
+
+[node name="PauseButton" type="Button" parent="UI/TimeControls"]
+text = "⏸"
+
+[node name="Speed1" type="Button" parent="UI/TimeControls"]
+text = "1×"
+
+[node name="Speed4" type="Button" parent="UI/TimeControls"]
+text = "4×"
+
+[node name="Speed16" type="Button" parent="UI/TimeControls"]
+text = "16×"
+
+[node name="Speed64" type="Button" parent="UI/TimeControls"]
+text = "64×"
+
+[node name="Inspector" type="PanelContainer" parent="UI"]
+script = ExtResource("5_insp")
+visible = false
+offset_left = 1050.0
+offset_top = 10.0
+offset_right = 1270.0
+offset_bottom = 200.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/Inspector"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+
+[node name="Label" type="Label" parent="UI/Inspector/VBoxContainer"]
+text = "—"
+theme_override_font_sizes/font_size = 14
+
+[node name="EventTicker" type="RichTextLabel" parent="UI"]
+script = ExtResource("6_tick")
+offset_left = 400.0
+offset_top = 720.0
+offset_right = 1270.0
+offset_bottom = 790.0
+bbcode_enabled = false
+scroll_following = true
+theme_override_colors/default_color = Color(0.8, 0.85, 0.9, 1)
+theme_override_font_sizes/normal_font_size = 12

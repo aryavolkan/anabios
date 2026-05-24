@@ -8,7 +8,20 @@ Not a neuroevolution project. Agents have **simple, hand-engineered cognition** 
 
 ## Status
 
-Pre-implementation. Design is at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md).
+Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md). M1–M6 shipped (see git tags `m1`–`m6`); M7+ adds module sprite layers, overlays, camera modes, and full codex UI.
+
+## Running the viewer
+
+1. Build the gdext cdylib:
+   ```bash
+   cargo build -p anabios-godot
+   ```
+2. Open `game/project.godot` in Godot 4.6+ (or import via `godot --headless --import --path game/`).
+3. Press F5 to run the main scene.
+   - Mouse wheel: zoom; middle-drag or WASD/arrow keys: pan
+   - Bottom-left buttons: pause + speed (1× / 4× / 16× / 64×)
+   - Left-click an agent (within 4 world units) to pin its stats in the inspector panel
+   - Scrolling list at bottom-right shows codex events as they fire
 
 ## Stack
 
