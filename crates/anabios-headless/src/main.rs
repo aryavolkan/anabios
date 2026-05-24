@@ -1,5 +1,6 @@
 //! Headless runner for anabios scenarios.
 
+use std::io::Write;
 use std::path::PathBuf;
 
 use anabios_core::scenario::Scenario;
@@ -28,6 +29,11 @@ enum Command {
         /// Optional explicit seed; overrides the scenario seed.
         #[arg(long)]
         seed: Option<u64>,
+        /// Optional path to write codex events as JSON Lines as they occur.
+        /// One JSON object per event, drained from the codex buffer after
+        /// every tick.
+        #[arg(long)]
+        events_jsonl: Option<PathBuf>,
     },
     /// Print summary of a scenario without running it.
     Info {
@@ -39,12 +45,19 @@ enum Command {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Run { scenario, ticks, seed } => run(scenario, ticks, seed),
+        Command::Run { scenario, ticks, seed, events_jsonl } => {
+            run(scenario, ticks, seed, events_jsonl)
+        }
         Command::Info { scenario } => info(scenario),
     }
 }
 
-fn run(scenario_path: PathBuf, ticks: u64, seed: Option<u64>) -> Result<()> {
+fn run(
+    scenario_path: PathBuf,
+    ticks: u64,
+    seed: Option<u64>,
+    events_jsonl: Option<PathBuf>,
+) -> Result<()> {
     let text = std::fs::read_to_string(&scenario_path)
         .with_context(|| format!("reading scenario file {}", scenario_path.display()))?;
     let mut scenario = Scenario::parse_toml(&text)?;
@@ -61,8 +74,22 @@ fn run(scenario_path: PathBuf, ticks: u64, seed: Option<u64>) -> Result<()> {
         world.plant_biomass_total()
     );
 
+    let mut events_file = match &events_jsonl {
+        Some(p) => Some(
+            std::fs::File::create(p)
+                .with_context(|| format!("creating events file {}", p.display()))?,
+        ),
+        None => None,
+    };
+
     for _ in 0..ticks {
         step(&mut world);
+        if let Some(f) = events_file.as_mut() {
+            for ev in world.codex.drain_events() {
+                serde_json::to_writer(&mut *f, &ev).context("writing codex event")?;
+                f.write_all(b"\n")?;
+            }
+        }
     }
 
     let hash = state_hash(&world);
