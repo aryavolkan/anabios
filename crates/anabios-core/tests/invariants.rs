@@ -171,6 +171,24 @@ proptest! {
                 "agent {id} has {n} modules");
         }
     }
+
+    /// Programs respect the PROGRAM_MAX_NODES hard cap.
+    #[test]
+    fn programs_respect_max_node_cap(
+        seed in 0u64..1_000,
+        ticks in 0u64..500,
+        count in 1usize..30,
+    ) {
+        let mut w = build_world(seed, count);
+        for _ in 0..ticks {
+            step(&mut w);
+        }
+        for id in w.agents.iter_alive() {
+            let len = w.agents.program[id as usize].len();
+            prop_assert!(len <= anabios_core::program::PROGRAM_MAX_NODES,
+                "agent {id} program length {len}");
+        }
+    }
 }
 
 fn combined_energy(w: &World) -> f32 {
