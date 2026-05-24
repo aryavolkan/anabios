@@ -283,6 +283,122 @@ pub fn effective_diet_carnivory(modules: &ModuleList) -> f32 {
         .fold(0.0_f32, f32::max)
 }
 
+/// Perturb every parameter of `module` with probability `MUTATE_PARAM_PROB`,
+/// drawing perturbations from `N(0, PARAM_SIGMA)` and clamping back into
+/// `[0, 1]`. Per-slot decisions consume the RNG in a fixed order so the
+/// result is deterministic.
+pub fn mutate_params(module: &mut Module, rng: &mut Rng) {
+    fn perturb(v: &mut f32, rng: &mut Rng) {
+        if rng.f32_unit() < MUTATE_PARAM_PROB {
+            *v = (*v + rng.gaussian(0.0, PARAM_SIGMA)).clamp(0.0, 1.0);
+        }
+    }
+    match module {
+        Module::Locomotor { max_speed, terrain_affinity } => {
+            perturb(max_speed, rng);
+            perturb(terrain_affinity, rng);
+        }
+        Module::Sensor { sensor_type: _, radius, acuity } => {
+            perturb(radius, rng);
+            perturb(acuity, rng);
+        }
+        Module::Mouth { bite_size, diet_affinity } => {
+            perturb(bite_size, rng);
+            perturb(diet_affinity, rng);
+        }
+        Module::Weapon { damage, energy_cost } => {
+            perturb(damage, rng);
+            perturb(energy_cost, rng);
+        }
+        Module::Armor { protection, mass_penalty } => {
+            perturb(protection, rng);
+            perturb(mass_penalty, rng);
+        }
+        Module::Storage { capacity } => {
+            perturb(capacity, rng);
+        }
+        Module::Communicator { range, channel_id: _ } => {
+            perturb(range, rng);
+        }
+        Module::Pheromone { channel: _, strength, decay } => {
+            perturb(strength, rng);
+            perturb(decay, rng);
+        }
+        Module::Reproductive { viability, brood_size_bias } => {
+            perturb(viability, rng);
+            perturb(brood_size_bias, rng);
+        }
+    }
+}
+
+/// Apply structural mutations to `modules` in place. Each operator fires
+/// independently with its own probability. The list is clamped to
+/// `[0, MODULE_LIST_MAX]` items; if a delete would empty the list, it
+/// skips to leave at least one module (so the agent is not entirely
+/// vestigial — extinction by full module loss is unproductive noise).
+pub fn structural_mutate(modules: &mut ModuleList, rng: &mut Rng) {
+    // Add
+    if modules.len() < MODULE_LIST_MAX && rng.f32_unit() < ADD_MODULE_PROB {
+        modules.push(Module::random_any(rng));
+    }
+    // Duplicate
+    if modules.len() < MODULE_LIST_MAX
+        && !modules.is_empty()
+        && rng.f32_unit() < DUPLICATE_MODULE_PROB
+    {
+        let pick = rng.index(modules.len());
+        let copy = modules[pick];
+        modules.push(copy);
+    }
+    // Replace
+    if !modules.is_empty() && rng.f32_unit() < REPLACE_MODULE_PROB {
+        let pick = rng.index(modules.len());
+        modules[pick] = Module::random_any(rng);
+    }
+    // Delete (last, so we don't replace then immediately delete)
+    if modules.len() > 1 && rng.f32_unit() < DELETE_MODULE_PROB {
+        let pick = rng.index(modules.len());
+        modules.remove(pick);
+    }
+}
+
+/// Build a child's module list from two parents:
+/// 1. For each slot index up to the longer parent's length, inherit from
+///    parent A or parent B with equal probability (per-slot uniform
+///    crossover). The shorter parent's slots beyond its length are skipped
+///    (so the child's length lands between the two parents' lengths).
+/// 2. Run `mutate_params` on every inherited module.
+/// 3. Run `structural_mutate` once on the resulting list.
+pub fn crossover_and_mutate(a: &ModuleList, b: &ModuleList, rng: &mut Rng) -> ModuleList {
+    let max_len = a.len().max(b.len());
+    let mut out = ModuleList::new();
+    for i in 0..max_len {
+        let from_a = rng.f32_unit() < 0.5;
+        let chosen = if from_a {
+            if i < a.len() {
+                Some(&a[i])
+            } else if i < b.len() {
+                Some(&b[i])
+            } else {
+                None
+            }
+        } else if i < b.len() {
+            Some(&b[i])
+        } else if i < a.len() {
+            Some(&a[i])
+        } else {
+            None
+        };
+        if let Some(m) = chosen {
+            let mut copy = *m;
+            mutate_params(&mut copy, rng);
+            out.push(copy);
+        }
+    }
+    structural_mutate(&mut out, rng);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,5 +445,59 @@ mod tests {
             let m = Module::random_of_type(t, &mut rng);
             assert_eq!(m.module_type(), t);
         }
+    }
+
+    #[test]
+    fn mutate_params_keeps_values_in_range() {
+        let mut rng = Rng::from_seed(7);
+        let mut m = Module::Locomotor { max_speed: 0.5, terrain_affinity: 0.5 };
+        for _ in 0..200 {
+            mutate_params(&mut m, &mut rng);
+            if let Module::Locomotor { max_speed, terrain_affinity } = m {
+                assert!((0.0..=1.0).contains(&max_speed));
+                assert!((0.0..=1.0).contains(&terrain_affinity));
+            }
+        }
+    }
+
+    #[test]
+    fn structural_mutate_never_empties_the_list() {
+        let mut rng = Rng::from_seed(11);
+        let mut k = starter_kit();
+        for _ in 0..1000 {
+            structural_mutate(&mut k, &mut rng);
+            assert!(!k.is_empty());
+            assert!(k.len() <= MODULE_LIST_MAX);
+        }
+    }
+
+    #[test]
+    fn crossover_with_identical_parents_yields_same_length_distribution() {
+        let mut rng = Rng::from_seed(13);
+        let p = starter_kit();
+        let mut len_sum = 0;
+        let n = 100;
+        for _ in 0..n {
+            let c = crossover_and_mutate(&p, &p, &mut rng);
+            len_sum += c.len();
+        }
+        // With identical parents and small structural mutation rates,
+        // child length should average close to parent length.
+        let avg = len_sum as f32 / n as f32;
+        let parent_len = p.len() as f32;
+        assert!(
+            (avg - parent_len).abs() < 1.5,
+            "average child length {avg} differs significantly from parent {parent_len}",
+        );
+    }
+
+    #[test]
+    fn crossover_is_deterministic() {
+        let p = starter_kit();
+        let mut r1 = Rng::from_seed(99);
+        let mut r2 = Rng::from_seed(99);
+        let c1 = crossover_and_mutate(&p, &p, &mut r1);
+        let c2 = crossover_and_mutate(&p, &p, &mut r2);
+        assert_eq!(c1, c2);
     }
 }
