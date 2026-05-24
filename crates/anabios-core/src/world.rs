@@ -97,6 +97,7 @@ impl World {
             [LINEAGE_NONE; 2],
             0,
             crate::module::starter_kit(),
+            crate::program::starter_grazer(),
         );
         self.add_to_species(0);
         id
