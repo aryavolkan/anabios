@@ -99,7 +99,11 @@ pub fn reproduce_all(world: &mut World) {
         // Spawn at midpoint of parents on the torus (account for wrap).
         let child_pos = midpoint_torus(a_pos, b_pos);
 
-        let child_modules = world.agents.modules[i].clone();
+        let a_modules = world.agents.modules[i].clone();
+        let b_modules = world.agents.modules[j].clone();
+        let child_modules =
+            crate::module::crossover_and_mutate(&a_modules, &b_modules, &mut world.rng);
+
         let lineage = world.next_lineage();
         let child_id = world.agents.spawn(
             child_pos,
