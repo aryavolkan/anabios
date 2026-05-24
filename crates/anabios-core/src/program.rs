@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 use crate::genome::GENOME_LEN;
+use crate::rng::Rng;
 
 /// Hard cap on program node count. Programs exceeding this are truncated.
 pub const PROGRAM_MAX_NODES: usize = 64;
@@ -292,6 +293,91 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
     action
 }
 
+/// Random node drawn from the full grammar. Used by structural mutation.
+pub fn random_node(rng: &mut Rng) -> Node {
+    match rng.index(20) {
+        0 => Node::SenseEnergy,
+        1 => Node::SenseAge,
+        2 => Node::SenseGenome(rng.index(GENOME_LEN) as u8),
+        3 => Node::SenseNearestDistance,
+        4 => Node::SenseNearestDirX,
+        5 => Node::SenseNearestDirY,
+        6 => Node::SensePlantDirX,
+        7 => Node::SensePlantDirY,
+        8 => Node::SenseLocalBiomass,
+        9 => Node::Const(rng.f32_range(-1.0, 1.0)),
+        10 => Node::Add,
+        11 => Node::Sub,
+        12 => Node::Mul,
+        13 => Node::Max,
+        14 => Node::Tanh,
+        15 => Node::IfThenElse,
+        16 => Node::MoveTowardX,
+        17 => Node::MoveTowardY,
+        18 => Node::Feed,
+        _ => Node::Mate,
+    }
+}
+
+/// Per-node Gaussian perturbation: `Const` and `ThresholdGt` get nudged;
+/// other nodes are swapped with a fresh random node at `POINT_MUTATE_PROB`.
+pub fn point_mutate(program: &mut Program, rng: &mut Rng) {
+    for node in program.nodes.iter_mut() {
+        if rng.f32_unit() >= POINT_MUTATE_PROB {
+            continue;
+        }
+        *node = match *node {
+            Node::Const(v) => Node::Const((v + rng.gaussian(0.0, CONST_SIGMA)).clamp(-2.0, 2.0)),
+            Node::ThresholdGt(v) => {
+                Node::ThresholdGt((v + rng.gaussian(0.0, CONST_SIGMA)).clamp(-2.0, 2.0))
+            }
+            _ => random_node(rng),
+        };
+    }
+}
+
+/// Structural mutation: insert, delete, and/or subtree-replace one node each
+/// with the corresponding probability. Keeps `[1, PROGRAM_MAX_NODES]`.
+pub fn structural_mutate(program: &mut Program, rng: &mut Rng) {
+    if program.nodes.len() < PROGRAM_MAX_NODES && rng.f32_unit() < INSERT_NODE_PROB {
+        let pos = if program.nodes.is_empty() { 0 } else { rng.index(program.nodes.len()) };
+        program.nodes.insert(pos, random_node(rng));
+    }
+    if program.nodes.len() > 1 && rng.f32_unit() < DELETE_NODE_PROB {
+        let pos = rng.index(program.nodes.len());
+        program.nodes.remove(pos);
+    }
+    if !program.nodes.is_empty() && rng.f32_unit() < SUBTREE_REPLACE_PROB {
+        let pos = rng.index(program.nodes.len());
+        program.nodes[pos] = random_node(rng);
+    }
+    while program.nodes.len() > PROGRAM_MAX_NODES {
+        program.nodes.pop();
+    }
+}
+
+/// Single-point crossover: take parent A's prefix and parent B's suffix at
+/// a random split, then apply point + structural mutation.
+pub fn crossover_and_mutate(a: &Program, b: &Program, rng: &mut Rng) -> Program {
+    let max_len = a.len().max(b.len());
+    let split = if max_len == 0 { 0 } else { rng.index(max_len + 1) };
+    let mut nodes: SmallVec<[Node; PROGRAM_INLINE]> = SmallVec::new();
+    for &n in a.nodes.iter().take(split) {
+        if nodes.len() < PROGRAM_MAX_NODES {
+            nodes.push(n);
+        }
+    }
+    for &n in b.nodes.iter().skip(split) {
+        if nodes.len() < PROGRAM_MAX_NODES {
+            nodes.push(n);
+        }
+    }
+    let mut child = Program { nodes };
+    point_mutate(&mut child, rng);
+    structural_mutate(&mut child, rng);
+    child
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -418,5 +504,47 @@ mod tests {
         let ctx = EvalContext { energy: 50.0, ..dummy_ctx(&g) };
         let a = evaluate(&p, ctx, &mut stack);
         assert!(a.mate_intent > 0.0);
+    }
+
+    #[test]
+    fn point_mutate_preserves_length() {
+        let mut rng = Rng::from_seed(7);
+        let mut p = starter_grazer();
+        let len = p.len();
+        for _ in 0..50 {
+            point_mutate(&mut p, &mut rng);
+        }
+        assert_eq!(p.len(), len);
+    }
+
+    #[test]
+    fn structural_mutate_stays_in_bounds() {
+        let mut rng = Rng::from_seed(11);
+        let mut p = starter_grazer();
+        for _ in 0..1000 {
+            structural_mutate(&mut p, &mut rng);
+            assert!(!p.is_empty());
+            assert!(p.len() <= PROGRAM_MAX_NODES);
+        }
+    }
+
+    #[test]
+    fn crossover_with_identical_parents_stays_in_bounds() {
+        let mut rng = Rng::from_seed(13);
+        let p = starter_grazer();
+        for _ in 0..200 {
+            let c = crossover_and_mutate(&p, &p, &mut rng);
+            assert!(c.len() <= PROGRAM_MAX_NODES);
+        }
+    }
+
+    #[test]
+    fn crossover_is_deterministic() {
+        let p = starter_grazer();
+        let mut r1 = Rng::from_seed(99);
+        let mut r2 = Rng::from_seed(99);
+        let c1 = crossover_and_mutate(&p, &p, &mut r1);
+        let c2 = crossover_and_mutate(&p, &p, &mut r2);
+        assert_eq!(c1, c2);
     }
 }
