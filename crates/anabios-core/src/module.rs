@@ -399,6 +399,18 @@ pub fn crossover_and_mutate(a: &ModuleList, b: &ModuleList, rng: &mut Rng) -> Mo
     out
 }
 
+/// Deduct per-tick module upkeep from every alive agent. Modules cost
+/// energy continuously regardless of whether they were used this tick;
+/// agents with too many modules for their food intake go negative and
+/// die in the subsequent `age_and_starve` stage.
+pub fn upkeep_all(agents: &mut crate::agent::AgentBuffers) {
+    for id in agents.iter_alive().collect::<Vec<_>>() {
+        let i = id as usize;
+        let cost = total_upkeep(&agents.modules[i]);
+        agents.energy[i] -= cost;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,5 +511,19 @@ mod tests {
         let c1 = crossover_and_mutate(&p, &p, &mut r1);
         let c2 = crossover_and_mutate(&p, &p, &mut r2);
         assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn upkeep_all_deducts_starter_kit_cost() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::world::World;
+        let mut w = World::new(1);
+        let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        let before = w.agents.energy[id as usize];
+        upkeep_all(&mut w.agents);
+        let after = w.agents.energy[id as usize];
+        let expected_cost = total_upkeep(&w.agents.modules[id as usize]);
+        assert!((before - after - expected_cost).abs() < 1e-5);
     }
 }

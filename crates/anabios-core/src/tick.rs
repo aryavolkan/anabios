@@ -30,6 +30,9 @@ pub fn step(world: &mut World) {
     // Stage 5: interact (feeding).
     interact_all(&mut world.agents, &mut world.biome);
 
+    // M3: module upkeep — every alive agent pays for its modules.
+    crate::module::upkeep_all(&mut world.agents);
+
     // Stage 6: reproduce. Mutates the alive set; do not rely on `cap` after
     // this point.
     crate::reproduce::reproduce_all(world);
