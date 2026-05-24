@@ -104,8 +104,10 @@ pub fn reproduce_all(world: &mut World) {
         let child_modules =
             crate::module::crossover_and_mutate(&a_modules, &b_modules, &mut world.rng);
 
-        // Task 6 will replace this with crossover_and_mutate over programs.
-        let child_program = world.agents.program[i].clone();
+        let a_program = world.agents.program[i].clone();
+        let b_program = world.agents.program[j].clone();
+        let child_program =
+            crate::program::crossover_and_mutate(&a_program, &b_program, &mut world.rng);
 
         let lineage = world.next_lineage();
         let child_id = world.agents.spawn(
