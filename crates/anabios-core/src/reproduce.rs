@@ -148,9 +148,10 @@ fn find_mate(
         if d > MATING_RANGE {
             return;
         }
-        // First eligible mate wins; we iterate ids in deterministic order
-        // because the spatial hash flattens cells in ascending bucket order.
-        // To be safe, take the lowest id we've seen.
+        // Take the lowest-id eligible mate. The spatial query already visits
+        // cells in a fixed order and within each cell ids are scattered in
+        // ascending-id order, so this is robust to any future change in
+        // bucket traversal.
         match best {
             None => best = Some(other_id),
             Some(cur) if other_id < cur => best = Some(other_id),

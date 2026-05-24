@@ -27,6 +27,12 @@ pub struct World {
     /// (extinct species) are kept in place so existing ids stay stable;
     /// `species_member_counts[id] == 0` marks them.
     pub species_centroids: Vec<crate::genome::Genome>,
+    /// **Only authoritative immediately after `species::species_step` has
+    /// run.** Between any `agents.spawn` / `agents.kill` and the next
+    /// `species_step` (which recomputes from `iter_alive`), these counts
+    /// may be stale. M3 will track counts incrementally on spawn/kill;
+    /// until then, do not read this field from gameplay code outside of
+    /// `species_step` itself.
     pub species_member_counts: Vec<u32>,
     /// Parent species id for each species. `None` for founder species
     /// (initially only species 0). Indexed by `SpeciesId`.

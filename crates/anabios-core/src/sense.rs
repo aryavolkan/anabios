@@ -30,10 +30,10 @@ pub struct SensorRegister {
     pub nearest_neighbor_dir: Vec2,
     /// Whether the agent currently has any alive neighbor in perception.
     pub has_neighbor: bool,
-    /// Species id of the nearest neighbor, or `u32::MAX` if no neighbor.
-    /// `u32::MAX` is chosen as a sentinel so the default-initialized state
-    /// of an uninhabited sensor register doesn't accidentally look like
-    /// "compatible with species 0".
+    /// Species id of the nearest neighbor, or `NO_NEIGHBOR_SPECIES` when
+    /// there is no neighbor. The sentinel is chosen so the default-
+    /// initialized state of an uninhabited sensor register doesn't
+    /// accidentally look like "compatible with species 0".
     pub nearest_neighbor_species: u32,
 }
 

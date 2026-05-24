@@ -17,7 +17,10 @@
 use crate::genome::{Genome, GENOME_LEN};
 use crate::world::World;
 
-/// Run species clustering every N ticks.
+/// Run species clustering every N ticks. Triggered at ticks 0, N, 2N, ...
+/// (the check is `tick % N == 0` *before* the tick counter is incremented),
+/// so the first clustering pass executes during the first call to
+/// `tick::step()`.
 pub const SPECIES_STEP_INTERVAL: u64 = 200;
 
 /// L2 distance threshold beyond which an agent's genome is considered
