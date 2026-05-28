@@ -79,11 +79,14 @@ pub fn species_step(world: &mut World) {
             // parent species id so consumers can rebuild the phylogeny
             // from the event stream alone.
             let tick = world.tick;
+            let founder_pos = world.agents.position[i];
             world.codex.push_event(crate::codex::CodexEvent {
                 event_type: crate::codex::EventType::SpeciationEvent,
                 tick,
                 species_id: new_id,
                 value: cur_species as f32,
+                loc_x: founder_pos.x,
+                loc_y: founder_pos.y,
             });
         }
     }
