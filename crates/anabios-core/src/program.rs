@@ -158,6 +158,44 @@ impl Program {
                 | Node::Idle
         )
     }
+
+    /// Stable discriminant per node kind, grouping parameterized variants
+    /// (e.g. all `Const(_)` share one kind). Used by codex novelty tracking.
+    pub fn node_kind(node: Node) -> u8 {
+        match node {
+            Node::SenseEnergy => 0,
+            Node::SenseAge => 1,
+            Node::SenseGenome(_) => 2,
+            Node::SenseNearestDistance => 3,
+            Node::SenseNearestDirX => 4,
+            Node::SenseNearestDirY => 5,
+            Node::SensePlantDirX => 6,
+            Node::SensePlantDirY => 7,
+            Node::SenseLocalBiomass => 8,
+            Node::SenseMeme(_) => 9,
+            Node::Const(_) => 10,
+            Node::Add => 11,
+            Node::Sub => 12,
+            Node::Mul => 13,
+            Node::Min => 14,
+            Node::Max => 15,
+            Node::Neg => 16,
+            Node::Tanh => 17,
+            Node::ThresholdGt(_) => 18,
+            Node::IfThenElse => 19,
+            Node::Lerp => 20,
+            Node::MoveTowardX => 21,
+            Node::MoveTowardY => 22,
+            Node::MoveAwayX => 23,
+            Node::MoveAwayY => 24,
+            Node::Feed => 25,
+            Node::Mate => 26,
+            Node::FireWeapon => 27,
+            Node::EmitPheromone(_) => 28,
+            Node::Broadcast(_) => 29,
+            Node::Idle => 30,
+        }
+    }
 }
 
 /// Canned starter: basic herbivore that always heads toward plants and

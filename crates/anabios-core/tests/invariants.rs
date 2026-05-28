@@ -207,6 +207,28 @@ proptest! {
                 "event references invalid species {}", ev.species_id);
         }
     }
+
+    /// Codex event locations are finite and within world bounds (or 0,0).
+    #[test]
+    fn codex_event_locations_in_bounds(
+        seed in 0u64..1_000,
+        ticks in 0u64..500,
+        count in 1usize..30,
+    ) {
+        let ws = anabios_core::biome::WORLD_SIZE;
+        let mut w = build_world(seed, count);
+        for _ in 0..ticks {
+            step(&mut w);
+        }
+        for ev in &w.codex.events {
+            prop_assert!(ev.loc_x.is_finite() && ev.loc_y.is_finite(),
+                "event location not finite");
+            prop_assert!(ev.loc_x >= 0.0 && ev.loc_x <= ws,
+                "loc_x {} out of bounds", ev.loc_x);
+            prop_assert!(ev.loc_y >= 0.0 && ev.loc_y <= ws,
+                "loc_y {} out of bounds", ev.loc_y);
+        }
+    }
 }
 
 fn combined_energy(w: &World) -> f32 {

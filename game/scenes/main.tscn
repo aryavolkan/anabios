@@ -5,8 +5,8 @@
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="3_cam"]
 [ext_resource type="Script" path="res://scripts/time_controls.gd" id="4_time"]
 [ext_resource type="Script" path="res://scripts/inspector_panel.gd" id="5_insp"]
-[ext_resource type="Script" path="res://scripts/event_ticker.gd" id="6_tick"]
 [ext_resource type="Script" path="res://scripts/biome_renderer.gd" id="7_biome"]
+[ext_resource type="Script" path="res://scripts/codex_panel.gd" id="8_codex"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -173,13 +173,22 @@ offset_bottom = -10.0
 text = "—"
 theme_override_font_sizes/font_size = 14
 
-[node name="EventTicker" type="RichTextLabel" parent="UI"]
-script = ExtResource("6_tick")
+[node name="CodexPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("8_codex")
 offset_left = 400.0
-offset_top = 720.0
-offset_right = 1270.0
+offset_top = 560.0
+offset_right = 1030.0
 offset_bottom = 790.0
-bbcode_enabled = false
-scroll_following = true
-theme_override_colors/default_color = Color(0.8, 0.85, 0.9, 1)
-theme_override_font_sizes/normal_font_size = 12
+
+[node name="VBox" type="VBoxContainer" parent="UI/CodexPanel"]
+
+[node name="Counts" type="Label" parent="UI/CodexPanel/VBox"]
+text = "codex"
+theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
+theme_override_font_sizes/font_size = 13
+
+[node name="Scroll" type="ScrollContainer" parent="UI/CodexPanel/VBox"]
+custom_minimum_size = Vector2(610, 190)
+
+[node name="RecentList" type="VBoxContainer" parent="UI/CodexPanel/VBox/Scroll"]
+custom_minimum_size = Vector2(600, 0)
