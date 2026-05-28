@@ -24,15 +24,23 @@ const GLYPH_SIZE: float = 0.7
 @onready var module_layers: Node2D = $ModuleLayers
 
 func _ready() -> void:
-	var scenario_path = "res://../scenarios/minimal.toml"
+	var scenario_path: String = GameConfig.scenario_path
 	var f = FileAccess.open(scenario_path, FileAccess.READ)
 	if f == null:
 		push_error("could not open " + scenario_path)
 		return
 	var text = f.get_as_text()
 	f.close()
-	if not sim.load_scenario(text):
+	if not sim.load_scenario_with_seed(text, GameConfig.seed):
 		push_error("scenario load failed")
+	# Apply UI scale from the menu.
+	var s: float = GameConfig.ui_scale
+	$UI.transform = Transform2D(0.0, Vector2(s, s), 0.0, Vector2.ZERO)
+
+func _notification(what: int) -> void:
+	# Pause when the window loses focus; user resumes manually.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		paused = true
 
 func _process(_delta: float) -> void:
 	if not paused:

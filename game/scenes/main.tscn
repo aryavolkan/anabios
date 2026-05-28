@@ -152,6 +152,12 @@ text = "16×"
 [node name="Speed64" type="Button" parent="UI/TimeControls"]
 text = "64×"
 
+[node name="Restart" type="Button" parent="UI/TimeControls"]
+text = "Restart"
+
+[node name="Menu" type="Button" parent="UI/TimeControls"]
+text = "Menu"
+
 [node name="Inspector" type="PanelContainer" parent="UI"]
 script = ExtResource("5_insp")
 visible = false
