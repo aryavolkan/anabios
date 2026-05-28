@@ -178,6 +178,84 @@ impl Simulation {
         out
     }
 
+    /// Biome grid resolution per axis (cells = res²).
+    #[func]
+    fn biome_resolution(&self) -> i64 {
+        anabios_core::biome::BIOME_RES as i64
+    }
+
+    /// One color per biome cell, row-major (`row * RES + col`). Terrain
+    /// type sets the base hue; live plant biomass brightens grass/forest
+    /// cells. Returns `RES²` colors, or empty if no world is loaded.
+    #[func]
+    fn biome_colors(&self) -> PackedColorArray {
+        use anabios_core::biome::TerrainType;
+        let mut out = PackedColorArray::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for cell in w.biome.cells.iter() {
+            let base = match cell.terrain {
+                TerrainType::Water => Color::from_rgb(0.12, 0.22, 0.42),
+                TerrainType::Grass => Color::from_rgb(0.20, 0.42, 0.18),
+                TerrainType::Forest => Color::from_rgb(0.10, 0.30, 0.12),
+                TerrainType::Desert => Color::from_rgb(0.62, 0.56, 0.34),
+                TerrainType::Rock => Color::from_rgb(0.36, 0.36, 0.40),
+            };
+            let cap = cell.terrain.carrying_capacity();
+            let frac = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };
+            let lit = base.lerp(Color::from_rgb(0.40, 0.85, 0.35), (frac * 0.6) as f64);
+            out.push(lit);
+        }
+        out
+    }
+
+    /// Body rotation (radians) per alive agent, from velocity direction.
+    /// Non-moving agents keep rotation 0. Same order as `alive_positions`.
+    #[func]
+    fn alive_rotations(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                let v = w.agents.velocity[id as usize];
+                let r = if v.length_squared() > 1e-6 { v.y.atan2(v.x) } else { 0.0 };
+                out.push(r);
+            }
+        }
+        out
+    }
+
+    /// Number of module types (for the GDScript layer loop).
+    #[func]
+    fn module_type_count(&self) -> i64 {
+        9
+    }
+
+    /// Glyph world-positions for every module of `module_type` (0..9) across
+    /// all alive agents. Each module sits at one of 8 evenly-spaced perimeter
+    /// slots around its owner, scaled by the owner's size.
+    #[func]
+    fn module_glyphs(&self, module_type: i64) -> PackedVector2Array {
+        use anabios_core::genome::GenomeSlot;
+        let mut out = PackedVector2Array::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        let want = module_type as u8;
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            let pos = w.agents.position[i];
+            let size = 0.5 + 2.5 * w.agents.genome[i].get(GenomeSlot::Size);
+            let radius = size * 0.7;
+            for (slot, m) in w.agents.modules[i].iter().enumerate() {
+                if m.module_type() as u8 != want {
+                    continue;
+                }
+                let angle = (slot as f32) * std::f32::consts::TAU / 8.0;
+                let gx = pos.x + radius * math_cos(angle);
+                let gy = pos.y + radius * math_sin(angle);
+                out.push(Vector2::new(gx, gy));
+            }
+        }
+        out
+    }
+
     /// Find the closest alive agent to a world position, within `radius`
     /// world units. Returns the agent id, or -1 if no agent in range.
     #[func]
@@ -196,6 +274,16 @@ impl Simulation {
         }
         best_id
     }
+}
+
+#[inline]
+fn math_cos(x: f32) -> f32 {
+    libm::cosf(x)
+}
+
+#[inline]
+fn math_sin(x: f32) -> f32 {
+    libm::sinf(x)
 }
 
 fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
