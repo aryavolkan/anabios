@@ -161,8 +161,8 @@ impl Simulation {
     }
 
     /// Drain the codex event buffer. Each event becomes a Dictionary:
-    ///   { type: int (0=Extinction, 1=PopulationCrash, 2=SpeciationEvent),
-    ///     tick: int, species_id: int, value: f32 }
+    ///   { type: int (0=Extinction .. 5=NovelBehaviorPattern),
+    ///     tick: int, species_id: int, value: f32, loc: Vector2 }
     #[func]
     fn take_codex_events(&mut self) -> Array<Dictionary> {
         let mut out = Array::<Dictionary>::new();
@@ -173,6 +173,7 @@ impl Simulation {
             d.set("tick", ev.tick as i64);
             d.set("species_id", ev.species_id as i64);
             d.set("value", ev.value);
+            d.set("loc", Vector2::new(ev.loc_x, ev.loc_y));
             out.push(&d);
         }
         out
