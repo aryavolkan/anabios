@@ -12,3 +12,4 @@ crate-type = ["cdylib"]
 anabios-core = { path = "../anabios-core" }
 godot = { workspace = true }
 glam = { workspace = true }
+libm = { workspace = true }
