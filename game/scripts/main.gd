@@ -4,10 +4,24 @@ extends Node2D
 @export var ticks_per_frame: int = 1
 @export var paused: bool = false
 
+const MODULE_COLORS: PackedColorArray = [
+	Color(0.6, 0.8, 1.0),   # 0 Locomotor
+	Color(0.4, 0.9, 0.5),   # 1 Sensor
+	Color(1.0, 0.7, 0.3),   # 2 Mouth
+	Color(1.0, 0.3, 0.3),   # 3 Weapon
+	Color(0.7, 0.7, 0.7),   # 4 Armor
+	Color(0.9, 0.9, 0.4),   # 5 Storage
+	Color(0.8, 0.5, 1.0),   # 6 Communicator
+	Color(0.5, 1.0, 0.9),   # 7 Pheromone
+	Color(1.0, 0.5, 0.8),   # 8 Reproductive
+]
+const GLYPH_SIZE: float = 0.7
+
 @onready var sim = $Simulation
 @onready var bodies: MultiMeshInstance2D = $Bodies
 @onready var hud: Label = $UI/HUD
 @onready var inspector: PanelContainer = $UI/Inspector
+@onready var module_layers: Node2D = $ModuleLayers
 
 func _ready() -> void:
 	var scenario_path = "res://../scenarios/minimal.toml"
@@ -34,15 +48,38 @@ func _refresh_bodies() -> void:
 	mm.visible_instance_count = n
 
 	if n == 0:
+		_clear_module_layers()
 		return
 
 	var positions: PackedVector2Array = sim.alive_positions()
 	var colors: PackedColorArray = sim.alive_colors()
 	var sizes: PackedFloat32Array = sim.alive_sizes()
+	var rots: PackedFloat32Array = sim.alive_rotations()
 	for i in n:
-		var t: Transform2D = Transform2D(0.0, Vector2(sizes[i], sizes[i]), 0.0, positions[i])
+		var t: Transform2D = Transform2D(rots[i], Vector2(sizes[i], sizes[i]), 0.0, positions[i])
 		mm.set_instance_transform_2d(i, t)
 		mm.set_instance_color(i, colors[i])
+
+	_refresh_module_layers()
+
+func _refresh_module_layers() -> void:
+	var type_count: int = int(sim.module_type_count())
+	for t in type_count:
+		var layer: MultiMeshInstance2D = module_layers.get_child(t)
+		var glyphs: PackedVector2Array = sim.module_glyphs(t)
+		var m: int = glyphs.size()
+		var mm: MultiMesh = layer.multimesh
+		if m > mm.instance_count:
+			mm.instance_count = m
+		mm.visible_instance_count = m
+		var col: Color = MODULE_COLORS[t]
+		for i in m:
+			mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(GLYPH_SIZE, GLYPH_SIZE), 0.0, glyphs[i]))
+			mm.set_instance_color(i, col)
+
+func _clear_module_layers() -> void:
+	for child in module_layers.get_children():
+		(child as MultiMeshInstance2D).multimesh.visible_instance_count = 0
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
