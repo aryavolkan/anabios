@@ -56,6 +56,23 @@ impl Simulation {
         }
     }
 
+    /// Load a TOML scenario but override its seed. Returns true on success.
+    #[func]
+    fn load_scenario_with_seed(&mut self, toml_text: GString, seed: i64) -> bool {
+        let text = String::from(toml_text);
+        match anabios_core::Scenario::parse_toml(&text) {
+            Ok(mut s) => {
+                s.seed = seed as u64;
+                self.inner = Some(s.instantiate());
+                true
+            }
+            Err(e) => {
+                godot_error!("scenario parse failed: {e}");
+                false
+            }
+        }
+    }
+
     /// Advance the simulation by N ticks.
     #[func]
     fn step_n(&mut self, n: i64) {
