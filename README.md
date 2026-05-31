@@ -10,6 +10,21 @@ Not a neuroevolution project. Agents have **simple, hand-engineered cognition** 
 
 Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md). M1–M6 shipped (see git tags `m1`–`m6`); M7+ adds module sprite layers, overlays, camera modes, and full codex UI.
 
+## Running a sweep (headless)
+
+Run N seeds of a scenario in parallel and dump per-run codex events + a CSV summary:
+
+```bash
+cargo build --release --bin anabios-headless
+./target/release/anabios-headless sweep \
+    --scenario scenarios/divergent.toml \
+    --seeds 32 --ticks 5000 \
+    --out runs/divergent-32
+cat runs/divergent-32/summary.csv
+```
+
+The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
+
 ## Running the viewer
 
 1. Build the gdext cdylib:
