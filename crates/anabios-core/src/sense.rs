@@ -16,6 +16,9 @@ use crate::spatial::{torus_distance, UniformSpatialHash, PERCEPTION_MAX_RADIUS};
 /// "no neighbor". `Default` initializes the field to this value.
 pub const NO_NEIGHBOR_SPECIES: u32 = u32::MAX;
 
+/// Sentinel in `SensorRegister` id fields meaning "no such neighbor".
+pub const NO_NEIGHBOR_ID: u32 = u32::MAX;
+
 /// Per-agent sensor outputs computed each tick.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SensorRegister {
@@ -35,6 +38,26 @@ pub struct SensorRegister {
     /// initialized state of an uninhabited sensor register doesn't
     /// accidentally look like "compatible with species 0".
     pub nearest_neighbor_species: u32,
+    /// Id of the nearest neighbor of any species, or `NO_NEIGHBOR_ID`.
+    pub nearest_neighbor_id: u32,
+    /// Distance to the nearest neighbor of the SAME species, or `f32::INFINITY`.
+    pub nearest_same_dist: f32,
+    /// Unit direction to the nearest same-species neighbor.
+    pub nearest_same_dir: Vec2,
+    /// Id of the nearest same-species neighbor, or `NO_NEIGHBOR_ID`.
+    pub nearest_same_id: u32,
+    /// Distance to the nearest neighbor of a DIFFERENT species.
+    pub nearest_other_dist: f32,
+    /// Unit direction to the nearest other-species neighbor.
+    pub nearest_other_dir: Vec2,
+    /// Id of the nearest other-species neighbor, or `NO_NEIGHBOR_ID`.
+    pub nearest_other_id: u32,
+    /// `other.size / self.size` of the overall-nearest neighbor; 0.0 if none.
+    pub nearest_rel_size: f32,
+    /// `other.energy / self.energy` of the overall-nearest neighbor; 0.0 if none.
+    pub nearest_rel_energy: f32,
+    /// Count of alive neighbors within perception radius.
+    pub crowding: u32,
 }
 
 impl Default for SensorRegister {
@@ -46,6 +69,16 @@ impl Default for SensorRegister {
             nearest_neighbor_dir: Vec2::ZERO,
             has_neighbor: false,
             nearest_neighbor_species: NO_NEIGHBOR_SPECIES,
+            nearest_neighbor_id: NO_NEIGHBOR_ID,
+            nearest_same_dist: f32::INFINITY,
+            nearest_same_dir: Vec2::ZERO,
+            nearest_same_id: NO_NEIGHBOR_ID,
+            nearest_other_dist: f32::INFINITY,
+            nearest_other_dir: Vec2::ZERO,
+            nearest_other_id: NO_NEIGHBOR_ID,
+            nearest_rel_size: 0.0,
+            nearest_rel_energy: 0.0,
+            crowding: 0,
         }
     }
 }
@@ -88,21 +121,56 @@ pub fn sense_all(
         let local_cell = biome.sample(pos);
         let plant_direction = best_plant_direction(biome, pos, radius);
 
+        let self_species = agents.species_id[i];
+        let self_size = genome.get(GenomeSlot::Size).max(1e-3);
+        let self_energy = agents.energy[i].max(1e-3);
+
         let mut nearest_dist = f32::INFINITY;
         let mut nearest_dir = Vec2::ZERO;
         let mut has_neighbor = false;
         let mut nearest_species: u32 = NO_NEIGHBOR_SPECIES;
-        spatial.query(pos, radius, |other_id| {
-            if other_id == id {
+        let mut nearest_id: u32 = NO_NEIGHBOR_ID;
+        let mut nearest_rel_size = 0.0_f32;
+        let mut nearest_rel_energy = 0.0_f32;
+        let mut same_dist = f32::INFINITY;
+        let mut same_dir = Vec2::ZERO;
+        let mut same_id: u32 = NO_NEIGHBOR_ID;
+        let mut other_dist = f32::INFINITY;
+        let mut other_dir = Vec2::ZERO;
+        let mut other_id: u32 = NO_NEIGHBOR_ID;
+        let mut crowding: u32 = 0;
+
+        spatial.query(pos, radius, |oid| {
+            if oid == id {
                 return;
             }
-            let other_pos = agents.position[other_id as usize];
+            let other_pos = agents.position[oid as usize];
             let d = torus_distance(pos, other_pos);
-            if d <= radius && d < nearest_dist {
+            if d > radius {
+                return;
+            }
+            crowding += 1;
+            let dir = torus_direction(pos, other_pos);
+            let other_species = agents.species_id[oid as usize];
+            if d < nearest_dist {
                 nearest_dist = d;
-                nearest_dir = torus_direction(pos, other_pos);
+                nearest_dir = dir;
                 has_neighbor = true;
-                nearest_species = agents.species_id[other_id as usize];
+                nearest_species = other_species;
+                nearest_id = oid;
+                nearest_rel_size = agents.genome[oid as usize].get(GenomeSlot::Size) / self_size;
+                nearest_rel_energy = agents.energy[oid as usize] / self_energy;
+            }
+            if other_species == self_species {
+                if d < same_dist {
+                    same_dist = d;
+                    same_dir = dir;
+                    same_id = oid;
+                }
+            } else if d < other_dist {
+                other_dist = d;
+                other_dir = dir;
+                other_id = oid;
             }
         });
 
@@ -113,6 +181,16 @@ pub fn sense_all(
             nearest_neighbor_dir: nearest_dir,
             has_neighbor,
             nearest_neighbor_species: nearest_species,
+            nearest_neighbor_id: nearest_id,
+            nearest_same_dist: same_dist,
+            nearest_same_dir: same_dir,
+            nearest_same_id: same_id,
+            nearest_other_dist: other_dist,
+            nearest_other_dir: other_dir,
+            nearest_other_id: other_id,
+            nearest_rel_size,
+            nearest_rel_energy,
+            crowding,
         };
     }
 }
@@ -178,6 +256,7 @@ fn torus_direction(from: Vec2, to: Vec2) -> Vec2 {
 mod tests {
     use super::*;
     use crate::biome::TerrainType;
+    use crate::genome::GenomeSlot;
     use crate::world::World;
 
     #[test]
@@ -240,5 +319,57 @@ mod tests {
         assert!(!regs[0].has_neighbor);
         assert_eq!(regs[0].nearest_neighbor_dist, f32::INFINITY);
         assert_eq!(regs[0].nearest_neighbor_species, NO_NEIGHBOR_SPECIES);
+    }
+
+    #[test]
+    fn distinguishes_same_and_other_species() {
+        let mut w = World::new(1);
+        let me = w.spawn_agent(Vec2::new(100.0, 100.0), Genome::neutral());
+        let kin = w.spawn_agent(Vec2::new(106.0, 100.0), Genome::neutral()); // same species 0
+        let foe = w.spawn_agent(Vec2::new(103.0, 100.0), Genome::neutral());
+        w.agents.species_id[foe as usize] = 1; // make foe another species
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
+        sense_all(&w.agents, &w.biome, &w.spatial, &mut regs);
+        let r = regs[me as usize];
+        assert_eq!(r.nearest_same_id, kin);
+        assert!((r.nearest_same_dist - 6.0).abs() < 1e-3);
+        assert!(r.nearest_same_dir.x > 0.9);
+        assert_eq!(r.nearest_other_id, foe);
+        assert!((r.nearest_other_dist - 3.0).abs() < 1e-3);
+        assert!(r.nearest_other_dir.x > 0.9);
+        // Overall nearest is the foe (3 < 6).
+        assert_eq!(r.nearest_neighbor_id, foe);
+    }
+
+    #[test]
+    fn relative_size_and_energy_of_nearest() {
+        let mut w = World::new(1);
+        let mut big = Genome::neutral();
+        big.set(GenomeSlot::Size, 1.0);
+        let mut small = Genome::neutral();
+        small.set(GenomeSlot::Size, 0.5);
+        let me = w.spawn_agent(Vec2::new(200.0, 200.0), small);
+        let other = w.spawn_agent(Vec2::new(204.0, 200.0), big);
+        w.agents.energy[me as usize] = 20.0;
+        w.agents.energy[other as usize] = 40.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
+        sense_all(&w.agents, &w.biome, &w.spatial, &mut regs);
+        let r = regs[me as usize];
+        assert!((r.nearest_rel_size - 2.0).abs() < 1e-3, "1.0/0.5 = 2.0, got {}", r.nearest_rel_size);
+        assert!((r.nearest_rel_energy - 2.0).abs() < 1e-3, "40/20 = 2.0, got {}", r.nearest_rel_energy);
+    }
+
+    #[test]
+    fn crowding_counts_neighbors_in_radius() {
+        let mut w = World::new(1);
+        let me = w.spawn_agent(Vec2::new(300.0, 300.0), Genome::neutral());
+        let _ = w.spawn_agent(Vec2::new(303.0, 300.0), Genome::neutral());
+        let _ = w.spawn_agent(Vec2::new(300.0, 303.0), Genome::neutral());
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
+        sense_all(&w.agents, &w.biome, &w.spatial, &mut regs);
+        assert_eq!(regs[me as usize].crowding, 2);
     }
 }
