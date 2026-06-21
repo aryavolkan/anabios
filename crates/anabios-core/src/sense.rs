@@ -159,6 +159,8 @@ pub fn sense_all(
                 nearest_species = other_species;
                 nearest_id = oid;
                 nearest_rel_size = agents.genome[oid as usize].get(GenomeSlot::Size) / self_size;
+                // The hash holds only alive agents (rebuilt with the alive
+                // predicate before sense), so the neighbor's energy is >= 0.
                 nearest_rel_energy = agents.energy[oid as usize] / self_energy;
             }
             if other_species == self_species {
@@ -319,6 +321,10 @@ mod tests {
         assert!(!regs[0].has_neighbor);
         assert_eq!(regs[0].nearest_neighbor_dist, f32::INFINITY);
         assert_eq!(regs[0].nearest_neighbor_species, NO_NEIGHBOR_SPECIES);
+        assert_eq!(regs[0].nearest_neighbor_id, NO_NEIGHBOR_ID);
+        assert_eq!(regs[0].nearest_rel_size, 0.0);
+        assert_eq!(regs[0].nearest_rel_energy, 0.0);
+        assert_eq!(regs[0].crowding, 0);
     }
 
     #[test]
