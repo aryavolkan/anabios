@@ -1,5 +1,7 @@
 //! Headless runner for anabios scenarios.
 
+mod sweep;
+
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -40,6 +42,21 @@ enum Command {
         #[arg(long)]
         scenario: PathBuf,
     },
+    /// Sweep N seeds of a scenario in parallel; write per-run codex
+    /// events as JSONL plus an aggregate CSV summary.
+    Sweep {
+        #[arg(long)]
+        scenario: PathBuf,
+        #[arg(long, default_value_t = 16)]
+        seeds: u64,
+        #[arg(long, default_value_t = 2000)]
+        ticks: u64,
+        #[arg(long)]
+        out: PathBuf,
+        /// Override the rayon thread pool size; defaults to logical CPUs.
+        #[arg(long)]
+        threads: Option<usize>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -49,6 +66,9 @@ fn main() -> Result<()> {
             run(scenario, ticks, seed, events_jsonl)
         }
         Command::Info { scenario } => info(scenario),
+        Command::Sweep { scenario, seeds, ticks, out, threads } => {
+            sweep::run(scenario, seeds, ticks, out, threads)
+        }
     }
 }
 
