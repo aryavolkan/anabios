@@ -4,6 +4,7 @@ use crate::age::age_and_starve;
 use crate::behavior::decide;
 use crate::integrate::integrate_all;
 use crate::interact::interact_all;
+use crate::prelude::Vec2;
 use crate::sense::sense_all;
 use crate::world::World;
 
@@ -57,9 +58,10 @@ pub fn step(world: &mut World) {
 }
 
 fn decide_all(world: &mut World) {
-    use crate::prelude::Vec2;
     // Deterministic order: ascending id. Programs are evaluated against the
     // shared `world.eval_stack` scratch buffer.
+    // Collect ids first to release the borrow on `world.agents` before the loop
+    // body borrows `world` mutably (decide reads buffers, then we write back).
     let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
     for id in alive_ids {
         let i = id as usize;
