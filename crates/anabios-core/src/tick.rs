@@ -57,12 +57,13 @@ pub fn step(world: &mut World) {
 }
 
 fn decide_all(world: &mut World) {
+    use crate::prelude::Vec2;
     // Deterministic order: ascending id. Programs are evaluated against the
     // shared `world.eval_stack` scratch buffer.
     let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
     for id in alive_ids {
         let i = id as usize;
-        let dir = decide(
+        let action = decide(
             &world.agents.program[i],
             &world.agents.genome[i],
             &world.sensors[i],
@@ -70,7 +71,12 @@ fn decide_all(world: &mut World) {
             world.agents.age[i],
             &mut world.eval_stack,
         );
-        world.desired_direction[i] = dir;
+        // Normalize the movement intent to a unit direction (identical to the
+        // pre-M11 logic that lived inside `decide`).
+        let v = Vec2::new(action.move_x, action.move_y);
+        let len = v.length();
+        world.desired_direction[i] = if len < 1e-4 { Vec2::ZERO } else { v / len };
+        world.actions[i] = action;
     }
 }
 
@@ -151,5 +157,22 @@ mod tests {
             }
         }
         assert!(!w.agents.is_alive(id));
+    }
+
+    #[test]
+    fn decide_populates_action_buffer_with_target() {
+        use crate::program::{Node, Program, NO_TARGET};
+        let mut w = World::new(1);
+        // A program that always fires with intent 1.0.
+        let prog = Program::from_slice(&[Node::Const(1.0), Node::FireWeapon]);
+        let a = w.spawn_agent(Vec2::new(400.0, 400.0), Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(404.0, 400.0), Genome::neutral());
+        w.agents.program[a as usize] = prog;
+        // One tick runs sense -> decide; afterwards actions[a] reflects the program.
+        step(&mut w);
+        assert!(w.actions[a as usize].fire_intent > 0.0);
+        // a's nearest neighbor is b, so target should be b (not NO_TARGET).
+        assert_eq!(w.actions[a as usize].target_id, b);
+        assert_ne!(w.actions[a as usize].target_id, NO_TARGET);
     }
 }

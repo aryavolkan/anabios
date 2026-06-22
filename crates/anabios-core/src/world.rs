@@ -46,6 +46,10 @@ pub struct World {
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
     pub desired_direction: Vec<crate::prelude::Vec2>,
+    /// Per-agent action register from `decide()`. Scratch, recomputed each
+    /// tick. Consumed by `interact` starting in M12.
+    #[serde(skip)]
+    pub actions: Vec<crate::program::ActionRegister>,
     /// Per-agent BitVec marking who has already mated this tick.
     /// Cleared at the start of `reproduce_all`.
     // allow: filled by Task 6
@@ -78,6 +82,7 @@ impl World {
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
+            actions: Vec::new(),
             reproduced_this_tick: BitVec::new(),
             eval_stack: Vec::new(),
         }
@@ -164,6 +169,9 @@ impl World {
         }
         if self.desired_direction.len() < cap {
             self.desired_direction.resize(cap, crate::prelude::Vec2::ZERO);
+        }
+        if self.actions.len() < cap {
+            self.actions.resize(cap, crate::program::ActionRegister::default());
         }
         if self.reproduced_this_tick.len() < cap {
             self.reproduced_this_tick.resize(cap, false);
