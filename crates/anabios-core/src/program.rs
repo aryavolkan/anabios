@@ -312,8 +312,9 @@ pub fn starter_stalker() -> Program {
     ])
 }
 
-/// Pack hunter: approach prey, broadcast its presence on channel 0 when near,
-/// and fire when adjacent. (Broadcast/FireWeapon inert until M14/M12.)
+/// Pack hunter: approach prey, broadcast its presence on channel 0 when within
+/// ~5 units, and fire when within ~3 units. (Broadcast/FireWeapon inert until
+/// M14/M12.)
 pub fn starter_pack_hunter() -> Program {
     Program::from_slice(&[
         Node::SenseOtherDirX,
