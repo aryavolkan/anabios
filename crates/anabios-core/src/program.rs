@@ -71,6 +71,20 @@ pub enum Node {
     EmitPheromone(u8),
     Broadcast(u8),
     Idle,
+
+    // M11 inputs — appended at the END of the enum on purpose. Serde/bincode
+    // encodes enum variants by positional index, so new variants MUST go last
+    // to keep the serialized bytes of existing agent programs (and thus the
+    // golden-tick state hashes) stable. Logical kinds live in `node_kind`.
+    SenseSameDist,
+    SenseSameDirX,
+    SenseSameDirY,
+    SenseOtherDist,
+    SenseOtherDirX,
+    SenseOtherDirY,
+    SenseRelSize,
+    SenseRelEnergy,
+    SenseCrowding,
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
@@ -125,6 +139,15 @@ impl Program {
             | Node::SensePlantDirY
             | Node::SenseLocalBiomass
             | Node::SenseMeme(_)
+            | Node::SenseSameDist
+            | Node::SenseSameDirX
+            | Node::SenseSameDirY
+            | Node::SenseOtherDist
+            | Node::SenseOtherDirX
+            | Node::SenseOtherDirY
+            | Node::SenseRelSize
+            | Node::SenseRelEnergy
+            | Node::SenseCrowding
             | Node::Const(_) => 0,
             Node::Add | Node::Sub | Node::Mul | Node::Min | Node::Max => 2,
             Node::Neg | Node::Tanh | Node::ThresholdGt(_) => 1,
@@ -194,6 +217,15 @@ impl Program {
             Node::EmitPheromone(_) => 28,
             Node::Broadcast(_) => 29,
             Node::Idle => 30,
+            Node::SenseSameDist => 31,
+            Node::SenseSameDirX => 32,
+            Node::SenseSameDirY => 33,
+            Node::SenseOtherDist => 34,
+            Node::SenseOtherDirX => 35,
+            Node::SenseOtherDirY => 36,
+            Node::SenseRelSize => 37,
+            Node::SenseRelEnergy => 38,
+            Node::SenseCrowding => 39,
         }
     }
 }
@@ -251,6 +283,13 @@ pub struct EvalContext<'a> {
     pub nearest_dir: glam::Vec2,
     pub plant_dir: glam::Vec2,
     pub local_biomass: f32,
+    pub same_distance: f32,
+    pub same_dir: glam::Vec2,
+    pub other_distance: f32,
+    pub other_dir: glam::Vec2,
+    pub rel_size: f32,
+    pub rel_energy: f32,
+    pub crowding: f32,
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -279,6 +318,15 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SensePlantDirX => scratch.push(ctx.plant_dir.x),
             Node::SensePlantDirY => scratch.push(ctx.plant_dir.y),
             Node::SenseLocalBiomass => scratch.push(ctx.local_biomass),
+            Node::SenseSameDist => scratch.push(ctx.same_distance.min(1e6)),
+            Node::SenseSameDirX => scratch.push(ctx.same_dir.x),
+            Node::SenseSameDirY => scratch.push(ctx.same_dir.y),
+            Node::SenseOtherDist => scratch.push(ctx.other_distance.min(1e6)),
+            Node::SenseOtherDirX => scratch.push(ctx.other_dir.x),
+            Node::SenseOtherDirY => scratch.push(ctx.other_dir.y),
+            Node::SenseRelSize => scratch.push(ctx.rel_size),
+            Node::SenseRelEnergy => scratch.push(ctx.rel_energy),
+            Node::SenseCrowding => scratch.push(ctx.crowding),
             Node::SenseMeme(_) => scratch.push(0.0),
             Node::Const(v) => scratch.push(v),
 
@@ -481,6 +529,13 @@ mod tests {
             nearest_dir: glam::Vec2::new(1.0, 0.0),
             plant_dir: glam::Vec2::new(0.0, 1.0),
             local_biomass: 8.0,
+            same_distance: f32::INFINITY,
+            same_dir: glam::Vec2::ZERO,
+            other_distance: f32::INFINITY,
+            other_dir: glam::Vec2::ZERO,
+            rel_size: 0.0,
+            rel_energy: 0.0,
+            crowding: 0.0,
         }
     }
 
@@ -603,5 +658,27 @@ mod tests {
         let c1 = crossover_and_mutate(&p, &p, &mut r1);
         let c2 = crossover_and_mutate(&p, &p, &mut r2);
         assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn new_sense_nodes_push_context_values() {
+        let g = Genome::neutral();
+        let ctx = EvalContext {
+            same_distance: 6.0,
+            same_dir: glam::Vec2::new(1.0, 0.0),
+            other_distance: 3.0,
+            other_dir: glam::Vec2::new(0.0, 1.0),
+            rel_size: 2.0,
+            rel_energy: 0.5,
+            crowding: 4.0,
+            ..dummy_ctx(&g)
+        };
+        let mut stack = Vec::new();
+        let p = Program::from_slice(&[Node::SenseRelSize, Node::MoveTowardX]);
+        let a = evaluate(&p, ctx, &mut stack);
+        assert_eq!(a.move_x, 2.0);
+        let p2 = Program::from_slice(&[Node::SenseCrowding, Node::MoveTowardY]);
+        let a2 = evaluate(&p2, ctx, &mut stack);
+        assert_eq!(a2.move_y, 4.0);
     }
 }

@@ -28,6 +28,13 @@ pub fn decide(
         nearest_dir: sensor.nearest_neighbor_dir,
         plant_dir: sensor.plant_direction,
         local_biomass: sensor.local_plant_biomass,
+        same_distance: sensor.nearest_same_dist,
+        same_dir: sensor.nearest_same_dir,
+        other_distance: sensor.nearest_other_dist,
+        other_dir: sensor.nearest_other_dir,
+        rel_size: sensor.nearest_rel_size,
+        rel_energy: sensor.nearest_rel_energy,
+        crowding: sensor.crowding as f32,
     };
     let ActionRegister { move_x, move_y, .. } = evaluate(program, ctx, eval_stack);
 
