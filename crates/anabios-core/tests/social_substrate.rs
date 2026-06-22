@@ -35,8 +35,8 @@ fn predator_program_produces_fire_intent_and_target() {
     let prey = w.spawn_agent(Vec2::new(503.0, 500.0), Genome::neutral());
     let prey_species = reassign_to_new_species(&mut w, prey);
     assert_eq!(prey_species, 1); // sanity: helper returns the new species id
-    // Fire when other_dist < 6. The postfix idiom `SenseOtherDist, Neg,
-    // ThresholdGt(-6.0)` computes `(-other_dist) > -6`, i.e. `other_dist < 6`.
+                                 // Fire when other_dist < 6. The postfix idiom `SenseOtherDist, Neg,
+                                 // ThresholdGt(-6.0)` computes `(-other_dist) > -6`, i.e. `other_dist < 6`.
     w.agents.program[pred as usize] = Program::from_slice(&[
         Node::SenseOtherDist,
         Node::Neg,
@@ -93,9 +93,8 @@ fn relative_size_channel_is_visible_to_programs() {
     big.set(GenomeSlot::Size, 1.0);
     let me = w.spawn_agent(Vec2::new(800.0, 800.0), small);
     let _bigger = w.spawn_agent(Vec2::new(804.0, 800.0), big); // present to be sensed; id not needed
-    // move_x = rel_size (will be >1 because neighbor is bigger)
-    w.agents.program[me as usize] =
-        Program::from_slice(&[Node::SenseRelSize, Node::MoveTowardX]);
+                                                               // move_x = rel_size (will be >1 because neighbor is bigger)
+    w.agents.program[me as usize] = Program::from_slice(&[Node::SenseRelSize, Node::MoveTowardX]);
     step(&mut w);
     // MoveTowardX is the only move node, so the raw vector is (rel_size, 0)
     // with rel_size > 0, which normalizes to exactly (1, 0). Assert > 0.9.

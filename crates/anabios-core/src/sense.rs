@@ -363,8 +363,16 @@ mod tests {
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
         sense_all(&w.agents, &w.biome, &w.spatial, &mut regs);
         let r = regs[me as usize];
-        assert!((r.nearest_rel_size - 2.0).abs() < 1e-3, "1.0/0.5 = 2.0, got {}", r.nearest_rel_size);
-        assert!((r.nearest_rel_energy - 2.0).abs() < 1e-3, "40/20 = 2.0, got {}", r.nearest_rel_energy);
+        assert!(
+            (r.nearest_rel_size - 2.0).abs() < 1e-3,
+            "1.0/0.5 = 2.0, got {}",
+            r.nearest_rel_size
+        );
+        assert!(
+            (r.nearest_rel_energy - 2.0).abs() < 1e-3,
+            "40/20 = 2.0, got {}",
+            r.nearest_rel_energy
+        );
     }
 
     #[test]
