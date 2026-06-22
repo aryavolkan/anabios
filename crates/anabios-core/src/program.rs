@@ -732,6 +732,27 @@ mod tests {
     }
 
     #[test]
+    fn fire_intent_accumulates_and_idle_discards() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        // Two FireWeapon outputs accumulate (+=), and an Idle output writes
+        // no intent while still draining its stack value.
+        let p = Program::from_slice(&[
+            Node::Const(0.3),
+            Node::FireWeapon,
+            Node::Const(0.4),
+            Node::FireWeapon,
+            Node::Const(99.0),
+            Node::Idle,
+        ]);
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert!((a.fire_intent - 0.7).abs() < 1e-6, "0.3 + 0.4 = 0.7, got {}", a.fire_intent);
+        assert_eq!(a.emit_intent[0], 0.0);
+        assert_eq!(a.broadcast_intent[0], 0.0);
+        assert_eq!(a.feed_intent, 0.0);
+    }
+
+    #[test]
     fn new_sense_nodes_push_context_values() {
         let g = Genome::neutral();
         let ctx = EvalContext {
