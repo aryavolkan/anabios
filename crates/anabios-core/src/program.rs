@@ -296,9 +296,72 @@ pub fn starter_grazer() -> Program {
     ])
 }
 
-/// Library of starter programs. Founders use index 0.
+/// Stalker: approach the nearest other-species agent and fire a weapon when
+/// within ~3 units. (`FireWeapon` is inert until M12 wires combat.)
+pub fn starter_stalker() -> Program {
+    Program::from_slice(&[
+        Node::SenseOtherDirX,
+        Node::MoveTowardX,
+        Node::SenseOtherDirY,
+        Node::MoveTowardY,
+        // fire when other_dist < 3  ==  (-other_dist) > -3
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-3.0),
+        Node::FireWeapon,
+    ])
+}
+
+/// Pack hunter: approach prey, broadcast its presence on channel 0 when near,
+/// and fire when adjacent. (Broadcast/FireWeapon inert until M14/M12.)
+pub fn starter_pack_hunter() -> Program {
+    Program::from_slice(&[
+        Node::SenseOtherDirX,
+        Node::MoveTowardX,
+        Node::SenseOtherDirY,
+        Node::MoveTowardY,
+        // broadcast presence when other_dist < 5
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-5.0),
+        Node::Broadcast(0),
+        // fire when other_dist < 3
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-3.0),
+        Node::FireWeapon,
+    ])
+}
+
+/// Sentinel: flee from the nearest other-species agent and raise an alarm on
+/// channel 1 when one is within ~8 units. (Broadcast inert until M14.)
+pub fn starter_sentinel() -> Program {
+    Program::from_slice(&[
+        Node::SenseOtherDirX,
+        Node::MoveAwayX,
+        Node::SenseOtherDirY,
+        Node::MoveAwayY,
+        // alarm when other_dist < 8
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-8.0),
+        Node::Broadcast(1),
+    ])
+}
+
+/// Herd: move toward the nearest same-species neighbor (cohesion).
+pub fn starter_herd() -> Program {
+    Program::from_slice(&[
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+    ])
+}
+
+/// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
-    &[starter_grazer]
+    &[starter_grazer, starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd]
 }
 
 /// Per-agent inputs read by the evaluator. Caller fills this each tick.
@@ -750,6 +813,33 @@ mod tests {
         assert_eq!(a.emit_intent[0], 0.0);
         assert_eq!(a.broadcast_intent[0], 0.0);
         assert_eq!(a.feed_intent, 0.0);
+    }
+
+    #[test]
+    fn social_starters_are_bounded_and_evaluable() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        for make in [starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd] {
+            let p = make();
+            assert!(!p.is_empty());
+            assert!(p.len() <= PROGRAM_MAX_NODES);
+            // Must evaluate without panicking against a populated context.
+            let _ = evaluate(&p, dummy_ctx(&g), &mut stack);
+        }
+    }
+
+    #[test]
+    fn herd_moves_toward_same_species() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let ctx = EvalContext { same_dir: glam::Vec2::new(1.0, 0.0), ..dummy_ctx(&g) };
+        let a = evaluate(&starter_herd(), ctx, &mut stack);
+        assert!(a.move_x > 0.0, "herd should move toward same-species: {:?}", a);
+    }
+
+    #[test]
+    fn starter_library_has_all_starters() {
+        assert_eq!(starter_library().len(), 5);
     }
 
     #[test]
