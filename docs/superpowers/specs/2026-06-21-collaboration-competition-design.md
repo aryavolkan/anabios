@@ -127,6 +127,13 @@ Pure enablement; no emergent behavior claimed. **Mechanism tests only.**
   `Weapon.damage` to its action-target within contact range, reduced by the
   target's `Armor.protection`, spending the attacker's `Weapon.energy_cost`.
   Lethal damage uses the normal death path (freelist, lineage preserved).
+  **Targeting note (carried from M11 review):** M11's `ActionRegister.target_id`
+  resolves to the *overall-nearest* neighbor (any species). Combat should target
+  the nearest *other-species* agent instead — `SensorRegister.nearest_other_id`
+  is already populated for exactly this. Either retarget in `interact.rs` from
+  the sensor, or have `decide()` set `target_id` from `nearest_other_id` for
+  attacking programs. Don't silently inherit the overall-nearest target, or a
+  predator with a closer kin would fire at kin.
 - **Predation — carnivore Mouth on flesh.** Extend feeding so a meat-affinity
   `Mouth` biting a killed/dead agent in range converts a fraction of the
   victim's remaining energy into the eater's energy. Closes the trophic loop
