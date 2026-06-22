@@ -14,8 +14,11 @@ use anabios_core::world::World;
 /// species before the first tick.
 fn reassign_to_new_species(w: &mut World, agent: u32) -> u32 {
     let sid = w.species_centroids.len() as u32;
+    // Grow all three parallel species tables explicitly so the helper is
+    // self-contained (not relying on add_to_species's internal resize).
     w.species_centroids.push(Genome::neutral());
     w.species_parents.push(Some(0));
+    w.species_member_counts.push(0);
     w.next_species_id = sid + 1;
     w.remove_from_species(w.agents.species_id[agent as usize]);
     w.agents.species_id[agent as usize] = sid;
@@ -31,8 +34,9 @@ fn predator_program_produces_fire_intent_and_target() {
     let pred = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
     let prey = w.spawn_agent(Vec2::new(503.0, 500.0), Genome::neutral());
     let prey_species = reassign_to_new_species(&mut w, prey);
-    assert_eq!(prey_species, 1);
-    // fire_intent = 1 when other_dist < 6
+    assert_eq!(prey_species, 1); // sanity: helper returns the new species id
+    // Fire when other_dist < 6. The postfix idiom `SenseOtherDist, Neg,
+    // ThresholdGt(-6.0)` computes `(-other_dist) > -6`, i.e. `other_dist < 6`.
     w.agents.program[pred as usize] = Program::from_slice(&[
         Node::SenseOtherDist,
         Node::Neg,
@@ -88,12 +92,12 @@ fn relative_size_channel_is_visible_to_programs() {
     let mut big = Genome::neutral();
     big.set(GenomeSlot::Size, 1.0);
     let me = w.spawn_agent(Vec2::new(800.0, 800.0), small);
-    let _bigger = w.spawn_agent(Vec2::new(804.0, 800.0), big);
+    let _bigger = w.spawn_agent(Vec2::new(804.0, 800.0), big); // present to be sensed; id not needed
     // move_x = rel_size (will be >1 because neighbor is bigger)
     w.agents.program[me as usize] =
         Program::from_slice(&[Node::SenseRelSize, Node::MoveTowardX]);
     step(&mut w);
-    // desired_direction is normalized, so just assert it points +x (toward the
-    // computed positive intent) — rel_size > 0 means a positive move_x.
+    // MoveTowardX is the only move node, so the raw vector is (rel_size, 0)
+    // with rel_size > 0, which normalizes to exactly (1, 0). Assert > 0.9.
     assert!(w.desired_direction[me as usize].x > 0.9);
 }
