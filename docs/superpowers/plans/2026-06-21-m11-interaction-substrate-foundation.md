@@ -281,7 +281,7 @@ Expected: FAIL — `EvalContext` has no field `same_distance` / no variant `Sens
 
 - [ ] **Step 3: Add the node variants**
 
-In the `Node` enum (`program.rs`), in the `// Inputs` group after `SenseLocalBiomass`, add:
+In the `Node` enum (`program.rs`), append the variants at the **very end of the enum, after `Idle`** (NOT in the Inputs group). Serde/bincode encodes enum variants by positional index, so inserting mid-enum shifts the discriminants of every later variant and changes the serialized bytes of existing agent programs — breaking the golden-tick hashes. Appending keeps M11 hash-neutral; logical discriminants come from `node_kind`, which is position-independent. Also: because `decide()` in `behavior.rs` builds an `EvalContext` struct literal, you MUST populate the new `EvalContext` fields there in this same task (see below) or the crate won't compile.
 
 ```rust
     SenseSameDist,
