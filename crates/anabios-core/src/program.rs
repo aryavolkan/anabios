@@ -30,6 +30,13 @@ pub const SUBTREE_REPLACE_PROB: f32 = 0.02;
 /// Sigma for Gaussian perturbation of `Const(f32)` values.
 pub const CONST_SIGMA: f32 = 0.1;
 
+/// Number of pheromone channels (design §3.6). Wired by M13.
+pub const PHEROMONE_CHANNELS: usize = 4;
+/// Number of meme/broadcast channels (design §3.1). Wired by M14.
+pub const MEME_CHANNELS: usize = 8;
+/// Sentinel in `ActionRegister.target_id` meaning "no action target".
+pub const NO_TARGET: u32 = u32::MAX;
+
 /// AST node. Operators reference operands implicitly via the postfix
 /// evaluation stack, so the same `Program` struct works for any topology
 /// without explicit child indices.
@@ -88,12 +95,33 @@ pub enum Node {
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct ActionRegister {
     pub move_x: f32,
     pub move_y: f32,
     pub feed_intent: f32,
     pub mate_intent: f32,
+    pub fire_intent: f32,
+    pub emit_intent: [f32; PHEROMONE_CHANNELS],
+    pub broadcast_intent: [f32; MEME_CHANNELS],
+    /// Agent this action is directed at (combat/share target), derived from
+    /// the nearest-neighbor sense. `NO_TARGET` when there is no neighbor.
+    pub target_id: u32,
+}
+
+impl Default for ActionRegister {
+    fn default() -> Self {
+        Self {
+            move_x: 0.0,
+            move_y: 0.0,
+            feed_intent: 0.0,
+            mate_intent: 0.0,
+            fire_intent: 0.0,
+            emit_intent: [0.0; PHEROMONE_CHANNELS],
+            broadcast_intent: [0.0; MEME_CHANNELS],
+            target_id: NO_TARGET,
+        }
+    }
 }
 
 /// One agent's behavior program.
@@ -389,7 +417,16 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::MoveAwayY => action.move_y -= scratch.pop().unwrap(),
             Node::Feed => action.feed_intent += scratch.pop().unwrap(),
             Node::Mate => action.mate_intent += scratch.pop().unwrap(),
-            Node::FireWeapon | Node::EmitPheromone(_) | Node::Broadcast(_) | Node::Idle => {
+            Node::FireWeapon => action.fire_intent += scratch.pop().unwrap(),
+            Node::EmitPheromone(ch) => {
+                let v = scratch.pop().unwrap();
+                action.emit_intent[(ch as usize).min(PHEROMONE_CHANNELS - 1)] += v;
+            }
+            Node::Broadcast(ch) => {
+                let v = scratch.pop().unwrap();
+                action.broadcast_intent[(ch as usize).min(MEME_CHANNELS - 1)] += v;
+            }
+            Node::Idle => {
                 scratch.pop();
             }
         }
@@ -658,6 +695,40 @@ mod tests {
         let c1 = crossover_and_mutate(&p, &p, &mut r1);
         let c2 = crossover_and_mutate(&p, &p, &mut r2);
         assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn fire_emit_broadcast_write_intents() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let p = Program::from_slice(&[
+            Node::Const(0.8),
+            Node::FireWeapon,
+            Node::Const(0.5),
+            Node::EmitPheromone(2),
+            Node::Const(0.9),
+            Node::Broadcast(1),
+        ]);
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert_eq!(a.fire_intent, 0.8);
+        assert_eq!(a.emit_intent[2], 0.5);
+        assert_eq!(a.broadcast_intent[1], 0.9);
+        assert_eq!(a.target_id, NO_TARGET);
+    }
+
+    #[test]
+    fn out_of_range_channels_clamp() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let p = Program::from_slice(&[
+            Node::Const(1.0),
+            Node::EmitPheromone(250), // clamps to last pheromone channel
+            Node::Const(1.0),
+            Node::Broadcast(250), // clamps to last meme channel
+        ]);
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert_eq!(a.emit_intent[PHEROMONE_CHANNELS - 1], 1.0);
+        assert_eq!(a.broadcast_intent[MEME_CHANNELS - 1], 1.0);
     }
 
     #[test]
