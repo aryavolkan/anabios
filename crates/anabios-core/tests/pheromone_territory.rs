@@ -104,3 +104,56 @@ fn smell_sensored_agent_reads_local_pheromone_sensorless_reads_zero() {
     step(&mut w2);
     assert_eq!(w2.desired_direction[blind as usize].x, 0.0, "no Smell → reads zero (gating)");
 }
+
+use anabios_core::codex::{species_spread, EventType, TERRITORY_SPREAD_MAX};
+
+#[test]
+fn species_spread_is_small_for_a_tight_cluster_large_for_a_dispersed_one() {
+    let tight = [
+        Vec2::new(500.0, 500.0),
+        Vec2::new(505.0, 500.0),
+        Vec2::new(500.0, 505.0),
+    ];
+    let dispersed = [
+        Vec2::new(100.0, 100.0),
+        Vec2::new(900.0, 100.0),
+        Vec2::new(500.0, 900.0),
+    ];
+    assert!(species_spread(&tight) < TERRITORY_SPREAD_MAX);
+    assert!(species_spread(&dispersed) > TERRITORY_SPREAD_MAX);
+}
+
+#[test]
+fn territory_formation_fires_for_a_clustered_marking_species() {
+    use anabios_core::codex::observe_all;
+    let mut w = World::new(5);
+    // Spawn a tight cluster of pheromone-markers as their own species.
+    let mut ids = Vec::new();
+    for k in 0..6 {
+        let id = w.spawn_agent(Vec2::new(500.0 + k as f32, 500.0), Genome::neutral());
+        w.agents.modules[id as usize] = marker_kit(); // has a Pheromone module
+        ids.push(id);
+    }
+    // Move them all into one fresh species so they are measured together.
+    let sid = w.species_centroids.len() as u32;
+    w.species_centroids.push(Genome::neutral());
+    w.species_parents.push(Some(0));
+    w.species_member_counts.push(0);
+    w.next_species_id = sid + 1;
+    for &id in &ids {
+        w.remove_from_species(w.agents.species_id[id as usize]);
+        w.agents.species_id[id as usize] = sid;
+        w.add_to_species(sid);
+    }
+    // Run observe_all for a full window without moving them (tight cluster persists).
+    let mut fired = false;
+    for _ in 0..(anabios_core::codex::TERRITORY_WINDOW + 2) {
+        observe_all(&mut w);
+        w.tick += 1;
+        if w.codex.events.iter().any(|e| e.event_type == EventType::TerritoryFormation) {
+            fired = true;
+            break;
+        }
+    }
+    assert!(fired, "a tight, persistent marking species forms a territory");
+}

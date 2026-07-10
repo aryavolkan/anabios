@@ -44,6 +44,13 @@ pub const ARMS_WINDOW: usize = 20;
 /// Minimum rise (window back − front) in a trait mean to count as "trending up".
 pub const ARMS_MIN_DELTA: f32 = 0.5;
 
+/// Ticks a species must stay clustered to count as a formed territory.
+pub const TERRITORY_WINDOW: usize = 60;
+/// Max RMS spread (world units) for a species to count as "clustered".
+pub const TERRITORY_SPREAD_MAX: f32 = 120.0;
+/// Min members before territory clustering is meaningful.
+pub const TERRITORY_MIN_MEMBERS: u32 = 5;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EventType {
@@ -59,6 +66,8 @@ pub enum EventType {
     CombatRaid = 7,
     /// One species' mean weapon damage and another's mean armor both trend up.
     ArmsRace = 8,
+    /// A pheromone-marking species maintains a tight, persistent spatial cluster.
+    TerritoryFormation = 9,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +121,10 @@ pub struct CodexState {
     pub armor_history: BTreeMap<u32, VecDeque<f32>>,
     /// Edge-trigger state for ArmsRace.
     pub arms_race_active: bool,
+    /// Rolling per-species RMS spatial spread (for TerritoryFormation).
+    pub territory_spread: BTreeMap<u32, VecDeque<f32>>,
+    /// Species currently latched as having a formed territory.
+    pub territory_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -146,6 +159,28 @@ impl CodexState {
             loc_y: y,
         });
     }
+}
+
+/// RMS distance (torus-aware) of `positions` from their coordinate mean.
+/// Returns 0.0 for fewer than 2 points.
+pub fn species_spread(positions: &[glam::Vec2]) -> f32 {
+    if positions.len() < 2 {
+        return 0.0;
+    }
+    let n = positions.len() as f32;
+    let mut cx = 0.0f64;
+    let mut cy = 0.0f64;
+    for p in positions {
+        cx += p.x as f64;
+        cy += p.y as f64;
+    }
+    let centroid = glam::Vec2::new((cx / n as f64) as f32, (cy / n as f64) as f32);
+    let mut sumsq = 0.0f64;
+    for p in positions {
+        let d = crate::spatial::torus_distance(*p, centroid);
+        sumsq += (d as f64) * (d as f64);
+    }
+    ((sumsq / n as f64).sqrt()) as f32
 }
 
 /// Pure ArmsRace test: is there a species whose weapon-damage mean rose across
@@ -229,6 +264,57 @@ fn detect_arms_race(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
     }
 }
 
+/// TerritoryFormation: a pheromone-marking species that stays clustered (spread
+/// ≤ TERRITORY_SPREAD_MAX) for TERRITORY_WINDOW consecutive ticks. Edge-
+/// triggered per species; re-arms when the cluster disperses.
+fn detect_territory_formation(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+    let tick = world.tick;
+    // Gather per-species member positions and whether the species marks (has a
+    // Pheromone module member). BTreeMap → deterministic.
+    let mut positions: BTreeMap<u32, Vec<glam::Vec2>> = BTreeMap::new();
+    let mut marks: BTreeSet<u32> = BTreeSet::new();
+    for id in world.agents.iter_alive() {
+        let i = id as usize;
+        let sid = world.agents.species_id[i];
+        positions.entry(sid).or_default().push(world.agents.position[i]);
+        if crate::module::has(&world.agents.modules[i], crate::module::ModuleType::Pheromone) {
+            marks.insert(sid);
+        }
+    }
+    let mut to_push: Vec<CodexEvent> = Vec::new();
+    for (sid, ps) in positions.iter() {
+        if (ps.len() as u32) < TERRITORY_MIN_MEMBERS || !marks.contains(sid) {
+            world.codex.territory_spread.remove(sid);
+            world.codex.territory_active.remove(sid);
+            continue;
+        }
+        let spread = species_spread(ps);
+        let buf = world.codex.territory_spread.entry(*sid).or_default();
+        if buf.len() == TERRITORY_WINDOW {
+            buf.pop_front();
+        }
+        buf.push_back(spread);
+        let clustered = buf.len() == TERRITORY_WINDOW && buf.iter().all(|&s| s <= TERRITORY_SPREAD_MAX);
+        if clustered && !world.codex.territory_active.contains(sid) {
+            let (lx, ly) = centroid_of(centroids, *sid);
+            to_push.push(CodexEvent {
+                event_type: EventType::TerritoryFormation,
+                tick,
+                species_id: *sid,
+                value: *buf.back().unwrap(),
+                loc_x: lx,
+                loc_y: ly,
+            });
+            world.codex.territory_active.insert(*sid);
+        } else if !clustered {
+            world.codex.territory_active.remove(sid);
+        }
+    }
+    for ev in to_push {
+        world.codex.push_event(ev);
+    }
+}
+
 /// Run all detectors. Called by the tick orchestrator at the end of each
 /// tick. SpeciationEvent is emitted directly from `species_step`.
 pub fn observe_all(world: &mut World) {
@@ -248,6 +334,7 @@ pub fn observe_all(world: &mut World) {
     detect_predation(world);
     detect_combat_raid(world);
     detect_arms_race(world, &centroids);
+    detect_territory_formation(world, &centroids);
 }
 
 /// Mean alive position per species, ascending id order, f64 accumulator.
