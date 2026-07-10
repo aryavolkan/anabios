@@ -14,7 +14,11 @@ fn arm_predator(w: &mut World, i: usize, damage: f32, cost: f32) {
 }
 
 /// Build a module kit inline (test-local so the test is self-contained).
-fn smallvec_kit(weapon_damage: f32, weapon_cost: f32, armor: f32) -> anabios_core::module::ModuleList {
+fn smallvec_kit(
+    weapon_damage: f32,
+    weapon_cost: f32,
+    armor: f32,
+) -> anabios_core::module::ModuleList {
     let mut m = anabios_core::module::ModuleList::new();
     m.push(Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 });
     m.push(Module::Sensor { sensor_type: SensorType::Vision, radius: 0.6, acuity: 0.6 });
@@ -125,7 +129,7 @@ fn death_forms_carcass_with_flesh_proportional_to_size() {
     w.agents.modules[id as usize]
         .retain(|m| !matches!(m, Module::Locomotor { .. } | Module::Mouth { .. }));
     w.agents.energy[id as usize] = 0.3; // dies next age_and_starve
-    // Run until it dies (energy <= 0).
+                                        // Run until it dies (energy <= 0).
     for _ in 0..50 {
         step(&mut w);
         if !w.agents.is_alive(id) {
@@ -144,12 +148,7 @@ fn death_forms_carcass_with_flesh_proportional_to_size() {
 fn carcass_decays_and_is_removed_after_decay_ticks() {
     use anabios_core::carcass::{carcass_step, Carcass, CARCASS_DECAY_TICKS};
     let mut w = World::new(1);
-    w.carcasses.push(Carcass {
-        pos: Vec2::new(10.0, 10.0),
-        flesh: 5.0,
-        age: 0,
-        species_id: 0,
-    });
+    w.carcasses.push(Carcass { pos: Vec2::new(10.0, 10.0), flesh: 5.0, age: 0, species_id: 0 });
     for _ in 0..CARCASS_DECAY_TICKS {
         carcass_step(&mut w);
     }
@@ -179,14 +178,10 @@ fn carnivore_scavenges_carcass_gaining_energy_and_depleting_flesh() {
 fn herbivore_does_not_scavenge_flesh() {
     use anabios_core::carcass::Carcass;
     let mut w = World::new(2);
-    let eater = w.spawn_agent(Vec2::new(400.0, 400.0), Genome::neutral());
+    // Spawn a default (herbivore) agent; id unused — the point is it does NOT eat.
+    let _eater = w.spawn_agent(Vec2::new(400.0, 400.0), Genome::neutral());
     // Default starter_kit Mouth has diet_affinity = 0.0 (pure herbivore).
-    w.carcasses.push(Carcass {
-        pos: Vec2::new(400.5, 400.0),
-        flesh: 10.0,
-        age: 0,
-        species_id: 1,
-    });
+    w.carcasses.push(Carcass { pos: Vec2::new(400.5, 400.0), flesh: 10.0, age: 0, species_id: 1 });
     step(&mut w);
     assert_eq!(w.carcasses[0].flesh, 10.0, "herbivore Mouth does not eat flesh (gating)");
 }
