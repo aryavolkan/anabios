@@ -185,8 +185,8 @@ pub fn sense_all(
         let pheromone = if crate::module::has_smell(&agents.modules[i]) {
             let pos = agents.position[i];
             let mut ch_vals = [0.0f32; crate::program::PHEROMONE_CHANNELS];
-            for ch in 0..crate::program::PHEROMONE_CHANNELS {
-                ch_vals[ch] = pheromones.sample(pos, ch);
+            for (ch, v) in ch_vals.iter_mut().enumerate() {
+                *v = pheromones.sample(pos, ch);
             }
             ch_vals
         } else {

@@ -109,16 +109,8 @@ use anabios_core::codex::{species_spread, EventType, TERRITORY_SPREAD_MAX};
 
 #[test]
 fn species_spread_is_small_for_a_tight_cluster_large_for_a_dispersed_one() {
-    let tight = [
-        Vec2::new(500.0, 500.0),
-        Vec2::new(505.0, 500.0),
-        Vec2::new(500.0, 505.0),
-    ];
-    let dispersed = [
-        Vec2::new(100.0, 100.0),
-        Vec2::new(900.0, 100.0),
-        Vec2::new(500.0, 900.0),
-    ];
+    let tight = [Vec2::new(500.0, 500.0), Vec2::new(505.0, 500.0), Vec2::new(500.0, 505.0)];
+    let dispersed = [Vec2::new(100.0, 100.0), Vec2::new(900.0, 100.0), Vec2::new(500.0, 900.0)];
     assert!(species_spread(&tight) < TERRITORY_SPREAD_MAX);
     assert!(species_spread(&dispersed) > TERRITORY_SPREAD_MAX);
 }

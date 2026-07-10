@@ -319,7 +319,8 @@ fn detect_territory_formation(world: &mut World, centroids: &BTreeMap<u32, (f32,
             buf.pop_front();
         }
         buf.push_back(spread);
-        let clustered = buf.len() == TERRITORY_WINDOW && buf.iter().all(|&s| s <= TERRITORY_SPREAD_MAX);
+        let clustered =
+            buf.len() == TERRITORY_WINDOW && buf.iter().all(|&s| s <= TERRITORY_SPREAD_MAX);
         if clustered && !world.codex.territory_active.contains(sid) {
             let (lx, ly) = centroid_of(centroids, *sid);
             to_push.push(CodexEvent {
