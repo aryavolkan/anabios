@@ -155,3 +155,54 @@ fn carcass_decays_and_is_removed_after_decay_ticks() {
     }
     assert!(w.carcasses.is_empty(), "carcass removed once age reaches CARCASS_DECAY_TICKS");
 }
+
+#[test]
+fn carnivore_scavenges_carcass_gaining_energy_and_depleting_flesh() {
+    use anabios_core::carcass::Carcass;
+    let mut w = World::new(2);
+    let eater = w.spawn_agent(Vec2::new(400.0, 400.0), Genome::neutral());
+    // Carnivore Mouth (diet_affinity = 1.0), no weapon needed to scavenge.
+    w.agents.modules[eater as usize] = smallvec_kit(0.0, 0.0, 0.0);
+    w.carcasses.push(Carcass {
+        pos: Vec2::new(400.5, 400.0), // within SCAVENGE_RANGE
+        flesh: 10.0,
+        age: 0,
+        species_id: 1,
+    });
+    let e0 = w.agents.energy[eater as usize];
+    step(&mut w);
+    assert!(w.agents.energy[eater as usize] > e0, "carnivore gained energy from flesh");
+    assert!(w.carcasses[0].flesh < 10.0, "carcass flesh depleted by scavenging");
+}
+
+#[test]
+fn herbivore_does_not_scavenge_flesh() {
+    use anabios_core::carcass::Carcass;
+    let mut w = World::new(2);
+    let eater = w.spawn_agent(Vec2::new(400.0, 400.0), Genome::neutral());
+    // Default starter_kit Mouth has diet_affinity = 0.0 (pure herbivore).
+    w.carcasses.push(Carcass {
+        pos: Vec2::new(400.5, 400.0),
+        flesh: 10.0,
+        age: 0,
+        species_id: 1,
+    });
+    step(&mut w);
+    assert_eq!(w.carcasses[0].flesh, 10.0, "herbivore Mouth does not eat flesh (gating)");
+}
+
+#[test]
+fn carcass_out_of_scavenge_range_is_not_eaten() {
+    use anabios_core::carcass::Carcass;
+    let mut w = World::new(2);
+    let eater = w.spawn_agent(Vec2::new(400.0, 400.0), Genome::neutral());
+    w.agents.modules[eater as usize] = smallvec_kit(0.0, 0.0, 0.0); // carnivore
+    w.carcasses.push(Carcass {
+        pos: Vec2::new(500.0, 400.0), // 100 units away
+        flesh: 10.0,
+        age: 0,
+        species_id: 1,
+    });
+    step(&mut w);
+    assert_eq!(w.carcasses[0].flesh, 10.0, "carcass out of range is untouched");
+}

@@ -88,5 +88,42 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
     }
 }
 
-/// Predation: filled in by Task 3 (carnivore Mouth scavenges carcasses).
-fn scavenge_pass(_world: &mut World, _alive_ids: &[u32]) {}
+/// Predation: a carnivore-capable Mouth bites the nearest carcass within
+/// `SCAVENGE_RANGE`, converting its flesh into energy. Ties on distance break
+/// toward the lower carcass index (strict `<`), keeping this deterministic.
+fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
+    use crate::carcass::{FLESH_ENERGY_PER_UNIT, SCAVENGE_MAX, SCAVENGE_RANGE};
+    for &id in alive_ids {
+        let i = id as usize;
+        if !module::has(&world.agents.modules[i], ModuleType::Mouth) {
+            continue;
+        }
+        let carn = module::effective_diet_carnivory(&world.agents.modules[i]);
+        let bite_cap = module::effective_bite_size(&world.agents.modules[i]);
+        if carn <= 0.0 || bite_cap <= 0.0 {
+            continue;
+        }
+        let pos = world.agents.position[i];
+        let mut best: Option<usize> = None;
+        let mut best_d = SCAVENGE_RANGE;
+        for (ci, c) in world.carcasses.iter().enumerate() {
+            if c.flesh <= 0.0 {
+                continue;
+            }
+            let d = crate::spatial::torus_distance(pos, c.pos);
+            if d < best_d {
+                best_d = d;
+                best = Some(ci);
+            }
+        }
+        if let Some(ci) = best {
+            let size = world.agents.genome[i].get(GenomeSlot::Size).max(0.1);
+            let desired = SCAVENGE_MAX * size * bite_cap * carn;
+            let taken = desired.min(world.carcasses[ci].flesh);
+            if taken > 0.0 {
+                world.carcasses[ci].flesh -= taken;
+                world.agents.energy[i] += taken * FLESH_ENERGY_PER_UNIT;
+            }
+        }
+    }
+}
