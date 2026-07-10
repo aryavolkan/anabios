@@ -51,6 +51,13 @@ pub const TERRITORY_SPREAD_MAX: f32 = 120.0;
 /// Min members before territory clustering is meaningful.
 pub const TERRITORY_MIN_MEMBERS: u32 = 5;
 
+/// Ticks two species must stay below the overlap threshold to partition.
+pub const NICHE_WINDOW: u32 = 60;
+/// Max terrain-distribution overlap for two species to count as partitioned.
+pub const NICHE_OVERLAP_MAX: f32 = 0.35;
+/// Min members per species for niche comparison to be meaningful.
+pub const NICHE_MIN_MEMBERS: u32 = 5;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EventType {
@@ -68,6 +75,8 @@ pub enum EventType {
     ArmsRace = 8,
     /// A pheromone-marking species maintains a tight, persistent spatial cluster.
     TerritoryFormation = 9,
+    /// Two species occupy divergent terrain-type distributions (low overlap).
+    NichePartitioning = 10,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,6 +134,10 @@ pub struct CodexState {
     pub territory_spread: BTreeMap<u32, VecDeque<f32>>,
     /// Species currently latched as having a formed territory.
     pub territory_active: BTreeSet<u32>,
+    /// Per species-pair consecutive-tick streak below the overlap threshold.
+    pub niche_streak: BTreeMap<(u32, u32), u32>,
+    /// Species pairs currently latched as niche-partitioned.
+    pub niche_active: BTreeSet<(u32, u32)>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -209,6 +222,18 @@ pub fn arms_race_signal(
         }
     }
     None
+}
+
+/// Histogram intersection of two normalized terrain distributions
+/// (`Σ min(a_t, b_t)`): 1.0 identical, 0.0 disjoint.
+pub fn histogram_overlap(a: &BTreeMap<u8, f32>, b: &BTreeMap<u8, f32>) -> f32 {
+    let mut overlap = 0.0f32;
+    for (t, av) in a.iter() {
+        if let Some(bv) = b.get(t) {
+            overlap += av.min(*bv);
+        }
+    }
+    overlap
 }
 
 /// Update per-species weapon/armor trend windows from the current population,
@@ -315,6 +340,64 @@ fn detect_territory_formation(world: &mut World, centroids: &BTreeMap<u32, (f32,
     }
 }
 
+/// NichePartitioning: two ≥NICHE_MIN_MEMBERS species whose terrain-type
+/// distributions overlap ≤ NICHE_OVERLAP_MAX for NICHE_WINDOW consecutive ticks.
+fn detect_niche_partitioning(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+    let tick = world.tick;
+    // Per-species normalized terrain histogram (terrain discriminant → fraction).
+    let mut counts: BTreeMap<u32, BTreeMap<u8, f32>> = BTreeMap::new();
+    let mut totals: BTreeMap<u32, u32> = BTreeMap::new();
+    for id in world.agents.iter_alive() {
+        let i = id as usize;
+        let sid = world.agents.species_id[i];
+        let (col, row) = crate::biome::BiomeField::cell_coords(world.agents.position[i]);
+        let terrain = world.biome.at(col, row).terrain as u8;
+        *counts.entry(sid).or_default().entry(terrain).or_insert(0.0) += 1.0;
+        *totals.entry(sid).or_insert(0) += 1;
+    }
+    // Normalize and keep only species with enough members.
+    let mut hist: BTreeMap<u32, BTreeMap<u8, f32>> = BTreeMap::new();
+    for (sid, h) in counts.into_iter() {
+        let n = *totals.get(&sid).unwrap_or(&0);
+        if n < NICHE_MIN_MEMBERS {
+            continue;
+        }
+        let nf = n as f32;
+        hist.insert(sid, h.into_iter().map(|(t, c)| (t, c / nf)).collect());
+    }
+    let sids: Vec<u32> = hist.keys().copied().collect();
+    let mut to_push: Vec<CodexEvent> = Vec::new();
+    for ai in 0..sids.len() {
+        for bi in (ai + 1)..sids.len() {
+            let (a, b) = (sids[ai], sids[bi]); // a < b (ascending keys)
+            let overlap = histogram_overlap(&hist[&a], &hist[&b]);
+            let key = (a, b);
+            if overlap <= NICHE_OVERLAP_MAX {
+                let s = world.codex.niche_streak.entry(key).or_insert(0);
+                *s += 1;
+                if *s >= NICHE_WINDOW && !world.codex.niche_active.contains(&key) {
+                    let (lx, ly) = centroid_of(centroids, a);
+                    to_push.push(CodexEvent {
+                        event_type: EventType::NichePartitioning,
+                        tick,
+                        species_id: a,
+                        value: overlap,
+                        loc_x: lx,
+                        loc_y: ly,
+                    });
+                    world.codex.niche_active.insert(key);
+                }
+            } else {
+                world.codex.niche_streak.remove(&key);
+                world.codex.niche_active.remove(&key);
+            }
+        }
+    }
+    for ev in to_push {
+        world.codex.push_event(ev);
+    }
+}
+
 /// Run all detectors. Called by the tick orchestrator at the end of each
 /// tick. SpeciationEvent is emitted directly from `species_step`.
 pub fn observe_all(world: &mut World) {
@@ -335,6 +418,7 @@ pub fn observe_all(world: &mut World) {
     detect_combat_raid(world);
     detect_arms_race(world, &centroids);
     detect_territory_formation(world, &centroids);
+    detect_niche_partitioning(world, &centroids);
 }
 
 /// Mean alive position per species, ascending id order, f64 accumulator.
