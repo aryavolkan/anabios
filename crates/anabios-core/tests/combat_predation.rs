@@ -186,6 +186,36 @@ fn herbivore_does_not_scavenge_flesh() {
     assert_eq!(w.carcasses[0].flesh, 10.0, "herbivore Mouth does not eat flesh (gating)");
 }
 
+/// Herbivory-gate coverage restored (was a dropped interact.rs unit test): an
+/// obligate carnivore (diet_affinity 1.0) does NOT graze plant biomass, so on a
+/// grass cell with no carcass/prey it can only lose energy to metabolism.
+#[test]
+fn obligate_carnivore_does_not_graze_plants() {
+    use anabios_core::biome::{TerrainType, BIOME_RES, CELL_SIZE};
+    let mut w = World::new(4);
+    // Find a grass cell — a herbivore here would gain energy by grazing.
+    let mut spawn = Vec2::new(0.0, 0.0);
+    'outer: for row in 0..BIOME_RES {
+        for col in 0..BIOME_RES {
+            if w.biome.at(col, row).terrain == TerrainType::Grass
+                && w.biome.at(col, row).plant_biomass > 0.0
+            {
+                spawn = Vec2::new((col as f32 + 0.5) * CELL_SIZE, (row as f32 + 0.5) * CELL_SIZE);
+                break 'outer;
+            }
+        }
+    }
+    let id = w.spawn_agent(spawn, Genome::neutral());
+    // Obligate carnivore kit (diet_affinity 1.0 Mouth); no weapon/prey/carcass.
+    w.agents.modules[id as usize] = smallvec_kit(0.0, 0.0, 0.0);
+    let e0 = w.agents.energy[id as usize];
+    step(&mut w);
+    assert!(
+        w.agents.energy[id as usize] < e0,
+        "carnivore must not gain energy from plants on a grass cell (herbivory gate)"
+    );
+}
+
 #[test]
 fn carcass_out_of_scavenge_range_is_not_eaten() {
     use anabios_core::carcass::Carcass;
