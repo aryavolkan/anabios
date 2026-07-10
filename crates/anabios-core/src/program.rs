@@ -92,6 +92,8 @@ pub enum Node {
     SenseRelSize,
     SenseRelEnergy,
     SenseCrowding,
+    /// Local pheromone concentration on the given channel (Smell-gated). M13.
+    SensePheromone(u8),
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
@@ -176,6 +178,7 @@ impl Program {
             | Node::SenseRelSize
             | Node::SenseRelEnergy
             | Node::SenseCrowding
+            | Node::SensePheromone(_)
             | Node::Const(_) => 0,
             Node::Add | Node::Sub | Node::Mul | Node::Min | Node::Max => 2,
             Node::Neg | Node::Tanh | Node::ThresholdGt(_) => 1,
@@ -254,6 +257,7 @@ impl Program {
             Node::SenseRelSize => 37,
             Node::SenseRelEnergy => 38,
             Node::SenseCrowding => 39,
+            Node::SensePheromone(_) => 40,
         }
     }
 }
@@ -382,6 +386,7 @@ pub struct EvalContext<'a> {
     pub rel_size: f32,
     pub rel_energy: f32,
     pub crowding: f32,
+    pub pheromone_sample: [f32; PHEROMONE_CHANNELS],
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -419,6 +424,9 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SenseRelSize => scratch.push(ctx.rel_size),
             Node::SenseRelEnergy => scratch.push(ctx.rel_energy),
             Node::SenseCrowding => scratch.push(ctx.crowding),
+            Node::SensePheromone(ch) => {
+                scratch.push(ctx.pheromone_sample[(ch as usize).min(PHEROMONE_CHANNELS - 1)])
+            }
             Node::SenseMeme(_) => scratch.push(0.0),
             Node::Const(v) => scratch.push(v),
 
@@ -637,6 +645,7 @@ mod tests {
             rel_size: 0.0,
             rel_energy: 0.0,
             crowding: 0.0,
+            pheromone_sample: [0.0; PHEROMONE_CHANNELS],
         }
     }
 

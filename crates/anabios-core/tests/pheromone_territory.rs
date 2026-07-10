@@ -70,3 +70,37 @@ fn agent_without_pheromone_module_deposits_nothing() {
     step(&mut w);
     assert_eq!(w.pheromones.sample(pos, 3), 0.0, "no Pheromone module → no deposit (gating)");
 }
+
+#[test]
+fn smell_sensored_agent_reads_local_pheromone_sensorless_reads_zero() {
+    // Sensor agent: has a Smell sensor; a plant marker is pre-seeded at its cell.
+    let mut w = World::new(2);
+    let smeller = w.spawn_agent(Vec2::new(700.0, 700.0), Genome::neutral());
+    let mut kit = marker_kit();
+    // marker_kit's Sensor is Vision; swap to Smell so sensing is gated ON.
+    for m in kit.iter_mut() {
+        if let Module::Sensor { sensor_type, .. } = m {
+            *sensor_type = SensorType::Smell;
+        }
+    }
+    w.agents.modules[smeller as usize] = kit;
+    // Program: move_x = SensePheromone(2). Plant a Trail (channel 2) at its cell.
+    let pos = w.agents.position[smeller as usize];
+    w.pheromones.deposit(pos, 2, 3.0);
+    w.agents.program[smeller as usize] =
+        Program::from_slice(&[Node::SensePheromone(2), Node::MoveTowardX]);
+    step(&mut w);
+    // A positive pheromone read drives move_x > 0 → normalized to +1 on x.
+    assert!(w.desired_direction[smeller as usize].x > 0.9, "Smell agent reads the pheromone");
+
+    // Sensorless agent (no Smell) reads zero → no movement from the same program.
+    let mut w2 = World::new(2);
+    let blind = w2.spawn_agent(Vec2::new(700.0, 700.0), Genome::neutral());
+    // Default starter_kit Sensor is Vision (not Smell).
+    let pos2 = w2.agents.position[blind as usize];
+    w2.pheromones.deposit(pos2, 2, 3.0);
+    w2.agents.program[blind as usize] =
+        Program::from_slice(&[Node::SensePheromone(2), Node::MoveTowardX]);
+    step(&mut w2);
+    assert_eq!(w2.desired_direction[blind as usize].x, 0.0, "no Smell → reads zero (gating)");
+}
