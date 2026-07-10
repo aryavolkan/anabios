@@ -30,6 +30,13 @@ pub const SUBTREE_REPLACE_PROB: f32 = 0.02;
 /// Sigma for Gaussian perturbation of `Const(f32)` values.
 pub const CONST_SIGMA: f32 = 0.1;
 
+/// Number of pheromone channels (design §3.6). Wired by M13.
+pub const PHEROMONE_CHANNELS: usize = 4;
+/// Number of meme/broadcast channels (design §3.1). Wired by M14.
+pub const MEME_CHANNELS: usize = 8;
+/// Sentinel in `ActionRegister.target_id` meaning "no action target".
+pub const NO_TARGET: u32 = u32::MAX;
+
 /// AST node. Operators reference operands implicitly via the postfix
 /// evaluation stack, so the same `Program` struct works for any topology
 /// without explicit child indices.
@@ -71,15 +78,50 @@ pub enum Node {
     EmitPheromone(u8),
     Broadcast(u8),
     Idle,
+
+    // M11 inputs — appended at the END of the enum on purpose. Serde/bincode
+    // encodes enum variants by positional index, so new variants MUST go last
+    // to keep the serialized bytes of existing agent programs (and thus the
+    // golden-tick state hashes) stable. Logical kinds live in `node_kind`.
+    SenseSameDist,
+    SenseSameDirX,
+    SenseSameDirY,
+    SenseOtherDist,
+    SenseOtherDirX,
+    SenseOtherDirY,
+    SenseRelSize,
+    SenseRelEnergy,
+    SenseCrowding,
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct ActionRegister {
     pub move_x: f32,
     pub move_y: f32,
     pub feed_intent: f32,
     pub mate_intent: f32,
+    pub fire_intent: f32,
+    pub emit_intent: [f32; PHEROMONE_CHANNELS],
+    pub broadcast_intent: [f32; MEME_CHANNELS],
+    /// Agent this action is directed at (combat/share target), derived from
+    /// the nearest-neighbor sense. `NO_TARGET` when there is no neighbor.
+    pub target_id: u32,
+}
+
+impl Default for ActionRegister {
+    fn default() -> Self {
+        Self {
+            move_x: 0.0,
+            move_y: 0.0,
+            feed_intent: 0.0,
+            mate_intent: 0.0,
+            fire_intent: 0.0,
+            emit_intent: [0.0; PHEROMONE_CHANNELS],
+            broadcast_intent: [0.0; MEME_CHANNELS],
+            target_id: NO_TARGET,
+        }
+    }
 }
 
 /// One agent's behavior program.
@@ -125,6 +167,15 @@ impl Program {
             | Node::SensePlantDirY
             | Node::SenseLocalBiomass
             | Node::SenseMeme(_)
+            | Node::SenseSameDist
+            | Node::SenseSameDirX
+            | Node::SenseSameDirY
+            | Node::SenseOtherDist
+            | Node::SenseOtherDirX
+            | Node::SenseOtherDirY
+            | Node::SenseRelSize
+            | Node::SenseRelEnergy
+            | Node::SenseCrowding
             | Node::Const(_) => 0,
             Node::Add | Node::Sub | Node::Mul | Node::Min | Node::Max => 2,
             Node::Neg | Node::Tanh | Node::ThresholdGt(_) => 1,
@@ -194,6 +245,15 @@ impl Program {
             Node::EmitPheromone(_) => 28,
             Node::Broadcast(_) => 29,
             Node::Idle => 30,
+            Node::SenseSameDist => 31,
+            Node::SenseSameDirX => 32,
+            Node::SenseSameDirY => 33,
+            Node::SenseOtherDist => 34,
+            Node::SenseOtherDirX => 35,
+            Node::SenseOtherDirY => 36,
+            Node::SenseRelSize => 37,
+            Node::SenseRelEnergy => 38,
+            Node::SenseCrowding => 39,
         }
     }
 }
@@ -236,9 +296,73 @@ pub fn starter_grazer() -> Program {
     ])
 }
 
-/// Library of starter programs. Founders use index 0.
+/// Stalker: approach the nearest other-species agent and fire a weapon when
+/// within ~3 units. (`FireWeapon` is inert until M12 wires combat.)
+pub fn starter_stalker() -> Program {
+    Program::from_slice(&[
+        Node::SenseOtherDirX,
+        Node::MoveTowardX,
+        Node::SenseOtherDirY,
+        Node::MoveTowardY,
+        // fire when other_dist < 3  ==  (-other_dist) > -3
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-3.0),
+        Node::FireWeapon,
+    ])
+}
+
+/// Pack hunter: approach prey, broadcast its presence on channel 0 when within
+/// ~5 units, and fire when within ~3 units. (Broadcast/FireWeapon inert until
+/// M14/M12.)
+pub fn starter_pack_hunter() -> Program {
+    Program::from_slice(&[
+        Node::SenseOtherDirX,
+        Node::MoveTowardX,
+        Node::SenseOtherDirY,
+        Node::MoveTowardY,
+        // broadcast presence when other_dist < 5
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-5.0),
+        Node::Broadcast(0),
+        // fire when other_dist < 3
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-3.0),
+        Node::FireWeapon,
+    ])
+}
+
+/// Sentinel: flee from the nearest other-species agent and raise an alarm on
+/// channel 1 when one is within ~8 units. (Broadcast inert until M14.)
+pub fn starter_sentinel() -> Program {
+    Program::from_slice(&[
+        Node::SenseOtherDirX,
+        Node::MoveAwayX,
+        Node::SenseOtherDirY,
+        Node::MoveAwayY,
+        // alarm when other_dist < 8
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-8.0),
+        Node::Broadcast(1),
+    ])
+}
+
+/// Herd: move toward the nearest same-species neighbor (cohesion).
+pub fn starter_herd() -> Program {
+    Program::from_slice(&[
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+    ])
+}
+
+/// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
-    &[starter_grazer]
+    &[starter_grazer, starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd]
 }
 
 /// Per-agent inputs read by the evaluator. Caller fills this each tick.
@@ -251,6 +375,13 @@ pub struct EvalContext<'a> {
     pub nearest_dir: glam::Vec2,
     pub plant_dir: glam::Vec2,
     pub local_biomass: f32,
+    pub same_distance: f32,
+    pub same_dir: glam::Vec2,
+    pub other_distance: f32,
+    pub other_dir: glam::Vec2,
+    pub rel_size: f32,
+    pub rel_energy: f32,
+    pub crowding: f32,
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -279,6 +410,15 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SensePlantDirX => scratch.push(ctx.plant_dir.x),
             Node::SensePlantDirY => scratch.push(ctx.plant_dir.y),
             Node::SenseLocalBiomass => scratch.push(ctx.local_biomass),
+            Node::SenseSameDist => scratch.push(ctx.same_distance.min(1e6)),
+            Node::SenseSameDirX => scratch.push(ctx.same_dir.x),
+            Node::SenseSameDirY => scratch.push(ctx.same_dir.y),
+            Node::SenseOtherDist => scratch.push(ctx.other_distance.min(1e6)),
+            Node::SenseOtherDirX => scratch.push(ctx.other_dir.x),
+            Node::SenseOtherDirY => scratch.push(ctx.other_dir.y),
+            Node::SenseRelSize => scratch.push(ctx.rel_size),
+            Node::SenseRelEnergy => scratch.push(ctx.rel_energy),
+            Node::SenseCrowding => scratch.push(ctx.crowding),
             Node::SenseMeme(_) => scratch.push(0.0),
             Node::Const(v) => scratch.push(v),
 
@@ -341,7 +481,16 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::MoveAwayY => action.move_y -= scratch.pop().unwrap(),
             Node::Feed => action.feed_intent += scratch.pop().unwrap(),
             Node::Mate => action.mate_intent += scratch.pop().unwrap(),
-            Node::FireWeapon | Node::EmitPheromone(_) | Node::Broadcast(_) | Node::Idle => {
+            Node::FireWeapon => action.fire_intent += scratch.pop().unwrap(),
+            Node::EmitPheromone(ch) => {
+                let v = scratch.pop().unwrap();
+                action.emit_intent[(ch as usize).min(PHEROMONE_CHANNELS - 1)] += v;
+            }
+            Node::Broadcast(ch) => {
+                let v = scratch.pop().unwrap();
+                action.broadcast_intent[(ch as usize).min(MEME_CHANNELS - 1)] += v;
+            }
+            Node::Idle => {
                 scratch.pop();
             }
         }
@@ -481,6 +630,13 @@ mod tests {
             nearest_dir: glam::Vec2::new(1.0, 0.0),
             plant_dir: glam::Vec2::new(0.0, 1.0),
             local_biomass: 8.0,
+            same_distance: f32::INFINITY,
+            same_dir: glam::Vec2::ZERO,
+            other_distance: f32::INFINITY,
+            other_dir: glam::Vec2::ZERO,
+            rel_size: 0.0,
+            rel_energy: 0.0,
+            crowding: 0.0,
         }
     }
 
@@ -603,5 +759,109 @@ mod tests {
         let c1 = crossover_and_mutate(&p, &p, &mut r1);
         let c2 = crossover_and_mutate(&p, &p, &mut r2);
         assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn fire_emit_broadcast_write_intents() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let p = Program::from_slice(&[
+            Node::Const(0.8),
+            Node::FireWeapon,
+            Node::Const(0.5),
+            Node::EmitPheromone(2),
+            Node::Const(0.9),
+            Node::Broadcast(1),
+        ]);
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert_eq!(a.fire_intent, 0.8);
+        assert_eq!(a.emit_intent[2], 0.5);
+        assert_eq!(a.broadcast_intent[1], 0.9);
+        assert_eq!(a.target_id, NO_TARGET);
+    }
+
+    #[test]
+    fn out_of_range_channels_clamp() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let p = Program::from_slice(&[
+            Node::Const(1.0),
+            Node::EmitPheromone(250), // clamps to last pheromone channel
+            Node::Const(1.0),
+            Node::Broadcast(250), // clamps to last meme channel
+        ]);
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert_eq!(a.emit_intent[PHEROMONE_CHANNELS - 1], 1.0);
+        assert_eq!(a.broadcast_intent[MEME_CHANNELS - 1], 1.0);
+    }
+
+    #[test]
+    fn fire_intent_accumulates_and_idle_discards() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        // Two FireWeapon outputs accumulate (+=), and an Idle output writes
+        // no intent while still draining its stack value.
+        let p = Program::from_slice(&[
+            Node::Const(0.3),
+            Node::FireWeapon,
+            Node::Const(0.4),
+            Node::FireWeapon,
+            Node::Const(99.0),
+            Node::Idle,
+        ]);
+        let a = evaluate(&p, dummy_ctx(&g), &mut stack);
+        assert!((a.fire_intent - 0.7).abs() < 1e-6, "0.3 + 0.4 = 0.7, got {}", a.fire_intent);
+        assert_eq!(a.emit_intent[0], 0.0);
+        assert_eq!(a.broadcast_intent[0], 0.0);
+        assert_eq!(a.feed_intent, 0.0);
+    }
+
+    #[test]
+    fn social_starters_are_bounded_and_evaluable() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        for make in [starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd] {
+            let p = make();
+            assert!(!p.is_empty());
+            assert!(p.len() <= PROGRAM_MAX_NODES);
+            // Must evaluate without panicking against a populated context.
+            let _ = evaluate(&p, dummy_ctx(&g), &mut stack);
+        }
+    }
+
+    #[test]
+    fn herd_moves_toward_same_species() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let ctx = EvalContext { same_dir: glam::Vec2::new(1.0, 0.0), ..dummy_ctx(&g) };
+        let a = evaluate(&starter_herd(), ctx, &mut stack);
+        assert!(a.move_x > 0.0, "herd should move toward same-species: {:?}", a);
+    }
+
+    #[test]
+    fn starter_library_has_all_starters() {
+        assert_eq!(starter_library().len(), 5);
+    }
+
+    #[test]
+    fn new_sense_nodes_push_context_values() {
+        let g = Genome::neutral();
+        let ctx = EvalContext {
+            same_distance: 6.0,
+            same_dir: glam::Vec2::new(1.0, 0.0),
+            other_distance: 3.0,
+            other_dir: glam::Vec2::new(0.0, 1.0),
+            rel_size: 2.0,
+            rel_energy: 0.5,
+            crowding: 4.0,
+            ..dummy_ctx(&g)
+        };
+        let mut stack = Vec::new();
+        let p = Program::from_slice(&[Node::SenseRelSize, Node::MoveTowardX]);
+        let a = evaluate(&p, ctx, &mut stack);
+        assert_eq!(a.move_x, 2.0);
+        let p2 = Program::from_slice(&[Node::SenseCrowding, Node::MoveTowardY]);
+        let a2 = evaluate(&p2, ctx, &mut stack);
+        assert_eq!(a2.move_y, 4.0);
     }
 }
