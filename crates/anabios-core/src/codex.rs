@@ -33,6 +33,11 @@ pub const MIGRATION_WINDOW: usize = 200;
 /// units across `MIGRATION_WINDOW` ticks.
 pub const MIGRATION_DISTANCE: f32 = 150.0;
 
+/// Window (ticks) over which combat deaths accumulate for CombatRaid.
+pub const COMBAT_RAID_WINDOW: u64 = 100;
+/// Combat deaths within the window needed to declare a CombatRaid.
+pub const COMBAT_RAID_THRESHOLD: usize = 3;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EventType {
@@ -42,6 +47,10 @@ pub enum EventType {
     Migration = 3,
     NovelModuleAppeared = 4,
     NovelBehaviorPattern = 5,
+    /// First agent death caused by another agent's weapon (vs starvation/age).
+    Predation = 6,
+    /// Sustained combat deaths crossing a rolling window threshold.
+    CombatRaid = 7,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +69,17 @@ pub struct CodexEvent {
     pub loc_y: f32,
 }
 
+/// A death attributed to another agent's weapon. Fuel for the Predation /
+/// CombatRaid detectors.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CombatDeath {
+    pub tick: u64,
+    pub victim_species: u32,
+    pub attacker_species: u32,
+    pub loc_x: f32,
+    pub loc_y: f32,
+}
+
 /// Persistent state owned by `World`. Holds detector scratch and the
 /// event ring buffer.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -72,6 +92,12 @@ pub struct CodexState {
     pub seen_modules: BTreeMap<u32, BTreeSet<u8>>,
     /// Per-species set of program node-kind discriminants already observed.
     pub seen_node_kinds: BTreeMap<u32, BTreeSet<u8>>,
+    /// Rolling window of combat-attributed deaths (pruned to COMBAT_RAID_WINDOW).
+    pub combat_deaths: VecDeque<CombatDeath>,
+    /// Latch: the first Predation event has been emitted.
+    pub predation_emitted: bool,
+    /// Edge-trigger state for CombatRaid (armed while below threshold).
+    pub raid_active: bool,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -88,6 +114,24 @@ impl CodexState {
     pub fn drain_events(&mut self) -> std::collections::vec_deque::Drain<'_, CodexEvent> {
         self.events.drain(..)
     }
+
+    /// Record a combat-attributed death for the Predation/CombatRaid detectors.
+    pub fn record_combat_death(
+        &mut self,
+        tick: u64,
+        victim_species: u32,
+        attacker_species: u32,
+        x: f32,
+        y: f32,
+    ) {
+        self.combat_deaths.push_back(CombatDeath {
+            tick,
+            victim_species,
+            attacker_species,
+            loc_x: x,
+            loc_y: y,
+        });
+    }
 }
 
 /// Run all detectors. Called by the tick orchestrator at the end of each
@@ -103,6 +147,11 @@ pub fn observe_all(world: &mut World) {
     detect_migration(world, &centroids);
     detect_novel_modules(world, &centroids);
     detect_novel_behavior(world, &centroids);
+    // Predation runs before CombatRaid on purpose: it scans this tick's
+    // combat-death entries, and CombatRaid then prunes entries older than the
+    // window (which never includes the current tick).
+    detect_predation(world);
+    detect_combat_raid(world);
 }
 
 /// Mean alive position per species, ascending id order, f64 accumulator.
@@ -316,6 +365,58 @@ fn detect_novel_behavior(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)
     }
     for ev in to_push {
         world.codex.push_event(ev);
+    }
+}
+
+/// Predation: emit once, the first tick a combat-attributed death is recorded.
+/// Payload species = the attacker (predator) species.
+fn detect_predation(world: &mut World) {
+    if world.codex.predation_emitted {
+        return;
+    }
+    let tick = world.tick;
+    if let Some(cd) = world.codex.combat_deaths.iter().find(|d| d.tick == tick) {
+        let ev = CodexEvent {
+            event_type: EventType::Predation,
+            tick,
+            species_id: cd.attacker_species,
+            value: 1.0,
+            loc_x: cd.loc_x,
+            loc_y: cd.loc_y,
+        };
+        world.codex.push_event(ev);
+        world.codex.predation_emitted = true;
+    }
+}
+
+/// CombatRaid: prune the combat-death window, then edge-trigger when the count
+/// reaches COMBAT_RAID_THRESHOLD. Re-arms when it drops back below threshold.
+fn detect_combat_raid(world: &mut World) {
+    let tick = world.tick;
+    let cutoff = tick.saturating_sub(COMBAT_RAID_WINDOW);
+    while let Some(front) = world.codex.combat_deaths.front() {
+        if front.tick < cutoff {
+            world.codex.combat_deaths.pop_front();
+        } else {
+            break;
+        }
+    }
+    let count = world.codex.combat_deaths.len();
+    let raiding = count >= COMBAT_RAID_THRESHOLD;
+    if raiding && !world.codex.raid_active {
+        let last = world.codex.combat_deaths.back().expect("non-empty when raiding");
+        let ev = CodexEvent {
+            event_type: EventType::CombatRaid,
+            tick,
+            species_id: last.attacker_species,
+            value: count as f32,
+            loc_x: last.loc_x,
+            loc_y: last.loc_y,
+        };
+        world.codex.push_event(ev);
+        world.codex.raid_active = true;
+    } else if !raiding {
+        world.codex.raid_active = false;
     }
 }
 

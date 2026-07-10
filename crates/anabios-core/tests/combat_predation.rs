@@ -206,3 +206,77 @@ fn carcass_out_of_scavenge_range_is_not_eaten() {
     step(&mut w);
     assert_eq!(w.carcasses[0].flesh, 10.0, "carcass out of range is untouched");
 }
+
+use anabios_core::codex::EventType;
+
+/// Count events of a given type currently in the codex ring buffer.
+fn count_events(w: &World, t: EventType) -> usize {
+    w.codex.events.iter().filter(|e| e.event_type == t).count()
+}
+
+/// Build a lethal predator (huge damage) that always fires, adjacent to prey.
+fn spawn_lethal_duel(seed: u64) -> (World, u32, u32) {
+    let mut w = World::new(seed);
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let prey = w.spawn_agent(Vec2::new(501.0, 500.0), Genome::neutral());
+    reassign_to_new_species(&mut w, prey);
+    arm_predator(&mut w, pred as usize, /*damage=*/ 1000.0, /*cost=*/ 1.0);
+    w.agents.program[pred as usize] = always_fire();
+    (w, pred, prey)
+}
+
+#[test]
+fn predation_event_fires_once_on_a_combat_kill() {
+    let (mut w, _pred, prey) = spawn_lethal_duel(11);
+    // Step until the prey dies from combat.
+    for _ in 0..10 {
+        step(&mut w);
+        if !w.agents.is_alive(prey) {
+            break;
+        }
+    }
+    assert!(!w.agents.is_alive(prey), "prey should be killed by combat");
+    assert_eq!(count_events(&w, EventType::Predation), 1, "Predation fires exactly once");
+    // Keep stepping — it must not fire again (latched).
+    for _ in 0..20 {
+        step(&mut w);
+    }
+    assert_eq!(count_events(&w, EventType::Predation), 1, "Predation stays latched");
+}
+
+#[test]
+fn starvation_death_does_not_fire_predation() {
+    let mut w = World::new(5);
+    let g = Genome::neutral();
+    let id = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+    // Strip Mouth (and Locomotor) so the agent cannot graze back to life —
+    // guarantees a terrain-independent starvation death.
+    w.agents.modules[id as usize]
+        .retain(|m| !matches!(m, Module::Locomotor { .. } | Module::Mouth { .. }));
+    w.agents.energy[id as usize] = 0.2;
+    for _ in 0..50 {
+        step(&mut w);
+        if !w.agents.is_alive(id) {
+            break;
+        }
+    }
+    assert!(!w.agents.is_alive(id), "agent starved");
+    assert_eq!(count_events(&w, EventType::Predation), 0, "starvation is not predation");
+}
+
+#[test]
+fn combat_raid_fires_on_sustained_conflict_not_a_single_kill() {
+    use anabios_core::codex::COMBAT_RAID_THRESHOLD;
+    // Drive the detector directly via recorded combat deaths, then observe.
+    let mut w = World::new(9);
+    // A single death: below threshold → no raid.
+    w.codex.record_combat_death(w.tick, 1, 0, 10.0, 10.0);
+    anabios_core::codex::observe_all(&mut w);
+    assert_eq!(count_events(&w, EventType::CombatRaid), 0, "one kill is not a raid");
+    // Push up to threshold within the window.
+    for _ in 1..COMBAT_RAID_THRESHOLD {
+        w.codex.record_combat_death(w.tick, 1, 0, 10.0, 10.0);
+    }
+    anabios_core::codex::observe_all(&mut w);
+    assert_eq!(count_events(&w, EventType::CombatRaid), 1, "sustained conflict → one CombatRaid");
+}
