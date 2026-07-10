@@ -130,6 +130,31 @@ impl World {
         id
     }
 
+    /// Spawn an agent with an explicit species, module kit, and program.
+    /// Used by scenario archetypes (`spawn_agent` always uses species 0 +
+    /// grazer defaults).
+    pub fn spawn_seeded(
+        &mut self,
+        position: Vec2,
+        genome: Genome,
+        species_id: crate::agent::SpeciesId,
+        modules: crate::module::ModuleList,
+        program: crate::program::Program,
+    ) -> AgentId {
+        let lineage = self.next_lineage();
+        let id = self.agents.spawn(
+            position,
+            genome,
+            lineage,
+            [LINEAGE_NONE; 2],
+            species_id,
+            modules,
+            program,
+        );
+        self.add_to_species(species_id);
+        id
+    }
+
     /// Increment the species member count, growing the table if needed.
     /// Called by every spawn path.
     pub fn add_to_species(&mut self, species_id: u32) {

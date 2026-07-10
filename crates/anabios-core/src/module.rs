@@ -221,6 +221,17 @@ pub fn starter_kit() -> ModuleList {
     ]
 }
 
+/// A carnivore starter kit: mobile, sighted, meat-eating, and armed. Used by
+/// the `stalker`/`pack_hunter` scenario archetypes.
+pub fn predator_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.7, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.8, acuity: 0.7 },
+        Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 },
+        Module::Weapon { damage: 8.0, energy_cost: 1.0 },
+    ]
+}
+
 /// `true` iff the list contains at least one module of the given type.
 #[inline]
 pub fn has(modules: &ModuleList, module_type: ModuleType) -> bool {

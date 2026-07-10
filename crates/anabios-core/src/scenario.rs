@@ -25,6 +25,8 @@ pub struct AgentSpec {
     pub placement: Placement,
     #[serde(default)]
     pub traits: TraitOverrides,
+    #[serde(default)]
+    pub archetype: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -80,6 +82,22 @@ impl Default for Placement {
     }
 }
 
+/// Resolve an archetype name to its starter program + module kit. Unknown
+/// names fall back to the grazer defaults.
+fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Program) {
+    use crate::module::{predator_kit, starter_kit};
+    use crate::program::{
+        starter_grazer, starter_herd, starter_pack_hunter, starter_sentinel, starter_stalker,
+    };
+    match name {
+        "stalker" => (predator_kit(), starter_stalker()),
+        "pack_hunter" => (predator_kit(), starter_pack_hunter()),
+        "sentinel" => (starter_kit(), starter_sentinel()),
+        "herd" => (starter_kit(), starter_herd()),
+        _ => (starter_kit(), starter_grazer()),
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ScenarioError {
     #[error("toml parse error: {0}")]
@@ -96,7 +114,29 @@ impl Scenario {
     /// RNG in agent-id order.
     pub fn instantiate(&self) -> World {
         let mut w = World::new(self.seed);
-        for spec in &self.agents {
+        for spec in self.agents.iter() {
+            // Each archetype spec gets a FRESH species id from `next_species_id`,
+            // reserving species 0 strictly for archetype-free (legacy) specs.
+            // (Using the spec index as the id would let an archetype at index 0
+            // silently alias the default species 0.)
+            let (species_id, kit) = match &spec.archetype {
+                Some(name) => {
+                    let sid = w.next_species_id;
+                    // Grow the species tables for this id (spawn_seeded's
+                    // add_to_species only grows the member-count vec).
+                    while w.species_centroids.len() <= sid as usize {
+                        w.species_centroids.push(Genome::neutral());
+                        // Placeholder parent; species_step overwrites on the
+                        // first reclustering. Founder archetypes have no real
+                        // parent species.
+                        w.species_parents.push(Some(0));
+                        w.species_member_counts.push(0);
+                    }
+                    w.next_species_id = sid + 1;
+                    (sid, Some(archetype_kit(name)))
+                }
+                None => (0u32, None),
+            };
             for _ in 0..spec.count {
                 let position = match spec.placement {
                     Placement::Uniform => {
@@ -115,7 +155,14 @@ impl Scenario {
                 };
                 let mut g = Genome::neutral();
                 spec.traits.apply(&mut g);
-                w.spawn_agent(position, g);
+                match &kit {
+                    Some((modules, program)) => {
+                        w.spawn_seeded(position, g, species_id, modules.clone(), program.clone());
+                    }
+                    None => {
+                        w.spawn_agent(position, g);
+                    }
+                }
             }
         }
         w
@@ -178,6 +225,48 @@ count = 50
         let b = s.instantiate();
         for id in a.agents.iter_alive() {
             assert_eq!(a.agents.position[id as usize], b.agents.position[id as usize]);
+        }
+    }
+
+    #[test]
+    fn archetype_seeds_distinct_species_with_kits() {
+        let text = r#"
+name = "pp"
+seed = 3
+
+[[agents]]
+count = 4
+archetype = "grazer"
+placement = { kind = "uniform" }
+
+[[agents]]
+count = 2
+archetype = "stalker"
+placement = { kind = "uniform" }
+"#;
+        let s = Scenario::parse_toml(text).expect("parse");
+        let w = s.instantiate();
+        assert_eq!(w.agents.live_count(), 6);
+        // Fresh ids reserve species 0 for the archetype-free path, so the two
+        // archetype specs become species 1 (grazers) and species 2 (stalkers).
+        let grazers = w
+            .agents
+            .iter_alive()
+            .filter(|&id| w.agents.species_id[id as usize] == 1)
+            .count();
+        assert_eq!(grazers, 4, "grazer archetype forms species 1");
+        let stalkers: Vec<u32> = w
+            .agents
+            .iter_alive()
+            .filter(|&id| w.agents.species_id[id as usize] == 2)
+            .collect();
+        assert_eq!(stalkers.len(), 2, "stalker archetype forms species 2");
+        // Stalkers carry a Weapon module (predator kit).
+        for id in stalkers {
+            assert!(
+                crate::module::effective_weapon(&w.agents.modules[id as usize]).is_some(),
+                "stalker has a Weapon"
+            );
         }
     }
 }
