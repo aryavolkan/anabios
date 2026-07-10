@@ -307,6 +307,25 @@ pub fn effective_weapon(modules: &ModuleList) -> Option<(f32, f32)> {
         .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
 }
 
+/// Max `Pheromone.strength`, or `0.0` if the agent has no `Pheromone` module.
+#[inline]
+pub fn effective_pheromone_strength(modules: &ModuleList) -> f32 {
+    modules
+        .iter()
+        .filter_map(|m| match m {
+            Module::Pheromone { strength, .. } => Some(*strength),
+            _ => None,
+        })
+        .fold(0.0_f32, f32::max)
+}
+
+/// `true` iff the agent has a `Sensor` module of type `Smell` (gates pheromone
+/// perception, design §3.6).
+#[inline]
+pub fn has_smell(modules: &ModuleList) -> bool {
+    modules.iter().any(|m| matches!(m, Module::Sensor { sensor_type: SensorType::Smell, .. }))
+}
+
 /// Max `Armor.protection`, or `0.0` if the agent has no `Armor` module.
 #[inline]
 pub fn effective_armor_protection(modules: &ModuleList) -> f32 {

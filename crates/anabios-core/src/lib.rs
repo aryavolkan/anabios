@@ -15,6 +15,7 @@ pub mod integrate;
 pub mod interact;
 pub mod mathf;
 pub mod module;
+pub mod pheromone;
 pub mod program;
 pub mod reproduce;
 pub mod rng;
