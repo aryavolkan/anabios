@@ -280,3 +280,33 @@ fn combat_raid_fires_on_sustained_conflict_not_a_single_kill() {
     anabios_core::codex::observe_all(&mut w);
     assert_eq!(count_events(&w, EventType::CombatRaid), 1, "sustained conflict → one CombatRaid");
 }
+
+#[test]
+fn arms_race_signal_detects_co_rising_trend() {
+    use anabios_core::codex::{arms_race_signal, ARMS_WINDOW};
+    use std::collections::{BTreeMap, VecDeque};
+    let mut weapon: BTreeMap<u32, VecDeque<f32>> = BTreeMap::new();
+    let mut armor: BTreeMap<u32, VecDeque<f32>> = BTreeMap::new();
+    // Species 0: weapon damage rises 0→10 over the window.
+    // Species 1: armor rises 0→10 over the window.
+    let rising: VecDeque<f32> = (0..ARMS_WINDOW).map(|k| k as f32 * 0.6).collect();
+    let flat: VecDeque<f32> = (0..ARMS_WINDOW).map(|_| 1.0).collect();
+    weapon.insert(0, rising.clone());
+    weapon.insert(1, flat.clone());
+    armor.insert(0, flat.clone());
+    armor.insert(1, rising.clone());
+    let sig = arms_race_signal(&weapon, &armor);
+    assert!(matches!(sig, Some((0, _))), "species 0 weapons + species 1 armor both rise");
+}
+
+#[test]
+fn arms_race_signal_silent_on_flat_traits() {
+    use anabios_core::codex::{arms_race_signal, ARMS_WINDOW};
+    use std::collections::{BTreeMap, VecDeque};
+    let flat: VecDeque<f32> = (0..ARMS_WINDOW).map(|_| 1.0).collect();
+    let mut weapon = BTreeMap::new();
+    let mut armor = BTreeMap::new();
+    weapon.insert(0, flat.clone());
+    armor.insert(1, flat.clone());
+    assert!(arms_race_signal(&weapon, &armor).is_none(), "flat traits → no arms race");
+}
