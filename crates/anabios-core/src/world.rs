@@ -40,6 +40,8 @@ pub struct World {
     /// Codex event bus + per-detector scratch. Part of the deterministic
     /// snapshot (not `#[serde(skip)]`).
     pub codex: crate::codex::CodexState,
+    /// Dead-but-edible flesh left by deaths this run; scavenged by carnivores.
+    pub carcasses: Vec<crate::carcass::Carcass>,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     #[serde(skip)]
@@ -88,6 +90,7 @@ impl World {
             species_parents: vec![None],
             next_species_id: 1,
             codex: crate::codex::CodexState::default(),
+            carcasses: Vec::new(),
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),

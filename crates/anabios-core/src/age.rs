@@ -20,6 +20,14 @@ pub fn age_and_starve(world: &mut crate::world::World) {
 
         if died {
             let sid = world.agents.species_id[i];
+            let size = world.agents.genome[i].get(GenomeSlot::Size).max(0.1);
+            let pos = world.agents.position[i];
+            world.carcasses.push(crate::carcass::Carcass {
+                pos,
+                flesh: crate::carcass::CARCASS_FLESH_PER_SIZE * size,
+                age: 0,
+                species_id: sid,
+            });
             world.agents.kill(id);
             world.remove_from_species(sid);
         }

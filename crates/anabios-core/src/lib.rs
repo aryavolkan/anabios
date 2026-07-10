@@ -7,6 +7,7 @@
 pub mod age;
 pub mod agent;
 pub mod behavior;
+pub mod carcass;
 pub mod biome;
 pub mod codex;
 pub mod genome;

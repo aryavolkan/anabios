@@ -112,3 +112,46 @@ fn combat_targets_other_species_not_nearer_kin() {
     assert!(!w.combat_damaged[kin as usize], "must not fire at nearer same-species kin");
     assert!(w.combat_damaged[prey as usize], "must fire at the other-species target");
 }
+
+#[test]
+fn death_forms_carcass_with_flesh_proportional_to_size() {
+    use anabios_core::carcass::CARCASS_FLESH_PER_SIZE;
+    let mut w = World::new(3);
+    let mut g = Genome::neutral();
+    g.set(GenomeSlot::Size, 0.5);
+    let id = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+    // Strip Mouth (and Locomotor) so the agent cannot graze back to life no
+    // matter what terrain it spawned on — guarantees a starvation death.
+    w.agents.modules[id as usize]
+        .retain(|m| !matches!(m, Module::Locomotor { .. } | Module::Mouth { .. }));
+    w.agents.energy[id as usize] = 0.3; // dies next age_and_starve
+    // Run until it dies (energy <= 0).
+    for _ in 0..50 {
+        step(&mut w);
+        if !w.agents.is_alive(id) {
+            break;
+        }
+    }
+    assert!(!w.agents.is_alive(id), "agent should have starved");
+    assert_eq!(w.carcasses.len(), 1, "one carcass formed on death");
+    let c = w.carcasses[0];
+    // size clamps to >= 0.1; here size = 0.5 → flesh = 0.5 * CARCASS_FLESH_PER_SIZE.
+    assert!((c.flesh - 0.5 * CARCASS_FLESH_PER_SIZE).abs() < 1e-3);
+    assert_eq!(c.species_id, 0);
+}
+
+#[test]
+fn carcass_decays_and_is_removed_after_decay_ticks() {
+    use anabios_core::carcass::{carcass_step, Carcass, CARCASS_DECAY_TICKS};
+    let mut w = World::new(1);
+    w.carcasses.push(Carcass {
+        pos: Vec2::new(10.0, 10.0),
+        flesh: 5.0,
+        age: 0,
+        species_id: 0,
+    });
+    for _ in 0..CARCASS_DECAY_TICKS {
+        carcass_step(&mut w);
+    }
+    assert!(w.carcasses.is_empty(), "carcass removed once age reaches CARCASS_DECAY_TICKS");
+}
