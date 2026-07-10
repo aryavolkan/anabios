@@ -85,15 +85,17 @@ impl Default for Placement {
 /// Resolve an archetype name to its starter program + module kit. Unknown
 /// names fall back to the grazer defaults.
 fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Program) {
-    use crate::module::{predator_kit, starter_kit};
+    use crate::module::{marker_kit, predator_kit, starter_kit};
     use crate::program::{
-        starter_grazer, starter_herd, starter_pack_hunter, starter_sentinel, starter_stalker,
+        starter_grazer, starter_herd, starter_marker, starter_pack_hunter, starter_sentinel,
+        starter_stalker,
     };
     match name {
         "stalker" => (predator_kit(), starter_stalker()),
         "pack_hunter" => (predator_kit(), starter_pack_hunter()),
         "sentinel" => (starter_kit(), starter_sentinel()),
         "herd" => (starter_kit(), starter_herd()),
+        "marker" => (marker_kit(), starter_marker()),
         _ => (starter_kit(), starter_grazer()),
     }
 }
@@ -226,6 +228,24 @@ count = 50
         for id in a.agents.iter_alive() {
             assert_eq!(a.agents.position[id as usize], b.agents.position[id as usize]);
         }
+    }
+
+    #[test]
+    fn marker_archetype_has_pheromone_and_smell_modules() {
+        let text = r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 5
+archetype = "marker"
+placement = { kind = "uniform" }
+"#;
+        let s = Scenario::parse_toml(text).expect("parse");
+        let w = s.instantiate();
+        let id = w.agents.iter_alive().next().expect("one agent");
+        let mods = &w.agents.modules[id as usize];
+        assert!(crate::module::has(mods, crate::module::ModuleType::Pheromone));
+        assert!(crate::module::has_smell(mods));
     }
 
     #[test]

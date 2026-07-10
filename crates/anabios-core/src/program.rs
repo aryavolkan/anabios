@@ -364,9 +364,31 @@ pub fn starter_herd() -> Program {
     ])
 }
 
+/// Marker: emit Marker pheromone (channel 3) each tick and cohere toward the
+/// nearest same-species neighbor (herd), so the group clusters while marking.
+pub fn starter_marker() -> Program {
+    Program::from_slice(&[
+        // deposit a strong marker every tick
+        Node::Const(1.0),
+        Node::EmitPheromone(3),
+        // cohesion toward same-species
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+    ])
+}
+
 /// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
-    &[starter_grazer, starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd]
+    &[
+        starter_grazer,
+        starter_stalker,
+        starter_pack_hunter,
+        starter_sentinel,
+        starter_herd,
+        starter_marker,
+    ]
 }
 
 /// Per-agent inputs read by the evaluator. Caller fills this each tick.
@@ -829,7 +851,9 @@ mod tests {
     fn social_starters_are_bounded_and_evaluable() {
         let g = Genome::neutral();
         let mut stack = Vec::new();
-        for make in [starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd] {
+        for make in
+            [starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd, starter_marker]
+        {
             let p = make();
             assert!(!p.is_empty());
             assert!(p.len() <= PROGRAM_MAX_NODES);
@@ -849,7 +873,7 @@ mod tests {
 
     #[test]
     fn starter_library_has_all_starters() {
-        assert_eq!(starter_library().len(), 5);
+        assert_eq!(starter_library().len(), 6);
     }
 
     #[test]

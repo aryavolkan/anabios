@@ -232,6 +232,17 @@ pub fn predator_kit() -> ModuleList {
     ]
 }
 
+/// A pheromone-marking herbivore: mobile, smells pheromones, grazes, and marks
+/// territory on the Marker channel. Used by the `marker` scenario archetype.
+pub fn marker_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Smell, radius: 0.7, acuity: 0.6 },
+        Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 },
+        Module::Pheromone { channel: PheromoneChannel::Marker, strength: 1.0, decay: 0.1 },
+    ]
+}
+
 /// `true` iff the list contains at least one module of the given type.
 #[inline]
 pub fn has(modules: &ModuleList, module_type: ModuleType) -> bool {
