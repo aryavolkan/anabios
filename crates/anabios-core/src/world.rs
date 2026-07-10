@@ -40,6 +40,8 @@ pub struct World {
     /// Codex event bus + per-detector scratch. Part of the deterministic
     /// snapshot (not `#[serde(skip)]`).
     pub codex: crate::codex::CodexState,
+    /// Dead-but-edible flesh left by deaths this run; scavenged by carnivores.
+    pub carcasses: Vec<crate::carcass::Carcass>,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     #[serde(skip)]
@@ -58,6 +60,15 @@ pub struct World {
     /// Scratch value stack reused by the program evaluator each tick.
     #[serde(skip)]
     pub eval_stack: Vec<f32>,
+    /// Per-tick combat attribution scratch (reset each tick in `interact_all`).
+    /// `combat_damaged[t]` is set when slot `t` takes combat damage; read by
+    /// `age_and_starve` / the codex detectors to attribute deaths.
+    #[serde(skip)]
+    pub combat_damaged: Vec<bool>,
+    /// Attacker species id for each combat-damaged slot (valid only where
+    /// `combat_damaged[t]` is true this tick).
+    #[serde(skip)]
+    pub combat_attacker: Vec<u32>,
 }
 
 impl World {
@@ -79,12 +90,15 @@ impl World {
             species_parents: vec![None],
             next_species_id: 1,
             codex: crate::codex::CodexState::default(),
+            carcasses: Vec::new(),
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),
             reproduced_this_tick: BitVec::new(),
             eval_stack: Vec::new(),
+            combat_damaged: Vec::new(),
+            combat_attacker: Vec::new(),
         }
     }
 
@@ -113,6 +127,31 @@ impl World {
             crate::program::starter_grazer(),
         );
         self.add_to_species(0);
+        id
+    }
+
+    /// Spawn an agent with an explicit species, module kit, and program.
+    /// Used by scenario archetypes (`spawn_agent` always uses species 0 +
+    /// grazer defaults).
+    pub fn spawn_seeded(
+        &mut self,
+        position: Vec2,
+        genome: Genome,
+        species_id: crate::agent::SpeciesId,
+        modules: crate::module::ModuleList,
+        program: crate::program::Program,
+    ) -> AgentId {
+        let lineage = self.next_lineage();
+        let id = self.agents.spawn(
+            position,
+            genome,
+            lineage,
+            [LINEAGE_NONE; 2],
+            species_id,
+            modules,
+            program,
+        );
+        self.add_to_species(species_id);
         id
     }
 
@@ -175,6 +214,12 @@ impl World {
         }
         if self.reproduced_this_tick.len() < cap {
             self.reproduced_this_tick.resize(cap, false);
+        }
+        if self.combat_damaged.len() < cap {
+            self.combat_damaged.resize(cap, false);
+        }
+        if self.combat_attacker.len() < cap {
+            self.combat_attacker.resize(cap, crate::sense::NO_NEIGHBOR_SPECIES);
         }
     }
 }

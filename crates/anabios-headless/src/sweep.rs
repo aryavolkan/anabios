@@ -98,6 +98,9 @@ fn event_name(t: EventType) -> &'static str {
         EventType::Migration => "migration",
         EventType::NovelModuleAppeared => "novel_module",
         EventType::NovelBehaviorPattern => "novel_behavior",
+        EventType::Predation => "predation",
+        EventType::CombatRaid => "combat_raid",
+        EventType::ArmsRace => "arms_race",
     }
 }
 
@@ -107,13 +110,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
     writeln!(
         f,
         "seed,ticks,final_alive,final_biomass,state_hash,\
-         extinction,pop_crash,speciation,migration,novel_module,novel_behavior"
+         extinction,pop_crash,speciation,migration,novel_module,novel_behavior,\
+         predation,combat_raid,arms_race"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -125,7 +129,21 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("migration"),
             g("novel_module"),
             g("novel_behavior"),
+            g("predation"),
+            g("combat_raid"),
+            g("arms_race"),
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn event_name_covers_m12_events() {
+        use anabios_core::codex::EventType;
+        assert_eq!(super::event_name(EventType::Predation), "predation");
+        assert_eq!(super::event_name(EventType::CombatRaid), "combat_raid");
+        assert_eq!(super::event_name(EventType::ArmsRace), "arms_race");
+    }
 }

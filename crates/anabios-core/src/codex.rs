@@ -33,6 +33,17 @@ pub const MIGRATION_WINDOW: usize = 200;
 /// units across `MIGRATION_WINDOW` ticks.
 pub const MIGRATION_DISTANCE: f32 = 150.0;
 
+/// Window (ticks) over which combat deaths accumulate for CombatRaid.
+pub const COMBAT_RAID_WINDOW: u64 = 100;
+
+/// Combat deaths within the window needed to declare a CombatRaid.
+pub const COMBAT_RAID_THRESHOLD: usize = 3;
+
+/// Samples retained per species for the weapon/armor trend windows.
+pub const ARMS_WINDOW: usize = 20;
+/// Minimum rise (window back − front) in a trait mean to count as "trending up".
+pub const ARMS_MIN_DELTA: f32 = 0.5;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EventType {
@@ -42,6 +53,12 @@ pub enum EventType {
     Migration = 3,
     NovelModuleAppeared = 4,
     NovelBehaviorPattern = 5,
+    /// First agent death caused by another agent's weapon (vs starvation/age).
+    Predation = 6,
+    /// Sustained combat deaths crossing a rolling window threshold.
+    CombatRaid = 7,
+    /// One species' mean weapon damage and another's mean armor both trend up.
+    ArmsRace = 8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +77,17 @@ pub struct CodexEvent {
     pub loc_y: f32,
 }
 
+/// A death attributed to another agent's weapon. Fuel for the Predation /
+/// CombatRaid detectors.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CombatDeath {
+    pub tick: u64,
+    pub victim_species: u32,
+    pub attacker_species: u32,
+    pub loc_x: f32,
+    pub loc_y: f32,
+}
+
 /// Persistent state owned by `World`. Holds detector scratch and the
 /// event ring buffer.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -72,6 +100,18 @@ pub struct CodexState {
     pub seen_modules: BTreeMap<u32, BTreeSet<u8>>,
     /// Per-species set of program node-kind discriminants already observed.
     pub seen_node_kinds: BTreeMap<u32, BTreeSet<u8>>,
+    /// Rolling window of combat-attributed deaths (pruned to COMBAT_RAID_WINDOW).
+    pub combat_deaths: VecDeque<CombatDeath>,
+    /// Latch: the first Predation event has been emitted.
+    pub predation_emitted: bool,
+    /// Edge-trigger state for CombatRaid (armed while below threshold).
+    pub raid_active: bool,
+    /// Rolling per-species mean weapon damage (window ARMS_WINDOW).
+    pub weapon_history: BTreeMap<u32, VecDeque<f32>>,
+    /// Rolling per-species mean armor protection (window ARMS_WINDOW).
+    pub armor_history: BTreeMap<u32, VecDeque<f32>>,
+    /// Edge-trigger state for ArmsRace.
+    pub arms_race_active: bool,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -88,6 +128,105 @@ impl CodexState {
     pub fn drain_events(&mut self) -> std::collections::vec_deque::Drain<'_, CodexEvent> {
         self.events.drain(..)
     }
+
+    /// Record a combat-attributed death for the Predation/CombatRaid detectors.
+    pub fn record_combat_death(
+        &mut self,
+        tick: u64,
+        victim_species: u32,
+        attacker_species: u32,
+        x: f32,
+        y: f32,
+    ) {
+        self.combat_deaths.push_back(CombatDeath {
+            tick,
+            victim_species,
+            attacker_species,
+            loc_x: x,
+            loc_y: y,
+        });
+    }
+}
+
+/// Pure ArmsRace test: is there a species whose weapon-damage mean rose across
+/// a full window while a *different* species' armor mean also rose? Returns
+/// `(weaponized_species, weapon_rise)`.
+pub fn arms_race_signal(
+    weapon_history: &BTreeMap<u32, VecDeque<f32>>,
+    armor_history: &BTreeMap<u32, VecDeque<f32>>,
+) -> Option<(u32, f32)> {
+    let rise = |buf: &VecDeque<f32>| -> Option<f32> {
+        if buf.len() < ARMS_WINDOW {
+            return None;
+        }
+        let delta = buf.back()? - buf.front()?;
+        (delta >= ARMS_MIN_DELTA).then_some(delta)
+    };
+    for (wsid, wbuf) in weapon_history.iter() {
+        let Some(wrise) = rise(wbuf) else { continue };
+        for (asid, abuf) in armor_history.iter() {
+            if asid == wsid {
+                continue;
+            }
+            if rise(abuf).is_some() {
+                return Some((*wsid, wrise));
+            }
+        }
+    }
+    None
+}
+
+/// Update per-species weapon/armor trend windows from the current population,
+/// then edge-trigger ArmsRace when a co-rising trend appears.
+fn detect_arms_race(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+    // Accumulate per-species means (BTreeMap → deterministic).
+    let mut wsum: BTreeMap<u32, (f64, u32)> = BTreeMap::new();
+    let mut asum: BTreeMap<u32, (f64, u32)> = BTreeMap::new();
+    for id in world.agents.iter_alive() {
+        let i = id as usize;
+        let sid = world.agents.species_id[i];
+        let wd = crate::module::effective_weapon(&world.agents.modules[i])
+            .map(|(d, _)| d)
+            .unwrap_or(0.0);
+        let ap = crate::module::effective_armor_protection(&world.agents.modules[i]);
+        let w = wsum.entry(sid).or_insert((0.0, 0));
+        w.0 += wd as f64;
+        w.1 += 1;
+        let a = asum.entry(sid).or_insert((0.0, 0));
+        a.0 += ap as f64;
+        a.1 += 1;
+    }
+    let push = |hist: &mut BTreeMap<u32, VecDeque<f32>>, sid: u32, mean: f32| {
+        let buf = hist.entry(sid).or_default();
+        if buf.len() == ARMS_WINDOW {
+            buf.pop_front();
+        }
+        buf.push_back(mean);
+    };
+    for (sid, (sum, n)) in wsum.iter() {
+        push(&mut world.codex.weapon_history, *sid, (*sum / *n as f64) as f32);
+    }
+    for (sid, (sum, n)) in asum.iter() {
+        push(&mut world.codex.armor_history, *sid, (*sum / *n as f64) as f32);
+    }
+
+    let signal = arms_race_signal(&world.codex.weapon_history, &world.codex.armor_history);
+    match signal {
+        Some((sid, rise)) if !world.codex.arms_race_active => {
+            let (lx, ly) = centroid_of(centroids, sid);
+            world.codex.push_event(CodexEvent {
+                event_type: EventType::ArmsRace,
+                tick: world.tick,
+                species_id: sid,
+                value: rise,
+                loc_x: lx,
+                loc_y: ly,
+            });
+            world.codex.arms_race_active = true;
+        }
+        None => world.codex.arms_race_active = false,
+        _ => {}
+    }
 }
 
 /// Run all detectors. Called by the tick orchestrator at the end of each
@@ -103,6 +242,12 @@ pub fn observe_all(world: &mut World) {
     detect_migration(world, &centroids);
     detect_novel_modules(world, &centroids);
     detect_novel_behavior(world, &centroids);
+    // Predation runs before CombatRaid on purpose: it scans this tick's
+    // combat-death entries, and CombatRaid then prunes entries older than the
+    // window (which never includes the current tick).
+    detect_predation(world);
+    detect_combat_raid(world);
+    detect_arms_race(world, &centroids);
 }
 
 /// Mean alive position per species, ascending id order, f64 accumulator.
@@ -316,6 +461,58 @@ fn detect_novel_behavior(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)
     }
     for ev in to_push {
         world.codex.push_event(ev);
+    }
+}
+
+/// Predation: emit once, the first tick a combat-attributed death is recorded.
+/// Payload species = the attacker (predator) species.
+fn detect_predation(world: &mut World) {
+    if world.codex.predation_emitted {
+        return;
+    }
+    let tick = world.tick;
+    if let Some(cd) = world.codex.combat_deaths.iter().find(|d| d.tick == tick) {
+        let ev = CodexEvent {
+            event_type: EventType::Predation,
+            tick,
+            species_id: cd.attacker_species,
+            value: 1.0,
+            loc_x: cd.loc_x,
+            loc_y: cd.loc_y,
+        };
+        world.codex.push_event(ev);
+        world.codex.predation_emitted = true;
+    }
+}
+
+/// CombatRaid: prune the combat-death window, then edge-trigger when the count
+/// reaches COMBAT_RAID_THRESHOLD. Re-arms when it drops back below threshold.
+fn detect_combat_raid(world: &mut World) {
+    let tick = world.tick;
+    let cutoff = tick.saturating_sub(COMBAT_RAID_WINDOW);
+    while let Some(front) = world.codex.combat_deaths.front() {
+        if front.tick < cutoff {
+            world.codex.combat_deaths.pop_front();
+        } else {
+            break;
+        }
+    }
+    let count = world.codex.combat_deaths.len();
+    let raiding = count >= COMBAT_RAID_THRESHOLD;
+    if raiding && !world.codex.raid_active {
+        let last = world.codex.combat_deaths.back().expect("non-empty when raiding");
+        let ev = CodexEvent {
+            event_type: EventType::CombatRaid,
+            tick,
+            species_id: last.attacker_species,
+            value: count as f32,
+            loc_x: last.loc_x,
+            loc_y: last.loc_y,
+        };
+        world.codex.push_event(ev);
+        world.codex.raid_active = true;
+    } else if !raiding {
+        world.codex.raid_active = false;
     }
 }
 

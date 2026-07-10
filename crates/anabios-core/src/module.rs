@@ -221,6 +221,17 @@ pub fn starter_kit() -> ModuleList {
     ]
 }
 
+/// A carnivore starter kit: mobile, sighted, meat-eating, and armed. Used by
+/// the `stalker`/`pack_hunter` scenario archetypes.
+pub fn predator_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.7, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.8, acuity: 0.7 },
+        Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 },
+        Module::Weapon { damage: 8.0, energy_cost: 1.0 },
+    ]
+}
+
 /// `true` iff the list contains at least one module of the given type.
 #[inline]
 pub fn has(modules: &ModuleList, module_type: ModuleType) -> bool {
@@ -278,6 +289,31 @@ pub fn effective_diet_carnivory(modules: &ModuleList) -> f32 {
         .iter()
         .filter_map(|m| match m {
             Module::Mouth { diet_affinity, .. } => Some(*diet_affinity),
+            _ => None,
+        })
+        .fold(0.0_f32, f32::max)
+}
+
+/// Damage + energy_cost of the highest-damage `Weapon`, or `None` if the
+/// agent has no `Weapon` module (combat gating, design §3.5).
+#[inline]
+pub fn effective_weapon(modules: &ModuleList) -> Option<(f32, f32)> {
+    modules
+        .iter()
+        .filter_map(|m| match m {
+            Module::Weapon { damage, energy_cost } => Some((*damage, *energy_cost)),
+            _ => None,
+        })
+        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+}
+
+/// Max `Armor.protection`, or `0.0` if the agent has no `Armor` module.
+#[inline]
+pub fn effective_armor_protection(modules: &ModuleList) -> f32 {
+    modules
+        .iter()
+        .filter_map(|m| match m {
+            Module::Armor { protection, .. } => Some(*protection),
             _ => None,
         })
         .fold(0.0_f32, f32::max)

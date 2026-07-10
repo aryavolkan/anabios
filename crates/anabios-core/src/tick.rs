@@ -28,8 +28,8 @@ pub fn step(world: &mut World) {
     // Stage 4: integrate (motion + per-tick metabolism).
     integrate_all(&mut world.agents, &world.desired_direction[..cap]);
 
-    // Stage 5: interact (feeding).
-    interact_all(&mut world.agents, &mut world.biome);
+    // Stage 5: interact (feeding, combat, predation).
+    interact_all(world);
 
     // M3: module upkeep — every alive agent pays for its modules.
     crate::module::upkeep_all(&mut world.agents);
@@ -40,6 +40,9 @@ pub fn step(world: &mut World) {
 
     // Stage 7: age + starve.
     age_and_starve(world);
+
+    // Stage 7b: carcass aging + removal (design step 9 analogue).
+    crate::carcass::carcass_step(world);
 
     // Stage 8: periodic species clustering.
     if world.tick.is_multiple_of(crate::species::SPECIES_STEP_INTERVAL) {
