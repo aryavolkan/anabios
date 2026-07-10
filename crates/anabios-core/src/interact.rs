@@ -31,6 +31,7 @@ pub fn interact_all(world: &mut World) {
     feed_pass(world, &alive_ids);
     combat_pass(world, &alive_ids);
     scavenge_pass(world, &alive_ids);
+    deposit_pass(world, &alive_ids);
 }
 
 /// Grazing: a herbivore-capable Mouth bites plant biomass at its cell.
@@ -85,6 +86,30 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.energy[i] -= cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
+    }
+}
+
+/// Pheromone deposition: an agent with a `Pheromone` module writes each of its
+/// above-threshold `emit_intent` channels into the field cell at its position,
+/// scaled by the module's strength. Gated on the `Pheromone` module.
+fn deposit_pass(world: &mut World, alive_ids: &[u32]) {
+    use crate::pheromone::{PHEROMONE_DEPOSIT_SCALE, PHEROMONE_EMIT_THRESHOLD};
+    for &id in alive_ids {
+        let i = id as usize;
+        if !module::has(&world.agents.modules[i], ModuleType::Pheromone) {
+            continue;
+        }
+        let strength = module::effective_pheromone_strength(&world.agents.modules[i]);
+        if strength <= 0.0 {
+            continue;
+        }
+        let pos = world.agents.position[i];
+        for ch in 0..crate::program::PHEROMONE_CHANNELS {
+            let intent = world.actions[i].emit_intent[ch];
+            if intent > PHEROMONE_EMIT_THRESHOLD {
+                world.pheromones.deposit(pos, ch, intent * strength * PHEROMONE_DEPOSIT_SCALE);
+            }
+        }
     }
 }
 

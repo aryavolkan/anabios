@@ -44,6 +44,9 @@ pub fn step(world: &mut World) {
     // Stage 7b: carcass aging + removal (design step 9 analogue).
     crate::carcass::carcass_step(world);
 
+    // Stage 8c: pheromone field decay (design §3.7 step 9).
+    world.pheromones.decay_step();
+
     // Stage 8: periodic species clustering.
     if world.tick.is_multiple_of(crate::species::SPECIES_STEP_INTERVAL) {
         crate::species::species_step(world);
