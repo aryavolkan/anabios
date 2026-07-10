@@ -249,17 +249,11 @@ placement = { kind = "uniform" }
         assert_eq!(w.agents.live_count(), 6);
         // Fresh ids reserve species 0 for the archetype-free path, so the two
         // archetype specs become species 1 (grazers) and species 2 (stalkers).
-        let grazers = w
-            .agents
-            .iter_alive()
-            .filter(|&id| w.agents.species_id[id as usize] == 1)
-            .count();
+        let grazers =
+            w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 1).count();
         assert_eq!(grazers, 4, "grazer archetype forms species 1");
-        let stalkers: Vec<u32> = w
-            .agents
-            .iter_alive()
-            .filter(|&id| w.agents.species_id[id as usize] == 2)
-            .collect();
+        let stalkers: Vec<u32> =
+            w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 2).collect();
         assert_eq!(stalkers.len(), 2, "stalker archetype forms species 2");
         // Stalkers carry a Weapon module (predator kit).
         for id in stalkers {

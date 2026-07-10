@@ -1,0 +1,21 @@
+name = "predator-prey"
+seed = 0
+
+# Prey: a herd of grazers clustered in the middle of the world.
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+
+# Predators: a handful of stalkers seeded into the same region.
+[[agents]]
+count = 8
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+[agents.traits]
+size = 0.7
+diet_carnivory = 1.0
+lifespan_bias = 1.0
