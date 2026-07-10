@@ -283,6 +283,31 @@ pub fn effective_diet_carnivory(modules: &ModuleList) -> f32 {
         .fold(0.0_f32, f32::max)
 }
 
+/// Damage + energy_cost of the highest-damage `Weapon`, or `None` if the
+/// agent has no `Weapon` module (combat gating, design §3.5).
+#[inline]
+pub fn effective_weapon(modules: &ModuleList) -> Option<(f32, f32)> {
+    modules
+        .iter()
+        .filter_map(|m| match m {
+            Module::Weapon { damage, energy_cost } => Some((*damage, *energy_cost)),
+            _ => None,
+        })
+        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+}
+
+/// Max `Armor.protection`, or `0.0` if the agent has no `Armor` module.
+#[inline]
+pub fn effective_armor_protection(modules: &ModuleList) -> f32 {
+    modules
+        .iter()
+        .filter_map(|m| match m {
+            Module::Armor { protection, .. } => Some(*protection),
+            _ => None,
+        })
+        .fold(0.0_f32, f32::max)
+}
+
 /// Perturb every parameter of `module` with probability `MUTATE_PARAM_PROB`,
 /// drawing perturbations from `N(0, PARAM_SIGMA)` and clamping back into
 /// `[0, 1]`. Per-slot decisions consume the RNG in a fixed order so the

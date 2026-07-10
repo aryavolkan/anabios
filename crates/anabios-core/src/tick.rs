@@ -28,8 +28,8 @@ pub fn step(world: &mut World) {
     // Stage 4: integrate (motion + per-tick metabolism).
     integrate_all(&mut world.agents, &world.desired_direction[..cap]);
 
-    // Stage 5: interact (feeding).
-    interact_all(&mut world.agents, &mut world.biome);
+    // Stage 5: interact (feeding, combat, predation).
+    interact_all(world);
 
     // M3: module upkeep — every alive agent pays for its modules.
     crate::module::upkeep_all(&mut world.agents);

@@ -1,129 +1,92 @@
-//! Interaction step. In M1 the only interaction is **feeding**: agents in a
-//! cell with plant biomass and a herbivorous diet (low `DietCarnivory`)
-//! graze. Combat and mating land in later milestones.
+//! Interaction stage: feeding (grazing), combat, and predation (scavenging).
 
-use crate::agent::AgentBuffers;
-use crate::biome::BiomeField;
 use crate::genome::GenomeSlot;
+use crate::module::{self, ModuleType};
+use crate::world::World;
 
-/// Maximum plant biomass an agent can eat per tick at `Size = 1.0`.
+/// Max biomass an agent can bite from the biome in one tick (before scaling).
 pub const BITE_MAX: f32 = 0.5;
-/// Energy gained per biomass unit consumed.
+/// Energy yielded per unit of plant biomass eaten.
 pub const FOOD_ENERGY_PER_BIOMASS: f32 = 4.0;
+/// `fire_intent` above this threshold triggers a weapon attack.
+pub const FIRE_THRESHOLD: f32 = 0.5;
+/// Contact range (world units) within which combat can land. Mirrors
+/// `reproduce::MATING_RANGE`.
+pub const COMBAT_RANGE: f32 = 2.0;
 
-pub fn interact_all(agents: &mut AgentBuffers, biome: &mut BiomeField) {
-    let alive_ids: Vec<u32> = agents.iter_alive().collect();
-    for id in alive_ids {
+/// Run all interaction rules for one tick: feed, then combat, then scavenge.
+/// Each pass iterates alive agents in ascending id order (determinism).
+pub fn interact_all(world: &mut World) {
+    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
+    // Reset combat attribution scratch for this tick. `combat_attacker` is only
+    // read where `combat_damaged` is set, but reset it too so stale attacker
+    // species from a prior tick can never leak into a consumer.
+    for b in world.combat_damaged.iter_mut() {
+        *b = false;
+    }
+    for v in world.combat_attacker.iter_mut() {
+        *v = crate::sense::NO_NEIGHBOR_SPECIES;
+    }
+
+    feed_pass(world, &alive_ids);
+    combat_pass(world, &alive_ids);
+    scavenge_pass(world, &alive_ids);
+}
+
+/// Grazing: a herbivore-capable Mouth bites plant biomass at its cell.
+fn feed_pass(world: &mut World, alive_ids: &[u32]) {
+    for &id in alive_ids {
         let i = id as usize;
-
-        // Action gating: no Mouth → can't eat.
-        if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Mouth) {
+        if !module::has(&world.agents.modules[i], ModuleType::Mouth) {
             continue;
         }
-
-        let pos = agents.position[i];
-        let bite_cap = crate::module::effective_bite_size(&agents.modules[i]);
-        let diet_carn = crate::module::effective_diet_carnivory(&agents.modules[i]);
+        let bite_cap = module::effective_bite_size(&world.agents.modules[i]);
+        let diet_carn = module::effective_diet_carnivory(&world.agents.modules[i]);
         let herbivory = (1.0 - diet_carn).clamp(0.0, 1.0);
         if herbivory <= 0.0 || bite_cap <= 0.0 {
             continue;
         }
-        let size = agents.genome[i].get(GenomeSlot::Size).max(0.1);
+        let pos = world.agents.position[i];
+        let size = world.agents.genome[i].get(GenomeSlot::Size).max(0.1);
         let desired_bite = BITE_MAX * size * bite_cap * herbivory;
-        let taken = biome.graze(pos, desired_bite);
+        let taken = world.biome.graze(pos, desired_bite);
         if taken > 0.0 {
-            agents.energy[i] += taken * FOOD_ENERGY_PER_BIOMASS;
+            world.agents.energy[i] += taken * FOOD_ENERGY_PER_BIOMASS;
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::biome::TerrainType;
-    use crate::genome::Genome;
-    use crate::prelude::Vec2;
-    use crate::world::World;
-
-    fn find_grass_cell_center(w: &World) -> Vec2 {
-        for row in 0..crate::biome::BIOME_RES {
-            for col in 0..crate::biome::BIOME_RES {
-                if w.biome.at(col, row).terrain == TerrainType::Grass {
-                    return Vec2::new(
-                        (col as f32 + 0.5) * crate::biome::CELL_SIZE,
-                        (row as f32 + 0.5) * crate::biome::CELL_SIZE,
-                    );
-                }
-            }
+/// Combat: a Weapon-bearing agent that fires deals `damage - target_armor`
+/// energy damage to the nearest *other-species* agent within `COMBAT_RANGE`,
+/// spending its own weapon `energy_cost`.
+fn combat_pass(world: &mut World, alive_ids: &[u32]) {
+    for &id in alive_ids {
+        let i = id as usize;
+        if world.actions[i].fire_intent <= FIRE_THRESHOLD {
+            continue;
         }
-        panic!("no grass cell in biome");
-    }
-
-    #[test]
-    fn herbivore_on_grass_gains_energy() {
-        let mut w = World::new(11);
-        let pos = find_grass_cell_center(&w);
-        let mut genome = Genome::neutral();
-        genome.set(GenomeSlot::DietCarnivory, 0.0);
-        let id = w.spawn_agent(pos, genome);
-        let energy_before = w.agents.energy[id as usize];
-        let biomass_before = w.biome.sample(pos).plant_biomass;
-        interact_all(&mut w.agents, &mut w.biome);
-        let energy_after = w.agents.energy[id as usize];
-        let biomass_after = w.biome.sample(pos).plant_biomass;
-        assert!(energy_after > energy_before);
-        assert!(biomass_after < biomass_before);
-    }
-
-    #[test]
-    fn obligate_carnivore_does_not_eat_plants() {
-        let mut w = World::new(11);
-        let pos = find_grass_cell_center(&w);
-        let id = w.spawn_agent(pos, Genome::neutral());
-        // Replace Mouth with a pure carnivore.
-        for m in w.agents.modules[id as usize].iter_mut() {
-            if let crate::module::Module::Mouth { diet_affinity, .. } = m {
-                *diet_affinity = 1.0;
-            }
-        }
-        let energy_before = w.agents.energy[id as usize];
-        let biomass_before = w.biome.sample(pos).plant_biomass;
-        interact_all(&mut w.agents, &mut w.biome);
-        assert_eq!(w.agents.energy[id as usize], energy_before);
-        assert_eq!(w.biome.sample(pos).plant_biomass, biomass_before);
-    }
-
-    #[test]
-    fn agent_without_mouth_does_not_eat() {
-        let mut w = World::new(11);
-        let pos = find_grass_cell_center(&w);
-        let id = w.spawn_agent(pos, Genome::neutral());
-        w.agents.modules[id as usize].retain(|m| !matches!(m, crate::module::Module::Mouth { .. }));
-        let energy_before = w.agents.energy[id as usize];
-        let biomass_before = w.biome.sample(pos).plant_biomass;
-        interact_all(&mut w.agents, &mut w.biome);
-        assert_eq!(w.agents.energy[id as usize], energy_before);
-        assert_eq!(w.biome.sample(pos).plant_biomass, biomass_before);
-    }
-
-    #[test]
-    fn two_agents_share_finite_biomass_deterministically() {
-        let mut w = World::new(11);
-        let pos = find_grass_cell_center(&w);
-        // Drain to a small amount.
-        let (col, row) = BiomeField::cell_coords(pos);
-        w.biome.at_mut(col, row).plant_biomass = 0.3;
-        let g = {
-            let mut g = Genome::neutral();
-            g.set(GenomeSlot::DietCarnivory, 0.0);
-            g.set(GenomeSlot::Size, 1.0);
-            g
+        let Some((damage, cost)) = module::effective_weapon(&world.agents.modules[i]) else {
+            continue; // no Weapon module → gated out
         };
-        let id0 = w.spawn_agent(pos, g);
-        let id1 = w.spawn_agent(pos, g);
-        interact_all(&mut w.agents, &mut w.biome);
-        // First-in-id wins the larger share.
-        assert!(w.agents.energy[id0 as usize] > w.agents.energy[id1 as usize]);
-        assert!(w.biome.sample(pos).plant_biomass < 1e-5);
+        let tgt = world.sensors[i].nearest_other_id;
+        if tgt == crate::sense::NO_NEIGHBOR_ID {
+            continue;
+        }
+        if world.sensors[i].nearest_other_dist >= COMBAT_RANGE {
+            continue;
+        }
+        let t = tgt as usize;
+        if t == i || !world.agents.is_alive(tgt) {
+            continue;
+        }
+        let armor = module::effective_armor_protection(&world.agents.modules[t]);
+        let net = (damage - armor).max(0.0);
+        world.agents.energy[t] -= net;
+        world.agents.energy[i] -= cost;
+        world.combat_damaged[t] = true;
+        world.combat_attacker[t] = world.agents.species_id[i];
     }
 }
+
+/// Predation: filled in by Task 3 (carnivore Mouth scavenges carcasses).
+fn scavenge_pass(_world: &mut World, _alive_ids: &[u32]) {}

@@ -58,6 +58,15 @@ pub struct World {
     /// Scratch value stack reused by the program evaluator each tick.
     #[serde(skip)]
     pub eval_stack: Vec<f32>,
+    /// Per-tick combat attribution scratch (reset each tick in `interact_all`).
+    /// `combat_damaged[t]` is set when slot `t` takes combat damage; read by
+    /// `age_and_starve` / the codex detectors to attribute deaths.
+    #[serde(skip)]
+    pub combat_damaged: Vec<bool>,
+    /// Attacker species id for each combat-damaged slot (valid only where
+    /// `combat_damaged[t]` is true this tick).
+    #[serde(skip)]
+    pub combat_attacker: Vec<u32>,
 }
 
 impl World {
@@ -85,6 +94,8 @@ impl World {
             actions: Vec::new(),
             reproduced_this_tick: BitVec::new(),
             eval_stack: Vec::new(),
+            combat_damaged: Vec::new(),
+            combat_attacker: Vec::new(),
         }
     }
 
@@ -175,6 +186,12 @@ impl World {
         }
         if self.reproduced_this_tick.len() < cap {
             self.reproduced_this_tick.resize(cap, false);
+        }
+        if self.combat_damaged.len() < cap {
+            self.combat_damaged.resize(cap, false);
+        }
+        if self.combat_attacker.len() < cap {
+            self.combat_attacker.resize(cap, crate::sense::NO_NEIGHBOR_SPECIES);
         }
     }
 }
