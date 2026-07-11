@@ -1,0 +1,36 @@
+//! M14 mechanism tests: meme transmission, sensing, inheritance, and detectors.
+
+use anabios_core::genome::Genome;
+use anabios_core::module::{Module, ModuleType};
+use anabios_core::prelude_test::Vec2;
+use anabios_core::program::MEME_CHANNELS;
+use anabios_core::world::World;
+
+/// A kit with a Communicator (so meme ops are enabled) + basics.
+fn communicator_kit() -> anabios_core::module::ModuleList {
+    let mut m = anabios_core::module::ModuleList::new();
+    m.push(Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 });
+    m.push(Module::Sensor { sensor_type: anabios_core::module::SensorType::Vision, radius: 0.6, acuity: 0.6 });
+    m.push(Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 });
+    m.push(Module::Communicator { range: 10.0, channel_id: 0 });
+    m
+}
+
+#[test]
+fn new_agent_has_zeroed_meme_vector() {
+    let mut w = World::new(1);
+    let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    assert_eq!(w.agents.meme_vector[id as usize], [0.0; MEME_CHANNELS]);
+}
+
+#[test]
+fn effective_communicator_range_reports_max() {
+    let kit = communicator_kit();
+    assert_eq!(anabios_core::module::effective_communicator_range(&kit), 10.0);
+    // A kit without a Communicator reports 0.
+    let mut bare = anabios_core::module::ModuleList::new();
+    bare.push(Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 });
+    assert_eq!(anabios_core::module::effective_communicator_range(&bare), 0.0);
+    // Silence unused warning until later tasks use it.
+    let _ = ModuleType::Communicator;
+}

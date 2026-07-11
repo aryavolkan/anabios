@@ -49,6 +49,9 @@ pub struct AgentBuffers {
     pub species_id: Vec<SpeciesId>,
     pub modules: Vec<ModuleList>,
     pub program: Vec<Program>,
+    /// Per-agent cultural state; transmitted by `culture_step`, read by
+    /// `SenseMeme`. Zeroed on spawn; only Communicator agents change it.
+    pub meme_vector: Vec<[f32; crate::program::MEME_CHANNELS]>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -107,6 +110,7 @@ impl AgentBuffers {
             self.species_id[i] = species_id;
             self.modules[i] = modules;
             self.program[i] = program;
+            self.meme_vector[i] = [0.0; crate::program::MEME_CHANNELS];
             self.alive.set(i, true);
             id
         } else {
@@ -121,6 +125,7 @@ impl AgentBuffers {
             self.species_id.push(species_id);
             self.modules.push(modules);
             self.program.push(program);
+            self.meme_vector.push([0.0; crate::program::MEME_CHANNELS]);
             self.alive.push(true);
             i as AgentId
         };
