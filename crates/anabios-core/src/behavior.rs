@@ -14,6 +14,7 @@ pub fn decide(
     program: &Program,
     genome: &Genome,
     sensor: &SensorRegister,
+    meme: &[f32; crate::program::MEME_CHANNELS],
     energy: f32,
     age: u32,
     eval_stack: &mut Vec<f32>,
@@ -34,6 +35,7 @@ pub fn decide(
         rel_energy: sensor.nearest_rel_energy,
         crowding: sensor.crowding as f32,
         pheromone_sample: sensor.pheromone,
+        meme_sample: *meme,
     };
     let mut action = evaluate(program, ctx, eval_stack);
     action.target_id = if sensor.nearest_neighbor_id == NO_NEIGHBOR_ID {

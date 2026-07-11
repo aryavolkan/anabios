@@ -75,6 +75,7 @@ fn decide_all(world: &mut World) {
             &world.agents.program[i],
             &world.agents.genome[i],
             &world.sensors[i],
+            &world.agents.meme_vector[i],
             world.agents.energy[i],
             world.agents.age[i],
             &mut world.eval_stack,

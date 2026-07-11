@@ -409,6 +409,7 @@ pub struct EvalContext<'a> {
     pub rel_energy: f32,
     pub crowding: f32,
     pub pheromone_sample: [f32; PHEROMONE_CHANNELS],
+    pub meme_sample: [f32; MEME_CHANNELS],
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -449,7 +450,9 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SensePheromone(ch) => {
                 scratch.push(ctx.pheromone_sample[(ch as usize).min(PHEROMONE_CHANNELS - 1)])
             }
-            Node::SenseMeme(_) => scratch.push(0.0),
+            Node::SenseMeme(ch) => {
+                scratch.push(ctx.meme_sample[(ch as usize).min(MEME_CHANNELS - 1)])
+            }
             Node::Const(v) => scratch.push(v),
 
             Node::Add => {
@@ -668,6 +671,7 @@ mod tests {
             rel_energy: 0.0,
             crowding: 0.0,
             pheromone_sample: [0.0; PHEROMONE_CHANNELS],
+            meme_sample: [0.0; MEME_CHANNELS],
         }
     }
 

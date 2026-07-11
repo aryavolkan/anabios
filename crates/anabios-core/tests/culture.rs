@@ -34,3 +34,19 @@ fn effective_communicator_range_reports_max() {
     // Silence unused warning until later tasks use it.
     let _ = ModuleType::Communicator;
 }
+
+use anabios_core::program::{Node, Program};
+use anabios_core::tick::step;
+
+#[test]
+fn sense_meme_reads_the_agents_own_meme_vector() {
+    let mut w = World::new(2);
+    let id = w.spawn_agent(Vec2::new(700.0, 700.0), Genome::neutral());
+    // Plant a meme value on channel 2, then program move_x = SenseMeme(2).
+    w.agents.meme_vector[id as usize][2] = 1.0;
+    w.agents.program[id as usize] =
+        Program::from_slice(&[Node::SenseMeme(2), Node::MoveTowardX]);
+    step(&mut w);
+    // Positive meme read → move_x > 0 → normalized to +1 on x.
+    assert!(w.desired_direction[id as usize].x > 0.9, "SenseMeme reads the meme vector");
+}
