@@ -92,6 +92,8 @@ pub enum Node {
     SenseRelSize,
     SenseRelEnergy,
     SenseCrowding,
+    /// Local pheromone concentration on the given channel (Smell-gated). M13.
+    SensePheromone(u8),
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
@@ -176,6 +178,7 @@ impl Program {
             | Node::SenseRelSize
             | Node::SenseRelEnergy
             | Node::SenseCrowding
+            | Node::SensePheromone(_)
             | Node::Const(_) => 0,
             Node::Add | Node::Sub | Node::Mul | Node::Min | Node::Max => 2,
             Node::Neg | Node::Tanh | Node::ThresholdGt(_) => 1,
@@ -254,6 +257,7 @@ impl Program {
             Node::SenseRelSize => 37,
             Node::SenseRelEnergy => 38,
             Node::SenseCrowding => 39,
+            Node::SensePheromone(_) => 40,
         }
     }
 }
@@ -360,9 +364,31 @@ pub fn starter_herd() -> Program {
     ])
 }
 
+/// Marker: emit Marker pheromone (channel 3) each tick and cohere toward the
+/// nearest same-species neighbor (herd), so the group clusters while marking.
+pub fn starter_marker() -> Program {
+    Program::from_slice(&[
+        // deposit a strong marker every tick
+        Node::Const(1.0),
+        Node::EmitPheromone(3),
+        // cohesion toward same-species
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+    ])
+}
+
 /// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
-    &[starter_grazer, starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd]
+    &[
+        starter_grazer,
+        starter_stalker,
+        starter_pack_hunter,
+        starter_sentinel,
+        starter_herd,
+        starter_marker,
+    ]
 }
 
 /// Per-agent inputs read by the evaluator. Caller fills this each tick.
@@ -382,6 +408,7 @@ pub struct EvalContext<'a> {
     pub rel_size: f32,
     pub rel_energy: f32,
     pub crowding: f32,
+    pub pheromone_sample: [f32; PHEROMONE_CHANNELS],
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -419,6 +446,9 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SenseRelSize => scratch.push(ctx.rel_size),
             Node::SenseRelEnergy => scratch.push(ctx.rel_energy),
             Node::SenseCrowding => scratch.push(ctx.crowding),
+            Node::SensePheromone(ch) => {
+                scratch.push(ctx.pheromone_sample[(ch as usize).min(PHEROMONE_CHANNELS - 1)])
+            }
             Node::SenseMeme(_) => scratch.push(0.0),
             Node::Const(v) => scratch.push(v),
 
@@ -637,6 +667,7 @@ mod tests {
             rel_size: 0.0,
             rel_energy: 0.0,
             crowding: 0.0,
+            pheromone_sample: [0.0; PHEROMONE_CHANNELS],
         }
     }
 
@@ -820,7 +851,9 @@ mod tests {
     fn social_starters_are_bounded_and_evaluable() {
         let g = Genome::neutral();
         let mut stack = Vec::new();
-        for make in [starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd] {
+        for make in
+            [starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd, starter_marker]
+        {
             let p = make();
             assert!(!p.is_empty());
             assert!(p.len() <= PROGRAM_MAX_NODES);
@@ -840,7 +873,7 @@ mod tests {
 
     #[test]
     fn starter_library_has_all_starters() {
-        assert_eq!(starter_library().len(), 5);
+        assert_eq!(starter_library().len(), 6);
     }
 
     #[test]

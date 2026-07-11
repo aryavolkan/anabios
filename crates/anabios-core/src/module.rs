@@ -232,6 +232,17 @@ pub fn predator_kit() -> ModuleList {
     ]
 }
 
+/// A pheromone-marking herbivore: mobile, smells pheromones, grazes, and marks
+/// territory on the Marker channel. Used by the `marker` scenario archetype.
+pub fn marker_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Smell, radius: 0.7, acuity: 0.6 },
+        Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 },
+        Module::Pheromone { channel: PheromoneChannel::Marker, strength: 1.0, decay: 0.1 },
+    ]
+}
+
 /// `true` iff the list contains at least one module of the given type.
 #[inline]
 pub fn has(modules: &ModuleList, module_type: ModuleType) -> bool {
@@ -305,6 +316,25 @@ pub fn effective_weapon(modules: &ModuleList) -> Option<(f32, f32)> {
             _ => None,
         })
         .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+}
+
+/// Max `Pheromone.strength`, or `0.0` if the agent has no `Pheromone` module.
+#[inline]
+pub fn effective_pheromone_strength(modules: &ModuleList) -> f32 {
+    modules
+        .iter()
+        .filter_map(|m| match m {
+            Module::Pheromone { strength, .. } => Some(*strength),
+            _ => None,
+        })
+        .fold(0.0_f32, f32::max)
+}
+
+/// `true` iff the agent has a `Sensor` module of type `Smell` (gates pheromone
+/// perception, design §3.6).
+#[inline]
+pub fn has_smell(modules: &ModuleList) -> bool {
+    modules.iter().any(|m| matches!(m, Module::Sensor { sensor_type: SensorType::Smell, .. }))
 }
 
 /// Max `Armor.protection`, or `0.0` if the agent has no `Armor` module.

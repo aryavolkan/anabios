@@ -1,0 +1,18 @@
+name = "territories"
+seed = 0
+
+# Marking species A — clustered NW.
+[[agents]]
+count = 30
+archetype = "marker"
+placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Marking species B — clustered SE.
+[[agents]]
+count = 30
+archetype = "marker"
+placement = { kind = "cluster", center_x = 720.0, center_y = 720.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0

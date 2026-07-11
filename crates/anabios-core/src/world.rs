@@ -42,6 +42,8 @@ pub struct World {
     pub codex: crate::codex::CodexState,
     /// Dead-but-edible flesh left by deaths this run; scavenged by carnivores.
     pub carcasses: Vec<crate::carcass::Carcass>,
+    /// Per-channel pheromone grids (deposited in `interact`, decayed each tick).
+    pub pheromones: crate::pheromone::PheromoneField,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     #[serde(skip)]
@@ -91,6 +93,7 @@ impl World {
             next_species_id: 1,
             codex: crate::codex::CodexState::default(),
             carcasses: Vec::new(),
+            pheromones: crate::pheromone::PheromoneField::new(),
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),

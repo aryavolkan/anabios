@@ -33,6 +33,7 @@ pub fn decide(
         rel_size: sensor.nearest_rel_size,
         rel_energy: sensor.nearest_rel_energy,
         crowding: sensor.crowding as f32,
+        pheromone_sample: sensor.pheromone,
     };
     let mut action = evaluate(program, ctx, eval_stack);
     action.target_id = if sensor.nearest_neighbor_id == NO_NEIGHBOR_ID {
