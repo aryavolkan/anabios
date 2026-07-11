@@ -50,3 +50,33 @@ fn sense_meme_reads_the_agents_own_meme_vector() {
     // Positive meme read → move_x > 0 → normalized to +1 on x.
     assert!(w.desired_direction[id as usize].x > 0.9, "SenseMeme reads the meme vector");
 }
+
+#[test]
+fn culture_step_transmits_broadcast_toward_receiver_meme() {
+    let mut w = World::new(3);
+    let sender = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let receiver = w.spawn_agent(Vec2::new(503.0, 500.0), Genome::neutral()); // within range
+    w.agents.modules[sender as usize] = communicator_kit();
+    w.agents.modules[receiver as usize] = communicator_kit();
+    // Sender broadcasts a high value on channel 1 every tick; receiver just reads.
+    w.agents.program[sender as usize] =
+        Program::from_slice(&[Node::Const(4.0), Node::Broadcast(1)]);
+    w.agents.program[receiver as usize] = Program::from_slice(&[Node::Idle]);
+    let before = w.agents.meme_vector[receiver as usize][1];
+    step(&mut w);
+    let after = w.agents.meme_vector[receiver as usize][1];
+    assert!(after > before, "receiver's meme[1] moved toward the sender's broadcast");
+}
+
+#[test]
+fn no_communicator_means_no_transmission() {
+    let mut w = World::new(3);
+    let sender = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let receiver = w.spawn_agent(Vec2::new(503.0, 500.0), Genome::neutral());
+    w.agents.modules[sender as usize] = communicator_kit();
+    // Receiver has the DEFAULT kit — no Communicator.
+    w.agents.program[sender as usize] =
+        Program::from_slice(&[Node::Const(4.0), Node::Broadcast(1)]);
+    step(&mut w);
+    assert_eq!(w.agents.meme_vector[receiver as usize][1], 0.0, "no Communicator → no receive (gating)");
+}

@@ -38,6 +38,9 @@ pub fn step(world: &mut World) {
     // this point.
     crate::reproduce::reproduce_all(world);
 
+    // Stage 6b: culture — meme transmission between communicators (§3.7 step 7).
+    crate::culture::culture_step(world);
+
     // Stage 7: age + starve.
     age_and_starve(world);
 

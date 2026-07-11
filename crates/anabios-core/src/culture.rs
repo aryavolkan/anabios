@@ -2,6 +2,11 @@
 //! neighbors with imperfect copy (design §3.1, §3.7 step 7, §4.4). Meme ops are
 //! gated on the `Communicator` module.
 
+use crate::module::{self, ModuleType};
+use crate::program::MEME_CHANNELS;
+use crate::spatial::PERCEPTION_MAX_RADIUS;
+use crate::world::World;
+
 /// Fraction each receiver moves its meme toward the neighbor mean per tick
 /// (the "imperfect copy" — < 1.0 means partial adoption).
 pub const MEME_COPY_RATE: f32 = 0.25;
@@ -11,3 +16,45 @@ pub const MEME_BROADCAST_THRESHOLD: f32 = 0.5;
 pub const MEME_INHERIT_JITTER: f32 = 0.05;
 /// The meme channel used for alarm calls (AlarmCall detector).
 pub const ALARM_MEME_CHANNEL: usize = 0;
+
+/// Transmit memes between Communicator neighbors: each receiver lerps its meme
+/// vector toward the mean of nearby communicators' broadcasts. Deterministic
+/// (no RNG); iterates alive ids ascending. The received value comes from
+/// `broadcast_intent` (fixed this tick), so in-place updates don't interfere.
+pub fn culture_step(world: &mut World) {
+    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
+    for &id in &alive_ids {
+        let i = id as usize;
+        if !module::has(&world.agents.modules[i], ModuleType::Communicator) {
+            continue;
+        }
+        let range = module::effective_communicator_range(&world.agents.modules[i])
+            .min(PERCEPTION_MAX_RADIUS);
+        if range <= 0.0 {
+            continue;
+        }
+        let pos = world.agents.position[i];
+        let mut sum = [0.0f32; MEME_CHANNELS];
+        let mut count = [0u32; MEME_CHANNELS];
+        world.spatial.query(pos, range, |oid| {
+            if oid == id {
+                return;
+            }
+            let j = oid as usize;
+            if !module::has(&world.agents.modules[j], ModuleType::Communicator) {
+                return;
+            }
+            for ch in 0..MEME_CHANNELS {
+                sum[ch] += world.actions[j].broadcast_intent[ch];
+                count[ch] += 1;
+            }
+        });
+        for ch in 0..MEME_CHANNELS {
+            if count[ch] > 0 {
+                let received = sum[ch] / count[ch] as f32;
+                let cur = world.agents.meme_vector[i][ch];
+                world.agents.meme_vector[i][ch] = cur + MEME_COPY_RATE * (received - cur);
+            }
+        }
+    }
+}
