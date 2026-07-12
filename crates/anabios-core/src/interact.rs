@@ -94,6 +94,13 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.energy[i] -= cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
+        // Record hit for the PackHunting detector.
+        world.codex.combat_hits.push_back(crate::codex::CombatHit {
+            tick: world.tick,
+            target_id: tgt,
+            attacker_id: id,
+            species: world.agents.species_id[i],
+        });
     }
 }
 

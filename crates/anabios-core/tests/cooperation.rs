@@ -113,3 +113,43 @@ fn evolved_cooperation_fires_on_sustained_sharing() {
     }
     assert!(fired, "sustained kin sharing → EvolvedCooperation");
 }
+
+use anabios_core::module::Module;
+
+#[test]
+fn pack_hunting_fires_when_three_attackers_hit_one_target() {
+    let mut w = World::new(6);
+    let prey = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    // Move prey to its own species so the attackers are "other species" to it.
+    let psid = w.species_centroids.len() as u32;
+    w.species_centroids.push(Genome::neutral());
+    w.species_parents.push(Some(0));
+    w.species_member_counts.push(0);
+    w.next_species_id = psid + 1;
+    w.remove_from_species(w.agents.species_id[prey as usize]);
+    w.agents.species_id[prey as usize] = psid;
+    w.add_to_species(psid);
+    // Three armed same-species predators adjacent to the prey, all firing.
+    for k in 0..3 {
+        let pred = w.spawn_agent(Vec2::new(501.0, 500.0 + k as f32 * 0.3), Genome::neutral());
+        let mut kit = anabios_core::module::ModuleList::new();
+        kit.push(Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 });
+        kit.push(Module::Sensor {
+            sensor_type: anabios_core::module::SensorType::Vision,
+            radius: 0.6,
+            acuity: 0.6,
+        });
+        kit.push(Module::Weapon { damage: 1.0, energy_cost: 0.1 });
+        w.agents.modules[pred as usize] = kit;
+        w.agents.program[pred as usize] = Program::from_slice(&[Node::Const(1.0), Node::FireWeapon]);
+    }
+    let mut fired = false;
+    for _ in 0..12 {
+        step(&mut w);
+        if w.codex.events.iter().any(|e| e.event_type == EventType::PackHunting) {
+            fired = true;
+            break;
+        }
+    }
+    assert!(fired, "3 same-species attackers on one target → PackHunting");
+}

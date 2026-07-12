@@ -74,6 +74,11 @@ pub const COOPERATION_WINDOW: u64 = 100;
 /// Minimum share events within the window to declare EvolvedCooperation.
 pub const COOPERATION_MIN_SHARES: usize = 12;
 
+/// Rolling window (ticks) over which combat hits accumulate for PackHunting.
+pub const PACK_WINDOW: u64 = 8;
+/// Distinct same-species attackers on one target needed to declare PackHunting.
+pub const PACK_MIN_ATTACKERS: usize = 3;
+
 /// Ticks of history tracked for the per-(species,channel) meme mean sweep.
 pub const MEME_SWEEP_WINDOW: usize = 80;
 /// Meme mean must start at or below this for a MemeSweep.
@@ -110,6 +115,9 @@ pub enum EventType {
     AlarmCall = 13,
     /// A species sustains a high energy-sharing rate over a rolling window.
     EvolvedCooperation = 14,
+    /// ≥ PACK_MIN_ATTACKERS distinct same-species agents deal combat damage to
+    /// one target within PACK_WINDOW ticks.
+    PackHunting = 15,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +145,16 @@ pub struct CombatDeath {
     pub attacker_species: u32,
     pub loc_x: f32,
     pub loc_y: f32,
+}
+
+/// A single combat hit (attacker deals damage to target). Fuel for the
+/// PackHunting detector.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CombatHit {
+    pub tick: u64,
+    pub target_id: u32,
+    pub attacker_id: u32,
+    pub species: u32,
 }
 
 /// Persistent state owned by `World`. Holds detector scratch and the
@@ -187,6 +205,10 @@ pub struct CodexState {
     pub share_events: VecDeque<(u64, u32)>,
     /// Species currently latched as having evolved cooperation (re-arms on drop).
     pub cooperation_active: BTreeSet<u32>,
+    /// Rolling window of combat hits for PackHunting.
+    pub combat_hits: VecDeque<CombatHit>,
+    /// Edge-trigger state for PackHunting (armed while no qualifying group).
+    pub pack_active: bool,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -752,6 +774,61 @@ fn detect_evolved_cooperation(world: &mut World, centroids: &BTreeMap<u32, (f32,
     }
 }
 
+/// PackHunting: ≥ PACK_MIN_ATTACKERS distinct same-species agents deal combat
+/// damage to one target within PACK_WINDOW ticks. Prunes the rolling window,
+/// groups hits by (target, species), and edge-fires on the `pack_active` latch.
+/// Re-arms when no qualifying (target, species) group exists.
+fn detect_pack_hunting(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+    let tick = world.tick;
+    // Prune entries older than the rolling window (mirror detect_combat_raid).
+    let cutoff = tick.saturating_sub(PACK_WINDOW);
+    while let Some(front) = world.codex.combat_hits.front() {
+        if front.tick < cutoff {
+            world.codex.combat_hits.pop_front();
+        } else {
+            break;
+        }
+    }
+    // Group by target → species → set of distinct attacker ids (BTreeMap → deterministic).
+    let mut groups: BTreeMap<u32, BTreeMap<u32, BTreeSet<u32>>> = BTreeMap::new();
+    for hit in world.codex.combat_hits.iter() {
+        groups
+            .entry(hit.target_id)
+            .or_default()
+            .entry(hit.species)
+            .or_default()
+            .insert(hit.attacker_id);
+    }
+    // Check whether any (target, species) pair has ≥ PACK_MIN_ATTACKERS.
+    let mut raiding = false;
+    let mut event_species: u32 = 0;
+    let mut event_loc: (f32, f32) = (0.0, 0.0);
+    'outer: for (_target_id, by_species) in groups.iter() {
+        for (sid, attackers) in by_species.iter() {
+            if attackers.len() >= PACK_MIN_ATTACKERS {
+                raiding = true;
+                event_species = *sid;
+                event_loc = centroid_of(centroids, *sid);
+                break 'outer;
+            }
+        }
+    }
+    // Edge-trigger: fire on rising edge, re-arm on falling edge.
+    if raiding && !world.codex.pack_active {
+        world.codex.push_event(CodexEvent {
+            event_type: EventType::PackHunting,
+            tick,
+            species_id: event_species,
+            value: PACK_MIN_ATTACKERS as f32,
+            loc_x: event_loc.0,
+            loc_y: event_loc.1,
+        });
+        world.codex.pack_active = true;
+    } else if !raiding {
+        world.codex.pack_active = false;
+    }
+}
+
 /// Run all detectors. Called by the tick orchestrator at the end of each
 /// tick. SpeciationEvent is emitted directly from `species_step`.
 pub fn observe_all(world: &mut World) {
@@ -777,6 +854,7 @@ pub fn observe_all(world: &mut World) {
     detect_meme_sweep(world, &centroids);
     detect_alarm_call(world);
     detect_evolved_cooperation(world, &centroids);
+    detect_pack_hunting(world, &centroids);
 }
 
 /// Mean alive position per species, ascending id order, f64 accumulator.
