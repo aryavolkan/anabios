@@ -817,7 +817,7 @@ fn detect_pack_hunting(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>)
     let mut raiding = false;
     let mut event_species: u32 = 0;
     let mut event_loc: (f32, f32) = (0.0, 0.0);
-    'outer: for (_target_id, by_species) in groups.iter() {
+    'outer: for by_species in groups.values() {
         for (sid, attackers) in by_species.iter() {
             if attackers.len() >= PACK_MIN_ATTACKERS {
                 raiding = true;
