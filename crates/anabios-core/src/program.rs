@@ -94,6 +94,13 @@ pub enum Node {
     SenseCrowding,
     /// Local pheromone concentration on the given channel (Smell-gated). M13.
     SensePheromone(u8),
+    /// Kinship of the overall-nearest neighbor in `[0,1]`; 0.0 when none. M15.
+    /// Excluded from `random_node` so evolved programs stay unchanged.
+    SenseKinship,
+    /// Altruistic sharing output. Pops one value and adds it to
+    /// `share_intent`. Triggers `share_pass` when above `SHARE_THRESHOLD`
+    /// and `Altruism > 0`. M15. Excluded from `random_node`.
+    Share,
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
@@ -109,6 +116,9 @@ pub struct ActionRegister {
     /// Agent this action is directed at (combat/share target), derived from
     /// the nearest-neighbor sense. `NO_TARGET` when there is no neighbor.
     pub target_id: u32,
+    /// Altruistic sharing intent. Positive values above `SHARE_THRESHOLD`
+    /// trigger `share_pass` to transfer energy to the action target. M15.
+    pub share_intent: f32,
 }
 
 impl Default for ActionRegister {
@@ -122,6 +132,7 @@ impl Default for ActionRegister {
             emit_intent: [0.0; PHEROMONE_CHANNELS],
             broadcast_intent: [0.0; MEME_CHANNELS],
             target_id: NO_TARGET,
+            share_intent: 0.0,
         }
     }
 }
@@ -179,6 +190,7 @@ impl Program {
             | Node::SenseRelEnergy
             | Node::SenseCrowding
             | Node::SensePheromone(_)
+            | Node::SenseKinship
             | Node::Const(_) => 0,
             Node::Add | Node::Sub | Node::Mul | Node::Min | Node::Max => 2,
             Node::Neg | Node::Tanh | Node::ThresholdGt(_) => 1,
@@ -192,7 +204,8 @@ impl Program {
             | Node::FireWeapon
             | Node::EmitPheromone(_)
             | Node::Broadcast(_)
-            | Node::Idle => 1,
+            | Node::Idle
+            | Node::Share => 1,
         }
     }
 
@@ -210,6 +223,7 @@ impl Program {
                 | Node::EmitPheromone(_)
                 | Node::Broadcast(_)
                 | Node::Idle
+                | Node::Share
         )
     }
 
@@ -258,6 +272,8 @@ impl Program {
             Node::SenseRelEnergy => 38,
             Node::SenseCrowding => 39,
             Node::SensePheromone(_) => 40,
+            Node::SenseKinship => 41,
+            Node::Share => 42,
         }
     }
 }
@@ -393,6 +409,23 @@ pub fn starter_communicator() -> Program {
     ])
 }
 
+/// Cooperator: share energy with kin (when kinship > 0.3) and cohere toward
+/// the nearest same-species neighbor. `SenseKinship` pushes kinship onto the
+/// stack, `ThresholdGt(0.3)` maps it to 1.0/0.0, `Share` pops that value and
+/// adds it to `share_intent` (positive → altruistic transfer fires when
+/// `Altruism > 0`). M15.
+pub fn starter_cooperator() -> Program {
+    Program::from_slice(&[
+        Node::SenseKinship,
+        Node::ThresholdGt(0.3),
+        Node::Share,
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+    ])
+}
+
 /// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
     &[
@@ -403,6 +436,7 @@ pub fn starter_library() -> &'static [fn() -> Program] {
         starter_herd,
         starter_marker,
         starter_communicator,
+        starter_cooperator,
     ]
 }
 
@@ -425,6 +459,7 @@ pub struct EvalContext<'a> {
     pub crowding: f32,
     pub pheromone_sample: [f32; PHEROMONE_CHANNELS],
     pub meme_sample: [f32; MEME_CHANNELS],
+    pub nearest_kinship: f32,
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -465,6 +500,7 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SensePheromone(ch) => {
                 scratch.push(ctx.pheromone_sample[(ch as usize).min(PHEROMONE_CHANNELS - 1)])
             }
+            Node::SenseKinship => scratch.push(ctx.nearest_kinship),
             Node::SenseMeme(ch) => {
                 scratch.push(ctx.meme_sample[(ch as usize).min(MEME_CHANNELS - 1)])
             }
@@ -541,6 +577,7 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::Idle => {
                 scratch.pop();
             }
+            Node::Share => action.share_intent += scratch.pop().unwrap(),
         }
     }
 
@@ -687,6 +724,7 @@ mod tests {
             crowding: 0.0,
             pheromone_sample: [0.0; PHEROMONE_CHANNELS],
             meme_sample: [0.0; MEME_CHANNELS],
+            nearest_kinship: 0.0,
         }
     }
 
@@ -877,6 +915,7 @@ mod tests {
             starter_herd,
             starter_marker,
             starter_communicator,
+            starter_cooperator,
         ] {
             let p = make();
             assert!(!p.is_empty());
@@ -897,7 +936,7 @@ mod tests {
 
     #[test]
     fn starter_library_has_all_starters() {
-        assert_eq!(starter_library().len(), 7);
+        assert_eq!(starter_library().len(), 8);
     }
 
     #[test]

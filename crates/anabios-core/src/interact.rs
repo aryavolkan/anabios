@@ -4,6 +4,13 @@ use crate::genome::GenomeSlot;
 use crate::module::{self, ModuleType};
 use crate::world::World;
 
+/// `share_intent` above this triggers a transfer.
+pub const SHARE_THRESHOLD: f32 = 0.5;
+/// Max fraction of the donor's energy shared in one tick (before altruism scale).
+pub const SHARE_FRACTION: f32 = 0.2;
+/// Contact range (world units) for sharing. Mirrors COMBAT_RANGE.
+pub const SHARE_RANGE: f32 = 2.0;
+
 /// Max biomass an agent can bite from the biome in one tick (before scaling).
 pub const BITE_MAX: f32 = 0.5;
 /// Energy yielded per unit of plant biomass eaten.
@@ -32,6 +39,7 @@ pub fn interact_all(world: &mut World) {
     combat_pass(world, &alive_ids);
     scavenge_pass(world, &alive_ids);
     deposit_pass(world, &alive_ids);
+    share_pass(world, &alive_ids);
 }
 
 /// Grazing: a herbivore-capable Mouth bites plant biomass at its cell.
@@ -86,6 +94,13 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.energy[i] -= cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
+        // Record hit for the PackHunting detector.
+        world.codex.combat_hits.push_back(crate::codex::CombatHit {
+            tick: world.tick,
+            target_id: tgt,
+            attacker_id: id,
+            species: world.agents.species_id[i],
+        });
     }
 }
 
@@ -150,5 +165,41 @@ fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
                 world.agents.energy[i] += taken * FLESH_ENERGY_PER_UNIT;
             }
         }
+    }
+}
+
+/// Altruism: a donor with `share_intent` transfers a fraction of its energy to
+/// its action target (the nearest neighbor), scaled by the `Altruism` genome
+/// slot. Donor loses, recipient gains. Program-level gating on `SenseKinship`
+/// makes this kin-directed.
+fn share_pass(world: &mut World, alive_ids: &[u32]) {
+    for &id in alive_ids {
+        let i = id as usize;
+        if world.actions[i].share_intent <= SHARE_THRESHOLD {
+            continue;
+        }
+        let altruism = world.agents.genome[i].get(GenomeSlot::Altruism);
+        if altruism <= 0.0 {
+            continue;
+        }
+        let tgt = world.actions[i].target_id;
+        if tgt == crate::program::NO_TARGET {
+            continue;
+        }
+        let t = tgt as usize;
+        if t == i || !world.agents.is_alive(tgt) {
+            continue;
+        }
+        if world.sensors[i].nearest_neighbor_dist >= SHARE_RANGE {
+            continue;
+        }
+        let amount = SHARE_FRACTION * world.agents.energy[i].max(0.0) * altruism;
+        if amount <= 0.0 {
+            continue;
+        }
+        world.agents.energy[i] -= amount;
+        world.agents.energy[t] += amount;
+        // Record for the EvolvedCooperation detector.
+        world.codex.share_events.push_back((world.tick, world.agents.species_id[i]));
     }
 }
