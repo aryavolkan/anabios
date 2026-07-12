@@ -93,3 +93,55 @@ fn child_inherits_parent_meme_average_with_jitter() {
         assert!((v - 2.0).abs() < 0.5, "child meme near parent average ({v})");
     }
 }
+
+#[test]
+fn meme_l2_is_zero_for_equal_positive_for_divergent() {
+    use anabios_core::codex::meme_l2;
+    let a = [0.0f32; MEME_CHANNELS];
+    let b = [0.0f32; MEME_CHANNELS];
+    assert_eq!(meme_l2(&a, &b), 0.0);
+    let mut c = [0.0f32; MEME_CHANNELS];
+    c[0] = 1.0;
+    assert!(meme_l2(&a, &c) > 0.5);
+}
+
+#[test]
+fn dialect_formed_fires_for_two_divergent_halves() {
+    use anabios_core::codex::{observe_all, EventType, DIALECT_WINDOW};
+    let mut w = World::new(9);
+    // West half at x=300 with meme[0]=0; east half at x=700 with meme[0]=1.
+    let mut ids = Vec::new();
+    for k in 0..4 {
+        let id = w.spawn_agent(Vec2::new(300.0, 500.0 + k as f32), Genome::neutral());
+        w.agents.modules[id as usize] = communicator_kit();
+        ids.push(id);
+    }
+    for k in 0..4 {
+        let id = w.spawn_agent(Vec2::new(700.0, 500.0 + k as f32), Genome::neutral());
+        w.agents.modules[id as usize] = communicator_kit();
+        w.agents.meme_vector[id as usize][0] = 1.0;
+        ids.push(id);
+    }
+    // Put all 8 in one fresh species.
+    let sid = w.species_centroids.len() as u32;
+    w.species_centroids.push(Genome::neutral());
+    w.species_parents.push(Some(0));
+    w.species_member_counts.push(0);
+    w.next_species_id = sid + 1;
+    for &id in &ids {
+        w.remove_from_species(w.agents.species_id[id as usize]);
+        w.agents.species_id[id as usize] = sid;
+        w.add_to_species(sid);
+    }
+    // Drive observe_all for a full window WITHOUT stepping (memes/positions fixed).
+    let mut fired = false;
+    for _ in 0..(DIALECT_WINDOW + 2) {
+        observe_all(&mut w);
+        w.tick += 1;
+        if w.codex.events.iter().any(|e| e.event_type == EventType::DialectFormed) {
+            fired = true;
+            break;
+        }
+    }
+    assert!(fired, "two divergent meme halves form a dialect");
+}
