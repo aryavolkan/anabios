@@ -86,7 +86,8 @@ pub fn culture_step(world: &mut World) {
                 sum[ch] += world.actions[j].broadcast_intent[ch];
                 count[ch] += 1;
             }
-            max_neighbour_skill = max_neighbour_skill.max(world.agents.meme_vector[j][SKILL_CHANNEL]);
+            max_neighbour_skill =
+                max_neighbour_skill.max(world.agents.meme_vector[j][SKILL_CHANNEL]);
         });
         for ch in 0..MEME_CHANNELS {
             // The skill channel is transmitted by social learning (below), not by

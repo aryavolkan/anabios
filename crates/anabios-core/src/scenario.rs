@@ -97,10 +97,8 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
     };
     use crate::program::{
         starter_asocial_forager, starter_asocial_prey, starter_communicator, starter_cooperator,
-        starter_cultural_cooperator, starter_cultural_hunter, starter_culture_prey,
-        starter_grazer,
-        starter_herd, starter_marker,
-        starter_pack_hunter, starter_sentinel, starter_stalker,
+        starter_cultural_cooperator, starter_cultural_hunter, starter_culture_prey, starter_grazer,
+        starter_herd, starter_marker, starter_pack_hunter, starter_sentinel, starter_stalker,
     };
     match name {
         "stalker" => (predator_kit(), starter_stalker()),
