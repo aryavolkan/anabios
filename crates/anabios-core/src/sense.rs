@@ -61,7 +61,7 @@ pub struct SensorRegister {
     /// Local pheromone concentration per channel (0 unless the agent has a
     /// `Smell` sensor). Read by `Node::SensePheromone`.
     pub pheromone: [f32; crate::program::PHEROMONE_CHANNELS],
-    /// Kinship of the overall-nearest neighbor in [0,1]; 0.0 when there is
+    /// Kinship of the overall-nearest neighbor in `[0,1]`; 0.0 when there is
     /// no neighbor. Computed by `sense_all` after the neighbor scan.
     /// `#[serde(skip)]` scratch — no snapshot impact.
     #[serde(skip)]

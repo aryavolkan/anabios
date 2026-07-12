@@ -1,4 +1,4 @@
-//! Kin recognition: a scalar relatedness in [0,1] blending shared ancestry
+//! Kin recognition: a scalar relatedness in `[0,1]` blending shared ancestry
 //! (parent-lineage overlap + parent/child links) with genome similarity.
 //! Gates altruism on kin so cooperation is evolutionarily stable (§3.2, §4.3).
 
@@ -6,10 +6,10 @@ use crate::agent::LINEAGE_NONE;
 use crate::genome::{Genome, GENOME_LEN};
 
 /// √GENOME_LEN — the max possible L2 distance between two genomes whose slots
-/// are all in [0,1]. Used to normalize genome distance into a [0,1] similarity.
+/// are all in `[0,1]`. Used to normalize genome distance into a `[0,1]` similarity.
 pub const SQRT_GENOME_LEN: f32 = 7.071_068; // sqrt(50)
 
-/// Relatedness of two agents in [0,1]: `0.5*ancestry + 0.5*genome_similarity`.
+/// Relatedness of two agents in `[0,1]`: `0.5*ancestry + 0.5*genome_similarity`.
 pub fn kinship(
     a_lineage: u64,
     a_parents: &[u64; 2],

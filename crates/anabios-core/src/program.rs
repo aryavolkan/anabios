@@ -94,7 +94,7 @@ pub enum Node {
     SenseCrowding,
     /// Local pheromone concentration on the given channel (Smell-gated). M13.
     SensePheromone(u8),
-    /// Kinship of the overall-nearest neighbor in [0,1]; 0.0 when none. M15.
+    /// Kinship of the overall-nearest neighbor in `[0,1]`; 0.0 when none. M15.
     /// Excluded from `random_node` so evolved programs stay unchanged.
     SenseKinship,
     /// Altruistic sharing output. Pops one value and adds it to
