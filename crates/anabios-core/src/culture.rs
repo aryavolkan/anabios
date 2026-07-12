@@ -4,6 +4,7 @@
 
 use crate::module::{self, ModuleType};
 use crate::program::MEME_CHANNELS;
+use crate::rng::Rng;
 use crate::spatial::PERCEPTION_MAX_RADIUS;
 use crate::world::World;
 
@@ -12,10 +13,28 @@ use crate::world::World;
 pub const MEME_COPY_RATE: f32 = 0.25;
 /// `broadcast_intent[ch]` above this counts as an active broadcast this tick.
 pub const MEME_BROADCAST_THRESHOLD: f32 = 0.5;
-/// Std-dev of the per-channel jitter added to an inherited meme vector.
+/// Half-range of the centered-uniform per-channel jitter added to an inherited
+/// meme vector (jitter is drawn from `[-MEME_INHERIT_JITTER, +MEME_INHERIT_JITTER]`).
 pub const MEME_INHERIT_JITTER: f32 = 0.05;
 /// The meme channel used for alarm calls (AlarmCall detector).
 pub const ALARM_MEME_CHANNEL: usize = 0;
+
+/// Child meme = per-channel parent average plus small centered-uniform jitter.
+/// Jitter uses a centered uniform draw scaled by `MEME_INHERIT_JITTER` (matches
+/// the codebase's `perturb` style; determinism via the shared `rng`).
+/// Draw count is exactly `MEME_CHANNELS` per inheriting birth.
+pub fn inherit_meme(
+    a: &[f32; MEME_CHANNELS],
+    b: &[f32; MEME_CHANNELS],
+    rng: &mut Rng,
+) -> [f32; MEME_CHANNELS] {
+    let mut out = [0.0f32; MEME_CHANNELS];
+    for ch in 0..MEME_CHANNELS {
+        let jitter = (rng.f32_unit() - 0.5) * 2.0 * MEME_INHERIT_JITTER;
+        out[ch] = 0.5 * (a[ch] + b[ch]) + jitter;
+    }
+    out
+}
 
 /// Transmit memes between Communicator neighbors: each receiver lerps its meme
 /// vector toward the mean of nearby communicators' broadcasts. Deterministic

@@ -80,3 +80,16 @@ fn no_communicator_means_no_transmission() {
     step(&mut w);
     assert_eq!(w.agents.meme_vector[receiver as usize][1], 0.0, "no Communicator → no receive (gating)");
 }
+
+#[test]
+fn child_inherits_parent_meme_average_with_jitter() {
+    use anabios_core::rng::Rng;
+    let a = [1.0f32; MEME_CHANNELS];
+    let b = [3.0f32; MEME_CHANNELS];
+    let mut rng = Rng::from_seed(42);
+    let child = anabios_core::culture::inherit_meme(&a, &b, &mut rng);
+    // Average is 2.0; jitter is small (MEME_INHERIT_JITTER = 0.05), so each channel is near 2.0.
+    for &v in &child {
+        assert!((v - 2.0).abs() < 0.5, "child meme near parent average ({v})");
+    }
+}
