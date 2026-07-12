@@ -61,6 +61,11 @@ pub struct SensorRegister {
     /// Local pheromone concentration per channel (0 unless the agent has a
     /// `Smell` sensor). Read by `Node::SensePheromone`.
     pub pheromone: [f32; crate::program::PHEROMONE_CHANNELS],
+    /// Kinship of the overall-nearest neighbor in [0,1]; 0.0 when there is
+    /// no neighbor. Computed by `sense_all` after the neighbor scan.
+    /// `#[serde(skip)]` scratch — no snapshot impact.
+    #[serde(skip)]
+    pub nearest_kinship: f32,
 }
 
 impl Default for SensorRegister {
@@ -83,6 +88,7 @@ impl Default for SensorRegister {
             nearest_rel_energy: 0.0,
             crowding: 0,
             pheromone: [0.0; crate::program::PHEROMONE_CHANNELS],
+            nearest_kinship: 0.0,
         }
     }
 }
@@ -211,6 +217,22 @@ pub fn sense_all(
             nearest_rel_energy,
             crowding,
             pheromone,
+            nearest_kinship: 0.0,
+        };
+
+        // Kinship of the overall-nearest neighbor (0 when there is none).
+        registers[i].nearest_kinship = if has_neighbor {
+            let n = nearest_id as usize;
+            crate::kin::kinship(
+                agents.lineage_id[i],
+                &agents.parent_ids[i],
+                &agents.genome[i],
+                agents.lineage_id[n],
+                &agents.parent_ids[n],
+                &agents.genome[n],
+            )
+        } else {
+            0.0
         };
     }
 }

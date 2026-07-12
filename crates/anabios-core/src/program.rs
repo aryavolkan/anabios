@@ -94,6 +94,9 @@ pub enum Node {
     SenseCrowding,
     /// Local pheromone concentration on the given channel (Smell-gated). M13.
     SensePheromone(u8),
+    /// Kinship of the overall-nearest neighbor in [0,1]; 0.0 when none. M15.
+    /// Excluded from `random_node` so evolved programs stay unchanged.
+    SenseKinship,
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
@@ -179,6 +182,7 @@ impl Program {
             | Node::SenseRelEnergy
             | Node::SenseCrowding
             | Node::SensePheromone(_)
+            | Node::SenseKinship
             | Node::Const(_) => 0,
             Node::Add | Node::Sub | Node::Mul | Node::Min | Node::Max => 2,
             Node::Neg | Node::Tanh | Node::ThresholdGt(_) => 1,
@@ -258,6 +262,7 @@ impl Program {
             Node::SenseRelEnergy => 38,
             Node::SenseCrowding => 39,
             Node::SensePheromone(_) => 40,
+            Node::SenseKinship => 41,
         }
     }
 }
@@ -425,6 +430,7 @@ pub struct EvalContext<'a> {
     pub crowding: f32,
     pub pheromone_sample: [f32; PHEROMONE_CHANNELS],
     pub meme_sample: [f32; MEME_CHANNELS],
+    pub nearest_kinship: f32,
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -465,6 +471,7 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SensePheromone(ch) => {
                 scratch.push(ctx.pheromone_sample[(ch as usize).min(PHEROMONE_CHANNELS - 1)])
             }
+            Node::SenseKinship => scratch.push(ctx.nearest_kinship),
             Node::SenseMeme(ch) => {
                 scratch.push(ctx.meme_sample[(ch as usize).min(MEME_CHANNELS - 1)])
             }
