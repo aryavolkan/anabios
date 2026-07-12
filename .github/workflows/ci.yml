@@ -39,6 +39,22 @@ jobs:
       - name: bench compile check
         run: cargo bench --workspace --no-run
 
+  emergence:
+    name: emergence (release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The integration step in the `rust` job runs in debug, where the emergence
+      # detectors (M11-M15) are `#[cfg_attr(debug_assertions, ignore)]` and skipped.
+      # This runs the integration tests in release so those detectors actually
+      # execute — the behavioural regression gate. (The exploratory #[ignore]
+      # experiment harnesses in gene_culture.rs / dit_boundary.rs are NOT run here:
+      # they are seed-dependent analysis tools, not pass/fail gates.)
+      - name: test (integration, release — runs emergence detectors)
+        run: cargo test --workspace --tests --release
+
   determinism:
     name: determinism smoke
     runs-on: ubuntu-latest
