@@ -43,7 +43,7 @@ fn share_transfers_energy_scaled_by_altruism() {
     rg.set(GenomeSlot::ReproductionThreshold, 1.0);
     let donor = w.spawn_agent(Vec2::new(500.0, 500.0), g);
     let recipient = w.spawn_agent(Vec2::new(501.0, 500.0), rg); // within SHARE_RANGE
-    // Donor always shares (share_intent = 1.0 via Const + Share).
+                                                                // Donor always shares (share_intent = 1.0 via Const + Share).
     w.agents.program[donor as usize] = Program::from_slice(&[Node::Const(1.0), Node::Share]);
     w.agents.program[recipient as usize] = Program::from_slice(&[Node::Idle]);
     let d0 = w.agents.energy[donor as usize];
@@ -68,4 +68,24 @@ fn zero_altruism_means_no_sharing() {
     // Recipient's only energy change is its own metabolism/grazing — no share in.
     // Assert it did not gain the share amount (energy did not increase from sharing).
     assert!(w.agents.energy[recipient as usize] <= r0 + 1e-3, "no altruism → no share");
+}
+
+#[test]
+fn scratch_stays_sized_across_reproduction() {
+    // With reproduction growing capacity mid-tick, world.actions must stay sized
+    // to capacity every tick so the AlarmCall detector never early-returns on a
+    // birth tick (M14 whole-branch-review follow-up).
+    let mut w = World::new(7);
+    for k in 0..8 {
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::ReproductionThreshold, 0.0); // reproduce readily
+        let _ = w.spawn_agent(Vec2::new(500.0 + k as f32, 500.0), g);
+    }
+    for _ in 0..30 {
+        step(&mut w);
+        assert!(
+            w.actions.len() >= w.agents.capacity(),
+            "world.actions must stay sized to capacity (alarm scratch invariant)"
+        );
+    }
 }

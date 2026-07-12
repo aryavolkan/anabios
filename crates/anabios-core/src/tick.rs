@@ -41,6 +41,11 @@ pub fn step(world: &mut World) {
     // Stage 6b: culture — meme transmission between communicators (§3.7 step 7).
     crate::culture::culture_step(world);
 
+    // Keep scratch sized to the post-reproduce capacity so end-of-tick detectors
+    // (AlarmCall) that read actions/sensors/desired_direction see every agent —
+    // reproduce (stage 6) can grow capacity past the top-of-tick resize.
+    world.resize_scratch();
+
     // Stage 7: age + starve.
     age_and_starve(world);
 
