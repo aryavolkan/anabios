@@ -106,6 +106,9 @@ fn event_name(t: EventType) -> &'static str {
         EventType::DialectFormed => "dialect_formed",
         EventType::MemeSweep => "meme_sweep",
         EventType::AlarmCall => "alarm_call",
+        EventType::EvolvedCooperation => "evolved_cooperation",
+        EventType::PackHunting => "pack_hunting",
+        EventType::HerdCohesion => "herd_cohesion",
     }
 }
 
@@ -118,13 +121,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          extinction,pop_crash,speciation,migration,novel_module,novel_behavior,\
          predation,combat_raid,arms_race,\
          territory_formation,niche_partitioning,\
-         dialect_formed,meme_sweep,alarm_call"
+         dialect_formed,meme_sweep,alarm_call,\
+         evolved_cooperation,pack_hunting,herd_cohesion"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -144,6 +148,9 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("dialect_formed"),
             g("meme_sweep"),
             g("alarm_call"),
+            g("evolved_cooperation"),
+            g("pack_hunting"),
+            g("herd_cohesion"),
         )?;
     }
     Ok(())
@@ -165,6 +172,14 @@ mod tests {
         assert_eq!(super::event_name(EventType::DialectFormed), "dialect_formed");
         assert_eq!(super::event_name(EventType::MemeSweep), "meme_sweep");
         assert_eq!(super::event_name(EventType::AlarmCall), "alarm_call");
+    }
+
+    #[test]
+    fn event_name_covers_m15_events() {
+        use anabios_core::codex::EventType;
+        assert_eq!(super::event_name(EventType::EvolvedCooperation), "evolved_cooperation");
+        assert_eq!(super::event_name(EventType::PackHunting), "pack_hunting");
+        assert_eq!(super::event_name(EventType::HerdCohesion), "herd_cohesion");
     }
 
     #[test]

@@ -882,8 +882,7 @@ fn detect_herd_cohesion(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>
             buf.pop_front();
         }
         buf.push_back(mean);
-        let cohesive =
-            buf.len() == HERD_WINDOW && buf.iter().all(|&c| c >= HERD_CROWDING_MIN);
+        let cohesive = buf.len() == HERD_WINDOW && buf.iter().all(|&c| c >= HERD_CROWDING_MIN);
         if cohesive && !world.codex.herd_active.contains(&sid) {
             let (lx, ly) = centroid_of(centroids, sid);
             to_push.push(CodexEvent {

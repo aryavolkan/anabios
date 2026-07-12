@@ -141,7 +141,8 @@ fn pack_hunting_fires_when_three_attackers_hit_one_target() {
         });
         kit.push(Module::Weapon { damage: 1.0, energy_cost: 0.1 });
         w.agents.modules[pred as usize] = kit;
-        w.agents.program[pred as usize] = Program::from_slice(&[Node::Const(1.0), Node::FireWeapon]);
+        w.agents.program[pred as usize] =
+            Program::from_slice(&[Node::Const(1.0), Node::FireWeapon]);
     }
     let mut fired = false;
     for _ in 0..12 {
@@ -161,10 +162,16 @@ fn herd_cohesion_fires_for_a_tight_persistent_herd() {
     // A tight cluster of same-species herders (default species 0).
     let mut ids = Vec::new();
     for k in 0..10 {
-        let id = w.spawn_agent(Vec2::new(500.0 + (k % 5) as f32 * 0.5, 500.0 + (k / 5) as f32 * 0.5), Genome::neutral());
+        let id = w.spawn_agent(
+            Vec2::new(500.0 + (k % 5) as f32 * 0.5, 500.0 + (k / 5) as f32 * 0.5),
+            Genome::neutral(),
+        );
         // Herd behavior: cohere toward same-species neighbor.
         w.agents.program[id as usize] = Program::from_slice(&[
-            Node::SenseSameDirX, Node::MoveTowardX, Node::SenseSameDirY, Node::MoveTowardY,
+            Node::SenseSameDirX,
+            Node::MoveTowardX,
+            Node::SenseSameDirY,
+            Node::MoveTowardY,
         ]);
         ids.push(id);
     }
