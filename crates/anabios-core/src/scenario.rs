@@ -114,6 +114,7 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
         "asocial_forager" => (starter_kit(), starter_asocial_forager()),
         "culture_prey" => (communicator_kit(), starter_culture_prey()),
         "asocial_prey" => (starter_kit(), starter_asocial_prey()),
+        "skilled_forager" => (communicator_kit(), starter_asocial_forager()),
         "fast_hunter" => (fast_hunter_kit(), starter_cultural_hunter()),
         "slow_hunter" => (slow_hunter_kit(), starter_cultural_hunter()),
         _ => (starter_kit(), starter_grazer()),

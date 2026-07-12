@@ -19,6 +19,23 @@ pub const MEME_INHERIT_JITTER: f32 = 0.05;
 /// The meme channel used for alarm calls (AlarmCall detector).
 pub const ALARM_MEME_CHANNEL: usize = 0;
 
+// --- Cumulative cultural skill (experiment C: gene-culture coevolution) ---
+// A "foraging skill" that raises feeding efficiency. It is LEARNED within a
+// lifetime by feeding (experience, not genetics) and can be SOCIALLY COPIED from
+// a more-skilled neighbour far faster than grinding it alone. Both learning and
+// the feeding bonus are gated on the `Communicator` module — culture-capable
+// cognition — so it gives culture an adaptive niche genes cannot fill, and
+// leaves non-Communicator baselines (minimal.toml) unchanged.
+/// Meme channel holding the learned foraging skill in `[0,1]`.
+pub const SKILL_CHANNEL: usize = 5;
+/// Per-successful-feed increment toward mastery (asymptotic, learning-by-doing).
+pub const SKILL_LEARN_RATE: f32 = 0.03;
+/// Fraction a Communicator moves its skill toward a more-skilled neighbour's
+/// skill each tick (social learning — much faster than solo learning).
+pub const SKILL_SOCIAL_RATE: f32 = 0.15;
+/// Extra feeding multiplier at full skill: bite *= 1 + SKILL_BONUS * skill.
+pub const SKILL_BONUS: f32 = 2.5;
+
 /// Child meme = per-channel parent average plus small centered-uniform jitter.
 /// Jitter uses a centered uniform draw scaled by `MEME_INHERIT_JITTER` (matches
 /// the codebase's `perturb` style; determinism via the shared `rng`).
@@ -55,6 +72,8 @@ pub fn culture_step(world: &mut World) {
         let pos = world.agents.position[i];
         let mut sum = [0.0f32; MEME_CHANNELS];
         let mut count = [0u32; MEME_CHANNELS];
+        // Social learning: track the most-skilled Communicator neighbour.
+        let mut max_neighbour_skill = 0.0f32;
         world.spatial.query(pos, range, |oid| {
             if oid == id {
                 return;
@@ -67,13 +86,27 @@ pub fn culture_step(world: &mut World) {
                 sum[ch] += world.actions[j].broadcast_intent[ch];
                 count[ch] += 1;
             }
+            max_neighbour_skill = max_neighbour_skill.max(world.agents.meme_vector[j][SKILL_CHANNEL]);
         });
         for ch in 0..MEME_CHANNELS {
+            // The skill channel is transmitted by social learning (below), not by
+            // the broadcast-mean lerp.
+            if ch == SKILL_CHANNEL {
+                continue;
+            }
             if count[ch] > 0 {
                 let received = sum[ch] / count[ch] as f32;
                 let cur = world.agents.meme_vector[i][ch];
                 world.agents.meme_vector[i][ch] = cur + MEME_COPY_RATE * (received - cur);
             }
+        }
+        // Social learning of the foraging skill: copy toward the most-skilled
+        // neighbour (you can learn a skill from an expert much faster than by
+        // rediscovering it yourself).
+        let cur_skill = world.agents.meme_vector[i][SKILL_CHANNEL];
+        if count[0] > 0 && max_neighbour_skill > cur_skill {
+            world.agents.meme_vector[i][SKILL_CHANNEL] =
+                cur_skill + SKILL_SOCIAL_RATE * (max_neighbour_skill - cur_skill);
         }
     }
 }

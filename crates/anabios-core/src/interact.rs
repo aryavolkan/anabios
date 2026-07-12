@@ -57,10 +57,23 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         }
         let pos = world.agents.position[i];
         let size = world.agents.genome[i].get(GenomeSlot::Size).max(0.1);
-        let desired_bite = BITE_MAX * size * bite_cap * herbivory;
+        let mut desired_bite = BITE_MAX * size * bite_cap * herbivory;
+        // Cumulative cultural skill (experiment C): Communicator-capable agents
+        // apply a learned foraging-skill multiplier and learn-by-doing. Gated on
+        // the module so non-communicator baselines are unchanged.
+        let is_comm = module::has(&world.agents.modules[i], ModuleType::Communicator);
+        if is_comm {
+            let skill = world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL];
+            desired_bite *= 1.0 + crate::culture::SKILL_BONUS * skill.clamp(0.0, 1.0);
+        }
         let taken = world.biome.graze(pos, desired_bite);
         if taken > 0.0 {
             world.agents.energy[i] += taken * FOOD_ENERGY_PER_BIOMASS;
+            if is_comm {
+                // Learning by doing: skill rises asymptotically toward mastery.
+                let s = &mut world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL];
+                *s += crate::culture::SKILL_LEARN_RATE * (1.0 - *s);
+            }
         }
     }
 }

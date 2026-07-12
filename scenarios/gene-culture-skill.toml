@@ -1,0 +1,20 @@
+name = "gene-culture-skill"
+seed = 0
+
+# Skilled foragers: Communicator gene → can LEARN a foraging skill (by doing)
+# and SOCIALLY COPY it from skilled neighbours, boosting feeding. Same forage
+# program + ecology as the control; the gene is the only difference.
+[[agents]]
+count = 40
+archetype = "skilled_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Asocial control: identical forager, NO Communicator → cannot learn the skill.
+[[agents]]
+count = 40
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0

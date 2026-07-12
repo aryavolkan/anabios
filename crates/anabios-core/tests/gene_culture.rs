@@ -23,7 +23,7 @@ fn snapshot(w: &anabios_core::world::World) -> std::collections::BTreeMap<u32, (
         let sid = w.agents.species_id[i];
         let e = acc.entry(sid).or_insert((0, 0.0, 0));
         e.0 += 1;
-        e.1 += w.agents.meme_vector[i][2] as f64;
+        e.1 += w.agents.meme_vector[i][5] as f64;
         if has(&w.agents.modules[i], ModuleType::Communicator) {
             e.2 += 1;
         }
@@ -152,4 +152,40 @@ fn gene_culture_technique_A_hunt() {
         eprintln!("HUNT SEED{seed}: fast {}->{fast}, slow {}->{slow}", 20, 20);
     }
     eprintln!("HUNT RESULT: fast (gene-enabled culture) beat slow in {fast_wins}/{SEEDS} seeds");
+}
+
+const SCENARIO_SKILL: &str = include_str!("../../../scenarios/gene-culture-skill.toml");
+
+/// C (cumulative cultural skill): Communicator foragers who learn + socially
+/// copy a foraging skill vs. an identical control that lacks the gene (so cannot
+/// learn it). If culturally-transmitted skill is adaptive, the culture-gene
+/// lineage should out-grow the control — gene-culture coevolution.
+#[ignore = "experiment harness — run explicitly with --ignored --nocapture"]
+#[test]
+fn gene_culture_skill_C() {
+    const SEEDS: u64 = 20;
+    const TICKS: u32 = 1500;
+    let mut culture_wins = 0u64;
+    for seed in 0..SEEDS {
+        let mut s = Scenario::parse_toml(SCENARIO_SKILL).expect("parse skill");
+        s.seed = seed;
+        let mut w = s.instantiate();
+        for t in 0..TICKS {
+            step(&mut w);
+            if t % 500 == 499 {
+                let sn = snapshot(&w);
+                let c = sn.get(&1).copied().unwrap_or((0, 0.0, 0.0));
+                let a = sn.get(&2).map(|x| x.0).unwrap_or(0);
+                eprintln!("SKILL seed{seed} t{}: culture n={} skill(meme5-proxy: meme2={:.2}) | asocial n={}", t + 1, c.0, c.1, a);
+            }
+        }
+        let sn = snapshot(&w);
+        let c = sn.get(&1).map(|x| x.0).unwrap_or(0);
+        let a = sn.get(&2).map(|x| x.0).unwrap_or(0);
+        if c > a {
+            culture_wins += 1;
+        }
+        eprintln!("SKILL SEED{seed}: culture 40->{c}, asocial 40->{a}");
+    }
+    eprintln!("SKILL RESULT: culture-gene lineage out-grew control in {culture_wins}/{SEEDS} seeds");
 }
