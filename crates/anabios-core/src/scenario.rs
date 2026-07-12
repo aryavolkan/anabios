@@ -92,9 +92,14 @@ impl Default for Placement {
 /// Resolve an archetype name to its starter program + module kit. Unknown
 /// names fall back to the grazer defaults.
 fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Program) {
-    use crate::module::{communicator_kit, marker_kit, predator_kit, starter_kit};
+    use crate::module::{
+        communicator_kit, fast_hunter_kit, marker_kit, predator_kit, slow_hunter_kit, starter_kit,
+    };
     use crate::program::{
-        starter_communicator, starter_cooperator, starter_grazer, starter_herd, starter_marker,
+        starter_asocial_forager, starter_asocial_prey, starter_communicator, starter_cooperator,
+        starter_cultural_cooperator, starter_cultural_hunter, starter_culture_prey,
+        starter_grazer,
+        starter_herd, starter_marker,
         starter_pack_hunter, starter_sentinel, starter_stalker,
     };
     match name {
@@ -105,6 +110,12 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
         "marker" => (marker_kit(), starter_marker()),
         "communicator" => (communicator_kit(), starter_communicator()),
         "cooperator" => (starter_kit(), starter_cooperator()),
+        "cultural_cooperator" => (communicator_kit(), starter_cultural_cooperator()),
+        "asocial_forager" => (starter_kit(), starter_asocial_forager()),
+        "culture_prey" => (communicator_kit(), starter_culture_prey()),
+        "asocial_prey" => (starter_kit(), starter_asocial_prey()),
+        "fast_hunter" => (fast_hunter_kit(), starter_cultural_hunter()),
+        "slow_hunter" => (slow_hunter_kit(), starter_cultural_hunter()),
         _ => (starter_kit(), starter_grazer()),
     }
 }

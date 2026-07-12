@@ -1,0 +1,27 @@
+name = "gene-culture-alarm"
+seed = 0
+
+# Culture-prey: Communicator gene + alarm broadcast/heed (early warning).
+[[agents]]
+count = 40
+archetype = "culture_prey"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Asocial-prey: identical forage+herd+mate, flees only on own detection. Control.
+[[agents]]
+count = 40
+archetype = "asocial_prey"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Predators: armed stalkers seeded into the same region (shared mortality source).
+[[agents]]
+count = 8
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+diet_carnivory = 1.0
+lifespan_bias = 1.0

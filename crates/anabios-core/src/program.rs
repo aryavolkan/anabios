@@ -426,6 +426,165 @@ pub fn starter_cooperator() -> Program {
     ])
 }
 
+/// Cultural cooperator (gene-culture experiment): broadcast a cooperation meme
+/// on channel 2 and share with kin ONLY WHEN the received cooperation meme is
+/// also high — i.e. sharing is gated on BOTH a cultural norm (`SenseMeme(2)`)
+/// and genetic kinship (`SenseKinship`). `Mul` ANDs the two thresholded gates;
+/// `Share` fires only when both are satisfied. The meme is a heritable,
+/// culturally-transmitted "cooperation norm"; the `Communicator` module is the
+/// genetically-encoded capacity to hold and spread it. Requires a Communicator.
+pub fn starter_cultural_cooperator() -> Program {
+    Program::from_slice(&[
+        // forage toward plants + mate when well-fed (IDENTICAL to the asocial
+        // control, so sharing is the only behavioural difference)
+        Node::SensePlantDirX,
+        Node::MoveTowardX,
+        Node::SensePlantDirY,
+        Node::MoveTowardY,
+        Node::SenseEnergy,
+        Node::ThresholdGt(35.0),
+        Node::Mate,
+        // broadcast the cooperation norm every tick (channel 2)
+        Node::Const(1.0),
+        Node::Broadcast(2),
+        // NEED-BASED sharing: share only to a kin neighbour who is POORER than
+        // me (rel_energy <= 0.7) when the norm is present and I have surplus.
+        // gate = (meme>0.3)*(kin>0.3)*(own energy>40)*(neighbour poorer).
+        // Targeting surplus to needy kin saves them from starvation (raising
+        // inclusive fitness) instead of flattening energy across the group.
+        Node::SenseMeme(2),
+        Node::ThresholdGt(0.3),
+        Node::SenseKinship,
+        Node::ThresholdGt(0.3),
+        Node::Mul,
+        Node::SenseEnergy,
+        Node::ThresholdGt(40.0),
+        Node::Mul,
+        // (1 - [rel_energy > 0.7]) == neighbour is poorer than me
+        Node::Const(1.0),
+        Node::SenseRelEnergy,
+        Node::ThresholdGt(0.7),
+        Node::Sub,
+        Node::Mul,
+        Node::Share,
+    ])
+}
+
+/// Asocial control forager: forage toward plants + mate when well-fed. Same
+/// ecology as `starter_cultural_cooperator` MINUS the broadcast/meme/share — the
+/// clean control for the gene-culture experiment. No Communicator.
+pub fn starter_asocial_forager() -> Program {
+    Program::from_slice(&[
+        Node::SensePlantDirX,
+        Node::MoveTowardX,
+        Node::SensePlantDirY,
+        Node::MoveTowardY,
+        Node::SenseEnergy,
+        Node::ThresholdGt(35.0),
+        Node::Mate,
+    ])
+}
+
+/// Culture-prey (gene-culture experiment, alarm variant): forage + herd, and
+/// broadcast an ALARM meme (channel 0) when a predator is near, then flee scaled
+/// by the RECEIVED alarm — i.e. respond to a warning propagated by neighbours,
+/// even for a predator not yet in the agent's own perception. Alarm information
+/// is non-zero-sum: the sender loses nothing, the receiver gains a head start.
+pub fn starter_culture_prey() -> Program {
+    Program::from_slice(&[
+        // forage
+        Node::SensePlantDirX,
+        Node::MoveTowardX,
+        Node::SensePlantDirY,
+        Node::MoveTowardY,
+        // herd (cohesion → the alarm has a group to propagate through)
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+        // broadcast alarm when a predator (other species) is within ~12
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-12.0),
+        Node::Broadcast(0),
+        // flee from the predator, scaled by the received alarm meme (early warning)
+        Node::SenseOtherDirX,
+        Node::SenseMeme(0),
+        Node::Mul,
+        Node::MoveAwayX,
+        Node::SenseOtherDirY,
+        Node::SenseMeme(0),
+        Node::Mul,
+        Node::MoveAwayY,
+        // mate when well-fed
+        Node::SenseEnergy,
+        Node::ThresholdGt(35.0),
+        Node::Mate,
+    ])
+}
+
+/// Asocial-prey control (alarm variant): identical forage + herd + mate, but
+/// flees ONLY on the agent's OWN direct detection of a predator (no comms, no
+/// warning propagation). Clean control vs `starter_culture_prey`. No Communicator.
+pub fn starter_asocial_prey() -> Program {
+    Program::from_slice(&[
+        Node::SensePlantDirX,
+        Node::MoveTowardX,
+        Node::SensePlantDirY,
+        Node::MoveTowardY,
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+        // flee scaled by OWN detection: gate = (other within 12)
+        Node::SenseOtherDirX,
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-12.0),
+        Node::Mul,
+        Node::MoveAwayX,
+        Node::SenseOtherDirY,
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-12.0),
+        Node::Mul,
+        Node::MoveAwayY,
+        Node::SenseEnergy,
+        Node::ThresholdGt(35.0),
+        Node::Mate,
+    ])
+}
+
+/// Cultural hunter (gene-culture experiment): an omnivore that grazes as a
+/// fallback but, when the HUNT-TECHNIQUE meme (channel 4) is active, pursues the
+/// nearest other-species agent and fires on it — "leap on prey". Broadcasts the
+/// hunt meme so the technique spreads. The technique's PAYOFF (catching mobile
+/// prey for a flesh bonus) is conditional on the agent's genetic speed
+/// (Locomotor max_speed): fast agents catch prey, slow agents waste energy — so
+/// the meme is adaptive only given the speed gene (gene-culture coupling).
+pub fn starter_cultural_hunter() -> Program {
+    Program::from_slice(&[
+        // broadcast the hunt-technique meme (channel 4) — the shared technique
+        Node::Const(1.0),
+        Node::Broadcast(4),
+        // "leap on prey": pursue the nearest other-species agent...
+        Node::SenseOtherDirX,
+        Node::MoveTowardX,
+        Node::SenseOtherDirY,
+        Node::MoveTowardY,
+        // ...and fire when within ~3. Catching mobile prey requires genetic
+        // speed > prey speed; slow hunters chase fruitlessly and starve.
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-3.0),
+        Node::FireWeapon,
+        // mate when well-fed
+        Node::SenseEnergy,
+        Node::ThresholdGt(35.0),
+        Node::Mate,
+    ])
+}
+
 /// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
     &[
@@ -437,6 +596,7 @@ pub fn starter_library() -> &'static [fn() -> Program] {
         starter_marker,
         starter_communicator,
         starter_cooperator,
+        starter_cultural_cooperator,
     ]
 }
 
@@ -916,6 +1076,7 @@ mod tests {
             starter_marker,
             starter_communicator,
             starter_cooperator,
+            starter_cultural_cooperator,
         ] {
             let p = make();
             assert!(!p.is_empty());
@@ -936,7 +1097,7 @@ mod tests {
 
     #[test]
     fn starter_library_has_all_starters() {
-        assert_eq!(starter_library().len(), 8);
+        assert_eq!(starter_library().len(), 9);
     }
 
     #[test]
