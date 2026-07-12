@@ -38,6 +38,10 @@ pub struct TraitOverrides {
     pub basal_metabolism: Option<f32>,
     pub lifespan_bias: Option<f32>,
     pub reproduction_threshold: Option<f32>,
+    /// Altruistic sharing drive (`GenomeSlot::Altruism`). Required for M15
+    /// `starter_cooperator` scenarios; absent from all pre-M15 scenarios so
+    /// the golden-tick hash is unaffected.
+    pub altruism: Option<f32>,
 }
 
 impl TraitOverrides {
@@ -63,6 +67,9 @@ impl TraitOverrides {
         if let Some(v) = self.reproduction_threshold {
             g.set(GenomeSlot::ReproductionThreshold, v);
         }
+        if let Some(v) = self.altruism {
+            g.set(GenomeSlot::Altruism, v);
+        }
     }
 }
 
@@ -87,8 +94,8 @@ impl Default for Placement {
 fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Program) {
     use crate::module::{communicator_kit, marker_kit, predator_kit, starter_kit};
     use crate::program::{
-        starter_communicator, starter_grazer, starter_herd, starter_marker, starter_pack_hunter,
-        starter_sentinel, starter_stalker,
+        starter_communicator, starter_cooperator, starter_grazer, starter_herd, starter_marker,
+        starter_pack_hunter, starter_sentinel, starter_stalker,
     };
     match name {
         "stalker" => (predator_kit(), starter_stalker()),
@@ -97,6 +104,7 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
         "herd" => (starter_kit(), starter_herd()),
         "marker" => (marker_kit(), starter_marker()),
         "communicator" => (communicator_kit(), starter_communicator()),
+        "cooperator" => (starter_kit(), starter_cooperator()),
         _ => (starter_kit(), starter_grazer()),
     }
 }

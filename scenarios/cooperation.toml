@@ -1,0 +1,13 @@
+name = "cooperation"
+seed = 0
+
+# Dense cluster of cooperator herbivores. High altruism ensures share_pass
+# fires when kinship is above the 0.3 threshold, triggering EvolvedCooperation
+# and HerdCohesion detectors within ~400 ticks.
+[[agents]]
+count = 40
+archetype = "cooperator"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 60.0 }
+[agents.traits]
+altruism = 1.0
+lifespan_bias = 1.0

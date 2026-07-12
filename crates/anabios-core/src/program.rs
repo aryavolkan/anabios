@@ -409,6 +409,23 @@ pub fn starter_communicator() -> Program {
     ])
 }
 
+/// Cooperator: share energy with kin (when kinship > 0.3) and cohere toward
+/// the nearest same-species neighbor. `SenseKinship` pushes kinship onto the
+/// stack, `ThresholdGt(0.3)` maps it to 1.0/0.0, `Share` pops that value and
+/// adds it to `share_intent` (positive → altruistic transfer fires when
+/// `Altruism > 0`). M15.
+pub fn starter_cooperator() -> Program {
+    Program::from_slice(&[
+        Node::SenseKinship,
+        Node::ThresholdGt(0.3),
+        Node::Share,
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+    ])
+}
+
 /// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
     &[
@@ -419,6 +436,7 @@ pub fn starter_library() -> &'static [fn() -> Program] {
         starter_herd,
         starter_marker,
         starter_communicator,
+        starter_cooperator,
     ]
 }
 
@@ -897,6 +915,7 @@ mod tests {
             starter_herd,
             starter_marker,
             starter_communicator,
+            starter_cooperator,
         ] {
             let p = make();
             assert!(!p.is_empty());
@@ -917,7 +936,7 @@ mod tests {
 
     #[test]
     fn starter_library_has_all_starters() {
-        assert_eq!(starter_library().len(), 7);
+        assert_eq!(starter_library().len(), 8);
     }
 
     #[test]
