@@ -2,6 +2,7 @@
 //! neighbors with imperfect copy (design §3.1, §3.7 step 7, §4.4). Meme ops are
 //! gated on the `Communicator` module.
 
+use crate::genome::GenomeSlot;
 use crate::module::{self, ModuleType};
 use crate::program::MEME_CHANNELS;
 use crate::rng::Rng;
@@ -35,6 +36,69 @@ pub const SKILL_LEARN_RATE: f32 = 0.03;
 pub const SKILL_SOCIAL_RATE: f32 = 0.15;
 /// Extra feeding multiplier at full skill: bite *= 1 + SKILL_BONUS * skill.
 pub const SKILL_BONUS: f32 = 2.5;
+
+// --- DIT environmental-variability technique (experiment) ---
+// A culturally/genetically-carried foraging *technique* matched against a
+// possibly-shifting environmental optimum. Inert unless `World.env_period > 0`.
+/// Meme channel holding the culturally-transmitted foraging *technique* in `[0,1]`
+/// (distinct from SKILL_CHANNEL). Used only when `World.env_period > 0`.
+pub const TECH_CHANNEL: usize = 6;
+/// Sentinel env_period meaning "mechanism active but the optimum never shifts" (static test).
+pub const ENV_STATIC_PERIOD: u32 = u32::MAX;
+/// The two technique optima the environment alternates between.
+pub const ENV_TECH_LOW: f32 = 0.25;
+pub const ENV_TECH_HIGH: f32 = 0.75;
+/// The static-env optimum (what the genetic strategy can evolve toward).
+pub const ENV_STATIC_OPTIMUM: f32 = 0.75;
+/// Extra feeding multiplier when technique matches the optimum: bite *= 1 + ENV_BONUS*match.
+/// Deliberately modest: a large bonus causes competitive exclusion (the matched
+/// strategy grazes the biome flat, starving mismatched agents before they can
+/// re-learn), which traps trackers mid-transition. A gentle edge lets mismatched
+/// agents still feed and learn their way back, so tracking can actually pay off.
+pub const ENV_BONUS: f32 = 0.5;
+/// Per-successful-feed step of individual technique learning toward the current
+/// optimum. Fast enough that a tracker re-matches within a few feeds after the
+/// optimum shifts (so the transition is a brief dip, not a starvation event).
+pub const ENV_LEARN_RATE: f32 = 0.15;
+/// Flat energy cost paid each foraging tick an agent individually learns (now
+/// per-tick, so kept small — real enough to make learning a cost the fixed
+/// genetic strategy avoids, but survivable).
+pub const ENV_LEARN_COST: f32 = 0.005;
+/// Fraction a social learner moves its technique toward the best-matched neighbour's technique per tick.
+pub const ENV_SOCIAL_RATE: f32 = 0.20;
+/// Half-width of the technique-match kernel. A technique more than this far from
+/// the current optimum earns NO bonus — so a fixed "generalist" technique midway
+/// between two alternating optima (0.5 apart) gets nothing, not partial credit.
+/// This is what makes environmental variability actually punish the genetic hedge
+/// and reward tracking (the canonical DIT payoff).
+pub const ENV_TOLERANCE: f32 = 0.2;
+
+/// Foraging-efficiency factor in `[0,1]`: a triangular kernel, 1.0 at a perfect
+/// technique match and falling linearly to 0.0 at `ENV_TOLERANCE` away. Used by
+/// both the feeding bonus and the experiment harnesses so "match" == fitness.
+pub fn technique_match(tech: f32, opt: f32) -> f32 {
+    (1.0 - (tech - opt).abs() / ENV_TOLERANCE).clamp(0.0, 1.0)
+}
+
+/// The globally-optimal foraging technique at a given tick, in `[0,1]`. Pure (no RNG,
+/// no stored state) so it needs no tick hook and stays perfectly deterministic.
+/// `period == 0` should never reach here (callers gate on env_period > 0).
+/// `period == ENV_STATIC_PERIOD` → a fixed optimum (static environment).
+///
+/// Otherwise the optimum SWEEPS continuously as a triangle wave between LOW and
+/// HIGH, completing a full LOW→HIGH→LOW cycle every `2 * period` ticks. A moving
+/// optimum (rather than two discrete states) denies a fixed genetic strategy any
+/// permanent "refuge" optimum to camp — which is what lets a tracker actually win
+/// under slow change and lose under fast change (the canonical DIT boundary).
+pub fn env_optimum_at(tick: u64, period: u32) -> f32 {
+    if period == ENV_STATIC_PERIOD {
+        return ENV_STATIC_OPTIMUM;
+    }
+    let full = period as u64 * 2;
+    let phase = (tick % full) as f32 / period as f32; // 0.0 .. 2.0
+    let tri = if phase <= 1.0 { phase } else { 2.0 - phase }; // 0→1→0
+    ENV_TECH_LOW + (ENV_TECH_HIGH - ENV_TECH_LOW) * tri
+}
 
 /// Child meme = per-channel parent average plus small centered-uniform jitter.
 /// Jitter uses a centered uniform draw scaled by `MEME_INHERIT_JITTER` (matches
@@ -74,6 +138,12 @@ pub fn culture_step(world: &mut World) {
         let mut count = [0u32; MEME_CHANNELS];
         // Social learning: track the most-skilled Communicator neighbour.
         let mut max_neighbour_skill = 0.0f32;
+        // DIT env mode: the current optimum, and the neighbour whose technique
+        // best matches it (minimizes |tech - opt|). Only computed when active.
+        let env_on = world.env_period > 0;
+        let opt = if env_on { env_optimum_at(world.tick, world.env_period) } else { 0.0 };
+        let mut best_tech: Option<f32> = None;
+        let mut best_tech_err = f32::INFINITY;
         world.spatial.query(pos, range, |oid| {
             if oid == id {
                 return;
@@ -88,11 +158,21 @@ pub fn culture_step(world: &mut World) {
             }
             max_neighbour_skill =
                 max_neighbour_skill.max(world.agents.meme_vector[j][SKILL_CHANNEL]);
+            if env_on {
+                let tech = world.agents.meme_vector[j][TECH_CHANNEL];
+                let err = (tech - opt).abs();
+                if err < best_tech_err {
+                    best_tech_err = err;
+                    best_tech = Some(tech);
+                }
+            }
         });
         for ch in 0..MEME_CHANNELS {
-            // The skill channel is transmitted by social learning (below), not by
-            // the broadcast-mean lerp.
-            if ch == SKILL_CHANNEL {
+            // The skill and technique channels carry cumulative learned values
+            // transmitted by their own social-learning rules below — they must NOT
+            // be dragged toward the broadcast mean by the generic meme lerp (which
+            // would pull them toward 0 and fight individual learning).
+            if ch == SKILL_CHANNEL || ch == TECH_CHANNEL {
                 continue;
             }
             if count[ch] > 0 {
@@ -108,6 +188,21 @@ pub fn culture_step(world: &mut World) {
         if count[0] > 0 && max_neighbour_skill > cur_skill {
             world.agents.meme_vector[i][SKILL_CHANNEL] =
                 cur_skill + SKILL_SOCIAL_RATE * (max_neighbour_skill - cur_skill);
+        }
+        // DIT env mode: social learners copy the technique toward the best-matched
+        // neighbour — but only if that neighbour is doing BETTER than they are
+        // (payoff-biased imitation). Copying indiscriminately would drag a
+        // well-adapted individual down toward its lagging neighbours; imitating
+        // only your betters means social learning can help but never hurt.
+        if env_on && world.agents.genome[i].get(GenomeSlot::SocialLearning) > 0.5 {
+            if let Some(target_tech) = best_tech {
+                let cur_tech = world.agents.meme_vector[i][TECH_CHANNEL];
+                let own_err = (cur_tech - opt).abs();
+                if best_tech_err < own_err {
+                    world.agents.meme_vector[i][TECH_CHANNEL] =
+                        cur_tech + ENV_SOCIAL_RATE * (target_tech - cur_tech);
+                }
+            }
         }
     }
 }

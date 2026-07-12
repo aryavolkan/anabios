@@ -58,8 +58,13 @@ pub enum GenomeSlot {
     SpeedMax = 25,
     PerceptionRadius = 26,
     DietCarnivory = 27,
-    _BehaviorReserved28 = 28,
-    _BehaviorReserved29 = 29,
+    /// Propensity (`> 0.5`) to individually *learn* the foraging technique by
+    /// doing (learning-by-doing toward the current environmental optimum).
+    /// Only active in DIT env mode (`World.env_period > 0`).
+    IndividualLearning = 28,
+    /// Propensity (`> 0.5`) to *socially copy* the foraging technique from a
+    /// well-matched neighbour. Only active in DIT env mode (`World.env_period > 0`).
+    SocialLearning = 29,
 
     // Reproductive (30..40)
     ReproductionThreshold = 30,
@@ -74,7 +79,9 @@ pub enum GenomeSlot {
     _ReproReserved39 = 39,
 
     // Sensory weighting (40..50)
-    _SensoryReserved40 = 40,
+    /// A genetic strategy's fixed innate foraging technique in `[0, 1]`.
+    /// Used (for non-cultural agents) only in DIT env mode (`World.env_period > 0`).
+    InnateTechnique = 40,
     _SensoryReserved41 = 41,
     _SensoryReserved42 = 42,
     _SensoryReserved43 = 43,

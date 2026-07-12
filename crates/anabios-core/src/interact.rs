@@ -62,15 +62,43 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         // apply a learned foraging-skill multiplier and learn-by-doing. Gated on
         // the module so non-communicator baselines are unchanged.
         let is_comm = module::has(&world.agents.modules[i], ModuleType::Communicator);
-        if is_comm {
+        // DIT env mode (experiment): whether this agent is "cultural" (learns
+        // its technique) and which technique it currently forages with. The env
+        // match-bonus is mutually exclusive with the C skill bonus.
+        let il = world.agents.genome[i].get(GenomeSlot::IndividualLearning) > 0.5;
+        let sl = world.agents.genome[i].get(GenomeSlot::SocialLearning) > 0.5;
+        let cultural = il || sl;
+        if world.env_period > 0 {
+            // env DIT mode: match-based bonus (mutually exclusive with C skill).
+            let technique = if cultural {
+                world.agents.meme_vector[i][crate::culture::TECH_CHANNEL]
+            } else {
+                world.agents.genome[i].get(GenomeSlot::InnateTechnique)
+            };
+            let opt = crate::culture::env_optimum_at(world.tick, world.env_period);
+            let m = crate::culture::technique_match(technique, opt);
+            desired_bite *= 1.0 + crate::culture::ENV_BONUS * m;
+        } else if is_comm {
             let skill = world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL];
             desired_bite *= 1.0 + crate::culture::SKILL_BONUS * skill.clamp(0.0, 1.0);
+        }
+        // Individual technique learning (env mode): an ONGOING cognitive process
+        // that runs each foraging tick, decoupled from whether this tick's bite
+        // landed — so a learner's technique tracks the shifting optimum reliably,
+        // while the feeding BONUS above still rewards actually matching it. The
+        // per-tick energy cost is what makes learning a real (survivable) expense.
+        if world.env_period > 0 && cultural && il {
+            let opt = crate::culture::env_optimum_at(world.tick, world.env_period);
+            let t = &mut world.agents.meme_vector[i][crate::culture::TECH_CHANNEL];
+            *t += crate::culture::ENV_LEARN_RATE * (opt - *t);
+            world.agents.energy[i] -= crate::culture::ENV_LEARN_COST;
         }
         let taken = world.biome.graze(pos, desired_bite);
         if taken > 0.0 {
             world.agents.energy[i] += taken * FOOD_ENERGY_PER_BIOMASS;
-            if is_comm {
-                // Learning by doing: skill rises asymptotically toward mastery.
+            // C cumulative-skill learning-by-doing (env_period == 0) is still gated
+            // on a successful graze — skill is mastery earned through feeding.
+            if world.env_period == 0 && is_comm {
                 let s = &mut world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL];
                 *s += crate::culture::SKILL_LEARN_RATE * (1.0 - *s);
             }

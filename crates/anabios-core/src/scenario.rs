@@ -14,6 +14,11 @@ pub struct Scenario {
     pub seed: u64,
     #[serde(default)]
     pub agents: Vec<AgentSpec>,
+    /// DIT environmental-variability period (experiment). `0` (default) = the
+    /// env technique mechanism is OFF. `> 0` shifts the optimum every N ticks;
+    /// `4294967295` (`u32::MAX`, `culture::ENV_STATIC_PERIOD`) = active-but-static.
+    #[serde(default)]
+    pub env_period: u32,
 }
 
 /// A request for `count` agents distributed via the given placement, each
@@ -42,6 +47,12 @@ pub struct TraitOverrides {
     /// `starter_cooperator` scenarios; absent from all pre-M15 scenarios so
     /// the golden-tick hash is unaffected.
     pub altruism: Option<f32>,
+    /// DIT env-mode genome propensities (experiment). `InnateTechnique` is the
+    /// genetic strategy's fixed technique; `IndividualLearning`/`SocialLearning`
+    /// (`> 0.5`) enable learning-by-doing / social copying of the technique.
+    pub innate_technique: Option<f32>,
+    pub individual_learning: Option<f32>,
+    pub social_learning: Option<f32>,
 }
 
 impl TraitOverrides {
@@ -69,6 +80,15 @@ impl TraitOverrides {
         }
         if let Some(v) = self.altruism {
             g.set(GenomeSlot::Altruism, v);
+        }
+        if let Some(v) = self.innate_technique {
+            g.set(GenomeSlot::InnateTechnique, v);
+        }
+        if let Some(v) = self.individual_learning {
+            g.set(GenomeSlot::IndividualLearning, v);
+        }
+        if let Some(v) = self.social_learning {
+            g.set(GenomeSlot::SocialLearning, v);
         }
     }
 }
@@ -115,7 +135,35 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
         "skilled_forager" => (communicator_kit(), starter_asocial_forager()),
         "fast_hunter" => (fast_hunter_kit(), starter_cultural_hunter()),
         "slow_hunter" => (slow_hunter_kit(), starter_cultural_hunter()),
+        // DIT env-mode strategies (experiment): the genetic strategy carries no
+        // Communicator; the three cultural strategies do and differ only by their
+        // learning-propensity genome slots (see `archetype_genome`).
+        "innate_forager" => (starter_kit(), starter_asocial_forager()),
+        "individual_learner" => (communicator_kit(), starter_asocial_forager()),
+        "pure_imitator" => (communicator_kit(), starter_asocial_forager()),
+        "critical_learner" => (communicator_kit(), starter_asocial_forager()),
         _ => (starter_kit(), starter_grazer()),
+    }
+}
+
+/// Apply DIT env-mode genome defaults for the four strategy archetypes (applied
+/// before scenario `traits`, so an explicit trait override still wins). No-op for
+/// every other archetype, keeping non-DIT scenarios untouched.
+fn archetype_genome(name: &str, g: &mut Genome) {
+    match name {
+        // Genetic strategy: a fixed innate technique (mid-range; evolves across
+        // generations), no learning.
+        "innate_forager" => g.set(GenomeSlot::InnateTechnique, 0.5),
+        // Individual learner: learns by doing, does not copy.
+        "individual_learner" => g.set(GenomeSlot::IndividualLearning, 1.0),
+        // Pure imitator (Rogers variant): copies, never individually learns.
+        "pure_imitator" => g.set(GenomeSlot::SocialLearning, 1.0),
+        // Critical learner: both copies and individually corrects.
+        "critical_learner" => {
+            g.set(GenomeSlot::IndividualLearning, 1.0);
+            g.set(GenomeSlot::SocialLearning, 1.0);
+        }
+        _ => {}
     }
 }
 
@@ -135,6 +183,7 @@ impl Scenario {
     /// RNG in agent-id order.
     pub fn instantiate(&self) -> World {
         let mut w = World::new(self.seed);
+        w.env_period = self.env_period;
         for spec in self.agents.iter() {
             // Each archetype spec gets a FRESH species id from `next_species_id`,
             // reserving species 0 strictly for archetype-free (legacy) specs.
@@ -175,6 +224,9 @@ impl Scenario {
                     }
                 };
                 let mut g = Genome::neutral();
+                if let Some(name) = &spec.archetype {
+                    archetype_genome(name, &mut g);
+                }
                 spec.traits.apply(&mut g);
                 match &kit {
                     Some((modules, program)) => {

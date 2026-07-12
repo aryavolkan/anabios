@@ -1,0 +1,28 @@
+name = "dit-rogers"
+seed = 0
+
+# Rogers' paradox: a population of individual-learners invaded by pure imitators
+# under a shifting environment (env_period = 200). The imitators are cheaper
+# (they skip the individual-learning energy cost) so they spread — but as they
+# come to dominate there are fewer up-to-date individuals to copy, so the copied
+# technique goes stale. Prediction: imitators INVADE (rise in frequency) yet gain
+# no adaptive edge (their mean technique-match lags the individual-learners').
+env_period = 200
+
+# Individual learners: pay to sample the environment every life; always current.
+[[agents]]
+count = 80
+archetype = "individual_learner"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 70.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# Pure imitators (Rogers variant): copy only, never individually learn.
+[[agents]]
+count = 20
+archetype = "pure_imitator"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 70.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
