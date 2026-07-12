@@ -145,3 +145,38 @@ fn dialect_formed_fires_for_two_divergent_halves() {
     }
     assert!(fired, "two divergent meme halves form a dialect");
 }
+
+#[test]
+fn alarm_call_fires_on_broadcast_plus_nearby_flee() {
+    use anabios_core::codex::{observe_all, EventType, ALARM_MIN_RESPONSES};
+    use anabios_core::program::ActionRegister;
+    use anabios_core::sense::SensorRegister;
+    let mut w = World::new(11);
+    let caller = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let responder = w.spawn_agent(Vec2::new(503.0, 500.0), Genome::neutral());
+    w.agents.modules[caller as usize] = communicator_kit();
+    w.agents.modules[responder as usize] = communicator_kit();
+    // Manually resize scratch buffers (resize_scratch is pub(crate); we size
+    // directly since sensors / desired_direction / actions are pub fields).
+    let cap = w.agents.capacity();
+    w.sensors.resize(cap, SensorRegister::default());
+    w.desired_direction.resize(cap, Vec2::ZERO);
+    w.actions.resize(cap, ActionRegister::default());
+    let mut fired = false;
+    for _ in 0..(ALARM_MIN_RESPONSES + 5) {
+        // Rebuild the spatial hash so the query finds the responder.
+        w.spatial.rebuild(&w.agents.position, |k| w.agents.is_alive(k as u32));
+        w.actions[caller as usize].broadcast_intent[0] = 1.0;
+        // Responder senses a threat to its +x and flees to -x.
+        w.sensors[responder as usize].nearest_other_dist = 4.0;
+        w.sensors[responder as usize].nearest_other_dir = Vec2::new(1.0, 0.0);
+        w.desired_direction[responder as usize] = Vec2::new(-1.0, 0.0);
+        observe_all(&mut w);
+        w.tick += 1;
+        if w.codex.events.iter().any(|e| e.event_type == EventType::AlarmCall) {
+            fired = true;
+            break;
+        }
+    }
+    assert!(fired, "alarm broadcast + nearby flee triggers AlarmCall");
+}

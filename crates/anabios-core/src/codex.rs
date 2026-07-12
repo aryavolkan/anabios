@@ -13,8 +13,9 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
+use crate::culture::{ALARM_MEME_CHANNEL, MEME_BROADCAST_THRESHOLD};
 use crate::program::MEME_CHANNELS;
-use crate::spatial::torus_distance;
+use crate::spatial::{torus_distance, PERCEPTION_MAX_RADIUS};
 use crate::world::World;
 
 /// Maximum events buffered before the oldest are dropped.
@@ -65,6 +66,9 @@ pub const DIALECT_WINDOW: usize = 50;
 pub const DIALECT_DIVERGENCE_MIN: f32 = 0.4;
 /// Minimum agents required in each spatial half for dialect detection.
 pub const DIALECT_MIN_HALF: u32 = 3;
+/// Cumulative alarm→flee co-occurrences needed to fire AlarmCall.
+pub const ALARM_MIN_RESPONSES: u32 = 15;
+
 /// Ticks of history tracked for the per-(species,channel) meme mean sweep.
 pub const MEME_SWEEP_WINDOW: usize = 80;
 /// Meme mean must start at or below this for a MemeSweep.
@@ -97,6 +101,8 @@ pub enum EventType {
     DialectFormed = 11,
     /// A meme value rises from rare to dominant across a species.
     MemeSweep = 12,
+    /// Alarm broadcasts reliably co-occur with nearby same-species fleeing.
+    AlarmCall = 13,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -166,6 +172,10 @@ pub struct CodexState {
     pub meme_mean_history: BTreeMap<(u32, u8), VecDeque<f32>>,
     /// (species, channel) pairs currently latched as swept.
     pub meme_sweep_active: BTreeSet<(u32, u8)>,
+    /// Cumulative alarm→flee co-occurrences (for AlarmCall).
+    pub alarm_responses: u32,
+    /// Latch: the AlarmCall event has been emitted.
+    pub alarm_emitted: bool,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -600,6 +610,87 @@ fn detect_meme_sweep(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
     }
 }
 
+/// AlarmCall: fires once (latched) when alarm-channel broadcasts co-occur
+/// with nearby same-species agents fleeing a threat. Accumulates a cumulative
+/// count of alarm→flee co-occurrences; emits when it reaches ALARM_MIN_RESPONSES.
+fn detect_alarm_call(world: &mut World) {
+    if world.codex.alarm_emitted {
+        return;
+    }
+    // The detector reads this tick's actions/sensors/movement scratch. In a real
+    // tick these are always sized (step() calls resize_scratch first); guard so
+    // a standalone observe_all (e.g. detector unit tests) is a safe no-op.
+    let cap = world.agents.capacity();
+    if world.actions.len() < cap
+        || world.sensors.len() < cap
+        || world.desired_direction.len() < cap
+    {
+        return;
+    }
+    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
+    let tick = world.tick;
+    let mut first_caller_species: Option<u32> = None;
+    let mut first_caller_pos: (f32, f32) = (0.0, 0.0);
+    for &id in &alive_ids {
+        let i = id as usize;
+        // Only Communicator agents broadcasting on the alarm channel.
+        if !crate::module::has(&world.agents.modules[i], crate::module::ModuleType::Communicator) {
+            continue;
+        }
+        if world.actions[i].broadcast_intent[ALARM_MEME_CHANNEL] <= MEME_BROADCAST_THRESHOLD {
+            continue;
+        }
+        let range = crate::module::effective_communicator_range(&world.agents.modules[i])
+            .min(PERCEPTION_MAX_RADIUS);
+        if range <= 0.0 {
+            continue;
+        }
+        let pos = world.agents.position[i];
+        let caller_species = world.agents.species_id[i];
+        let mut responses_this_caller: u32 = 0;
+        world.spatial.query(pos, range, |oid| {
+            if oid == id {
+                return;
+            }
+            let j = oid as usize;
+            if world.agents.species_id[j] != caller_species {
+                return;
+            }
+            let nearest_other_dist = world.sensors[j].nearest_other_dist;
+            if !nearest_other_dist.is_finite() {
+                return;
+            }
+            let dd = world.desired_direction[j];
+            let threat_dir = world.sensors[j].nearest_other_dir;
+            if dd.dot(threat_dir) < 0.0 {
+                responses_this_caller += 1;
+            }
+        });
+        world.codex.alarm_responses += responses_this_caller;
+        // Record the first alarm broadcaster this tick as the event's location,
+        // regardless of whether it drew responses — so the payload never
+        // defaults to (0,0) when the threshold tips on a zero-response caller.
+        if first_caller_species.is_none() {
+            first_caller_species = Some(caller_species);
+            first_caller_pos = (pos.x, pos.y);
+        }
+        if world.codex.alarm_responses >= ALARM_MIN_RESPONSES {
+            let (lx, ly) = first_caller_pos;
+            let sid = first_caller_species.unwrap_or(caller_species);
+            world.codex.push_event(CodexEvent {
+                event_type: EventType::AlarmCall,
+                tick,
+                species_id: sid,
+                value: world.codex.alarm_responses as f32,
+                loc_x: lx,
+                loc_y: ly,
+            });
+            world.codex.alarm_emitted = true;
+            return;
+        }
+    }
+}
+
 /// Run all detectors. Called by the tick orchestrator at the end of each
 /// tick. SpeciationEvent is emitted directly from `species_step`.
 pub fn observe_all(world: &mut World) {
@@ -623,6 +714,7 @@ pub fn observe_all(world: &mut World) {
     detect_niche_partitioning(world, &centroids);
     detect_dialect_formed(world, &centroids);
     detect_meme_sweep(world, &centroids);
+    detect_alarm_call(world);
 }
 
 /// Mean alive position per species, ascending id order, f64 accumulator.
