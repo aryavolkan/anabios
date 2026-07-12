@@ -10,7 +10,7 @@ use crate::world::World;
 
 /// Fraction each receiver moves its meme toward the neighbor mean per tick
 /// (the "imperfect copy" — < 1.0 means partial adoption).
-pub const MEME_COPY_RATE: f32 = 0.25;
+pub const MEME_COPY_RATE: f32 = 0.05;
 /// `broadcast_intent[ch]` above this counts as an active broadcast this tick.
 pub const MEME_BROADCAST_THRESHOLD: f32 = 0.5;
 /// Half-range of the centered-uniform per-channel jitter added to an inherited

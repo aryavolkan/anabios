@@ -243,6 +243,17 @@ pub fn marker_kit() -> ModuleList {
     ]
 }
 
+/// A meme-broadcasting herbivore: mobile, sighted, grazes, and communicates on
+/// channel 0. Used by the `communicator` scenario archetype.
+pub fn communicator_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.6, acuity: 0.6 },
+        Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 },
+        Module::Communicator { range: 12.0, channel_id: 0 },
+    ]
+}
+
 /// `true` iff the list contains at least one module of the given type.
 #[inline]
 pub fn has(modules: &ModuleList, module_type: ModuleType) -> bool {

@@ -1,0 +1,16 @@
+name = "dialects"
+seed = 0
+
+[[agents]]
+count = 24
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 260.0, center_y = 512.0, radius = 40.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 24
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 764.0, center_y = 512.0, radius = 40.0 }
+[agents.traits]
+lifespan_bias = 1.0

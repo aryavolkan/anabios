@@ -379,6 +379,20 @@ pub fn starter_marker() -> Program {
     ])
 }
 
+/// Communicator: broadcast a strong signal on channel 1 and cohere toward the
+/// nearest same-species neighbor, so the meme propagates and sweeps the cluster
+/// (population meme[1] rises from ~0 to dominant → MemeSweep).
+pub fn starter_communicator() -> Program {
+    Program::from_slice(&[
+        Node::Const(1.0),
+        Node::Broadcast(1),
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+    ])
+}
+
 /// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
     &[
@@ -388,6 +402,7 @@ pub fn starter_library() -> &'static [fn() -> Program] {
         starter_sentinel,
         starter_herd,
         starter_marker,
+        starter_communicator,
     ]
 }
 
@@ -855,9 +870,14 @@ mod tests {
     fn social_starters_are_bounded_and_evaluable() {
         let g = Genome::neutral();
         let mut stack = Vec::new();
-        for make in
-            [starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd, starter_marker]
-        {
+        for make in [
+            starter_stalker,
+            starter_pack_hunter,
+            starter_sentinel,
+            starter_herd,
+            starter_marker,
+            starter_communicator,
+        ] {
             let p = make();
             assert!(!p.is_empty());
             assert!(p.len() <= PROGRAM_MAX_NODES);
@@ -877,7 +897,7 @@ mod tests {
 
     #[test]
     fn starter_library_has_all_starters() {
-        assert_eq!(starter_library().len(), 6);
+        assert_eq!(starter_library().len(), 7);
     }
 
     #[test]
