@@ -10,7 +10,11 @@ use anabios_core::world::World;
 fn communicator_kit() -> anabios_core::module::ModuleList {
     let mut m = anabios_core::module::ModuleList::new();
     m.push(Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 });
-    m.push(Module::Sensor { sensor_type: anabios_core::module::SensorType::Vision, radius: 0.6, acuity: 0.6 });
+    m.push(Module::Sensor {
+        sensor_type: anabios_core::module::SensorType::Vision,
+        radius: 0.6,
+        acuity: 0.6,
+    });
     m.push(Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 });
     m.push(Module::Communicator { range: 10.0, channel_id: 0 });
     m
@@ -44,8 +48,7 @@ fn sense_meme_reads_the_agents_own_meme_vector() {
     let id = w.spawn_agent(Vec2::new(700.0, 700.0), Genome::neutral());
     // Plant a meme value on channel 2, then program move_x = SenseMeme(2).
     w.agents.meme_vector[id as usize][2] = 1.0;
-    w.agents.program[id as usize] =
-        Program::from_slice(&[Node::SenseMeme(2), Node::MoveTowardX]);
+    w.agents.program[id as usize] = Program::from_slice(&[Node::SenseMeme(2), Node::MoveTowardX]);
     step(&mut w);
     // Positive meme read → move_x > 0 → normalized to +1 on x.
     assert!(w.desired_direction[id as usize].x > 0.9, "SenseMeme reads the meme vector");
@@ -78,7 +81,10 @@ fn no_communicator_means_no_transmission() {
     w.agents.program[sender as usize] =
         Program::from_slice(&[Node::Const(4.0), Node::Broadcast(1)]);
     step(&mut w);
-    assert_eq!(w.agents.meme_vector[receiver as usize][1], 0.0, "no Communicator → no receive (gating)");
+    assert_eq!(
+        w.agents.meme_vector[receiver as usize][1], 0.0,
+        "no Communicator → no receive (gating)"
+    );
 }
 
 #[test]
