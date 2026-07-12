@@ -192,6 +192,10 @@ fn share_pass(world: &mut World, alive_ids: &[u32]) {
         }
         world.agents.energy[i] -= amount;
         world.agents.energy[t] += amount;
-        // Record for the EvolvedCooperation detector (Task 4 adds the buffer).
+        // Record for the EvolvedCooperation detector.
+        world
+            .codex
+            .share_events
+            .push_back((world.tick, world.agents.species_id[i]));
     }
 }

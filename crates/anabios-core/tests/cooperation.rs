@@ -26,6 +26,7 @@ fn kinship_parent_child_is_related() {
     assert!(r > 0.5, "parent-child relatedness ({r})");
 }
 
+use anabios_core::codex::EventType;
 use anabios_core::prelude_test::Vec2;
 use anabios_core::program::{Node, Program};
 use anabios_core::tick::step;
@@ -88,4 +89,27 @@ fn scratch_stays_sized_across_reproduction() {
             "world.actions must stay sized to capacity (alarm scratch invariant)"
         );
     }
+}
+
+#[test]
+fn evolved_cooperation_fires_on_sustained_sharing() {
+    let mut w = World::new(5);
+    // A tight cluster of altruists that always share with their neighbor.
+    let mut ids = Vec::new();
+    for k in 0..8 {
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::Altruism, 1.0);
+        let id = w.spawn_agent(Vec2::new(500.0 + (k % 3) as f32, 500.0 + (k / 3) as f32), g);
+        w.agents.program[id as usize] = Program::from_slice(&[Node::Const(1.0), Node::Share]);
+        ids.push(id);
+    }
+    let mut fired = false;
+    for _ in 0..200 {
+        step(&mut w);
+        if w.codex.events.iter().any(|e| e.event_type == EventType::EvolvedCooperation) {
+            fired = true;
+            break;
+        }
+    }
+    assert!(fired, "sustained kin sharing → EvolvedCooperation");
 }

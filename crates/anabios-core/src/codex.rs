@@ -69,6 +69,11 @@ pub const DIALECT_MIN_HALF: u32 = 3;
 /// Cumulative alarm→flee co-occurrences needed to fire AlarmCall.
 pub const ALARM_MIN_RESPONSES: u32 = 15;
 
+/// Rolling window (ticks) over which share events accumulate for EvolvedCooperation.
+pub const COOPERATION_WINDOW: u64 = 100;
+/// Minimum share events within the window to declare EvolvedCooperation.
+pub const COOPERATION_MIN_SHARES: usize = 12;
+
 /// Ticks of history tracked for the per-(species,channel) meme mean sweep.
 pub const MEME_SWEEP_WINDOW: usize = 80;
 /// Meme mean must start at or below this for a MemeSweep.
@@ -103,6 +108,8 @@ pub enum EventType {
     MemeSweep = 12,
     /// Alarm broadcasts reliably co-occur with nearby same-species fleeing.
     AlarmCall = 13,
+    /// A species sustains a high energy-sharing rate over a rolling window.
+    EvolvedCooperation = 14,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,6 +183,10 @@ pub struct CodexState {
     pub alarm_responses: u32,
     /// Latch: the AlarmCall event has been emitted.
     pub alarm_emitted: bool,
+    /// Rolling window of share events (tick, donor_species) for EvolvedCooperation.
+    pub share_events: VecDeque<(u64, u32)>,
+    /// Species currently latched as having evolved cooperation (re-arms on drop).
+    pub cooperation_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -689,6 +700,58 @@ fn detect_alarm_call(world: &mut World) {
     }
 }
 
+/// EvolvedCooperation: prune share_events to the COOPERATION_WINDOW, tally per
+/// species, and edge-trigger (per species) when a species reaches
+/// COOPERATION_MIN_SHARES. Re-arms when the count drops below threshold.
+fn detect_evolved_cooperation(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+    let tick = world.tick;
+    // Prune entries older than the rolling window (mirror detect_combat_raid).
+    let cutoff = tick.saturating_sub(COOPERATION_WINDOW);
+    while let Some(&(t, _)) = world.codex.share_events.front() {
+        if t < cutoff {
+            world.codex.share_events.pop_front();
+        } else {
+            break;
+        }
+    }
+    // Tally shares per species (BTreeMap → deterministic).
+    let mut counts: BTreeMap<u32, usize> = BTreeMap::new();
+    for &(_t, sid) in world.codex.share_events.iter() {
+        *counts.entry(sid).or_insert(0) += 1;
+    }
+    // Edge-trigger per species; re-arm when the count drops.
+    let mut to_push: Vec<CodexEvent> = Vec::new();
+    // Collect species to re-arm (drop latch) — those in cooperation_active but below threshold.
+    let mut to_rearm: Vec<u32> = Vec::new();
+    for &sid in world.codex.cooperation_active.iter() {
+        let count = counts.get(&sid).copied().unwrap_or(0);
+        if count < COOPERATION_MIN_SHARES {
+            to_rearm.push(sid);
+        }
+    }
+    for sid in to_rearm {
+        world.codex.cooperation_active.remove(&sid);
+    }
+    // Fire for species above threshold not yet latched.
+    for (sid, count) in counts.iter() {
+        if *count >= COOPERATION_MIN_SHARES && !world.codex.cooperation_active.contains(sid) {
+            let (lx, ly) = centroid_of(centroids, *sid);
+            to_push.push(CodexEvent {
+                event_type: EventType::EvolvedCooperation,
+                tick,
+                species_id: *sid,
+                value: *count as f32,
+                loc_x: lx,
+                loc_y: ly,
+            });
+            world.codex.cooperation_active.insert(*sid);
+        }
+    }
+    for ev in to_push {
+        world.codex.push_event(ev);
+    }
+}
+
 /// Run all detectors. Called by the tick orchestrator at the end of each
 /// tick. SpeciationEvent is emitted directly from `species_step`.
 pub fn observe_all(world: &mut World) {
@@ -713,6 +776,7 @@ pub fn observe_all(world: &mut World) {
     detect_dialect_formed(world, &centroids);
     detect_meme_sweep(world, &centroids);
     detect_alarm_call(world);
+    detect_evolved_cooperation(world, &centroids);
 }
 
 /// Mean alive position per species, ascending id order, f64 accumulator.
