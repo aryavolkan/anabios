@@ -497,20 +497,20 @@ fn detect_dialect_formed(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)
         let wn = west.len() as f32;
         let en = east.len() as f32;
         for &i in &west {
-            for ch in 0..MEME_CHANNELS {
-                west_mean[ch] += world.agents.meme_vector[i][ch];
+            for (ch, w) in west_mean.iter_mut().enumerate() {
+                *w += world.agents.meme_vector[i][ch];
             }
         }
-        for ch in 0..MEME_CHANNELS {
-            west_mean[ch] /= wn;
+        for w in west_mean.iter_mut() {
+            *w /= wn;
         }
         for &i in &east {
-            for ch in 0..MEME_CHANNELS {
-                east_mean[ch] += world.agents.meme_vector[i][ch];
+            for (ch, e) in east_mean.iter_mut().enumerate() {
+                *e += world.agents.meme_vector[i][ch];
             }
         }
-        for ch in 0..MEME_CHANNELS {
-            east_mean[ch] /= en;
+        for e in east_mean.iter_mut() {
+            *e /= en;
         }
         let div = meme_l2(&west_mean, &east_mean);
         // Bounded window push.
@@ -576,8 +576,8 @@ fn detect_meme_sweep(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
         }
         let (lx, ly) = centroid_of(centroids, *sid);
         let nf = *n as f64;
-        for ch in 0..MEME_CHANNELS {
-            let mean = (sums[ch] / nf) as f32;
+        for (ch, &s) in sums.iter().enumerate() {
+            let mean = (s / nf) as f32;
             let key = (*sid, ch as u8);
             let buf = world.codex.meme_mean_history.entry(key).or_default();
             if buf.len() == MEME_SWEEP_WINDOW {
@@ -621,9 +621,7 @@ fn detect_alarm_call(world: &mut World) {
     // tick these are always sized (step() calls resize_scratch first); guard so
     // a standalone observe_all (e.g. detector unit tests) is a safe no-op.
     let cap = world.agents.capacity();
-    if world.actions.len() < cap
-        || world.sensors.len() < cap
-        || world.desired_direction.len() < cap
+    if world.actions.len() < cap || world.sensors.len() < cap || world.desired_direction.len() < cap
     {
         return;
     }
