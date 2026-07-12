@@ -88,6 +88,13 @@ pub const MEME_SWEEP_HIGH: f32 = 0.6;
 /// Minimum members a species needs for MemeSweep to be meaningful.
 pub const MEME_SWEEP_MIN_MEMBERS: u32 = 5;
 
+/// Ticks a species must sustain high crowding to fire HerdCohesion.
+pub const HERD_WINDOW: usize = 60;
+/// Minimum mean same-species crowding (neighbors per member) to count as cohesive.
+pub const HERD_CROWDING_MIN: f32 = 3.0;
+/// Minimum members before herd cohesion detection is meaningful.
+pub const HERD_MIN_MEMBERS: u32 = 5;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EventType {
@@ -118,6 +125,9 @@ pub enum EventType {
     /// ≥ PACK_MIN_ATTACKERS distinct same-species agents deal combat damage to
     /// one target within PACK_WINDOW ticks.
     PackHunting = 15,
+    /// A species maintains persistently high mean per-member same-species crowding
+    /// over a full HERD_WINDOW window.
+    HerdCohesion = 16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,6 +219,10 @@ pub struct CodexState {
     pub combat_hits: VecDeque<CombatHit>,
     /// Edge-trigger state for PackHunting (armed while no qualifying group).
     pub pack_active: bool,
+    /// Rolling per-species mean same-species crowding window (for HerdCohesion).
+    pub herd_crowding: BTreeMap<u32, VecDeque<f32>>,
+    /// Species currently latched as exhibiting herd cohesion.
+    pub herd_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -829,6 +843,67 @@ fn detect_pack_hunting(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>)
     }
 }
 
+/// HerdCohesion: a species with ≥ HERD_MIN_MEMBERS sustains mean per-member
+/// same-species crowding ≥ HERD_CROWDING_MIN for a full HERD_WINDOW of
+/// consecutive ticks. Edge-triggered per species; re-arms when cohesion drops.
+fn detect_herd_cohesion(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+    // Guard: sensors scratch is only sized after resize_scratch (like detect_alarm_call).
+    if world.sensors.len() < world.agents.capacity() {
+        return;
+    }
+    let tick = world.tick;
+    // Gather per-species member count and summed crowding (BTreeMap → deterministic).
+    let mut member_count: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut crowding_sum: BTreeMap<u32, f64> = BTreeMap::new();
+    for id in world.agents.iter_alive() {
+        let i = id as usize;
+        let sid = world.agents.species_id[i];
+        *member_count.entry(sid).or_insert(0) += 1;
+        *crowding_sum.entry(sid).or_insert(0.0) += world.sensors[i].crowding as f64;
+    }
+    // Collect all species ids present this tick.
+    let all_sids: Vec<u32> = member_count.keys().copied().collect();
+    // Prune entries for species that have gone below threshold or disappeared.
+    for &sid in &all_sids {
+        if member_count.get(&sid).copied().unwrap_or(0) < HERD_MIN_MEMBERS {
+            world.codex.herd_crowding.remove(&sid);
+            world.codex.herd_active.remove(&sid);
+        }
+    }
+    let mut to_push: Vec<CodexEvent> = Vec::new();
+    for &sid in &all_sids {
+        let n = member_count[&sid];
+        if n < HERD_MIN_MEMBERS {
+            continue;
+        }
+        let mean = (crowding_sum[&sid] / n as f64) as f32;
+        let buf = world.codex.herd_crowding.entry(sid).or_default();
+        if buf.len() == HERD_WINDOW {
+            buf.pop_front();
+        }
+        buf.push_back(mean);
+        let cohesive =
+            buf.len() == HERD_WINDOW && buf.iter().all(|&c| c >= HERD_CROWDING_MIN);
+        if cohesive && !world.codex.herd_active.contains(&sid) {
+            let (lx, ly) = centroid_of(centroids, sid);
+            to_push.push(CodexEvent {
+                event_type: EventType::HerdCohesion,
+                tick,
+                species_id: sid,
+                value: mean,
+                loc_x: lx,
+                loc_y: ly,
+            });
+            world.codex.herd_active.insert(sid);
+        } else if !cohesive {
+            world.codex.herd_active.remove(&sid);
+        }
+    }
+    for ev in to_push {
+        world.codex.push_event(ev);
+    }
+}
+
 /// Run all detectors. Called by the tick orchestrator at the end of each
 /// tick. SpeciationEvent is emitted directly from `species_step`.
 pub fn observe_all(world: &mut World) {
@@ -855,6 +930,7 @@ pub fn observe_all(world: &mut World) {
     detect_alarm_call(world);
     detect_evolved_cooperation(world, &centroids);
     detect_pack_hunting(world, &centroids);
+    detect_herd_cohesion(world, &centroids);
 }
 
 /// Mean alive position per species, ascending id order, f64 accumulator.

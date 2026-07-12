@@ -153,3 +153,28 @@ fn pack_hunting_fires_when_three_attackers_hit_one_target() {
     }
     assert!(fired, "3 same-species attackers on one target → PackHunting");
 }
+
+#[test]
+fn herd_cohesion_fires_for_a_tight_persistent_herd() {
+    use anabios_core::codex::HERD_WINDOW;
+    let mut w = World::new(8);
+    // A tight cluster of same-species herders (default species 0).
+    let mut ids = Vec::new();
+    for k in 0..10 {
+        let id = w.spawn_agent(Vec2::new(500.0 + (k % 5) as f32 * 0.5, 500.0 + (k / 5) as f32 * 0.5), Genome::neutral());
+        // Herd behavior: cohere toward same-species neighbor.
+        w.agents.program[id as usize] = Program::from_slice(&[
+            Node::SenseSameDirX, Node::MoveTowardX, Node::SenseSameDirY, Node::MoveTowardY,
+        ]);
+        ids.push(id);
+    }
+    let mut fired = false;
+    for _ in 0..(HERD_WINDOW + 20) {
+        step(&mut w);
+        if w.codex.events.iter().any(|e| e.event_type == EventType::HerdCohesion) {
+            fired = true;
+            break;
+        }
+    }
+    assert!(fired, "a tight persistent herd → HerdCohesion");
+}
