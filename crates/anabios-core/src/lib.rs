@@ -10,6 +10,7 @@ pub mod behavior;
 pub mod biome;
 pub mod carcass;
 pub mod codex;
+pub mod culture;
 pub mod genome;
 pub mod integrate;
 pub mod interact;

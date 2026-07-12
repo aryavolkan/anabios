@@ -127,6 +127,20 @@ pub fn reproduce_all(world: &mut World) {
             world.reproduced_this_tick.resize(child_id as usize + 1, false);
         }
         world.reproduced_this_tick.set(child_id as usize, true);
+
+        // Meme inheritance: child = parent average + jitter, ONLY if the child
+        // has a Communicator module. This gates RNG draws so that non-communicator
+        // lineages (e.g. minimal.toml) draw zero meme RNG, keeping the golden
+        // hash stream unchanged.
+        if crate::module::has(
+            &world.agents.modules[child_id as usize],
+            crate::module::ModuleType::Communicator,
+        ) {
+            let a_meme = world.agents.meme_vector[i];
+            let b_meme = world.agents.meme_vector[j];
+            world.agents.meme_vector[child_id as usize] =
+                crate::culture::inherit_meme(&a_meme, &b_meme, &mut world.rng);
+        }
     }
 }
 

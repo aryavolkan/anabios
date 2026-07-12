@@ -103,6 +103,9 @@ fn event_name(t: EventType) -> &'static str {
         EventType::ArmsRace => "arms_race",
         EventType::TerritoryFormation => "territory_formation",
         EventType::NichePartitioning => "niche_partitioning",
+        EventType::DialectFormed => "dialect_formed",
+        EventType::MemeSweep => "meme_sweep",
+        EventType::AlarmCall => "alarm_call",
     }
 }
 
@@ -114,13 +117,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
         "seed,ticks,final_alive,final_biomass,state_hash,\
          extinction,pop_crash,speciation,migration,novel_module,novel_behavior,\
          predation,combat_raid,arms_race,\
-         territory_formation,niche_partitioning"
+         territory_formation,niche_partitioning,\
+         dialect_formed,meme_sweep,alarm_call"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -137,6 +141,9 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("arms_race"),
             g("territory_formation"),
             g("niche_partitioning"),
+            g("dialect_formed"),
+            g("meme_sweep"),
+            g("alarm_call"),
         )?;
     }
     Ok(())
@@ -150,6 +157,14 @@ mod tests {
         assert_eq!(super::event_name(EventType::Predation), "predation");
         assert_eq!(super::event_name(EventType::CombatRaid), "combat_raid");
         assert_eq!(super::event_name(EventType::ArmsRace), "arms_race");
+    }
+
+    #[test]
+    fn event_name_covers_m14_events() {
+        use anabios_core::codex::EventType;
+        assert_eq!(super::event_name(EventType::DialectFormed), "dialect_formed");
+        assert_eq!(super::event_name(EventType::MemeSweep), "meme_sweep");
+        assert_eq!(super::event_name(EventType::AlarmCall), "alarm_call");
     }
 
     #[test]

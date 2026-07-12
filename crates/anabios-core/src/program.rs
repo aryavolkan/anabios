@@ -379,6 +379,20 @@ pub fn starter_marker() -> Program {
     ])
 }
 
+/// Communicator: broadcast a strong signal on channel 1 and cohere toward the
+/// nearest same-species neighbor, so the meme propagates and sweeps the cluster
+/// (population `meme[1]` rises from ~0 to dominant → MemeSweep).
+pub fn starter_communicator() -> Program {
+    Program::from_slice(&[
+        Node::Const(1.0),
+        Node::Broadcast(1),
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+    ])
+}
+
 /// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
     &[
@@ -388,6 +402,7 @@ pub fn starter_library() -> &'static [fn() -> Program] {
         starter_sentinel,
         starter_herd,
         starter_marker,
+        starter_communicator,
     ]
 }
 
@@ -409,6 +424,7 @@ pub struct EvalContext<'a> {
     pub rel_energy: f32,
     pub crowding: f32,
     pub pheromone_sample: [f32; PHEROMONE_CHANNELS],
+    pub meme_sample: [f32; MEME_CHANNELS],
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -449,7 +465,9 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SensePheromone(ch) => {
                 scratch.push(ctx.pheromone_sample[(ch as usize).min(PHEROMONE_CHANNELS - 1)])
             }
-            Node::SenseMeme(_) => scratch.push(0.0),
+            Node::SenseMeme(ch) => {
+                scratch.push(ctx.meme_sample[(ch as usize).min(MEME_CHANNELS - 1)])
+            }
             Node::Const(v) => scratch.push(v),
 
             Node::Add => {
@@ -668,6 +686,7 @@ mod tests {
             rel_energy: 0.0,
             crowding: 0.0,
             pheromone_sample: [0.0; PHEROMONE_CHANNELS],
+            meme_sample: [0.0; MEME_CHANNELS],
         }
     }
 
@@ -851,9 +870,14 @@ mod tests {
     fn social_starters_are_bounded_and_evaluable() {
         let g = Genome::neutral();
         let mut stack = Vec::new();
-        for make in
-            [starter_stalker, starter_pack_hunter, starter_sentinel, starter_herd, starter_marker]
-        {
+        for make in [
+            starter_stalker,
+            starter_pack_hunter,
+            starter_sentinel,
+            starter_herd,
+            starter_marker,
+            starter_communicator,
+        ] {
             let p = make();
             assert!(!p.is_empty());
             assert!(p.len() <= PROGRAM_MAX_NODES);
@@ -873,7 +897,7 @@ mod tests {
 
     #[test]
     fn starter_library_has_all_starters() {
-        assert_eq!(starter_library().len(), 6);
+        assert_eq!(starter_library().len(), 7);
     }
 
     #[test]

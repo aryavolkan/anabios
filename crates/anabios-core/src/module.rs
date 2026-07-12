@@ -243,6 +243,17 @@ pub fn marker_kit() -> ModuleList {
     ]
 }
 
+/// A meme-broadcasting herbivore: mobile, sighted, grazes, and communicates on
+/// channel 0. Used by the `communicator` scenario archetype.
+pub fn communicator_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.6, acuity: 0.6 },
+        Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 },
+        Module::Communicator { range: 12.0, channel_id: 0 },
+    ]
+}
+
 /// `true` iff the list contains at least one module of the given type.
 #[inline]
 pub fn has(modules: &ModuleList, module_type: ModuleType) -> bool {
@@ -344,6 +355,18 @@ pub fn effective_armor_protection(modules: &ModuleList) -> f32 {
         .iter()
         .filter_map(|m| match m {
             Module::Armor { protection, .. } => Some(*protection),
+            _ => None,
+        })
+        .fold(0.0_f32, f32::max)
+}
+
+/// Max `Communicator.range`, or `0.0` if the agent has no `Communicator`.
+#[inline]
+pub fn effective_communicator_range(modules: &ModuleList) -> f32 {
+    modules
+        .iter()
+        .filter_map(|m| match m {
+            Module::Communicator { range, .. } => Some(*range),
             _ => None,
         })
         .fold(0.0_f32, f32::max)

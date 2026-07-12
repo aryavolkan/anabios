@@ -85,10 +85,10 @@ impl Default for Placement {
 /// Resolve an archetype name to its starter program + module kit. Unknown
 /// names fall back to the grazer defaults.
 fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Program) {
-    use crate::module::{marker_kit, predator_kit, starter_kit};
+    use crate::module::{communicator_kit, marker_kit, predator_kit, starter_kit};
     use crate::program::{
-        starter_grazer, starter_herd, starter_marker, starter_pack_hunter, starter_sentinel,
-        starter_stalker,
+        starter_communicator, starter_grazer, starter_herd, starter_marker, starter_pack_hunter,
+        starter_sentinel, starter_stalker,
     };
     match name {
         "stalker" => (predator_kit(), starter_stalker()),
@@ -96,6 +96,7 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
         "sentinel" => (starter_kit(), starter_sentinel()),
         "herd" => (starter_kit(), starter_herd()),
         "marker" => (marker_kit(), starter_marker()),
+        "communicator" => (communicator_kit(), starter_communicator()),
         _ => (starter_kit(), starter_grazer()),
     }
 }
