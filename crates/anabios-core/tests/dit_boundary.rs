@@ -399,3 +399,219 @@ fn dit_abundance_amplifies_skill() {
         "the multiplicative C-skill edge should be at least as large under abundance as scarcity"
     );
 }
+
+// ----------------------------------------------------------------------------
+// Axis 4: the Goldilocks rate, gene-culture coevolution, and adaptation timescale
+// ----------------------------------------------------------------------------
+
+/// The GOLDILOCKS result: culture's tracking advantage over a fixed genetic
+/// strategy is NON-MONOTONIC in the rate of environmental change. It is ~zero when
+/// the world is static (genes already match), largest at an intermediate rate
+/// (only culture keeps up), and small again when change is too fast for culture to
+/// track. The advantage peaks in the middle — the canonical inverted-U.
+#[ignore = "experiment harness — run with --ignored --nocapture"]
+#[test]
+fn dit_intermediate_change_is_optimal() {
+    const SEEDS: u64 = 6;
+    let mut peaked = 0;
+    for seed in 0..SEEDS {
+        let adv = |p: u32| track_quality(seed, p, CRITICAL) - track_quality(seed, p, INNATE);
+        let a_static = adv(ENV_STATIC_PERIOD);
+        let a_mid = adv(ENV_SLOW);
+        let a_fast = adv(ENV_FAST);
+        if a_mid > a_static + 0.2 && a_mid > a_fast + 0.2 {
+            peaked += 1;
+        }
+        eprintln!("GOLDILOCKS seed{seed}: culture advantage static={a_static:.2} mid={a_mid:.2} fast={a_fast:.2}");
+    }
+    eprintln!("GOLDILOCKS RESULT: culture's advantage peaked at the intermediate rate in {peaked}/{SEEDS} seeds");
+    assert!(
+        peaked * 2 > SEEDS,
+        "culture's tracking advantage should peak at an intermediate change rate (inverted-U)"
+    );
+}
+
+/// Fraction of the WHOLE alive population carrying the learning gene
+/// (`IndividualLearning > 0.5`) — across all species, since selection may split
+/// learners and non-learners into distinct species.
+fn learner_fraction(w: &World) -> f64 {
+    let mut n = 0usize;
+    let mut learners = 0usize;
+    for id in w.agents.iter_alive() {
+        n += 1;
+        if w.agents.genome[id as usize].get(GenomeSlot::IndividualLearning) > 0.5 {
+            learners += 1;
+        }
+    }
+    if n > 0 {
+        learners as f64 / n as f64
+    } else {
+        0.0
+    }
+}
+
+/// Outcome of one interbreeding gene-culture run.
+struct Coevo {
+    start_frac: f64,       // learner-gene frequency at founding
+    early_frac: f64,       // learner-gene frequency early, before the population saturates
+    end_frac: f64,         // learner-gene frequency at the end
+    learner_match: f64,    // run-time-averaged technique-match of learners
+    nonlearner_match: f64, // ... and of the fixed genetic foragers
+}
+
+/// Run one interbreeding population that starts half individual-learners (the
+/// heritable `IndividualLearning` gene on) and half fixed genetic foragers under a
+/// changing environment. The learning gene is inherited allele-like via crossover,
+/// so its frequency tracks selection. Records how well each group tracks the
+/// optimum and how the learner-gene frequency moves early vs late.
+fn run_coevolution(seed: u64, ticks: u32) -> Coevo {
+    let mut w = World::new(seed);
+    w.env_period = ENV_SLOW;
+    ensure_species(&mut w, 1);
+    let seed_opt = env_optimum_at(0, ENV_SLOW);
+    let n = 80usize;
+    for k in 0..n {
+        let ang = k as f32 * 0.7;
+        let rad = 12.0 + (k % 11) as f32 * 7.0;
+        let pos = Vec2::new(512.0 + rad * ang.cos(), 512.0 + rad * ang.sin());
+        let learner = k % 2 == 0;
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::ReproductionThreshold, 0.3);
+        g.set(GenomeSlot::IndividualLearning, if learner { 1.0 } else { 0.0 });
+        g.set(GenomeSlot::InnateTechnique, seed_opt); // non-learners pre-adapted to tick-0 opt
+        let id = w.spawn_seeded(pos, g, 1, starter_kit(), starter_asocial_forager());
+        if learner {
+            w.agents.meme_vector[id as usize][TECH_CHANNEL] = seed_opt;
+        }
+    }
+    let start_frac = learner_fraction(&w);
+    let mut early_frac = start_frac;
+    let (mut lsum, mut lcnt, mut nsum, mut ncnt) = (0.0f64, 0u64, 0.0f64, 0u64);
+    for t in 0..ticks {
+        step(&mut w);
+        let opt = env_optimum_at(w.tick, w.env_period);
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            let m = technique_match(tech_of(&w, i), opt) as f64;
+            if w.agents.genome[i].get(GenomeSlot::IndividualLearning) > 0.5 {
+                lsum += m;
+                lcnt += 1;
+            } else {
+                nsum += m;
+                ncnt += 1;
+            }
+        }
+        if t + 1 == 600 {
+            early_frac = learner_fraction(&w);
+        }
+    }
+    Coevo {
+        start_frac,
+        early_frac,
+        end_frac: learner_fraction(&w),
+        learner_match: if lcnt > 0 { lsum / lcnt as f64 } else { 0.0 },
+        nonlearner_match: if ncnt > 0 { nsum / ncnt as f64 } else { 0.0 },
+    }
+}
+
+/// Gene-culture COEVOLUTION — the honest dissociation. Starting from a 50/50 mix of
+/// individual-learners and fixed genetic foragers under a changing environment, the
+/// learners are behaviourally the clear winners: they track the moving optimum
+/// nearly perfectly while the fixed strategy stays badly mismatched, and they
+/// initially boom to a large majority. YET the learning GENE does not fix — it is
+/// steadily purged as the population saturates. The env bonus is a grazing
+/// MULTIPLIER, worthless at carrying capacity (depleted biome, nothing to multiply)
+/// while the learning cost persists, so behaviourally-adaptive culture fails to
+/// translate into durable gene selection. This is *why* the first-principles test
+/// (experiment B) came back negative, and it matches the abundance/scarcity axis.
+#[ignore = "experiment harness — run with --ignored --nocapture"]
+#[test]
+fn dit_coevolution_tracking_does_not_fix_the_gene() {
+    const SEEDS: u64 = 6;
+    let mut adaptive_but_purged = 0;
+    for seed in 0..SEEDS {
+        let c = run_coevolution(seed, 4000);
+        // (1) culture is behaviourally adaptive: learners track the moving optimum
+        //     far better than the fixed genetic strategy.
+        let behaviourally_adaptive = c.learner_match > c.nonlearner_match + 0.3;
+        // (2) yet the learning GENE is not selected up — it declines by the end.
+        let gene_purged = c.end_frac < c.start_frac;
+        if behaviourally_adaptive && gene_purged {
+            adaptive_but_purged += 1;
+        }
+        eprintln!(
+            "COEVO seed{seed}: learner-match={:.2} non-match={:.2} | learner-freq start={:.2} early={:.2} end={:.2}",
+            c.learner_match, c.nonlearner_match, c.start_frac, c.early_frac, c.end_frac
+        );
+    }
+    eprintln!("COEVO RESULT: culture was behaviourally adaptive yet its gene was purged in {adaptive_but_purged}/{SEEDS} seeds");
+    assert!(
+        adaptive_but_purged * 2 > SEEDS,
+        "learners should track far better and win early, yet the learning gene should still be purged at carrying capacity"
+    );
+}
+
+/// Two-timescale adaptation: culture responds FASTER than genes. A population
+/// seeded MIS-matched to a static optimum recovers within a lifetime if it can
+/// learn (technique converges by learning), but a fixed genetic population can
+/// only recover by mutating + selecting its innate technique over generations.
+/// Returns the tick at which mean match first passes 0.6 (or `ticks` if never).
+fn recovery_tick(seed: u64, learner: bool, ticks: u32) -> u32 {
+    let mut w = World::new(seed);
+    w.env_period = ENV_STATIC_PERIOD; // fixed optimum = ENV_STATIC_OPTIMUM (0.75)
+    ensure_species(&mut w, 1);
+    let wrong = 0.2_f32; // seed far from the 0.75 optimum → everyone starts mismatched
+    for k in 0..40usize {
+        let ang = k as f32 * 0.7;
+        let rad = 12.0 + (k % 11) as f32 * 7.0;
+        let pos = Vec2::new(512.0 + rad * ang.cos(), 512.0 + rad * ang.sin());
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::ReproductionThreshold, 0.3);
+        // Give the genetic population a mutation rate so it CAN evolve (slowly);
+        // the learner instead adapts within life via the IndividualLearning gene.
+        if learner {
+            g.set(GenomeSlot::IndividualLearning, 1.0);
+        } else {
+            g.set(GenomeSlot::MutationRate, 0.5);
+        }
+        g.set(GenomeSlot::InnateTechnique, wrong);
+        let id = w.spawn_seeded(pos, g, 1, starter_kit(), starter_asocial_forager());
+        if learner {
+            w.agents.meme_vector[id as usize][TECH_CHANNEL] = wrong;
+        }
+    }
+    for t in 0..ticks {
+        step(&mut w);
+        let (sm, n) = match_sum(&w, 1);
+        if n > 0 && sm / n as f64 > 0.6 {
+            return t + 1;
+        }
+    }
+    ticks
+}
+
+/// Culture adapts on a faster timescale than genes: from the same mismatched
+/// start, a learning population recovers a good technique-match far sooner than a
+/// genetic-only population that must evolve its innate technique.
+#[ignore = "experiment harness — run with --ignored --nocapture"]
+#[test]
+fn dit_culture_adapts_faster_than_genes() {
+    const SEEDS: u64 = 6;
+    const TICKS: u32 = 2500;
+    let mut faster = 0;
+    for seed in 0..SEEDS {
+        let t_culture = recovery_tick(seed, true, TICKS);
+        let t_genes = recovery_tick(seed, false, TICKS);
+        if (t_culture as f64) < 0.5 * t_genes as f64 {
+            faster += 1;
+        }
+        eprintln!("TIMESCALE seed{seed}: recovery ticks culture={t_culture} genes={t_genes}");
+    }
+    eprintln!(
+        "TIMESCALE RESULT: culture recovered in <half the time of genes in {faster}/{SEEDS} seeds"
+    );
+    assert!(
+        faster * 2 > SEEDS,
+        "cultural adaptation should recover a good match far faster than genetic evolution"
+    );
+}
