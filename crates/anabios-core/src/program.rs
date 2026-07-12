@@ -97,6 +97,10 @@ pub enum Node {
     /// Kinship of the overall-nearest neighbor in [0,1]; 0.0 when none. M15.
     /// Excluded from `random_node` so evolved programs stay unchanged.
     SenseKinship,
+    /// Altruistic sharing output. Pops one value and adds it to
+    /// `share_intent`. Triggers `share_pass` when above `SHARE_THRESHOLD`
+    /// and `Altruism > 0`. M15. Excluded from `random_node`.
+    Share,
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
@@ -112,6 +116,9 @@ pub struct ActionRegister {
     /// Agent this action is directed at (combat/share target), derived from
     /// the nearest-neighbor sense. `NO_TARGET` when there is no neighbor.
     pub target_id: u32,
+    /// Altruistic sharing intent. Positive values above `SHARE_THRESHOLD`
+    /// trigger `share_pass` to transfer energy to the action target. M15.
+    pub share_intent: f32,
 }
 
 impl Default for ActionRegister {
@@ -125,6 +132,7 @@ impl Default for ActionRegister {
             emit_intent: [0.0; PHEROMONE_CHANNELS],
             broadcast_intent: [0.0; MEME_CHANNELS],
             target_id: NO_TARGET,
+            share_intent: 0.0,
         }
     }
 }
@@ -196,7 +204,8 @@ impl Program {
             | Node::FireWeapon
             | Node::EmitPheromone(_)
             | Node::Broadcast(_)
-            | Node::Idle => 1,
+            | Node::Idle
+            | Node::Share => 1,
         }
     }
 
@@ -214,6 +223,7 @@ impl Program {
                 | Node::EmitPheromone(_)
                 | Node::Broadcast(_)
                 | Node::Idle
+                | Node::Share
         )
     }
 
@@ -263,6 +273,7 @@ impl Program {
             Node::SenseCrowding => 39,
             Node::SensePheromone(_) => 40,
             Node::SenseKinship => 41,
+            Node::Share => 42,
         }
     }
 }
@@ -548,6 +559,7 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::Idle => {
                 scratch.pop();
             }
+            Node::Share => action.share_intent += scratch.pop().unwrap(),
         }
     }
 
@@ -694,6 +706,7 @@ mod tests {
             crowding: 0.0,
             pheromone_sample: [0.0; PHEROMONE_CHANNELS],
             meme_sample: [0.0; MEME_CHANNELS],
+            nearest_kinship: 0.0,
         }
     }
 
