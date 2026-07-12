@@ -381,7 +381,7 @@ pub fn starter_marker() -> Program {
 
 /// Communicator: broadcast a strong signal on channel 1 and cohere toward the
 /// nearest same-species neighbor, so the meme propagates and sweeps the cluster
-/// (population meme[1] rises from ~0 to dominant → MemeSweep).
+/// (population `meme[1]` rises from ~0 to dominant → MemeSweep).
 pub fn starter_communicator() -> Program {
     Program::from_slice(&[
         Node::Const(1.0),
