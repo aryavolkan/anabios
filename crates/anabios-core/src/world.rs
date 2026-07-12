@@ -44,6 +44,12 @@ pub struct World {
     pub carcasses: Vec<crate::carcass::Carcass>,
     /// Per-channel pheromone grids (deposited in `interact`, decayed each tick).
     pub pheromones: crate::pheromone::PheromoneField,
+    /// DIT environmental-variability period (experiment). `0` = mechanism OFF
+    /// (all pre-existing scenarios). `> 0` enables the gene-culture technique
+    /// mechanism; `culture::ENV_STATIC_PERIOD` means active-but-static. Defaulted
+    /// so old snapshots without this field still deserialize.
+    #[serde(default)]
+    pub env_period: u32,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     #[serde(skip)]
@@ -94,6 +100,7 @@ impl World {
             codex: crate::codex::CodexState::default(),
             carcasses: Vec::new(),
             pheromones: crate::pheromone::PheromoneField::new(),
+            env_period: 0,
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),

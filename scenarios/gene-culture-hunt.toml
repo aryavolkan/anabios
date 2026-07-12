@@ -1,0 +1,27 @@
+name = "gene-culture-hunt"
+seed = 0
+
+# Prey: ordinary grazers (herbivores, Locomotor speed 0.6). Food for hunters.
+[[agents]]
+count = 50
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# FAST hunters: genetic speed 0.95 > prey — the hunt-technique meme pays off.
+[[agents]]
+count = 20
+archetype = "fast_hunter"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# SLOW hunters: genetic speed 0.3 < prey — SAME hunt meme, but they can't catch,
+# so the technique wastes energy on fruitless pursuit. Gene-conditional payoff.
+[[agents]]
+count = 20
+archetype = "slow_hunter"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+[agents.traits]
+lifespan_bias = 1.0

@@ -1,0 +1,25 @@
+name = "gene-culture"
+seed = 0
+
+# Culture-users: Communicator (culture-enabling GENE) + a program that shares
+# with kin only when the received cooperation MEME is also high. High altruism
+# so shares are substantial. Dense cluster → meme spreads + kin are close.
+[[agents]]
+count = 30
+archetype = "cultural_cooperator"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+altruism = 1.0
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+
+# Asocials: plain grazers, no Communicator, no sharing — otherwise identical
+# ecology (same region, same metabolism). The control lineage.
+[[agents]]
+count = 30
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+altruism = 0.0
+basal_metabolism = 0.7
+lifespan_bias = 1.0

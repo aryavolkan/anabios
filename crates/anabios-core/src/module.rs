@@ -254,6 +254,31 @@ pub fn communicator_kit() -> ModuleList {
     ]
 }
 
+/// Gene-culture experiment: an omnivore hunter — grazes (fallback) AND can hunt
+/// (Weapon + carnivore-capable Mouth) + communicates. `FAST` sets a high
+/// Locomotor max_speed (the primal "speed gene"); the slow variant is identical
+/// but slow. The hunt-technique meme's payoff is conditional on this gene.
+pub fn fast_hunter_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.95, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.8, acuity: 0.7 },
+        Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 },
+        Module::Weapon { damage: 8.0, energy_cost: 1.0 },
+        Module::Communicator { range: 12.0, channel_id: 0 },
+    ]
+}
+
+/// Slow variant of `fast_hunter_kit` — identical except a low Locomotor speed.
+pub fn slow_hunter_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.3, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.8, acuity: 0.7 },
+        Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 },
+        Module::Weapon { damage: 8.0, energy_cost: 1.0 },
+        Module::Communicator { range: 12.0, channel_id: 0 },
+    ]
+}
+
 /// `true` iff the list contains at least one module of the given type.
 #[inline]
 pub fn has(modules: &ModuleList, module_type: ModuleType) -> bool {

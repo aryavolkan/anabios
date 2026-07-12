@@ -1,0 +1,28 @@
+name = "dit-env-slow"
+seed = 0
+
+# DIT env-variability, SLOW sweep (env_period = 400): the optimal foraging
+# technique sweeps slowly up and down (a triangle wave, full cycle = 2*period).
+# Genes (innate) can't follow a moving target; the cultural critical_learner
+# tracks it by learning + copying. Prediction: culture WORKS — the learner's
+# technique-match stays far higher than the fixed genetic strategy's.
+env_period = 400
+
+# Genetic strategy: fixed innate technique, evolves only across generations.
+[[agents]]
+count = 60
+archetype = "innate_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# Cultural strategy: learns the technique by doing AND copies well-matched
+# neighbours — stays current as the optimum shifts.
+[[agents]]
+count = 60
+archetype = "critical_learner"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3

@@ -1,0 +1,29 @@
+name = "dit-env-static"
+seed = 0
+
+# DIT env-variability, STATIC world (env_period = 4294967295 = u32::MAX =
+# culture::ENV_STATIC_PERIOD): the mechanism is active but the optimal technique
+# never moves. The genetic strategy is pre-adapted to the fixed optimum at zero
+# cost; the cultural learner also matches it but pays a perpetual learning cost
+# for a technique genes already encode. Prediction: culture is REDUNDANT — it
+# confers no tracking edge over the fixed genetic strategy when nothing changes.
+env_period = 4294967295
+
+# Genetic strategy: fixed innate technique (seeded pre-adapted to the optimum).
+[[agents]]
+count = 60
+archetype = "innate_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# Cultural strategy: learns + copies the technique — but there is nothing new to
+# track, so it only pays the learning cost.
+[[agents]]
+count = 60
+archetype = "critical_learner"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3

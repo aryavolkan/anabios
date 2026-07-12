@@ -1,0 +1,24 @@
+name = "dit-env-fast"
+seed = 0
+
+# DIT env-variability, FAST sweep (env_period = 8) — the optimal technique sweeps
+# up and down faster than the learn+copy loop can follow, so a learner's technique
+# lags and its match collapses. Prediction: culture FAILS — the critical_learner
+# tracks no better than a fixed innate_forager.
+env_period = 8
+
+[[agents]]
+count = 60
+archetype = "innate_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 60
+archetype = "critical_learner"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
