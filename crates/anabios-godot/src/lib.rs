@@ -251,6 +251,63 @@ impl Simulation {
         out
     }
 
+    /// True iff the DIT environment mechanism is active (`env_period > 0`).
+    #[func]
+    fn env_active(&self) -> bool {
+        self.inner.as_ref().map(|w| w.env_period > 0).unwrap_or(false)
+    }
+
+    /// Current global optimal technique in `[0,1]`, or `-1.0` when the env
+    /// mechanism is inactive.
+    #[func]
+    fn env_optimum(&self) -> f32 {
+        match self.inner.as_ref() {
+            Some(w) if w.env_period > 0 => {
+                anabios_core::culture::env_optimum_at(w.tick, w.env_period)
+            }
+            _ => -1.0,
+        }
+    }
+
+    /// Per-live-species aggregate stats. `mean_technique_match` is the mean of
+    /// `technique_match(meme[TECH_CHANNEL], optimum)` when the env mechanism is
+    /// active, else `0.0`. Each entry is
+    /// `{ species_id, count, mean_energy, mean_technique_match }`.
+    #[func]
+    fn species_stats(&self) -> Array<Dictionary> {
+        use anabios_core::culture::{env_optimum_at, technique_match, TECH_CHANNEL};
+        use std::collections::BTreeMap;
+        let mut out = Array::<Dictionary>::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        let active = w.env_period > 0;
+        let opt = if active { env_optimum_at(w.tick, w.env_period) } else { 0.0 };
+        // Aggregate over live agents, keyed by species_id (BTreeMap keeps the
+        // output stable and ascending).
+        let mut count: BTreeMap<u32, i64> = BTreeMap::new();
+        let mut energy: BTreeMap<u32, f32> = BTreeMap::new();
+        let mut matchsum: BTreeMap<u32, f32> = BTreeMap::new();
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            let sp = w.agents.species_id[i];
+            *count.entry(sp).or_insert(0) += 1;
+            *energy.entry(sp).or_insert(0.0) += w.agents.energy[i];
+            if active {
+                let tech = w.agents.meme_vector[i][TECH_CHANNEL];
+                *matchsum.entry(sp).or_insert(0.0) += technique_match(tech, opt);
+            }
+        }
+        for (sp, n) in count.iter() {
+            let mut d = Dictionary::new();
+            let nf = *n as f32;
+            d.set("species_id", *sp as i64);
+            d.set("count", *n);
+            d.set("mean_energy", energy[sp] / nf);
+            d.set("mean_technique_match", if active { matchsum[sp] / nf } else { 0.0 });
+            out.push(&d);
+        }
+        out
+    }
+
     /// Body rotation (radians) per alive agent, from velocity direction.
     /// Non-moving agents keep rotation 0. Same order as `alive_positions`.
     #[func]
