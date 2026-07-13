@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://scripts/codex_panel.gd" id="8_codex"]
 [ext_resource type="Script" path="res://scripts/overlay_manager.gd" id="9_overlay"]
 [ext_resource type="Script" path="res://scripts/population_panel.gd" id="10_pop"]
+[ext_resource type="Script" path="res://scripts/dit_panel.gd" id="11_dit"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -214,6 +215,16 @@ offset_right = 1270.0
 offset_bottom = 420.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/PopulationPanel"]
+
+[node name="DitPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("11_dit")
+visible = false
+offset_left = 1050.0
+offset_top = 430.0
+offset_right = 1270.0
+offset_bottom = 620.0
+
+[node name="VBox" type="VBoxContainer" parent="UI/DitPanel"]
 
 [node name="CodexPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("8_codex")
