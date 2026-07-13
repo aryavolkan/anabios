@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/biome_renderer.gd" id="7_biome"]
 [ext_resource type="Script" path="res://scripts/codex_panel.gd" id="8_codex"]
 [ext_resource type="Script" path="res://scripts/overlay_manager.gd" id="9_overlay"]
+[ext_resource type="Script" path="res://scripts/population_panel.gd" id="10_pop"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -204,6 +205,15 @@ offset_bottom = -10.0
 [node name="Label" type="Label" parent="UI/Inspector/VBoxContainer"]
 text = "—"
 theme_override_font_sizes/font_size = 14
+
+[node name="PopulationPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("10_pop")
+offset_left = 1050.0
+offset_top = 210.0
+offset_right = 1270.0
+offset_bottom = 420.0
+
+[node name="VBox" type="VBoxContainer" parent="UI/PopulationPanel"]
 
 [node name="CodexPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("8_codex")
