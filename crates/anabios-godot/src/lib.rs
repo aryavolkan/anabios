@@ -226,6 +226,31 @@ impl Simulation {
         out
     }
 
+    /// Number of pheromone channels (for the overlay cycling loop).
+    #[func]
+    fn pheromone_channel_count(&self) -> i64 {
+        anabios_core::program::PHEROMONE_CHANNELS as i64
+    }
+
+    /// One color per pheromone cell on `channel`, row-major (`row * RES + col`),
+    /// as a dark-to-hot ramp with alpha proportional to intensity. Returns
+    /// `RES²` colors, or empty if no world is loaded or the channel is invalid.
+    #[func]
+    fn pheromone_colors(&self, channel: i64) -> PackedColorArray {
+        let mut out = PackedColorArray::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        let ch = channel as usize;
+        if ch >= anabios_core::program::PHEROMONE_CHANNELS {
+            return out;
+        }
+        for cell in w.pheromones.cells.iter() {
+            let t = phero_intensity(cell[ch]);
+            let c = Color::from_rgb(0.05 + 0.95 * t, 0.10 * t, 0.30 * (1.0 - t));
+            out.push(Color { a: t, ..c });
+        }
+        out
+    }
+
     /// Body rotation (radians) per alive agent, from velocity direction.
     /// Non-moving agents keep rotation 0. Same order as `alive_positions`.
     #[func]
@@ -304,6 +329,13 @@ fn math_sin(x: f32) -> f32 {
     libm::sinf(x)
 }
 
+/// Map a raw pheromone concentration to a saturating intensity in `[0,1]`
+/// (deposits are unbounded and decay is slow, so a plain clamp would wash out).
+fn phero_intensity(v: f32) -> f32 {
+    let x = v.max(0.0);
+    1.0 - (-x).exp()
+}
+
 fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
     let h6 = (h.rem_euclid(1.0)) * 6.0;
     let i = h6.floor() as i32;
@@ -320,4 +352,17 @@ fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
         _ => (v, p, q),
     };
     Color::from_rgb(r, g, b)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn phero_intensity_saturates_monotonically() {
+        assert_eq!(phero_intensity(0.0), 0.0);
+        assert!(phero_intensity(1.0) > phero_intensity(0.1));
+        assert!(phero_intensity(100.0) <= 1.0);
+        assert!(phero_intensity(-5.0) == 0.0);
+    }
 }
