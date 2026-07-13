@@ -177,6 +177,39 @@ impl Simulation {
         d
     }
 
+    /// Full inspector view of one alive agent. Superset of `get_agent_info`,
+    /// adding diet, learned skill/technique, learning flags, dialect hue, and
+    /// module names.
+    #[func]
+    fn agent_detail(&self, id: i64) -> Dictionary {
+        use anabios_core::culture::{SKILL_CHANNEL, TECH_CHANNEL};
+        use anabios_core::genome::GenomeSlot;
+        let mut d = self.get_agent_info(id);
+        let Some(w) = self.inner.as_ref() else { return d };
+        let aid = id as u32;
+        if !w.agents.is_alive(aid) {
+            return d;
+        }
+        let i = id as usize;
+        let g = &w.agents.genome[i];
+        let meme = &w.agents.meme_vector[i];
+        d.set(
+            "diet_carnivory",
+            anabios_core::module::effective_diet_carnivory(&w.agents.modules[i]),
+        );
+        d.set("skill", meme[SKILL_CHANNEL]);
+        d.set("technique", meme[TECH_CHANNEL]);
+        d.set("indiv_learn", g.get(GenomeSlot::IndividualLearning) > 0.5);
+        d.set("social_learn", g.get(GenomeSlot::SocialLearning) > 0.5);
+        d.set("dialect_hue", dialect_hue(meme));
+        let mut names = PackedStringArray::new();
+        for m in w.agents.modules[i].iter() {
+            names.push(&format!("{:?}", m.module_type()));
+        }
+        d.set("module_names", names);
+        d
+    }
+
     /// Drain the codex event buffer. Each event becomes a Dictionary:
     ///   { type: int (0=Extinction .. 5=NovelBehaviorPattern),
     ///     tick: int, species_id: int, value: f32, loc: Vector2 }
@@ -426,6 +459,16 @@ fn phero_intensity(v: f32) -> f32 {
     1.0 - (-x).exp()
 }
 
+/// Project a meme vector onto a stable hue in `[0,1)` so divergent dialects
+/// render as distinct body colors. Weighted low channels dominate.
+fn dialect_hue(meme: &[f32]) -> f32 {
+    let mut acc = 0.0_f32;
+    for (k, v) in meme.iter().enumerate() {
+        acc += v * (0.37 + 0.11 * k as f32);
+    }
+    acc.rem_euclid(1.0)
+}
+
 fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
     let h6 = (h.rem_euclid(1.0)) * 6.0;
     let i = h6.floor() as i32;
@@ -454,5 +497,14 @@ mod tests {
         assert!(phero_intensity(1.0) > phero_intensity(0.1));
         assert!(phero_intensity(100.0) <= 1.0);
         assert!(phero_intensity(-5.0) == 0.0);
+    }
+
+    #[test]
+    fn dialect_hue_is_bounded_and_varies() {
+        let a = [0.0_f32; 8];
+        let b = [0.9_f32, 0.1, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0];
+        assert!((0.0..1.0).contains(&dialect_hue(&a)));
+        assert!((0.0..1.0).contains(&dialect_hue(&b)));
+        assert!(dialect_hue(&a) != dialect_hue(&b));
     }
 }
