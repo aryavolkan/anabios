@@ -308,6 +308,39 @@ impl Simulation {
         out
     }
 
+    /// One entry per carcass currently in the world:
+    /// `{ pos, flesh, age, species_id }`.
+    #[func]
+    fn carcass_data(&self) -> Array<Dictionary> {
+        let mut out = Array::<Dictionary>::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for c in w.carcasses.iter() {
+            let mut d = Dictionary::new();
+            d.set("pos", Vector2::new(c.pos.x, c.pos.y));
+            d.set("flesh", c.flesh);
+            d.set("age", c.age as i64);
+            d.set("species_id", c.species_id as i64);
+            out.push(&d);
+        }
+        out
+    }
+
+    /// World positions of alive agents that took combat damage on the most
+    /// recent tick (the flag is reset at the start of the next combat pass).
+    #[func]
+    fn combat_flashes(&self) -> PackedVector2Array {
+        let mut out = PackedVector2Array::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            if w.combat_damaged.get(i).copied().unwrap_or(false) {
+                let p = w.agents.position[i];
+                out.push(Vector2::new(p.x, p.y));
+            }
+        }
+        out
+    }
+
     /// Body rotation (radians) per alive agent, from velocity direction.
     /// Non-moving agents keep rotation 0. Same order as `alive_positions`.
     #[func]
