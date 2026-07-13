@@ -499,13 +499,21 @@ fn phero_intensity(v: f32) -> f32 {
 }
 
 /// Project a meme vector onto a stable hue in `[0,1)` so divergent dialects
-/// render as distinct body colors. Weighted low channels dominate.
+/// render as distinct body colors. The per-channel weights are normalized to
+/// sum to 1, so the hue is a weighted average of the meme values (bounded and
+/// not dominated by any single high-index channel) wrapped into `[0,1)`.
 fn dialect_hue(meme: &[f32]) -> f32 {
     let mut acc = 0.0_f32;
+    let mut wsum = 0.0_f32;
     for (k, v) in meme.iter().enumerate() {
-        acc += v * (0.37 + 0.11 * k as f32);
+        let w = 0.37 + 0.11 * k as f32;
+        acc += v * w;
+        wsum += w;
     }
-    acc.rem_euclid(1.0)
+    if wsum <= 0.0 {
+        return 0.0;
+    }
+    (acc / wsum).rem_euclid(1.0)
 }
 
 fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
