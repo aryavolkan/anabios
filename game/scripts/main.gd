@@ -106,6 +106,8 @@ func _refresh_carcasses() -> void:
 	var data: Array = sim.carcass_data()
 	var mm: MultiMesh = carcasses.multimesh
 	var m: int = data.size()
+	if m > mm.instance_count:
+		mm.instance_count = m
 	mm.visible_instance_count = m
 	for i in m:
 		var d: Dictionary = data[i]
@@ -118,6 +120,8 @@ func _refresh_flashes() -> void:
 	var pts: PackedVector2Array = sim.combat_flashes()
 	var mm: MultiMesh = flashes.multimesh
 	var m: int = pts.size()
+	if m > mm.instance_count:
+		mm.instance_count = m
 	mm.visible_instance_count = m
 	for i in m:
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(1.6, 1.6), 0.0, pts[i]))
