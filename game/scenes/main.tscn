@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/inspector_panel.gd" id="5_insp"]
 [ext_resource type="Script" path="res://scripts/biome_renderer.gd" id="7_biome"]
 [ext_resource type="Script" path="res://scripts/codex_panel.gd" id="8_codex"]
+[ext_resource type="Script" path="res://scripts/overlay_manager.gd" id="9_overlay"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -83,6 +84,9 @@ position = Vector2(512, 512)
 zoom = Vector2(1, 1)
 
 [node name="Simulation" type="Simulation" parent="."]
+
+[node name="OverlayManager" type="Node" parent="."]
+script = ExtResource("9_overlay")
 
 [node name="Biome" type="Sprite2D" parent="."]
 script = ExtResource("7_biome")
