@@ -10,6 +10,8 @@
 
 use godot::prelude::*;
 
+mod coevo;
+
 struct AnabiosExtension;
 
 #[gdextension]
