@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/overlay_manager.gd" id="9_overlay"]
 [ext_resource type="Script" path="res://scripts/population_panel.gd" id="10_pop"]
 [ext_resource type="Script" path="res://scripts/dit_panel.gd" id="11_dit"]
+[ext_resource type="Script" path="res://scripts/legend_panel.gd" id="12_legend"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -225,6 +226,17 @@ offset_right = 1270.0
 offset_bottom = 620.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/DitPanel"]
+
+[node name="LegendPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("12_legend")
+offset_left = 10.0
+offset_top = 620.0
+offset_right = 380.0
+offset_bottom = 750.0
+
+[node name="Label" type="Label" parent="UI/LegendPanel"]
+text = "—"
+theme_override_font_sizes/font_size = 13
 
 [node name="CodexPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("8_codex")
