@@ -148,6 +148,45 @@ impl Simulation {
         out
     }
 
+    /// Carnivory diet score per alive agent (0 herbivore .. 1 carnivore),
+    /// same order as `alive_positions`.
+    #[func]
+    fn alive_diet(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(anabios_core::module::effective_diet_carnivory(
+                    &w.agents.modules[id as usize],
+                ));
+            }
+        }
+        out
+    }
+
+    /// Dialect hue per alive agent in `[0,1)`, same order as `alive_positions`.
+    #[func]
+    fn alive_dialect_hue(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(dialect_hue(&w.agents.meme_vector[id as usize]));
+            }
+        }
+        out
+    }
+
+    /// Energy per alive agent, same order as `alive_positions`.
+    #[func]
+    fn alive_energy(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(w.agents.energy[id as usize]);
+            }
+        }
+        out
+    }
+
     /// Look up one alive agent by id. Returns a Dictionary; empty if dead.
     #[func]
     fn get_agent_info(&self, id: i64) -> Dictionary {

@@ -22,6 +22,9 @@ const GLYPH_SIZE: float = 0.7
 @onready var hud: Label = $UI/HUD
 @onready var inspector: PanelContainer = $UI/Inspector
 @onready var module_layers: Node2D = $ModuleLayers
+@onready var overlay = $OverlayManager
+@onready var carcasses: MultiMeshInstance2D = $Carcasses
+@onready var flashes: MultiMeshInstance2D = $Flashes
 
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
@@ -46,6 +49,8 @@ func _process(_delta: float) -> void:
 	if not paused:
 		sim.step_n(ticks_per_frame)
 	_refresh_bodies()
+	_refresh_carcasses()
+	_refresh_flashes()
 	hud.text = "tick=%d alive=%d" % [sim.tick(), sim.alive_count()]
 
 func _refresh_bodies() -> void:
@@ -60,15 +65,63 @@ func _refresh_bodies() -> void:
 		return
 
 	var positions: PackedVector2Array = sim.alive_positions()
-	var colors: PackedColorArray = sim.alive_colors()
 	var sizes: PackedFloat32Array = sim.alive_sizes()
 	var rots: PackedFloat32Array = sim.alive_rotations()
+	var body_colors: PackedColorArray = _body_colors(n)
 	for i in n:
 		var t: Transform2D = Transform2D(rots[i], Vector2(sizes[i], sizes[i]), 0.0, positions[i])
 		mm.set_instance_transform_2d(i, t)
-		mm.set_instance_color(i, colors[i])
+		mm.set_instance_color(i, body_colors[i])
 
 	_refresh_module_layers()
+
+func _body_colors(n: int) -> PackedColorArray:
+	match overlay.body_mode:
+		overlay.BODY_DIALECT:
+			var hues: PackedFloat32Array = sim.alive_dialect_hue()
+			var out := PackedColorArray()
+			out.resize(n)
+			for i in n:
+				out[i] = Color.from_hsv(hues[i], 0.7, 0.95)
+			return out
+		overlay.BODY_DIET:
+			var diet: PackedFloat32Array = sim.alive_diet()
+			var out2 := PackedColorArray()
+			out2.resize(n)
+			for i in n:
+				out2[i] = Color(0.3, 0.9, 0.4).lerp(Color(1.0, 0.3, 0.3), clampf(diet[i], 0.0, 1.0))
+			return out2
+		overlay.BODY_ENERGY:
+			var en: PackedFloat32Array = sim.alive_energy()
+			var out3 := PackedColorArray()
+			out3.resize(n)
+			for i in n:
+				var t := clampf(en[i] / 50.0, 0.0, 1.0)
+				out3[i] = Color(0.2, 0.3, 0.8).lerp(Color(1.0, 0.9, 0.3), t)
+			return out3
+		_:
+			return sim.alive_colors()
+
+func _refresh_carcasses() -> void:
+	var data: Array = sim.carcass_data()
+	var mm: MultiMesh = carcasses.multimesh
+	var m: int = data.size()
+	mm.visible_instance_count = m
+	for i in m:
+		var d: Dictionary = data[i]
+		var pos: Vector2 = d["pos"]
+		var f: float = clampf(float(d["flesh"]) / 20.0, 0.2, 1.5)
+		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(f, f), 0.0, pos))
+		mm.set_instance_color(i, Color(0.77, 0.80, 0.86, 0.55))
+
+func _refresh_flashes() -> void:
+	var pts: PackedVector2Array = sim.combat_flashes()
+	var mm: MultiMesh = flashes.multimesh
+	var m: int = pts.size()
+	mm.visible_instance_count = m
+	for i in m:
+		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(1.6, 1.6), 0.0, pts[i]))
+		mm.set_instance_color(i, Color(1.0, 0.85, 0.2, 0.9))
 
 func _refresh_module_layers() -> void:
 	var type_count: int = int(sim.module_type_count())

@@ -75,6 +75,20 @@ instance_count = 10000
 visible_instance_count = 0
 mesh = SubResource("QuadMesh_glyph")
 
+[sub_resource type="MultiMesh" id="MM_carcass"]
+transform_format = 0
+use_colors = true
+instance_count = 4096
+visible_instance_count = 0
+mesh = SubResource("QuadMesh_glyph")
+
+[sub_resource type="MultiMesh" id="MM_flash"]
+transform_format = 0
+use_colors = true
+instance_count = 4096
+visible_instance_count = 0
+mesh = SubResource("QuadMesh_glyph")
+
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
 
@@ -93,6 +107,14 @@ script = ExtResource("7_biome")
 
 [node name="Bodies" type="MultiMeshInstance2D" parent="."]
 multimesh = ExtResource("2_mm")
+
+[node name="Carcasses" type="MultiMeshInstance2D" parent="."]
+multimesh = SubResource("MM_carcass")
+z_index = -5
+
+[node name="Flashes" type="MultiMeshInstance2D" parent="."]
+multimesh = SubResource("MM_flash")
+z_index = 5
 
 [node name="ModuleLayers" type="Node2D" parent="."]
 
