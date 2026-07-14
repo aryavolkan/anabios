@@ -21,5 +21,5 @@ func _process(_delta: float) -> void:
 	var g: int = clampi(overlay.ground_mode, 0, GROUND_NAMES.size() - 1)
 	var b: int = clampi(overlay.body_mode, 0, BODY_NAMES.size() - 1)
 	label.text = (
-		"[G] ground: %s\n[C] body: %s\n[H] hide this\nWASD/drag pan · wheel zoom · click inspect"
+		"[G] ground: %s\n[C] body: %s\n[Y] co-evolution chart\n[H] hide this\nWASD/drag pan · wheel zoom · click inspect"
 	) % [GROUND_NAMES[g], BODY_NAMES[b]]
