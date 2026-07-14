@@ -48,11 +48,22 @@ const CHARTS := [
 const PAD_LEFT := 96.0            # left gutter for legend labels
 const PAD_RIGHT := 10.0
 
+# Codex EventType ids we mark, mapped to a line color.
+# (0=Extinction, 2=Speciation, 11=DialectFormed, 12=MemeSweep.)
+const MARKER_COLORS := {
+	0: Color(1.0, 0.3, 0.3, 0.5),    # Extinction
+	2: Color(0.6, 0.9, 1.0, 0.5),    # Speciation
+	11: Color(1.0, 0.6, 0.2, 0.6),   # DialectFormed
+	12: Color(1.0, 0.9, 0.3, 0.6),   # MemeSweep
+}
+
 var _shown: bool = false
 var _hidden_keys: Dictionary = {}          # key -> true when toggled off
 var _scrub_index: int = -1                  # -1 = none
 var _font: Font
 var _legend_hitboxes: Array[Dictionary] = []   # [{rect, key}] rebuilt each _draw
+var _marks: Array[Dictionary] = []             # [{tick:int, type:int}]
+var _mark_cursor: int = 0                       # own cursor over the shared event log
 
 func _ready() -> void:
 	visible = false
@@ -64,8 +75,20 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		visible = _shown
 
 func _process(_delta: float) -> void:
+	_poll_marks()
 	if _shown:
 		queue_redraw()
+
+# Accumulate markable codex events regardless of visibility, so the marker log
+# stays complete even while the panel is hidden. Own cursor over the shared,
+# non-draining event log (codex_panel.gd keeps its own cursor independently).
+func _poll_marks() -> void:
+	var evs: Array = sim.codex_events_since(_mark_cursor)
+	for ev in evs:
+		_mark_cursor = int(ev["index"]) + 1
+		var t: int = int(ev["type"])
+		if MARKER_COLORS.has(t):
+			_marks.append({"tick": int(ev["tick"]), "type": t})
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -108,6 +131,8 @@ func _draw() -> void:
 	for c in CHARTS:
 		_draw_chart(c, PAD_LEFT, plot_w, y0, chart_h - 8.0)
 		y0 += chart_h
+
+	_draw_marks(ticks, PAD_LEFT, plot_w)
 
 	# Scrub cursor + readout across the full height.
 	if _scrub_index >= 0 and _scrub_index < n:
@@ -156,6 +181,21 @@ func _draw_chart(c: Dictionary, pad: float, plot_w: float, top: float, h: float)
 			pts.push_back(Vector2(px, py))
 		if pts.size() >= 2:
 			draw_polyline(pts, col, 1.5, true)
+
+# Vertical color-coded lines at each markable event's tick, across all charts.
+func _draw_marks(ticks: PackedFloat32Array, pad: float, plot_w: float) -> void:
+	var n: int = ticks.size()
+	if n < 2 or _marks.is_empty():
+		return
+	var t_first: float = ticks[0]
+	var t_last: float = ticks[n - 1]
+	var span: float = maxf(1.0, t_last - t_first)
+	for m in _marks:
+		var mt: float = float(m["tick"])
+		if mt < t_first or mt > t_last:
+			continue
+		var mx: float = pad + ((mt - t_first) / span) * plot_w
+		draw_line(Vector2(mx, 16), Vector2(mx, size.y - 4), MARKER_COLORS[m["type"]], 1.0)
 
 func _draw_readout(index: int) -> void:
 	var s: Dictionary = sim.coevo_sample_at(index)
