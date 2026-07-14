@@ -7,6 +7,7 @@ const MAX_RECENT: int = 30
 
 var _counts: Array[int] = [0, 0, 0, 0, 0, 0]
 var _recent: Array[Dictionary] = []
+var _cursor: int = 0
 
 @onready var sim = get_node("/root/Main/Simulation")
 @onready var camera: Camera2D = get_node("/root/Main/Camera2D")
@@ -14,10 +15,11 @@ var _recent: Array[Dictionary] = []
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
 
 func _process(_delta: float) -> void:
-	var events: Array = sim.take_codex_events()
+	var events: Array = sim.codex_events_since(_cursor)
 	if events.is_empty():
 		return
 	for ev in events:
+		_cursor = int(ev["index"]) + 1
 		var t: int = int(ev["type"])
 		if t >= 0 and t < _counts.size():
 			_counts[t] += 1

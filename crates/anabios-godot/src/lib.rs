@@ -38,6 +38,18 @@ struct CoevoSample {
 /// stop appending and log once, rather than grow without bound.
 const COEVO_HISTORY_CAP: usize = 200_000;
 
+/// A codex event retained for the timeline. Plain data on the `Simulation`
+/// node (outside `World`).
+#[derive(Clone, Copy)]
+struct StoredEvent {
+    event_type: i64,
+    tick: i64,
+    species_id: i64,
+    value: f32,
+    loc_x: f32,
+    loc_y: f32,
+}
+
 /// One in-process anabios simulation, owned by a Godot `Simulation` node.
 #[derive(GodotClass)]
 #[class(base = Node)]
@@ -47,12 +59,19 @@ pub struct Simulation {
     inner: Option<anabios_core::World>,
     history: Vec<CoevoSample>,
     history_capped_logged: bool,
+    events: Vec<StoredEvent>,
 }
 
 #[godot_api]
 impl INode for Simulation {
     fn init(base: Base<Node>) -> Self {
-        Self { base, inner: None, history: Vec::new(), history_capped_logged: false }
+        Self {
+            base,
+            inner: None,
+            history: Vec::new(),
+            history_capped_logged: false,
+            events: Vec::new(),
+        }
     }
 }
 
@@ -108,6 +127,21 @@ impl Simulation {
         for _ in 0..n.max(0) {
             let Some(w) = self.inner.as_mut() else { return };
             anabios_core::tick::step(w);
+            // Persist codex events for the timeline (single drain site). Draining
+            // is an output read; it does not feed back into `step`, so per-tick
+            // vs per-frame draining leaves World evolution identical.
+            for ev in w.codex.drain_events() {
+                if self.events.len() < COEVO_HISTORY_CAP {
+                    self.events.push(StoredEvent {
+                        event_type: ev.event_type as u8 as i64,
+                        tick: ev.tick as i64,
+                        species_id: ev.species_id as i64,
+                        value: ev.value,
+                        loc_x: ev.loc_x,
+                        loc_y: ev.loc_y,
+                    });
+                }
+            }
             if self.history.len() < COEVO_HISTORY_CAP {
                 let s = sample_now(self.inner.as_ref().unwrap());
                 self.history.push(s);
@@ -122,6 +156,7 @@ impl Simulation {
     fn reset_history(&mut self) {
         self.history.clear();
         self.history_capped_logged = false;
+        self.events.clear();
     }
 
     /// Current-tick co-evolution scalars (see plan/spec for key meanings).
@@ -340,18 +375,27 @@ impl Simulation {
         d
     }
 
-    /// Drain the codex event buffer. Each event becomes a Dictionary:
-    ///   { type: int (0=Extinction .. 5=NovelBehaviorPattern),
-    ///     tick: int, species_id: int, value: f32, loc: Vector2 }
+    /// Total codex events recorded so far.
     #[func]
-    fn take_codex_events(&mut self) -> Array<Dictionary> {
+    fn codex_event_count(&self) -> i64 {
+        self.events.len() as i64
+    }
+
+    /// Codex events at log index `>= cursor`, non-draining. Callers track their
+    /// own cursor (use the returned `index + 1`, or `codex_event_count`). Each
+    /// event becomes a Dictionary:
+    ///   { index: int, type: int, tick: int, species_id: int,
+    ///     value: f32, loc: Vector2 }
+    #[func]
+    fn codex_events_since(&self, cursor: i64) -> Array<Dictionary> {
         let mut out = Array::<Dictionary>::new();
-        let Some(w) = self.inner.as_mut() else { return out };
-        for ev in w.codex.drain_events() {
+        let start = cursor.max(0) as usize;
+        for (idx, ev) in self.events.iter().enumerate().skip(start) {
             let mut d = Dictionary::new();
-            d.set("type", ev.event_type as u8 as i64);
-            d.set("tick", ev.tick as i64);
-            d.set("species_id", ev.species_id as i64);
+            d.set("index", idx as i64);
+            d.set("type", ev.event_type);
+            d.set("tick", ev.tick);
+            d.set("species_id", ev.species_id);
             d.set("value", ev.value);
             d.set("loc", Vector2::new(ev.loc_x, ev.loc_y));
             out.push(&d);
