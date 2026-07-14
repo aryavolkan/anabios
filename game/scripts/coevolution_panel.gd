@@ -83,6 +83,12 @@ func _process(_delta: float) -> void:
 # stays complete even while the panel is hidden. Own cursor over the shared,
 # non-draining event log (codex_panel.gd keeps its own cursor independently).
 func _poll_marks() -> void:
+	# The Rust event log is cleared on scenario (re)load; if it shrank below our
+	# cursor, a reload happened — reset so we don't skip the new run's events.
+	if sim.codex_event_count() < _mark_cursor:
+		_mark_cursor = 0
+		_marks.clear()
+		_scrub_index = -1
 	var evs: Array = sim.codex_events_since(_mark_cursor)
 	for ev in evs:
 		_mark_cursor = int(ev["index"]) + 1
@@ -172,13 +178,27 @@ func _draw_chart(c: Dictionary, pad: float, plot_w: float, top: float, h: float)
 		var arr: PackedFloat32Array = sim.coevo_series(key)
 		if arr.size() < 2:
 			continue
+		# Min/max decimation: each pixel column spans a source-index range and
+		# emits both its min and max sample, so single-tick spikes survive even
+		# when many ticks collapse into one column (spec: "spikes survive").
+		var span: float = maxf(0.0001, vmax - vmin)
 		var pts := PackedVector2Array()
 		for cx in range(cols):
-			var idx: int = int(float(cx) / float(maxi(1, cols - 1)) * float(n - 1))
-			var ny: float = clampf((arr[idx] - vmin) / maxf(0.0001, vmax - vmin), 0.0, 1.0)
-			var px: float = pad + (float(cx) / float(maxi(1, cols - 1))) * plot_w
-			var py: float = top + h - ny * h
-			pts.push_back(Vector2(px, py))
+			var lo: int = int(float(cx) / float(cols) * float(n))
+			var hi: int = int(float(cx + 1) / float(cols) * float(n))
+			if hi <= lo:
+				hi = lo + 1
+			hi = mini(hi, n)
+			var vlo: float = arr[lo]
+			var vhi: float = arr[lo]
+			for k in range(lo, hi):
+				vlo = minf(vlo, arr[k])
+				vhi = maxf(vhi, arr[k])
+			var px: float = pad + (float(cx) + 0.5) / float(cols) * plot_w
+			var py_hi: float = top + h - clampf((vhi - vmin) / span, 0.0, 1.0) * h
+			var py_lo: float = top + h - clampf((vlo - vmin) / span, 0.0, 1.0) * h
+			pts.push_back(Vector2(px, py_hi))
+			pts.push_back(Vector2(px, py_lo))
 		if pts.size() >= 2:
 			draw_polyline(pts, col, 1.5, true)
 

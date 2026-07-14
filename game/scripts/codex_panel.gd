@@ -15,6 +15,12 @@ var _cursor: int = 0
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
 
 func _process(_delta: float) -> void:
+	# Event log is cleared on scenario (re)load; a shrink below our cursor means
+	# a reload — reset so counts/recent reflect the new run.
+	if sim.codex_event_count() < _cursor:
+		_cursor = 0
+		_counts = [0, 0, 0, 0, 0, 0]
+		_recent.clear()
 	var events: Array = sim.codex_events_since(_cursor)
 	if events.is_empty():
 		return
