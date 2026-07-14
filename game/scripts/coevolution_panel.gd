@@ -1,0 +1,175 @@
+extends Control
+
+# Gene↔culture co-evolution time-series. Reads the Rust per-tick history and
+# draws a vertical stack of small-multiple charts sharing one time axis.
+# Toggle with [Y]. Click a legend label to hide/show a series; click a chart to
+# drop a scrub cursor with a value readout. (Read-only; no World mutation.)
+
+@onready var sim = get_node("/root/Main/Simulation")
+
+# Series grouped into stacked sub-charts. Each entry: {key, label, color}.
+# unit "01" charts share a fixed [0,1] axis; "auto" charts self-scale.
+const CHARTS := [
+	{
+		"title": "gene vs culture",
+		"unit": "01",
+		"series": [
+			{"key": "communicator_frac", "label": "Communicator gene", "color": Color(0.35, 0.75, 1.0)},
+			{"key": "mean_skill", "label": "skill meme", "color": Color(1.0, 0.75, 0.25)},
+			{"key": "mean_social_learning", "label": "SocialLearning", "color": Color(0.55, 0.9, 0.55, 0.8)},
+			{"key": "mean_individual_learning", "label": "IndividualLearning", "color": Color(0.9, 0.55, 0.85, 0.8)},
+		],
+	},
+	{
+		"title": "cultural divergence",
+		"unit": "01",
+		"series": [
+			{"key": "meme_divergence", "label": "dialect L2", "color": Color(1.0, 0.4, 0.4)},
+			{"key": "mean_tech_match", "label": "tech match", "color": Color(0.5, 1.0, 0.8)},
+		],
+	},
+	{
+		"title": "population",
+		"unit": "auto",
+		"series": [
+			{"key": "live_count", "label": "alive", "color": Color(0.8, 0.8, 0.85)},
+			{"key": "species_count", "label": "species", "color": Color(0.6, 0.7, 1.0)},
+		],
+	},
+	{
+		"title": "genetic diversity",
+		"unit": "auto",
+		"series": [
+			{"key": "genetic_diversity", "label": "mean slot var", "color": Color(0.7, 0.9, 0.6)},
+		],
+	},
+]
+
+const PAD_LEFT := 96.0            # left gutter for legend labels
+const PAD_RIGHT := 10.0
+
+var _shown: bool = false
+var _hidden_keys: Dictionary = {}          # key -> true when toggled off
+var _scrub_index: int = -1                  # -1 = none
+var _font: Font
+var _legend_hitboxes: Array[Dictionary] = []   # [{rect, key}] rebuilt each _draw
+
+func _ready() -> void:
+	visible = false
+	_font = ThemeDB.fallback_font
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_Y:
+		_shown = not _shown
+		visible = _shown
+
+func _process(_delta: float) -> void:
+	if _shown:
+		queue_redraw()
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_handle_click(event.position)
+
+func _handle_click(pos: Vector2) -> void:
+	# Legend label click toggles that series.
+	for hb in _legend_hitboxes:
+		if (hb["rect"] as Rect2).has_point(pos):
+			var key: String = hb["key"]
+			if _hidden_keys.has(key):
+				_hidden_keys.erase(key)
+			else:
+				_hidden_keys[key] = true
+			queue_redraw()
+			return
+	# Otherwise, a click in the plot area moves the scrub cursor.
+	var n: int = sim.coevo_history_len()
+	if n <= 0:
+		return
+	var plot_w: float = maxf(1.0, size.x - PAD_LEFT - PAD_RIGHT)
+	if pos.x >= PAD_LEFT:
+		var frac: float = clampf((pos.x - PAD_LEFT) / plot_w, 0.0, 1.0)
+		_scrub_index = int(round(frac * float(n - 1)))
+		queue_redraw()
+
+func _draw() -> void:
+	_legend_hitboxes.clear()
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.06, 0.09, 0.9))
+	var n: int = sim.coevo_history_len()
+	if n <= 1:
+		draw_string(_font, Vector2(12, 26), "co-evolution — waiting for data…",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
+		return
+
+	var ticks: PackedFloat32Array = sim.coevo_series("tick")
+	var plot_w: float = maxf(1.0, size.x - PAD_LEFT - PAD_RIGHT)
+	var chart_h: float = (size.y - 24.0) / float(CHARTS.size())
+	var y0 := 20.0
+	for c in CHARTS:
+		_draw_chart(c, PAD_LEFT, plot_w, y0, chart_h - 8.0)
+		y0 += chart_h
+
+	# Scrub cursor + readout across the full height.
+	if _scrub_index >= 0 and _scrub_index < n:
+		var sx: float = PAD_LEFT + plot_w * (float(_scrub_index) / float(n - 1))
+		draw_line(Vector2(sx, 16), Vector2(sx, size.y - 4), Color(1, 1, 1, 0.5), 1.0)
+		_draw_readout(_scrub_index)
+
+func _draw_chart(c: Dictionary, pad: float, plot_w: float, top: float, h: float) -> void:
+	var n: int = sim.coevo_history_len()
+	# y-scale.
+	var vmax := 1.0
+	var vmin := 0.0
+	if c["unit"] == "auto":
+		vmax = 0.0001
+		for s in c["series"]:
+			if _hidden_keys.has(s["key"]):
+				continue
+			for v in sim.coevo_series(s["key"]):
+				vmax = maxf(vmax, v)
+	# Frame + title.
+	draw_rect(Rect2(Vector2(pad, top), Vector2(plot_w, h)), Color(1, 1, 1, 0.06))
+	draw_string(_font, Vector2(pad + 4, top + 12), str(c["title"]),
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.8, 0.85, 0.95))
+	# Legend rows (left gutter) + polylines.
+	var cols: int = int(minf(plot_w, float(n)))
+	var legend_y: float = top + 12.0
+	for s in c["series"]:
+		var key: String = s["key"]
+		var col: Color = s["color"]
+		var off: bool = _hidden_keys.has(key)
+		var draw_col := Color(col.r, col.g, col.b, 0.3) if off else col
+		draw_string(_font, Vector2(6, legend_y), s["label"], HORIZONTAL_ALIGNMENT_LEFT, 84, 10, draw_col)
+		_legend_hitboxes.append({"rect": Rect2(4, legend_y - 10, 88, 13), "key": key})
+		legend_y += 13.0
+		if off:
+			continue
+		var arr: PackedFloat32Array = sim.coevo_series(key)
+		if arr.size() < 2:
+			continue
+		var pts := PackedVector2Array()
+		for cx in range(cols):
+			var idx: int = int(float(cx) / float(maxi(1, cols - 1)) * float(n - 1))
+			var ny: float = clampf((arr[idx] - vmin) / maxf(0.0001, vmax - vmin), 0.0, 1.0)
+			var px: float = pad + (float(cx) / float(maxi(1, cols - 1))) * plot_w
+			var py: float = top + h - ny * h
+			pts.push_back(Vector2(px, py))
+		if pts.size() >= 2:
+			draw_polyline(pts, col, 1.5, true)
+
+func _draw_readout(index: int) -> void:
+	var s: Dictionary = sim.coevo_sample_at(index)
+	if s.is_empty():
+		return
+	var lines := PackedStringArray()
+	lines.append("t=%d" % int(s.get("tick", 0)))
+	lines.append("comm=%.2f skill=%.2f" % [float(s.get("communicator_frac", 0)), float(s.get("mean_skill", 0))])
+	lines.append("div=%.2f match=%.2f" % [float(s.get("meme_divergence", 0)), float(s.get("mean_tech_match", 0))])
+	lines.append("alive=%d sp=%d" % [int(s.get("live_count", 0)), int(s.get("species_count", 0))])
+	var box := Vector2(150, 8 + lines.size() * 13)
+	var origin := Vector2(size.x - box.x - 8, 20)
+	draw_rect(Rect2(origin, box), Color(0, 0, 0, 0.75))
+	var y := origin.y + 14
+	for ln in lines:
+		draw_string(_font, Vector2(origin.x + 6, y), ln, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
+		y += 13
