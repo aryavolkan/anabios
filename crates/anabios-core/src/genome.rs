@@ -18,6 +18,10 @@ pub const GENOME_LEN: usize = 50;
 /// Effective sigma per mutation = `MUTATION_SIGMA_MAX * genome[mutation_rate]`.
 pub const MUTATION_SIGMA_MAX: f32 = 0.08;
 
+/// Std-dev for the Gaussian initial distribution of the 5 OCEAN personality
+/// slots (stored space `[0,1]`, centered on the neutral 0.5).
+pub const INIT_SIGMA: f32 = 0.2;
+
 /// Named slot indices into the 50-float genome.
 ///
 /// Slot meanings are stable. New slots are appended; existing indices never
@@ -37,11 +41,17 @@ pub enum GenomeSlot {
     _BodyReserved8 = 8,
     _BodyReserved9 = 9,
 
-    // Drive levels (10..20)
-    Aggression = 10,
-    Fearfulness = 11,
-    Curiosity = 12,
-    SocialAffinity = 13,
+    // Drive levels (10..20). Slots 10-13 and 21 are the Big Five (OCEAN)
+    // personality traits (signed `[-1,+1]` via `2*g - 1`); renamed in place
+    // from the former inert drive slots — indices are unchanged.
+    /// Agreeableness: +1 cooperative/peaceful, −1 antagonistic (was Aggression).
+    Agreeableness = 10,
+    /// Neuroticism: +1 anxious/reactive, −1 stable/bold (was Fearfulness).
+    Neuroticism = 11,
+    /// Openness: +1 novelty-seeking, −1 routine (was Curiosity).
+    Openness = 12,
+    /// Extraversion: +1 social/seeking, −1 solitary (was SocialAffinity).
+    Extraversion = 13,
     KinPreference = 14,
     Territoriality = 15,
     _DriveReserved16 = 16,
@@ -51,7 +61,8 @@ pub enum GenomeSlot {
 
     // Behavioral biases (20..30)
     ExploreVsExploit = 20,
-    RiskTolerance = 21,
+    /// Conscientiousness: +1 prudent/careful, −1 impulsive (was RiskTolerance).
+    Conscientiousness = 21,
     AmbushPreference = 22,
     CommunicationStrength = 23,
     Altruism = 24,
@@ -171,6 +182,42 @@ impl Genome {
         self.0[slot.idx()] = value.clamp(0.0, 1.0);
     }
 
+    /// Openness in `[-1,+1]` (`2·slot − 1`). +1 novelty-seeking, −1 routine.
+    pub fn openness(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Openness) - 1.0
+    }
+    /// Conscientiousness in `[-1,+1]`. +1 prudent/careful, −1 impulsive.
+    pub fn conscientiousness(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Conscientiousness) - 1.0
+    }
+    /// Extraversion in `[-1,+1]`. +1 social/seeking, −1 solitary.
+    pub fn extraversion(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Extraversion) - 1.0
+    }
+    /// Agreeableness in `[-1,+1]`. +1 cooperative/peaceful, −1 antagonistic.
+    pub fn agreeableness(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Agreeableness) - 1.0
+    }
+    /// Neuroticism in `[-1,+1]`. +1 anxious/reactive, −1 stable/bold.
+    pub fn neuroticism(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Neuroticism) - 1.0
+    }
+
+    /// Overwrite the 5 OCEAN slots with `N(0.5, INIT_SIGMA)` clamped to `[0,1]`,
+    /// giving a normally-distributed personality. Other slots are untouched.
+    pub fn sample_personality_in_place(&mut self, rng: &mut Rng) {
+        for slot in [
+            GenomeSlot::Openness,
+            GenomeSlot::Conscientiousness,
+            GenomeSlot::Extraversion,
+            GenomeSlot::Agreeableness,
+            GenomeSlot::Neuroticism,
+        ] {
+            let v = rng.gaussian(0.5, INIT_SIGMA).clamp(0.0, 1.0);
+            self.set(slot, v);
+        }
+    }
+
     /// L2 distance between two genomes. Used by speciation in M2; kept here
     /// because it is conceptually part of the genome's contract.
     pub fn distance(&self, other: &Genome) -> f32 {
@@ -255,10 +302,46 @@ mod tests {
     #[test]
     fn set_clamps_out_of_range_values() {
         let mut g = Genome::neutral();
-        g.set(GenomeSlot::Aggression, -1.0);
-        g.set(GenomeSlot::Curiosity, 2.0);
-        assert_eq!(g.get(GenomeSlot::Aggression), 0.0);
-        assert_eq!(g.get(GenomeSlot::Curiosity), 1.0);
+        g.set(GenomeSlot::Agreeableness, -1.0);
+        g.set(GenomeSlot::Openness, 2.0);
+        assert_eq!(g.get(GenomeSlot::Agreeableness), 0.0);
+        assert_eq!(g.get(GenomeSlot::Openness), 1.0);
+    }
+
+    #[test]
+    fn personality_accessors_are_signed_minus1_to_plus1() {
+        let mut g = Genome::neutral(); // all 0.5
+        assert!((g.openness() - 0.0).abs() < 1e-6);
+        assert!((g.agreeableness() - 0.0).abs() < 1e-6);
+        g.set(GenomeSlot::Openness, 1.0);
+        g.set(GenomeSlot::Neuroticism, 0.0);
+        assert!((g.openness() - 1.0).abs() < 1e-6);
+        assert!((g.neuroticism() - (-1.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sample_personality_is_centered_clamped_and_varied() {
+        let mut rng = crate::rng::Rng::from_seed(42);
+        let mut sum = 0.0f32;
+        let mut min = 1.0f32;
+        let mut max = 0.0f32;
+        let n = 2000;
+        for _ in 0..n {
+            let mut g = Genome::neutral();
+            g.sample_personality_in_place(&mut rng);
+            let v = g.get(GenomeSlot::Openness);
+            assert!((0.0..=1.0).contains(&v));
+            sum += v;
+            min = min.min(v);
+            max = max.max(v);
+        }
+        let mean = sum / n as f32;
+        assert!((mean - 0.5).abs() < 0.05, "mean {mean} not ~0.5");
+        assert!(max - min > 0.3, "spread too small: {min}..{max}");
+        // Non-personality slot is untouched by the sampler.
+        let mut g = Genome::neutral();
+        g.sample_personality_in_place(&mut rng);
+        assert_eq!(g.get(GenomeSlot::Size), 0.5);
     }
 
     #[test]
@@ -337,7 +420,7 @@ mod tests {
         let mut a = Genome::neutral();
         let mut b = Genome::neutral();
         a.set(GenomeSlot::MutationRate, 1.0);
-        b.set(GenomeSlot::Aggression, 1.0);
+        b.set(GenomeSlot::Agreeableness, 1.0);
         let child = Genome::crossover(&a, &b, &mut rng);
         for v in child.0.iter() {
             assert!(*v >= 0.0 && *v <= 1.0);
