@@ -10,10 +10,45 @@
 
 use godot::prelude::*;
 
+mod coevo;
+
 struct AnabiosExtension;
 
 #[gdextension]
 unsafe impl ExtensionLibrary for AnabiosExtension {}
+
+/// One per-tick co-evolution metric snapshot. Plain data, lives OUTSIDE
+/// `World` (on the `Simulation` node) so determinism is untouched.
+#[derive(Clone, Copy)]
+struct CoevoSample {
+    tick: f32,
+    communicator_frac: f32,
+    mean_social_learning: f32,
+    mean_individual_learning: f32,
+    genetic_diversity: f32,
+    mean_skill: f32,
+    mean_tech_match: f32,
+    meme_divergence: f32,
+    live_count: f32,
+    species_count: f32,
+    env_optimum: f32,
+}
+
+/// Soft cap on retained samples (~tens of KB each thousand ticks). Past this we
+/// stop appending and log once, rather than grow without bound.
+const COEVO_HISTORY_CAP: usize = 200_000;
+
+/// A codex event retained for the timeline. Plain data on the `Simulation`
+/// node (outside `World`).
+#[derive(Clone, Copy)]
+struct StoredEvent {
+    event_type: i64,
+    tick: i64,
+    species_id: i64,
+    value: f32,
+    loc_x: f32,
+    loc_y: f32,
+}
 
 /// One in-process anabios simulation, owned by a Godot `Simulation` node.
 #[derive(GodotClass)]
@@ -22,12 +57,21 @@ pub struct Simulation {
     #[allow(dead_code)]
     base: Base<Node>,
     inner: Option<anabios_core::World>,
+    history: Vec<CoevoSample>,
+    history_capped_logged: bool,
+    events: Vec<StoredEvent>,
 }
 
 #[godot_api]
 impl INode for Simulation {
     fn init(base: Base<Node>) -> Self {
-        Self { base, inner: None }
+        Self {
+            base,
+            inner: None,
+            history: Vec::new(),
+            history_capped_logged: false,
+            events: Vec::new(),
+        }
     }
 }
 
@@ -37,6 +81,7 @@ impl Simulation {
     #[func]
     fn new_world(&mut self, seed: i64) {
         self.inner = Some(anabios_core::World::new(seed as u64));
+        self.reset_history();
     }
 
     /// Load a TOML scenario (passed as a Godot string). Returns true on
@@ -47,6 +92,7 @@ impl Simulation {
         match anabios_core::Scenario::parse_toml(&text) {
             Ok(s) => {
                 self.inner = Some(s.instantiate());
+                self.reset_history();
                 true
             }
             Err(e) => {
@@ -64,6 +110,7 @@ impl Simulation {
             Ok(mut s) => {
                 s.seed = seed as u64;
                 self.inner = Some(s.instantiate());
+                self.reset_history();
                 true
             }
             Err(e) => {
@@ -73,13 +120,92 @@ impl Simulation {
         }
     }
 
-    /// Advance the simulation by N ticks.
+    /// Advance the simulation by N ticks, sampling co-evolution metrics into
+    /// the view-only history buffer after each tick.
     #[func]
     fn step_n(&mut self, n: i64) {
-        if let Some(w) = self.inner.as_mut() {
-            for _ in 0..n.max(0) {
-                anabios_core::tick::step(w);
+        for _ in 0..n.max(0) {
+            let Some(w) = self.inner.as_mut() else { return };
+            anabios_core::tick::step(w);
+            // Persist codex events for the timeline (single drain site). Draining
+            // is an output read; it does not feed back into `step`, so per-tick
+            // vs per-frame draining leaves World evolution identical.
+            for ev in w.codex.drain_events() {
+                if self.events.len() < COEVO_HISTORY_CAP {
+                    self.events.push(StoredEvent {
+                        event_type: ev.event_type as u8 as i64,
+                        tick: ev.tick as i64,
+                        species_id: ev.species_id as i64,
+                        value: ev.value,
+                        loc_x: ev.loc_x,
+                        loc_y: ev.loc_y,
+                    });
+                }
             }
+            if self.history.len() < COEVO_HISTORY_CAP {
+                let s = sample_now(self.inner.as_ref().unwrap());
+                self.history.push(s);
+            } else if !self.history_capped_logged {
+                godot_warn!("coevo history hit {COEVO_HISTORY_CAP} samples; no longer recording");
+                self.history_capped_logged = true;
+            }
+        }
+    }
+
+    /// Clear all view-only recording buffers (called on world (re)load).
+    fn reset_history(&mut self) {
+        self.history.clear();
+        self.history_capped_logged = false;
+        self.events.clear();
+    }
+
+    /// Current-tick co-evolution scalars (see plan/spec for key meanings).
+    /// All frequencies/means in `[0,1]`; `env_optimum` is `-1.0` when inactive.
+    #[func]
+    fn coevo_metrics(&self) -> Dictionary {
+        match self.inner.as_ref() {
+            Some(w) => sample_to_dict(&sample_now(w)),
+            None => Dictionary::new(),
+        }
+    }
+
+    /// Number of recorded per-tick samples.
+    #[func]
+    fn coevo_history_len(&self) -> i64 {
+        self.history.len() as i64
+    }
+
+    /// Full history of one series, oldest-first. Unknown key returns empty.
+    #[func]
+    fn coevo_series(&self, key: GString) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        let pick: fn(&CoevoSample) -> f32 = match String::from(key).as_str() {
+            "tick" => |s| s.tick,
+            "communicator_frac" => |s| s.communicator_frac,
+            "mean_social_learning" => |s| s.mean_social_learning,
+            "mean_individual_learning" => |s| s.mean_individual_learning,
+            "genetic_diversity" => |s| s.genetic_diversity,
+            "mean_skill" => |s| s.mean_skill,
+            "mean_tech_match" => |s| s.mean_tech_match,
+            "meme_divergence" => |s| s.meme_divergence,
+            "live_count" => |s| s.live_count,
+            "species_count" => |s| s.species_count,
+            "env_optimum" => |s| s.env_optimum,
+            _ => return out,
+        };
+        for s in &self.history {
+            out.push(pick(s));
+        }
+        out
+    }
+
+    /// One historical sample as a Dictionary (for the scrub readout).
+    /// Out-of-range index returns empty.
+    #[func]
+    fn coevo_sample_at(&self, index: i64) -> Dictionary {
+        match (index >= 0).then(|| self.history.get(index as usize)).flatten() {
+            Some(s) => sample_to_dict(s),
+            None => Dictionary::new(),
         }
     }
 
@@ -249,18 +375,27 @@ impl Simulation {
         d
     }
 
-    /// Drain the codex event buffer. Each event becomes a Dictionary:
-    ///   { type: int (0=Extinction .. 5=NovelBehaviorPattern),
-    ///     tick: int, species_id: int, value: f32, loc: Vector2 }
+    /// Total codex events recorded so far.
     #[func]
-    fn take_codex_events(&mut self) -> Array<Dictionary> {
+    fn codex_event_count(&self) -> i64 {
+        self.events.len() as i64
+    }
+
+    /// Codex events at log index `>= cursor`, non-draining. Callers track their
+    /// own cursor (use the returned `index + 1`, or `codex_event_count`). Each
+    /// event becomes a Dictionary:
+    ///   { index: int, type: int, tick: int, species_id: int,
+    ///     value: f32, loc: Vector2 }
+    #[func]
+    fn codex_events_since(&self, cursor: i64) -> Array<Dictionary> {
         let mut out = Array::<Dictionary>::new();
-        let Some(w) = self.inner.as_mut() else { return out };
-        for ev in w.codex.drain_events() {
+        let start = cursor.max(0) as usize;
+        for (idx, ev) in self.events.iter().enumerate().skip(start) {
             let mut d = Dictionary::new();
-            d.set("type", ev.event_type as u8 as i64);
-            d.set("tick", ev.tick as i64);
-            d.set("species_id", ev.species_id as i64);
+            d.set("index", idx as i64);
+            d.set("type", ev.event_type);
+            d.set("tick", ev.tick);
+            d.set("species_id", ev.species_id);
             d.set("value", ev.value);
             d.set("loc", Vector2::new(ev.loc_x, ev.loc_y));
             out.push(&d);
@@ -534,9 +669,93 @@ fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
     Color::from_rgb(r, g, b)
 }
 
+/// Compute a `CoevoSample` from a read-only world. Builds compact live-only
+/// slices once, then delegates to the pure `coevo` helpers.
+fn sample_now(w: &anabios_core::World) -> CoevoSample {
+    use anabios_core::culture::{env_optimum_at, SKILL_CHANNEL};
+    use anabios_core::genome::GenomeSlot;
+    use anabios_core::module::{self, ModuleType};
+
+    let mut memes: Vec<[f32; anabios_core::program::MEME_CHANNELS]> = Vec::new();
+    let mut genomes: Vec<anabios_core::genome::Genome> = Vec::new();
+    let mut species: Vec<u32> = Vec::new();
+    let mut xs: Vec<f32> = Vec::new();
+    let mut comm: Vec<bool> = Vec::new();
+    let mut species_set = std::collections::BTreeSet::new();
+    for id in w.agents.iter_alive() {
+        let i = id as usize;
+        memes.push(w.agents.meme_vector[i]);
+        genomes.push(w.agents.genome[i]);
+        species.push(w.agents.species_id[i]);
+        xs.push(w.agents.position[i].x);
+        comm.push(module::has(&w.agents.modules[i], ModuleType::Communicator));
+        species_set.insert(w.agents.species_id[i]);
+    }
+    let active = w.env_period > 0;
+    let opt = if active { env_optimum_at(w.tick, w.env_period) } else { 0.0 };
+    CoevoSample {
+        tick: w.tick as f32,
+        communicator_frac: coevo::frac_true(&comm),
+        mean_social_learning: coevo::mean_slot(&genomes, GenomeSlot::SocialLearning),
+        mean_individual_learning: coevo::mean_slot(&genomes, GenomeSlot::IndividualLearning),
+        genetic_diversity: coevo::genetic_diversity(&genomes),
+        mean_skill: coevo::mean_channel_over(&memes, &comm, SKILL_CHANNEL),
+        mean_tech_match: if active { coevo::mean_tech_match(&memes, &comm, opt) } else { 0.0 },
+        meme_divergence: coevo::species_max_meme_divergence(&memes, &species, &xs, &comm),
+        live_count: memes.len() as f32,
+        species_count: species_set.len() as f32,
+        env_optimum: if active { opt } else { -1.0 },
+    }
+}
+
+/// Serialize a `CoevoSample` into a Godot Dictionary (shared by the live-metrics
+/// and scrub-readout exports).
+fn sample_to_dict(s: &CoevoSample) -> Dictionary {
+    let mut d = Dictionary::new();
+    d.set("tick", s.tick as i64);
+    d.set("communicator_frac", s.communicator_frac);
+    d.set("mean_social_learning", s.mean_social_learning);
+    d.set("mean_individual_learning", s.mean_individual_learning);
+    d.set("genetic_diversity", s.genetic_diversity);
+    d.set("mean_skill", s.mean_skill);
+    d.set("mean_tech_match", s.mean_tech_match);
+    d.set("meme_divergence", s.meme_divergence);
+    d.set("live_count", s.live_count);
+    d.set("species_count", s.species_count);
+    d.set("env_optimum", s.env_optimum);
+    d
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sample_now_is_bounded_and_nonneg() {
+        // Instantiate the shipped minimal scenario and step a few ticks.
+        let toml = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scenarios/minimal.toml"
+        ))
+        .expect("read minimal.toml");
+        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
+        for _ in 0..25 {
+            anabios_core::tick::step(&mut w);
+        }
+        let s = super::sample_now(&w);
+        for v in [
+            s.communicator_frac,
+            s.mean_social_learning,
+            s.mean_individual_learning,
+            s.mean_skill,
+            s.mean_tech_match,
+        ] {
+            assert!((0.0..=1.0).contains(&v), "expected [0,1], got {v}");
+        }
+        assert!(s.meme_divergence >= 0.0);
+        assert!(s.genetic_diversity >= 0.0);
+        assert!(s.live_count >= 0.0);
+    }
 
     #[test]
     fn phero_intensity_saturates_monotonically() {

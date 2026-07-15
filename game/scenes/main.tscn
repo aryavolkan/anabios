@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="MultiMesh" path="res://resources/body_multimesh.tres" id="2_mm"]
@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scripts/population_panel.gd" id="10_pop"]
 [ext_resource type="Script" path="res://scripts/dit_panel.gd" id="11_dit"]
 [ext_resource type="Script" path="res://scripts/legend_panel.gd" id="12_legend"]
+[ext_resource type="Script" path="res://scripts/coevolution_panel.gd" id="13_coevo"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -237,6 +238,14 @@ offset_bottom = 750.0
 [node name="Label" type="Label" parent="UI/LegendPanel"]
 text = "—"
 theme_override_font_sizes/font_size = 13
+
+[node name="CoevolutionPanel" type="Control" parent="UI"]
+script = ExtResource("13_coevo")
+visible = false
+offset_left = 430.0
+offset_top = 20.0
+offset_right = 1035.0
+offset_bottom = 555.0
 
 [node name="CodexPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("8_codex")
