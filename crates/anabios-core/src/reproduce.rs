@@ -153,7 +153,11 @@ fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
     if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Reproductive) {
         return false;
     }
-    let threshold = SPAWN_ENERGY * agents.genome[i].get(GenomeSlot::ReproductionThreshold) * 1.5;
+    // Conscientiousness raises the effective breeding threshold.
+    let threshold = SPAWN_ENERGY
+        * agents.genome[i].get(GenomeSlot::ReproductionThreshold)
+        * 1.5
+        * crate::personality::personality_reproduction_factor(&agents.genome[i]);
     agents.energy[i] >= threshold
 }
 

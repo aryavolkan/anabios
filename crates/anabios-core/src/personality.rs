@@ -9,17 +9,17 @@ use crate::program::{ActionRegister, NO_TARGET};
 use crate::sense::{SensorRegister, NO_NEIGHBOR_ID};
 
 /// Openness → movement-speed gain (applied in `integrate`).
-pub const K_O: f32 = 0.5;
+pub const K_O: f32 = 0.2;
 /// Conscientiousness → reproduction-threshold gain (applied in `reproduce`).
-pub const K_C: f32 = 0.5;
+pub const K_C: f32 = 0.2;
 /// Extraversion → same-species approach bias + broadcast gain.
-pub const K_E: f32 = 0.6;
+pub const K_E: f32 = 0.25;
 /// Neuroticism → flee bias from other-species neighbors.
-pub const K_N: f32 = 0.8;
+pub const K_N: f32 = 0.4;
 /// Agreeableness → same-species attack suppression gain.
-pub const K_A: f32 = 1.0;
+pub const K_A: f32 = 0.5;
 /// Conscientiousness → feed-intent boost when below comfort energy.
-pub const K_C_FEED: f32 = 0.5;
+pub const K_C_FEED: f32 = 0.25;
 /// Comfort energy fraction (of `SPAWN_ENERGY`) below which C boosts feeding.
 pub const COMFORT_FRAC: f32 = 0.5;
 /// Neuroticism → feed/mate dampening under threat.
@@ -49,40 +49,49 @@ pub fn apply_personality(
     let a = genome.agreeableness();
     let n = genome.neuroticism();
 
-    // Extraversion: bias movement toward the nearest same-species neighbor and
-    // scale broadcasts. (Introverts, e < 0, bias away.)
-    if sensors.nearest_same_id != NO_NEIGHBOR_ID {
+    // Every block below is guarded on its trait being non-neutral, so an agent
+    // whose personality is exactly neutral (all traits 0.0) incurs no arithmetic
+    // and its action is left bit-for-bit unchanged. (Offspring drift these slots
+    // via mutation, so most agents do run the modulation.)
+
+    // Extraversion: bias movement toward the nearest same-species neighbor
+    // (introverts, e < 0, bias away); scale broadcasts when outgoing (e > 0).
+    if e != 0.0 && sensors.nearest_same_id != NO_NEIGHBOR_ID {
         action.move_x += K_E * e * sensors.nearest_same_dir.x;
         action.move_y += K_E * e * sensors.nearest_same_dir.y;
     }
-    let bcast = (1.0 + K_E * e.max(0.0)).max(0.0);
-    for ch in action.broadcast_intent.iter_mut() {
-        *ch *= bcast;
+    if e > 0.0 {
+        let bcast = 1.0 + K_E * e;
+        for ch in action.broadcast_intent.iter_mut() {
+            *ch *= bcast;
+        }
     }
 
     // Neuroticism: flee nearby other-species neighbors; dampen feed/mate under threat.
-    if sensors.nearest_other_id != NO_NEIGHBOR_ID {
-        let flee = K_N * n.max(0.0);
+    if n > 0.0 && sensors.nearest_other_id != NO_NEIGHBOR_ID {
+        let flee = K_N * n;
         action.move_x -= flee * sensors.nearest_other_dir.x;
         action.move_y -= flee * sensors.nearest_other_dir.y;
-        let damp = (1.0 - N_DAMPEN * n.max(0.0)).max(0.0);
+        let damp = (1.0 - N_DAMPEN * n).max(0.0);
         action.feed_intent *= damp;
         action.mate_intent *= damp;
     }
 
     // Agreeableness: scale sharing (+A shares more, −A none); suppress attacks on
     // kin (+A peaceful → ×0; −A antagonistic → up to ×2).
-    action.share_intent *= (1.0 + a).clamp(0.0, 2.0);
-    if sensors.nearest_same_id != NO_NEIGHBOR_ID
-        && action.target_id != NO_TARGET
-        && action.target_id == sensors.nearest_same_id
-    {
-        action.fire_intent *= (1.0 - K_A * a).clamp(0.0, 2.0);
+    if a != 0.0 {
+        action.share_intent *= (1.0 + a).clamp(0.0, 2.0);
+        if sensors.nearest_same_id != NO_NEIGHBOR_ID
+            && action.target_id != NO_TARGET
+            && action.target_id == sensors.nearest_same_id
+        {
+            action.fire_intent *= (1.0 - K_A * a).clamp(0.0, 2.0);
+        }
     }
 
     // Conscientiousness: boost feeding when below comfort energy (provisioning).
-    if energy < COMFORT_FRAC * SPAWN_ENERGY {
-        action.feed_intent *= 1.0 + K_C_FEED * c.max(0.0);
+    if c > 0.0 && energy < COMFORT_FRAC * SPAWN_ENERGY {
+        action.feed_intent *= 1.0 + K_C_FEED * c;
     }
 }
 

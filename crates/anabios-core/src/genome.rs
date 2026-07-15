@@ -218,11 +218,29 @@ impl Genome {
         }
     }
 
-    /// L2 distance between two genomes. Used by speciation in M2; kept here
-    /// because it is conceptually part of the genome's contract.
+    /// Genome slots excluded from the speciation distance metric. The 5 Big
+    /// Five personality slots vary within a species (they are behavioral
+    /// temperament, not species identity), so counting them would fragment a
+    /// population into spurious species and collapse same-species mating.
+    /// Excluding them keeps `distance` bit-identical to the pre-personality era,
+    /// where these slots were uniformly neutral (0.5) and contributed nothing.
+    const PERSONALITY_SLOTS: [usize; 5] = [
+        GenomeSlot::Agreeableness as usize,
+        GenomeSlot::Neuroticism as usize,
+        GenomeSlot::Openness as usize,
+        GenomeSlot::Extraversion as usize,
+        GenomeSlot::Conscientiousness as usize,
+    ];
+
+    /// L2 distance between two genomes, EXCLUDING the personality slots. Used by
+    /// speciation in M2; kept here because it is conceptually part of the
+    /// genome's contract.
     pub fn distance(&self, other: &Genome) -> f32 {
         let mut acc = 0.0_f32;
         for i in 0..GENOME_LEN {
+            if Self::PERSONALITY_SLOTS.contains(&i) {
+                continue;
+            }
             let d = self.0[i] - other.0[i];
             acc += d * d;
         }

@@ -79,7 +79,7 @@ fn decide_all(world: &mut World) {
     let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
     for id in alive_ids {
         let i = id as usize;
-        let action = decide(
+        let mut action = decide(
             &world.agents.program[i],
             &world.agents.genome[i],
             &world.sensors[i],
@@ -88,11 +88,22 @@ fn decide_all(world: &mut World) {
             world.agents.age[i],
             &mut world.eval_stack,
         );
+        // Personality modulation of the raw action intents (Big Five).
+        crate::personality::apply_personality(
+            &mut action,
+            &world.agents.genome[i],
+            &world.sensors[i],
+            world.agents.energy[i],
+        );
         // Normalize the movement intent to a unit direction (identical to the
-        // pre-M11 logic that lived inside `decide`).
+        // pre-M11 logic that lived inside `decide`). Guard against a non-finite
+        // intent (an evolved program can overflow to `inf`; `inf/inf` would make
+        // the direction `NaN` and corrupt the agent's position) — treat it as
+        // no movement.
         let v = Vec2::new(action.move_x, action.move_y);
         let len = v.length();
-        world.desired_direction[i] = if len < 1e-4 { Vec2::ZERO } else { v / len };
+        world.desired_direction[i] =
+            if len < 1e-4 || !v.is_finite() { Vec2::ZERO } else { v / len };
         world.actions[i] = action;
     }
 }
