@@ -222,8 +222,11 @@ impl Genome {
     /// Five personality slots vary within a species (they are behavioral
     /// temperament, not species identity), so counting them would fragment a
     /// population into spurious species and collapse same-species mating.
-    /// Excluding them keeps `distance` bit-identical to the pre-personality era,
-    /// where these slots were uniformly neutral (0.5) and contributed nothing.
+    /// These slots were neutral (0.5) at spawn in the pre-personality era, so
+    /// their contribution to speciation was incidental; excluding them keeps
+    /// species clustering driven by the ecological/morphological genes only.
+    /// (The byte-level determinism contract is pinned by the golden test, not
+    /// by this exclusion.)
     const PERSONALITY_SLOTS: [usize; 5] = [
         GenomeSlot::Agreeableness as usize,
         GenomeSlot::Neuroticism as usize,

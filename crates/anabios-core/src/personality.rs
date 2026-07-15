@@ -67,7 +67,12 @@ pub fn apply_personality(
         }
     }
 
-    // Neuroticism: flee nearby other-species neighbors; dampen feed/mate under threat.
+    // Neuroticism: flee nearby other-species neighbors; dampen feed/mate under
+    // threat. NOTE: the LIVE effect is the flee vector (move_x/y). `feed_intent`
+    // and `mate_intent` are not yet consumed by any tick rule (feeding derives
+    // its bite from modules/genome/skill; mating is energy-threshold gated), so
+    // the damp lines are latent — they take effect only if those intent fields
+    // are later wired into interact/reproduce.
     if n > 0.0 && sensors.nearest_other_id != NO_NEIGHBOR_ID {
         let flee = K_N * n;
         action.move_x -= flee * sensors.nearest_other_dir.x;
@@ -90,6 +95,10 @@ pub fn apply_personality(
     }
 
     // Conscientiousness: boost feeding when below comfort energy (provisioning).
+    // NOTE: the LIVE Conscientiousness effect is the raised reproduction
+    // threshold (see `personality_reproduction_factor`, applied in reproduce.rs).
+    // This `feed_intent` boost is latent for the same reason as the Neuroticism
+    // damp above — no tick rule reads `feed_intent` yet.
     if c > 0.0 && energy < COMFORT_FRAC * SPAWN_ENERGY {
         action.feed_intent *= 1.0 + K_C_FEED * c;
     }
