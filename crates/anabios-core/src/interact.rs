@@ -24,7 +24,9 @@ pub const COMBAT_RANGE: f32 = 2.0;
 /// Run all interaction rules for one tick: feed, then combat, then scavenge.
 /// Each pass iterates alive agents in ascending id order (determinism).
 pub fn interact_all(world: &mut World) {
-    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
+    let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
+    alive_ids.clear();
+    alive_ids.extend(world.agents.iter_alive());
     // Reset combat attribution scratch for this tick. `combat_attacker` is only
     // read where `combat_damaged` is set, but reset it too so stale attacker
     // species from a prior tick can never leak into a consumer.
@@ -40,6 +42,7 @@ pub fn interact_all(world: &mut World) {
     scavenge_pass(world, &alive_ids);
     deposit_pass(world, &alive_ids);
     share_pass(world, &alive_ids);
+    world.agents.scratch_ids = alive_ids;
 }
 
 /// Grazing: a herbivore-capable Mouth bites plant biomass at its cell.

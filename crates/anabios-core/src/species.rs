@@ -31,8 +31,10 @@ pub const SPECIATION_THRESHOLD: f32 = 0.6;
 pub fn species_step(world: &mut World) {
     recompute_centroids(world);
 
-    // Snapshot alive ids to iterate deterministically.
-    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
+    // Snapshot alive ids to iterate deterministically (reused buffer).
+    let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
+    alive_ids.clear();
+    alive_ids.extend(world.agents.iter_alive());
 
     for id in &alive_ids {
         let i = *id as usize;
@@ -90,6 +92,7 @@ pub fn species_step(world: &mut World) {
             });
         }
     }
+    world.agents.scratch_ids = alive_ids;
 
     // Step 3: recompute centroids once more so they reflect new memberships.
     recompute_centroids(world);

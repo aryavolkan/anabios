@@ -22,7 +22,10 @@ pub const SPEED_MAX_CAP: f32 = 4.0;
 /// effective Locomotor speed. Agents without a Locomotor still pay basal
 /// metabolism but do not move.
 pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2]) {
-    for id in agents.iter_alive().collect::<Vec<_>>() {
+    let mut ids = std::mem::take(&mut agents.scratch_ids);
+    ids.clear();
+    ids.extend(agents.iter_alive());
+    for &id in &ids {
         let i = id as usize;
 
         // Action gating: no Locomotor → no motion.
@@ -50,6 +53,7 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2]) {
         let basal = BASAL_METABOLISM_COST * agents.genome[i].get(GenomeSlot::BasalMetabolism);
         agents.energy[i] -= move_cost + basal;
     }
+    agents.scratch_ids = ids;
 }
 
 #[cfg(test)]

@@ -76,8 +76,10 @@ fn decide_all(world: &mut World) {
     // shared `world.eval_stack` scratch buffer.
     // Collect ids first to release the borrow on `world.agents` before the loop
     // body borrows `world` mutably (decide reads buffers, then we write back).
-    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
-    for id in alive_ids {
+    let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
+    alive_ids.clear();
+    alive_ids.extend(world.agents.iter_alive());
+    for &id in &alive_ids {
         let i = id as usize;
         let mut action = decide(
             &world.agents.program[i],
@@ -106,6 +108,7 @@ fn decide_all(world: &mut World) {
             if len < 1e-4 || !v.is_finite() { Vec2::ZERO } else { v / len };
         world.actions[i] = action;
     }
+    world.agents.scratch_ids = alive_ids;
 }
 
 #[cfg(test)]

@@ -122,7 +122,9 @@ pub fn inherit_meme(
 /// (no RNG); iterates alive ids ascending. The received value comes from
 /// `broadcast_intent` (fixed this tick), so in-place updates don't interfere.
 pub fn culture_step(world: &mut World) {
-    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
+    let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
+    alive_ids.clear();
+    alive_ids.extend(world.agents.iter_alive());
     for &id in &alive_ids {
         let i = id as usize;
         if !module::has(&world.agents.modules[i], ModuleType::Communicator) {
@@ -205,4 +207,5 @@ pub fn culture_step(world: &mut World) {
             }
         }
     }
+    world.agents.scratch_ids = alive_ids;
 }
