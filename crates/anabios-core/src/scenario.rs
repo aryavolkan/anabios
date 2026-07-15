@@ -53,6 +53,13 @@ pub struct TraitOverrides {
     pub innate_technique: Option<f32>,
     pub individual_learning: Option<f32>,
     pub social_learning: Option<f32>,
+    /// Big Five personality overrides (stored `[0,1]`; `0.5` = neutral/0.0
+    /// signed). When present, they pin the slot instead of the random draw.
+    pub openness: Option<f32>,
+    pub conscientiousness: Option<f32>,
+    pub extraversion: Option<f32>,
+    pub agreeableness: Option<f32>,
+    pub neuroticism: Option<f32>,
 }
 
 impl TraitOverrides {
@@ -89,6 +96,21 @@ impl TraitOverrides {
         }
         if let Some(v) = self.social_learning {
             g.set(GenomeSlot::SocialLearning, v);
+        }
+        if let Some(v) = self.openness {
+            g.set(GenomeSlot::Openness, v);
+        }
+        if let Some(v) = self.conscientiousness {
+            g.set(GenomeSlot::Conscientiousness, v);
+        }
+        if let Some(v) = self.extraversion {
+            g.set(GenomeSlot::Extraversion, v);
+        }
+        if let Some(v) = self.agreeableness {
+            g.set(GenomeSlot::Agreeableness, v);
+        }
+        if let Some(v) = self.neuroticism {
+            g.set(GenomeSlot::Neuroticism, v);
         }
     }
 }
@@ -184,6 +206,12 @@ impl Scenario {
     pub fn instantiate(&self) -> World {
         let mut w = World::new(self.seed);
         w.env_period = self.env_period;
+        // Personality is sampled from a DEDICATED rng substream (seeded from the
+        // world seed) so it never perturbs `world.rng` — the physics/placement/
+        // reproduction stream stays bit-identical to a personality-free build.
+        // The trajectory then diverges only through actual personality-driven
+        // behavior, not through init draw-shifting.
+        let mut personality_rng = crate::rng::Rng::from_seed(self.seed ^ 0x9E37_79B9_7F4A_7C15);
         for spec in self.agents.iter() {
             // Each archetype spec gets a FRESH species id from `next_species_id`,
             // reserving species 0 strictly for archetype-free (legacy) specs.
@@ -224,6 +252,11 @@ impl Scenario {
                     }
                 };
                 let mut g = Genome::neutral();
+                // Normally-distributed Big Five personality (heritable, evolves).
+                // Sampled from the dedicated substream, before archetype/trait
+                // overrides so an explicit personality override in a scenario
+                // wins over the random draw.
+                g.sample_personality_in_place(&mut personality_rng);
                 if let Some(name) = &spec.archetype {
                     archetype_genome(name, &mut g);
                 }

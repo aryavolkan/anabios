@@ -36,7 +36,9 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2]) {
 
         let direction = desired_direction[i];
         let module_speed = crate::module::effective_speed_max(&agents.modules[i]).clamp(0.0, 1.0);
-        let v = direction * (SPEED_MAX_CAP * module_speed);
+        // Openness scales effective speed (identity at neutral personality).
+        let speed_factor = crate::personality::personality_speed_factor(&agents.genome[i]);
+        let v = direction * (SPEED_MAX_CAP * module_speed * speed_factor);
         agents.velocity[i] = v;
 
         let new_pos = agents.position[i] + v;

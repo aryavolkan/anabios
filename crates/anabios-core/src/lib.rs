@@ -17,6 +17,7 @@ pub mod interact;
 pub mod kin;
 pub mod mathf;
 pub mod module;
+pub mod personality;
 pub mod pheromone;
 pub mod program;
 pub mod reproduce;
