@@ -36,19 +36,20 @@ pub(super) fn detect_territory_formation(world: &mut World, centroids: &BTreeMap
         buf.push_back(spread);
         let clustered =
             buf.len() == TERRITORY_WINDOW && buf.iter().all(|&s| s <= TERRITORY_SPREAD_MAX);
-        if clustered && !world.codex.territory_active.contains(sid) {
-            let (lx, ly) = centroid_of(centroids, *sid);
-            to_push.push(CodexEvent {
-                event_type: EventType::TerritoryFormation,
-                tick,
-                species_id: *sid,
-                value: *buf.back().unwrap(),
-                loc_x: lx,
-                loc_y: ly,
-            });
-            world.codex.territory_active.insert(*sid);
-        } else if !clustered {
-            world.codex.territory_active.remove(sid);
+        if let Some(ev) =
+            edge_trigger_species(&mut world.codex.territory_active, *sid, clustered, || {
+                let (lx, ly) = centroid_of(centroids, *sid);
+                CodexEvent {
+                    event_type: EventType::TerritoryFormation,
+                    tick,
+                    species_id: *sid,
+                    value: *buf.back().unwrap(),
+                    loc_x: lx,
+                    loc_y: ly,
+                }
+            })
+        {
+            to_push.push(ev);
         }
     }
     for ev in to_push {
@@ -154,19 +155,18 @@ pub(super) fn detect_herd_cohesion(world: &mut World, centroids: &BTreeMap<u32, 
         }
         buf.push_back(mean);
         let cohesive = buf.len() == HERD_WINDOW && buf.iter().all(|&c| c >= HERD_CROWDING_MIN);
-        if cohesive && !world.codex.herd_active.contains(&sid) {
+        if let Some(ev) = edge_trigger_species(&mut world.codex.herd_active, sid, cohesive, || {
             let (lx, ly) = centroid_of(centroids, sid);
-            to_push.push(CodexEvent {
+            CodexEvent {
                 event_type: EventType::HerdCohesion,
                 tick,
                 species_id: sid,
                 value: mean,
                 loc_x: lx,
                 loc_y: ly,
-            });
-            world.codex.herd_active.insert(sid);
-        } else if !cohesive {
-            world.codex.herd_active.remove(&sid);
+            }
+        }) {
+            to_push.push(ev);
         }
     }
     for ev in to_push {

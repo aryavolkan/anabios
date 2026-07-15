@@ -78,23 +78,24 @@ pub(super) fn detect_dialect_formed(world: &mut World, centroids: &BTreeMap<u32,
         buf.push_back(div);
         let full_and_diverged =
             buf.len() == DIALECT_WINDOW && buf.iter().all(|&d| d >= DIALECT_DIVERGENCE_MIN);
-        if full_and_diverged && !world.codex.dialect_active.contains(sid) {
-            let (lx, ly) = centroid_of(centroids, *sid);
-            to_push.push(CodexEvent {
-                event_type: EventType::DialectFormed,
-                tick,
-                species_id: *sid,
-                value: div,
-                loc_x: lx,
-                loc_y: ly,
-            });
-            world.codex.dialect_active.insert(*sid);
-        } else if !full_and_diverged {
-            world.codex.dialect_active.remove(sid);
-            if div < DIALECT_DIVERGENCE_MIN {
-                // Clear buffer so a new window starts fresh.
-                world.codex.dialect_divergence.remove(sid);
-            }
+        if let Some(ev) =
+            edge_trigger_species(&mut world.codex.dialect_active, *sid, full_and_diverged, || {
+                let (lx, ly) = centroid_of(centroids, *sid);
+                CodexEvent {
+                    event_type: EventType::DialectFormed,
+                    tick,
+                    species_id: *sid,
+                    value: div,
+                    loc_x: lx,
+                    loc_y: ly,
+                }
+            })
+        {
+            to_push.push(ev);
+        } else if !full_and_diverged && div < DIALECT_DIVERGENCE_MIN {
+            // Clear buffer so a new window starts fresh (the latch itself is
+            // cleared by edge_trigger_species above).
+            world.codex.dialect_divergence.remove(sid);
         }
     }
     for ev in to_push {

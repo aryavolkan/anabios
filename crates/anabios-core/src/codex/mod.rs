@@ -389,6 +389,26 @@ pub(super) fn centroid_of(centroids: &BTreeMap<u32, (f32, f32)>, sid: u32) -> (f
     centroids.get(&sid).copied().unwrap_or((0.0, 0.0))
 }
 
+/// Per-species edge-trigger latch. On the rising edge (`fired` and `sid` not
+/// already active) marks `sid` active and returns the event to push; on a
+/// falling edge (`!fired`) clears `sid`. Returns `None` when there is nothing to
+/// emit. Centralizes the latch the species-keyed detectors previously hand-rolled.
+pub(super) fn edge_trigger_species(
+    active: &mut BTreeSet<u32>,
+    sid: u32,
+    fired: bool,
+    make: impl FnOnce() -> CodexEvent,
+) -> Option<CodexEvent> {
+    if fired {
+        if active.insert(sid) {
+            return Some(make());
+        }
+    } else {
+        active.remove(&sid);
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
