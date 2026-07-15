@@ -25,6 +25,8 @@ pub struct UniformSpatialHash {
     bucket_offsets: Vec<u32>,
     bucket_lens: Vec<u32>,
     flat: Vec<u32>,
+    /// Reusable per-cell count buffer for `rebuild` (avoids a per-tick alloc).
+    counts: Vec<u32>,
 }
 
 impl UniformSpatialHash {
@@ -34,6 +36,7 @@ impl UniformSpatialHash {
             bucket_offsets: vec![0; total_cells],
             bucket_lens: vec![0; total_cells],
             flat: Vec::new(),
+            counts: vec![0; total_cells],
         }
     }
 
@@ -43,21 +46,22 @@ impl UniformSpatialHash {
     #[allow(clippy::needless_range_loop)]
     pub fn rebuild(&mut self, positions: &[Vec2], alive: impl Fn(usize) -> bool) {
         let total_cells = HASH_RES * HASH_RES;
-        // Phase 1: count agents per cell.
-        let mut counts = vec![0_u32; total_cells];
+        // Phase 1: count agents per cell (reused buffer, no per-tick alloc).
+        self.counts.clear();
+        self.counts.resize(total_cells, 0);
         for (i, pos) in positions.iter().enumerate() {
             if !alive(i) {
                 continue;
             }
             let cell = Self::cell_of(*pos);
-            counts[cell] += 1;
+            self.counts[cell] += 1;
         }
 
         // Phase 2: prefix-sum to compute offsets.
         let mut total = 0_u32;
         for i in 0..total_cells {
             self.bucket_offsets[i] = total;
-            total += counts[i];
+            total += self.counts[i];
             self.bucket_lens[i] = 0;
         }
         self.flat.clear();
