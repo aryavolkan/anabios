@@ -64,7 +64,7 @@ value; `K_*` are tuning gains.
 
 | Trait | Concrete effect on `ActionRegister` / tick params | Testable signature |
 |---|---|---|
-| **Openness** (O) | scale locomotion magnitude: `move_x,move_y ×= (1 + K_O·O)` (clamped ≥ 0) — open agents range/disperse; closed stay local | high-O pop → larger mean per-agent displacement/dispersal |
+| **Openness** (O) | scale effective movement **speed** in `integrate` via `personality_speed_factor = (1 + K_O·O).max(0)` — open agents range/disperse; closed stay local. (Applied in `integrate`, not on the action, because the decide stage normalizes `move_x/y` to a unit direction and discards magnitude.) | high-O pop → larger mean per-agent displacement/dispersal |
 | **Conscientiousness** (C) | raise effective reproduction energy threshold `×(1 + K_C·C)` **and** boost `feed_intent` when energy below a comfort fraction — prudent provisioners vs impulsive breeders | high-C pop → higher mean energy at reproduction |
 | **Extraversion** (E) | add movement bias toward `sensors.nearest_same_dir` scaled by `K_E·E` (when `has_neighbor`) **and** scale `broadcast_intent ×= (1 + K_E·max(0,E))` | high-E pop → higher mean same-species crowding |
 | **Agreeableness** (A) | scale `share_intent ×= max(0, A)` **and** scale same-species `fire_intent ×= clamp(1 − K_A·A, 0, 1)` (negative pole → attacks kin more) | high-A pop → more sharing, fewer intra-species combat deaths; low-A → more combat |
@@ -81,11 +81,12 @@ New/changed units, each with one clear responsibility:
 - **`crates/anabios-core/src/personality.rs` (new).** Home of:
   - The tuning constants `K_O, K_C, K_E, K_A, K_N, INIT_SIGMA` and a comfort
     fraction for C.
-  - `apply_personality(action: &mut ActionRegister, genome: &Genome, sensors: &SensorRegister)`
-    — the modulation pass. The reproduction-threshold part of C is applied where
-    the threshold is computed (reproduce.rs), reading a helper here.
-  - `personality_reproduction_factor(genome: &Genome) -> f32` = `1 + K_C·C`,
-    consumed by reproduce.rs.
+  - `apply_personality(action: &mut ActionRegister, genome: &Genome, sensors: &SensorRegister, energy: f32)`
+    — the modulation pass for the intent/direction traits (E, N, A, C-feed).
+  - `personality_speed_factor(genome: &Genome) -> f32` = `(1 + K_O·O).max(0)`,
+    consumed by integrate.rs (Openness).
+  - `personality_reproduction_factor(genome: &Genome) -> f32` = `(1 + K_C·C).max(0)`,
+    consumed by reproduce.rs (Conscientiousness).
 - **`crates/anabios-core/src/genome.rs`.** Rename slots 10/11/12/13/21 to the OCEAN
   names in `GenomeSlot`. Add signed accessors:
   `openness()/conscientiousness()/extraversion()/agreeableness()/neuroticism() -> f32`
@@ -99,28 +100,36 @@ New/changed units, each with one clear responsibility:
   optional `openness/conscientiousness/extraversion/agreeableness/neuroticism`
   fields (each an `Option<f32>` in stored `[0,1]` space); when present they win over
   the Gaussian draw (so scenarios/tests can pin a population's personality).
-- **`crates/anabios-core/src/tick.rs`.** In the decide stage, after program
-  evaluation fills each agent's `ActionRegister` and before integrate/interact,
-  call `apply_personality(&mut action, genome, sensors)` per alive agent.
+- **`crates/anabios-core/src/tick.rs`.** In `decide_all`, after `decide(...)` fills
+  each agent's `ActionRegister` and before the move-vector is normalized to a unit
+  direction, call `apply_personality(&mut action, genome, sensors, energy)`.
+- **`crates/anabios-core/src/integrate.rs`.** Multiply effective movement speed by
+  `personality_speed_factor(genome)` (Openness).
 - **`crates/anabios-core/src/reproduce.rs`.** Multiply the effective reproduction
-  energy threshold by `personality_reproduction_factor(genome)`.
+  energy threshold by `personality_reproduction_factor(genome)` (Conscientiousness).
 
-Data flow per tick (unchanged except the new modulation step):
+Data flow per tick (unchanged except the new modulation steps):
 
 ```
-sense → program.evaluate → ActionRegister
-      → apply_personality(action, genome, sensors)   [NEW]
-      → integrate (move) / interact (feed/fire/share) / reproduce (mate)
+sense → decide/program.evaluate → ActionRegister
+      → apply_personality(action, genome, sensors, energy)   [NEW: E,N,A,C-feed]
+      → normalize move → integrate (speed ×= O factor) / interact (feed/fire/share)
+      → reproduce (threshold ×= C factor)
 ```
 
 ## Determinism
 
-This is a **deterministic-core change** (behavior + init both change). The three
-golden hashes in `crates/anabios-core/tests/determinism.rs` WILL change. Plan
-includes a deliberate **golden-hash refresh**: implement, run the sim to capture
-the new hashes, update the pinned values, and note the refresh in the commit. The
-personality RNG draws use the scenario's seeded `world.rng` at a fixed code point,
-so the new state is fully deterministic and reproducible.
+This is a **deterministic-core change**. Crucial property that structures the
+plan: **at neutral traits (stored `0.5` → signed `0.0`) every personality effect
+is an identity** — all factors equal `1.0`, all biases are `0`. Therefore *wiring
+the pass into the pipeline changes nothing while genomes are still neutral-init*:
+the three golden hashes in `crates/anabios-core/tests/determinism.rs` stay
+byte-identical through that step. Only **enabling Gaussian personality init**
+(non-neutral traits + new RNG draws) changes evolution → that task carries the
+deliberate **golden-hash refresh** (run with `UPDATE_HASHES=1`, copy the printed
+values into `determinism.rs`, note the refresh in the commit). The personality RNG
+draws use the scenario's seeded `world.rng` at a fixed code point, so the refreshed
+state is fully deterministic and reproducible.
 
 ## Testing
 
