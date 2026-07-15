@@ -306,39 +306,36 @@ pub fn effective_speed_max(modules: &ModuleList) -> f32 {
 
 /// Maximum perception radius across all Sensor modules. 0.0 if no Sensor.
 #[inline]
+/// Fold the extracted per-module parameter with `f32::max`, defaulting to 0.0
+/// when no module contributes. Shared by the "strongest module wins" accessors.
+fn max_param(modules: &ModuleList, extract: impl Fn(&Module) -> Option<f32>) -> f32 {
+    modules.iter().filter_map(extract).fold(0.0_f32, f32::max)
+}
+
 pub fn effective_perception_radius(modules: &ModuleList) -> f32 {
-    modules
-        .iter()
-        .filter_map(|m| match m {
-            Module::Sensor { radius, .. } => Some(*radius),
-            _ => None,
-        })
-        .fold(0.0_f32, f32::max)
+    max_param(modules, |m| match m {
+        Module::Sensor { radius, .. } => Some(*radius),
+        _ => None,
+    })
 }
 
 /// Maximum bite size across all Mouth modules. 0.0 if no Mouth.
 #[inline]
 pub fn effective_bite_size(modules: &ModuleList) -> f32 {
-    modules
-        .iter()
-        .filter_map(|m| match m {
-            Module::Mouth { bite_size, .. } => Some(*bite_size),
-            _ => None,
-        })
-        .fold(0.0_f32, f32::max)
+    max_param(modules, |m| match m {
+        Module::Mouth { bite_size, .. } => Some(*bite_size),
+        _ => None,
+    })
 }
 
 /// Maximum diet affinity across all Mouth modules. 0.0 (pure herbivore)
 /// if no Mouth, but action gating means feeding is skipped anyway.
 #[inline]
 pub fn effective_diet_carnivory(modules: &ModuleList) -> f32 {
-    modules
-        .iter()
-        .filter_map(|m| match m {
-            Module::Mouth { diet_affinity, .. } => Some(*diet_affinity),
-            _ => None,
-        })
-        .fold(0.0_f32, f32::max)
+    max_param(modules, |m| match m {
+        Module::Mouth { diet_affinity, .. } => Some(*diet_affinity),
+        _ => None,
+    })
 }
 
 /// Damage + energy_cost of the highest-damage `Weapon`, or `None` if the
@@ -357,13 +354,10 @@ pub fn effective_weapon(modules: &ModuleList) -> Option<(f32, f32)> {
 /// Max `Pheromone.strength`, or `0.0` if the agent has no `Pheromone` module.
 #[inline]
 pub fn effective_pheromone_strength(modules: &ModuleList) -> f32 {
-    modules
-        .iter()
-        .filter_map(|m| match m {
-            Module::Pheromone { strength, .. } => Some(*strength),
-            _ => None,
-        })
-        .fold(0.0_f32, f32::max)
+    max_param(modules, |m| match m {
+        Module::Pheromone { strength, .. } => Some(*strength),
+        _ => None,
+    })
 }
 
 /// `true` iff the agent has a `Sensor` module of type `Smell` (gates pheromone
@@ -376,25 +370,19 @@ pub fn has_smell(modules: &ModuleList) -> bool {
 /// Max `Armor.protection`, or `0.0` if the agent has no `Armor` module.
 #[inline]
 pub fn effective_armor_protection(modules: &ModuleList) -> f32 {
-    modules
-        .iter()
-        .filter_map(|m| match m {
-            Module::Armor { protection, .. } => Some(*protection),
-            _ => None,
-        })
-        .fold(0.0_f32, f32::max)
+    max_param(modules, |m| match m {
+        Module::Armor { protection, .. } => Some(*protection),
+        _ => None,
+    })
 }
 
 /// Max `Communicator.range`, or `0.0` if the agent has no `Communicator`.
 #[inline]
 pub fn effective_communicator_range(modules: &ModuleList) -> f32 {
-    modules
-        .iter()
-        .filter_map(|m| match m {
-            Module::Communicator { range, .. } => Some(*range),
-            _ => None,
-        })
-        .fold(0.0_f32, f32::max)
+    max_param(modules, |m| match m {
+        Module::Communicator { range, .. } => Some(*range),
+        _ => None,
+    })
 }
 
 /// Perturb every parameter of `module` with probability `MUTATE_PARAM_PROB`,
