@@ -148,6 +148,45 @@ impl Simulation {
         out
     }
 
+    /// Carnivory diet score per alive agent (0 herbivore .. 1 carnivore),
+    /// same order as `alive_positions`.
+    #[func]
+    fn alive_diet(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(anabios_core::module::effective_diet_carnivory(
+                    &w.agents.modules[id as usize],
+                ));
+            }
+        }
+        out
+    }
+
+    /// Dialect hue per alive agent in `[0,1)`, same order as `alive_positions`.
+    #[func]
+    fn alive_dialect_hue(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(dialect_hue(&w.agents.meme_vector[id as usize]));
+            }
+        }
+        out
+    }
+
+    /// Energy per alive agent, same order as `alive_positions`.
+    #[func]
+    fn alive_energy(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(w.agents.energy[id as usize]);
+            }
+        }
+        out
+    }
+
     /// Look up one alive agent by id. Returns a Dictionary; empty if dead.
     #[func]
     fn get_agent_info(&self, id: i64) -> Dictionary {
@@ -174,6 +213,39 @@ impl Simulation {
             g.push(*v);
         }
         d.set("genome", g);
+        d
+    }
+
+    /// Full inspector view of one alive agent. Superset of `get_agent_info`,
+    /// adding diet, learned skill/technique, learning flags, dialect hue, and
+    /// module names.
+    #[func]
+    fn agent_detail(&self, id: i64) -> Dictionary {
+        use anabios_core::culture::{SKILL_CHANNEL, TECH_CHANNEL};
+        use anabios_core::genome::GenomeSlot;
+        let mut d = self.get_agent_info(id);
+        let Some(w) = self.inner.as_ref() else { return d };
+        let aid = id as u32;
+        if !w.agents.is_alive(aid) {
+            return d;
+        }
+        let i = id as usize;
+        let g = &w.agents.genome[i];
+        let meme = &w.agents.meme_vector[i];
+        d.set(
+            "diet_carnivory",
+            anabios_core::module::effective_diet_carnivory(&w.agents.modules[i]),
+        );
+        d.set("skill", meme[SKILL_CHANNEL]);
+        d.set("technique", meme[TECH_CHANNEL]);
+        d.set("indiv_learn", g.get(GenomeSlot::IndividualLearning) > 0.5);
+        d.set("social_learn", g.get(GenomeSlot::SocialLearning) > 0.5);
+        d.set("dialect_hue", dialect_hue(meme));
+        let mut names = PackedStringArray::new();
+        for m in w.agents.modules[i].iter() {
+            names.push(&format!("{:?}", m.module_type()));
+        }
+        d.set("module_names", names);
         d
     }
 
@@ -222,6 +294,121 @@ impl Simulation {
             let frac = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };
             let lit = base.lerp(Color::from_rgb(0.40, 0.85, 0.35), (frac * 0.6) as f64);
             out.push(lit);
+        }
+        out
+    }
+
+    /// Number of pheromone channels (for the overlay cycling loop).
+    #[func]
+    fn pheromone_channel_count(&self) -> i64 {
+        anabios_core::program::PHEROMONE_CHANNELS as i64
+    }
+
+    /// One color per pheromone cell on `channel`, row-major (`row * RES + col`),
+    /// as a dark-to-hot ramp with alpha proportional to intensity. Returns
+    /// `RES²` colors, or empty if no world is loaded or the channel is invalid.
+    #[func]
+    fn pheromone_colors(&self, channel: i64) -> PackedColorArray {
+        let mut out = PackedColorArray::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        let ch = channel as usize;
+        if ch >= anabios_core::program::PHEROMONE_CHANNELS {
+            return out;
+        }
+        for cell in w.pheromones.cells.iter() {
+            let t = phero_intensity(cell[ch]);
+            let c = Color::from_rgb(0.05 + 0.95 * t, 0.10 * t, 0.30 * (1.0 - t));
+            out.push(Color { a: t, ..c });
+        }
+        out
+    }
+
+    /// True iff the DIT environment mechanism is active (`env_period > 0`).
+    #[func]
+    fn env_active(&self) -> bool {
+        self.inner.as_ref().map(|w| w.env_period > 0).unwrap_or(false)
+    }
+
+    /// Current global optimal technique in `[0,1]`, or `-1.0` when the env
+    /// mechanism is inactive.
+    #[func]
+    fn env_optimum(&self) -> f32 {
+        match self.inner.as_ref() {
+            Some(w) if w.env_period > 0 => {
+                anabios_core::culture::env_optimum_at(w.tick, w.env_period)
+            }
+            _ => -1.0,
+        }
+    }
+
+    /// Per-live-species aggregate stats. `mean_technique_match` is the mean of
+    /// `technique_match(meme[TECH_CHANNEL], optimum)` when the env mechanism is
+    /// active, else `0.0`. Each entry is
+    /// `{ species_id, count, mean_energy, mean_technique_match }`.
+    #[func]
+    fn species_stats(&self) -> Array<Dictionary> {
+        use anabios_core::culture::{env_optimum_at, technique_match, TECH_CHANNEL};
+        use std::collections::BTreeMap;
+        let mut out = Array::<Dictionary>::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        let active = w.env_period > 0;
+        let opt = if active { env_optimum_at(w.tick, w.env_period) } else { 0.0 };
+        // Aggregate over live agents, keyed by species_id (BTreeMap keeps the
+        // output stable and ascending).
+        let mut count: BTreeMap<u32, i64> = BTreeMap::new();
+        let mut energy: BTreeMap<u32, f32> = BTreeMap::new();
+        let mut matchsum: BTreeMap<u32, f32> = BTreeMap::new();
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            let sp = w.agents.species_id[i];
+            *count.entry(sp).or_insert(0) += 1;
+            *energy.entry(sp).or_insert(0.0) += w.agents.energy[i];
+            if active {
+                let tech = w.agents.meme_vector[i][TECH_CHANNEL];
+                *matchsum.entry(sp).or_insert(0.0) += technique_match(tech, opt);
+            }
+        }
+        for (sp, n) in count.iter() {
+            let mut d = Dictionary::new();
+            let nf = *n as f32;
+            d.set("species_id", *sp as i64);
+            d.set("count", *n);
+            d.set("mean_energy", energy[sp] / nf);
+            d.set("mean_technique_match", if active { matchsum[sp] / nf } else { 0.0 });
+            out.push(&d);
+        }
+        out
+    }
+
+    /// One entry per carcass currently in the world:
+    /// `{ pos, flesh, age, species_id }`.
+    #[func]
+    fn carcass_data(&self) -> Array<Dictionary> {
+        let mut out = Array::<Dictionary>::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for c in w.carcasses.iter() {
+            let mut d = Dictionary::new();
+            d.set("pos", Vector2::new(c.pos.x, c.pos.y));
+            d.set("flesh", c.flesh);
+            d.set("age", c.age as i64);
+            d.set("species_id", c.species_id as i64);
+            out.push(&d);
+        }
+        out
+    }
+
+    /// World positions of alive agents that took combat damage on the most
+    /// recent tick (the flag is reset at the start of the next combat pass).
+    #[func]
+    fn combat_flashes(&self) -> PackedVector2Array {
+        let mut out = PackedVector2Array::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            if w.combat_damaged.get(i).copied().unwrap_or(false) {
+                let p = w.agents.position[i];
+                out.push(Vector2::new(p.x, p.y));
+            }
         }
         out
     }
@@ -304,6 +491,31 @@ fn math_sin(x: f32) -> f32 {
     libm::sinf(x)
 }
 
+/// Map a raw pheromone concentration to a saturating intensity in `[0,1]`
+/// (deposits are unbounded and decay is slow, so a plain clamp would wash out).
+fn phero_intensity(v: f32) -> f32 {
+    let x = v.max(0.0);
+    1.0 - (-x).exp()
+}
+
+/// Project a meme vector onto a stable hue in `[0,1)` so divergent dialects
+/// render as distinct body colors. The per-channel weights are normalized to
+/// sum to 1, so the hue is a weighted average of the meme values (bounded and
+/// not dominated by any single high-index channel) wrapped into `[0,1)`.
+fn dialect_hue(meme: &[f32]) -> f32 {
+    let mut acc = 0.0_f32;
+    let mut wsum = 0.0_f32;
+    for (k, v) in meme.iter().enumerate() {
+        let w = 0.37 + 0.11 * k as f32;
+        acc += v * w;
+        wsum += w;
+    }
+    if wsum <= 0.0 {
+        return 0.0;
+    }
+    (acc / wsum).rem_euclid(1.0)
+}
+
 fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
     let h6 = (h.rem_euclid(1.0)) * 6.0;
     let i = h6.floor() as i32;
@@ -320,4 +532,26 @@ fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
         _ => (v, p, q),
     };
     Color::from_rgb(r, g, b)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn phero_intensity_saturates_monotonically() {
+        assert_eq!(phero_intensity(0.0), 0.0);
+        assert!(phero_intensity(1.0) > phero_intensity(0.1));
+        assert!(phero_intensity(100.0) <= 1.0);
+        assert!(phero_intensity(-5.0) == 0.0);
+    }
+
+    #[test]
+    fn dialect_hue_is_bounded_and_varies() {
+        let a = [0.0_f32; 8];
+        let b = [0.9_f32, 0.1, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0];
+        assert!((0.0..1.0).contains(&dialect_hue(&a)));
+        assert!((0.0..1.0).contains(&dialect_hue(&b)));
+        assert!(dialect_hue(&a) != dialect_hue(&b));
+    }
 }

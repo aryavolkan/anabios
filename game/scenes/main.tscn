@@ -7,6 +7,10 @@
 [ext_resource type="Script" path="res://scripts/inspector_panel.gd" id="5_insp"]
 [ext_resource type="Script" path="res://scripts/biome_renderer.gd" id="7_biome"]
 [ext_resource type="Script" path="res://scripts/codex_panel.gd" id="8_codex"]
+[ext_resource type="Script" path="res://scripts/overlay_manager.gd" id="9_overlay"]
+[ext_resource type="Script" path="res://scripts/population_panel.gd" id="10_pop"]
+[ext_resource type="Script" path="res://scripts/dit_panel.gd" id="11_dit"]
+[ext_resource type="Script" path="res://scripts/legend_panel.gd" id="12_legend"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -74,6 +78,20 @@ instance_count = 10000
 visible_instance_count = 0
 mesh = SubResource("QuadMesh_glyph")
 
+[sub_resource type="MultiMesh" id="MM_carcass"]
+transform_format = 0
+use_colors = true
+instance_count = 4096
+visible_instance_count = 0
+mesh = SubResource("QuadMesh_glyph")
+
+[sub_resource type="MultiMesh" id="MM_flash"]
+transform_format = 0
+use_colors = true
+instance_count = 4096
+visible_instance_count = 0
+mesh = SubResource("QuadMesh_glyph")
+
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
 
@@ -84,11 +102,22 @@ zoom = Vector2(1, 1)
 
 [node name="Simulation" type="Simulation" parent="."]
 
+[node name="OverlayManager" type="Node" parent="."]
+script = ExtResource("9_overlay")
+
 [node name="Biome" type="Sprite2D" parent="."]
 script = ExtResource("7_biome")
 
 [node name="Bodies" type="MultiMeshInstance2D" parent="."]
 multimesh = ExtResource("2_mm")
+
+[node name="Carcasses" type="MultiMeshInstance2D" parent="."]
+multimesh = SubResource("MM_carcass")
+z_index = -5
+
+[node name="Flashes" type="MultiMeshInstance2D" parent="."]
+multimesh = SubResource("MM_flash")
+z_index = 5
 
 [node name="ModuleLayers" type="Node2D" parent="."]
 
@@ -178,6 +207,36 @@ offset_bottom = -10.0
 [node name="Label" type="Label" parent="UI/Inspector/VBoxContainer"]
 text = "—"
 theme_override_font_sizes/font_size = 14
+
+[node name="PopulationPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("10_pop")
+offset_left = 1050.0
+offset_top = 210.0
+offset_right = 1270.0
+offset_bottom = 420.0
+
+[node name="VBox" type="VBoxContainer" parent="UI/PopulationPanel"]
+
+[node name="DitPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("11_dit")
+visible = false
+offset_left = 1050.0
+offset_top = 430.0
+offset_right = 1270.0
+offset_bottom = 620.0
+
+[node name="VBox" type="VBoxContainer" parent="UI/DitPanel"]
+
+[node name="LegendPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("12_legend")
+offset_left = 10.0
+offset_top = 620.0
+offset_right = 380.0
+offset_bottom = 750.0
+
+[node name="Label" type="Label" parent="UI/LegendPanel"]
+text = "—"
+theme_override_font_sizes/font_size = 13
 
 [node name="CodexPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("8_codex")

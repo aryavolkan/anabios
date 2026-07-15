@@ -12,14 +12,17 @@ func pin(id: int) -> void:
 func _process(_delta: float) -> void:
 	if pinned_id < 0:
 		return
-	var info: Dictionary = sim.get_agent_info(pinned_id)
+	var info: Dictionary = sim.agent_detail(pinned_id)
 	if info.is_empty() or not info.get("alive", false):
 		label.text = "(agent %d is dead)" % pinned_id
 		return
-	label.text = (
-		"id %d\nspecies %d  lineage %d\nenergy %.1f  age %d\nprogram %d  modules %d"
-	) % [
-		pinned_id, info["species_id"], info["lineage_id"],
-		info["energy"], info["age"],
-		info["program_len"], info["module_count"],
+	var lines: PackedStringArray = [
+		"id %d   species %d   lineage %d" % [pinned_id, info["species_id"], info["lineage_id"]],
+		"energy %.1f   age %d" % [info["energy"], info["age"]],
+		"program %d   modules %d" % [info["program_len"], info["module_count"]],
+		"diet %.2f (0=herb 1=carn)" % info["diet_carnivory"],
+		"skill %.2f   technique %.2f" % [info["skill"], info["technique"]],
+		"learn: indiv=%s social=%s" % [str(info["indiv_learn"]), str(info["social_learn"])],
+		"modules: %s" % ", ".join(info["module_names"]),
 	]
+	label.text = "\n".join(lines)
