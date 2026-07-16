@@ -131,11 +131,19 @@ func _draw() -> void:
 		return
 
 	var ticks: PackedFloat32Array = sim.coevo_series("tick")
+	# Fetch each series ONCE this draw (charts otherwise re-fetch per series and
+	# again for auto-scale — an O(history) copy each time).
+	var cache: Dictionary = {}
+	for c in CHARTS:
+		for s in c["series"]:
+			var k: String = s["key"]
+			if not cache.has(k):
+				cache[k] = sim.coevo_series(k)
 	var plot_w: float = maxf(1.0, size.x - PAD_LEFT - PAD_RIGHT)
 	var chart_h: float = (size.y - 24.0) / float(CHARTS.size())
 	var y0 := 20.0
 	for c in CHARTS:
-		_draw_chart(c, PAD_LEFT, plot_w, y0, chart_h - 8.0)
+		_draw_chart(c, cache, n, PAD_LEFT, plot_w, y0, chart_h - 8.0)
 		y0 += chart_h
 
 	_draw_marks(ticks, PAD_LEFT, plot_w)
@@ -146,8 +154,7 @@ func _draw() -> void:
 		draw_line(Vector2(sx, 16), Vector2(sx, size.y - 4), Color(1, 1, 1, 0.5), 1.0)
 		_draw_readout(_scrub_index)
 
-func _draw_chart(c: Dictionary, pad: float, plot_w: float, top: float, h: float) -> void:
-	var n: int = sim.coevo_history_len()
+func _draw_chart(c: Dictionary, cache: Dictionary, n: int, pad: float, plot_w: float, top: float, h: float) -> void:
 	# y-scale.
 	var vmax := 1.0
 	var vmin := 0.0
@@ -156,7 +163,7 @@ func _draw_chart(c: Dictionary, pad: float, plot_w: float, top: float, h: float)
 		for s in c["series"]:
 			if _hidden_keys.has(s["key"]):
 				continue
-			for v in sim.coevo_series(s["key"]):
+			for v in (cache[s["key"]] as PackedFloat32Array):
 				vmax = maxf(vmax, v)
 	# Frame + title.
 	draw_rect(Rect2(Vector2(pad, top), Vector2(plot_w, h)), Color(1, 1, 1, 0.06))
@@ -175,7 +182,7 @@ func _draw_chart(c: Dictionary, pad: float, plot_w: float, top: float, h: float)
 		legend_y += 13.0
 		if off:
 			continue
-		var arr: PackedFloat32Array = sim.coevo_series(key)
+		var arr: PackedFloat32Array = cache[key]
 		if arr.size() < 2:
 			continue
 		# Min/max decimation: each pixel column spans a source-index range and
