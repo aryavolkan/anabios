@@ -17,6 +17,8 @@ func _process(_delta: float) -> void:
 	var stats: Array = sim.species_stats()
 	_sync_label_count(stats.size() + 1)   # +1 header row
 	var children: Array = list.get_children()
+	# Header renders one point larger than the rows (parity with the pre-pool version).
+	(children[0] as Label).add_theme_font_size_override("font_size", 13)
 	(children[0] as Label).text = "DIT  env-optimum = %.2f" % float(sim.env_optimum())
 	for i in stats.size():
 		var s: Dictionary = stats[i]
