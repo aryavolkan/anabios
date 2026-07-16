@@ -304,14 +304,14 @@ pub fn effective_speed_max(modules: &ModuleList) -> f32 {
         .sum()
 }
 
-/// Maximum perception radius across all Sensor modules. 0.0 if no Sensor.
-#[inline]
 /// Fold the extracted per-module parameter with `f32::max`, defaulting to 0.0
 /// when no module contributes. Shared by the "strongest module wins" accessors.
 fn max_param(modules: &ModuleList, extract: impl Fn(&Module) -> Option<f32>) -> f32 {
     modules.iter().filter_map(extract).fold(0.0_f32, f32::max)
 }
 
+/// Maximum perception radius across all Sensor modules. 0.0 if no Sensor.
+#[inline]
 pub fn effective_perception_radius(modules: &ModuleList) -> f32 {
     max_param(modules, |m| match m {
         Module::Sensor { radius, .. } => Some(*radius),
