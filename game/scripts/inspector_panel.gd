@@ -5,6 +5,11 @@ var pinned_id: int = -1
 @onready var sim = get_node("/root/Main/Simulation")
 @onready var label: Label = $VBoxContainer/Label
 
+func _ready() -> void:
+	# Long lines (the module list) were clipping off the panel's right edge;
+	# wrap them within the panel width instead.
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
 func pin(id: int) -> void:
 	pinned_id = id
 	visible = id >= 0

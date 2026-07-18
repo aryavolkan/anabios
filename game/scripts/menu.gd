@@ -1,5 +1,7 @@
 extends Control
 
+const UiTheme = preload("res://scripts/ui_theme.gd")
+
 const SCENARIOS: Array[Dictionary] = [
 	# Foundations
 	{ "label": "Foundations — Minimal (200 herbivores)", "path": "res://../scenarios/minimal.toml", "ground": 0, "body": 0 },
@@ -26,6 +28,10 @@ const SCENARIOS: Array[Dictionary] = [
 @onready var start_btn: Button = $VBox/StartButton
 
 func _ready() -> void:
+	theme = UiTheme.build()
+	$Background.color = Color(0.04, 0.055, 0.07, 1.0)
+	$VBox/Title.add_theme_color_override("font_color", UiTheme.ACCENT)
+	$VBox/Subtitle.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
 	for s in SCENARIOS:
 		scenario_pick.add_item(s["label"])
 	seed_spin.value = GameConfig.seed
