@@ -17,5 +17,4 @@ archetype = "stalker"
 placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
 [agents.traits]
 size = 0.7
-diet_carnivory = 1.0
 lifespan_bias = 1.0

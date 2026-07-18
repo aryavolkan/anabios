@@ -9,8 +9,10 @@ pub const LIFESPAN_MAX_TICKS: u32 = 5_000;
 pub const LIFESPAN_MIN_TICKS: u32 = 500;
 
 pub fn age_and_starve(world: &mut crate::world::World) {
-    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
-    for id in alive_ids {
+    let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
+    alive_ids.clear();
+    alive_ids.extend(world.agents.iter_alive());
+    for &id in &alive_ids {
         let i = id as usize;
         world.agents.age[i] = world.agents.age[i].saturating_add(1);
 
@@ -36,6 +38,7 @@ pub fn age_and_starve(world: &mut crate::world::World) {
             world.remove_from_species(sid);
         }
     }
+    world.agents.scratch_ids = alive_ids;
 }
 
 /// Maximum tick age an agent of this genome can reach before dying of old age.

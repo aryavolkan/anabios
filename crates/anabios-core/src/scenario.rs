@@ -36,10 +36,8 @@ pub struct AgentSpec {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TraitOverrides {
-    pub speed_max: Option<f32>,
     pub perception_radius: Option<f32>,
     pub size: Option<f32>,
-    pub diet_carnivory: Option<f32>,
     pub basal_metabolism: Option<f32>,
     pub lifespan_bias: Option<f32>,
     pub reproduction_threshold: Option<f32>,
@@ -64,17 +62,11 @@ pub struct TraitOverrides {
 
 impl TraitOverrides {
     pub fn apply(&self, g: &mut Genome) {
-        if let Some(v) = self.speed_max {
-            g.set(GenomeSlot::SpeedMax, v);
-        }
         if let Some(v) = self.perception_radius {
             g.set(GenomeSlot::PerceptionRadius, v);
         }
         if let Some(v) = self.size {
             g.set(GenomeSlot::Size, v);
-        }
-        if let Some(v) = self.diet_carnivory {
-            g.set(GenomeSlot::DietCarnivory, v);
         }
         if let Some(v) = self.basal_metabolism {
             g.set(GenomeSlot::BasalMetabolism, v);
@@ -289,7 +281,6 @@ seed = 42
 count = 10
 placement = { kind = "uniform" }
 [agents.traits]
-speed_max = 0.5
 size = 0.5
 "#;
         let s = Scenario::parse_toml(text).expect("parse");
@@ -298,7 +289,7 @@ size = 0.5
         assert_eq!(s.agents.len(), 1);
         assert_eq!(s.agents[0].count, 10);
         assert!(matches!(s.agents[0].placement, Placement::Uniform));
-        assert_eq!(s.agents[0].traits.speed_max, Some(0.5));
+        assert_eq!(s.agents[0].traits.size, Some(0.5));
     }
 
     #[test]

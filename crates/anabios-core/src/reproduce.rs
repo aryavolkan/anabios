@@ -44,7 +44,9 @@ pub fn reproduce_all(world: &mut World) {
     // Snapshot the alive ids to a local vec; reproduction mutates the
     // alive set via spawn() and we don't want to iterate over newborns
     // this tick.
-    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
+    let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
+    alive_ids.clear();
+    alive_ids.extend(world.agents.iter_alive());
 
     for &a_id in &alive_ids {
         if world.agents.live_count() >= MAX_POPULATION {
@@ -142,6 +144,7 @@ pub fn reproduce_all(world: &mut World) {
                 crate::culture::inherit_meme(&a_meme, &b_meme, &mut world.rng);
         }
     }
+    world.agents.scratch_ids = alive_ids;
 }
 
 fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {

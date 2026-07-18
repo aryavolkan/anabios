@@ -23,5 +23,4 @@ count = 8
 archetype = "stalker"
 placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
 [agents.traits]
-diet_carnivory = 1.0
 lifespan_bias = 1.0

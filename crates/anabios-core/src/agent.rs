@@ -55,6 +55,10 @@ pub struct AgentBuffers {
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
+    /// Reusable scratch buffer for per-tick "snapshot the alive ids" loops.
+    /// `#[serde(skip)]` — never part of the deterministic state hash.
+    #[serde(skip)]
+    pub scratch_ids: Vec<u32>,
 }
 
 impl AgentBuffers {
