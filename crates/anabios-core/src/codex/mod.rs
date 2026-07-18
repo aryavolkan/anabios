@@ -592,4 +592,73 @@ mod tests {
         assert_eq!(s.events.len(), CODEX_EVENT_CAPACITY);
         assert_eq!(s.events.front().unwrap().tick, 100);
     }
+
+    /// The fused aggregation must reproduce the per-detector scans it replaced:
+    /// counts, centroids, module/node masks, terrain histograms, sums.
+    #[test]
+    fn species_agg_matches_hand_rolled_expectations() {
+        use crate::genome::Genome;
+        use crate::module::{Module, ModuleList};
+        use crate::prelude::Vec2;
+
+        let mut w = World::new(21);
+        // Species 0: two plain founders (starter kit).
+        let a = w.spawn_agent(Vec2::new(100.0, 100.0), Genome::neutral());
+        let _b = w.spawn_agent(Vec2::new(300.0, 100.0), Genome::neutral());
+        // Species 1: one communicator+weapon agent.
+        let c = w.spawn_agent(Vec2::new(600.0, 200.0), Genome::neutral());
+        let sid1 = w.species_centroids.len() as u32;
+        w.species_centroids.push(Genome::neutral());
+        w.species_parents.push(Some(0));
+        w.species_member_counts.push(0);
+        w.next_species_id = sid1 + 1;
+        w.remove_from_species(0);
+        w.agents.species_id[c as usize] = sid1;
+        w.add_to_species(sid1);
+        let mut kit: ModuleList = crate::module::communicator_kit();
+        kit.push(Module::Weapon { damage: 4.0, energy_cost: 1.0 });
+        w.agents.modules[c as usize] = kit;
+
+        let mut agg = std::mem::take(&mut w.codex_agg);
+        agg.build(&w);
+
+        // Active set: both species, ascending.
+        assert_eq!(agg.active(), &[0, sid1]);
+
+        let e0 = agg.get(0).expect("species 0 entry");
+        assert_eq!(e0.count, 2);
+        assert_eq!(e0.member_idx.len(), 2);
+        let (cx, cy) = e0.centroid();
+        assert!((cx - 200.0).abs() < 1e-4 && (cy - 100.0).abs() < 1e-4);
+        assert!(!e0.has_comm && !e0.has_pheromone);
+        // Starter kit: Locomotor(0), Sensor(1), Mouth(2), Reproductive(?).
+        let starter = crate::module::starter_kit();
+        let mut want_mask = 0u16;
+        for m in starter.iter() {
+            want_mask |= 1u16 << (m.module_type() as u8);
+        }
+        assert_eq!(e0.module_mask, want_mask);
+        // Node mask covers the starter grazer program's kinds.
+        let mut want_nodes = 0u64;
+        for n in crate::program::starter_grazer().nodes.iter().copied() {
+            want_nodes |= 1u64 << crate::program::Program::node_kind(n);
+        }
+        assert_eq!(e0.node_mask, want_nodes);
+        // Every member landed in exactly one terrain slot.
+        assert_eq!(e0.terrain_counts.iter().sum::<f32>(), 2.0);
+        assert_eq!(e0.weapon_sum, 0.0);
+
+        let e1 = agg.get(sid1).expect("species 1 entry");
+        assert_eq!(e1.count, 1);
+        assert!(e1.has_comm, "communicator kit flags has_comm");
+        assert_eq!(e1.weapon_sum, 4.0);
+        let (cx1, cy1) = e1.centroid();
+        assert!((cx1 - 600.0).abs() < 1e-4 && (cy1 - 200.0).abs() < 1e-4);
+
+        // Rebuild reuses storage without leaking previous state.
+        w.agents.kill(a);
+        agg.build(&w);
+        assert_eq!(agg.get(0).map(|e| e.count), Some(1));
+        w.codex_agg = agg;
+    }
 }
