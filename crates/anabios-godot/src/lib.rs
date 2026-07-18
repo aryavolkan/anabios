@@ -596,6 +596,41 @@ impl Simulation {
         out
     }
 
+    /// All module glyphs in ONE alive pass, bucketed by module type. Returns an
+    /// array of length `module_type_count()` (9); entry `t` is a
+    /// `PackedVector2Array` of world positions for every module of type `t`.
+    /// Read-only view — replaces nine separate `module_glyphs(t)` passes.
+    #[func]
+    fn module_glyphs_all(&self) -> Array<PackedVector2Array> {
+        use anabios_core::genome::GenomeSlot;
+        let type_count = 9usize; // matches module_type_count()
+        let mut buckets: Vec<PackedVector2Array> =
+            (0..type_count).map(|_| PackedVector2Array::new()).collect();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                let i = id as usize;
+                let pos = w.agents.position[i];
+                let size = 0.5 + 2.5 * w.agents.genome[i].get(GenomeSlot::Size);
+                let radius = size * 0.7;
+                for (slot, m) in w.agents.modules[i].iter().enumerate() {
+                    let t = m.module_type() as usize;
+                    if t >= type_count {
+                        continue;
+                    }
+                    let angle = (slot as f32) * std::f32::consts::TAU / 8.0;
+                    let gx = pos.x + radius * math_cos(angle);
+                    let gy = pos.y + radius * math_sin(angle);
+                    buckets[t].push(Vector2::new(gx, gy));
+                }
+            }
+        }
+        let mut out: Array<PackedVector2Array> = Array::new();
+        for b in &buckets {
+            out.push(b);
+        }
+        out
+    }
+
     /// Find the closest alive agent to a world position, within `radius`
     /// world units. Returns the agent id, or -1 if no agent in range.
     #[func]

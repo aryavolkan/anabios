@@ -128,10 +128,11 @@ func _refresh_flashes() -> void:
 		mm.set_instance_color(i, Color(1.0, 0.85, 0.2, 0.9))
 
 func _refresh_module_layers() -> void:
-	var type_count: int = int(sim.module_type_count())
+	var all: Array = sim.module_glyphs_all()
+	var type_count: int = all.size()
 	for t in type_count:
 		var layer: MultiMeshInstance2D = module_layers.get_child(t)
-		var glyphs: PackedVector2Array = sim.module_glyphs(t)
+		var glyphs: PackedVector2Array = all[t]
 		var m: int = glyphs.size()
 		var mm: MultiMesh = layer.multimesh
 		if m > mm.instance_count:

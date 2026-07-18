@@ -7,6 +7,10 @@ var _img: Image
 var _tex: ImageTexture
 var _res: int = 0
 
+const REDRAW_EVERY := 6
+var _frame: int = 0
+var _last_mode: int = -999   # last (channel, or -1 biome, or -2 optimum) drawn
+
 func _ready() -> void:
 	_res = int(sim.biome_resolution())
 	if _res <= 0:
@@ -23,22 +27,45 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _res <= 0:
 		return
-	var colors: PackedColorArray
-	var ch: int = overlay.ground_channel()
+	# Current ground selection encoded as one int: -2 optimum, -1 biome, else channel.
+	var mode: int = -1
 	if overlay.ground_is_optimum():
+		mode = -2
+	else:
+		var ch0: int = overlay.ground_channel()
+		if ch0 >= 0:
+			mode = ch0
+	# Throttle: rebuild every REDRAW_EVERY frames, but immediately when the ground
+	# selection changed (so [G]/overlay toggles feel instant).
+	_frame += 1
+	if mode == _last_mode and _frame % REDRAW_EVERY != 0:
+		return
+	_last_mode = mode
+
+	var colors: PackedColorArray
+	if mode == -2:
 		# Flat tint whose hue encodes the current global optimum in [0,1].
 		var opt: float = sim.env_optimum()
 		var c: Color = Color.from_hsv(clampf(opt, 0.0, 1.0) * 0.8, 0.7, 0.5) if opt >= 0.0 else Color(0.1, 0.1, 0.12)
 		colors = PackedColorArray()
 		colors.resize(_res * _res)
 		colors.fill(c)
-	elif ch >= 0:
-		colors = sim.pheromone_colors(ch)
+	elif mode >= 0:
+		colors = sim.pheromone_colors(mode)
 	else:
 		colors = sim.biome_colors()
 	if colors.size() != _res * _res:
 		return
-	for row in _res:
-		for col in _res:
-			_img.set_pixel(col, row, colors[row * _res + col])
+
+	# Build an RGBA8 byte buffer in one pass (faster than per-pixel set_pixel).
+	var bytes := PackedByteArray()
+	bytes.resize(_res * _res * 4)
+	for i in colors.size():
+		var col: Color = colors[i]
+		var o: int = i * 4
+		bytes[o] = int(clampf(col.r, 0.0, 1.0) * 255.0)
+		bytes[o + 1] = int(clampf(col.g, 0.0, 1.0) * 255.0)
+		bytes[o + 2] = int(clampf(col.b, 0.0, 1.0) * 255.0)
+		bytes[o + 3] = int(clampf(col.a, 0.0, 1.0) * 255.0)
+	_img.set_data(_res, _res, false, Image.FORMAT_RGBA8, bytes)
 	_tex.update(_img)
