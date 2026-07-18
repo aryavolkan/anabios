@@ -6,7 +6,7 @@ use bitvec::vec::BitVec;
 use serde::{Deserialize, Serialize};
 
 use crate::agent::{AgentBuffers, AgentId, LineageId, LINEAGE_NONE};
-use crate::biome::{BiomeField, WORLD_SIZE};
+use crate::biome::BiomeField;
 use crate::genome::Genome;
 use crate::prelude::Vec2;
 use crate::rng::Rng;
@@ -262,11 +262,11 @@ impl World {
         self.species_member_counts[idx] = self.species_member_counts[idx].saturating_sub(1);
     }
 
-    /// World dimensions (for callers that want the constant without
-    /// importing the biome module directly).
+    /// World dimensions (for callers that want the runtime extent without
+    /// reading `world_size` directly).
     #[inline]
     pub fn size(&self) -> f32 {
-        WORLD_SIZE
+        self.world_size
     }
 
     /// Sanity helper used by tests and the headless CLI.

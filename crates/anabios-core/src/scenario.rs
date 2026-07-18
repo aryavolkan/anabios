@@ -3,7 +3,6 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::biome::WORLD_SIZE;
 use crate::genome::{Genome, GenomeSlot};
 use crate::prelude::Vec2;
 use crate::world::World;
@@ -243,8 +242,8 @@ impl Scenario {
             for _ in 0..spec.count {
                 let position = match spec.placement {
                     Placement::Uniform => {
-                        let x = w.rng.f32_range(0.0, WORLD_SIZE);
-                        let y = w.rng.f32_range(0.0, WORLD_SIZE);
+                        let x = w.rng.f32_range(0.0, w.world_size);
+                        let y = w.rng.f32_range(0.0, w.world_size);
                         Vec2::new(x, y)
                     }
                     Placement::Cluster { center_x, center_y, radius } => {

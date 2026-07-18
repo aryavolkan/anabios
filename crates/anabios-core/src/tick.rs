@@ -20,13 +20,20 @@ pub fn step(world: &mut World) {
     world.spatial.rebuild(&world.agents.position, |i| world.agents.is_alive(i as u32));
 
     // Stage 2: sense.
-    sense_all(&world.agents, &world.biome, &world.pheromones, &world.spatial, &mut world.sensors);
+    sense_all(
+        &world.agents,
+        &world.biome,
+        &world.pheromones,
+        &world.spatial,
+        &mut world.sensors,
+        world.world_size,
+    );
 
     // Stage 3: decide.
     decide_all(world);
 
     // Stage 4: integrate (motion + per-tick metabolism).
-    integrate_all(&mut world.agents, &world.desired_direction[..cap]);
+    integrate_all(&mut world.agents, &world.desired_direction[..cap], world.world_size);
 
     // Stage 5: interact (feeding, combat, predation).
     interact_all(world);

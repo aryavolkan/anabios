@@ -264,9 +264,9 @@ impl CodexState {
     }
 }
 
-/// RMS distance (torus-aware) of `positions` from their coordinate mean.
-/// Returns 0.0 for fewer than 2 points.
-pub fn species_spread(positions: &[glam::Vec2]) -> f32 {
+/// RMS distance (torus-aware) of `positions` from their coordinate mean, on a
+/// torus of the given `world_size`. Returns 0.0 for fewer than 2 points.
+pub fn species_spread(positions: &[glam::Vec2], world_size: f32) -> f32 {
     if positions.len() < 2 {
         return 0.0;
     }
@@ -280,7 +280,7 @@ pub fn species_spread(positions: &[glam::Vec2]) -> f32 {
     let centroid = glam::Vec2::new((cx / n as f64) as f32, (cy / n as f64) as f32);
     let mut sumsq = 0.0f64;
     for p in positions {
-        let d = crate::spatial::torus_distance(*p, centroid);
+        let d = crate::spatial::torus_distance(*p, centroid, world_size);
         sumsq += (d as f64) * (d as f64);
     }
     ((sumsq / n as f64).sqrt()) as f32

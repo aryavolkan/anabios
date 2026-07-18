@@ -84,3 +84,25 @@ fn large_world_pheromone_honours_world_size() {
     assert!(pheromones.sample(Vec2::new(1500.0, 0.5), 0) > 0.0);
     assert_eq!(pheromones.sample(Vec2::new(476.0, 0.5), 0), 0.0);
 }
+
+#[test]
+fn torus_distance_wraps_correctly_across_the_2048_seam() {
+    use anabios_core::prelude_test::Vec2;
+    use anabios_core::spatial::torus_distance;
+
+    // Task 1.4: torus_distance now takes the runtime world_size instead of
+    // reading the hard-coded 1024 constant. At world_size=2048, two points
+    // straddling the x=0/2048 seam must wrap the short way: |10 - 2040| =
+    // 2030 the long way, but 2048 - 2030 = 18 the short way around.
+    let world_size = 2048.0;
+    let a = Vec2::new(10.0, 500.0);
+    let b = Vec2::new(2040.0, 500.0);
+    let d = torus_distance(a, b, world_size);
+    assert!(
+        (d - 18.0).abs() < 1e-3,
+        "expected ~18 (wrap-around distance on a 2048 torus), got {d}"
+    );
+    // Sanity: nowhere near the ~1024 a broken/unwrapped (or 1024-assuming)
+    // computation would produce.
+    assert!(d < 100.0, "distance must take the short way around the seam, got {d}");
+}

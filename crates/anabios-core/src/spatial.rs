@@ -161,16 +161,16 @@ impl Default for UniformSpatialHash {
     }
 }
 
-/// Wrap-aware distance between two points on the torus.
+/// Wrap-aware distance between two points on a torus of the given `world_size`.
 #[inline]
-pub fn torus_distance(a: Vec2, b: Vec2) -> f32 {
+pub fn torus_distance(a: Vec2, b: Vec2, world_size: f32) -> f32 {
     let mut dx = (a.x - b.x).abs();
     let mut dy = (a.y - b.y).abs();
-    if dx > WORLD_SIZE * 0.5 {
-        dx = WORLD_SIZE - dx;
+    if dx > world_size * 0.5 {
+        dx = world_size - dx;
     }
-    if dy > WORLD_SIZE * 0.5 {
-        dy = WORLD_SIZE - dy;
+    if dy > world_size * 0.5 {
+        dy = world_size - dy;
     }
     (dx * dx + dy * dy).sqrt()
 }
@@ -181,7 +181,7 @@ mod tests {
 
     fn brute_force_neighbors(positions: &[Vec2], origin: Vec2, radius: f32) -> Vec<u32> {
         let mut out: Vec<u32> = (0..positions.len() as u32)
-            .filter(|i| torus_distance(positions[*i as usize], origin) <= radius)
+            .filter(|i| torus_distance(positions[*i as usize], origin, WORLD_SIZE) <= radius)
             .collect();
         out.sort();
         out
@@ -216,7 +216,9 @@ mod tests {
         for probe in probes {
             let mut got: Vec<u32> = Vec::new();
             h.query(probe, PERCEPTION_MAX_RADIUS, |id| {
-                if torus_distance(positions[id as usize], probe) <= PERCEPTION_MAX_RADIUS {
+                if torus_distance(positions[id as usize], probe, WORLD_SIZE)
+                    <= PERCEPTION_MAX_RADIUS
+                {
                     got.push(id);
                 }
             });
@@ -242,6 +244,6 @@ mod tests {
     fn torus_distance_wraps_short_way() {
         let a = Vec2::new(2.0, 0.0);
         let b = Vec2::new(WORLD_SIZE - 2.0, 0.0);
-        assert!((torus_distance(a, b) - 4.0).abs() < 1e-3);
+        assert!((torus_distance(a, b, WORLD_SIZE) - 4.0).abs() < 1e-3);
     }
 }

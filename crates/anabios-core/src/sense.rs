@@ -7,7 +7,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::agent::AgentBuffers;
-use crate::biome::{BiomeCell, BiomeField, CELL_SIZE, WORLD_SIZE};
+#[cfg(test)]
+use crate::biome::CELL_SIZE;
+use crate::biome::{BiomeCell, BiomeField};
 use crate::genome::{Genome, GenomeSlot};
 use crate::prelude::{wrap_torus, Vec2};
 use crate::spatial::{torus_distance, UniformSpatialHash};
@@ -124,6 +126,7 @@ pub fn sense_all(
     pheromones: &crate::pheromone::PheromoneField,
     spatial: &UniformSpatialHash,
     registers: &mut [SensorRegister],
+    world_size: f32,
 ) {
     use rayon::prelude::*;
     debug_assert!(registers.len() >= agents.capacity());
@@ -134,7 +137,7 @@ pub fn sense_all(
         if !agents.is_alive(i as u32) {
             return;
         }
-        *reg = sense_one(i as u32, agents, biome, pheromones, spatial, max_radius);
+        *reg = sense_one(i as u32, agents, biome, pheromones, spatial, max_radius, world_size);
     });
 }
 
@@ -146,6 +149,7 @@ fn sense_one(
     pheromones: &crate::pheromone::PheromoneField,
     spatial: &UniformSpatialHash,
     max_radius: f32,
+    world_size: f32,
 ) -> SensorRegister {
     let i = id as usize;
     let pos = agents.position[i];
@@ -182,12 +186,12 @@ fn sense_one(
             return;
         }
         let other_pos = agents.position[oid as usize];
-        let d = torus_distance(pos, other_pos);
+        let d = torus_distance(pos, other_pos, world_size);
         if d > radius {
             return;
         }
         crowding += 1;
-        let dir = torus_direction(pos, other_pos);
+        let dir = torus_direction(pos, other_pos, world_size);
         let other_species = agents.species_id[oid as usize];
         if d < nearest_dist {
             nearest_dist = d;
@@ -268,7 +272,7 @@ fn sense_one(
 fn best_plant_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 {
     let mut best_biomass = 0.0_f32;
     let mut best_offset = Vec2::ZERO;
-    let cell_reach = (radius / CELL_SIZE).ceil() as i32 + 1;
+    let cell_reach = (radius / biome.cell_size).ceil() as i32 + 1;
     let (cx, cy) = biome.cell_coords(pos);
 
     for dy in -cell_reach..=cell_reach {
@@ -279,12 +283,14 @@ fn best_plant_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 {
             if cell.plant_biomass <= 0.0 {
                 continue;
             }
-            let cell_center =
-                Vec2::new((col as f32 + 0.5) * CELL_SIZE, (row as f32 + 0.5) * CELL_SIZE);
+            let cell_center = Vec2::new(
+                (col as f32 + 0.5) * biome.cell_size,
+                (row as f32 + 0.5) * biome.cell_size,
+            );
             let offset = wrap_torus(
-                cell_center - pos + Vec2::splat(WORLD_SIZE * 0.5),
-                Vec2::splat(WORLD_SIZE),
-            ) - Vec2::splat(WORLD_SIZE * 0.5);
+                cell_center - pos + Vec2::splat(biome.world_size * 0.5),
+                Vec2::splat(biome.world_size),
+            ) - Vec2::splat(biome.world_size * 0.5);
             let dist = offset.length();
             if dist > radius {
                 continue;
@@ -304,18 +310,18 @@ fn best_plant_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 {
 }
 
 /// Wrap-aware direction unit vector from `from` toward `to`.
-fn torus_direction(from: Vec2, to: Vec2) -> Vec2 {
+fn torus_direction(from: Vec2, to: Vec2, world_size: f32) -> Vec2 {
     let mut dx = to.x - from.x;
     let mut dy = to.y - from.y;
-    if dx > WORLD_SIZE * 0.5 {
-        dx -= WORLD_SIZE;
-    } else if dx < -WORLD_SIZE * 0.5 {
-        dx += WORLD_SIZE;
+    if dx > world_size * 0.5 {
+        dx -= world_size;
+    } else if dx < -world_size * 0.5 {
+        dx += world_size;
     }
-    if dy > WORLD_SIZE * 0.5 {
-        dy -= WORLD_SIZE;
-    } else if dy < -WORLD_SIZE * 0.5 {
-        dy += WORLD_SIZE;
+    if dy > world_size * 0.5 {
+        dy -= world_size;
+    } else if dy < -world_size * 0.5 {
+        dy += world_size;
     }
     Vec2::new(dx, dy).normalize_or_zero()
 }
@@ -344,7 +350,7 @@ mod tests {
         let _ = w.spawn_agent(spawn, Genome::neutral());
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs);
+        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
         assert!(regs[0].local_plant_biomass > 0.0);
     }
 
@@ -357,7 +363,7 @@ mod tests {
         let _ = w.spawn_agent(pos_b, Genome::neutral());
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs);
+        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
         assert!(regs[0].has_neighbor);
         assert!((regs[0].nearest_neighbor_dist - 4.0).abs() < 1e-3);
         assert!(regs[0].nearest_neighbor_dir.x > 0.9);
@@ -372,7 +378,7 @@ mod tests {
             .retain(|m| !matches!(m, crate::module::Module::Sensor { .. }));
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs);
+        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
         assert_eq!(regs[id as usize].local_plant_biomass, 0.0);
         assert!(!regs[id as usize].has_neighbor);
     }
@@ -383,7 +389,7 @@ mod tests {
         let _ = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs);
+        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
         assert!(!regs[0].has_neighbor);
         assert_eq!(regs[0].nearest_neighbor_dist, f32::INFINITY);
         assert_eq!(regs[0].nearest_neighbor_species, NO_NEIGHBOR_SPECIES);
@@ -402,7 +408,7 @@ mod tests {
         w.agents.species_id[foe as usize] = 1; // make foe another species
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs);
+        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
         let r = regs[me as usize];
         assert_eq!(r.nearest_same_id, kin);
         assert!((r.nearest_same_dist - 6.0).abs() < 1e-3);
@@ -427,7 +433,7 @@ mod tests {
         w.agents.energy[other as usize] = 40.0;
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs);
+        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
         let r = regs[me as usize];
         assert!(
             (r.nearest_rel_size - 2.0).abs() < 1e-3,
@@ -449,7 +455,7 @@ mod tests {
         let _ = w.spawn_agent(Vec2::new(300.0, 303.0), Genome::neutral());
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs);
+        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
         assert_eq!(regs[me as usize].crowding, 2);
     }
 }
