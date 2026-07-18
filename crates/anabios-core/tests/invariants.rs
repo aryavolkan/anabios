@@ -9,12 +9,13 @@ use proptest::prelude::*;
 
 fn build_world(seed: u64, agent_count: usize) -> World {
     let mut w = World::new(seed);
+    // Invariants hold regardless of scale; cap population so the proptest cases
+    // stay fast under the raised 10k default.
+    w.max_population = 500;
     for i in 0..agent_count {
         let x = ((i * 17) % 1024) as f32 + 0.5;
         let y = ((i * 31) % 1024) as f32 + 0.5;
         let mut g = Genome::neutral();
-        g.set(GenomeSlot::SpeedMax, 0.4);
-        g.set(GenomeSlot::DietCarnivory, 0.0);
         g.set(GenomeSlot::Size, 0.4);
         g.set(GenomeSlot::LifespanBias, 0.5);
         w.spawn_agent(Vec2::new(x, y), g);

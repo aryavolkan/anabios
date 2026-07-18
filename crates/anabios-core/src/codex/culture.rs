@@ -2,76 +2,35 @@
 
 use super::*;
 use crate::world::World;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 /// DialectFormed: a Communicator-bearing species whose west/east spatial halves
 /// maintain divergent meme vectors (L2 ≥ DIALECT_DIVERGENCE_MIN) for a full
 /// DIALECT_WINDOW consecutive ticks. Edge-triggered per species; re-arms when
 /// divergence drops (clears the buffer).
-pub(super) fn detect_dialect_formed(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+pub(super) fn detect_dialect_formed(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
-    // Gather per-species member indices; tag species that have a Communicator member.
-    let mut members: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
-    let mut has_comm: BTreeSet<u32> = BTreeSet::new();
-    for id in world.agents.iter_alive() {
-        let i = id as usize;
-        let sid = world.agents.species_id[i];
-        members.entry(sid).or_default().push(i);
-        if crate::module::has(&world.agents.modules[i], crate::module::ModuleType::Communicator) {
-            has_comm.insert(sid);
-        }
-    }
-
     let mut to_push: Vec<CodexEvent> = Vec::new();
-    for (sid, idxs) in members.iter() {
+    for &sid in agg.active() {
+        let entry = agg.get(sid).expect("active species has an entry");
         // Only Communicator-bearing species.
-        if !has_comm.contains(sid) {
-            world.codex.dialect_divergence.remove(sid);
-            world.codex.dialect_active.remove(sid);
+        if !entry.has_comm {
+            world.codex.dialect_divergence.remove(&sid);
+            world.codex.dialect_active.remove(&sid);
             continue;
         }
-        // Species centroid x.
-        let (cx, _cy) = centroid_of(centroids, *sid);
-        // Split into west (pos.x < cx) and east (pos.x >= cx).
-        let mut west: Vec<usize> = Vec::new();
-        let mut east: Vec<usize> = Vec::new();
-        for &i in idxs {
-            if world.agents.position[i].x < cx {
-                west.push(i);
-            } else {
-                east.push(i);
-            }
-        }
-        // Require each half to have at least DIALECT_MIN_HALF members.
-        if (west.len() as u32) < DIALECT_MIN_HALF || (east.len() as u32) < DIALECT_MIN_HALF {
-            world.codex.dialect_divergence.remove(sid);
-            world.codex.dialect_active.remove(sid);
+        let (cx, _cy) = entry.centroid();
+        let div = west_east_meme_divergence(&entry.member_idx, cx, DIALECT_MIN_HALF, |i| {
+            (world.agents.position[i].x, world.agents.meme_vector[i])
+        });
+        let Some(div) = div else {
+            // A spatial half fell below DIALECT_MIN_HALF.
+            world.codex.dialect_divergence.remove(&sid);
+            world.codex.dialect_active.remove(&sid);
             continue;
-        }
-        // Compute per-channel mean meme for each half.
-        let mut west_mean = [0.0f32; MEME_CHANNELS];
-        let mut east_mean = [0.0f32; MEME_CHANNELS];
-        let wn = west.len() as f32;
-        let en = east.len() as f32;
-        for &i in &west {
-            for (ch, w) in west_mean.iter_mut().enumerate() {
-                *w += world.agents.meme_vector[i][ch];
-            }
-        }
-        for w in west_mean.iter_mut() {
-            *w /= wn;
-        }
-        for &i in &east {
-            for (ch, e) in east_mean.iter_mut().enumerate() {
-                *e += world.agents.meme_vector[i][ch];
-            }
-        }
-        for e in east_mean.iter_mut() {
-            *e /= en;
-        }
-        let div = meme_l2(&west_mean, &east_mean);
+        };
         // Bounded window push.
-        let buf = world.codex.dialect_divergence.entry(*sid).or_default();
+        let buf = world.codex.dialect_divergence.entry(sid).or_default();
         if buf.len() == DIALECT_WINDOW {
             buf.pop_front();
         }
@@ -79,12 +38,12 @@ pub(super) fn detect_dialect_formed(world: &mut World, centroids: &BTreeMap<u32,
         let full_and_diverged =
             buf.len() == DIALECT_WINDOW && buf.iter().all(|&d| d >= DIALECT_DIVERGENCE_MIN);
         if let Some(ev) =
-            edge_trigger_species(&mut world.codex.dialect_active, *sid, full_and_diverged, || {
-                let (lx, ly) = centroid_of(centroids, *sid);
+            edge_trigger_species(&mut world.codex.dialect_active, sid, full_and_diverged, || {
+                let (lx, ly) = centroid_of(agg, sid);
                 CodexEvent {
                     event_type: EventType::DialectFormed,
                     tick,
-                    species_id: *sid,
+                    species_id: sid,
                     value: div,
                     loc_x: lx,
                     loc_y: ly,
@@ -95,7 +54,7 @@ pub(super) fn detect_dialect_formed(world: &mut World, centroids: &BTreeMap<u32,
         } else if !full_and_diverged && div < DIALECT_DIVERGENCE_MIN {
             // Clear buffer so a new window starts fresh (the latch itself is
             // cleared by edge_trigger_species above).
-            world.codex.dialect_divergence.remove(sid);
+            world.codex.dialect_divergence.remove(&sid);
         }
     }
     for ev in to_push {
@@ -108,35 +67,20 @@ pub(super) fn detect_dialect_formed(world: &mut World, centroids: &BTreeMap<u32,
 /// once per (species, channel) when the front of the window was ≤ MEME_SWEEP_LOW
 /// and the back is ≥ MEME_SWEEP_HIGH (a sweep from rare to dominant). Re-arms
 /// when the back drops below MEME_SWEEP_LOW again.
-pub(super) fn detect_meme_sweep(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+pub(super) fn detect_meme_sweep(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
-    // Per-species meme sums for each channel; track species with Communicator members.
-    let mut meme_sums: BTreeMap<u32, ([f64; MEME_CHANNELS], u32)> = BTreeMap::new();
-    let mut has_comm: BTreeSet<u32> = BTreeSet::new();
-    for id in world.agents.iter_alive() {
-        let i = id as usize;
-        let sid = world.agents.species_id[i];
-        if crate::module::has(&world.agents.modules[i], crate::module::ModuleType::Communicator) {
-            has_comm.insert(sid);
-        }
-        let entry = meme_sums.entry(sid).or_insert(([0.0f64; MEME_CHANNELS], 0));
-        for ch in 0..MEME_CHANNELS {
-            entry.0[ch] += world.agents.meme_vector[i][ch] as f64;
-        }
-        entry.1 += 1;
-    }
-
     let mut to_push: Vec<CodexEvent> = Vec::new();
-    for (sid, (sums, n)) in meme_sums.iter() {
+    for &sid in agg.active() {
+        let entry = agg.get(sid).expect("active species has an entry");
         // Must have Communicator and enough members.
-        if !has_comm.contains(sid) || *n < MEME_SWEEP_MIN_MEMBERS {
+        if !entry.has_comm || entry.count < MEME_SWEEP_MIN_MEMBERS {
             continue;
         }
-        let (lx, ly) = centroid_of(centroids, *sid);
-        let nf = *n as f64;
-        for (ch, &s) in sums.iter().enumerate() {
+        let (lx, ly) = centroid_of(agg, sid);
+        let nf = entry.count as f64;
+        for (ch, &s) in entry.meme_sums.iter().enumerate() {
             let mean = (s / nf) as f32;
-            let key = (*sid, ch as u8);
+            let key = (sid, ch as u8);
             let buf = world.codex.meme_mean_history.entry(key).or_default();
             if buf.len() == MEME_SWEEP_WINDOW {
                 buf.pop_front();
@@ -153,7 +97,7 @@ pub(super) fn detect_meme_sweep(world: &mut World, centroids: &BTreeMap<u32, (f3
                     to_push.push(CodexEvent {
                         event_type: EventType::MemeSweep,
                         tick,
-                        species_id: *sid,
+                        species_id: sid,
                         value: back,
                         loc_x: lx,
                         loc_y: ly,
@@ -183,7 +127,9 @@ pub(super) fn detect_alarm_call(world: &mut World) {
     {
         return;
     }
-    let alive_ids: Vec<u32> = world.agents.iter_alive().collect();
+    let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
+    alive_ids.clear();
+    alive_ids.extend(world.agents.iter_alive());
     let tick = world.tick;
     let mut first_caller_species: Option<u32> = None;
     let mut first_caller_pos: (f32, f32) = (0.0, 0.0);
@@ -242,15 +188,17 @@ pub(super) fn detect_alarm_call(world: &mut World) {
                 loc_y: ly,
             });
             world.codex.alarm_emitted = true;
+            world.agents.scratch_ids = alive_ids;
             return;
         }
     }
+    world.agents.scratch_ids = alive_ids;
 }
 
 /// EvolvedCooperation: prune share_events to the COOPERATION_WINDOW, tally per
 /// species, and edge-trigger (per species) when a species reaches
 /// COOPERATION_MIN_SHARES. Re-arms when the count drops below threshold.
-pub(super) fn detect_evolved_cooperation(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+pub(super) fn detect_evolved_cooperation(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
     // Prune entries older than the rolling window (mirror detect_combat_raid).
     let cutoff = tick.saturating_sub(COOPERATION_WINDOW);
@@ -282,7 +230,7 @@ pub(super) fn detect_evolved_cooperation(world: &mut World, centroids: &BTreeMap
     // Fire for species above threshold not yet latched.
     for (sid, count) in counts.iter() {
         if *count >= COOPERATION_MIN_SHARES && !world.codex.cooperation_active.contains(sid) {
-            let (lx, ly) = centroid_of(centroids, *sid);
+            let (lx, ly) = centroid_of(agg, *sid);
             to_push.push(CodexEvent {
                 event_type: EventType::EvolvedCooperation,
                 tick,

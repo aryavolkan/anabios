@@ -72,8 +72,12 @@ pub enum GenomeSlot {
     /// Declared; not yet read by behavior. Reserved: future Communicator-module effectiveness gain.
     CommunicationStrength = 23,
     Altruism = 24,
+    /// Declared; not yet read by behavior (speed is set by Locomotor modules).
+    /// Kept for serde index stability; reserved: future genome-level speed cap.
     SpeedMax = 25,
     PerceptionRadius = 26,
+    /// Declared; not yet read by behavior (diet is set by Mouth module params).
+    /// Kept for serde index stability; reserved: future genome-level diet bias.
     DietCarnivory = 27,
     /// Propensity (`> 0.5`) to individually *learn* the foraging technique by
     /// doing (learning-by-doing toward the current environmental optimum).
@@ -247,13 +251,25 @@ impl Genome {
         GenomeSlot::Conscientiousness as usize,
     ];
 
+    /// O(1) lookup form of `PERSONALITY_SLOTS` — the 5-element `contains`
+    /// probe showed up in the hot `distance()` inner loop.
+    const PERSONALITY_MASK: [bool; GENOME_LEN] = {
+        let mut m = [false; GENOME_LEN];
+        let mut k = 0;
+        while k < Self::PERSONALITY_SLOTS.len() {
+            m[Self::PERSONALITY_SLOTS[k]] = true;
+            k += 1;
+        }
+        m
+    };
+
     /// L2 distance between two genomes, EXCLUDING the personality slots. Used by
     /// speciation in M2; kept here because it is conceptually part of the
     /// genome's contract.
     pub fn distance(&self, other: &Genome) -> f32 {
         let mut acc = 0.0_f32;
         for i in 0..GENOME_LEN {
-            if Self::PERSONALITY_SLOTS.contains(&i) {
+            if Self::PERSONALITY_MASK[i] {
                 continue;
             }
             let d = self.0[i] - other.0[i];

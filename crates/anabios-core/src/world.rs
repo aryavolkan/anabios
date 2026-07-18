@@ -55,8 +55,18 @@ pub struct World {
     /// old snapshots without this field still deserialize.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// Hard cap on alive agents; `reproduce_all` skips mating at/above this.
+    /// Defaults to `reproduce::MAX_POPULATION` (the design's 10k budget);
+    /// scenarios/tests can pin it lower. Defaulted so old snapshots without
+    /// this field still deserialize.
+    #[serde(default = "default_max_population")]
+    pub max_population: u32,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
+    /// Spatial hash over `carcasses` (indexed by carcass index), rebuilt each
+    /// tick in `scavenge_pass` so carnivores don't linearly scan every carcass.
+    #[serde(skip)]
+    pub carcass_spatial: UniformSpatialHash,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
@@ -65,14 +75,14 @@ pub struct World {
     /// tick. Consumed by `interact` starting in M12.
     #[serde(skip)]
     pub actions: Vec<crate::program::ActionRegister>,
+    /// Per-tick per-species aggregates shared by the codex detectors; rebuilt
+    /// at the top of every `observe_all`. Reused across ticks (take/restore).
+    #[serde(skip)]
+    pub(crate) codex_agg: crate::codex::SpeciesAggTable,
     /// Per-agent BitVec marking who has already mated this tick.
     /// Cleared at the start of `reproduce_all`.
-    // allow: filled by Task 6
     #[serde(skip)]
     pub reproduced_this_tick: BitVec,
-    /// Scratch value stack reused by the program evaluator each tick.
-    #[serde(skip)]
-    pub eval_stack: Vec<f32>,
     /// Per-tick combat attribution scratch (reset each tick in `interact_all`).
     /// `combat_damaged[t]` is set when slot `t` takes combat damage; read by
     /// `age_and_starve` / the codex detectors to attribute deaths.
@@ -82,6 +92,11 @@ pub struct World {
     /// `combat_damaged[t]` is true this tick).
     #[serde(skip)]
     pub combat_attacker: Vec<u32>,
+}
+
+/// Serde default for `World::max_population` (old snapshots lack the field).
+fn default_max_population() -> u32 {
+    crate::reproduce::MAX_POPULATION
 }
 
 impl World {
@@ -107,12 +122,14 @@ impl World {
             pheromones: crate::pheromone::PheromoneField::new(),
             env_period: 0,
             biome_adaptation: false,
+            max_population: crate::reproduce::MAX_POPULATION,
             spatial: UniformSpatialHash::new(),
+            carcass_spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),
             reproduced_this_tick: BitVec::new(),
-            eval_stack: Vec::new(),
+            codex_agg: crate::codex::SpeciesAggTable::default(),
             combat_damaged: Vec::new(),
             combat_attacker: Vec::new(),
         }

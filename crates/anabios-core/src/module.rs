@@ -506,11 +506,15 @@ pub fn crossover_and_mutate(a: &ModuleList, b: &ModuleList, rng: &mut Rng) -> Mo
 /// agents with too many modules for their food intake go negative and
 /// die in the subsequent `age_and_starve` stage.
 pub fn upkeep_all(agents: &mut crate::agent::AgentBuffers) {
-    for id in agents.iter_alive().collect::<Vec<_>>() {
+    let mut ids = std::mem::take(&mut agents.scratch_ids);
+    ids.clear();
+    ids.extend(agents.iter_alive());
+    for &id in &ids {
         let i = id as usize;
         let cost = total_upkeep(&agents.modules[i]);
         agents.energy[i] -= cost;
     }
+    agents.scratch_ids = ids;
 }
 
 #[cfg(test)]

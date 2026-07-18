@@ -315,13 +315,12 @@ pub fn arms_race_signal(
 }
 
 /// Histogram intersection of two normalized terrain distributions
-/// (`Σ min(a_t, b_t)`): 1.0 identical, 0.0 disjoint.
-pub fn histogram_overlap(a: &BTreeMap<u8, f32>, b: &BTreeMap<u8, f32>) -> f32 {
+/// (`Σ min(a_t, b_t)`): 1.0 identical, 0.0 disjoint. Zero slots contribute
+/// nothing, so fixed-array iteration matches the former sparse-map version.
+pub fn histogram_overlap(a: &[f32; TERRAIN_SLOTS], b: &[f32; TERRAIN_SLOTS]) -> f32 {
     let mut overlap = 0.0f32;
-    for (t, av) in a.iter() {
-        if let Some(bv) = b.get(t) {
-            overlap += av.min(*bv);
-        }
+    for t in 0..TERRAIN_SLOTS {
+        overlap += a[t].min(b[t]);
     }
     overlap
 }
@@ -336,57 +335,221 @@ pub fn meme_l2(a: &[f32; MEME_CHANNELS], b: &[f32; MEME_CHANNELS]) -> f32 {
     s.sqrt()
 }
 
+/// Terrain histogram slot count. `TerrainType` has 5 variants; 8 gives
+/// headroom so a new variant doesn't silently corrupt the niche detector.
+pub const TERRAIN_SLOTS: usize = 8;
+
+/// Per-species aggregates for one tick, built in a single `iter_alive` pass
+/// at the top of `observe_all` and shared by every detector. Replaces the
+/// ~7 hand-rolled per-detector population scans (and their per-tick
+/// `BTreeMap` churn) with one pass over dense, reused storage.
+///
+/// Lives on `World` behind `#[serde(skip)]` — never part of the snapshot or
+/// the state hash. All accumulations visit agents in ascending id order so
+/// every f32/f64 sum is bit-identical to the scans this replaced.
+#[derive(Debug, Clone, Default)]
+pub struct SpeciesAggTable {
+    /// Dense per-species entries, indexed by species id. Grows as needed.
+    entries: Vec<SpeciesAgg>,
+    /// Species with ≥1 alive member this tick, ascending.
+    active: Vec<u32>,
+}
+
+/// Aggregates for one species for one tick.
+#[derive(Debug, Clone, Default)]
+pub struct SpeciesAgg {
+    pub count: u32,
+    pub sum_x: f64,
+    pub sum_y: f64,
+    /// Alive member agent indices, ascending.
+    pub member_idx: Vec<usize>,
+    pub has_comm: bool,
+    pub has_pheromone: bool,
+    /// Bitmask of present `ModuleType` discriminants (< 16 types).
+    pub module_mask: u16,
+    /// Bitmask of present program `node_kind` discriminants (≤ 42 kinds).
+    pub node_mask: u64,
+    /// Raw per-terrain member counts (normalized by `count` on read).
+    pub terrain_counts: [f32; TERRAIN_SLOTS],
+    pub meme_sums: [f64; MEME_CHANNELS],
+    /// Sum of `SensorRegister::crowding`; 0 when the sensors scratch is
+    /// undersized (standalone `observe_all` calls outside the tick).
+    pub crowding_sum: f64,
+    pub weapon_sum: f64,
+    pub armor_sum: f64,
+}
+
+impl SpeciesAgg {
+    fn reset(&mut self) {
+        self.count = 0;
+        self.sum_x = 0.0;
+        self.sum_y = 0.0;
+        self.member_idx.clear();
+        self.has_comm = false;
+        self.has_pheromone = false;
+        self.module_mask = 0;
+        self.node_mask = 0;
+        self.terrain_counts = [0.0; TERRAIN_SLOTS];
+        self.meme_sums = [0.0; MEME_CHANNELS];
+        self.crowding_sum = 0.0;
+        self.weapon_sum = 0.0;
+        self.armor_sum = 0.0;
+    }
+
+    /// This tick's centroid (mean alive position), `(0,0)` when empty.
+    /// f64 accumulator divided by member count — identical to the former
+    /// `compute_centroids`.
+    #[inline]
+    pub fn centroid(&self) -> (f32, f32) {
+        let nf = self.count.max(1) as f64;
+        ((self.sum_x / nf) as f32, (self.sum_y / nf) as f32)
+    }
+}
+
+impl SpeciesAggTable {
+    /// Entry for `sid`, if the species has ≥1 alive member this tick.
+    #[inline]
+    pub fn get(&self, sid: u32) -> Option<&SpeciesAgg> {
+        self.entries.get(sid as usize).filter(|e| e.count > 0)
+    }
+
+    /// Species ids with ≥1 alive member, ascending.
+    #[inline]
+    pub fn active(&self) -> &[u32] {
+        &self.active
+    }
+
+    /// Rebuild from current world state. One `iter_alive` pass.
+    pub fn build(&mut self, world: &World) {
+        use crate::module::{self, ModuleType};
+        for &sid in &self.active {
+            if let Some(e) = self.entries.get_mut(sid as usize) {
+                e.reset();
+            }
+        }
+        self.active.clear();
+        let sensors_ok = world.sensors.len() >= world.agents.capacity();
+        for id in world.agents.iter_alive() {
+            let i = id as usize;
+            let sid = world.agents.species_id[i];
+            let idx = sid as usize;
+            if idx >= self.entries.len() {
+                self.entries.resize(idx + 1, SpeciesAgg::default());
+            }
+            let e = &mut self.entries[idx];
+            if e.count == 0 {
+                self.active.push(sid);
+            }
+            e.count += 1;
+            let pos = world.agents.position[i];
+            e.sum_x += pos.x as f64;
+            e.sum_y += pos.y as f64;
+            e.member_idx.push(i);
+            let modules = &world.agents.modules[i];
+            if !e.has_comm && module::has(modules, ModuleType::Communicator) {
+                e.has_comm = true;
+            }
+            if !e.has_pheromone && module::has(modules, ModuleType::Pheromone) {
+                e.has_pheromone = true;
+            }
+            for m in modules.iter() {
+                e.module_mask |= 1u16 << (m.module_type() as u8);
+            }
+            for node in world.agents.program[i].nodes.iter().copied() {
+                e.node_mask |= 1u64 << crate::program::Program::node_kind(node);
+            }
+            let (col, row) = crate::biome::BiomeField::cell_coords(pos);
+            let terrain = world.biome.at(col, row).terrain as usize;
+            e.terrain_counts[terrain.min(TERRAIN_SLOTS - 1)] += 1.0;
+            for (ch, s) in e.meme_sums.iter_mut().enumerate() {
+                *s += world.agents.meme_vector[i][ch] as f64;
+            }
+            if sensors_ok {
+                e.crowding_sum += world.sensors[i].crowding as f64;
+            }
+            e.weapon_sum += module::effective_weapon(modules).map(|(d, _)| d).unwrap_or(0.0) as f64;
+            e.armor_sum += module::effective_armor_protection(modules) as f64;
+        }
+        self.active.sort_unstable();
+    }
+}
+
+/// West/east spatial-half meme divergence kernel shared by the DialectFormed
+/// detector and the Godot coevo metric. Splits `idxs` at centroid x `cx`,
+/// computes per-half per-channel meme means (f32, ascending index order),
+/// and returns their L2 distance. `None` when either half has fewer than
+/// `min_half` members.
+pub fn west_east_meme_divergence(
+    idxs: &[usize],
+    cx: f32,
+    min_half: u32,
+    sample: impl Fn(usize) -> (f32, [f32; MEME_CHANNELS]),
+) -> Option<f32> {
+    let mut west_mean = [0.0f32; MEME_CHANNELS];
+    let mut east_mean = [0.0f32; MEME_CHANNELS];
+    let mut wn = 0u32;
+    let mut en = 0u32;
+    for &i in idxs {
+        let (x, meme) = sample(i);
+        if x < cx {
+            for (ch, w) in west_mean.iter_mut().enumerate() {
+                *w += meme[ch];
+            }
+            wn += 1;
+        } else {
+            for (ch, e) in east_mean.iter_mut().enumerate() {
+                *e += meme[ch];
+            }
+            en += 1;
+        }
+    }
+    if wn < min_half || en < min_half {
+        return None;
+    }
+    for w in west_mean.iter_mut() {
+        *w /= wn as f32;
+    }
+    for e in east_mean.iter_mut() {
+        *e /= en as f32;
+    }
+    Some(meme_l2(&west_mean, &east_mean))
+}
+
 /// Run all detectors. Called by the tick orchestrator at the end of each
 /// tick. SpeciationEvent is emitted directly from `species_step`.
 pub fn observe_all(world: &mut World) {
-    // Compute per-species centroids once (immutable agent borrow) so the
-    // mutable-codex detectors can reuse them for event locations.
-    let centroids = compute_centroids(world);
+    // One fused per-species aggregation pass (replaces the per-detector
+    // population scans each detector used to hand-roll). Taken out of the
+    // world so detectors can borrow `world` mutably while reading `agg`.
+    let mut agg = std::mem::take(&mut world.codex_agg);
+    agg.build(world);
 
     population::update_pop_history(world);
-    population::detect_extinction(world, &centroids);
-    population::detect_population_crash(world, &centroids);
-    population::detect_migration(world, &centroids);
-    population::detect_novel_modules(world, &centroids);
-    population::detect_novel_behavior(world, &centroids);
+    population::detect_extinction(world, &agg);
+    population::detect_population_crash(world, &agg);
+    population::detect_migration(world, &agg);
+    population::detect_novel_modules(world, &agg);
+    population::detect_novel_behavior(world, &agg);
     // Predation runs before CombatRaid on purpose: it scans this tick's
     // combat-death entries, and CombatRaid then prunes entries older than the
     // window (which never includes the current tick).
     combat::detect_predation(world);
     combat::detect_combat_raid(world);
-    combat::detect_arms_race(world, &centroids);
-    spatial::detect_territory_formation(world, &centroids);
-    spatial::detect_niche_partitioning(world, &centroids);
-    culture::detect_dialect_formed(world, &centroids);
-    culture::detect_meme_sweep(world, &centroids);
+    combat::detect_arms_race(world, &agg);
+    spatial::detect_territory_formation(world, &agg);
+    spatial::detect_niche_partitioning(world, &agg);
+    culture::detect_dialect_formed(world, &agg);
+    culture::detect_meme_sweep(world, &agg);
     culture::detect_alarm_call(world);
-    culture::detect_evolved_cooperation(world, &centroids);
-    combat::detect_pack_hunting(world, &centroids);
-    spatial::detect_herd_cohesion(world, &centroids);
+    culture::detect_evolved_cooperation(world, &agg);
+    combat::detect_pack_hunting(world, &agg);
+    spatial::detect_herd_cohesion(world, &agg);
+
+    world.codex_agg = agg;
 }
 
-/// Mean alive position per species, ascending id order, f64 accumulator.
-fn compute_centroids(world: &World) -> BTreeMap<u32, (f32, f32)> {
-    let mut sums: BTreeMap<u32, (f64, f64, u32)> = BTreeMap::new();
-    for id in world.agents.iter_alive() {
-        let i = id as usize;
-        let sid = world.agents.species_id[i];
-        let p = world.agents.position[i];
-        let e = sums.entry(sid).or_insert((0.0, 0.0, 0));
-        e.0 += p.x as f64;
-        e.1 += p.y as f64;
-        e.2 += 1;
-    }
-    sums.into_iter()
-        .map(|(sid, (sx, sy, n))| {
-            let nf = n.max(1) as f64;
-            (sid, ((sx / nf) as f32, (sy / nf) as f32))
-        })
-        .collect()
-}
-
-pub(super) fn centroid_of(centroids: &BTreeMap<u32, (f32, f32)>, sid: u32) -> (f32, f32) {
-    centroids.get(&sid).copied().unwrap_or((0.0, 0.0))
+pub(super) fn centroid_of(agg: &SpeciesAggTable, sid: u32) -> (f32, f32) {
+    agg.get(sid).map(|e| e.centroid()).unwrap_or((0.0, 0.0))
 }
 
 /// Per-species edge-trigger latch. On the rising edge (`fired` and `sid` not

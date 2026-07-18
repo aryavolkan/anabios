@@ -11,6 +11,9 @@ const SCENARIO: &str = include_str!("../../../scenarios/divergent.toml");
 fn divergent_scenario_emits_speciation_event() {
     let scenario = Scenario::parse_toml(SCENARIO).expect("parse");
     let mut world = scenario.instantiate();
+    // Speciation needs divergence between the two founder clusters, not scale —
+    // cap population so the test stays fast under the raised 10k default.
+    world.max_population = 500;
 
     // 400 ticks is well past the first species_step (at tick 200).
     for _ in 0..400 {

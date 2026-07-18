@@ -35,6 +35,9 @@ fn every_scenario_parses_instantiates_and_runs() {
         let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("read {name}: {e}"));
         let scenario = Scenario::parse_toml(&text).unwrap_or_else(|e| panic!("parse {name}: {e}"));
         let mut w = scenario.instantiate();
+        // Clamp the population cap so fertile scenarios keep this smoke test
+        // fast (the default 10k cap made 200-tick runs minutes-slow).
+        w.max_population = w.max_population.min(500);
 
         for _ in 0..200 {
             step(&mut w);

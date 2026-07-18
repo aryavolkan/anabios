@@ -23,6 +23,11 @@ pub struct Scenario {
     /// climate). `false` (default) leaves foraging behavior unchanged.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// Opt-in population cap override (`World::max_population`). Absent =
+    /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
+    /// to keep long smoke runs fast.
+    #[serde(default)]
+    pub max_population: Option<u32>,
 }
 
 /// A request for `count` agents distributed via the given placement, each
@@ -203,6 +208,9 @@ impl Scenario {
         let mut w = World::new(self.seed);
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
+        if let Some(cap) = self.max_population {
+            w.max_population = cap;
+        }
         // Personality is sampled from a DEDICATED rng substream (seeded from the
         // world seed) so it never perturbs `world.rng` — the physics/placement/
         // reproduction stream stays bit-identical to a personality-free build.

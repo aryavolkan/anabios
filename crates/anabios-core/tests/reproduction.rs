@@ -11,6 +11,9 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 fn population_sustains_past_one_lifespan() {
     let scenario = Scenario::parse_toml(SCENARIO).expect("parse");
     let mut world = scenario.instantiate();
+    // Sustaining a population past a lifespan doesn't need scale — cap it so the
+    // 5,000-tick run stays fast under the raised 10k default.
+    world.max_population = 500;
     let initial_alive = world.agents.live_count();
     assert!(initial_alive > 0);
 

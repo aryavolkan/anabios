@@ -2,11 +2,11 @@
 
 use super::*;
 use crate::world::World;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 pub(super) fn update_pop_history(world: &mut World) {
-    let counts: Vec<u32> = world.species_member_counts.clone();
-    for (sid, count) in counts.into_iter().enumerate() {
+    for sid in 0..world.species_member_counts.len() {
+        let count = world.species_member_counts[sid];
         let buf = world.codex.pop_history.entry(sid as u32).or_default();
         if buf.len() == POP_HISTORY_WINDOW {
             buf.pop_front();
@@ -15,7 +15,7 @@ pub(super) fn update_pop_history(world: &mut World) {
     }
 }
 
-pub(super) fn detect_extinction(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+pub(super) fn detect_extinction(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
     let mut to_push: Vec<CodexEvent> = Vec::new();
     for (sid, buf) in world.codex.pop_history.iter() {
@@ -25,7 +25,7 @@ pub(super) fn detect_extinction(world: &mut World, centroids: &BTreeMap<u32, (f3
         let prev = buf[buf.len() - 2];
         let cur = buf[buf.len() - 1];
         if prev > 0 && cur == 0 {
-            let (lx, ly) = centroid_of(centroids, *sid);
+            let (lx, ly) = centroid_of(agg, *sid);
             to_push.push(CodexEvent {
                 event_type: EventType::Extinction,
                 tick,
@@ -41,7 +41,7 @@ pub(super) fn detect_extinction(world: &mut World, centroids: &BTreeMap<u32, (f3
     }
 }
 
-pub(super) fn detect_population_crash(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+pub(super) fn detect_population_crash(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
     let mut to_push: Vec<CodexEvent> = Vec::new();
     for (sid, buf) in world.codex.pop_history.iter() {
@@ -55,7 +55,7 @@ pub(super) fn detect_population_crash(world: &mut World, centroids: &BTreeMap<u3
         }
         let drop = 1.0 - (cur as f32 / peak as f32);
         if drop >= CRASH_FRACTION {
-            let (lx, ly) = centroid_of(centroids, *sid);
+            let (lx, ly) = centroid_of(agg, *sid);
             to_push.push(CodexEvent {
                 event_type: EventType::PopulationCrash,
                 tick,
@@ -71,15 +71,16 @@ pub(super) fn detect_population_crash(world: &mut World, centroids: &BTreeMap<u3
     }
 }
 
-pub(super) fn detect_migration(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+pub(super) fn detect_migration(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
     // Push current centroids into history.
-    for (sid, c) in centroids.iter() {
-        let buf = world.codex.centroid_history.entry(*sid).or_default();
+    for &sid in agg.active() {
+        let c = agg.get(sid).expect("active species has an entry").centroid();
+        let buf = world.codex.centroid_history.entry(sid).or_default();
         if buf.len() == MIGRATION_WINDOW {
             buf.pop_front();
         }
-        buf.push_back(*c);
+        buf.push_back(c);
     }
 
     let mut to_push: Vec<CodexEvent> = Vec::new();
@@ -112,30 +113,23 @@ pub(super) fn detect_migration(world: &mut World, centroids: &BTreeMap<u32, (f32
     }
 }
 
-pub(super) fn detect_novel_modules(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+pub(super) fn detect_novel_modules(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
-    // Current module types present per species this tick.
-    let mut current: BTreeMap<u32, BTreeSet<u8>> = BTreeMap::new();
-    for id in world.agents.iter_alive() {
-        let i = id as usize;
-        let sid = world.agents.species_id[i];
-        let set = current.entry(sid).or_default();
-        for m in world.agents.modules[i].iter() {
-            set.insert(m.module_type() as u8);
-        }
-    }
-
     let mut to_push: Vec<CodexEvent> = Vec::new();
-    for (sid, types) in current {
+    for &sid in agg.active() {
+        let mask = agg.get(sid).expect("active species has an entry").module_mask;
         match world.codex.seen_modules.get_mut(&sid) {
             None => {
                 // Debut: seed silently.
-                world.codex.seen_modules.insert(sid, types);
+                world.codex.seen_modules.insert(sid, bits_to_set_u16(mask));
             }
             Some(seen) => {
-                for t in types {
+                let mut m = mask;
+                while m != 0 {
+                    let t = m.trailing_zeros() as u8;
+                    m &= m - 1;
                     if seen.insert(t) {
-                        let (lx, ly) = centroid_of(centroids, sid);
+                        let (lx, ly) = centroid_of(agg, sid);
                         to_push.push(CodexEvent {
                             event_type: EventType::NovelModuleAppeared,
                             tick,
@@ -154,28 +148,22 @@ pub(super) fn detect_novel_modules(world: &mut World, centroids: &BTreeMap<u32, 
     }
 }
 
-pub(super) fn detect_novel_behavior(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+pub(super) fn detect_novel_behavior(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
-    let mut current: BTreeMap<u32, BTreeSet<u8>> = BTreeMap::new();
-    for id in world.agents.iter_alive() {
-        let i = id as usize;
-        let sid = world.agents.species_id[i];
-        let set = current.entry(sid).or_default();
-        for node in world.agents.program[i].nodes.iter().copied() {
-            set.insert(crate::program::Program::node_kind(node));
-        }
-    }
-
     let mut to_push: Vec<CodexEvent> = Vec::new();
-    for (sid, kinds) in current {
+    for &sid in agg.active() {
+        let mask = agg.get(sid).expect("active species has an entry").node_mask;
         match world.codex.seen_node_kinds.get_mut(&sid) {
             None => {
-                world.codex.seen_node_kinds.insert(sid, kinds);
+                world.codex.seen_node_kinds.insert(sid, bits_to_set_u64(mask));
             }
             Some(seen) => {
-                for k in kinds {
+                let mut m = mask;
+                while m != 0 {
+                    let k = m.trailing_zeros() as u8;
+                    m &= m - 1;
                     if seen.insert(k) {
-                        let (lx, ly) = centroid_of(centroids, sid);
+                        let (lx, ly) = centroid_of(agg, sid);
                         to_push.push(CodexEvent {
                             event_type: EventType::NovelBehaviorPattern,
                             tick,
@@ -192,4 +180,26 @@ pub(super) fn detect_novel_behavior(world: &mut World, centroids: &BTreeMap<u32,
     for ev in to_push {
         world.codex.push_event(ev);
     }
+}
+
+/// Set bits of a u16 mask as a BTreeSet of discriminants (ascending).
+fn bits_to_set_u16(mask: u16) -> BTreeSet<u8> {
+    let mut out = BTreeSet::new();
+    let mut m = mask;
+    while m != 0 {
+        out.insert(m.trailing_zeros() as u8);
+        m &= m - 1;
+    }
+    out
+}
+
+/// Set bits of a u64 mask as a BTreeSet of discriminants (ascending).
+fn bits_to_set_u64(mask: u64) -> BTreeSet<u8> {
+    let mut out = BTreeSet::new();
+    let mut m = mask;
+    while m != 0 {
+        out.insert(m.trailing_zeros() as u8);
+        m &= m - 1;
+    }
+    out
 }

@@ -11,7 +11,7 @@ use crate::prelude::Vec2;
 
 /// Number of cells per axis. 64 gives `cell_size = 16` world units, which
 /// safely covers the maximum possible perception radius
-/// (`PERCEPTION_MAX_RADIUS = 12` in `behavior.rs`).
+/// (`PERCEPTION_MAX_RADIUS`, defined below).
 pub const HASH_RES: usize = 64;
 pub const HASH_CELL_SIZE: f32 = WORLD_SIZE / HASH_RES as f32;
 
@@ -43,17 +43,28 @@ impl UniformSpatialHash {
     /// Rebuild from the alive agent positions. Agents whose `alive` bit is
     /// false are skipped. `positions[i]` and `alive_iter` are indexed by
     /// agent id.
-    #[allow(clippy::needless_range_loop)]
     pub fn rebuild(&mut self, positions: &[Vec2], alive: impl Fn(usize) -> bool) {
+        self.rebuild_indexed(positions.len(), |i| positions[i], alive);
+    }
+
+    /// Rebuild from any indexable position source (e.g. carcasses, where the
+    /// position is a field of the element). `pos_of(i)` returns the position
+    /// of element `i`; `alive(i)` filters elements out.
+    pub fn rebuild_indexed(
+        &mut self,
+        len: usize,
+        pos_of: impl Fn(usize) -> Vec2,
+        alive: impl Fn(usize) -> bool,
+    ) {
         let total_cells = HASH_RES * HASH_RES;
         // Phase 1: count agents per cell (reused buffer, no per-tick alloc).
         self.counts.clear();
         self.counts.resize(total_cells, 0);
-        for (i, pos) in positions.iter().enumerate() {
+        for i in 0..len {
             if !alive(i) {
                 continue;
             }
-            let cell = Self::cell_of(*pos);
+            let cell = Self::cell_of(pos_of(i));
             self.counts[cell] += 1;
         }
 
@@ -68,11 +79,11 @@ impl UniformSpatialHash {
         self.flat.resize(total as usize, 0);
 
         // Phase 3: scatter into flat buffer.
-        for (i, pos) in positions.iter().enumerate() {
+        for i in 0..len {
             if !alive(i) {
                 continue;
             }
-            let cell = Self::cell_of(*pos);
+            let cell = Self::cell_of(pos_of(i));
             let off = self.bucket_offsets[cell] + self.bucket_lens[cell];
             self.flat[off as usize] = i as u32;
             self.bucket_lens[cell] += 1;
