@@ -37,9 +37,12 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _dragging:
 		var mm := event as InputEventMouseMotion
 		position -= mm.relative / zoom.x
-	elif event is InputEventKey and event.pressed and not (event as InputEventKey).echo:
-		if (event as InputEventKey).keycode == KEY_F:
-			_fit_to_world()
+
+# Discrete key toggles go through _unhandled_key_input (matches overlay_manager
+# [G]/[C] and legend [H]), so a focused text field could consume them first.
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
+		_fit_to_world()
 
 func _process(delta: float) -> void:
 	var v := Vector2.ZERO
