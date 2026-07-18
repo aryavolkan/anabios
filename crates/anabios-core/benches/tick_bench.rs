@@ -79,6 +79,7 @@ fn bench_stages(c: &mut Criterion) {
                     &sw.pheromones,
                     &sw.spatial,
                     &mut sensors,
+                    sw.world_size,
                 )
             });
             sw.sensors = sensors;
