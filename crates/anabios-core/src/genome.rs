@@ -37,6 +37,7 @@ pub enum GenomeSlot {
     LifespanBias = 4,
     BasalMetabolism = 5,
     MutationRate = 6,
+    /// Declared; not yet read by behavior. Reserved: future disease-resistance modifier.
     ImmuneStrength = 7,
     _BodyReserved8 = 8,
     _BodyReserved9 = 9,
@@ -52,7 +53,9 @@ pub enum GenomeSlot {
     Openness = 12,
     /// Extraversion: +1 social/seeking, −1 solitary (was SocialAffinity).
     Extraversion = 13,
+    /// Declared; not yet read by behavior. Reserved: future kin-biased cooperation drive.
     KinPreference = 14,
+    /// Declared; not yet read by behavior. Reserved: future territory-defense drive.
     Territoriality = 15,
     _DriveReserved16 = 16,
     _DriveReserved17 = 17,
@@ -60,10 +63,13 @@ pub enum GenomeSlot {
     _DriveReserved19 = 19,
 
     // Behavioral biases (20..30)
+    /// Declared; not yet read by behavior. Reserved: future foraging explore-vs-exploit bias.
     ExploreVsExploit = 20,
     /// Conscientiousness: +1 prudent/careful, −1 impulsive (was RiskTolerance).
     Conscientiousness = 21,
+    /// Declared; not yet read by behavior. Reserved: future ambush-vs-pursuit hunting bias.
     AmbushPreference = 22,
+    /// Declared; not yet read by behavior. Reserved: future Communicator-module effectiveness gain.
     CommunicationStrength = 23,
     Altruism = 24,
     SpeedMax = 25,
@@ -79,8 +85,11 @@ pub enum GenomeSlot {
 
     // Reproductive (30..40)
     ReproductionThreshold = 30,
+    /// Declared; not yet read by behavior. Reserved: future per-offspring energy-investment knob.
     OffspringInvestment = 31,
+    /// Declared; not yet read by behavior. Reserved: future mate-selection choosiness knob.
     MateChoosiness = 32,
+    /// Declared; not yet read by behavior. Reserved: future sexual-dimorphism knob.
     SexualDimorphism = 33,
     _ReproReserved34 = 34,
     _ReproReserved35 = 35,
