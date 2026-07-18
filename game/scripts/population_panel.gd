@@ -1,10 +1,10 @@
 extends PanelContainer
 
 const REFRESH_EVERY := 6
-# Cap rows so the panel stays inside its fixed slot (see main.tscn). A long
-# tail of singleton species would otherwise grow the container and spill its
-# text onto the world and the codex panel below.
-const MAX_ROWS := 10
+# Cap rows so the panel stays inside its fixed slot (see main.tscn) and clears
+# the DIT panel stacked directly below it. A long tail of singleton species
+# would otherwise grow the container and spill onto its neighbours.
+const MAX_ROWS := 8
 
 @onready var sim = get_node("/root/Main/Simulation")
 @onready var list: VBoxContainer = $VBox

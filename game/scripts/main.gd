@@ -1,5 +1,7 @@
 extends Node2D
 
+const UiTheme = preload("res://scripts/ui_theme.gd")
+
 # Number of sim ticks to run per rendered frame. Speeds: 1, 4, 16, 64.
 @export var ticks_per_frame: int = 1
 @export var paused: bool = false
@@ -39,6 +41,19 @@ func _ready() -> void:
 	# Apply UI scale from the menu.
 	var s: float = GameConfig.ui_scale
 	$UI.transform = Transform2D(0.0, Vector2(s, s), 0.0, Vector2.ZERO)
+	_apply_ui_theme()
+
+# Give every HUD panel the shared instrument theme, and make the top-left
+# readout legible over any terrain with a dark outline.
+func _apply_ui_theme() -> void:
+	var theme := UiTheme.build()
+	for child in $UI.get_children():
+		if child is Control:
+			(child as Control).theme = theme
+	hud.add_theme_color_override("font_color", UiTheme.ACCENT)
+	hud.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.75))
+	hud.add_theme_constant_override("outline_size", 5)
+	hud.add_theme_font_size_override("font_size", 17)
 
 func _notification(what: int) -> void:
 	# Pause when the window loses focus; user resumes manually.

@@ -1,5 +1,6 @@
 extends PanelContainer
 
+const UiTheme = preload("res://scripts/ui_theme.gd")
 const CHAPTER_NAMES: PackedStringArray = [
 	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior"
 ]
@@ -13,6 +14,10 @@ var _cursor: int = 0
 @onready var camera: Camera2D = get_node("/root/Main/Camera2D")
 @onready var counts_label: Label = $VBox/Counts
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
+
+func _ready() -> void:
+	# The running tally reads as the panel's title — mark it with the accent.
+	counts_label.add_theme_color_override("font_color", UiTheme.ACCENT)
 
 func _process(_delta: float) -> void:
 	# Event log is cleared on scenario (re)load; a shrink below our cursor means
