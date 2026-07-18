@@ -20,8 +20,11 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // budget) and became a per-world field (`World::max_population`, scenario-
 // overridable). minimal.toml pins 2000, restoring pre-raise behavior; all three
 // hashes moved because the serialized World layout gained the new field.
+// Refreshed 2026-07-18: added World.{world_size,biome_res,hash_res} runtime
+// dimension fields (unused; behaviour identical at defaults, only serialized
+// layout grew).
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xecd34b053a7aa32e), (100, 0xf1feb6b23de48cbc), (1000, 0xd5190146a2f62551)];
+    &[(0, 0xe14c555fe3e98bda), (100, 0x0b9fa0fe3483d430), (1000, 0xc97d9803814b98ed)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

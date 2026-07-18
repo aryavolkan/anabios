@@ -13,6 +13,7 @@ use crate::prelude::Vec2;
 /// safely covers the maximum possible perception radius
 /// (`PERCEPTION_MAX_RADIUS`, defined below).
 pub const HASH_RES: usize = 64;
+pub const HASH_RES_DEFAULT: usize = HASH_RES;
 pub const HASH_CELL_SIZE: f32 = WORLD_SIZE / HASH_RES as f32;
 
 /// Hard upper bound on perception radius — must hold for the

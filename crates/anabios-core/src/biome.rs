@@ -17,6 +17,12 @@ pub const WORLD_SIZE: f32 = 1024.0;
 /// Side length of one biome cell, in world units.
 pub const CELL_SIZE: f32 = WORLD_SIZE / BIOME_RES as f32;
 
+/// Default world dimensions (today's compile-time values). New runtime
+/// dimension fields on `World` default to these so existing scenarios are
+/// byte-identical.
+pub const WORLD_SIZE_DEFAULT: f32 = WORLD_SIZE;
+pub const BIOME_RES_DEFAULT: usize = BIOME_RES;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TerrainType {
