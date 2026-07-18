@@ -182,6 +182,16 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
         "individual_learner" => (communicator_kit(), starter_asocial_forager()),
         "pure_imitator" => (communicator_kit(), starter_asocial_forager()),
         "critical_learner" => (communicator_kit(), starter_asocial_forager()),
+        // Living-sandbox coevolution (Task 3.1): the culture cohort, matched
+        // against `asocial_forager` (the control) on everything except the
+        // Communicator module. Deliberately NOT `communicator_kit()` — that
+        // kit drops Reproductive, which would cripple the culture lineage's
+        // reproduction and bias the experiment for the wrong reason.
+        "cultural_forager" => {
+            let mut m = starter_kit();
+            m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
+            (m, starter_asocial_forager())
+        }
         _ => (starter_kit(), starter_grazer()),
     }
 }

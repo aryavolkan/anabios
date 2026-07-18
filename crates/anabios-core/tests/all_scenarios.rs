@@ -4,7 +4,6 @@
 //! change silently breaking a scenario (e.g. a new genome slot, a new World field,
 //! or the DIT env mechanism).
 
-use anabios_core::biome::WORLD_SIZE;
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 use std::fs;
@@ -44,14 +43,18 @@ fn every_scenario_parses_instantiates_and_runs() {
         }
 
         // Every alive agent must remain within the (toroidal) world bounds — a cheap
-        // catch-all that a scenario didn't drive the sim into a bad state.
+        // catch-all that a scenario didn't drive the sim into a bad state. Uses this
+        // world's own `world_size` (not the crate-default `WORLD_SIZE` constant) so
+        // scenarios that opt into a larger world (e.g. `world_size = 2048.0`) are
+        // checked against their actual bounds.
+        let world_size = w.world_size;
         for id in w.agents.iter_alive() {
             let p = w.agents.position[id as usize];
             assert!(
                 p.x.is_finite()
                     && p.y.is_finite()
-                    && (0.0..WORLD_SIZE).contains(&p.x)
-                    && (0.0..WORLD_SIZE).contains(&p.y),
+                    && (0.0..world_size).contains(&p.x)
+                    && (0.0..world_size).contains(&p.y),
                 "{name}: agent {id} left world bounds at {p:?}"
             );
         }
@@ -59,4 +62,47 @@ fn every_scenario_parses_instantiates_and_runs() {
         eprintln!("ok: {name} ({} agents alive)", w.agents.live_count());
     }
     eprintln!("validated {} scenarios", files.len());
+}
+
+/// Dedicated smoke test for the Task 3.1 living-sandbox scenario (in addition
+/// to the glob-based test above): both cohorts must start alive, and the fair
+/// culture-vs-control design must actually hold — species 1 (culture) carries
+/// a Communicator, species 2 (control) does not, and BOTH carry Reproductive
+/// (the prior `skilled_forager` design would have dropped Reproductive from
+/// the culture cohort via `communicator_kit()`, biasing the experiment).
+#[test]
+fn living_sandbox_smoke() {
+    let toml = include_str!("../../../scenarios/living-sandbox-coevolution.toml");
+    let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
+
+    let species1_alive =
+        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 1).count();
+    let species2_alive =
+        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 2).count();
+    assert!(species1_alive > 0, "culture cohort (species 1) should start alive");
+    assert!(species2_alive > 0, "control cohort (species 2) should start alive");
+
+    for id in w.agents.iter_alive() {
+        let mods = &w.agents.modules[id as usize];
+        let has_communicator =
+            anabios_core::module::has(mods, anabios_core::module::ModuleType::Communicator);
+        let has_reproductive =
+            anabios_core::module::has(mods, anabios_core::module::ModuleType::Reproductive);
+        assert!(has_reproductive, "agent {id}: BOTH cohorts must keep Reproductive (fair design)");
+        match w.agents.species_id[id as usize] {
+            1 => assert!(has_communicator, "agent {id}: culture cohort must have a Communicator"),
+            2 => {
+                assert!(
+                    !has_communicator,
+                    "agent {id}: control cohort must NOT have a Communicator"
+                )
+            }
+            _ => {}
+        }
+    }
+
+    for _ in 0..200 {
+        anabios_core::tick::step(&mut w);
+    }
+    assert!(w.agents.live_count() > 0, "population should survive 200 ticks");
 }

@@ -1,0 +1,20 @@
+name = "living-sandbox-coevolution"
+seed = 1
+world_size = 2048.0
+biome_res = 256
+hash_res = 128
+living_biome = true
+season_period = 2000
+max_population = 8000
+
+# Culture lineage (species 1): starter kit + Communicator → learned foraging skill.
+[[agents]]
+count = 400
+placement = { kind = "uniform" }
+archetype = "cultural_forager"
+
+# Control lineage (species 2): identical starter kit WITHOUT a Communicator.
+[[agents]]
+count = 400
+placement = { kind = "uniform" }
+archetype = "asocial_forager"
