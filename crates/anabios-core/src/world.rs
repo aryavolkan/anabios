@@ -50,6 +50,11 @@ pub struct World {
     /// so old snapshots without this field still deserialize.
     #[serde(default)]
     pub env_period: u32,
+    /// When true, the biome-adaptation feeding bonus (EnvAffinity vs local
+    /// climate) is active. Off by default; opt-in per scenario. Defaulted so
+    /// old snapshots without this field still deserialize.
+    #[serde(default)]
+    pub biome_adaptation: bool,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     #[serde(skip)]
@@ -101,6 +106,7 @@ impl World {
             carcasses: Vec::new(),
             pheromones: crate::pheromone::PheromoneField::new(),
             env_period: 0,
+            biome_adaptation: false,
             spatial: UniformSpatialHash::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),

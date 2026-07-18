@@ -57,6 +57,10 @@ impl TerrainType {
 pub struct BiomeCell {
     pub terrain: TerrainType,
     pub plant_biomass: f32,
+    /// Per-cell climate value in `[0,1]` from a dedicated noise field, semi-
+    /// independent of terrain. Static after generation. Read by the biome-
+    /// adaptation feeding bonus when `World.biome_adaptation` is on.
+    pub env: f32,
 }
 
 /// 128×128 biome field. Indexed `[row * BIOME_RES + col]` with `row` = y,
@@ -71,9 +75,14 @@ impl BiomeField {
     /// Generate a biome field deterministically from a seed.
     pub fn generate(seed: u64) -> Self {
         let mut rng = Rng::from_seed(seed);
-        // Hash-based value-noise corner grid, sampled at two octaves.
+        // Hash-based value-noise corner grid, sampled at two octaves (terrain).
         let coarse = NoiseGrid::new(&mut rng, 8);
         let fine = NoiseGrid::new(&mut rng, 24);
+        // Dedicated climate field — drawn AFTER the terrain grids so terrain
+        // generation is byte-identical to before. Different frequencies keep
+        // climate semi-independent of terrain.
+        let climate_coarse = NoiseGrid::new(&mut rng, 6);
+        let climate_fine = NoiseGrid::new(&mut rng, 18);
 
         let mut cells = Vec::with_capacity(BIOME_RES * BIOME_RES);
         for row in 0..BIOME_RES {
@@ -82,7 +91,9 @@ impl BiomeField {
                 let v = row as f32 / BIOME_RES as f32;
                 let n = 0.65 * coarse.sample(u, v) + 0.35 * fine.sample(u, v);
                 let terrain = elevation_to_terrain(n);
-                cells.push(BiomeCell { terrain, plant_biomass: terrain.carrying_capacity() });
+                let env = (0.7 * climate_coarse.sample(u, v) + 0.3 * climate_fine.sample(u, v))
+                    .clamp(0.0, 1.0);
+                cells.push(BiomeCell { terrain, plant_biomass: terrain.carrying_capacity(), env });
             }
         }
         Self { cells }
@@ -213,6 +224,37 @@ impl NoiseGrid {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn climate_field_is_bounded_and_varies() {
+        let b = BiomeField::generate(12345);
+        let mut min = 1.0f32;
+        let mut max = 0.0f32;
+        for cell in b.cells.iter() {
+            assert!((0.0..=1.0).contains(&cell.env), "env out of range: {}", cell.env);
+            min = min.min(cell.env);
+            max = max.max(cell.env);
+        }
+        assert!(max - min > 0.3, "climate field too flat: {min}..{max}");
+    }
+
+    #[test]
+    fn climate_not_a_function_of_terrain_alone() {
+        // Two cells of the SAME terrain should be able to differ in env.
+        let b = BiomeField::generate(7);
+        use std::collections::BTreeMap;
+        let mut by_terrain: BTreeMap<u8, Vec<f32>> = BTreeMap::new();
+        for cell in b.cells.iter() {
+            by_terrain.entry(cell.terrain as u8).or_default().push(cell.env);
+        }
+        let varied = by_terrain.values().any(|v| {
+            v.len() > 1
+                && v.iter().cloned().fold(0.0f32, f32::max)
+                    - v.iter().cloned().fold(1.0f32, f32::min)
+                    > 0.1
+        });
+        assert!(varied, "env should vary within at least one terrain type");
+    }
 
     #[test]
     fn biome_is_deterministic() {
