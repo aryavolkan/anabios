@@ -10,8 +10,14 @@ use thiserror::Error;
 use crate::world::World;
 
 /// Current snapshot format version. Bump on any breaking change to the
-/// serialized layout.
-pub const FORMAT_VERSION: u32 = 2;
+/// serialized layout — and note bincode is NOT self-describing: adding,
+/// removing, or reordering a serialized field anywhere in `World` (or a type
+/// it contains) changes the byte layout, so such changes MUST bump this
+/// constant. `#[serde(default)]` on a new field does not let bincode read
+/// old payloads; it only helps self-describing formats.
+/// v2: BiomeCell.env climate field + World.biome_adaptation/env_period.
+/// v3: World.max_population.
+pub const FORMAT_VERSION: u32 = 3;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
@@ -127,9 +133,21 @@ mod tests {
     #[test]
     fn loaded_world_continues_bit_identically() {
         let mut w = World::new(77);
-        for _ in 0..5 {
-            let _ = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        // Populate the subsystems whose state lives behind serde(skip)
+        // scratch: two species (codex agg), pheromones (nonzero flag), a
+        // carcass (carcass_spatial).
+        for k in 0..5 {
+            let _ = w.spawn_agent(Vec2::new(500.0 + k as f32, 500.0), Genome::neutral());
         }
+        let migrant = w.spawn_agent(Vec2::new(700.0, 700.0), Genome::neutral());
+        crate::prelude_test::reassign_to_new_species(&mut w, migrant);
+        w.pheromones.deposit(Vec2::new(500.0, 500.0), 0, 2.0);
+        w.carcasses.push(crate::carcass::Carcass {
+            pos: Vec2::new(501.0, 500.0),
+            flesh: 5.0,
+            age: 0,
+            species_id: 0,
+        });
         for _ in 0..30 {
             step(&mut w);
         }
@@ -138,8 +156,8 @@ mod tests {
             step(&mut w);
             step(&mut w2);
         }
-        // Every #[serde(skip)] scratch buffer (spatial hashes, codex agg,
-        // sensors, pheromone flag) must rebuild itself on the fly.
+        // Every #[serde(skip)] scratch buffer (agent + carcass spatial hashes,
+        // codex agg, sensors, pheromone flag) must rebuild itself on the fly.
         assert_eq!(state_hash(&w), state_hash(&w2));
     }
 }
