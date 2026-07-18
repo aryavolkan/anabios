@@ -140,7 +140,7 @@ func _refresh_carcasses() -> void:
 	for i in m:
 		var d: Dictionary = data[i]
 		var pos: Vector2 = d["pos"]
-		var f: float = clampf(float(d["flesh"]) / 20.0, 0.2, 1.5)
+		var f: float = clampf(float(d["flesh"]) / 20.0 * 4.0, 3.0, 7.0)
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(f, f), 0.0, pos))
 		mm.set_instance_color(i, Color(0.77, 0.80, 0.86, 0.55))
 
@@ -152,8 +152,8 @@ func _refresh_flashes() -> void:
 		mm.instance_count = m
 	mm.visible_instance_count = m
 	for i in m:
-		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(1.6, 1.6), 0.0, pts[i]))
-		mm.set_instance_color(i, Color(1.0, 0.85, 0.2, 0.9))
+		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(6.0, 6.0), 0.0, pts[i]))
+		mm.set_instance_color(i, Color(1.0, 0.92, 0.45, 0.95))
 
 func _refresh_module_layers() -> void:
 	var all: Array = sim.module_glyphs_all()
