@@ -50,6 +50,18 @@ struct StoredEvent {
     loc_y: f32,
 }
 
+/// Reusable buffers for `sample_into` — avoids 5 Vec + 1 BTreeSet
+/// allocations per sampled tick in the render loop.
+#[derive(Default)]
+struct SampleScratch {
+    memes: Vec<[f32; anabios_core::program::MEME_CHANNELS]>,
+    genomes: Vec<anabios_core::genome::Genome>,
+    species: Vec<u32>,
+    xs: Vec<f32>,
+    comm: Vec<bool>,
+    species_set: std::collections::BTreeSet<u32>,
+}
+
 /// One in-process anabios simulation, owned by a Godot `Simulation` node.
 #[derive(GodotClass)]
 #[class(base = Node)]
@@ -60,6 +72,7 @@ pub struct Simulation {
     history: Vec<CoevoSample>,
     history_capped_logged: bool,
     events: Vec<StoredEvent>,
+    sample_scratch: SampleScratch,
 }
 
 #[godot_api]
@@ -71,6 +84,7 @@ impl INode for Simulation {
             history: Vec::new(),
             history_capped_logged: false,
             events: Vec::new(),
+            sample_scratch: SampleScratch::default(),
         }
     }
 }
@@ -143,7 +157,7 @@ impl Simulation {
                 }
             }
             if self.history.len() < COEVO_HISTORY_CAP {
-                let s = sample_now(self.inner.as_ref().unwrap());
+                let s = sample_into(self.inner.as_ref().unwrap(), &mut self.sample_scratch);
                 self.history.push(s);
             } else if !self.history_capped_logged {
                 godot_warn!("coevo history hit {COEVO_HISTORY_CAP} samples; no longer recording");
@@ -162,9 +176,12 @@ impl Simulation {
     /// Current-tick co-evolution scalars (see plan/spec for key meanings).
     /// All frequencies/means in `[0,1]`; `env_optimum` is `-1.0` when inactive.
     #[func]
-    fn coevo_metrics(&self) -> Dictionary {
+    fn coevo_metrics(&mut self) -> Dictionary {
         match self.inner.as_ref() {
-            Some(w) => sample_to_dict(&sample_now(w)),
+            Some(w) => {
+                let s = sample_into(w, &mut self.sample_scratch);
+                sample_to_dict(&s)
+            }
             None => Dictionary::new(),
         }
     }
@@ -569,33 +586,6 @@ impl Simulation {
         9
     }
 
-    /// Glyph world-positions for every module of `module_type` (0..9) across
-    /// all alive agents. Each module sits at one of 8 evenly-spaced perimeter
-    /// slots around its owner, scaled by the owner's size.
-    #[func]
-    fn module_glyphs(&self, module_type: i64) -> PackedVector2Array {
-        use anabios_core::genome::GenomeSlot;
-        let mut out = PackedVector2Array::new();
-        let Some(w) = self.inner.as_ref() else { return out };
-        let want = module_type as u8;
-        for id in w.agents.iter_alive() {
-            let i = id as usize;
-            let pos = w.agents.position[i];
-            let size = 0.5 + 2.5 * w.agents.genome[i].get(GenomeSlot::Size);
-            let radius = size * 0.7;
-            for (slot, m) in w.agents.modules[i].iter().enumerate() {
-                if m.module_type() as u8 != want {
-                    continue;
-                }
-                let angle = (slot as f32) * std::f32::consts::TAU / 8.0;
-                let gx = pos.x + radius * math_cos(angle);
-                let gy = pos.y + radius * math_sin(angle);
-                out.push(Vector2::new(gx, gy));
-            }
-        }
-        out
-    }
-
     /// All module glyphs in ONE alive pass, bucketed by module type. Returns an
     /// array of length `module_type_count()` (9); entry `t` is a
     /// `PackedVector2Array` of world positions for every module of type `t`.
@@ -704,41 +694,44 @@ fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
     Color::from_rgb(r, g, b)
 }
 
-/// Compute a `CoevoSample` from a read-only world. Builds compact live-only
-/// slices once, then delegates to the pure `coevo` helpers.
-fn sample_now(w: &anabios_core::World) -> CoevoSample {
+/// Compute a `CoevoSample` from a read-only world, filling `scratch` with
+/// compact live-only slices (cleared + reused across ticks), then delegating
+/// to the pure `coevo` helpers.
+fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSample {
     use anabios_core::culture::{env_optimum_at, SKILL_CHANNEL};
     use anabios_core::genome::GenomeSlot;
     use anabios_core::module::{self, ModuleType};
 
-    let mut memes: Vec<[f32; anabios_core::program::MEME_CHANNELS]> = Vec::new();
-    let mut genomes: Vec<anabios_core::genome::Genome> = Vec::new();
-    let mut species: Vec<u32> = Vec::new();
-    let mut xs: Vec<f32> = Vec::new();
-    let mut comm: Vec<bool> = Vec::new();
-    let mut species_set = std::collections::BTreeSet::new();
+    scratch.memes.clear();
+    scratch.genomes.clear();
+    scratch.species.clear();
+    scratch.xs.clear();
+    scratch.comm.clear();
+    scratch.species_set.clear();
     for id in w.agents.iter_alive() {
         let i = id as usize;
-        memes.push(w.agents.meme_vector[i]);
-        genomes.push(w.agents.genome[i]);
-        species.push(w.agents.species_id[i]);
-        xs.push(w.agents.position[i].x);
-        comm.push(module::has(&w.agents.modules[i], ModuleType::Communicator));
-        species_set.insert(w.agents.species_id[i]);
+        scratch.memes.push(w.agents.meme_vector[i]);
+        scratch.genomes.push(w.agents.genome[i]);
+        scratch.species.push(w.agents.species_id[i]);
+        scratch.xs.push(w.agents.position[i].x);
+        scratch.comm.push(module::has(&w.agents.modules[i], ModuleType::Communicator));
+        scratch.species_set.insert(w.agents.species_id[i]);
     }
+    let (memes, genomes, species, xs, comm) =
+        (&scratch.memes, &scratch.genomes, &scratch.species, &scratch.xs, &scratch.comm);
     let active = w.env_period > 0;
     let opt = if active { env_optimum_at(w.tick, w.env_period) } else { 0.0 };
     CoevoSample {
         tick: w.tick as f32,
-        communicator_frac: coevo::frac_true(&comm),
-        mean_social_learning: coevo::mean_slot(&genomes, GenomeSlot::SocialLearning),
-        mean_individual_learning: coevo::mean_slot(&genomes, GenomeSlot::IndividualLearning),
-        genetic_diversity: coevo::genetic_diversity(&genomes),
-        mean_skill: coevo::mean_channel_over(&memes, &comm, SKILL_CHANNEL),
-        mean_tech_match: if active { coevo::mean_tech_match(&memes, &comm, opt) } else { 0.0 },
-        meme_divergence: coevo::species_max_meme_divergence(&memes, &species, &xs, &comm),
+        communicator_frac: coevo::frac_true(comm),
+        mean_social_learning: coevo::mean_slot(genomes, GenomeSlot::SocialLearning),
+        mean_individual_learning: coevo::mean_slot(genomes, GenomeSlot::IndividualLearning),
+        genetic_diversity: coevo::genetic_diversity(genomes),
+        mean_skill: coevo::mean_channel_over(memes, comm, SKILL_CHANNEL),
+        mean_tech_match: if active { coevo::mean_tech_match(memes, comm, opt) } else { 0.0 },
+        meme_divergence: coevo::species_max_meme_divergence(memes, species, xs, comm),
         live_count: memes.len() as f32,
-        species_count: species_set.len() as f32,
+        species_count: scratch.species_set.len() as f32,
         env_optimum: if active { opt } else { -1.0 },
     }
 }
@@ -777,7 +770,7 @@ mod tests {
         for _ in 0..25 {
             anabios_core::tick::step(&mut w);
         }
-        let s = super::sample_now(&w);
+        let s = super::sample_into(&w, &mut super::SampleScratch::default());
         for v in [
             s.communicator_frac,
             s.mean_social_learning,

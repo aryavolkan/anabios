@@ -182,9 +182,19 @@ fn deposit_pass(world: &mut World, alive_ids: &[u32]) {
 
 /// Predation: a carnivore-capable Mouth bites the nearest carcass within
 /// `SCAVENGE_RANGE`, converting its flesh into energy. Ties on distance break
-/// toward the lower carcass index (strict `<`), keeping this deterministic.
+/// toward the lower carcass index, keeping this deterministic. Carcasses are
+/// indexed in `world.carcass_spatial` (rebuilt below) so the per-agent search
+/// touches only nearby carcasses instead of scanning the whole list.
 fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
     use crate::carcass::{FLESH_ENERGY_PER_UNIT, SCAVENGE_MAX, SCAVENGE_RANGE};
+    if world.carcasses.is_empty() {
+        return;
+    }
+    world.carcass_spatial.rebuild_indexed(
+        world.carcasses.len(),
+        |ci| world.carcasses[ci].pos,
+        |ci| world.carcasses[ci].flesh > 0.0,
+    );
     for &id in alive_ids {
         let i = id as usize;
         if !module::has(&world.agents.modules[i], ModuleType::Mouth) {
@@ -198,16 +208,21 @@ fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
         let pos = world.agents.position[i];
         let mut best: Option<usize> = None;
         let mut best_d = SCAVENGE_RANGE;
-        for (ci, c) in world.carcasses.iter().enumerate() {
-            if c.flesh <= 0.0 {
-                continue;
+        world.carcass_spatial.query(pos, SCAVENGE_RANGE, |ci| {
+            let ci = ci as usize;
+            // Re-check flesh: an earlier scavenger this same tick may have
+            // depleted this carcass below the prefilter snapshot.
+            if world.carcasses[ci].flesh <= 0.0 {
+                return;
             }
-            let d = crate::spatial::torus_distance(pos, c.pos);
-            if d < best_d {
+            let d = crate::spatial::torus_distance(pos, world.carcasses[ci].pos);
+            // Strict `<` on distance plus lowest-index tie-break reproduces the
+            // old ascending-index linear scan exactly.
+            if d < best_d || (d == best_d && best.is_some_and(|b| ci < b)) {
                 best_d = d;
                 best = Some(ci);
             }
-        }
+        });
         if let Some(ci) = best {
             let size = world.agents.genome[i].get(GenomeSlot::Size).max(0.1);
             let desired = SCAVENGE_MAX * size * bite_cap * carn;

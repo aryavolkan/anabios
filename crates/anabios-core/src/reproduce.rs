@@ -25,9 +25,11 @@ pub const MATING_RANGE: f32 = 2.0;
 /// 0.5 means parents collectively pay `SPAWN_ENERGY` total (energy-conserving).
 pub const PARENT_ENERGY_COST_FRAC: f32 = 0.5;
 
-/// Hard upper bound on alive agents. Reproduction skips above this cap.
-/// Sized to the simulation perf budget (see bench `tick_bench`).
-pub const MAX_POPULATION: u32 = 2_000;
+/// Default hard upper bound on alive agents. Reproduction skips at/above the
+/// cap. The live value is `World::max_population` (per-world overridable);
+/// this constant is the design's 10k-agent budget (design §8; the
+/// `tick_bench` 10k case seeds founders directly to exercise that scale).
+pub const MAX_POPULATION: u32 = 10_000;
 
 /// Run the reproduce stage. Each alive agent at most mates once per tick.
 /// Order: ascending agent id. Each agent A checks its same-cell neighbours
@@ -49,7 +51,7 @@ pub fn reproduce_all(world: &mut World) {
     alive_ids.extend(world.agents.iter_alive());
 
     for &a_id in &alive_ids {
-        if world.agents.live_count() >= MAX_POPULATION {
+        if world.agents.live_count() >= world.max_population {
             // Backstop: stop producing offspring above the cap. Iteration
             // order is deterministic (ascending id), so the cutoff is too.
             break;
@@ -248,8 +250,6 @@ mod tests {
     fn fertile_genome() -> Genome {
         let mut g = Genome::neutral();
         g.set(GenomeSlot::ReproductionThreshold, 0.4);
-        g.set(GenomeSlot::DietCarnivory, 0.0);
-        g.set(GenomeSlot::SpeedMax, 0.4);
         g.set(GenomeSlot::Size, 0.4);
         g.set(GenomeSlot::BasalMetabolism, 0.4);
         g

@@ -11,6 +11,9 @@ const SCENARIO: &str = include_str!("../../../scenarios/divergent.toml");
 fn distant_founder_populations_become_separate_species() {
     let scenario = Scenario::parse_toml(SCENARIO).expect("parse");
     let mut world = scenario.instantiate();
+    // The split is genetic, not population-driven — cap population so the run
+    // stays fast under the raised 10k default.
+    world.max_population = 500;
 
     // Run past the first speciation event (200 ticks) plus a buffer for
     // the algorithm to recognize the split.

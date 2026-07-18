@@ -72,57 +72,68 @@ pub fn step(world: &mut World) {
 }
 
 fn decide_all(world: &mut World) {
-    // Deterministic order: ascending id. Programs are evaluated against the
-    // shared `world.eval_stack` scratch buffer.
-    // Collect ids first to release the borrow on `world.agents` before the loop
-    // body borrows `world` mutably (decide reads buffers, then we write back).
-    let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
-    alive_ids.clear();
-    alive_ids.extend(world.agents.iter_alive());
-    for &id in &alive_ids {
-        let i = id as usize;
-        let mut action = decide(
-            &world.agents.program[i],
-            &world.agents.genome[i],
-            &world.sensors[i],
-            &world.agents.meme_vector[i],
-            world.agents.energy[i],
-            world.agents.age[i],
-            &mut world.eval_stack,
-        );
-        // Personality modulation of the raw action intents (Big Five).
-        crate::personality::apply_personality(
-            &mut action,
-            &world.agents.genome[i],
-            &world.sensors[i],
-            world.agents.energy[i],
-        );
-        // Habitat selection (opt-in): bias movement toward the nearby cell whose
-        // climate best matches this agent's EnvAffinity, so lineages sort into
-        // their preferred zone. Gated on the flag so flag-off stays byte-identical.
-        if world.biome_adaptation {
-            let affinity = world.agents.genome[i].get(crate::genome::GenomeSlot::EnvAffinity);
-            let pull = crate::biome::best_env_direction(
-                &world.biome,
-                world.agents.position[i],
-                affinity,
-                crate::culture::HABITAT_REACH,
+    use rayon::prelude::*;
+    // Each agent's action is a pure function of its own program/genome/sensors
+    // plus the (read-only) biome, so the loop runs in parallel with
+    // index-disjoint writes into `actions` / `desired_direction` — results are
+    // bit-identical to the old serial ascending-id loop. `map_init` gives each
+    // rayon worker one reusable eval stack (replacing the former shared
+    // `eval_stack` scratch on World).
+    let agents = &world.agents;
+    let sensors = &world.sensors;
+    let biome = &world.biome;
+    let biome_adaptation = world.biome_adaptation;
+    let cap = world.agents.capacity();
+    world
+        .actions
+        .par_iter_mut()
+        .zip(world.desired_direction.par_iter_mut())
+        .enumerate()
+        .map_init(Vec::new, |stack, (i, (action_out, dir_out))| {
+            if i >= cap || !agents.is_alive(i as u32) {
+                return;
+            }
+            let mut action = decide(
+                &agents.program[i],
+                &agents.genome[i],
+                &sensors[i],
+                &agents.meme_vector[i],
+                agents.energy[i],
+                agents.age[i],
+                stack,
             );
-            action.move_x += crate::culture::HABITAT_PULL * pull.x;
-            action.move_y += crate::culture::HABITAT_PULL * pull.y;
-        }
-        // Normalize the movement intent to a unit direction (identical to the
-        // pre-M11 logic that lived inside `decide`). Guard against a non-finite
-        // intent (an evolved program can overflow to `inf`; `inf/inf` would make
-        // the direction `NaN` and corrupt the agent's position) — treat it as
-        // no movement.
-        let v = Vec2::new(action.move_x, action.move_y);
-        let len = v.length();
-        world.desired_direction[i] =
-            if len < 1e-4 || !v.is_finite() { Vec2::ZERO } else { v / len };
-        world.actions[i] = action;
-    }
-    world.agents.scratch_ids = alive_ids;
+            // Personality modulation of the raw action intents (Big Five).
+            crate::personality::apply_personality(
+                &mut action,
+                &agents.genome[i],
+                &sensors[i],
+                agents.energy[i],
+            );
+            // Habitat selection (opt-in): bias movement toward the nearby cell whose
+            // climate best matches this agent's EnvAffinity, so lineages sort into
+            // their preferred zone. Gated on the flag so flag-off stays byte-identical.
+            if biome_adaptation {
+                let affinity = agents.genome[i].get(crate::genome::GenomeSlot::EnvAffinity);
+                let pull = crate::biome::best_env_direction(
+                    biome,
+                    agents.position[i],
+                    affinity,
+                    crate::culture::HABITAT_REACH,
+                );
+                action.move_x += crate::culture::HABITAT_PULL * pull.x;
+                action.move_y += crate::culture::HABITAT_PULL * pull.y;
+            }
+            // Normalize the movement intent to a unit direction (identical to the
+            // pre-M11 logic that lived inside `decide`). Guard against a non-finite
+            // intent (an evolved program can overflow to `inf`; `inf/inf` would make
+            // the direction `NaN` and corrupt the agent's position) — treat it as
+            // no movement.
+            let v = Vec2::new(action.move_x, action.move_y);
+            let len = v.length();
+            *dir_out = if len < 1e-4 || !v.is_finite() { Vec2::ZERO } else { v / len };
+            *action_out = action;
+        })
+        .count();
 }
 
 #[cfg(test)]

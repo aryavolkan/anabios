@@ -16,8 +16,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // flag, then tuned the climate to low frequency (large zones for habitat selection).
 // Behavior is unchanged with the flag off (env is unread; terrain/biomass generation
 // is byte-identical) — only the serialized env bytes changed, so all three hashes moved.
+// Refreshed 2026-07-17 (2): MAX_POPULATION raised 2_000 → 10_000 (design's 10k
+// budget) and became a per-world field (`World::max_population`, scenario-
+// overridable). minimal.toml pins 2000, restoring pre-raise behavior; all three
+// hashes moved because the serialized World layout gained the new field.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xa523d4bf691f7f6f), (100, 0x8e95dd8d49487951), (1000, 0x47b53f649ca7d2ec)];
+    &[(0, 0xecd34b053a7aa32e), (100, 0xf1feb6b23de48cbc), (1000, 0xd5190146a2f62551)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

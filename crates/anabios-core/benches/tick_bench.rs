@@ -13,8 +13,6 @@ fn build_population(count: usize, seed: u64) -> World {
         let x = ((i.wrapping_mul(2_654_435_761)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
         let y = ((i.wrapping_mul(40_503)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
         let mut g = Genome::neutral();
-        g.set(GenomeSlot::SpeedMax, 0.4);
-        g.set(GenomeSlot::DietCarnivory, 0.0);
         g.set(GenomeSlot::Size, 0.4);
         w.spawn_agent(Vec2::new(x, y), g);
     }

@@ -150,18 +150,17 @@ fn territory_formation_fires_for_a_clustered_marking_species() {
     assert!(fired, "a tight, persistent marking species forms a territory");
 }
 
-use anabios_core::codex::histogram_overlap;
-use std::collections::BTreeMap;
+use anabios_core::codex::{histogram_overlap, TERRAIN_SLOTS};
 
 #[test]
 fn histogram_overlap_is_one_for_identical_zero_for_disjoint() {
-    let mut a: BTreeMap<u8, f32> = BTreeMap::new();
-    a.insert(0, 0.5);
-    a.insert(1, 0.5);
-    let identical = a.clone();
+    let mut a = [0.0f32; TERRAIN_SLOTS];
+    a[0] = 0.5;
+    a[1] = 0.5;
+    let identical = a;
     assert!((histogram_overlap(&a, &identical) - 1.0).abs() < 1e-6);
 
-    let mut b: BTreeMap<u8, f32> = BTreeMap::new();
-    b.insert(2, 1.0); // disjoint terrain type
+    let mut b = [0.0f32; TERRAIN_SLOTS];
+    b[2] = 1.0; // disjoint terrain type
     assert_eq!(histogram_overlap(&a, &b), 0.0);
 }

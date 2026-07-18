@@ -115,36 +115,13 @@ pub(crate) fn species_max_meme_divergence(
             continue;
         }
         let cx = idxs.iter().map(|&i| xs[i]).sum::<f32>() / idxs.len() as f32;
-        let (mut west, mut east): (Vec<usize>, Vec<usize>) = (Vec::new(), Vec::new());
-        for &i in idxs {
-            if xs[i] < cx {
-                west.push(i);
-            } else {
-                east.push(i);
-            }
+        if let Some(l2) =
+            anabios_core::codex::west_east_meme_divergence(idxs, cx, DIALECT_MIN_HALF as u32, |i| {
+                (xs[i], memes[i])
+            })
+        {
+            best = best.max(l2);
         }
-        if west.len() < DIALECT_MIN_HALF || east.len() < DIALECT_MIN_HALF {
-            continue;
-        }
-        let mut wm = [0.0f32; MEME_CHANNELS];
-        let mut em = [0.0f32; MEME_CHANNELS];
-        for &i in &west {
-            for ch in 0..MEME_CHANNELS {
-                wm[ch] += memes[i][ch];
-            }
-        }
-        for &i in &east {
-            for ch in 0..MEME_CHANNELS {
-                em[ch] += memes[i][ch];
-            }
-        }
-        let (wn, en) = (west.len() as f32, east.len() as f32);
-        let mut l2 = 0.0f32;
-        for ch in 0..MEME_CHANNELS {
-            let d = wm[ch] / wn - em[ch] / en;
-            l2 += d * d;
-        }
-        best = best.max(l2.sqrt());
     }
     best
 }

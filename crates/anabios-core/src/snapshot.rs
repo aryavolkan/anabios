@@ -38,7 +38,8 @@ pub fn load_from_bytes(bytes: &[u8]) -> Result<World, SnapshotError> {
     if env.format_version != FORMAT_VERSION {
         return Err(SnapshotError::Version { found: env.format_version, expected: FORMAT_VERSION });
     }
-    let world: World = bincode::deserialize(&env.payload)?;
+    let mut world: World = bincode::deserialize(&env.payload)?;
+    world.pheromones.refresh_nonzero();
     Ok(world)
 }
 

@@ -4,26 +4,9 @@ use super::*;
 use crate::world::World;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-/// Update per-species weapon/armor trend windows from the current population,
-/// then edge-trigger ArmsRace when a co-rising trend appears.
-pub(super) fn detect_arms_race(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
-    // Accumulate per-species means (BTreeMap → deterministic).
-    let mut wsum: BTreeMap<u32, (f64, u32)> = BTreeMap::new();
-    let mut asum: BTreeMap<u32, (f64, u32)> = BTreeMap::new();
-    for id in world.agents.iter_alive() {
-        let i = id as usize;
-        let sid = world.agents.species_id[i];
-        let wd = crate::module::effective_weapon(&world.agents.modules[i])
-            .map(|(d, _)| d)
-            .unwrap_or(0.0);
-        let ap = crate::module::effective_armor_protection(&world.agents.modules[i]);
-        let w = wsum.entry(sid).or_insert((0.0, 0));
-        w.0 += wd as f64;
-        w.1 += 1;
-        let a = asum.entry(sid).or_insert((0.0, 0));
-        a.0 += ap as f64;
-        a.1 += 1;
-    }
+/// Update per-species weapon/armor trend windows from the fused per-species
+/// aggregates, then edge-trigger ArmsRace when a co-rising trend appears.
+pub(super) fn detect_arms_race(world: &mut World, agg: &SpeciesAggTable) {
     let push = |hist: &mut BTreeMap<u32, VecDeque<f32>>, sid: u32, mean: f32| {
         let buf = hist.entry(sid).or_default();
         if buf.len() == ARMS_WINDOW {
@@ -31,17 +14,17 @@ pub(super) fn detect_arms_race(world: &mut World, centroids: &BTreeMap<u32, (f32
         }
         buf.push_back(mean);
     };
-    for (sid, (sum, n)) in wsum.iter() {
-        push(&mut world.codex.weapon_history, *sid, (*sum / *n as f64) as f32);
-    }
-    for (sid, (sum, n)) in asum.iter() {
-        push(&mut world.codex.armor_history, *sid, (*sum / *n as f64) as f32);
+    for &sid in agg.active() {
+        let entry = agg.get(sid).expect("active species has an entry");
+        let n = entry.count as f64;
+        push(&mut world.codex.weapon_history, sid, (entry.weapon_sum / n) as f32);
+        push(&mut world.codex.armor_history, sid, (entry.armor_sum / n) as f32);
     }
 
     let signal = arms_race_signal(&world.codex.weapon_history, &world.codex.armor_history);
     match signal {
         Some((sid, rise)) if !world.codex.arms_race_active => {
-            let (lx, ly) = centroid_of(centroids, sid);
+            let (lx, ly) = centroid_of(agg, sid);
             world.codex.push_event(CodexEvent {
                 event_type: EventType::ArmsRace,
                 tick: world.tick,
@@ -61,7 +44,7 @@ pub(super) fn detect_arms_race(world: &mut World, centroids: &BTreeMap<u32, (f32
 /// damage to one target within PACK_WINDOW ticks. Prunes the rolling window,
 /// groups hits by (target, species), and edge-fires on the `pack_active` latch.
 /// Re-arms when no qualifying (target, species) group exists.
-pub(super) fn detect_pack_hunting(world: &mut World, centroids: &BTreeMap<u32, (f32, f32)>) {
+pub(super) fn detect_pack_hunting(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
     // Prune entries older than the rolling window (mirror detect_combat_raid).
     let cutoff = tick.saturating_sub(PACK_WINDOW);
@@ -91,7 +74,7 @@ pub(super) fn detect_pack_hunting(world: &mut World, centroids: &BTreeMap<u32, (
             if attackers.len() >= PACK_MIN_ATTACKERS {
                 raiding = true;
                 event_species = *sid;
-                event_loc = centroid_of(centroids, *sid);
+                event_loc = centroid_of(agg, *sid);
                 break 'outer;
             }
         }

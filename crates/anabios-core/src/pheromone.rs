@@ -19,6 +19,12 @@ pub const PHEROMONE_DEPOSIT_SCALE: f32 = 1.0;
 pub struct PheromoneField {
     /// Row-major `BIOME_RES*BIOME_RES` cells; each holds one value per channel.
     pub cells: Vec<[f32; PHEROMONE_CHANNELS]>,
+    /// Cached "any cell is nonzero" flag — lets `decay_step` skip the full
+    /// 65k-multiply pass when no pheromone has ever been deposited. Once true
+    /// it stays true (decay only shrinks values toward zero, never reaching
+    /// it). Skipped by serde; recomputed on snapshot load.
+    #[serde(skip)]
+    nonzero: bool,
 }
 
 impl Default for PheromoneField {
@@ -29,7 +35,7 @@ impl Default for PheromoneField {
 
 impl PheromoneField {
     pub fn new() -> Self {
-        Self { cells: vec![[0.0; PHEROMONE_CHANNELS]; BIOME_RES * BIOME_RES] }
+        Self { cells: vec![[0.0; PHEROMONE_CHANNELS]; BIOME_RES * BIOME_RES], nonzero: false }
     }
 
     #[inline]
@@ -42,6 +48,7 @@ impl PheromoneField {
     pub fn deposit(&mut self, pos: Vec2, channel: usize, amount: f32) {
         let ch = channel.min(PHEROMONE_CHANNELS - 1);
         self.cells[Self::idx(pos)][ch] += amount;
+        self.nonzero = true;
     }
 
     /// Read the concentration at `pos` on `channel` (index clamped).
@@ -50,8 +57,17 @@ impl PheromoneField {
         self.cells[Self::idx(pos)][ch]
     }
 
+    /// Recompute the `nonzero` cache. Called after snapshot load, where the
+    /// serde-skipped flag defaults to false but cells may hold values.
+    pub(crate) fn refresh_nonzero(&mut self) {
+        self.nonzero = self.cells.iter().any(|c| c.iter().any(|&v| v != 0.0));
+    }
+
     /// Exponential per-tick decay across every cell and channel.
     pub fn decay_step(&mut self) {
+        if !self.nonzero {
+            return;
+        }
         let keep = 1.0 - PHEROMONE_DECAY;
         for cell in self.cells.iter_mut() {
             for v in cell.iter_mut() {

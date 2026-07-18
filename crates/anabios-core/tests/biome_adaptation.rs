@@ -12,6 +12,9 @@ const SCENARIO: &str = include_str!("../../../scenarios/biome-adaptation.toml");
 fn affinity_cline_tracks_local_climate() {
     let mut w = Scenario::parse_toml(SCENARIO).expect("parse").instantiate();
     assert!(w.biome_adaptation);
+    // Clamp the cap: 2500 ticks at the default 10k cap is minutes-slow; the
+    // cline signal this test asserts forms well below 500 agents.
+    w.max_population = 500;
     for _ in 0..2500 {
         step(&mut w);
     }

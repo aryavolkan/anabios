@@ -110,6 +110,10 @@ pub fn perception_radius(modules: &crate::module::ModuleList, genome: &Genome) -
 /// Run the sense stage. `registers[i]` is populated for every alive agent;
 /// dead slots are left unchanged. Caller owns `registers` and reuses it
 /// across ticks to avoid per-tick allocation.
+///
+/// Each agent's register is a pure function of the (immutable) world inputs,
+/// so the loop runs in parallel over rayon with index-disjoint writes —
+/// results are bit-identical to the serial ascending-id loop.
 pub fn sense_all(
     agents: &AgentBuffers,
     biome: &BiomeField,
@@ -117,124 +121,140 @@ pub fn sense_all(
     spatial: &UniformSpatialHash,
     registers: &mut [SensorRegister],
 ) {
+    use rayon::prelude::*;
     debug_assert!(registers.len() >= agents.capacity());
+    let cap = agents.capacity();
 
-    for id in agents.iter_alive() {
-        let i = id as usize;
-        let pos = agents.position[i];
-        let genome = &agents.genome[i];
-        let radius = perception_radius(&agents.modules[i], genome);
-        if radius <= 0.0 {
-            registers[i] = SensorRegister::default();
-            continue;
+    registers[..cap].par_iter_mut().enumerate().for_each(|(i, reg)| {
+        if !agents.is_alive(i as u32) {
+            return;
         }
+        *reg = sense_one(i as u32, agents, biome, pheromones, spatial);
+    });
+}
 
-        let local_cell = biome.sample(pos);
-        let plant_direction = best_plant_direction(biome, pos, radius);
-
-        let self_species = agents.species_id[i];
-        let self_size = genome.get(GenomeSlot::Size).max(1e-3);
-        let self_energy = agents.energy[i].max(1e-3);
-
-        let mut nearest_dist = f32::INFINITY;
-        let mut nearest_dir = Vec2::ZERO;
-        let mut has_neighbor = false;
-        let mut nearest_species: u32 = NO_NEIGHBOR_SPECIES;
-        let mut nearest_id: u32 = NO_NEIGHBOR_ID;
-        let mut nearest_rel_size = 0.0_f32;
-        let mut nearest_rel_energy = 0.0_f32;
-        let mut same_dist = f32::INFINITY;
-        let mut same_dir = Vec2::ZERO;
-        let mut same_id: u32 = NO_NEIGHBOR_ID;
-        let mut other_dist = f32::INFINITY;
-        let mut other_dir = Vec2::ZERO;
-        let mut other_id: u32 = NO_NEIGHBOR_ID;
-        let mut crowding: u32 = 0;
-
-        spatial.query(pos, radius, |oid| {
-            if oid == id {
-                return;
-            }
-            let other_pos = agents.position[oid as usize];
-            let d = torus_distance(pos, other_pos);
-            if d > radius {
-                return;
-            }
-            crowding += 1;
-            let dir = torus_direction(pos, other_pos);
-            let other_species = agents.species_id[oid as usize];
-            if d < nearest_dist {
-                nearest_dist = d;
-                nearest_dir = dir;
-                has_neighbor = true;
-                nearest_species = other_species;
-                nearest_id = oid;
-                nearest_rel_size = agents.genome[oid as usize].get(GenomeSlot::Size) / self_size;
-                // The hash holds only alive agents (rebuilt with the alive
-                // predicate before sense), so the neighbor's energy is >= 0.
-                nearest_rel_energy = agents.energy[oid as usize] / self_energy;
-            }
-            if other_species == self_species {
-                if d < same_dist {
-                    same_dist = d;
-                    same_dir = dir;
-                    same_id = oid;
-                }
-            } else if d < other_dist {
-                other_dist = d;
-                other_dir = dir;
-                other_id = oid;
-            }
-        });
-
-        // Pheromone perception is gated by a Smell sensor module.
-        let pheromone = if crate::module::has_smell(&agents.modules[i]) {
-            let pos = agents.position[i];
-            let mut ch_vals = [0.0f32; crate::program::PHEROMONE_CHANNELS];
-            for (ch, v) in ch_vals.iter_mut().enumerate() {
-                *v = pheromones.sample(pos, ch);
-            }
-            ch_vals
-        } else {
-            [0.0; crate::program::PHEROMONE_CHANNELS]
-        };
-
-        registers[i] = SensorRegister {
-            local_plant_biomass: local_cell.plant_biomass,
-            plant_direction,
-            nearest_neighbor_dist: nearest_dist,
-            nearest_neighbor_dir: nearest_dir,
-            has_neighbor,
-            nearest_neighbor_species: nearest_species,
-            nearest_neighbor_id: nearest_id,
-            nearest_same_dist: same_dist,
-            nearest_same_dir: same_dir,
-            nearest_same_id: same_id,
-            nearest_other_dist: other_dist,
-            nearest_other_dir: other_dir,
-            nearest_other_id: other_id,
-            nearest_rel_size,
-            nearest_rel_energy,
-            crowding,
-            pheromone,
-            nearest_kinship: 0.0,
-        };
-
-        // Kinship of the overall-nearest neighbor (0 when there is none).
-        registers[i].nearest_kinship = if has_neighbor {
-            let n = nearest_id as usize;
-            crate::kin::kinship(
-                agents.lineage_id[i],
-                &agents.parent_ids[i],
-                &agents.genome[i],
-                agents.lineage_id[n],
-                &agents.parent_ids[n],
-                &agents.genome[n],
-            )
-        } else {
-            0.0
-        };
+/// Compute one alive agent's sensor register. Pure over the shared inputs.
+fn sense_one(
+    id: u32,
+    agents: &AgentBuffers,
+    biome: &BiomeField,
+    pheromones: &crate::pheromone::PheromoneField,
+    spatial: &UniformSpatialHash,
+) -> SensorRegister {
+    let i = id as usize;
+    let pos = agents.position[i];
+    let genome = &agents.genome[i];
+    let radius = perception_radius(&agents.modules[i], genome);
+    if radius <= 0.0 {
+        return SensorRegister::default();
     }
+
+    let local_cell = biome.sample(pos);
+    let plant_direction = best_plant_direction(biome, pos, radius);
+
+    let self_species = agents.species_id[i];
+    let self_size = genome.get(GenomeSlot::Size).max(1e-3);
+    let self_energy = agents.energy[i].max(1e-3);
+
+    let mut nearest_dist = f32::INFINITY;
+    let mut nearest_dir = Vec2::ZERO;
+    let mut has_neighbor = false;
+    let mut nearest_species: u32 = NO_NEIGHBOR_SPECIES;
+    let mut nearest_id: u32 = NO_NEIGHBOR_ID;
+    let mut nearest_rel_size = 0.0_f32;
+    let mut nearest_rel_energy = 0.0_f32;
+    let mut same_dist = f32::INFINITY;
+    let mut same_dir = Vec2::ZERO;
+    let mut same_id: u32 = NO_NEIGHBOR_ID;
+    let mut other_dist = f32::INFINITY;
+    let mut other_dir = Vec2::ZERO;
+    let mut other_id: u32 = NO_NEIGHBOR_ID;
+    let mut crowding: u32 = 0;
+
+    spatial.query(pos, radius, |oid| {
+        if oid == id {
+            return;
+        }
+        let other_pos = agents.position[oid as usize];
+        let d = torus_distance(pos, other_pos);
+        if d > radius {
+            return;
+        }
+        crowding += 1;
+        let dir = torus_direction(pos, other_pos);
+        let other_species = agents.species_id[oid as usize];
+        if d < nearest_dist {
+            nearest_dist = d;
+            nearest_dir = dir;
+            has_neighbor = true;
+            nearest_species = other_species;
+            nearest_id = oid;
+            nearest_rel_size = agents.genome[oid as usize].get(GenomeSlot::Size) / self_size;
+            // The hash holds only alive agents (rebuilt with the alive
+            // predicate before sense), so the neighbor's energy is >= 0.
+            nearest_rel_energy = agents.energy[oid as usize] / self_energy;
+        }
+        if other_species == self_species {
+            if d < same_dist {
+                same_dist = d;
+                same_dir = dir;
+                same_id = oid;
+            }
+        } else if d < other_dist {
+            other_dist = d;
+            other_dir = dir;
+            other_id = oid;
+        }
+    });
+
+    // Pheromone perception is gated by a Smell sensor module.
+    let pheromone = if crate::module::has_smell(&agents.modules[i]) {
+        let pos = agents.position[i];
+        let mut ch_vals = [0.0f32; crate::program::PHEROMONE_CHANNELS];
+        for (ch, v) in ch_vals.iter_mut().enumerate() {
+            *v = pheromones.sample(pos, ch);
+        }
+        ch_vals
+    } else {
+        [0.0; crate::program::PHEROMONE_CHANNELS]
+    };
+
+    let mut reg = SensorRegister {
+        local_plant_biomass: local_cell.plant_biomass,
+        plant_direction,
+        nearest_neighbor_dist: nearest_dist,
+        nearest_neighbor_dir: nearest_dir,
+        has_neighbor,
+        nearest_neighbor_species: nearest_species,
+        nearest_neighbor_id: nearest_id,
+        nearest_same_dist: same_dist,
+        nearest_same_dir: same_dir,
+        nearest_same_id: same_id,
+        nearest_other_dist: other_dist,
+        nearest_other_dir: other_dir,
+        nearest_other_id: other_id,
+        nearest_rel_size,
+        nearest_rel_energy,
+        crowding,
+        pheromone,
+        nearest_kinship: 0.0,
+    };
+
+    // Kinship of the overall-nearest neighbor (0 when there is none).
+    reg.nearest_kinship = if has_neighbor {
+        let n = nearest_id as usize;
+        crate::kin::kinship(
+            agents.lineage_id[i],
+            &agents.parent_ids[i],
+            &agents.genome[i],
+            agents.lineage_id[n],
+            &agents.parent_ids[n],
+            &agents.genome[n],
+        )
+    } else {
+        0.0
+    };
+    reg
 }
 
 /// Find the direction toward the best-biomass biome cell within `radius`.
