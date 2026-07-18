@@ -7,16 +7,33 @@ use anabios_core::tick::step;
 use anabios_core::world::World;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
+/// Deterministic pseudo-random world position for index `i` (no RNG needed;
+/// the salts decorrelate x/y and let each caller pick a different spread).
+fn scatter_pos(i: usize, x_salt: u32, y_salt: u32) -> Vec2 {
+    let x = ((i.wrapping_mul(x_salt as usize)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
+    let y = ((i.wrapping_mul(y_salt as usize)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
+    Vec2::new(x, y)
+}
+
 fn build_population(count: usize, seed: u64) -> World {
     let mut w = World::new(seed);
     for i in 0..count {
-        let x = ((i.wrapping_mul(2_654_435_761)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
-        let y = ((i.wrapping_mul(40_503)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
         let mut g = Genome::neutral();
         g.set(GenomeSlot::Size, 0.4);
-        w.spawn_agent(Vec2::new(x, y), g);
+        w.spawn_agent(scatter_pos(i, 2_654_435_761, 40_503), g);
     }
     w
+}
+
+/// Warm a bench world a few ticks so scratch buffers and the spatial hash are
+/// sized and detector windows hold realistic data.
+fn warm(w: &mut World, ticks: usize) {
+    for _ in 0..ticks {
+        step(w);
+    }
+    let cap = w.agents.capacity();
+    w.sensors.resize(cap, anabios_core::sense::SensorRegister::default());
+    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
 }
 
 fn bench_tick(c: &mut Criterion) {
@@ -45,27 +62,15 @@ fn bench_stages(c: &mut Criterion) {
     let mut group = c.benchmark_group("stages");
     group.sample_size(20);
     let mut w = build_population(10_000, 1);
-    // Warm a few ticks so scratch buffers and the spatial hash are sized and
-    // detector windows hold realistic data.
-    for _ in 0..5 {
-        step(&mut w);
-    }
-    let cap = w.agents.capacity();
-    w.sensors.resize(cap, anabios_core::sense::SensorRegister::default());
-    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+    warm(&mut w, 5);
 
     group.bench_function("spatial_rebuild/10000", |b| {
         b.iter(|| w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32)))
     });
-    for &count in &[1_000_usize, 10_000_usize] {
-        let mut sw = build_population(count, 1);
-        for _ in 0..5 {
-            step(&mut sw);
-        }
-        let cap = sw.agents.capacity();
-        sw.sensors.resize(cap, anabios_core::sense::SensorRegister::default());
-        sw.spatial.rebuild(&sw.agents.position, |i| sw.agents.is_alive(i as u32));
-        group.bench_function(BenchmarkId::new("sense", count), |b| {
+    let mut w1k = build_population(1_000, 1);
+    warm(&mut w1k, 5);
+    for (name, sw) in [(1_000, &mut w1k), (10_000, &mut w)] {
+        group.bench_function(BenchmarkId::new("sense", name), |b| {
             let mut sensors = std::mem::take(&mut sw.sensors);
             b.iter(|| {
                 anabios_core::sense::sense_all(
@@ -93,19 +98,16 @@ fn bench_scavenge(c: &mut Criterion) {
     let mut group = c.benchmark_group("scavenge");
     group.sample_size(20);
     let mut w = World::new(1);
-    // 2k stationary carnivores.
+    // 2k armed carnivores (predator_kit: Locomotor + Vision + carnivore Mouth
+    // + Weapon).
     for i in 0..2_000_usize {
-        let x = ((i.wrapping_mul(2_654_435_761)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
-        let y = ((i.wrapping_mul(40_503)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
-        let id = w.spawn_agent(Vec2::new(x, y), Genome::neutral());
+        let id = w.spawn_agent(scatter_pos(i, 2_654_435_761, 40_503), Genome::neutral());
         w.agents.modules[id as usize] = anabios_core::module::predator_kit();
     }
-    // 1k carcasses scattered on the same deterministic grid.
+    // 1k carcasses scattered on a second deterministic grid.
     for i in 0..1_000_usize {
-        let x = ((i.wrapping_mul(1_103_515_245)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
-        let y = ((i.wrapping_mul(19_379)) as u32 as f32) / u32::MAX as f32 * WORLD_SIZE;
         w.carcasses.push(anabios_core::carcass::Carcass {
-            pos: Vec2::new(x, y),
+            pos: scatter_pos(i, 1_103_515_245, 19_379),
             flesh: 10.0,
             age: 0,
             species_id: 0,

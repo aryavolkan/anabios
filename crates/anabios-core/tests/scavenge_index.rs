@@ -9,7 +9,7 @@
 use anabios_core::carcass::Carcass;
 use anabios_core::genome::Genome;
 use anabios_core::module::{Module, ModuleList};
-use anabios_core::prelude_test::Vec2;
+use anabios_core::prelude_test::{reassign_to_new_species, Vec2};
 use anabios_core::tick::step;
 use anabios_core::world::World;
 
@@ -19,20 +19,6 @@ fn carnivore_mouth_only() -> ModuleList {
     let mut m = ModuleList::new();
     m.push(Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 });
     m
-}
-
-/// Move an agent into a fresh species (prevents mating between adjacent test
-/// agents, which would perturb their energies).
-fn reassign_to_new_species(w: &mut World, agent: u32) -> u32 {
-    let sid = w.species_centroids.len() as u32;
-    w.species_centroids.push(Genome::neutral());
-    w.species_parents.push(Some(0));
-    w.species_member_counts.push(0);
-    w.next_species_id = sid + 1;
-    w.remove_from_species(w.agents.species_id[agent as usize]);
-    w.agents.species_id[agent as usize] = sid;
-    w.add_to_species(sid);
-    sid
 }
 
 fn spawn_carnivore(w: &mut World, pos: Vec2) -> u32 {

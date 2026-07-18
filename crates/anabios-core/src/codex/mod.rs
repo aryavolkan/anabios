@@ -607,14 +607,7 @@ mod tests {
         let _b = w.spawn_agent(Vec2::new(300.0, 100.0), Genome::neutral());
         // Species 1: one communicator+weapon agent.
         let c = w.spawn_agent(Vec2::new(600.0, 200.0), Genome::neutral());
-        let sid1 = w.species_centroids.len() as u32;
-        w.species_centroids.push(Genome::neutral());
-        w.species_parents.push(Some(0));
-        w.species_member_counts.push(0);
-        w.next_species_id = sid1 + 1;
-        w.remove_from_species(0);
-        w.agents.species_id[c as usize] = sid1;
-        w.add_to_species(sid1);
+        let sid1 = crate::prelude_test::reassign_to_new_species(&mut w, c);
         let mut kit: ModuleList = crate::module::communicator_kit();
         kit.push(Module::Weapon { damage: 4.0, energy_cost: 1.0 });
         w.agents.modules[c as usize] = kit;
