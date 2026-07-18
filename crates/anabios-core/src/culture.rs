@@ -320,7 +320,7 @@ pub fn culture_step(world: &mut World) {
                     INVENT_SOCIAL_RATE
                 };
                 world.agents.meme_vector[i][INVENTION_CHANNEL] =
-                    cur + rate * (best_neighbour_invention - cur);
+                    (cur + rate * (best_neighbour_invention - cur)).clamp(0.0, 1.0);
             }
         }
         // DIT env mode: social learners copy the technique toward the best-matched

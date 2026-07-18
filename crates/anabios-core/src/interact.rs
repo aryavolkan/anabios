@@ -124,7 +124,7 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
                 && crate::culture::is_inventive(&world.agents.genome[i])
             {
                 let inv = &mut world.agents.meme_vector[i][crate::culture::INVENTION_CHANNEL];
-                *inv += crate::culture::INVENT_RATE * (1.0 - *inv);
+                *inv = (*inv + crate::culture::INVENT_RATE * (1.0 - *inv)).clamp(0.0, 1.0);
             }
         }
         // Domestication tier (Task 2.1): a flat, additive steady food income —
