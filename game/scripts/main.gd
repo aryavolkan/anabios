@@ -17,7 +17,12 @@ const MODULE_COLORS: PackedColorArray = [
 	Color(0.5, 1.0, 0.9),   # 7 Pheromone
 	Color(1.0, 0.5, 0.8),   # 8 Reproductive
 ]
-const GLYPH_SIZE: float = 0.7
+# Bodies are 0.5–3.0 world units across (genome size), which is only a few
+# pixels at default zoom. Scale them up with a floor so even the smallest
+# organism is an easy-to-see mark, not a stray pixel.
+const BODY_SCALE: float = 3.2
+const BODY_MIN: float = 2.6
+const GLYPH_SIZE: float = 1.6
 
 @onready var sim = $Simulation
 @onready var bodies: MultiMeshInstance2D = $Bodies
@@ -84,7 +89,8 @@ func _refresh_bodies() -> void:
 	var rots: PackedFloat32Array = sim.alive_rotations()
 	var body_colors: PackedColorArray = _body_colors(n)
 	for i in n:
-		var t: Transform2D = Transform2D(rots[i], Vector2(sizes[i], sizes[i]), 0.0, positions[i])
+		var sz: float = maxf(sizes[i] * BODY_SCALE, BODY_MIN)
+		var t: Transform2D = Transform2D(rots[i], Vector2(sz, sz), 0.0, positions[i])
 		mm.set_instance_transform_2d(i, t)
 		mm.set_instance_color(i, body_colors[i])
 
