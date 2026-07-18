@@ -10,24 +10,27 @@
 //! RESULT (2026-07-18) — POSITIVE and confound-controlled. The Inventiveness
 //! gene sweeps from 15% standing variation toward fixation among surviving runs
 //! (boom/bust extinctions occur in the harsh 2048 living+seasonal biome; the
-//! sweep is read on runs that survive). 6 seeds x 5000 ticks:
-//!   - Naive seeding (default): 5/6 ROSE 0.15 -> 0.83..1.00.
-//! BUT the naive seeding is CONFOUNDED — the seeded gene-carriers also carry a
-//! Communicator MODULE, and `feed_pass`'s experiment-C foraging-skill bonus is
+//! sweep is read on runs that survive). With the naive default seeding, 6 seeds
+//! x 5000 ticks gives 5/6 rising 0.15 -> 0.83..1.00.
+//!
+//! BUT the naive seeding is CONFOUNDED: the seeded gene-carriers also carry a
+//! Communicator module, and `feed_pass`'s experiment-C foraging-skill bonus is
 //! gated on that module (not the gene), giving carriers an independent edge.
-//! Two controls settle the causal attribution:
-//!   - IS_INVENTIONS=0 (invention mechanism OFF, Communicator kept): the gene
-//!     STILL sweeps in most seeds (final freq ~0.06..1.00, variable). So the
-//!     Communicator/skill bonus drives much of the NAIVE sweep — the gene
-//!     hitchhikes on the module. (Confirms the confound is real.)
-//!   - IS_ALL_COMM=1 (EVERY agent gets a Communicator → the skill bonus is
-//!     EQUAL across cohorts; the ONLY difference is the Inventiveness gene):
-//!     the gene STILL sweeps to fixation in every surviving seed
-//!     (0.948 / 0.991 / 0.986; the rest went extinct). This ISOLATES the
-//!     invention benefit as a genuine, sufficient cause of the sweep,
-//!     independent of the Communicator.
+//! Two controls settle the causal attribution.
+//!
+//! Control 1 — IS_INVENTIONS=0 (invention mechanism OFF, Communicator kept):
+//! the gene STILL sweeps in most seeds (final freq ~0.06..1.00, variable), so
+//! the Communicator/skill bonus drives much of the NAIVE sweep — the gene
+//! hitchhikes on the module. This confirms the confound is real.
+//!
+//! Control 2 — IS_ALL_COMM=1 (EVERY agent gets a Communicator, so the skill
+//! bonus is EQUAL across cohorts and the ONLY difference is the Inventiveness
+//! gene): the gene STILL sweeps to fixation in every surviving seed (0.948,
+//! 0.991, 0.986; the rest went extinct). This isolates the invention benefit
+//! as a genuine, sufficient cause of the sweep, independent of the Communicator.
+//!
 //! Conclusion: with the module confound controlled, the ROBUST CUMULATIVE
-//! invention benefit (additive domestication food + industry upkeep/repro
+//! invention benefit (additive domestication food plus industry upkeep/repro
 //! discounts, compounded by Writing-accelerated transmission — none of which
 //! saturate in abundance) drives the Inventiveness gene to fixation. This is
 //! gene-culture coevolution attributable to inventions — the durable,
