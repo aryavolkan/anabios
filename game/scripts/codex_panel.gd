@@ -1,11 +1,24 @@
 extends PanelContainer
 
+const UiTheme = preload("res://scripts/ui_theme.gd")
 const CHAPTER_NAMES: PackedStringArray = [
-	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior"
+	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior",
+	"Predation", "CombatRaid", "ArmsRace", "Territory", "NichePartition",
+	"Dialect", "MemeSweep", "AlarmCall", "Cooperation", "PackHunting", "HerdCohesion"
+]
+# One color per event type so the timeline is scannable at a glance (matches
+# the co-evolution chart's marker hues where they overlap).
+const CHAPTER_COLORS: PackedColorArray = [
+	Color(1.0, 0.42, 0.42),   # 0 Extinction  — red
+	Color(1.0, 0.62, 0.35),   # 1 PopCrash    — orange
+	Color(0.55, 0.85, 1.0),   # 2 Speciation  — cyan
+	Color(0.65, 0.75, 1.0),   # 3 Migration   — blue
+	Color(1.0, 0.85, 0.4),    # 4 NovelModule — amber
+	Color(0.55, 0.95, 0.6),   # 5 NovelBehavior — green
 ]
 const MAX_RECENT: int = 30
 
-var _counts: Array[int] = [0, 0, 0, 0, 0, 0]
+var _counts: Array[int] = []
 var _recent: Array[Dictionary] = []
 var _cursor: int = 0
 
@@ -14,12 +27,18 @@ var _cursor: int = 0
 @onready var counts_label: Label = $VBox/Counts
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
 
+func _ready() -> void:
+	# The running tally reads as the panel's title — mark it with the accent.
+	counts_label.add_theme_color_override("font_color", UiTheme.ACCENT)
+	_counts.resize(CHAPTER_NAMES.size())
+	_counts.fill(0)
+
 func _process(_delta: float) -> void:
 	# Event log is cleared on scenario (re)load; a shrink below our cursor means
 	# a reload — reset so counts/recent reflect the new run.
 	if sim.codex_event_count() < _cursor:
 		_cursor = 0
-		_counts = [0, 0, 0, 0, 0, 0]
+		_counts.fill(0)
 		_recent.clear()
 	var events: Array = sim.codex_events_since(_cursor)
 	if events.is_empty():
@@ -51,6 +70,8 @@ func _render() -> void:
 		btn.text = "t=%d %s sp=%d" % [int(ev["tick"]), name, int(ev["species_id"])]
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.add_theme_font_size_override("font_size", 11)
+		if t >= 0 and t < CHAPTER_COLORS.size():
+			btn.add_theme_color_override("font_color", CHAPTER_COLORS[t])
 		var loc: Vector2 = ev["loc"]
 		btn.pressed.connect(_jump_to.bind(loc))
 		recent_list.add_child(btn)

@@ -1,8 +1,11 @@
 //! Deterministic RNG wrapper.
 //!
 //! The simulation uses a single Xoshiro256++ stream owned by `World`. Every
-//! stochastic operation pulls from this stream in a fixed order. No code
-//! reads `rand::thread_rng()` or `std::time` for randomness.
+//! stochastic operation at tick time pulls from this stream in a fixed
+//! order. No code reads `rand::thread_rng()` or `std::time` for randomness.
+//! (Scenario instantiation additionally draws personalities from a dedicated
+//! substream seeded from the world seed — see `Scenario::instantiate` — so
+//! it never perturbs the tick-time stream.)
 
 use rand::distributions::Standard;
 use rand::prelude::Distribution;

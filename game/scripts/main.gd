@@ -1,21 +1,19 @@
 extends Node2D
 
+const UiTheme = preload("res://scripts/ui_theme.gd")
+const Palette = preload("res://scripts/palette.gd")
+
 # Number of sim ticks to run per rendered frame. Speeds: 1, 4, 16, 64.
 @export var ticks_per_frame: int = 1
 @export var paused: bool = false
 
-const MODULE_COLORS: PackedColorArray = [
-	Color(0.6, 0.8, 1.0),   # 0 Locomotor
-	Color(0.4, 0.9, 0.5),   # 1 Sensor
-	Color(1.0, 0.7, 0.3),   # 2 Mouth
-	Color(1.0, 0.3, 0.3),   # 3 Weapon
-	Color(0.7, 0.7, 0.7),   # 4 Armor
-	Color(0.9, 0.9, 0.4),   # 5 Storage
-	Color(0.8, 0.5, 1.0),   # 6 Communicator
-	Color(0.5, 1.0, 0.9),   # 7 Pheromone
-	Color(1.0, 0.5, 0.8),   # 8 Reproductive
-]
-const GLYPH_SIZE: float = 0.7
+const MODULE_COLORS: PackedColorArray = Palette.MODULE_COLORS
+# Bodies are 0.5–3.0 world units across (genome size), which is only a few
+# pixels at default zoom. Scale them up with a floor so even the smallest
+# organism is an easy-to-see mark, not a stray pixel.
+const BODY_SCALE: float = 3.2
+const BODY_MIN: float = 2.6
+const GLYPH_SIZE: float = 1.6
 
 @onready var sim = $Simulation
 @onready var bodies: MultiMeshInstance2D = $Bodies
@@ -39,6 +37,23 @@ func _ready() -> void:
 	# Apply UI scale from the menu.
 	var s: float = GameConfig.ui_scale
 	$UI.transform = Transform2D(0.0, Vector2(s, s), 0.0, Vector2.ZERO)
+	_apply_ui_theme()
+	var disc := _disc_texture()
+	bodies.texture = disc
+	carcasses.texture = disc
+	flashes.texture = disc
+
+# Give every HUD panel the shared instrument theme, and make the top-left
+# readout legible over any terrain with a dark outline.
+func _apply_ui_theme() -> void:
+	var theme := UiTheme.build()
+	for child in $UI.get_children():
+		if child is Control:
+			(child as Control).theme = theme
+	hud.add_theme_color_override("font_color", UiTheme.ACCENT)
+	hud.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.75))
+	hud.add_theme_constant_override("outline_size", 5)
+	hud.add_theme_font_size_override("font_size", 17)
 
 func _notification(what: int) -> void:
 	# Pause when the window loses focus; user resumes manually.
@@ -51,7 +66,8 @@ func _process(_delta: float) -> void:
 	_refresh_bodies()
 	_refresh_carcasses()
 	_refresh_flashes()
-	hud.text = "tick=%d alive=%d" % [sim.tick(), sim.alive_count()]
+	var rate: String = "paused" if paused else ("%d×" % ticks_per_frame)
+	hud.text = "tick %d · %d alive · %s" % [sim.tick(), sim.alive_count(), rate]
 
 func _refresh_bodies() -> void:
 	var n: int = int(sim.alive_count())
@@ -69,7 +85,8 @@ func _refresh_bodies() -> void:
 	var rots: PackedFloat32Array = sim.alive_rotations()
 	var body_colors: PackedColorArray = _body_colors(n)
 	for i in n:
-		var t: Transform2D = Transform2D(rots[i], Vector2(sizes[i], sizes[i]), 0.0, positions[i])
+		var sz: float = maxf(sizes[i] * BODY_SCALE, BODY_MIN)
+		var t: Transform2D = Transform2D(rots[i], Vector2(sz, sz), 0.0, positions[i])
 		mm.set_instance_transform_2d(i, t)
 		mm.set_instance_color(i, body_colors[i])
 
@@ -102,6 +119,18 @@ func _body_colors(n: int) -> PackedColorArray:
 		_:
 			return sim.alive_colors()
 
+# A soft white disc (alpha falls off to the edge). Multiplied by each MultiMesh
+# instance color, it turns the flat body quads into rounded, organic marks.
+func _disc_texture(res: int = 32) -> ImageTexture:
+	var img := Image.create(res, res, false, Image.FORMAT_RGBA8)
+	var c := (res - 1) * 0.5
+	for y in res:
+		for x in res:
+			var d := Vector2(x - c, y - c).length() / c          # 0 center .. 1 edge
+			var a := clampf(1.0 - smoothstep(0.75, 1.0, d), 0.0, 1.0)
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+	return ImageTexture.create_from_image(img)
+
 func _refresh_carcasses() -> void:
 	var data: Array = sim.carcass_data()
 	var mm: MultiMesh = carcasses.multimesh
@@ -112,7 +141,7 @@ func _refresh_carcasses() -> void:
 	for i in m:
 		var d: Dictionary = data[i]
 		var pos: Vector2 = d["pos"]
-		var f: float = clampf(float(d["flesh"]) / 20.0, 0.2, 1.5)
+		var f: float = clampf(float(d["flesh"]) / 20.0 * 4.0, 3.0, 7.0)
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(f, f), 0.0, pos))
 		mm.set_instance_color(i, Color(0.77, 0.80, 0.86, 0.55))
 
@@ -124,8 +153,8 @@ func _refresh_flashes() -> void:
 		mm.instance_count = m
 	mm.visible_instance_count = m
 	for i in m:
-		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(1.6, 1.6), 0.0, pts[i]))
-		mm.set_instance_color(i, Color(1.0, 0.85, 0.2, 0.9))
+		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(6.0, 6.0), 0.0, pts[i]))
+		mm.set_instance_color(i, Color(1.0, 0.92, 0.45, 0.95))
 
 func _refresh_module_layers() -> void:
 	var all: Array = sim.module_glyphs_all()

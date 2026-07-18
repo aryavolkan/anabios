@@ -23,6 +23,9 @@ func _ready() -> void:
 	scale = Vector2(world / _res, world / _res)
 	position = Vector2.ZERO
 	z_index = -10
+	# Slightly dim + cool the ground so organisms and overlays read clearly on
+	# top and the terrain harmonizes with the dark instrument HUD.
+	modulate = Color(0.78, 0.82, 0.88)
 
 func _process(_delta: float) -> void:
 	if _res <= 0:

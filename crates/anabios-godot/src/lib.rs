@@ -1,4 +1,4 @@
-//! anabios-godot — Godot 4.6 extension binding for anabios-core.
+//! anabios-godot — Godot 4.7 extension binding for anabios-core.
 //!
 //! Exposes a single `Simulation` node class that GDScript can construct,
 //! advance with `step_n()`, and query for per-tick agent buffers + codex
@@ -8,6 +8,7 @@
 // enum variant. We can't change that, so silence the lint crate-wide.
 #![allow(clippy::result_large_err)]
 
+use godot::builtin::VarDictionary;
 use godot::prelude::*;
 
 mod coevo;
@@ -176,13 +177,13 @@ impl Simulation {
     /// Current-tick co-evolution scalars (see plan/spec for key meanings).
     /// All frequencies/means in `[0,1]`; `env_optimum` is `-1.0` when inactive.
     #[func]
-    fn coevo_metrics(&mut self) -> Dictionary {
+    fn coevo_metrics(&mut self) -> VarDictionary {
         match self.inner.as_ref() {
             Some(w) => {
                 let s = sample_into(w, &mut self.sample_scratch);
                 sample_to_dict(&s)
             }
-            None => Dictionary::new(),
+            None => VarDictionary::new(),
         }
     }
 
@@ -219,10 +220,10 @@ impl Simulation {
     /// One historical sample as a Dictionary (for the scrub readout).
     /// Out-of-range index returns empty.
     #[func]
-    fn coevo_sample_at(&self, index: i64) -> Dictionary {
+    fn coevo_sample_at(&self, index: i64) -> VarDictionary {
         match (index >= 0).then(|| self.history.get(index as usize)).flatten() {
             Some(s) => sample_to_dict(s),
-            None => Dictionary::new(),
+            None => VarDictionary::new(),
         }
     }
 
@@ -332,8 +333,8 @@ impl Simulation {
 
     /// Look up one alive agent by id. Returns a Dictionary; empty if dead.
     #[func]
-    fn get_agent_info(&self, id: i64) -> Dictionary {
-        let mut d = Dictionary::new();
+    fn get_agent_info(&self, id: i64) -> VarDictionary {
+        let mut d = VarDictionary::new();
         let Some(w) = self.inner.as_ref() else { return d };
         let aid = id as u32;
         if !w.agents.is_alive(aid) {
@@ -355,7 +356,7 @@ impl Simulation {
         for v in w.agents.genome[i].0.iter() {
             g.push(*v);
         }
-        d.set("genome", g);
+        d.set("genome", &g);
         d
     }
 
@@ -363,7 +364,7 @@ impl Simulation {
     /// adding diet, learned skill/technique, learning flags, dialect hue, and
     /// module names.
     #[func]
-    fn agent_detail(&self, id: i64) -> Dictionary {
+    fn agent_detail(&self, id: i64) -> VarDictionary {
         use anabios_core::culture::{SKILL_CHANNEL, TECH_CHANNEL};
         use anabios_core::genome::GenomeSlot;
         let mut d = self.get_agent_info(id);
@@ -388,7 +389,7 @@ impl Simulation {
         for m in w.agents.modules[i].iter() {
             names.push(&format!("{:?}", m.module_type()));
         }
-        d.set("module_names", names);
+        d.set("module_names", &names);
         d
     }
 
@@ -404,11 +405,11 @@ impl Simulation {
     ///   { index: int, type: int, tick: int, species_id: int,
     ///     value: f32, loc: Vector2 }
     #[func]
-    fn codex_events_since(&self, cursor: i64) -> Array<Dictionary> {
-        let mut out = Array::<Dictionary>::new();
+    fn codex_events_since(&self, cursor: i64) -> Array<VarDictionary> {
+        let mut out = Array::<VarDictionary>::new();
         let start = cursor.max(0) as usize;
         for (idx, ev) in self.events.iter().enumerate().skip(start) {
-            let mut d = Dictionary::new();
+            let mut d = VarDictionary::new();
             d.set("index", idx as i64);
             d.set("type", ev.event_type);
             d.set("tick", ev.tick);
@@ -501,10 +502,10 @@ impl Simulation {
     /// active, else `0.0`. Each entry is
     /// `{ species_id, count, mean_energy, mean_technique_match }`.
     #[func]
-    fn species_stats(&self) -> Array<Dictionary> {
+    fn species_stats(&self) -> Array<VarDictionary> {
         use anabios_core::culture::{env_optimum_at, technique_match, TECH_CHANNEL};
         use std::collections::BTreeMap;
-        let mut out = Array::<Dictionary>::new();
+        let mut out = Array::<VarDictionary>::new();
         let Some(w) = self.inner.as_ref() else { return out };
         let active = w.env_period > 0;
         let opt = if active { env_optimum_at(w.tick, w.env_period) } else { 0.0 };
@@ -524,7 +525,7 @@ impl Simulation {
             }
         }
         for (sp, n) in count.iter() {
-            let mut d = Dictionary::new();
+            let mut d = VarDictionary::new();
             let nf = *n as f32;
             d.set("species_id", *sp as i64);
             d.set("count", *n);
@@ -538,11 +539,11 @@ impl Simulation {
     /// One entry per carcass currently in the world:
     /// `{ pos, flesh, age, species_id }`.
     #[func]
-    fn carcass_data(&self) -> Array<Dictionary> {
-        let mut out = Array::<Dictionary>::new();
+    fn carcass_data(&self) -> Array<VarDictionary> {
+        let mut out = Array::<VarDictionary>::new();
         let Some(w) = self.inner.as_ref() else { return out };
         for c in w.carcasses.iter() {
-            let mut d = Dictionary::new();
+            let mut d = VarDictionary::new();
             d.set("pos", Vector2::new(c.pos.x, c.pos.y));
             d.set("flesh", c.flesh);
             d.set("age", c.age as i64);
@@ -741,8 +742,8 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
 
 /// Serialize a `CoevoSample` into a Godot Dictionary (shared by the live-metrics
 /// and scrub-readout exports).
-fn sample_to_dict(s: &CoevoSample) -> Dictionary {
-    let mut d = Dictionary::new();
+fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
+    let mut d = VarDictionary::new();
     d.set("tick", s.tick as i64);
     d.set("communicator_frac", s.communicator_frac);
     d.set("mean_social_learning", s.mean_social_learning);

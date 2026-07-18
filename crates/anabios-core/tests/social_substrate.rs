@@ -7,24 +7,9 @@ use anabios_core::program::{Node, Program, NO_TARGET};
 use anabios_core::tick::step;
 use anabios_core::world::World;
 
-/// Move an already-spawned agent into a fresh second species, keeping the
-/// world's species bookkeeping tables (centroids / member counts / parents)
-/// consistent so `species_step` doesn't index out of bounds. `spawn_agent`
-/// always assigns species 0, so this is the test-only way to create two
-/// species before the first tick.
-fn reassign_to_new_species(w: &mut World, agent: u32) -> u32 {
-    let sid = w.species_centroids.len() as u32;
-    // Grow all three parallel species tables explicitly so the helper is
-    // self-contained (not relying on add_to_species's internal resize).
-    w.species_centroids.push(Genome::neutral());
-    w.species_parents.push(Some(0));
-    w.species_member_counts.push(0);
-    w.next_species_id = sid + 1;
-    w.remove_from_species(w.agents.species_id[agent as usize]);
-    w.agents.species_id[agent as usize] = sid;
-    w.add_to_species(sid);
-    sid
-}
+// Move an agent into a fresh second species, keeping species bookkeeping
+// tables consistent (`spawn_agent` always assigns species 0).
+use anabios_core::prelude_test::reassign_to_new_species;
 
 /// A predator program that fires whenever an other-species agent is in range,
 /// driven through the full sense -> decide pipeline.

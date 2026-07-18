@@ -128,15 +128,9 @@ fn territory_formation_fires_for_a_clustered_marking_species() {
         ids.push(id);
     }
     // Move them all into one fresh species so they are measured together.
-    let sid = w.species_centroids.len() as u32;
-    w.species_centroids.push(Genome::neutral());
-    w.species_parents.push(Some(0));
-    w.species_member_counts.push(0);
-    w.next_species_id = sid + 1;
+    let sid = anabios_core::prelude_test::fresh_species(&mut w);
     for &id in &ids {
-        w.remove_from_species(w.agents.species_id[id as usize]);
-        w.agents.species_id[id as usize] = sid;
-        w.add_to_species(sid);
+        anabios_core::prelude_test::reassign_to_species(&mut w, id, sid);
     }
     // Run observe_all for a full window without moving them (tight cluster persists).
     let mut fired = false;

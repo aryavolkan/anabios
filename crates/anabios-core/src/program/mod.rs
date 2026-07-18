@@ -5,10 +5,9 @@
 //! and push, output nodes pop and write to an `ActionRegister`. No recursion
 //! anywhere, so weird mutants cannot blow the stack.
 //!
-//! Nodes that reference world systems not yet implemented (pheromone field,
-//! meme transmission) evaluate to zero / no-op in M4 but remain in the
-//! grammar so structural mutation can produce them. Later milestones wire
-//! them up by editing only the evaluator.
+//! The grammar's world-facing nodes are all live: pheromone emit/sense
+//! (M13), meme broadcast/sense and kinship/sharing (M14–M15) are wired into
+//! the evaluator through the `EvalContext` the tick fills each tick.
 
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
