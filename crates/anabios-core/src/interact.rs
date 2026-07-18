@@ -85,6 +85,14 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
             let skill = world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL];
             desired_bite *= 1.0 + crate::culture::SKILL_BONUS * skill.clamp(0.0, 1.0);
         }
+        // Biome adaptation (opt-in): reward EnvAffinity matching the local
+        // climate. Composes multiplicatively with the DIT/skill bonuses above.
+        if world.biome_adaptation {
+            let env = world.biome.sample(pos).env;
+            let affinity = world.agents.genome[i].get(GenomeSlot::EnvAffinity);
+            let m = crate::culture::env_affinity_match(affinity, env);
+            desired_bite *= 1.0 + crate::culture::ENV_AFFINITY_BONUS * m;
+        }
         // Individual technique learning (env mode): an ONGOING cognitive process
         // that runs each foraging tick, decoupled from whether this tick's bite
         // landed — so a learner's technique tracks the shifting optimum reliably,
