@@ -29,6 +29,30 @@ pub const RECOLONIZE_RATE: f32 = 0.08;
 /// A cell counts as a viable seed source above this biomass.
 pub const RECOLONIZE_SEED_MIN: f32 = 0.5;
 
+/// Peak regrowth multiplier bonus for a cell whose climate matches the season.
+pub const SEASON_AMPLITUDE: f32 = 1.5;
+/// Climate distance beyond which the seasonal bonus is zero (triangular).
+pub const SEASON_TOLERANCE: f32 = 0.25;
+
+/// Season phase in \[0,1\], a triangle wave with full cycle `2*period` ticks.
+pub fn season_phase(tick: u64, period: u32) -> f32 {
+    if period == 0 {
+        return 0.0;
+    }
+    let p = period as u64;
+    let t = tick % (2 * p);
+    if t < p {
+        t as f32 / p as f32
+    } else {
+        2.0 - t as f32 / p as f32
+    }
+}
+
+/// Triangular match of a cell's static climate to the current season phase.
+pub fn season_match(env: f32, phase: f32) -> f32 {
+    (1.0 - (env - phase).abs() / SEASON_TOLERANCE).clamp(0.0, 1.0)
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TerrainType {
@@ -164,6 +188,23 @@ impl BiomeField {
                 continue;
             }
             let r = cell.terrain.regrowth_rate();
+            let b = cell.plant_biomass;
+            let next = b + r * b * (1.0 - b / capacity);
+            cell.plant_biomass = next.clamp(0.0, capacity);
+        }
+    }
+
+    /// Logistic regrowth with a per-cell seasonal multiplier: cells whose
+    /// climate matches the current season phase regrow faster, so the
+    /// productive band migrates. `phase` in \[0,1\]. Deterministic, no RNG.
+    pub fn regrow_step_seasonal(&mut self, phase: f32) {
+        for cell in self.cells.iter_mut() {
+            let capacity = cell.terrain.carrying_capacity();
+            if capacity <= 0.0 || cell.plant_biomass <= 0.0 {
+                continue;
+            }
+            let base_r = cell.terrain.regrowth_rate();
+            let r = base_r * (1.0 + SEASON_AMPLITUDE * season_match(cell.env, phase));
             let b = cell.plant_biomass;
             let next = b + r * b * (1.0 - b / capacity);
             cell.plant_biomass = next.clamp(0.0, capacity);

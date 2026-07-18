@@ -61,6 +61,12 @@ pub struct World {
     /// this field still deserialize.
     #[serde(default)]
     pub living_biome: bool,
+    /// Season cycle length in ticks (half-period of `biome::season_phase`'s
+    /// triangle wave). `0` = seasonal regrowth OFF (plain `regrow_step` runs
+    /// unconditionally). `> 0` opts a scenario into a migrating productive
+    /// band. Defaulted so old snapshots without this field still deserialize.
+    #[serde(default)]
+    pub season_period: u32,
     /// Hard cap on alive agents; `reproduce_all` skips mating at/above this.
     /// Defaults to `reproduce::MAX_POPULATION` (the design's 10k budget);
     /// scenarios/tests can pin it lower. Defaulted so old snapshots without
@@ -155,6 +161,7 @@ impl World {
             env_period: 0,
             biome_adaptation: false,
             living_biome: false,
+            season_period: 0,
             max_population: crate::reproduce::MAX_POPULATION,
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
             biome_res: crate::biome::BIOME_RES_DEFAULT,

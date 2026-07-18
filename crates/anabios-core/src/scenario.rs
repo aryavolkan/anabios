@@ -26,6 +26,12 @@ pub struct Scenario {
     /// vegetated neighbours). `false` (default) leaves regrowth unchanged.
     #[serde(default)]
     pub living_biome: bool,
+    /// Opt-in: season cycle length in ticks. `0` (default) = seasonal biome
+    /// regrowth OFF (plain regrowth every biome step). `> 0` boosts regrowth
+    /// in cells whose climate matches the current season phase, migrating
+    /// the productive band over a `2 * season_period`-tick cycle.
+    #[serde(default)]
+    pub season_period: u32,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -228,6 +234,7 @@ impl Scenario {
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
         w.living_biome = self.living_biome;
+        w.season_period = self.season_period;
         if let Some(cap) = self.max_population {
             w.max_population = cap;
         }

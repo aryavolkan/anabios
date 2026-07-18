@@ -30,8 +30,9 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // at defaults.
 // Refreshed 2026-07-18: added World.living_biome flag (off = byte-identical;
 // only serialized layout grew).
+// Refreshed 2026-07-18: added World.season_period (off = byte-identical).
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xc27d8b35b781ece5), (100, 0xc6f144191da869d3), (1000, 0x11c4825623363f74)];
+    &[(0, 0x3249470b7bc4efa5), (100, 0xf3f061ad14845ab3), (1000, 0x5f49083d2a0baee4)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

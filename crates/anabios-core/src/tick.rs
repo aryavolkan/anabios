@@ -75,7 +75,12 @@ pub fn step(world: &mut World) {
         if world.living_biome {
             world.biome.recolonize_step();
         }
-        world.biome.regrow_step();
+        if world.season_period > 0 {
+            let phase = crate::biome::season_phase(world.tick, world.season_period);
+            world.biome.regrow_step_seasonal(phase);
+        } else {
+            world.biome.regrow_step();
+        }
     }
 
     world.tick += 1;

@@ -180,3 +180,28 @@ fn recolonization_recovers_dead_cells_only_when_living() {
         g.cells[idx].plant_biomass
     );
 }
+
+#[test]
+fn seasonal_band_centroid_migrates() {
+    use anabios_core::biome::{season_phase, BiomeField};
+    // Two phases → the set of most-boosted cells shifts.
+    let f = BiomeField::generate(9, 128, 1024.0);
+    let centroid = |phase: f32| -> f32 {
+        let (mut sw, mut w) = (0.0f32, 0.0f32);
+        for c in &f.cells {
+            if c.terrain.carrying_capacity() > 0.0 {
+                let m = anabios_core::biome::season_match(c.env, phase);
+                sw += m * c.env;
+                w += m;
+            }
+        }
+        if w > 0.0 {
+            sw / w
+        } else {
+            0.0
+        }
+    };
+    let a = centroid(season_phase(0, 2000));
+    let b = centroid(season_phase(1000, 2000)); // phase 0.5
+    assert!((a - b).abs() > 0.05, "productive-band climate centroid should move: {a} vs {b}");
+}
