@@ -66,7 +66,8 @@ func _process(_delta: float) -> void:
 	_refresh_bodies()
 	_refresh_carcasses()
 	_refresh_flashes()
-	hud.text = "tick=%d alive=%d" % [sim.tick(), sim.alive_count()]
+	var rate: String = "paused" if paused else ("%d×" % ticks_per_frame)
+	hud.text = "tick %d · %d alive · %s" % [sim.tick(), sim.alive_count(), rate]
 
 func _refresh_bodies() -> void:
 	var n: int = int(sim.alive_count())
