@@ -32,19 +32,9 @@ fn smallvec_kit(
     m
 }
 
-/// Move an agent into a fresh second species, keeping species bookkeeping
-/// tables consistent (mirrors the helper in social_substrate.rs).
-fn reassign_to_new_species(w: &mut World, agent: u32) -> u32 {
-    let sid = w.species_centroids.len() as u32;
-    w.species_centroids.push(Genome::neutral());
-    w.species_parents.push(Some(0));
-    w.species_member_counts.push(0);
-    w.next_species_id = sid + 1;
-    w.remove_from_species(w.agents.species_id[agent as usize]);
-    w.agents.species_id[agent as usize] = sid;
-    w.add_to_species(sid);
-    sid
-}
+// Move an agent into a fresh second species, keeping species bookkeeping
+// tables consistent.
+use anabios_core::prelude_test::reassign_to_new_species;
 
 /// A program that always fires the weapon (fire_intent = 1.0 > FIRE_THRESHOLD).
 fn always_fire() -> Program {
