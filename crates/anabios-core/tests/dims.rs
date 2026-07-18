@@ -35,3 +35,22 @@ fn default_dims_byte_identical() {
     let fp = run_default_1000();
     assert!(!fp.is_empty(), "minimal.toml should have survivors at t=1000");
 }
+
+#[test]
+fn large_world_generates_and_steps() {
+    use anabios_core::genome::Genome;
+    use anabios_core::prelude_test::Vec2;
+
+    let mut w = anabios_core::world::World::with_dims(7, 2048.0, 256, 128);
+    assert_eq!(w.biome.cells.len(), 256 * 256);
+    assert_eq!(w.biome.cell_size, 8.0);
+    // Spawn a few agents spread across the enlarged world and step; must not
+    // panic (spatial hash sized in 1.3).
+    for k in 0..5 {
+        let p = Vec2::new(200.0 * k as f32, 300.0 * k as f32);
+        w.spawn_agent(p, Genome::neutral());
+    }
+    for _ in 0..20 {
+        anabios_core::tick::step(&mut w);
+    }
+}

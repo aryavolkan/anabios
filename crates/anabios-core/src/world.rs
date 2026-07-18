@@ -129,7 +129,11 @@ impl World {
             tick: 0,
             seed,
             rng: Rng::from_seed(seed),
-            biome: BiomeField::generate(seed),
+            biome: BiomeField::generate(
+                seed,
+                crate::biome::BIOME_RES_DEFAULT,
+                crate::biome::WORLD_SIZE_DEFAULT,
+            ),
             agents: AgentBuffers::new(),
             // Start at 1 — id 0 is reserved as LINEAGE_NONE for founder parents.
             next_lineage_id: 1,
@@ -160,14 +164,17 @@ impl World {
         }
     }
 
-    /// Build a world with explicit dimensions. For now this only records the
-    /// dimensions; biome/spatial still use defaults until Tasks 1.2–1.3 make
-    /// them dimension-aware. At default dimensions it is identical to `new`.
+    /// Build a world with explicit dimensions. The biome and pheromone grid
+    /// are regenerated at the requested resolution/extent; the spatial hash
+    /// still uses defaults until Task 1.3 makes it dimension-aware. At
+    /// default dimensions this is identical to `new`.
     pub fn with_dims(seed: u64, world_size: f32, biome_res: usize, hash_res: usize) -> Self {
         let mut w = Self::new(seed);
         w.world_size = world_size;
         w.biome_res = biome_res;
         w.hash_res = hash_res;
+        w.biome = crate::biome::BiomeField::generate(seed, biome_res, world_size);
+        w.pheromones = crate::pheromone::PheromoneField::with_res(biome_res);
         w
     }
 

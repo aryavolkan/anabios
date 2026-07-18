@@ -69,17 +69,24 @@ pub struct BiomeCell {
     pub env: f32,
 }
 
-/// 128×128 biome field. Indexed `[row * BIOME_RES + col]` with `row` = y,
-/// `col` = x. World position `(x, y)` maps to `(col, row) = (x/CELL_SIZE,
-/// y/CELL_SIZE)`.
+/// 128×128 biome field (at default dims). Indexed `[row * res + col]` with
+/// `row` = y, `col` = x. World position `(x, y)` maps to `(col, row) =
+/// (x/cell_size, y/cell_size)`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BiomeField {
     pub cells: Vec<BiomeCell>,
+    /// Grid resolution per axis (was the `BIOME_RES` const).
+    pub res: usize,
+    /// World extent per axis (was `WORLD_SIZE`).
+    pub world_size: f32,
+    /// Side length of one cell = `world_size / res` (was `CELL_SIZE`).
+    pub cell_size: f32,
 }
 
 impl BiomeField {
-    /// Generate a biome field deterministically from a seed.
-    pub fn generate(seed: u64) -> Self {
+    /// Generate a biome field deterministically from a seed, at the given
+    /// grid resolution and world extent per axis.
+    pub fn generate(seed: u64, res: usize, world_size: f32) -> Self {
         let mut rng = Rng::from_seed(seed);
         // Hash-based value-noise corner grid, sampled at two octaves (terrain).
         let coarse = NoiseGrid::new(&mut rng, 8);
@@ -93,11 +100,11 @@ impl BiomeField {
         let climate_coarse = NoiseGrid::new(&mut rng, 3);
         let climate_fine = NoiseGrid::new(&mut rng, 9);
 
-        let mut cells = Vec::with_capacity(BIOME_RES * BIOME_RES);
-        for row in 0..BIOME_RES {
-            for col in 0..BIOME_RES {
-                let u = col as f32 / BIOME_RES as f32;
-                let v = row as f32 / BIOME_RES as f32;
+        let mut cells = Vec::with_capacity(res * res);
+        for row in 0..res {
+            for col in 0..res {
+                let u = col as f32 / res as f32;
+                let v = row as f32 / res as f32;
                 let n = 0.65 * coarse.sample(u, v) + 0.35 * fine.sample(u, v);
                 let terrain = elevation_to_terrain(n);
                 let env = (0.85 * climate_coarse.sample(u, v) + 0.15 * climate_fine.sample(u, v))
@@ -105,38 +112,39 @@ impl BiomeField {
                 cells.push(BiomeCell { terrain, plant_biomass: terrain.carrying_capacity(), env });
             }
         }
-        Self { cells }
+        Self { cells, res, world_size, cell_size: world_size / res as f32 }
     }
 
     /// Convert a world position into a `(col, row)` cell index. Out-of-range
     /// positions are wrapped into the torus.
     #[inline]
-    pub fn cell_coords(pos: Vec2) -> (usize, usize) {
-        let wrapped_x = pos.x.rem_euclid(WORLD_SIZE);
-        let wrapped_y = pos.y.rem_euclid(WORLD_SIZE);
-        let col = (wrapped_x / CELL_SIZE) as usize;
-        let row = (wrapped_y / CELL_SIZE) as usize;
-        (col.min(BIOME_RES - 1), row.min(BIOME_RES - 1))
+    pub fn cell_coords(&self, pos: Vec2) -> (usize, usize) {
+        let wrapped_x = pos.x.rem_euclid(self.world_size);
+        let wrapped_y = pos.y.rem_euclid(self.world_size);
+        let col = (wrapped_x / self.cell_size) as usize;
+        let row = (wrapped_y / self.cell_size) as usize;
+        (col.min(self.res - 1), row.min(self.res - 1))
     }
 
     #[inline]
-    pub fn cell_index(col: usize, row: usize) -> usize {
-        row * BIOME_RES + col
+    pub fn cell_index(&self, col: usize, row: usize) -> usize {
+        row * self.res + col
     }
 
     #[inline]
     pub fn at(&self, col: usize, row: usize) -> &BiomeCell {
-        &self.cells[Self::cell_index(col, row)]
+        &self.cells[self.cell_index(col, row)]
     }
 
     #[inline]
     pub fn at_mut(&mut self, col: usize, row: usize) -> &mut BiomeCell {
-        &mut self.cells[Self::cell_index(col, row)]
+        let i = self.cell_index(col, row);
+        &mut self.cells[i]
     }
 
     /// Sample the biome at a world position.
     pub fn sample(&self, pos: Vec2) -> &BiomeCell {
-        let (col, row) = Self::cell_coords(pos);
+        let (col, row) = self.cell_coords(pos);
         self.at(col, row)
     }
 
@@ -163,7 +171,7 @@ impl BiomeField {
         if desired <= 0.0 {
             return 0.0;
         }
-        let (col, row) = Self::cell_coords(pos);
+        let (col, row) = self.cell_coords(pos);
         let cell = self.at_mut(col, row);
         let taken = desired.min(cell.plant_biomass);
         cell.plant_biomass -= taken;
@@ -177,21 +185,23 @@ impl BiomeField {
 /// (so a well-placed agent stays put). Deterministic: fixed scan order, strict
 /// improvement wins. Reads no RNG.
 pub fn best_env_direction(biome: &BiomeField, pos: Vec2, affinity: f32, radius: f32) -> Vec2 {
-    let cell_reach = (radius / CELL_SIZE).ceil() as i32 + 1;
-    let (cx, cy) = BiomeField::cell_coords(pos);
+    let cell_reach = (radius / biome.cell_size).ceil() as i32 + 1;
+    let (cx, cy) = biome.cell_coords(pos);
     let mut best_err = (biome.at(cx, cy).env - affinity).abs();
     let mut best_offset = Vec2::ZERO;
     for dy in -cell_reach..=cell_reach {
         for dx in -cell_reach..=cell_reach {
-            let col = ((cx as i32 + dx).rem_euclid(BIOME_RES as i32)) as usize;
-            let row = ((cy as i32 + dy).rem_euclid(BIOME_RES as i32)) as usize;
+            let col = ((cx as i32 + dx).rem_euclid(biome.res as i32)) as usize;
+            let row = ((cy as i32 + dy).rem_euclid(biome.res as i32)) as usize;
             let cell = biome.at(col, row);
-            let cell_center =
-                Vec2::new((col as f32 + 0.5) * CELL_SIZE, (row as f32 + 0.5) * CELL_SIZE);
+            let cell_center = Vec2::new(
+                (col as f32 + 0.5) * biome.cell_size,
+                (row as f32 + 0.5) * biome.cell_size,
+            );
             let offset = crate::prelude::wrap_torus(
-                cell_center - pos + Vec2::splat(WORLD_SIZE * 0.5),
-                Vec2::splat(WORLD_SIZE),
-            ) - Vec2::splat(WORLD_SIZE * 0.5);
+                cell_center - pos + Vec2::splat(biome.world_size * 0.5),
+                Vec2::splat(biome.world_size),
+            ) - Vec2::splat(biome.world_size * 0.5);
             if offset.length() > radius {
                 continue;
             }
@@ -270,7 +280,7 @@ mod tests {
 
     #[test]
     fn climate_field_is_bounded_and_varies() {
-        let b = BiomeField::generate(12345);
+        let b = BiomeField::generate(12345, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         let mut min = 1.0f32;
         let mut max = 0.0f32;
         for cell in b.cells.iter() {
@@ -284,7 +294,7 @@ mod tests {
     #[test]
     fn climate_not_a_function_of_terrain_alone() {
         // Two cells of the SAME terrain should be able to differ in env.
-        let b = BiomeField::generate(7);
+        let b = BiomeField::generate(7, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         use std::collections::BTreeMap;
         let mut by_terrain: BTreeMap<u8, Vec<f32>> = BTreeMap::new();
         for cell in b.cells.iter() {
@@ -301,8 +311,8 @@ mod tests {
 
     #[test]
     fn biome_is_deterministic() {
-        let a = BiomeField::generate(42);
-        let b = BiomeField::generate(42);
+        let a = BiomeField::generate(42, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+        let b = BiomeField::generate(42, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         for i in 0..a.cells.len() {
             assert_eq!(a.cells[i].terrain, b.cells[i].terrain);
             assert!((a.cells[i].plant_biomass - b.cells[i].plant_biomass).abs() < 1e-6);
@@ -311,7 +321,7 @@ mod tests {
 
     #[test]
     fn biome_contains_multiple_terrain_types() {
-        let b = BiomeField::generate(7);
+        let b = BiomeField::generate(7, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         let mut seen = [0_usize; 5];
         for cell in &b.cells {
             seen[cell.terrain as usize] += 1;
@@ -322,14 +332,15 @@ mod tests {
 
     #[test]
     fn cell_coords_wraps_negative_and_oversize_positions() {
-        let (cx, cy) = BiomeField::cell_coords(Vec2::new(-1.0, WORLD_SIZE + 5.0));
+        let b = BiomeField::generate(1, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+        let (cx, cy) = b.cell_coords(Vec2::new(-1.0, WORLD_SIZE + 5.0));
         assert!(cx < BIOME_RES);
         assert!(cy < BIOME_RES);
     }
 
     #[test]
     fn carrying_capacity_is_initial_biomass() {
-        let b = BiomeField::generate(99);
+        let b = BiomeField::generate(99, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         for cell in &b.cells {
             assert!((cell.plant_biomass - cell.terrain.carrying_capacity()).abs() < 1e-6);
         }
@@ -337,7 +348,7 @@ mod tests {
 
     #[test]
     fn regrow_increases_partial_biomass_toward_capacity() {
-        let mut b = BiomeField::generate(13);
+        let mut b = BiomeField::generate(13, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         // Drain every grass cell to 1.0 biomass.
         for cell in b.cells.iter_mut() {
             if cell.terrain == TerrainType::Grass {
@@ -364,7 +375,7 @@ mod tests {
 
     #[test]
     fn regrow_does_not_exceed_carrying_capacity() {
-        let mut b = BiomeField::generate(13);
+        let mut b = BiomeField::generate(13, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         for _ in 0..1000 {
             b.regrow_step();
         }
@@ -381,7 +392,7 @@ mod tests {
 
     #[test]
     fn regrow_leaves_dead_cells_dead() {
-        let mut b = BiomeField::generate(13);
+        let mut b = BiomeField::generate(13, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         for cell in b.cells.iter_mut() {
             if cell.terrain == TerrainType::Grass {
                 cell.plant_biomass = 0.0;
@@ -399,14 +410,16 @@ mod tests {
 
     #[test]
     fn graze_reduces_biomass_and_returns_taken_amount() {
-        let mut b = BiomeField::generate(31);
+        let mut b = BiomeField::generate(31, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         // Find a grass cell so we know biomass > 0.
         let mut target = Vec2::ZERO;
-        'outer: for row in 0..BIOME_RES {
-            for col in 0..BIOME_RES {
+        'outer: for row in 0..b.res {
+            for col in 0..b.res {
                 if b.at(col, row).terrain == TerrainType::Grass {
-                    target =
-                        Vec2::new((col as f32 + 0.5) * CELL_SIZE, (row as f32 + 0.5) * CELL_SIZE);
+                    target = Vec2::new(
+                        (col as f32 + 0.5) * b.cell_size,
+                        (row as f32 + 0.5) * b.cell_size,
+                    );
                     break 'outer;
                 }
             }

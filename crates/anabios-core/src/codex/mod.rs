@@ -458,7 +458,7 @@ impl SpeciesAggTable {
             for node in world.agents.program[i].nodes.iter().copied() {
                 e.node_mask |= 1u64 << crate::program::Program::node_kind(node);
             }
-            let (col, row) = crate::biome::BiomeField::cell_coords(pos);
+            let (col, row) = world.biome.cell_coords(pos);
             let terrain = world.biome.at(col, row).terrain as usize;
             e.terrain_counts[terrain.min(TERRAIN_SLOTS - 1)] += 1.0;
             for (ch, s) in e.meme_sums.iter_mut().enumerate() {

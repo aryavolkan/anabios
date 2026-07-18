@@ -233,13 +233,14 @@ mod tests {
     use crate::world::World;
 
     fn find_grass_cell_center(w: &World) -> Vec2 {
-        use crate::biome::{BIOME_RES, CELL_SIZE};
-        for row in 0..BIOME_RES {
-            for col in 0..BIOME_RES {
+        let res = w.biome.res;
+        let cell_size = w.biome.cell_size;
+        for row in 0..res {
+            for col in 0..res {
                 if w.biome.at(col, row).terrain == TerrainType::Grass {
                     return Vec2::new(
-                        (col as f32 + 0.5) * CELL_SIZE,
-                        (row as f32 + 0.5) * CELL_SIZE,
+                        (col as f32 + 0.5) * cell_size,
+                        (row as f32 + 0.5) * cell_size,
                     );
                 }
             }

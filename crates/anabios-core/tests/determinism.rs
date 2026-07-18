@@ -23,8 +23,10 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-18: added World.{world_size,biome_res,hash_res} runtime
 // dimension fields (unused; behaviour identical at defaults, only serialized
 // layout grew).
+// Refreshed 2026-07-18: BiomeField/pheromone grid became dimension-aware
+// (byte-identical at default res=128).
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xe14c555fe3e98bda), (100, 0x0b9fa0fe3483d430), (1000, 0xc97d9803814b98ed)];
+    &[(0, 0x44dc77f6849ae3a9), (100, 0xf6defa32c4dd6583), (1000, 0x77522ab8b8f1d5ae)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

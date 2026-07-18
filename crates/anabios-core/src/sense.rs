@@ -263,12 +263,12 @@ fn best_plant_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 {
     let mut best_biomass = 0.0_f32;
     let mut best_offset = Vec2::ZERO;
     let cell_reach = (radius / CELL_SIZE).ceil() as i32 + 1;
-    let (cx, cy) = BiomeField::cell_coords(pos);
+    let (cx, cy) = biome.cell_coords(pos);
 
     for dy in -cell_reach..=cell_reach {
         for dx in -cell_reach..=cell_reach {
-            let col = ((cx as i32 + dx).rem_euclid(crate::biome::BIOME_RES as i32)) as usize;
-            let row = ((cy as i32 + dy).rem_euclid(crate::biome::BIOME_RES as i32)) as usize;
+            let col = ((cx as i32 + dx).rem_euclid(biome.res as i32)) as usize;
+            let row = ((cy as i32 + dy).rem_euclid(biome.res as i32)) as usize;
             let cell: &BiomeCell = biome.at(col, row);
             if cell.plant_biomass <= 0.0 {
                 continue;
