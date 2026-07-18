@@ -1,7 +1,7 @@
 name = "divergent"
 seed = 4242
 
-# Population A: low-speed, low-aggression, low-perception herbivores
+# Population A: small, low-perception, low-metabolism herbivores
 # clustered near the world origin.
 [[agents]]
 count = 60
@@ -17,7 +17,8 @@ basal_metabolism = 0.2
 lifespan_bias = 0.7
 reproduction_threshold = 0.4
 
-# Population B: high-speed, high-perception herbivores clustered far away.
+# Population B: large, high-perception, high-metabolism herbivores clustered
+# far away.
 [[agents]]
 count = 60
 [agents.placement]

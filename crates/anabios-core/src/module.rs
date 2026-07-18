@@ -9,10 +9,11 @@
 //! - No `Mouth`      → cannot feed
 //! - No `Reproductive` → cannot mate
 //!
-//! Other module types (`Weapon`, `Armor`, `Storage`, `Communicator`,
-//! `Pheromone`) are part of the M3 substrate but their gameplay effects
-//! land in later milestones (combat in M4, pheromones in a later
-//! milestone). They still pay upkeep when present.
+//! The remaining module types (`Weapon`, `Armor`, `Communicator`,
+//! `Pheromone`) have live gameplay effects (combat, culture, chemical
+//! marks — see `interact` / `culture` / `sense`); `Storage` is the only
+//! type that currently just pays upkeep. Every module pays per-tick
+//! upkeep when present.
 //!
 //! All parameters are `f32` in `[0, 1]` and are perturbed by Gaussian
 //! mutation during reproduction. Whole-module mutation (add, delete,
@@ -42,8 +43,9 @@ pub const REPLACE_MODULE_PROB: f32 = 0.01;
 /// Gaussian sigma when perturbing a single module parameter.
 pub const PARAM_SIGMA: f32 = 0.05;
 
-/// Sensor channel type. Vision sees plants and other agents; smell, heat,
-/// and sound are reserved for later milestones and have no effect in M3.
+/// Sensor channel type. Vision sees plants and other agents; Smell gates
+/// pheromone perception (`has_smell` → `SensePheromone` reads). Heat and
+/// Sound remain reserved with no effect yet.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SensorType {
@@ -53,9 +55,9 @@ pub enum SensorType {
     Sound = 3,
 }
 
-/// Pheromone channel id. Multiple channels coexist; M3 does not yet read
-/// pheromones in any tick stage (no field present in `World`), so the
-/// channel value is currently inert metadata. Reserved for later.
+/// Pheromone channel id. Multiple channels coexist; `deposit_pass` writes
+/// them into `World.pheromones` and Smell-sensored agents read them via
+/// `SensePheromone`.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PheromoneChannel {
@@ -69,31 +71,38 @@ pub enum PheromoneChannel {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Module {
     /// Enables motion. `max_speed` scales the agent's velocity cap.
-    /// `terrain_affinity` is reserved for M4+ (will gate land vs water
-    /// crossing); currently inert.
+    /// `terrain_affinity` is reserved (will gate land vs water crossing);
+    /// currently inert.
     Locomotor { max_speed: f32, terrain_affinity: f32 },
     /// Enables one channel of perception. `radius` and `acuity` shape
     /// what the agent can sense.
     Sensor { sensor_type: SensorType, radius: f32, acuity: f32 },
     /// Enables feeding. `bite_size` caps biomass per bite; `diet_affinity`
-    /// = 0 → pure herbivore, 1 → pure carnivore (carnivory has no effect
-    /// in M3 since combat is M4).
+    /// = 0 → pure herbivore, 1 → pure carnivore. Drives the herbivory
+    /// fraction in `feed_pass` and gates/scales carcass scavenging in
+    /// `scavenge_pass`.
     Mouth { bite_size: f32, diet_affinity: f32 },
-    /// Inflicts damage on contact. No gameplay effect in M3 (combat is
-    /// later); pays upkeep.
+    /// Inflicts damage on contact: `combat_pass` deals `damage − armor`
+    /// to the nearest other-species agent in range, spends `energy_cost`,
+    /// and records a `CombatHit` for the PackHunting detector.
     Weapon { damage: f32, energy_cost: f32 },
-    /// Reduces damage. No gameplay effect in M3; pays upkeep.
+    /// Reduces incoming combat damage (`effective_armor_protection`);
+    /// feeds the ArmsRace detector.
     Armor { protection: f32, mass_penalty: f32 },
-    /// Increases the agent's effective energy capacity. No gameplay
-    /// effect in M3 (no overflow check yet); pays upkeep.
+    /// Reserved: intended to increase the agent's energy capacity, but no
+    /// tick rule reads `capacity` yet — currently it only pays upkeep.
     Storage { capacity: f32 },
-    /// Emits/receives meme signals. No gameplay effect in M3; pays upkeep.
+    /// Emits/receives meme signals: drives `culture_step` transmission,
+    /// `SenseMeme`/`Broadcast` program nodes, skill/technique learning,
+    /// and the culture detectors (dialect, meme sweep, alarm call).
     Communicator { range: f32, channel_id: u8 },
-    /// Leaves chemical marks on the biome. No gameplay effect in M3 (no
-    /// pheromone field yet); pays upkeep.
+    /// Leaves chemical marks on the biome: `deposit_pass` writes the
+    /// `World.pheromones` field, which decays per tick and is read by
+    /// Smell-sensored agents.
     Pheromone { channel: PheromoneChannel, strength: f32, decay: f32 },
-    /// Required for reproduction. `viability` modulates the mating energy
-    /// cost; `brood_size_bias` is reserved for M5.
+    /// Required for reproduction. Both parameters are currently unread
+    /// (reserved: `viability` for mating-cost modulation, `brood_size_bias`
+    /// for multi-offspring births); the module only pays upkeep.
     Reproductive { viability: f32, brood_size_bias: f32 },
 }
 

@@ -1,4 +1,5 @@
-//! Tick orchestration: the master `step()` function for M1.
+//! Tick orchestration: the master `step()` function that advances the whole
+//! simulation by one tick.
 
 use crate::age::age_and_starve;
 use crate::behavior::decide;

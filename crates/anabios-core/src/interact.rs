@@ -1,4 +1,5 @@
-//! Interaction stage: feeding (grazing), combat, and predation (scavenging).
+//! Interaction stage: feeding (grazing), combat, predation (scavenging),
+//! pheromone deposition, and altruistic energy sharing.
 
 use crate::genome::GenomeSlot;
 use crate::module::{self, ModuleType};
@@ -21,8 +22,9 @@ pub const FIRE_THRESHOLD: f32 = 0.5;
 /// `reproduce::MATING_RANGE`.
 pub const COMBAT_RANGE: f32 = 2.0;
 
-/// Run all interaction rules for one tick: feed, then combat, then scavenge.
-/// Each pass iterates alive agents in ascending id order (determinism).
+/// Run all interaction rules for one tick: feed, combat, scavenge, pheromone
+/// deposit, then share. Each pass iterates alive agents in ascending id
+/// order (determinism).
 pub fn interact_all(world: &mut World) {
     let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
     alive_ids.clear();

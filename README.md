@@ -8,7 +8,22 @@ Not a neuroevolution project. Agents have **simple, hand-engineered cognition** 
 
 ## Status
 
-Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md). M1–M6 shipped (see git tags `m1`–`m6`); M7+ adds module sprite layers, overlays, camera modes, and full codex UI.
+Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md). Milestones M1–M10 shipped (see git tags `m1`–`m10`), plus the M11–M15 interaction substrate (combat/predation, pheromone territories, communication/culture, cooperation/kin), the perf/refactor batches, and the biome climate-adaptation experiment.
+
+## Performance
+
+Deterministic (bit-identical per seed) and fast enough for long runs — measured with the criterion suite in `crates/anabios-core/benches/tick_bench.rs`:
+
+| Workload | Time |
+|---|---|
+| full tick @ 1k agents | ~0.75 ms |
+| full tick @ 10k agents | ~2.5 ms |
+
+(10-core machine; `sense`/`decide` run parallel over rayon, codex detectors share one fused per-species aggregation pass.)
+
+```bash
+cargo bench -p anabios-core          # tick, stages, and scavenge groups
+```
 
 ## Running a sweep (headless)
 
@@ -23,7 +38,7 @@ cargo build --release --bin anabios-headless
 cat runs/divergent-32/summary.csv
 ```
 
-The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
+The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
 
 ## Running the viewer
 
@@ -43,6 +58,6 @@ The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash
 - **`anabios-core`** — pure Rust simulation crate (no Godot, no I/O, deterministic)
 - **`anabios-godot`** — gdext wrapper for use from the Godot project
 - **`anabios-headless`** — CLI for batch runs, W&B sweeps, codex mining
-- **`game/`** — Godot 4.5+ project (viewer, codex UI, world setup, scenario authoring)
+- **`game/`** — Godot 4.6+ project (viewer, codex UI, world setup, scenario authoring)
 
 See the design doc for the full architecture, agent model, and roadmap.

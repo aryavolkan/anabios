@@ -2,7 +2,9 @@ extends PanelContainer
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
 const CHAPTER_NAMES: PackedStringArray = [
-	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior"
+	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior",
+	"Predation", "CombatRaid", "ArmsRace", "Territory", "NichePartition",
+	"Dialect", "MemeSweep", "AlarmCall", "Cooperation", "PackHunting", "HerdCohesion"
 ]
 # One color per event type so the timeline is scannable at a glance (matches
 # the co-evolution chart's marker hues where they overlap).
@@ -16,7 +18,7 @@ const CHAPTER_COLORS: PackedColorArray = [
 ]
 const MAX_RECENT: int = 30
 
-var _counts: Array[int] = [0, 0, 0, 0, 0, 0]
+var _counts: Array[int] = []
 var _recent: Array[Dictionary] = []
 var _cursor: int = 0
 
@@ -28,13 +30,15 @@ var _cursor: int = 0
 func _ready() -> void:
 	# The running tally reads as the panel's title — mark it with the accent.
 	counts_label.add_theme_color_override("font_color", UiTheme.ACCENT)
+	_counts.resize(CHAPTER_NAMES.size())
+	_counts.fill(0)
 
 func _process(_delta: float) -> void:
 	# Event log is cleared on scenario (re)load; a shrink below our cursor means
 	# a reload — reset so counts/recent reflect the new run.
 	if sim.codex_event_count() < _cursor:
 		_cursor = 0
-		_counts = [0, 0, 0, 0, 0, 0]
+		_counts.fill(0)
 		_recent.clear()
 	var events: Array = sim.codex_events_since(_cursor)
 	if events.is_empty():

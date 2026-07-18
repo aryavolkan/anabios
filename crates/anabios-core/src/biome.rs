@@ -135,8 +135,8 @@ impl BiomeField {
     }
 
     /// Apply logistic regrowth: `b += r * b * (1 - b / K)` clamped to `[0, K]`.
-    /// Empty cells stay empty (no spontaneous regeneration) — recolonization
-    /// requires neighbour cells with biomass and is added in M3.
+    /// Empty cells stay empty — no spontaneous regeneration or neighbour
+    /// recolonization (not implemented).
     pub fn regrow_step(&mut self) {
         for cell in self.cells.iter_mut() {
             let capacity = cell.terrain.carrying_capacity();

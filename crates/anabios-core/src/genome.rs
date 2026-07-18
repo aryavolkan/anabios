@@ -1,8 +1,11 @@
 //! 50-float genome with named trait slots.
 //!
 //! Every value is clamped to `[0, 1]`. Slot meanings are hardcoded; values
-//! mutate. Only a handful of slots drive behavior in M1 (see `behavior.rs`);
-//! the rest are present and inert, awaiting later milestones.
+//! mutate. Roughly twenty slots drive live behavior (body, metabolism,
+//! lifespan, mutation rate, the Big Five personality, Altruism,
+//! PerceptionRadius, ReproductionThreshold, the DIT learning propensities,
+//! EnvAffinity); the rest are documented as reserved — see the per-slot
+//! notes on `GenomeSlot`.
 
 use serde::de::{SeqAccess, Visitor};
 use serde::ser::SerializeTuple;
