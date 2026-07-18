@@ -42,6 +42,14 @@ func _run(path: String, wait_frames: int) -> void:
 			if coevo != null:
 				coevo.set("_shown", true)
 				coevo.visible = true
+		# Optionally pin an agent so the inspector panel is visible.
+		if OS.has_environment("ANABIOS_INSPECT"):
+			var sim2 := main.get_node_or_null("Simulation")
+			var insp := main.get_node_or_null("UI/Inspector")
+			if sim2 != null and insp != null:
+				var id: int = int(sim2.call("agent_near", Vector2(512, 512), 400.0))
+				if id >= 0:
+					insp.call("pin", id)
 	for _i in wait_frames:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
