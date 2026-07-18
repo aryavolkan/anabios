@@ -79,10 +79,13 @@ impl BiomeField {
         let coarse = NoiseGrid::new(&mut rng, 8);
         let fine = NoiseGrid::new(&mut rng, 24);
         // Dedicated climate field — drawn AFTER the terrain grids so terrain
-        // generation is byte-identical to before. Different frequencies keep
-        // climate semi-independent of terrain.
-        let climate_coarse = NoiseGrid::new(&mut rng, 6);
-        let climate_fine = NoiseGrid::new(&mut rng, 18);
+        // generation is byte-identical to before. Deliberately LOW frequency:
+        // climate zones must be larger than an agent's lifetime dispersal, or
+        // roaming agents experience the global-mean climate and adapt to the
+        // mean instead of forming a spatial cline. A faint fine octave adds
+        // texture without breaking the large-scale gradient.
+        let climate_coarse = NoiseGrid::new(&mut rng, 3);
+        let climate_fine = NoiseGrid::new(&mut rng, 9);
 
         let mut cells = Vec::with_capacity(BIOME_RES * BIOME_RES);
         for row in 0..BIOME_RES {
@@ -91,7 +94,7 @@ impl BiomeField {
                 let v = row as f32 / BIOME_RES as f32;
                 let n = 0.65 * coarse.sample(u, v) + 0.35 * fine.sample(u, v);
                 let terrain = elevation_to_terrain(n);
-                let env = (0.7 * climate_coarse.sample(u, v) + 0.3 * climate_fine.sample(u, v))
+                let env = (0.85 * climate_coarse.sample(u, v) + 0.15 * climate_fine.sample(u, v))
                     .clamp(0.0, 1.0);
                 cells.push(BiomeCell { terrain, plant_biomass: terrain.carrying_capacity(), env });
             }
@@ -160,6 +163,40 @@ impl BiomeField {
         cell.plant_biomass -= taken;
         taken
     }
+}
+
+/// Unit direction toward the nearby cell whose climate (`env`) best matches
+/// `affinity`, within `radius` world units — the habitat-selection pull. Returns
+/// `Vec2::ZERO` if the agent's current cell is already the best match in range
+/// (so a well-placed agent stays put). Deterministic: fixed scan order, strict
+/// improvement wins. Reads no RNG.
+pub fn best_env_direction(biome: &BiomeField, pos: Vec2, affinity: f32, radius: f32) -> Vec2 {
+    let cell_reach = (radius / CELL_SIZE).ceil() as i32 + 1;
+    let (cx, cy) = BiomeField::cell_coords(pos);
+    let mut best_err = (biome.at(cx, cy).env - affinity).abs();
+    let mut best_offset = Vec2::ZERO;
+    for dy in -cell_reach..=cell_reach {
+        for dx in -cell_reach..=cell_reach {
+            let col = ((cx as i32 + dx).rem_euclid(BIOME_RES as i32)) as usize;
+            let row = ((cy as i32 + dy).rem_euclid(BIOME_RES as i32)) as usize;
+            let cell = biome.at(col, row);
+            let cell_center =
+                Vec2::new((col as f32 + 0.5) * CELL_SIZE, (row as f32 + 0.5) * CELL_SIZE);
+            let offset = crate::prelude::wrap_torus(
+                cell_center - pos + Vec2::splat(WORLD_SIZE * 0.5),
+                Vec2::splat(WORLD_SIZE),
+            ) - Vec2::splat(WORLD_SIZE * 0.5);
+            if offset.length() > radius {
+                continue;
+            }
+            let err = (cell.env - affinity).abs();
+            if err < best_err {
+                best_err = err;
+                best_offset = offset;
+            }
+        }
+    }
+    best_offset.normalize_or_zero()
 }
 
 fn elevation_to_terrain(n: f32) -> TerrainType {

@@ -1,0 +1,10 @@
+name = "biome-adaptation"
+seed = 0
+biome_adaptation = true
+
+[[agents]]
+count = 300
+placement = { kind = "uniform" }
+[agents.traits]
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

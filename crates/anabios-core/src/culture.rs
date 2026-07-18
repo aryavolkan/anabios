@@ -82,7 +82,7 @@ pub fn technique_match(tech: f32, opt: f32) -> f32 {
 
 /// Feeding bonus multiplier for a perfect biome-climate affinity match (spatial
 /// genetic analog of the DIT technique bonus).
-pub const ENV_AFFINITY_BONUS: f32 = 0.5;
+pub const ENV_AFFINITY_BONUS: f32 = 1.0;
 /// Affinity distance beyond which the biome-adaptation bonus is zero.
 pub const ENV_AFFINITY_TOLERANCE: f32 = 0.25;
 
@@ -92,6 +92,18 @@ pub const ENV_AFFINITY_TOLERANCE: f32 = 0.25;
 pub fn env_affinity_match(affinity: f32, env: f32) -> f32 {
     (1.0 - (affinity - env).abs() / ENV_AFFINITY_TOLERANCE).clamp(0.0, 1.0)
 }
+
+/// Habitat-selection reach (world units): how far an agent scans for a cell
+/// whose climate better matches its `EnvAffinity`. Feeding-bonus adaptation
+/// alone yields panmixia (agents roam past climate features and adapt to the
+/// global mean); this movement pull lets lineages sort into their preferred
+/// zone, producing the spatial structure a cline needs.
+pub const HABITAT_REACH: f32 = 48.0;
+/// Weight of the affinity-matching pull added to an agent's movement intent
+/// before normalization. Comparable to the program/personality move magnitudes
+/// so climate-seeking meaningfully biases direction without fully overriding
+/// the evolved behavior.
+pub const HABITAT_PULL: f32 = 1.0;
 
 /// The globally-optimal foraging technique at a given tick, in `[0,1]`. Pure (no RNG,
 /// no stored state) so it needs no tick hook and stays perfectly deterministic.

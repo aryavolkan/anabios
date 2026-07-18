@@ -97,6 +97,20 @@ fn decide_all(world: &mut World) {
             &world.sensors[i],
             world.agents.energy[i],
         );
+        // Habitat selection (opt-in): bias movement toward the nearby cell whose
+        // climate best matches this agent's EnvAffinity, so lineages sort into
+        // their preferred zone. Gated on the flag so flag-off stays byte-identical.
+        if world.biome_adaptation {
+            let affinity = world.agents.genome[i].get(crate::genome::GenomeSlot::EnvAffinity);
+            let pull = crate::biome::best_env_direction(
+                &world.biome,
+                world.agents.position[i],
+                affinity,
+                crate::culture::HABITAT_REACH,
+            );
+            action.move_x += crate::culture::HABITAT_PULL * pull.x;
+            action.move_y += crate::culture::HABITAT_PULL * pull.y;
+        }
         // Normalize the movement intent to a unit direction (identical to the
         // pre-M11 logic that lived inside `decide`). Guard against a non-finite
         // intent (an evolved program can overflow to `inf`; `inf/inf` would make
