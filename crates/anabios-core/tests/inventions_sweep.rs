@@ -7,24 +7,33 @@
 //! Run: cargo test -p anabios-core --release --test inventions_sweep -- --ignored --nocapture
 //! Env: IS_SEEDS / IS_TICKS / IS_N override defaults.
 //!
-//! RESULT (2026-07-18) — POSITIVE, the arc's payoff: in EVERY population that
-//! survived, the Inventiveness gene swept from 15% standing variation toward
-//! fixation. 6 seeds x 5000 ticks: 5/6 ROSE 0.15 -> 0.83..1.00 (one at full
-//! 1.000); the 6th was a total population extinction (boom/bust in the harsh
-//! 2048 living+seasonal biome — not a selection failure). So it is 5/5 among
-//! surviving runs. This is gene-culture coevolution from FIRST PRINCIPLES — the
-//! exact bar the prior experiment B failed (there the Communicator gene did not
-//! reliably sweep; 2/6 rose weakly then decayed).
-//!
-//! WHY it works here and not before: experiment B's cultural benefit was a
-//! foraging-skill MULTIPLIER that saturates when food is abundant, so it did
-//! not convert to durable gene fitness (see tests/living_sandbox.rs). The
-//! invention benefit is ROBUST (non-saturating: additive domestication food,
-//! metabolic + reproductive industry discounts) and CUMULATIVE (the ratchet
-//! compounds via Writing-accelerated transmission), so inventive lineages hold
-//! a persistent reproductive edge and the gene fixes. This is the mechanism the
-//! prior work concluded was missing — a cultural benefit that stays valuable
-//! where selection is strongest.
+//! RESULT (2026-07-18) — POSITIVE and confound-controlled. The Inventiveness
+//! gene sweeps from 15% standing variation toward fixation among surviving runs
+//! (boom/bust extinctions occur in the harsh 2048 living+seasonal biome; the
+//! sweep is read on runs that survive). 6 seeds x 5000 ticks:
+//!   - Naive seeding (default): 5/6 ROSE 0.15 -> 0.83..1.00.
+//! BUT the naive seeding is CONFOUNDED — the seeded gene-carriers also carry a
+//! Communicator MODULE, and `feed_pass`'s experiment-C foraging-skill bonus is
+//! gated on that module (not the gene), giving carriers an independent edge.
+//! Two controls settle the causal attribution:
+//!   - IS_INVENTIONS=0 (invention mechanism OFF, Communicator kept): the gene
+//!     STILL sweeps in most seeds (final freq ~0.06..1.00, variable). So the
+//!     Communicator/skill bonus drives much of the NAIVE sweep — the gene
+//!     hitchhikes on the module. (Confirms the confound is real.)
+//!   - IS_ALL_COMM=1 (EVERY agent gets a Communicator → the skill bonus is
+//!     EQUAL across cohorts; the ONLY difference is the Inventiveness gene):
+//!     the gene STILL sweeps to fixation in every surviving seed
+//!     (0.948 / 0.991 / 0.986; the rest went extinct). This ISOLATES the
+//!     invention benefit as a genuine, sufficient cause of the sweep,
+//!     independent of the Communicator.
+//! Conclusion: with the module confound controlled, the ROBUST CUMULATIVE
+//! invention benefit (additive domestication food + industry upkeep/repro
+//! discounts, compounded by Writing-accelerated transmission — none of which
+//! saturate in abundance) drives the Inventiveness gene to fixation. This is
+//! gene-culture coevolution attributable to inventions — the durable,
+//! non-saturating cultural benefit the prior work (experiment B, the saturating
+//! foraging-skill multiplier; see tests/living_sandbox.rs) concluded was the
+//! missing ingredient.
 use anabios_core::genome::{Genome, GenomeSlot};
 use anabios_core::module::starter_kit;
 use anabios_core::prelude_test::Vec2;
@@ -67,7 +76,11 @@ fn inventiveness_gene_sweep() {
         let mut w = World::with_dims(seed, 2048.0, 256, 128);
         w.living_biome = true;
         w.season_period = 2000;
-        w.cultural_inventions = true;
+        // Control knob: IS_INVENTIONS=0 disables the invention mechanism while
+        // keeping the identical seeding (15% carry the gene + a Communicator).
+        // If the gene STILL sweeps with inventions off, the sweep is NOT caused
+        // by inventions (a falsification control); it must stay flat/fall.
+        w.cultural_inventions = env_u64("IS_INVENTIONS", 1) != 0;
         w.max_population = 8000;
         // One interbreeding species (id 0), clustered near the world centre.
         // ~15% carry the Inventiveness gene AND a Communicator; the rest neither.
@@ -81,6 +94,13 @@ fn inventiveness_gene_sweep() {
             let mut kit = starter_kit();
             if inventive {
                 g.set(GenomeSlot::Inventiveness, 1.0);
+            }
+            // Confound control: IS_ALL_COMM=1 gives EVERY agent a Communicator, so
+            // the experiment-C foraging-skill bonus (module-gated) is equal across
+            // cohorts and the ONLY difference is the Inventiveness gene. A sweep
+            // under this condition is attributable to inventions, not the module.
+            let all_comm = env_u64("IS_ALL_COMM", 0) != 0;
+            if inventive || all_comm {
                 kit.push(anabios_core::module::Module::Communicator { range: 12.0, channel_id: 0 });
             }
             w.spawn_seeded(pos, g, 0, kit, starter_asocial_forager());
