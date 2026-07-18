@@ -86,6 +86,30 @@ fn large_world_pheromone_honours_world_size() {
 }
 
 #[test]
+fn large_scenario_instantiates() {
+    let toml = r#"
+name = "big"
+seed = 3
+world_size = 2048.0
+biome_res = 256
+hash_res = 128
+[[agents]]
+count = 50
+placement = { kind = "uniform" }
+"#;
+    let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
+    assert_eq!(w.world_size, 2048.0);
+    assert_eq!(w.biome.cells.len(), 256 * 256);
+    for _ in 0..50 {
+        anabios_core::tick::step(&mut w);
+    }
+    for id in w.agents.iter_alive() {
+        let p = w.agents.position[id as usize];
+        assert!((0.0..2048.0).contains(&p.x) && (0.0..2048.0).contains(&p.y));
+    }
+}
+
+#[test]
 fn torus_distance_wraps_correctly_across_the_2048_seam() {
     use anabios_core::prelude_test::Vec2;
     use anabios_core::spatial::torus_distance;

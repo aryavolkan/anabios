@@ -27,6 +27,14 @@ pub struct Scenario {
     /// to keep long smoke runs fast.
     #[serde(default)]
     pub max_population: Option<u32>,
+    /// Opt-in larger world. Absent = default 1024/128/64. All three should be
+    /// set together and keep `world_size / hash_res ≈ 16` (the perception cap).
+    #[serde(default)]
+    pub world_size: Option<f32>,
+    #[serde(default)]
+    pub biome_res: Option<usize>,
+    #[serde(default)]
+    pub hash_res: Option<usize>,
 }
 
 /// A request for `count` agents distributed via the given placement, each
@@ -204,7 +212,15 @@ impl Scenario {
     /// from `seed`; agent positions for `Placement::Uniform` come from this
     /// RNG in agent-id order.
     pub fn instantiate(&self) -> World {
-        let mut w = World::new(self.seed);
+        let mut w = match (self.world_size, self.biome_res, self.hash_res) {
+            (None, None, None) => World::new(self.seed),
+            (ws, br, hr) => World::with_dims(
+                self.seed,
+                ws.unwrap_or(crate::biome::WORLD_SIZE_DEFAULT),
+                br.unwrap_or(crate::biome::BIOME_RES_DEFAULT),
+                hr.unwrap_or(crate::spatial::HASH_RES_DEFAULT),
+            ),
+        };
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
         if let Some(cap) = self.max_population {

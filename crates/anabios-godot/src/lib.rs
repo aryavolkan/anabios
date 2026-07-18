@@ -241,7 +241,7 @@ impl Simulation {
     /// World extent (a square). UI uses this to set camera limits.
     #[func]
     fn world_size(&self) -> f32 {
-        anabios_core::biome::WORLD_SIZE
+        self.inner.as_ref().map(|w| w.world_size).unwrap_or(anabios_core::biome::WORLD_SIZE_DEFAULT)
     }
 
     /// Return alive-agent positions as a Vector2 array, in ascending
@@ -423,7 +423,10 @@ impl Simulation {
     /// Biome grid resolution per axis (cells = res²).
     #[func]
     fn biome_resolution(&self) -> i64 {
-        anabios_core::biome::BIOME_RES as i64
+        self.inner
+            .as_ref()
+            .map(|w| w.biome_res as i64)
+            .unwrap_or(anabios_core::biome::BIOME_RES_DEFAULT as i64)
     }
 
     /// One color per biome cell, row-major (`row * RES + col`). Terrain
