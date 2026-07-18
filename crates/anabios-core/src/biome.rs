@@ -23,6 +23,12 @@ pub const CELL_SIZE: f32 = WORLD_SIZE / BIOME_RES as f32;
 pub const WORLD_SIZE_DEFAULT: f32 = WORLD_SIZE;
 pub const BIOME_RES_DEFAULT: usize = BIOME_RES;
 
+/// Fraction of the mean vegetated-neighbour biomass a depleted cell gains per
+/// recolonization step. Modest, so recovery is gradual (avoids boom/bust).
+pub const RECOLONIZE_RATE: f32 = 0.08;
+/// A cell counts as a viable seed source above this biomass.
+pub const RECOLONIZE_SEED_MIN: f32 = 0.5;
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TerrainType {
@@ -164,6 +170,48 @@ impl BiomeField {
         }
     }
 
+    /// Spread vegetation into depleted cells from their 4-neighbours (torus).
+    /// Only cells with positive carrying capacity can recolonize. Double-
+    /// buffered so the result is independent of scan order. Deterministic.
+    pub fn recolonize_step(&mut self) {
+        let res = self.res;
+        // Read the pre-step biomass; write deltas, apply after.
+        let mut add = vec![0.0f32; self.cells.len()];
+        for row in 0..res {
+            for col in 0..res {
+                let idx = row * res + col;
+                let cap = self.cells[idx].terrain.carrying_capacity();
+                if cap <= 0.0 || self.cells[idx].plant_biomass > RECOLONIZE_SEED_MIN {
+                    continue; // only depleted, colonizable cells receive seed
+                }
+                let n = [
+                    idx_wrap(row + res - 1, col, res),
+                    idx_wrap(row + 1, col, res),
+                    idx_wrap(row, col + res - 1, res),
+                    idx_wrap(row, col + 1, res),
+                ];
+                let mut sum = 0.0f32;
+                let mut count = 0.0f32;
+                for &ni in &n {
+                    let b = self.cells[ni].plant_biomass;
+                    if b > RECOLONIZE_SEED_MIN {
+                        sum += b;
+                        count += 1.0;
+                    }
+                }
+                if count > 0.0 {
+                    add[idx] = (RECOLONIZE_RATE * (sum / count)).min(cap);
+                }
+            }
+        }
+        for (cell, a) in self.cells.iter_mut().zip(add.iter()) {
+            if *a > 0.0 {
+                let cap = cell.terrain.carrying_capacity();
+                cell.plant_biomass = (cell.plant_biomass + *a).min(cap);
+            }
+        }
+    }
+
     /// Consume up to `desired` biomass from the cell containing `pos`,
     /// returning how much was actually consumed. The biome's biomass is
     /// reduced by the same amount.
@@ -213,6 +261,12 @@ pub fn best_env_direction(biome: &BiomeField, pos: Vec2, affinity: f32, radius: 
         }
     }
     best_offset.normalize_or_zero()
+}
+
+/// Wrap `(row, col)` onto a `res × res` torus and flatten to a cell index.
+#[inline]
+fn idx_wrap(row: usize, col: usize, res: usize) -> usize {
+    (row % res) * res + (col % res)
 }
 
 fn elevation_to_terrain(n: f32) -> TerrainType {

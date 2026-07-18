@@ -28,8 +28,10 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-18: UniformSpatialHash dimension-aware (skip, no layout
 // change) + PheromoneField gained world_size (serialized) — byte-identical
 // at defaults.
+// Refreshed 2026-07-18: added World.living_biome flag (off = byte-identical;
+// only serialized layout grew).
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x5cb06b04c60c250d), (100, 0xc01e24c0c7cb427f), (1000, 0xbedf0b32509fb0a2)];
+    &[(0, 0xc27d8b35b781ece5), (100, 0xc6f144191da869d3), (1000, 0x11c4825623363f74)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

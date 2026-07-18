@@ -130,3 +130,53 @@ fn torus_distance_wraps_correctly_across_the_2048_seam() {
     // computation would produce.
     assert!(d < 100.0, "distance must take the short way around the seam, got {d}");
 }
+
+#[test]
+fn recolonization_recovers_dead_cells_only_when_living() {
+    use anabios_core::biome::BiomeField;
+    // A field where one interior grass cell is grazed to zero, neighbours full.
+    fn make() -> BiomeField {
+        BiomeField::generate(42, 128, 1024.0)
+    }
+    // helper: index of a grass cell with grass neighbours
+    let mut f = make();
+    let res = f.res;
+    // find a grass cell whose 4-neighbours are also grass with biomass > 0
+    let mut target = None;
+    'outer: for row in 1..res - 1 {
+        for col in 1..res - 1 {
+            let idx = row * res + col;
+            let is_grass = |i: usize| {
+                f.cells[i].plant_biomass > 0.0 && f.cells[i].terrain.carrying_capacity() > 0.0
+            };
+            if is_grass(idx)
+                && is_grass(idx - 1)
+                && is_grass(idx + 1)
+                && is_grass(idx - res)
+                && is_grass(idx + res)
+            {
+                target = Some(idx);
+                break 'outer;
+            }
+        }
+    }
+    let idx = target.expect("a grass cell with grass neighbours exists");
+    f.cells[idx].plant_biomass = 0.0;
+    // Flag OFF path: regrow_step leaves it dead.
+    for _ in 0..50 {
+        f.regrow_step();
+    }
+    assert_eq!(f.cells[idx].plant_biomass, 0.0, "dead cell stays dead without living biome");
+    // Flag ON path: recolonize_step revives it from neighbours.
+    let mut g = make();
+    g.cells[idx].plant_biomass = 0.0;
+    for _ in 0..50 {
+        g.recolonize_step();
+        g.regrow_step();
+    }
+    assert!(
+        g.cells[idx].plant_biomass > 0.1,
+        "recolonized from neighbours, got {}",
+        g.cells[idx].plant_biomass
+    );
+}

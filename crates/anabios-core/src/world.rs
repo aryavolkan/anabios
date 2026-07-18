@@ -55,6 +55,12 @@ pub struct World {
     /// old snapshots without this field still deserialize.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// When true, depleted biome cells recolonize from vegetated neighbours
+    /// each biome step (`BiomeField::recolonize_step`), before regrowth. Off
+    /// by default; opt-in per scenario. Defaulted so old snapshots without
+    /// this field still deserialize.
+    #[serde(default)]
+    pub living_biome: bool,
     /// Hard cap on alive agents; `reproduce_all` skips mating at/above this.
     /// Defaults to `reproduce::MAX_POPULATION` (the design's 10k budget);
     /// scenarios/tests can pin it lower. Defaulted so old snapshots without
@@ -148,6 +154,7 @@ impl World {
             pheromones: crate::pheromone::PheromoneField::new(),
             env_period: 0,
             biome_adaptation: false,
+            living_biome: false,
             max_population: crate::reproduce::MAX_POPULATION,
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
             biome_res: crate::biome::BIOME_RES_DEFAULT,

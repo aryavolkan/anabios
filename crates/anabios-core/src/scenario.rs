@@ -22,6 +22,10 @@ pub struct Scenario {
     /// climate). `false` (default) leaves foraging behavior unchanged.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// Opt-in: enable renewing biome (depleted cells recolonize from
+    /// vegetated neighbours). `false` (default) leaves regrowth unchanged.
+    #[serde(default)]
+    pub living_biome: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -223,6 +227,7 @@ impl Scenario {
         };
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
+        w.living_biome = self.living_biome;
         if let Some(cap) = self.max_population {
             w.max_population = cap;
         }
