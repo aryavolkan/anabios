@@ -6,36 +6,38 @@
 //! Env knobs: LSB_SEEDS / LSB_TICKS / LSB_MAXPOP override the defaults for sweeps.
 //!
 //! FINDING (2026-07-18): the living biome works but culture does NOT robustly
-//! win. Reproducible from the committed (uniform) scenario:
-//! - The living biome dramatically raises carrying capacity (living pops fill
-//!   the cap; the STATIC biome collapses to near-zero at 2048) — the renewal +
-//!   seasonality mechanisms work.
-//! - The culture-vs-control differential is winner-take-all competitive
-//!   exclusion: whichever cohort's skill positive-feedback (skill -> graze ->
-//!   offspring -> more skilled foragers) fires first monopolizes the biome.
-//!   Bistable on founder-effect noise (~coin flip across seeds, e.g. 2/4).
-//! Mechanism (fitness-threshold, NOT per-bite saturation — `graze` returns
-//! `desired.min(biomass)`, so skill actually raises intake MORE in abundance):
-//! under abundance BOTH cohorts clear the reproduction-energy threshold
-//! regardless of skill, so the skill edge does not convert into extra
+//! win. Reproducible from the committed (uniform) scenario: the living biome
+//! dramatically raises carrying capacity (living pops fill the cap; the static
+//! biome collapses to near-zero at 2048 — renewal + seasonality work), and the
+//! culture-vs-control differential is winner-take-all competitive exclusion
+//! (whichever cohort's skill positive-feedback — skill to graze to offspring to
+//! more skilled foragers — fires first monopolizes the biome; bistable on
+//! founder-effect noise, ~coin flip across seeds, e.g. 2/4).
+//!
+//! Mechanism (a fitness-THRESHOLD effect, not per-bite saturation — `graze`
+//! returns `desired.min(biomass)`, so skill actually raises intake MORE in
+//! abundance): under abundance both cohorts clear the reproduction-energy
+//! threshold regardless of skill, so the skill edge does not convert into extra
 //! offspring, while the Communicator module's upkeep cost persists as a net
 //! drag. So the foraging-skill benefit does not durably translate into a
 //! lineage win when the biome is rich — echoing the prior DIT-boundary result
-//! that the cultural benefit is density-dependent. (An exploratory spatial-
-//! separation probe — NOT the committed scenario — suggested control wins in
-//! abundance / culture wins in scarcity, consistent with this, but adds a
-//! regional-biome confound and isn't reproducible from repo state.)
-//! CAVEAT on cohort purity: culture and control here are genetically IDENTICAL
-//! (they differ only by the Communicator MODULE, which is not in the genome),
-//! so genome-based speciation cannot perfectly police the boundary — a drifted
+//! that the cultural benefit is density-dependent. (An exploratory
+//! spatial-separation probe — NOT the committed scenario — suggested control
+//! wins in abundance / culture wins in scarcity, consistent with this, but adds
+//! a regional-biome confound and isn't reproducible from repo state.)
+//!
+//! Caveat on cohort purity: culture and control here are genetically IDENTICAL
+//! (they differ only by the Communicator MODULE, not in the genome), so
+//! genome-based speciation cannot perfectly police the boundary — a drifted
 //! agent can be reassigned across the tally. A future GENE-gated mechanism
-//! (e.g. an Inventiveness mutation) avoids this, since the cohorts would then
-//! differ in the genome and speciation keeps them apart.
+//! (an Inventiveness mutation) avoids this, since the cohorts would then differ
+//! in the genome and speciation keeps them apart.
+//!
 //! Next levers (future work): a robust (non-saturating, above-threshold-
-//! converting) cultural benefit gated by a mutation, lower Communicator
-//! upkeep, or the deferred genetic-assimilation (Baldwin) channel. This harness
-//! REPORTS the effect; it does not assert a pass — forcing one by parameter-
-//! hunting would be p-hacking.
+//! converting) cultural benefit gated by a mutation, lower Communicator upkeep,
+//! or the deferred genetic-assimilation (Baldwin) channel. This harness REPORTS
+//! the effect; it does not assert a pass — forcing one by parameter-hunting
+//! would be p-hacking.
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 use anabios_core::world::World;
