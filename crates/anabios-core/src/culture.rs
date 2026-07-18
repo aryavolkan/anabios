@@ -6,7 +6,6 @@ use crate::genome::GenomeSlot;
 use crate::module::{self, ModuleType};
 use crate::program::MEME_CHANNELS;
 use crate::rng::Rng;
-use crate::spatial::PERCEPTION_MAX_RADIUS;
 use crate::world::World;
 
 /// Fraction each receiver moves its meme toward the neighbor mean per tick
@@ -156,7 +155,7 @@ pub fn culture_step(world: &mut World) {
             continue;
         }
         let range = module::effective_communicator_range(&world.agents.modules[i])
-            .min(PERCEPTION_MAX_RADIUS);
+            .min(world.spatial.perception_max_radius());
         if range <= 0.0 {
             continue;
         }

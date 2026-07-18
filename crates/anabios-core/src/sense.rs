@@ -10,7 +10,7 @@ use crate::agent::AgentBuffers;
 use crate::biome::{BiomeCell, BiomeField, CELL_SIZE, WORLD_SIZE};
 use crate::genome::{Genome, GenomeSlot};
 use crate::prelude::{wrap_torus, Vec2};
-use crate::spatial::{torus_distance, UniformSpatialHash, PERCEPTION_MAX_RADIUS};
+use crate::spatial::{torus_distance, UniformSpatialHash};
 
 /// Sentinel value in `SensorRegister.nearest_neighbor_species` meaning
 /// "no neighbor". `Default` initializes the field to this value.
@@ -96,15 +96,19 @@ impl Default for SensorRegister {
 /// Effective perception radius for an agent given its module list and
 /// genome. Combines the max Sensor radius with the genome's
 /// `PerceptionRadius` slot (the genome acts as a modulator on top of
-/// module capability). Capped at `PERCEPTION_MAX_RADIUS` for the
-/// spatial-hash one-ring guarantee.
-pub fn perception_radius(modules: &crate::module::ModuleList, genome: &Genome) -> f32 {
+/// module capability). Capped at `max_radius` (the world's spatial hash's
+/// `perception_max_radius()`) for the spatial-hash one-ring guarantee.
+pub fn perception_radius(
+    modules: &crate::module::ModuleList,
+    genome: &Genome,
+    max_radius: f32,
+) -> f32 {
     let sensor_radius = crate::module::effective_perception_radius(modules);
     if sensor_radius <= 0.0 {
         return 0.0;
     }
     let modulator = 0.25 + 0.75 * genome.get(GenomeSlot::PerceptionRadius);
-    (PERCEPTION_MAX_RADIUS * sensor_radius * modulator).min(PERCEPTION_MAX_RADIUS)
+    (max_radius * sensor_radius * modulator).min(max_radius)
 }
 
 /// Run the sense stage. `registers[i]` is populated for every alive agent;
@@ -124,12 +128,13 @@ pub fn sense_all(
     use rayon::prelude::*;
     debug_assert!(registers.len() >= agents.capacity());
     let cap = agents.capacity();
+    let max_radius = spatial.perception_max_radius();
 
     registers[..cap].par_iter_mut().enumerate().for_each(|(i, reg)| {
         if !agents.is_alive(i as u32) {
             return;
         }
-        *reg = sense_one(i as u32, agents, biome, pheromones, spatial);
+        *reg = sense_one(i as u32, agents, biome, pheromones, spatial, max_radius);
     });
 }
 
@@ -140,11 +145,12 @@ fn sense_one(
     biome: &BiomeField,
     pheromones: &crate::pheromone::PheromoneField,
     spatial: &UniformSpatialHash,
+    max_radius: f32,
 ) -> SensorRegister {
     let i = id as usize;
     let pos = agents.position[i];
     let genome = &agents.genome[i];
-    let radius = perception_radius(&agents.modules[i], genome);
+    let radius = perception_radius(&agents.modules[i], genome, max_radius);
     if radius <= 0.0 {
         return SensorRegister::default();
     }

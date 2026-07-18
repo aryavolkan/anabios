@@ -152,8 +152,14 @@ impl World {
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
             biome_res: crate::biome::BIOME_RES_DEFAULT,
             hash_res: crate::spatial::HASH_RES_DEFAULT,
-            spatial: UniformSpatialHash::new(),
-            carcass_spatial: UniformSpatialHash::new(),
+            spatial: UniformSpatialHash::with_dims(
+                crate::biome::WORLD_SIZE_DEFAULT,
+                crate::spatial::HASH_RES_DEFAULT,
+            ),
+            carcass_spatial: UniformSpatialHash::with_dims(
+                crate::biome::WORLD_SIZE_DEFAULT,
+                crate::spatial::HASH_RES_DEFAULT,
+            ),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),
@@ -164,17 +170,18 @@ impl World {
         }
     }
 
-    /// Build a world with explicit dimensions. The biome and pheromone grid
-    /// are regenerated at the requested resolution/extent; the spatial hash
-    /// still uses defaults until Task 1.3 makes it dimension-aware. At
-    /// default dimensions this is identical to `new`.
+    /// Build a world with explicit dimensions. The biome, pheromone grid, and
+    /// spatial hashes are all regenerated at the requested resolution/extent.
+    /// At default dimensions this is identical to `new`.
     pub fn with_dims(seed: u64, world_size: f32, biome_res: usize, hash_res: usize) -> Self {
         let mut w = Self::new(seed);
         w.world_size = world_size;
         w.biome_res = biome_res;
         w.hash_res = hash_res;
         w.biome = crate::biome::BiomeField::generate(seed, biome_res, world_size);
-        w.pheromones = crate::pheromone::PheromoneField::with_res(biome_res);
+        w.pheromones = crate::pheromone::PheromoneField::with_dims(biome_res, world_size);
+        w.spatial = crate::spatial::UniformSpatialHash::with_dims(world_size, hash_res);
+        w.carcass_spatial = crate::spatial::UniformSpatialHash::with_dims(world_size, hash_res);
         w
     }
 

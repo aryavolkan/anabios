@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::culture::{ALARM_MEME_CHANNEL, MEME_BROADCAST_THRESHOLD};
 use crate::program::MEME_CHANNELS;
-use crate::spatial::{torus_distance, PERCEPTION_MAX_RADIUS};
+use crate::spatial::torus_distance;
 use crate::world::World;
 
 mod combat;

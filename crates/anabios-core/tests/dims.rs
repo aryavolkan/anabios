@@ -54,3 +54,33 @@ fn large_world_generates_and_steps() {
         anabios_core::tick::step(&mut w);
     }
 }
+
+#[test]
+fn large_world_perception_invariant() {
+    let w = anabios_core::world::World::with_dims(1, 2048.0, 256, 128);
+    // hash_cell_size = 2048/128 = 16, matching the default perception cap.
+    assert_eq!(w.spatial.perception_max_radius(), 16.0);
+}
+
+#[test]
+fn large_world_pheromone_honours_world_size() {
+    use anabios_core::prelude_test::Vec2;
+
+    // Task 1.3 folded fix: PheromoneField must derive cell_size from the
+    // world's actual world_size, not the WORLD_SIZE_DEFAULT const, or a
+    // position like x=1500 in a 2048-world would wrap into the wrong cell.
+    let w = anabios_core::world::World::with_dims(2, 2048.0, 256, 128);
+    assert_eq!(w.pheromones.res, 256);
+    assert_eq!(w.pheromones.world_size, 2048.0);
+
+    // cell_size at res=256, world_size=2048 is 8.0; x=1500 -> col 187, not
+    // wrapped into a col computed against a 1024-world.
+    let mut pheromones = w.pheromones.clone();
+    pheromones.deposit(Vec2::new(1500.0, 0.5), 0, 1.0);
+    let expected_col = (1500.0_f32 / 8.0) as usize;
+    assert_eq!(expected_col, 187);
+    // Sample right at that position's cell should see the deposit; a
+    // position wrapped modulo 1024 (1500 % 1024 = 476, col 59) should not.
+    assert!(pheromones.sample(Vec2::new(1500.0, 0.5), 0) > 0.0);
+    assert_eq!(pheromones.sample(Vec2::new(476.0, 0.5), 0), 0.0);
+}

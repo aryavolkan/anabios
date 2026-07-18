@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::biome::{BIOME_RES, WORLD_SIZE};
+use crate::biome::{BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT};
 use crate::prelude::Vec2;
 use crate::program::PHEROMONE_CHANNELS;
 
@@ -22,6 +22,10 @@ pub struct PheromoneField {
     /// Grid resolution per axis (was the `BIOME_RES` const). Kept in step
     /// with the world's `biome_res` by `World::with_dims`.
     pub res: usize,
+    /// World extent per axis (was the `WORLD_SIZE` const). Kept in step with
+    /// the world's `world_size` by `World::with_dims` so cell math scales
+    /// with the torus instead of always assuming the default 1024.
+    pub world_size: f32,
     /// Cached "any cell is nonzero" flag — lets `decay_step` skip the full
     /// 65k-multiply pass when no pheromone has ever been deposited. Once true
     /// it stays true (decay only shrinks values toward zero, never reaching
@@ -38,23 +42,31 @@ impl Default for PheromoneField {
 
 impl PheromoneField {
     pub fn new() -> Self {
-        Self::with_res(BIOME_RES)
+        Self::with_dims(BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT)
     }
 
     /// Build an empty pheromone grid at the given resolution per axis.
+    /// Assumes the default world size (`WORLD_SIZE_DEFAULT`); use
+    /// `with_dims` when the torus extent differs.
     pub fn with_res(res: usize) -> Self {
-        Self { cells: vec![[0.0; PHEROMONE_CHANNELS]; res * res], res, nonzero: false }
+        Self::with_dims(res, WORLD_SIZE_DEFAULT)
+    }
+
+    /// Build an empty pheromone grid at the given resolution per axis and
+    /// world extent per axis.
+    pub fn with_dims(res: usize, world_size: f32) -> Self {
+        Self { cells: vec![[0.0; PHEROMONE_CHANNELS]; res * res], res, world_size, nonzero: false }
     }
 
     /// Convert a world position into a flat cell index. Self-contained (no
-    /// `BiomeField` dependency): wraps into `[0, WORLD_SIZE)` on each axis and
+    /// `BiomeField` dependency): wraps into `[0, world_size)` on each axis and
     /// scales by this field's own resolution, clamping so the stride
     /// (`row * self.res + col`) always stays in bounds regardless of `res`.
     #[inline]
     fn idx(&self, pos: Vec2) -> usize {
-        let cell_size = WORLD_SIZE / self.res as f32;
-        let wrapped_x = pos.x.rem_euclid(WORLD_SIZE);
-        let wrapped_y = pos.y.rem_euclid(WORLD_SIZE);
+        let cell_size = self.world_size / self.res as f32;
+        let wrapped_x = pos.x.rem_euclid(self.world_size);
+        let wrapped_y = pos.y.rem_euclid(self.world_size);
         let col = ((wrapped_x / cell_size) as usize).min(self.res - 1);
         let row = ((wrapped_y / cell_size) as usize).min(self.res - 1);
         row * self.res + col
