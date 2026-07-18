@@ -107,4 +107,39 @@ mod tests {
         let err = load_from_bytes(&tampered).expect_err("should error");
         assert!(matches!(err, SnapshotError::Version { .. }));
     }
+
+    #[test]
+    fn pheromone_decay_continues_after_roundtrip() {
+        let mut w = World::new(9);
+        w.pheromones.deposit(Vec2::new(100.0, 100.0), 0, 1.0);
+        let mut w2 = load_from_bytes(&save_to_bytes(&w).expect("save")).expect("load");
+        // The serde-skipped `nonzero` cache must be refreshed on load, or the
+        // loaded world's decay_step would silently become a no-op.
+        w.pheromones.decay_step();
+        w2.pheromones.decay_step();
+        assert_eq!(w.pheromones.cells, w2.pheromones.cells);
+        assert!(
+            w2.pheromones.sample(Vec2::new(100.0, 100.0), 0) < 1.0,
+            "loaded world keeps decaying its pheromone field"
+        );
+    }
+
+    #[test]
+    fn loaded_world_continues_bit_identically() {
+        let mut w = World::new(77);
+        for _ in 0..5 {
+            let _ = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        }
+        for _ in 0..30 {
+            step(&mut w);
+        }
+        let mut w2 = load_from_bytes(&save_to_bytes(&w).expect("save")).expect("load");
+        for _ in 0..30 {
+            step(&mut w);
+            step(&mut w2);
+        }
+        // Every #[serde(skip)] scratch buffer (spatial hashes, codex agg,
+        // sensors, pheromone flag) must rebuild itself on the fly.
+        assert_eq!(state_hash(&w), state_hash(&w2));
+    }
 }

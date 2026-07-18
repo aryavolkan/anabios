@@ -8,7 +8,24 @@ Not a neuroevolution project. Agents have **simple, hand-engineered cognition** 
 
 ## Status
 
-Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md). Milestones M1–M10 shipped (see git tags `m1`–`m10`), plus the M11–M15 interaction substrate (combat/predation, pheromone territories, communication/culture, cooperation/kin), the perf/refactor batches, and the biome climate-adaptation experiment.
+Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md). Shipped to date (git tags `m1`–`m10` plus later batches):
+
+- **Core sim** — deterministic SoA agent simulation: uniform-grid spatial hashing, evolvable postfix behavior programs, 50-slot float genome, modular morphology, speciation
+- **Interaction substrate (M11–M15)** — combat & predation, carcass scavenging, pheromone fields, communication/meme culture, kin-directed cooperation
+- **Codex** — 17 emergence detectors (extinction → herd cohesion) writing a persistent event timeline
+- **Experiments** — DIT gene-culture technique model; biome climate adaptation (opt-in per scenario)
+- **Viewer** — Godot 4.6+ client: biome/species/pheromone overlays, inspector, codex panel, co-evolution charts
+- **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV), criterion benchmark suite
+
+## Testing
+
+```bash
+cargo test --workspace                      # unit + integration suite
+cargo test --workspace --tests --release   # full gate incl. long emergence tests (CI)
+cargo bench -p anabios-core                # criterion: tick / stages / scavenge
+```
+
+The determinism gate (`tests/determinism.rs`) pins golden state hashes at ticks 0/100/1000 of the minimal scenario. If a change is *intentionally* behavior-altering, regenerate with `UPDATE_HASHES=1 cargo test -p anabios-core --test determinism -- --nocapture` and copy the printed values into the test.
 
 ## Performance
 
