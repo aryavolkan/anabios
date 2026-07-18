@@ -8,6 +8,8 @@ season_period = 2000
 max_population = 8000
 
 # Culture lineage (species 1): starter kit + Communicator → learned foraging skill.
+# Uniform placement mixes the cohorts so they share one environment (no regional
+# biome confound). See tests/living_sandbox.rs for the finding this produces.
 [[agents]]
 count = 400
 placement = { kind = "uniform" }

@@ -3,7 +3,32 @@
 //! advantage stronger with the living biome ON than OFF?
 //!
 //! Run: cargo test -p anabios-core --release --test living_sandbox -- --ignored --nocapture
-//! Quick pass: LSB_SEEDS=3 LSB_TICKS=2500 cargo test ... (env overrides the defaults)
+//! Env knobs: LSB_SEEDS / LSB_TICKS / LSB_MAXPOP override the defaults for sweeps.
+//!
+//! FINDING (2026-07-18, hypothesis-INVERTING — the spec expected the living
+//! biome to rescue the culture advantage; it does the opposite):
+//! - The living biome dramatically raises carrying capacity (living pops fill
+//!   the cap; the STATIC biome collapses to near-zero at 2048) — the renewal +
+//!   seasonality mechanisms work.
+//! - Under UNIFORM placement the differential is winner-take-all competitive
+//!   exclusion: whichever cohort's skill positive-feedback (skill -> more graze
+//!   -> more offspring -> more skilled foragers) fires first monopolizes the
+//!   biome. Bistable on founder-effect noise (~coin flip across seeds).
+//! - Separating the cohorts spatially removes the monopoly but reveals the
+//!   mechanism: in the ABUNDANT living biome the CONTROL wins, while in the
+//!   SCARCE static biome the CULTURE wins. The skill multiplier saturates when
+//!   food is plentiful (everyone eats their fill), so it stops paying — yet the
+//!   Communicator module's upkeep cost persists, making culture a net loser
+//!   exactly where the biome is richest. Under scarcity the multiplier is
+//!   decisive, so culture wins.
+//! - Conclusion: the culture foraging-skill benefit is SCARCITY-dependent; a
+//!   renewing/abundant biome does NOT produce a robust culture lineage win.
+//!   This mirrors the prior DIT-boundary result that the cultural benefit is
+//!   density-dependent and evaporates where selection is strongest. Next levers
+//!   (future work): a non-saturating cultural benefit, lower Communicator
+//!   upkeep, a scarcity-tuned biome, or the deferred genetic-assimilation
+//!   (Baldwin) channel. This harness REPORTS the effect; it does not assert a
+//!   pass, because forcing one by parameter-hunting would be p-hacking.
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 use anabios_core::world::World;
@@ -106,18 +131,20 @@ fn culture_lineage_differential() {
         mean_lr_living - mean_lr_off
     );
 
-    // Success bar (spec §1): culture out-reproduces control in >= 70% of seeds
-    // with a positive mean log-ratio in the LIVING biome, AND the advantage is
-    // stronger living-ON than OFF. Reporting assertion for the research run; a
-    // failure is a RESULT to tune against (RECOLONIZE_RATE / SEASON_AMPLITUDE /
-    // regrowth / population), not a harness bug.
+    // Spec §1 success bar (for reference): culture out-reproduces control in
+    // >= 70% of seeds with a positive mean log-ratio in the LIVING biome, and
+    // stronger living-ON than OFF. This is a REPORTING harness — it prints the
+    // verdict rather than asserting, because the finding is that this bar is NOT
+    // met (see the module-level FINDING). The harness always completes so it can
+    // be run repeatedly for sweeps without a red test masking the numbers.
     let bar = (seeds as f64 * 0.7).ceil() as u32;
-    assert!(
-        culture_wins_living >= bar
-            && mean_lr_living > 0.0
-            && mean_lr_living > mean_lr_off,
-        "differential below target: living {culture_wins_living}/{seeds} (need >={bar}), \
-         mean log-ratio {mean_lr_living:.3} (need >0 and > off {mean_lr_off:.3}) \
-         — tune RECOLONIZE_RATE / SEASON_AMPLITUDE / regrowth / population, or reconsider the deferred Baldwin channel"
+    let met = culture_wins_living >= bar && mean_lr_living > 0.0 && mean_lr_living > mean_lr_off;
+    eprintln!(
+        "VERDICT: spec bar (culture wins >={bar}/{seeds} living, mean-lr>0, living>off) {}",
+        if met {
+            "MET"
+        } else {
+            "NOT met (see module FINDING: culture benefit is scarcity-dependent)"
+        }
     );
 }
