@@ -102,7 +102,10 @@ pub enum GenomeSlot {
     /// A genetic strategy's fixed innate foraging technique in `[0, 1]`.
     /// Used (for non-cultural agents) only in DIT env mode (`World.env_period > 0`).
     InnateTechnique = 40,
-    _SensoryReserved41 = 41,
+    /// Genetic affinity in `[0,1]` for the local biome climate (`BiomeCell.env`).
+    /// Read by the biome-adaptation feeding bonus when `World.biome_adaptation`
+    /// is on. Counts toward speciation distance (drives biome-driven divergence).
+    EnvAffinity = 41,
     _SensoryReserved42 = 42,
     _SensoryReserved43 = 43,
     _SensoryReserved44 = 44,

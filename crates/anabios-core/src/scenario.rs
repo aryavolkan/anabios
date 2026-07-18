@@ -19,6 +19,10 @@ pub struct Scenario {
     /// `4294967295` (`u32::MAX`, `culture::ENV_STATIC_PERIOD`) = active-but-static.
     #[serde(default)]
     pub env_period: u32,
+    /// Opt-in: enable the biome-adaptation feeding bonus (EnvAffinity vs local
+    /// climate). `false` (default) leaves foraging behavior unchanged.
+    #[serde(default)]
+    pub biome_adaptation: bool,
 }
 
 /// A request for `count` agents distributed via the given placement, each
@@ -198,6 +202,7 @@ impl Scenario {
     pub fn instantiate(&self) -> World {
         let mut w = World::new(self.seed);
         w.env_period = self.env_period;
+        w.biome_adaptation = self.biome_adaptation;
         // Personality is sampled from a DEDICATED rng substream (seeded from the
         // world seed) so it never perturbs `world.rng` — the physics/placement/
         // reproduction stream stays bit-identical to a personality-free build.

@@ -80,6 +80,31 @@ pub fn technique_match(tech: f32, opt: f32) -> f32 {
     (1.0 - (tech - opt).abs() / ENV_TOLERANCE).clamp(0.0, 1.0)
 }
 
+/// Feeding bonus multiplier for a perfect biome-climate affinity match (spatial
+/// genetic analog of the DIT technique bonus).
+pub const ENV_AFFINITY_BONUS: f32 = 1.0;
+/// Affinity distance beyond which the biome-adaptation bonus is zero.
+pub const ENV_AFFINITY_TOLERANCE: f32 = 0.25;
+
+/// Triangular match kernel for genetic biome-climate adaptation: 1.0 at a
+/// perfect match, linearly to 0.0 at `ENV_AFFINITY_TOLERANCE` apart. Both args
+/// in `[0,1]`.
+pub fn env_affinity_match(affinity: f32, env: f32) -> f32 {
+    (1.0 - (affinity - env).abs() / ENV_AFFINITY_TOLERANCE).clamp(0.0, 1.0)
+}
+
+/// Habitat-selection reach (world units): how far an agent scans for a cell
+/// whose climate better matches its `EnvAffinity`. Feeding-bonus adaptation
+/// alone yields panmixia (agents roam past climate features and adapt to the
+/// global mean); this movement pull lets lineages sort into their preferred
+/// zone, producing the spatial structure a cline needs.
+pub const HABITAT_REACH: f32 = 48.0;
+/// Weight of the affinity-matching pull added to an agent's movement intent
+/// before normalization. Comparable to the program/personality move magnitudes
+/// so climate-seeking meaningfully biases direction without fully overriding
+/// the evolved behavior.
+pub const HABITAT_PULL: f32 = 1.0;
+
 /// The globally-optimal foraging technique at a given tick, in `[0,1]`. Pure (no RNG,
 /// no stored state) so it needs no tick hook and stays perfectly deterministic.
 /// `period == 0` should never reach here (callers gate on env_period > 0).
@@ -208,4 +233,19 @@ pub fn culture_step(world: &mut World) {
         }
     }
     world.agents.scratch_ids = alive_ids;
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn env_affinity_match_peaks_and_falls_off() {
+        assert!((super::env_affinity_match(0.5, 0.5) - 1.0).abs() < 1e-6);
+        assert_eq!(super::env_affinity_match(0.0, 1.0), 0.0); // > tolerance apart
+        let m = super::env_affinity_match(0.5, 0.6);
+        assert!(m > 0.0 && m < 1.0);
+        for (a, e) in [(0.2, 0.9), (1.0, 0.0), (0.5, 0.5)] {
+            let v = super::env_affinity_match(a, e);
+            assert!((0.0..=1.0).contains(&v));
+        }
+    }
 }
