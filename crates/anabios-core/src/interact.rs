@@ -127,6 +127,20 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
                 *inv += crate::culture::INVENT_RATE * (1.0 - *inv);
             }
         }
+        // Domestication tier (Task 2.1): a flat, additive steady food income —
+        // reliable independent of whether this tick's graze succeeded, unlike
+        // the multiplicative bonuses above (which only apply to `taken > 0.0`).
+        // Applies once per foraging tick (this agent has Mouth + herbivory>0 +
+        // bite_cap>0, i.e. reached this point in the loop).
+        if crate::culture::invention_active(
+            world.cultural_inventions,
+            &world.agents.genome[i],
+            &world.agents.meme_vector[i],
+            is_comm,
+            crate::culture::DOMESTICATION_THRESHOLD,
+        ) {
+            world.agents.energy[i] += crate::culture::DOMESTICATION_ENERGY;
+        }
     }
 }
 
