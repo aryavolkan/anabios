@@ -36,6 +36,33 @@ pub const SKILL_SOCIAL_RATE: f32 = 0.15;
 /// Extra feeding multiplier at full skill: bite *= 1 + SKILL_BONUS * skill.
 pub const SKILL_BONUS: f32 = 2.5;
 
+// --- Mutation-gated cultural inventions (ratchet: invent slowly solo, copy
+// fast socially) ---
+// A cumulative "invention level" that only an Inventiveness-gened Communicator
+// can push forward through its own foraging (slow), but that ANY inventive
+// Communicator can pick up fast from a more-advanced neighbour (social copy).
+// Gated end-to-end on `World.cultural_inventions` so it is fully inert
+// (byte-identical) unless a scenario opts in.
+/// Meme channel carrying the cumulative cultural INVENTION LEVEL in `[0,1]`.
+pub const INVENTION_CHANNEL: usize = 7;
+/// Slow solo progress per successful foraging tick (invent-from-scratch rate).
+pub const INVENT_RATE: f32 = 0.01;
+/// Fast copy rate toward the best inventive Communicator neighbour's level.
+pub const INVENT_SOCIAL_RATE: f32 = 0.15;
+/// `GenomeSlot::Inventiveness` above this gene value makes an agent capable of
+/// (solo) invention. `Genome::neutral()`'s 0.5 is NOT inventive (strict `>`).
+pub const INVENTIVE_THRESHOLD: f32 = 0.5;
+
+/// Whether this genome's `Inventiveness` gene clears the inventive threshold.
+pub fn is_inventive(g: &crate::genome::Genome) -> bool {
+    g.get(crate::genome::GenomeSlot::Inventiveness) > INVENTIVE_THRESHOLD
+}
+
+/// Read the cumulative invention level out of a meme vector.
+pub fn invention_level(meme: &[f32; MEME_CHANNELS]) -> f32 {
+    meme[INVENTION_CHANNEL]
+}
+
 // --- DIT environmental-variability technique (experiment) ---
 // A culturally/genetically-carried foraging *technique* matched against a
 // possibly-shifting environmental optimum. Inert unless `World.env_period > 0`.
@@ -164,6 +191,11 @@ pub fn culture_step(world: &mut World) {
         let mut count = [0u32; MEME_CHANNELS];
         // Social learning: track the most-skilled Communicator neighbour.
         let mut max_neighbour_skill = 0.0f32;
+        // Cultural-inventions ratchet: track the highest invention level among
+        // inventive Communicator neighbours (only meaningful when the flag is
+        // on, but harmless to compute otherwise since it stays 0).
+        let inventions_on = world.cultural_inventions;
+        let mut best_neighbour_invention = 0.0f32;
         // DIT env mode: the current optimum, and the neighbour whose technique
         // best matches it (minimizes |tech - opt|). Only computed when active.
         let env_on = world.env_period > 0;
@@ -184,6 +216,10 @@ pub fn culture_step(world: &mut World) {
             }
             max_neighbour_skill =
                 max_neighbour_skill.max(world.agents.meme_vector[j][SKILL_CHANNEL]);
+            if inventions_on && is_inventive(&world.agents.genome[j]) {
+                best_neighbour_invention =
+                    best_neighbour_invention.max(world.agents.meme_vector[j][INVENTION_CHANNEL]);
+            }
             if env_on {
                 let tech = world.agents.meme_vector[j][TECH_CHANNEL];
                 let err = (tech - opt).abs();
@@ -194,11 +230,20 @@ pub fn culture_step(world: &mut World) {
             }
         });
         for ch in 0..MEME_CHANNELS {
-            // The skill and technique channels carry cumulative learned values
-            // transmitted by their own social-learning rules below — they must NOT
-            // be dragged toward the broadcast mean by the generic meme lerp (which
-            // would pull them toward 0 and fight individual learning).
-            if ch == SKILL_CHANNEL || ch == TECH_CHANNEL {
+            // The skill, technique, and invention channels carry cumulative
+            // learned values transmitted by their own social-learning rules
+            // below — they must NOT be dragged toward the broadcast mean by
+            // the generic meme lerp (which would pull them toward 0 and fight
+            // individual learning). The invention exclusion is itself gated on
+            // `cultural_inventions`: unlike SKILL/TECH, channel 7 can still be
+            // touched by ordinary structural-mutation Communicators when the
+            // flag is off (e.g. minimal.toml), so unconditionally excluding it
+            // would change pre-existing (flag-off) behaviour and move the
+            // golden hashes. Gating keeps flag-off byte-identical.
+            if ch == SKILL_CHANNEL
+                || ch == TECH_CHANNEL
+                || (ch == INVENTION_CHANNEL && inventions_on)
+            {
                 continue;
             }
             if count[ch] > 0 {
@@ -214,6 +259,18 @@ pub fn culture_step(world: &mut World) {
         if count[0] > 0 && max_neighbour_skill > cur_skill {
             world.agents.meme_vector[i][SKILL_CHANNEL] =
                 cur_skill + SKILL_SOCIAL_RATE * (max_neighbour_skill - cur_skill);
+        }
+        // Cultural-inventions ratchet: an inventive Communicator copies fast
+        // from the best-inventing Communicator neighbour (much faster than its
+        // own slow solo invention in `feed_pass`) — the "ratchet" that lets a
+        // rare breakthrough spread through the population instead of staying
+        // locked to the inventor who found it.
+        if inventions_on && is_inventive(&world.agents.genome[i]) {
+            let cur = world.agents.meme_vector[i][INVENTION_CHANNEL];
+            if best_neighbour_invention > cur {
+                world.agents.meme_vector[i][INVENTION_CHANNEL] =
+                    cur + INVENT_SOCIAL_RATE * (best_neighbour_invention - cur);
+            }
         }
         // DIT env mode: social learners copy the technique toward the best-matched
         // neighbour — but only if that neighbour is doing BETTER than they are
