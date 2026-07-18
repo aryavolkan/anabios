@@ -46,6 +46,34 @@ static func build() -> Theme:
 	theme.set_color("font_focus_color", "Button", TEXT)
 	theme.set_font_size("font_size", "Button", 12)
 
+	# --- Form controls (menu screen) ---
+	theme.set_stylebox("normal", "OptionButton", _button_box(BG_ELEV, ACCENT_DIM))
+	theme.set_stylebox("hover", "OptionButton", _button_box(BG_HOVER, ACCENT))
+	theme.set_stylebox("pressed", "OptionButton", _button_box(BG_PRESSED, ACCENT))
+	theme.set_stylebox("focus", "OptionButton", focus)
+	theme.set_color("font_color", "OptionButton", TEXT)
+	theme.set_color("font_hover_color", "OptionButton", ACCENT)
+	theme.set_font_size("font_size", "OptionButton", 13)
+
+	var field := _button_box(BG_ELEV, ACCENT_DIM)
+	theme.set_stylebox("normal", "LineEdit", field)
+	theme.set_stylebox("focus", "LineEdit", focus)
+	theme.set_color("font_color", "LineEdit", TEXT)
+	theme.set_color("caret_color", "LineEdit", ACCENT)
+	theme.set_font_size("font_size", "LineEdit", 13)
+
+	var popup := StyleBoxFlat.new()
+	popup.bg_color = Color(0.05, 0.07, 0.085, 0.98)
+	popup.set_corner_radius_all(4)
+	popup.set_border_width_all(1)
+	popup.border_color = ACCENT_DIM
+	popup.set_content_margin_all(4)
+	theme.set_stylebox("panel", "PopupMenu", popup)
+	theme.set_color("font_color", "PopupMenu", TEXT)
+	theme.set_color("font_hover_color", "PopupMenu", ACCENT)
+	theme.set_color("font_accelerator_color", "PopupMenu", TEXT_DIM)
+	theme.set_font_size("font_size", "PopupMenu", 13)
+
 	return theme
 
 static func _button_box(bg: Color, border: Color) -> StyleBoxFlat:
