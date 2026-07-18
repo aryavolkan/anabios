@@ -1,22 +1,13 @@
 extends Node2D
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
+const Palette = preload("res://scripts/palette.gd")
 
 # Number of sim ticks to run per rendered frame. Speeds: 1, 4, 16, 64.
 @export var ticks_per_frame: int = 1
 @export var paused: bool = false
 
-const MODULE_COLORS: PackedColorArray = [
-	Color(0.6, 0.8, 1.0),   # 0 Locomotor
-	Color(0.4, 0.9, 0.5),   # 1 Sensor
-	Color(1.0, 0.7, 0.3),   # 2 Mouth
-	Color(1.0, 0.3, 0.3),   # 3 Weapon
-	Color(0.7, 0.7, 0.7),   # 4 Armor
-	Color(0.9, 0.9, 0.4),   # 5 Storage
-	Color(0.8, 0.5, 1.0),   # 6 Communicator
-	Color(0.5, 1.0, 0.9),   # 7 Pheromone
-	Color(1.0, 0.5, 0.8),   # 8 Reproductive
-]
+const MODULE_COLORS: PackedColorArray = Palette.MODULE_COLORS
 # Bodies are 0.5–3.0 world units across (genome size), which is only a few
 # pixels at default zoom. Scale them up with a floor so even the smallest
 # organism is an easy-to-see mark, not a stray pixel.
