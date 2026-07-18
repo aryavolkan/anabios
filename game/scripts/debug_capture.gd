@@ -36,6 +36,12 @@ func _run(path: String, wait_frames: int) -> void:
 			var sim := main.get_node_or_null("Simulation")
 			if sim != null and ticks > 0:
 				sim.call("step_n", ticks)
+		# Optionally reveal the [Y] co-evolution chart for the capture.
+		if OS.has_environment("ANABIOS_COEVO"):
+			var coevo := main.get_node_or_null("UI/CoevolutionPanel")
+			if coevo != null:
+				coevo.set("_shown", true)
+				coevo.visible = true
 	for _i in wait_frames:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw

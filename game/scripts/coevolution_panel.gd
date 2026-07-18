@@ -45,8 +45,9 @@ const CHARTS := [
 	},
 ]
 
-const PAD_LEFT := 96.0            # left gutter for legend labels
+const PAD_LEFT := 116.0           # left gutter for legend labels
 const PAD_RIGHT := 10.0
+const LEGEND_W := 104.0           # label wrap/clip width inside the gutter
 
 # Codex EventType ids we mark, mapped to a line color.
 # (0=Extinction, 2=Speciation, 11=DialectFormed, 12=MemeSweep.)
@@ -123,7 +124,9 @@ func _handle_click(pos: Vector2) -> void:
 
 func _draw() -> void:
 	_legend_hitboxes.clear()
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.06, 0.09, 0.9))
+	# Near-opaque so the charts stay legible over any terrain (the world was
+	# bleeding through the lower plots at 0.9).
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.035, 0.05, 0.065, 0.985))
 	var n: int = sim.coevo_history_len()
 	if n <= 1:
 		draw_string(_font, Vector2(12, 26), "co-evolution — waiting for data…",
@@ -177,8 +180,8 @@ func _draw_chart(c: Dictionary, cache: Dictionary, n: int, pad: float, plot_w: f
 		var col: Color = s["color"]
 		var off: bool = _hidden_keys.has(key)
 		var draw_col := Color(col.r, col.g, col.b, 0.3) if off else col
-		draw_string(_font, Vector2(6, legend_y), s["label"], HORIZONTAL_ALIGNMENT_LEFT, 84, 10, draw_col)
-		_legend_hitboxes.append({"rect": Rect2(4, legend_y - 10, 88, 13), "key": key})
+		draw_string(_font, Vector2(6, legend_y), s["label"], HORIZONTAL_ALIGNMENT_LEFT, LEGEND_W, 10, draw_col)
+		_legend_hitboxes.append({"rect": Rect2(4, legend_y - 10, LEGEND_W + 4, 13), "key": key})
 		legend_y += 13.0
 		if off:
 			continue
