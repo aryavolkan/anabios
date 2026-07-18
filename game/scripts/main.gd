@@ -47,6 +47,10 @@ func _ready() -> void:
 	var s: float = GameConfig.ui_scale
 	$UI.transform = Transform2D(0.0, Vector2(s, s), 0.0, Vector2.ZERO)
 	_apply_ui_theme()
+	var disc := _disc_texture()
+	bodies.texture = disc
+	carcasses.texture = disc
+	flashes.texture = disc
 
 # Give every HUD panel the shared instrument theme, and make the top-left
 # readout legible over any terrain with a dark outline.
@@ -122,6 +126,18 @@ func _body_colors(n: int) -> PackedColorArray:
 			return out3
 		_:
 			return sim.alive_colors()
+
+# A soft white disc (alpha falls off to the edge). Multiplied by each MultiMesh
+# instance color, it turns the flat body quads into rounded, organic marks.
+func _disc_texture(res: int = 32) -> ImageTexture:
+	var img := Image.create(res, res, false, Image.FORMAT_RGBA8)
+	var c := (res - 1) * 0.5
+	for y in res:
+		for x in res:
+			var d := Vector2(x - c, y - c).length() / c          # 0 center .. 1 edge
+			var a := clampf(1.0 - smoothstep(0.75, 1.0, d), 0.0, 1.0)
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+	return ImageTexture.create_from_image(img)
 
 func _refresh_carcasses() -> void:
 	var data: Array = sim.carcass_data()
