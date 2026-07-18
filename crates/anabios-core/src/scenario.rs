@@ -22,6 +22,10 @@ pub struct Scenario {
     /// climate). `false` (default) leaves foraging behavior unchanged.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// Opt-in: enable the mutation-gated cultural-inventions mechanism.
+    /// `false` (default) leaves behavior unchanged.
+    #[serde(default)]
+    pub cultural_inventions: bool,
     /// Opt-in: enable renewing biome (depleted cells recolonize from
     /// vegetated neighbours). `false` (default) leaves regrowth unchanged.
     #[serde(default)]
@@ -243,6 +247,7 @@ impl Scenario {
         };
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
+        w.cultural_inventions = self.cultural_inventions;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
         if let Some(cap) = self.max_population {

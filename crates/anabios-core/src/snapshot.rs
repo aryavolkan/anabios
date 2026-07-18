@@ -11,7 +11,7 @@ use crate::world::World;
 
 /// Current snapshot format version. Bump on any breaking change to the
 /// serialized layout.
-pub const FORMAT_VERSION: u32 = 3;
+pub const FORMAT_VERSION: u32 = 4;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
