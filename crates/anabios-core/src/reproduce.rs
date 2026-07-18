@@ -7,10 +7,10 @@
 //! The fraction is tuned to be **energy-conserving** within the family-pair
 //! exchange (parents collectively pay exactly the offspring's spawn energy).
 //!
-//! Reproduction is hard-capped at `MAX_POPULATION` agents to prevent runaway
+//! Reproduction is hard-capped at `World::max_population` (default
+//! `MAX_POPULATION` = 10_000, scenario-overridable) to prevent runaway
 //! growth in over-fertile scenarios; this is a coarse backstop, not a
-//! carrying-capacity model (a proper Lotka-Volterra equilibrium is left to
-//! M5 codex tuning).
+//! carrying-capacity model.
 
 use crate::agent::{AgentBuffers, SPAWN_ENERGY};
 use crate::genome::{Genome, GenomeSlot};

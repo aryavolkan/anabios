@@ -42,7 +42,7 @@ pub fn starter_grazer() -> Program {
 }
 
 /// Stalker: approach the nearest other-species agent and fire a weapon when
-/// within ~3 units. (`FireWeapon` is inert until M12 wires combat.)
+/// within ~3 units.
 pub fn starter_stalker() -> Program {
     Program::from_slice(&[
         Node::SenseOtherDirX,
@@ -58,8 +58,7 @@ pub fn starter_stalker() -> Program {
 }
 
 /// Pack hunter: approach prey, broadcast its presence on channel 0 when within
-/// ~5 units, and fire when within ~3 units. (Broadcast/FireWeapon inert until
-/// M14/M12.)
+/// ~5 units, and fire when within ~3 units.
 pub fn starter_pack_hunter() -> Program {
     Program::from_slice(&[
         Node::SenseOtherDirX,
@@ -80,7 +79,7 @@ pub fn starter_pack_hunter() -> Program {
 }
 
 /// Sentinel: flee from the nearest other-species agent and raise an alarm on
-/// channel 1 when one is within ~8 units. (Broadcast inert until M14.)
+/// channel 1 when one is within ~8 units.
 pub fn starter_sentinel() -> Program {
     Program::from_slice(&[
         Node::SenseOtherDirX,
