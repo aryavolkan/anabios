@@ -30,13 +30,13 @@ PR #29's review established the real failure mechanism: it is **fitness-threshol
 - **Copy (social, fast):** in `culture_step`, an inventive Communicator copies the highest-level inventive neighbor: `inv += INVENT_SOCIAL_RATE * max(0, best_neighbor_inv - inv)` (`INVENT_SOCIAL_RATE ≈ 0.15`) — social outpaces solo, the ratchet.
 - **Retention across generations:** the level rides in `meme_vector`, inherited via the existing `inherit_meme` (parent-average + jitter), so culture *accumulates* (the cumulative-culture ratchet). Non-inventive agents (no gene) never raise or apply the level, even if they inherit a nonzero value — the benefit is gated on the gene at application time.
 
-### 3.3 The tech-tree — stacking robust benefits
-The invention level unlocks cumulative benefits at thresholds; **all gated on `inventive && has(Communicator)`** and on `World.cultural_inventions`. Each is robust (non-saturating) and converts to fitness above the reproduction threshold:
-1. `inv ≥ 0.34` → **Efficiency** — a per-tick metabolic discount `EFFICIENCY_DISCOUNT` (≈ 0.004) subtracted from the agent's upkeep in `module::upkeep_all` (directly offsets the Communicator upkeep, `UPKEEP_BASE=0.005`, that sank culture before). Clamped so upkeep never goes negative.
-2. `inv ≥ 0.67` → **Tooling** — a flat **additive** `TOOL_BONUS` (≈ 0.3) energy on a successful graze in `feed_pass` (added to the energy gained, NOT a multiplier on the bite → cannot saturate with abundance).
-3. `inv ≥ 1.0` → **Provisioning** — the effective reproduction-energy threshold (`GenomeSlot::ReproductionThreshold`, slot 30) is reduced by `PROVISION_DISCOUNT` (≈ 0.05) in `reproduce.rs` (breed sooner → more offspring, converts in abundance).
+### 3.3 The tech-tree — named cumulative inventions with stacking benefits
+The invention level unlocks a ladder of **named, evolutionarily-recognizable inventions** at thresholds (ordered by increasing sophistication); **all gated on `inventive && has(Communicator)`** and on `World.cultural_inventions`. Each is robust (non-saturating) and converts to fitness above the reproduction threshold, and they **stack** (an agent at `inv = 1.0` has all three, compounding):
+1. `inv ≥ 0.34` → **Animal domestication** (reliable food) — a flat **additive** `DOMESTICATION_ENERGY` (≈ 0.15) energy each foraging tick in `feed_pass`, regardless of graze success. A steady food income independent of wild foraging → robust, converts directly to fitness.
+2. `inv ≥ 0.67` → **Writing** (cultural transmission) — the invention social-copy in `culture_step` uses a boosted rate `INVENT_SOCIAL_RATE + WRITING_COPY_BONUS` (≈ +0.20). Literate cultures accumulate/spread inventions faster — a compounding cumulative-culture feedback (bounded by the `[0,1]` level cap). This is the invention that accelerates the ratchet itself.
+3. `inv ≥ 1.0` → **Industrial revolution** (mass efficiency — the top-tier payoff) — a per-tick metabolic upkeep discount `INDUSTRY_UPKEEP_DISCOUNT` (≈ 0.004) in `module::upkeep_all` (offsets the Communicator upkeep, `UPKEEP_BASE=0.005`, that sank culture before; clamped ≥ 0) **and** a reproduction-energy-threshold reduction `INDUSTRY_REPRO_DISCOUNT` (≈ 0.05) in `reproduce.rs` (breed sooner → more offspring in abundance). Two-part, because the top invention should be the largest compounding advantage.
 
-Benefits **stack** (an agent at `inv = 1.0` gets all three). Starting values are modest and tuned in the experiment.
+The ladder is cumulative: a max-level culture has domesticated food + fast-spreading written knowledge + industrial efficiency — a stacking evolutionary advantage that no single-tier benefit provides. Starting values are modest and tuned in the experiment.
 
 ### 3.4 Flag
 - `World.cultural_inventions: bool` (`#[serde(default)]`, default false) + a matching `Scenario` knob. Every new codepath early-exits when off → existing scenarios byte-identical.

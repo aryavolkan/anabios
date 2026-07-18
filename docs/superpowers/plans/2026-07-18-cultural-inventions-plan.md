@@ -14,7 +14,7 @@
 - **Golden discipline.** Only P1 adds a serialized `World` field (`cultural_inventions: bool`) → exactly one reviewed golden refresh, dated, attributing the move to the field. Later tasks add no `World` field (they reuse `genome`/`meme_vector` arrays + gate on the flag) → **golden must NOT move**; if it does, default behaviour changed — investigate, do not refresh.
 - **`Inventiveness` counts toward speciation** (must NOT be added to `PERSONALITY_MASK`).
 - **Determinism of new math:** fixed iteration order (ascending id in `culture_step`), no new RNG in hot paths. Bump `FORMAT_VERSION` for the new field.
-- **Exact values (verbatim):** slot `Inventiveness = 42`; `INVENTION_CHANNEL = 7`; `INVENT_RATE = 0.01`; `INVENT_SOCIAL_RATE = 0.15`; `INVENTIVE_THRESHOLD = 0.5`; tech-tree thresholds `0.34 / 0.67 / 1.0`; `EFFICIENCY_DISCOUNT = 0.004`; `TOOL_BONUS = 0.3`; `PROVISION_DISCOUNT = 0.05`. All are starting values tuned in P3.
+- **Exact values (verbatim):** slot `Inventiveness = 42`; `INVENTION_CHANNEL = 7`; `INVENT_RATE = 0.01`; `INVENT_SOCIAL_RATE = 0.15`; `INVENTIVE_THRESHOLD = 0.5`. Named tech-tree (thresholds + benefits): **Domestication** `DOMESTICATION_THRESHOLD = 0.34`, `DOMESTICATION_ENERGY = 0.15`; **Writing** `WRITING_THRESHOLD = 0.67`, `WRITING_COPY_BONUS = 0.20`; **Industrial revolution** `INDUSTRY_THRESHOLD = 1.0`, `INDUSTRY_UPKEEP_DISCOUNT = 0.004`, `INDUSTRY_REPRO_DISCOUNT = 0.05`. All are starting values tuned in P3.
 
 ### Determinism recipe (V)
 
@@ -130,18 +130,18 @@ Run recipe **V**. The ratchet test passes; `determinism` PASSES WITHOUT refresh 
 
 # PHASE 2 — The tech-tree (stacking robust benefits)
 
-### Task 2.1: Efficiency, Tooling, Provisioning
+### Task 2.1: Named tech-tree — Domestication, Writing, Industrial Revolution
 
-All three gated on `world.cultural_inventions && is_inventive(genome) && has(Communicator)` and the level threshold. Golden-neutral.
+All gated on `world.cultural_inventions && is_inventive(genome) && has(Communicator)` and the level threshold. Golden-neutral.
 
-**Files:** `culture.rs` (thresholds + a `tech_tier` helper), `module.rs` (Efficiency), `interact.rs` (Tooling), `reproduce.rs` (Provisioning), `tests/inventions.rs`
+**Files:** `culture.rs` (thresholds + gating helper + Writing copy-rate), `interact.rs` (Domestication energy), `module.rs` (Industry upkeep), `reproduce.rs` (Industry repro), `tests/inventions.rs`
 
 **Interfaces:**
-- Produces: `culture` consts `EFFICIENCY_THRESHOLD=0.34`, `TOOLING_THRESHOLD=0.67`, `PROVISION_THRESHOLD=1.0`, `EFFICIENCY_DISCOUNT=0.004`, `TOOL_BONUS=0.3`, `PROVISION_DISCOUNT=0.05`; a helper to test each tier given `(genome, meme, has_comm, flag)`.
+- Produces: `culture` consts `DOMESTICATION_THRESHOLD=0.34`, `DOMESTICATION_ENERGY=0.15`, `WRITING_THRESHOLD=0.67`, `WRITING_COPY_BONUS=0.20`, `INDUSTRY_THRESHOLD=1.0`, `INDUSTRY_UPKEEP_DISCOUNT=0.004`, `INDUSTRY_REPRO_DISCOUNT=0.05`; `pub fn invention_active(flag, &Genome, &meme, has_comm, threshold) -> bool`.
 
 - [ ] **Step 1: Thresholds + a gating helper**
 
-In `culture.rs` add the six consts and:
+In `culture.rs` add the seven consts and:
 ```rust
 /// Does an agent currently benefit from the invention tier unlocked at `threshold`?
 pub fn invention_active(
@@ -152,37 +152,45 @@ pub fn invention_active(
 }
 ```
 
-- [ ] **Step 2: Failing tests (each benefit, thresholded + stacking)**
+- [ ] **Step 2: Failing tests (each invention, thresholded + stacking)**
 
-Add tests to `tests/inventions.rs`: (a) Efficiency reduces an inventive Communicator's per-tick upkeep by `EFFICIENCY_DISCOUNT` only when `inv ≥ 0.34` and flag on; (b) Tooling adds `TOOL_BONUS` energy on a graze only when `inv ≥ 0.67`; (c) Provisioning lowers the effective reproduction threshold only when `inv ≥ 1.0`; (d) all three active at `inv = 1.0`; (e) all inert when flag off or gene ≤ 0.5. Run → FAIL.
+Add tests to `tests/inventions.rs`: (a) **Domestication** adds `DOMESTICATION_ENERGY` energy per foraging tick only when `inv ≥ 0.34` and flag on; (b) **Writing** makes the invention social-copy step move faster (an agent copying from a higher-level neighbour gains more per step) only when `inv ≥ 0.67`; (c) **Industry** reduces an inventive Communicator's per-tick upkeep by `INDUSTRY_UPKEEP_DISCOUNT` AND lowers its effective reproduction threshold by `INDUSTRY_REPRO_DISCOUNT` only when `inv ≥ 1.0`; (d) all active at `inv = 1.0`; (e) all inert when flag off or gene ≤ 0.5. Run → FAIL.
 
-- [ ] **Step 3: Efficiency (module.rs upkeep)**
+- [ ] **Step 3: Domestication (interact.rs feed_pass)**
 
-In `module::upkeep_all` (where `total_upkeep` is deducted per agent), after computing the module upkeep sum, subtract the discount when the tier is active, clamped ≥ 0:
+In `feed_pass`, on a foraging tick, add the flat steady food income when the Domestication tier is active (ADDITIVE — reliable food independent of graze success, cannot saturate):
 ```rust
-if crate::culture::invention_active(world.cultural_inventions, g, meme, has_comm, crate::culture::EFFICIENCY_THRESHOLD) {
-    total = (total - crate::culture::EFFICIENCY_DISCOUNT).max(0.0);
+if crate::culture::invention_active(world.cultural_inventions, &world.agents.genome[i], &world.agents.meme_vector[i], is_comm, crate::culture::DOMESTICATION_THRESHOLD) {
+    world.agents.energy[i] += crate::culture::DOMESTICATION_ENERGY;
 }
 ```
-(Thread whatever `upkeep_all` needs — it already has `agents`; it must also see the `cultural_inventions` flag. If `upkeep_all` takes only `&mut AgentBuffers` today, change its signature to also take `cultural_inventions: bool` and update the one call site in `tick.rs`.)
 
-- [ ] **Step 4: Tooling (interact.rs feed_pass)**
+- [ ] **Step 4: Writing (culture.rs — accelerate the ratchet)**
 
-In `feed_pass`, after a successful graze yields energy, add the flat bonus when the Tooling tier is active:
+In `culture_step`, at the invention social-copy site added in Task 1.2, make the copy rate tier-dependent: when the copier has the Writing tier, use `INVENT_SOCIAL_RATE + WRITING_COPY_BONUS` instead of `INVENT_SOCIAL_RATE`:
 ```rust
-if crate::culture::invention_active(world.cultural_inventions, &world.agents.genome[i], &world.agents.meme_vector[i], is_comm, crate::culture::TOOLING_THRESHOLD) {
-    world.agents.energy[i] += crate::culture::TOOL_BONUS;
+let rate = if invention_active(world.cultural_inventions, g_i, meme_i, has_comm_i, WRITING_THRESHOLD) {
+    INVENT_SOCIAL_RATE + WRITING_COPY_BONUS
+} else {
+    INVENT_SOCIAL_RATE
+};
+// inv_i += rate * (best_neighbour_invention - inv_i);   // when best > inv_i
+```
+(Bounded by the `[0,1]` level cap; deterministic — no RNG, same ascending-id iteration.)
+
+- [ ] **Step 5: Industrial revolution (module.rs upkeep + reproduce.rs threshold)**
+
+In `module::upkeep_all` (per-agent upkeep deduction), when the Industry tier is active subtract the discount, clamped ≥ 0:
+```rust
+if crate::culture::invention_active(cultural_inventions, g, meme, has_comm, crate::culture::INDUSTRY_THRESHOLD) {
+    total = (total - crate::culture::INDUSTRY_UPKEEP_DISCOUNT).max(0.0);
 }
 ```
-This is ADDITIVE to gained energy (not a multiplier on the bite) — it cannot saturate.
-
-- [ ] **Step 5: Provisioning (reproduce.rs threshold)**
-
-In `reproduce_all`, where the reproduction-energy threshold is read from `GenomeSlot::ReproductionThreshold`, subtract `PROVISION_DISCOUNT` from the effective threshold when the Provisioning tier is active (clamped to a sane floor, e.g. `≥ 0.05`). Thread the flag + meme/genome/has_comm at that site.
+If `upkeep_all` takes only `&mut AgentBuffers` today, change its signature to also take `cultural_inventions: bool` and update the one call site in `tick.rs`. In `reproduce_all`, where the effective reproduction-energy threshold is read from `GenomeSlot::ReproductionThreshold`, subtract `INDUSTRY_REPRO_DISCOUNT` when the Industry tier is active (clamp to a sane floor, e.g. `≥ 0.05`).
 
 - [ ] **Step 6: Verify (golden-neutral) + commit**
 
-Run recipe **V**. Tech-tree tests pass; `determinism` PASSES WITHOUT refresh; `default_dims_byte_identical` green. Commit `feat(core): invention tech-tree — efficiency, tooling, provisioning`.
+Run recipe **V**. Tech-tree tests pass; `determinism` PASSES WITHOUT refresh; `default_dims_byte_identical` green. Commit `feat(core): named invention tech-tree — domestication, writing, industry`.
 
 ---
 
