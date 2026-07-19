@@ -40,7 +40,7 @@ pub fn step(world: &mut World) {
     interact_all(world);
 
     // M3: module upkeep — every alive agent pays for its modules.
-    crate::module::upkeep_all(&mut world.agents, world.cultural_inventions);
+    crate::module::upkeep_all(&mut world.agents);
 
     // Stage 6: reproduce. Mutates the alive set; do not rely on `cap` after
     // this point.
@@ -48,6 +48,10 @@ pub fn step(world: &mut World) {
 
     // Stage 6b: culture — meme transmission between communicators (§3.7 step 7).
     crate::culture::culture_step(world);
+
+    // Stage 6c: inventions — discovery rolls + per-holder upkeep/income/
+    // stress/pollution (opt-in; no-op when `inventions_enabled` is false).
+    crate::invention::invention_step(world);
 
     // Keep scratch sized to the post-reproduce capacity so end-of-tick detectors
     // (AlarmCall) that read actions/sensors/desired_direction see every agent —

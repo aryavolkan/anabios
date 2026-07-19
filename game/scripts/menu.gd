@@ -20,6 +20,8 @@ const SCENARIOS: Array[Dictionary] = [
 	{ "label": "DIT — Env fast (culture stale)", "path": "res://../scenarios/dit-env-fast.toml", "ground": 5, "body": 1 },
 	{ "label": "DIT — Env static (culture redundant)", "path": "res://../scenarios/dit-env-static.toml", "ground": 5, "body": 1 },
 	{ "label": "DIT — Rogers (imitators invade)", "path": "res://../scenarios/dit-rogers.toml", "ground": 5, "body": 1 },
+	# Invention tree
+	{ "label": "Inventions — innovators vs traditionalists", "path": "res://../scenarios/inventions.toml", "ground": 0, "body": 1 },
 ]
 
 @onready var scenario_pick: OptionButton = $VBox/ScenarioPick

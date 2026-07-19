@@ -46,4 +46,7 @@ func _process(_delta: float) -> void:
 		"learn: indiv=%s social=%s" % [str(info["indiv_learn"]), str(info["social_learn"])],
 		"modules: %s" % mod_str,
 	]
+	var held: Array = info.get("inventions", [])
+	if not held.is_empty():
+		lines.append("tech era %d: %s" % [int(info["tech_era"]), ", ".join(held)])
 	label.text = "\n".join(lines)

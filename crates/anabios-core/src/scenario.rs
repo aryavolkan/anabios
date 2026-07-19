@@ -22,10 +22,11 @@ pub struct Scenario {
     /// climate). `false` (default) leaves foraging behavior unchanged.
     #[serde(default)]
     pub biome_adaptation: bool,
-    /// Opt-in: enable the mutation-gated cultural-inventions mechanism.
-    /// `false` (default) leaves behavior unchanged.
+    /// Opt-in: enable the cultural invention tree (discovery + social spread
+    /// on the invention meme channels, with per-holder buffs/debuffs).
+    /// `false` (default) leaves culture unchanged.
     #[serde(default)]
-    pub cultural_inventions: bool,
+    pub inventions_enabled: bool,
     /// Opt-in: enable renewing biome (depleted cells recolonize from
     /// vegetated neighbours). `false` (default) leaves regrowth unchanged.
     #[serde(default)]
@@ -196,15 +197,15 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
             (m, starter_asocial_forager())
         }
-        // Mutation-gated cultural inventions (Task 3.1): identical to
-        // `cultural_forager`'s kit (starter_kit + Communicator, keeping
-        // Reproductive), matched against `asocial_forager` (the control) on
-        // everything except the Communicator module + the Inventiveness gene
-        // (see `archetype_genome`).
-        "inventive_forager" => {
+        // Invention-tree demo strategies: culture-bearing (starter_kit +
+        // Communicator, keeping Reproductive so lineages persist across
+        // generations) on the proven grazer foraging program; they differ
+        // only by learning-propensity / personality genome slots (see
+        // `archetype_genome`).
+        "innovator" | "traditionalist" => {
             let mut m = starter_kit();
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
-            (m, starter_asocial_forager())
+            (m, starter_grazer())
         }
         _ => (starter_kit(), starter_grazer()),
     }
@@ -227,9 +228,21 @@ fn archetype_genome(name: &str, g: &mut Genome) {
             g.set(GenomeSlot::IndividualLearning, 1.0);
             g.set(GenomeSlot::SocialLearning, 1.0);
         }
-        // Mutation-gated cultural inventions (Task 3.1): the culture cohort
-        // carries the Inventiveness gene, gating the invention ratchet.
-        "inventive_forager" => g.set(GenomeSlot::Inventiveness, 1.0),
+        // Invention-tree demo strategies. Innovators: high Openness (novelty
+        // drive feeds the discovery roll) and fast learners (skill growth
+        // feeds it too). Traditionalists: low Openness, slow individual
+        // learners — they rarely invent, but still adopt what neighbours
+        // discover (the social spread in `culture_step` is gene-free).
+        "innovator" => {
+            g.set(GenomeSlot::Openness, 0.9);
+            g.set(GenomeSlot::IndividualLearning, 1.0);
+            g.set(GenomeSlot::SocialLearning, 1.0);
+        }
+        "traditionalist" => {
+            g.set(GenomeSlot::Openness, 0.2);
+            g.set(GenomeSlot::IndividualLearning, 0.2);
+            g.set(GenomeSlot::SocialLearning, 0.8);
+        }
         _ => {}
     }
 }
@@ -260,7 +273,7 @@ impl Scenario {
         };
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
-        w.cultural_inventions = self.cultural_inventions;
+        w.inventions_enabled = self.inventions_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
         if let Some(cap) = self.max_population {

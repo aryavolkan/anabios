@@ -36,68 +36,6 @@ pub const SKILL_SOCIAL_RATE: f32 = 0.15;
 /// Extra feeding multiplier at full skill: bite *= 1 + SKILL_BONUS * skill.
 pub const SKILL_BONUS: f32 = 2.5;
 
-// --- Mutation-gated cultural inventions (ratchet: invent slowly solo, copy
-// fast socially) ---
-// A cumulative "invention level" that only an Inventiveness-gened Communicator
-// can push forward through its own foraging (slow), but that ANY inventive
-// Communicator can pick up fast from a more-advanced neighbour (social copy).
-// Gated end-to-end on `World.cultural_inventions` so it is fully inert
-// (byte-identical) unless a scenario opts in.
-/// Meme channel carrying the cumulative cultural INVENTION LEVEL in `[0,1]`.
-pub const INVENTION_CHANNEL: usize = 7;
-/// Slow solo progress per successful foraging tick (invent-from-scratch rate).
-pub const INVENT_RATE: f32 = 0.01;
-/// Fast copy rate toward the best inventive Communicator neighbour's level.
-pub const INVENT_SOCIAL_RATE: f32 = 0.15;
-/// `GenomeSlot::Inventiveness` above this gene value makes an agent capable of
-/// (solo) invention. `Genome::neutral()`'s 0.5 is NOT inventive (strict `>`).
-pub const INVENTIVE_THRESHOLD: f32 = 0.5;
-
-/// Whether this genome's `Inventiveness` gene clears the inventive threshold.
-pub fn is_inventive(g: &crate::genome::Genome) -> bool {
-    g.get(crate::genome::GenomeSlot::Inventiveness) > INVENTIVE_THRESHOLD
-}
-
-/// Read the cumulative invention level out of a meme vector.
-pub fn invention_level(meme: &[f32; MEME_CHANNELS]) -> f32 {
-    meme[INVENTION_CHANNEL]
-}
-
-// --- Named tech-tree: cumulative robust benefits unlocked at invention-level
-// tiers (Task 2.1). Each tier compounds on the ratchet above: Domestication
-// unlocks first (lowest bar), then Writing, then the Industrial Revolution
-// (requires the full ratchet). All three are gated end-to-end through
-// `invention_active` below, so flag-off / non-inventive / non-Communicator
-// agents are completely unaffected (golden-neutral).
-/// Invention-level tier at which Domestication (steady food income) unlocks.
-pub const DOMESTICATION_THRESHOLD: f32 = 0.34;
-/// Flat additive energy gained per foraging tick once Domestication is active.
-pub const DOMESTICATION_ENERGY: f32 = 0.15;
-/// Invention-level tier at which Writing (faster cultural transmission) unlocks.
-pub const WRITING_THRESHOLD: f32 = 0.67;
-/// Extra invention-copy rate added to `INVENT_SOCIAL_RATE` for a copier that
-/// has reached the Writing tier.
-pub const WRITING_COPY_BONUS: f32 = 0.20;
-/// Invention-level tier at which the Industrial Revolution (metabolic and
-/// reproductive efficiency) unlocks — the top of the ratchet.
-pub const INDUSTRY_THRESHOLD: f32 = 1.0;
-/// Per-tick module-upkeep discount once the Industry tier is active.
-pub const INDUSTRY_UPKEEP_DISCOUNT: f32 = 0.004;
-/// Reduction to the effective `ReproductionThreshold` gene once the Industry
-/// tier is active.
-pub const INDUSTRY_REPRO_DISCOUNT: f32 = 0.05;
-
-/// Does an agent currently benefit from the invention tier unlocked at `threshold`?
-pub fn invention_active(
-    flag: bool,
-    g: &crate::genome::Genome,
-    meme: &[f32; MEME_CHANNELS],
-    has_comm: bool,
-    threshold: f32,
-) -> bool {
-    flag && has_comm && is_inventive(g) && invention_level(meme) >= threshold
-}
-
 // --- DIT environmental-variability technique (experiment) ---
 // A culturally/genetically-carried foraging *technique* matched against a
 // possibly-shifting environmental optimum. Inert unless `World.env_period > 0`.
@@ -226,11 +164,10 @@ pub fn culture_step(world: &mut World) {
         let mut count = [0u32; MEME_CHANNELS];
         // Social learning: track the most-skilled Communicator neighbour.
         let mut max_neighbour_skill = 0.0f32;
-        // Cultural-inventions ratchet: track the highest invention level among
-        // inventive Communicator neighbours (only meaningful when the flag is
-        // on, but harmless to compute otherwise since it stays 0).
-        let inventions_on = world.cultural_inventions;
-        let mut best_neighbour_invention = 0.0f32;
+        // Invention spread: track the best (highest-level) neighbour level per
+        // invention channel — the copy-toward-best target, like the skill
+        // channel's rule.
+        let mut max_neighbour_inv = [0.0f32; crate::invention::INVENTION_COUNT];
         // DIT env mode: the current optimum, and the neighbour whose technique
         // best matches it (minimizes |tech - opt|). Only computed when active.
         let env_on = world.env_period > 0;
@@ -251,9 +188,10 @@ pub fn culture_step(world: &mut World) {
             }
             max_neighbour_skill =
                 max_neighbour_skill.max(world.agents.meme_vector[j][SKILL_CHANNEL]);
-            if inventions_on && is_inventive(&world.agents.genome[j]) {
-                best_neighbour_invention =
-                    best_neighbour_invention.max(world.agents.meme_vector[j][INVENTION_CHANNEL]);
+            if world.inventions_enabled {
+                for (k, best) in max_neighbour_inv.iter_mut().enumerate() {
+                    *best = best.max(world.agents.meme_vector[j][crate::invention::channel(k)]);
+                }
             }
             if env_on {
                 let tech = world.agents.meme_vector[j][TECH_CHANNEL];
@@ -264,27 +202,32 @@ pub fn culture_step(world: &mut World) {
                 }
             }
         });
+        // Writing buff: the holder's meme copy rate and invention spread rate
+        // are doubled (literacy accelerates all cultural transmission).
+        let self_mask = if world.inventions_enabled {
+            crate::invention::held_mask(&world.agents.meme_vector[i])
+        } else {
+            0
+        };
+        let meme_copy_rate = MEME_COPY_RATE * crate::invention::spread_multiplier(self_mask);
         for ch in 0..MEME_CHANNELS {
-            // The skill, technique, and invention channels carry cumulative
-            // learned values transmitted by their own social-learning rules
-            // below — they must NOT be dragged toward the broadcast mean by
-            // the generic meme lerp (which would pull them toward 0 and fight
-            // individual learning). The invention exclusion is itself gated on
-            // `cultural_inventions`: unlike SKILL/TECH, channel 7 can still be
-            // touched by ordinary structural-mutation Communicators when the
-            // flag is off (e.g. minimal.toml), so unconditionally excluding it
-            // would change pre-existing (flag-off) behaviour and move the
-            // golden hashes. Gating keeps flag-off byte-identical.
+            // The skill and technique channels carry cumulative learned values
+            // transmitted by their own social-learning rules below — they must NOT
+            // be dragged toward the broadcast mean by the generic meme lerp (which
+            // would pull them toward 0 and fight individual learning). Invention
+            // channels (8..MEME_CHANNELS) likewise have their own spread rule
+            // (copy-toward-best); they didn't exist before the tree, so
+            // excluding them unconditionally is flag-off neutral.
             if ch == SKILL_CHANNEL
                 || ch == TECH_CHANNEL
-                || (ch == INVENTION_CHANNEL && inventions_on)
+                || crate::invention::is_invention_channel(ch)
             {
                 continue;
             }
             if count[ch] > 0 {
                 let received = sum[ch] / count[ch] as f32;
                 let cur = world.agents.meme_vector[i][ch];
-                world.agents.meme_vector[i][ch] = cur + MEME_COPY_RATE * (received - cur);
+                world.agents.meme_vector[i][ch] = cur + meme_copy_rate * (received - cur);
             }
         }
         // Social learning of the foraging skill: copy toward the most-skilled
@@ -295,32 +238,22 @@ pub fn culture_step(world: &mut World) {
             world.agents.meme_vector[i][SKILL_CHANNEL] =
                 cur_skill + SKILL_SOCIAL_RATE * (max_neighbour_skill - cur_skill);
         }
-        // Cultural-inventions ratchet: an inventive Communicator copies fast
-        // from the best-inventing Communicator neighbour (much faster than its
-        // own slow solo invention in `feed_pass`) — the "ratchet" that lets a
-        // rare breakthrough spread through the population instead of staying
-        // locked to the inventor who found it.
-        if inventions_on && is_inventive(&world.agents.genome[i]) {
-            let cur = world.agents.meme_vector[i][INVENTION_CHANNEL];
-            if best_neighbour_invention > cur {
-                // Writing tier (Task 2.1): a copier who has already reached the
-                // Writing invention level transmits/absorbs faster — the copy
-                // rate itself compounds on the ratchet. `has_comm` is always
-                // `true` here: this loop already `continue`d past every agent
-                // lacking a Communicator module above.
-                let rate = if invention_active(
-                    inventions_on,
-                    &world.agents.genome[i],
-                    &world.agents.meme_vector[i],
-                    true,
-                    WRITING_THRESHOLD,
-                ) {
-                    INVENT_SOCIAL_RATE + WRITING_COPY_BONUS
-                } else {
-                    INVENT_SOCIAL_RATE
-                };
-                world.agents.meme_vector[i][INVENTION_CHANNEL] =
-                    (cur + rate * (best_neighbour_invention - cur)).clamp(0.0, 1.0);
+        // Invention spread: copy each adoptable invention toward the
+        // best-holding neighbour's level (learn-from-the-expert, the same
+        // rule as the skill channel). Prereq-gated on the receiver's own
+        // held mask, so the tree can't be skipped socially either.
+        if world.inventions_enabled {
+            let rate = crate::invention::INVENTION_SPREAD_RATE
+                * crate::invention::spread_multiplier(self_mask);
+            for (k, &target) in max_neighbour_inv.iter().enumerate() {
+                if crate::invention::INVENTIONS[k].prereqs & !self_mask != 0 {
+                    continue; // missing foundations
+                }
+                let ch = crate::invention::channel(k);
+                let cur = world.agents.meme_vector[i][ch];
+                if target > cur {
+                    world.agents.meme_vector[i][ch] = cur + rate * (target - cur);
+                }
             }
         }
         // DIT env mode: social learners copy the technique toward the best-matched

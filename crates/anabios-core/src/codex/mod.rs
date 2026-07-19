@@ -20,6 +20,7 @@ use crate::world::World;
 
 mod combat;
 mod culture;
+mod invention;
 mod population;
 mod spatial;
 
@@ -133,6 +134,11 @@ pub enum EventType {
     /// A species maintains persistently high mean per-member same-species crowding
     /// over a full HERD_WINDOW window.
     HerdCohesion = 16,
+    /// First agent in the world to hold an invention (`value` = invention id).
+    InventionDiscovered = 17,
+    /// An invention crosses ≥50% adoption inside a species (`value` =
+    /// invention id).
+    InventionAdopted = 18,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -228,6 +234,12 @@ pub struct CodexState {
     pub herd_crowding: BTreeMap<u32, VecDeque<f32>>,
     /// Species currently latched as exhibiting herd cohesion.
     pub herd_active: BTreeSet<u32>,
+    /// Inventions discovered at least once anywhere in the world (latched;
+    /// `InventionDiscovered` fires once per invention id).
+    pub inventions_discovered: BTreeSet<u8>,
+    /// (species, invention) pairs currently latched as adopted (≥50% of the
+    /// species holds it). Re-arms when adoption drops below the threshold.
+    pub inventions_adopted: BTreeSet<(u32, u8)>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -377,6 +389,9 @@ pub struct SpeciesAgg {
     pub crowding_sum: f64,
     pub weapon_sum: f64,
     pub armor_sum: f64,
+    /// Per-invention count of members at or above the held threshold (for
+    /// `InventionAdopted`). All zero when the invention tree is inactive.
+    pub invention_counts: [u32; crate::invention::INVENTION_COUNT],
 }
 
 impl SpeciesAgg {
@@ -394,6 +409,7 @@ impl SpeciesAgg {
         self.crowding_sum = 0.0;
         self.weapon_sum = 0.0;
         self.armor_sum = 0.0;
+        self.invention_counts = [0; crate::invention::INVENTION_COUNT];
     }
 
     /// This tick's centroid (mean alive position), `(0,0)` when empty.
@@ -466,6 +482,10 @@ impl SpeciesAggTable {
             }
             if sensors_ok {
                 e.crowding_sum += world.sensors[i].crowding as f64;
+            }
+            if world.inventions_enabled {
+                let inv_mask = crate::invention::held_mask(&world.agents.meme_vector[i]);
+                crate::invention::for_each_set_bit(inv_mask, |k| e.invention_counts[k] += 1);
             }
             e.weapon_sum += module::effective_weapon(modules).map(|(d, _)| d).unwrap_or(0.0) as f64;
             e.armor_sum += module::effective_armor_protection(modules) as f64;
@@ -542,6 +562,7 @@ pub fn observe_all(world: &mut World) {
     culture::detect_meme_sweep(world, &agg);
     culture::detect_alarm_call(world);
     culture::detect_evolved_cooperation(world, &agg);
+    invention::detect_inventions(world, &agg);
     combat::detect_pack_hunting(world, &agg);
     spatial::detect_herd_cohesion(world, &agg);
 

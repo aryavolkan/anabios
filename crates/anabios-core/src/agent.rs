@@ -51,6 +51,8 @@ pub struct AgentBuffers {
     pub program: Vec<Program>,
     /// Per-agent cultural state; transmitted by `culture_step`, read by
     /// `SenseMeme`. Zeroed on spawn; only Communicator agents change it.
+    /// Channels `invention::INVENTION_CHANNEL_BASE..` carry the invention
+    /// tree's adoption levels.
     pub meme_vector: Vec<[f32; crate::program::MEME_CHANNELS]>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,

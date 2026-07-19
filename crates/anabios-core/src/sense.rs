@@ -154,7 +154,12 @@ fn sense_one(
     let i = id as usize;
     let pos = agents.position[i];
     let genome = &agents.genome[i];
-    let radius = perception_radius(&agents.modules[i], genome, max_radius);
+    // Electricity buff: powered sensors extend perception (identity at mask 0).
+    let radius = perception_radius(&agents.modules[i], genome, max_radius)
+        * crate::invention::perception_multiplier(crate::invention::held_mask(
+            &agents.meme_vector[i],
+        ));
+    let radius = radius.min(max_radius);
     if radius <= 0.0 {
         return SensorRegister::default();
     }

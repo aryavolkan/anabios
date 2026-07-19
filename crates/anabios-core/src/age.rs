@@ -16,7 +16,10 @@ pub fn age_and_starve(world: &mut crate::world::World) {
         let i = id as usize;
         world.agents.age[i] = world.agents.age[i].saturating_add(1);
 
-        let lifespan = lifespan_of(&world.agents.genome[i]);
+        let lifespan = (lifespan_of(&world.agents.genome[i]) as f32
+            * crate::invention::lifespan_multiplier(crate::invention::held_mask(
+                &world.agents.meme_vector[i],
+            ))) as u32;
         let died =
             if world.agents.energy[i] <= 0.0 { true } else { world.agents.age[i] >= lifespan };
 

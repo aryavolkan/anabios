@@ -32,8 +32,12 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], worl
         // Action gating: no Locomotor → no motion.
         if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Locomotor) {
             agents.velocity[i] = Vec2::ZERO;
-            // Still pay basal metabolism.
-            let basal = BASAL_METABOLISM_COST * agents.genome[i].get(GenomeSlot::BasalMetabolism);
+            // Still pay basal metabolism (invention debuffs scale it).
+            let basal = BASAL_METABOLISM_COST
+                * agents.genome[i].get(GenomeSlot::BasalMetabolism)
+                * crate::invention::metabolism_multiplier(crate::invention::held_mask(
+                    &agents.meme_vector[i],
+                ));
             agents.energy[i] -= basal;
             continue;
         }
@@ -42,7 +46,10 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], worl
         let module_speed = crate::module::effective_speed_max(&agents.modules[i]).clamp(0.0, 1.0);
         // Openness scales effective speed (identity at neutral personality).
         let speed_factor = crate::personality::personality_speed_factor(&agents.genome[i]);
-        let v = direction * (SPEED_MAX_CAP * module_speed * speed_factor);
+        // Machinery buff: powered locomotion.
+        let inv_speed =
+            crate::invention::speed_multiplier(crate::invention::held_mask(&agents.meme_vector[i]));
+        let v = direction * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed);
         agents.velocity[i] = v;
 
         let new_pos = agents.position[i] + v;
@@ -51,7 +58,11 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], worl
         let move_dist = v.length();
         let size = agents.genome[i].get(GenomeSlot::Size).max(0.1);
         let move_cost = MOVE_ENERGY_COST * move_dist * size;
-        let basal = BASAL_METABOLISM_COST * agents.genome[i].get(GenomeSlot::BasalMetabolism);
+        let basal = BASAL_METABOLISM_COST
+            * agents.genome[i].get(GenomeSlot::BasalMetabolism)
+            * crate::invention::metabolism_multiplier(crate::invention::held_mask(
+                &agents.meme_vector[i],
+            ));
         agents.energy[i] -= move_cost + basal;
     }
     agents.scratch_ids = ids;

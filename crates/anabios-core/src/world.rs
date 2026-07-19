@@ -57,11 +57,12 @@ pub struct World {
     /// bincode/`FORMAT_VERSION` caveat as `env_period`.
     #[serde(default)]
     pub biome_adaptation: bool,
-    /// When true, the mutation-gated cultural-inventions mechanism is active.
-    /// Off by default; opt-in per scenario. Defaulted so old snapshots
-    /// without this field still deserialize.
+    /// When true, the cultural invention tree is active: Communicator agents
+    /// discover inventions (innovation roll) and copy them socially, with
+    /// per-holder buffs/debuffs. Off by default; opt-in per scenario.
+    /// Defaulted so old snapshots without this field still deserialize.
     #[serde(default)]
-    pub cultural_inventions: bool,
+    pub inventions_enabled: bool,
     /// When true, depleted biome cells recolonize from vegetated neighbours
     /// each biome step (`BiomeField::recolonize_step`), before regrowth. Off
     /// by default; opt-in per scenario. Defaulted so old snapshots without
@@ -167,7 +168,7 @@ impl World {
             pheromones: crate::pheromone::PheromoneField::new(),
             env_period: 0,
             biome_adaptation: false,
-            cultural_inventions: false,
+            inventions_enabled: false,
             living_biome: false,
             season_period: 0,
             max_population: crate::reproduce::MAX_POPULATION,

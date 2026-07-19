@@ -17,8 +17,12 @@ use crate::world::World;
 /// old payloads; it only helps self-describing formats.
 /// v2: BiomeCell.env climate field + World.biome_adaptation/env_period.
 /// v3: World.max_population.
-/// v4: World.cultural_inventions flag.
-pub const FORMAT_VERSION: u32 = 4;
+/// v4: World.cultural_inventions flag (superseded by v5).
+/// v5: the cultural-inventions ratchet is replaced by the full invention
+///     tree: MEME_CHANNELS widened 8→18 (inventions ride meme channels),
+///     BiomeCell.pollution, World.inventions_enabled (renamed from
+///     cultural_inventions), CodexState invention latches.
+pub const FORMAT_VERSION: u32 = 5;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

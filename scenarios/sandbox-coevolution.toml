@@ -5,17 +5,18 @@ biome_res = 256
 hash_res = 128
 living_biome = true
 season_period = 2500
-cultural_inventions = true
+inventions_enabled = true
 max_population = 8000
 
-# Culture cohort: Inventiveness gene + Communicator → the invention ratchet
-# (domestication / writing / industry) climbs and stacks robust benefits.
+# Culture cohort: high-Openness innovators + Communicator → the invention
+# tree (stone tools → … → nuclear power) climbs, with buffs and debuffs.
 [[agents]]
 count = 700
 placement = { kind = "uniform" }
-archetype = "inventive_forager"
+archetype = "innovator"
 
-# Asocial control: identical starter kit, no gene, no Communicator.
+# Asocial control: identical starter kit, no Communicator — the pre-invention
+# baseline.
 [[agents]]
 count = 700
 placement = { kind = "uniform" }

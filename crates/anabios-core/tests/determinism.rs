@@ -34,8 +34,14 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-18: added World.cultural_inventions flag + renamed genome
 // slot 42 to Inventiveness (flag off = byte-identical; only serialized layout
 // grew — the slot value semantics are unchanged).
+// Refreshed 2026-07-19: the cultural-inventions ratchet is replaced by the
+// full invention tree — MEME_CHANNELS widened 8→18 (inventions ride meme
+// channels), BiomeCell.pollution, World.cultural_inventions renamed to
+// inventions_enabled, genome slot 42 back to reserved, CodexState invention
+// latches. Flag-off behavior unchanged (identity multipliers at mask 0, zero
+// invention RNG draws); serialized layout changed, so all three hashes moved.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x658c24c37e37122d), (100, 0x486eb08475de250f), (1000, 0xcc8ddc27eb59212a)];
+    &[(0, 0xe51e55efb59c20ed), (100, 0x26b7b341a207605f), (1000, 0x83b82e2f3a71d0f5)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

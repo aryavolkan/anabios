@@ -4,7 +4,8 @@ const UiTheme = preload("res://scripts/ui_theme.gd")
 const CHAPTER_NAMES: PackedStringArray = [
 	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior",
 	"Predation", "CombatRaid", "ArmsRace", "Territory", "NichePartition",
-	"Dialect", "MemeSweep", "AlarmCall", "Cooperation", "PackHunting", "HerdCohesion"
+	"Dialect", "MemeSweep", "AlarmCall", "Cooperation", "PackHunting", "HerdCohesion",
+	"Discovery", "Adoption"
 ]
 # One color per event type so the timeline is scannable at a glance (matches
 # the co-evolution chart's marker hues where they overlap).
@@ -26,6 +27,8 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.6, 1.0, 0.7),     # 14 Cooperation — mint
 	Color(0.85, 0.7, 0.5),    # 15 PackHunting — tan
 	Color(0.6, 0.8, 1.0),     # 16 HerdCohesion — sky
+	Color(1.0, 0.9, 0.35),    # 17 Discovery  — gold
+	Color(0.55, 0.95, 1.0),   # 18 Adoption   — light sky
 ]
 const MAX_RECENT: int = 30
 

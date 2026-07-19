@@ -1,5 +1,6 @@
 //! Headless runner for anabios scenarios.
 
+mod demo;
 mod sweep;
 
 use std::io::Write;
@@ -57,6 +58,22 @@ enum Command {
         #[arg(long)]
         threads: Option<usize>,
     },
+    /// Narrate the cultural invention race: stream discovery/adoption events
+    /// and periodic per-species tech tables. Best with
+    /// `scenarios/inventions.toml`.
+    Demo {
+        #[arg(long)]
+        scenario: PathBuf,
+        /// Number of ticks to run. Default 8000 (enough for era 3+).
+        #[arg(long, default_value_t = 8000)]
+        ticks: u64,
+        /// Optional explicit seed; overrides the scenario seed.
+        #[arg(long)]
+        seed: Option<u64>,
+        /// Ticks between per-species tech reports. Default 1000.
+        #[arg(long, default_value_t = 1000)]
+        report_every: u64,
+    },
 }
 
 fn main() -> Result<()> {
@@ -68,6 +85,9 @@ fn main() -> Result<()> {
         Command::Info { scenario } => info(scenario),
         Command::Sweep { scenario, seeds, ticks, out, threads } => {
             sweep::run(scenario, seeds, ticks, out, threads)
+        }
+        Command::Demo { scenario, ticks, seed, report_every } => {
+            demo::run(scenario, ticks, seed, report_every)
         }
     }
 }
