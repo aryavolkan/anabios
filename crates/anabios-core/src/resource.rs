@@ -15,32 +15,33 @@ pub const GOOD_COUNT: usize = 4;
 pub const RESOURCE_STEP_INTERVAL: u64 = 10;
 /// Random placement attempts per spawn step (fixed → deterministic RNG draw count).
 pub const NODE_SPAWN_ATTEMPTS: usize = 64;
+/// Radius (world units) around a randomly-chosen alive agent within which a new
+/// resource node is placed. Nodes spawn NEAR the population so supply density
+/// tracks where agents are, rather than being scattered uniformly across a
+/// mostly-empty map.
+pub const SPAWN_NEAR_RADIUS: f32 = 25.0;
 /// Target live node count per good; spawning stops adding a good at/above this.
-/// Unchanged at 80: turnover testing (basket-accumulating `pick_swap` +
-/// `DOWRY_REQ` = 2.0) showed this ceiling isn't the bottleneck — a scarce
-/// terrain's live node count near any one cluster is already far below it,
-/// so lowering it (tried 60) starved the trade scenario without freeing up
-/// any other resource; the real limiter is map-area fraction per terrain.
-pub const NODE_TARGET_PER_GOOD: usize = 80;
+/// Lowered from 80 now that nodes spawn near the population (see
+/// `SPAWN_NEAR_RADIUS`): density-aware placement means the agent cluster's
+/// local node count reaches this ceiling much sooner, so a smaller target is
+/// enough to keep supply flowing without over-provisioning the map.
+pub const NODE_TARGET_PER_GOOD: usize = 40;
 /// Hard cap on total live nodes.
 pub const NODE_MAX_TOTAL: usize = 400;
-/// Amount a fresh node carries. Raised from 200: basket-accumulating
-/// `pick_swap` (deficit valuation, see `want` below) fixed the old
-/// equal-holdings absorbing state, but `DOWRY_REQ` doubling (1.0 -> 2.0)
-/// doubles the raw goods each agent needs, and that dominates. Turnover
-/// testing showed 200 (and everything below it down to 40) fails to produce
-/// a `DowryBirth` in the trade scenario's 600-tick window; 225 clears it with
-/// margin (first dowry birth ~tick 507, several agents holding a full basket
-/// by the end) — a modest supply increase, not the hoped-for decrease.
-pub const NODE_START_AMOUNT: f32 = 225.0;
+/// Amount a fresh node carries. Lowered from 225 now that nodes spawn near the
+/// agent population (see `SPAWN_NEAR_RADIUS`) instead of scattered uniformly
+/// across the map: the old inflated value compensated for nodes rarely
+/// landing near the co-located cluster, which density-aware spawning fixes
+/// directly. Turnover testing with near-agent spawning shows 20.0 clears the
+/// trade scenario's dowry-birth bar with margin.
+pub const NODE_START_AMOUNT: f32 = 20.0;
 /// Max distance an agent can harvest a node from (world units).
 pub const HARVEST_RANGE: f32 = 2.0;
-/// Max amount harvested from a node per tick per agent. Unchanged at 5.0:
-/// turnover testing showed the per-tick harvest rate has much less leverage
-/// on `DowryBirth` reachability than total node supply (`NODE_START_AMOUNT`)
-/// does — raising it alone (to 6.0, 7.0) while lowering start amount did not
-/// recover a passing run, so it stays at its prior value.
-pub const HARVEST_RATE: f32 = 5.0;
+/// Max amount harvested from a node per tick per agent. Lowered from 5.0 now
+/// that nodes spawn near the agent population (see `SPAWN_NEAR_RADIUS`):
+/// agents reach nodes far more often, so a smaller per-tick harvest still
+/// clears the trade scenario's dowry-birth bar.
+pub const HARVEST_RATE: f32 = 1.0;
 /// Base per-agent carrying capacity (summed across all goods).
 pub const INVENTORY_BASE_CAP: f32 = 12.0;
 /// Extra carrying capacity granted by a `Storage` module.
@@ -138,17 +139,26 @@ pub fn resource_step(world: &mut World) {
         counts[r.kind.index()] += 1;
     }
 
-    // Fixed attempt budget → fixed RNG draw count per step (2 draws/attempt),
-    // independent of how many actually land, keeping the stream deterministic.
+    // Snapshot alive agents (ascending → deterministic). Nodes spawn NEAR a
+    // random agent so supply density tracks the population. No agents → no
+    // new nodes.
+    let alive: Vec<usize> = world.agents.iter_alive().map(|id| id as usize).collect();
+    if alive.is_empty() {
+        return;
+    }
+
+    // Fixed 3 RNG draws per attempt (agent pick, angle, radius) regardless of
+    // outcome, keeping the draw count independent of node count.
     for _ in 0..NODE_SPAWN_ATTEMPTS {
+        let pick = (world.rng.f32_range(0.0, alive.len() as f32) as usize).min(alive.len() - 1);
+        let angle = world.rng.f32_range(0.0, std::f32::consts::TAU);
+        let radius = world.rng.f32_range(0.0, SPAWN_NEAR_RADIUS);
         if world.resources.len() >= NODE_MAX_TOTAL {
-            // Still draw so the RNG stream does not depend on the early exit.
-            let _ = world.rng.f32_range(0.0, world.world_size);
-            let _ = world.rng.f32_range(0.0, world.world_size);
             continue;
         }
-        let x = world.rng.f32_range(0.0, world.world_size);
-        let y = world.rng.f32_range(0.0, world.world_size);
+        let center = world.agents.position[alive[pick]];
+        let x = (center.x + radius * crate::mathf::cosf(angle)).rem_euclid(world.world_size);
+        let y = (center.y + radius * crate::mathf::sinf(angle)).rem_euclid(world.world_size);
         let pos = crate::prelude::Vec2::new(x, y);
         let Some(good) = Good::from_terrain(world.biome.sample(pos).terrain) else {
             continue;
@@ -181,6 +191,12 @@ mod tests {
     fn resource_step_spawns_nodes_in_matching_terrain() {
         let mut w = World::new(7);
         w.resources_enabled = true;
+        // Nodes now spawn near agents; seed a population first.
+        for k in 0..20u32 {
+            let x = (k as f32 * 53.0) % w.world_size;
+            let y = (k as f32 * 97.0) % w.world_size;
+            w.spawn_agent(crate::prelude::Vec2::new(x, y), crate::genome::Genome::neutral());
+        }
         for _ in 0..50 {
             resource_step(&mut w);
         }
@@ -202,6 +218,12 @@ mod tests {
     fn resource_step_removes_depleted_nodes() {
         let mut w = World::new(7);
         w.resources_enabled = true;
+        // Nodes now spawn near agents; seed a population first.
+        for k in 0..20u32 {
+            let x = (k as f32 * 53.0) % w.world_size;
+            let y = (k as f32 * 97.0) % w.world_size;
+            w.spawn_agent(crate::prelude::Vec2::new(x, y), crate::genome::Genome::neutral());
+        }
         resource_step(&mut w);
         let before = w.resources.len();
         assert!(before > 0);
