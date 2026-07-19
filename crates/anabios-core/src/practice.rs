@@ -135,13 +135,12 @@ pub fn discover_step(world: &mut World) {
         let openness = world.agents.genome[i].get(GenomeSlot::Openness);
         let mut total = 0.0f32;
         let mut probs = [0.0f32; PRACTICE_COUNT];
-        for p in 0..PRACTICE_COUNT {
+        for (p, prob) in probs.iter_mut().enumerate() {
             if has(&world.agents.meme_vector[i], p) {
                 continue;
             }
-            let pr = (PRACTICE_BASE_DISCOVERY * openness).min(DISCOVERY_CAP);
-            probs[p] = pr;
-            total += pr;
+            *prob = (PRACTICE_BASE_DISCOVERY * openness).min(DISCOVERY_CAP);
+            total += *prob;
         }
         if total <= 0.0 {
             continue;
