@@ -15,9 +15,11 @@
 //! type that currently just pays upkeep. Every module pays per-tick
 //! upkeep when present.
 //!
-//! All parameters are `f32` in `[0, 1]` and are perturbed by Gaussian
-//! mutation during reproduction. Whole-module mutation (add, delete,
-//! duplicate, replace) is also applied with low probability.
+//! Most parameters are `f32` in `[0, 1]`; combat parameters (weapon damage
+//! and energy cost, armor protection) evolve over wider ranges — see
+//! `DAMAGE_MAX` / `ENERGY_COST_MAX` / `PROTECTION_MAX`. All parameters are
+//! perturbed by Gaussian mutation during reproduction. Whole-module mutation
+//! (add, delete, duplicate, replace) is also applied with low probability.
 
 use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
@@ -42,6 +44,16 @@ pub const REPLACE_MODULE_PROB: f32 = 0.01;
 
 /// Gaussian sigma when perturbing a single module parameter.
 pub const PARAM_SIGMA: f32 = 0.05;
+
+/// Upper bounds for combat-relevant module parameters under mutation. Most
+/// module parameters live in `[0, 1]`, but founder kits carry weapon damage
+/// of 4–14 and costs of 1–2 — clamping those to 1.0 on the first mutation
+/// would collapse every armed lineage's damage within a generation instead
+/// of letting it evolve. These caps keep combat traits perturbable around
+/// their founder values (and let armor meaningfully contest them).
+pub const DAMAGE_MAX: f32 = 16.0;
+pub const ENERGY_COST_MAX: f32 = 4.0;
+pub const PROTECTION_MAX: f32 = 8.0;
 
 /// Effective reach (world units) of each weapon type in `combat_pass`.
 /// `Weapon` fights at contact range; `Jaws` is point-blank; `Spines` is the
@@ -480,13 +492,17 @@ pub fn effective_communicator_range(modules: &ModuleList) -> f32 {
 }
 
 /// Perturb every parameter of `module` with probability `MUTATE_PARAM_PROB`,
-/// drawing perturbations from `N(0, PARAM_SIGMA)` and clamping back into
-/// `[0, 1]`. Per-slot decisions consume the RNG in a fixed order so the
-/// result is deterministic.
+/// drawing perturbations from `N(0, PARAM_SIGMA)` and clamping back into its
+/// range — `[0, 1]` for most parameters, `[0, *_MAX]` for combat parameters
+/// (see `DAMAGE_MAX`). Per-slot decisions consume the RNG in a fixed order
+/// so the result is deterministic.
 pub fn mutate_params(module: &mut Module, rng: &mut Rng) {
     fn perturb(v: &mut f32, rng: &mut Rng) {
+        perturb_max(v, rng, 1.0);
+    }
+    fn perturb_max(v: &mut f32, rng: &mut Rng, max: f32) {
         if rng.f32_unit() < MUTATE_PARAM_PROB {
-            *v = (*v + rng.gaussian(0.0, PARAM_SIGMA)).clamp(0.0, 1.0);
+            *v = (*v + rng.gaussian(0.0, PARAM_SIGMA)).clamp(0.0, max);
         }
     }
     match module {
@@ -503,20 +519,20 @@ pub fn mutate_params(module: &mut Module, rng: &mut Rng) {
             perturb(diet_affinity, rng);
         }
         Module::Weapon { damage, energy_cost } => {
-            perturb(damage, rng);
-            perturb(energy_cost, rng);
+            perturb_max(damage, rng, DAMAGE_MAX);
+            perturb_max(energy_cost, rng, ENERGY_COST_MAX);
         }
         Module::Spines { damage, energy_cost, range } => {
-            perturb(damage, rng);
-            perturb(energy_cost, rng);
+            perturb_max(damage, rng, DAMAGE_MAX);
+            perturb_max(energy_cost, rng, ENERGY_COST_MAX);
             perturb(range, rng);
         }
         Module::Jaws { damage, energy_cost } => {
-            perturb(damage, rng);
-            perturb(energy_cost, rng);
+            perturb_max(damage, rng, DAMAGE_MAX);
+            perturb_max(energy_cost, rng, ENERGY_COST_MAX);
         }
         Module::Armor { protection, mass_penalty } => {
-            perturb(protection, rng);
+            perturb_max(protection, rng, PROTECTION_MAX);
             perturb(mass_penalty, rng);
         }
         Module::Storage { capacity } => {
@@ -688,6 +704,30 @@ mod tests {
         let br = bruiser_kit();
         assert!(has(&br, ModuleType::Jaws) && has(&br, ModuleType::Armor));
         assert!(has(&br, ModuleType::Reproductive));
+    }
+
+    #[test]
+    fn mutation_preserves_founder_combat_param_scale() {
+        // Founder kits carry damage 4–14 / costs 1–2. Before the combat caps,
+        // the first mutation clamped them to 1.0, collapsing every armed
+        // lineage's damage within a generation.
+        let mut rng = Rng::from_seed(42);
+        let mut jaws = Module::Jaws { damage: 14.0, energy_cost: 2.0 };
+        for _ in 0..20 {
+            mutate_params(&mut jaws, &mut rng);
+        }
+        let Module::Jaws { damage, energy_cost } = jaws else { unreachable!() };
+        assert!(
+            damage > 1.0 && damage <= DAMAGE_MAX,
+            "damage evolves around the founder scale: {damage}"
+        );
+        assert!(energy_cost > 1.0 && energy_cost <= ENERGY_COST_MAX);
+        let mut armor = Module::Armor { protection: 1.0, mass_penalty: 0.2 };
+        for _ in 0..20 {
+            mutate_params(&mut armor, &mut rng);
+        }
+        let Module::Armor { protection, .. } = armor else { unreachable!() };
+        assert!((0.0..=PROTECTION_MAX).contains(&protection));
     }
 
     #[test]

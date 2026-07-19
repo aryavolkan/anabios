@@ -542,4 +542,16 @@ terrain_affinity = 0.87
         let off = Scenario::parse_toml("name=\"t\"\nseed=1\n").expect("parse").instantiate();
         assert!(!off.terrain_habitat);
     }
+
+    #[test]
+    fn new_weapon_archetypes_resolve_to_their_kits() {
+        use crate::module::{has, ModuleType};
+        let (sp_mods, _) = archetype_kit("spiner");
+        assert!(has(&sp_mods, ModuleType::Spines), "spiner archetype carries Spines");
+        assert!(has(&sp_mods, ModuleType::Reproductive), "spiner lineage can establish");
+        let (br_mods, _) = archetype_kit("bruiser");
+        assert!(has(&br_mods, ModuleType::Jaws), "bruiser archetype carries Jaws");
+        assert!(has(&br_mods, ModuleType::Armor), "bruiser archetype is armored");
+        assert!(has(&br_mods, ModuleType::Reproductive), "bruiser lineage can establish");
+    }
 }
