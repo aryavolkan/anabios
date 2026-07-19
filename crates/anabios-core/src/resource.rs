@@ -87,6 +87,17 @@ impl Good {
             TerrainType::Water => None,
         }
     }
+
+    /// The home terrain where this good spawns (inverse of `from_terrain`).
+    #[inline]
+    pub fn home_terrain(self) -> TerrainType {
+        match self {
+            Good::Salt => TerrainType::Desert,
+            Good::Obsidian => TerrainType::Rock,
+            Good::Amber => TerrainType::Forest,
+            Good::Spice => TerrainType::Grass,
+        }
+    }
 }
 
 /// A discrete resource node on the map.
@@ -121,6 +132,14 @@ pub fn carrying_cap(modules: &crate::module::ModuleList) -> f32 {
         cap += INVENTORY_STORAGE_BONUS;
     }
     cap
+}
+
+/// The good (hence home terrain) an agent with the given `TerrainAffinity`
+/// gene value prefers. Splits [0,1] into `GOOD_COUNT` equal bands.
+#[inline]
+pub fn preferred_good(affinity: f32) -> Good {
+    let idx = ((affinity * GOOD_COUNT as f32) as usize).min(GOOD_COUNT - 1);
+    Good::ALL[idx]
 }
 
 /// Spawn new resource nodes in their home terrain and remove depleted ones.
@@ -269,5 +288,21 @@ mod tests {
         with_storage.push(crate::module::Module::Storage { capacity: 1.0 });
         assert_eq!(carrying_cap(&base), INVENTORY_BASE_CAP);
         assert_eq!(carrying_cap(&with_storage), INVENTORY_BASE_CAP + INVENTORY_STORAGE_BONUS);
+    }
+
+    #[test]
+    fn home_terrain_inverts_from_terrain() {
+        for g in Good::ALL {
+            assert_eq!(Good::from_terrain(g.home_terrain()), Some(g));
+        }
+    }
+
+    #[test]
+    fn preferred_good_bands() {
+        assert_eq!(preferred_good(0.0), Good::Salt);
+        assert_eq!(preferred_good(0.3), Good::Obsidian);
+        assert_eq!(preferred_good(0.6), Good::Amber);
+        assert_eq!(preferred_good(0.9), Good::Spice);
+        assert_eq!(preferred_good(1.0), Good::Spice); // clamped
     }
 }

@@ -113,7 +113,9 @@ pub enum GenomeSlot {
     /// Read by the biome-adaptation feeding bonus when `World.biome_adaptation`
     /// is on. Counts toward speciation distance (drives biome-driven divergence).
     EnvAffinity = 41,
-    _SensoryReserved42 = 42,
+    /// Genetic affinity for a terrain TYPE (maps to a preferred trade good's home terrain).
+    /// Read only under the terrain_habitat flag.
+    TerrainAffinity = 42,
     _SensoryReserved43 = 43,
     _SensoryReserved44 = 44,
     _SensoryReserved45 = 45,
