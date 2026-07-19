@@ -332,6 +332,47 @@ pub fn best_env_direction(biome: &BiomeField, pos: Vec2, affinity: f32, radius: 
     best_offset.normalize_or_zero()
 }
 
+/// Unit direction toward the nearby cell whose terrain matches `target`,
+/// within `radius` world units — the terrain habitat-selection pull. Returns
+/// `Vec2::ZERO` if the agent's current cell is already the best match in range
+/// (so a well-placed agent stays put). Deterministic: fixed scan order, strict
+/// improvement wins. Reads no RNG.
+pub fn best_terrain_direction(
+    biome: &BiomeField,
+    pos: Vec2,
+    target: TerrainType,
+    radius: f32,
+) -> Vec2 {
+    let cell_reach = (radius / biome.cell_size).ceil() as i32 + 1;
+    let (cx, cy) = biome.cell_coords(pos);
+    let mut best_err = if biome.at(cx, cy).terrain == target { 0.0 } else { 1.0 };
+    let mut best_offset = Vec2::ZERO;
+    for dy in -cell_reach..=cell_reach {
+        for dx in -cell_reach..=cell_reach {
+            let col = ((cx as i32 + dx).rem_euclid(biome.res as i32)) as usize;
+            let row = ((cy as i32 + dy).rem_euclid(biome.res as i32)) as usize;
+            let cell = biome.at(col, row);
+            let cell_center = Vec2::new(
+                (col as f32 + 0.5) * biome.cell_size,
+                (row as f32 + 0.5) * biome.cell_size,
+            );
+            let offset = crate::prelude::wrap_torus(
+                cell_center - pos + Vec2::splat(biome.world_size * 0.5),
+                Vec2::splat(biome.world_size),
+            ) - Vec2::splat(biome.world_size * 0.5);
+            if offset.length() > radius {
+                continue;
+            }
+            let err = if cell.terrain == target { 0.0 } else { 1.0 };
+            if err < best_err {
+                best_err = err;
+                best_offset = offset;
+            }
+        }
+    }
+    best_offset.normalize_or_zero()
+}
+
 /// Wrap `(row, col)` onto a `res × res` torus and flatten to a cell index.
 #[inline]
 fn idx_wrap(row: usize, col: usize, res: usize) -> usize {
@@ -553,5 +594,42 @@ mod tests {
         assert!(taken > 0.0 && taken <= 2.0);
         let after = b.sample(target).plant_biomass;
         assert!((before - after - taken).abs() < 1e-5);
+    }
+
+    #[test]
+    fn best_terrain_direction_pulls_toward_target_and_zero_when_already_there() {
+        let b = BiomeField::generate(31, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+        // Find two horizontally-adjacent cells with different terrain, so we
+        // have a target terrain and a nearby (but off-target) starting cell.
+        let mut found: Option<(usize, usize, usize, usize)> = None;
+        'outer: for row in 0..b.res {
+            for col in 0..b.res {
+                let next_col = (col + 1) % b.res;
+                if b.at(col, row).terrain != b.at(next_col, row).terrain {
+                    found = Some((col, row, next_col, row));
+                    break 'outer;
+                }
+            }
+        }
+        let (t_col, t_row, o_col, o_row) =
+            found.expect("expected adjacent cells with differing terrain");
+        let target = b.at(t_col, t_row).terrain;
+        let target_center =
+            Vec2::new((t_col as f32 + 0.5) * b.cell_size, (t_row as f32 + 0.5) * b.cell_size);
+        let off_center =
+            Vec2::new((o_col as f32 + 0.5) * b.cell_size, (o_row as f32 + 0.5) * b.cell_size);
+
+        // Case (a): standing on the target cell — no closer target cell can
+        // beat the current (zero-error) one, so the pull is zero.
+        let at_target = best_terrain_direction(&b, target_center, target, 200.0);
+        assert_eq!(at_target, Vec2::ZERO, "should not move when already on target terrain");
+
+        // Case (b): standing on an adjacent off-target cell, with the target
+        // terrain within reach — the pull should be a non-zero unit vector.
+        let toward_target = best_terrain_direction(&b, off_center, target, 48.0);
+        assert!(
+            toward_target.length() > 0.9 && toward_target.length() < 1.1,
+            "expected a roughly unit vector, got {toward_target:?}"
+        );
     }
 }

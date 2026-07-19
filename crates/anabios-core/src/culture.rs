@@ -104,6 +104,11 @@ pub const HABITAT_REACH: f32 = 48.0;
 /// the evolved behavior.
 pub const HABITAT_PULL: f32 = 1.0;
 
+/// Neighborhood radius (world units) scanned for terrain habitat selection.
+pub const TERRAIN_HABITAT_REACH: f32 = 48.0;
+/// Movement-bias strength pulling an agent toward its preferred terrain.
+pub const TERRAIN_HABITAT_PULL: f32 = 1.0;
+
 /// The globally-optimal foraging technique at a given tick, in `[0,1]`. Pure (no RNG,
 /// no stored state) so it needs no tick hook and stays perfectly deterministic.
 /// `period == 0` should never reach here (callers gate on env_period > 0).
