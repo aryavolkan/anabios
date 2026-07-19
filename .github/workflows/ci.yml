@@ -55,6 +55,50 @@ jobs:
       - name: test (integration, release — runs emergence detectors)
         run: cargo test --workspace --tests --release
 
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+      # Instrument and run the workspace test suite ONCE; the two gates below are
+      # cheap reports over the same profile data (no recompile, no re-run).
+      #
+      # Coverage reflects the always-on lib + integration suite. Doctests are not
+      # measured (they need the nightly -Zdoctest-in-workspace path); the emergence
+      # detectors run in debug here, where they are #[ignore]d.
+      - name: collect coverage
+        run: cargo llvm-cov --workspace --no-report
+      # Gate 1 — whole-workspace floor. A backstop against total collapse. This
+      # number is dragged down by the Godot bindings (anabios-godot) and the CLI
+      # binaries (anabios-headless), which can't run under headless unit tests, so
+      # the floor sits well below the simulation logic's true level (~84% now).
+      - name: gate — workspace line coverage >= 82%
+        run: cargo llvm-cov report --fail-under-lines 82
+      # Gate 2 — core floor. anabios-core is the simulation logic where the tests
+      # and the determinism/correctness guarantees live; hold it near its current
+      # ~98%. Excluding the Godot/CLI crates stops their low-coverage glue from
+      # masking a regression in core. Raise these floors when coverage climbs;
+      # never lower them silently.
+      - name: gate — anabios-core line coverage >= 95%
+        run: cargo llvm-cov report --fail-under-lines 95 --ignore-filename-regex 'anabios-(godot|headless)/'
+      # Machine-readable report for humans/tools (Codecov, editors). Not a gate;
+      # runs even when a gate above fails so the artifact is available to debug.
+      - name: export lcov
+        if: always()
+        run: cargo llvm-cov report --lcov --output-path lcov.info
+      - name: upload lcov artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: lcov.info
+          if-no-files-found: warn
+
   determinism:
     name: determinism smoke
     runs-on: ubuntu-latest
