@@ -325,3 +325,67 @@ fn arms_race_signal_silent_on_flat_traits() {
     armor.insert(1, flat.clone());
     assert!(arms_race_signal(&weapon, &armor).is_none(), "flat traits → no arms race");
 }
+
+/// Swap the predator's Weapon for an arbitrary weapon module (Spines/Jaws),
+/// keeping the rest of the carnivore kit.
+fn arm_predator_with(w: &mut World, i: usize, weapon: Module) {
+    let mut kit = smallvec_kit(0.0, 0.0, 0.0);
+    kit.push(weapon);
+    w.agents.modules[i] = kit;
+}
+
+#[test]
+fn spines_hit_from_beyond_contact_range() {
+    let mut w = World::new(7);
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let prey = w.spawn_agent(Vec2::new(505.0, 500.0), Genome::neutral()); // 5 apart > COMBAT_RANGE
+    reassign_to_new_species(&mut w, prey);
+    // Spines range 0.8 → effective reach 3.0 + 5.0*0.8 = 7.0 ≥ 5.
+    arm_predator_with(
+        &mut w,
+        pred as usize,
+        Module::Spines { damage: 4.0, energy_cost: 1.5, range: 0.8 },
+    );
+    w.agents.program[pred as usize] = always_fire();
+    step(&mut w);
+    assert!(w.combat_damaged[prey as usize], "Spines reach 7.0 → hit at 5 units");
+}
+
+#[test]
+fn contact_weapon_cannot_hit_at_spines_distance() {
+    let mut w = World::new(7);
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let prey = w.spawn_agent(Vec2::new(505.0, 500.0), Genome::neutral()); // 5 apart, seen but out of reach
+    reassign_to_new_species(&mut w, prey);
+    arm_predator(&mut w, pred as usize, 10.0, 2.0);
+    w.agents.program[pred as usize] = always_fire();
+    step(&mut w);
+    assert!(!w.combat_damaged[prey as usize], "Weapon reach 2.0 → no hit at 5 units");
+}
+
+#[test]
+fn jaws_hit_point_blank_but_not_at_contact_range() {
+    // At 1.5 units: inside a plain Weapon's 2.0 reach, outside Jaws' 1.2.
+    let mut w = World::new(7);
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let prey = w.spawn_agent(Vec2::new(501.5, 500.0), Genome::neutral());
+    reassign_to_new_species(&mut w, prey);
+    arm_predator_with(&mut w, pred as usize, Module::Jaws { damage: 14.0, energy_cost: 2.0 });
+    w.agents.program[pred as usize] = always_fire();
+    step(&mut w);
+    assert!(!w.combat_damaged[prey as usize], "Jaws reach 1.2 → no hit at 1.5 units");
+
+    // Re-spawn the prey point-blank and the same Jaws connect.
+    let mut w = World::new(7);
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let prey = w.spawn_agent(Vec2::new(500.8, 500.0), Genome::neutral());
+    reassign_to_new_species(&mut w, prey);
+    // Carnivore prey kit: no grazing gain to mask the combat energy delta.
+    w.agents.modules[prey as usize] = smallvec_kit(0.0, 0.0, 0.0);
+    arm_predator_with(&mut w, pred as usize, Module::Jaws { damage: 14.0, energy_cost: 2.0 });
+    w.agents.program[pred as usize] = always_fire();
+    let prey_e0 = w.agents.energy[prey as usize];
+    step(&mut w);
+    assert!(w.combat_damaged[prey as usize], "Jaws reach 1.2 → hit point-blank");
+    assert!(w.agents.energy[prey as usize] <= prey_e0 - 14.0 + 1e-3, "full Jaws damage lands");
+}

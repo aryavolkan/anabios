@@ -57,6 +57,39 @@ pub fn starter_stalker() -> Program {
     ])
 }
 
+/// Spiner: approach the nearest other-species agent and loose spines from
+/// standoff distance — fires when within ~6 units, inside the Spines
+/// module's reach but beyond a contact Weapon's.
+pub fn starter_spiner() -> Program {
+    Program::from_slice(&[
+        Node::SenseOtherDirX,
+        Node::MoveTowardX,
+        Node::SenseOtherDirY,
+        Node::MoveTowardY,
+        // fire when other_dist < 6  ==  (-other_dist) > -6
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-6.0),
+        Node::FireWeapon,
+    ])
+}
+
+/// Bruiser: close to point-blank and hit with Jaws — the shortest reach in
+/// the arsenal, so it fires only when within ~1 unit.
+pub fn starter_bruiser() -> Program {
+    Program::from_slice(&[
+        Node::SenseOtherDirX,
+        Node::MoveTowardX,
+        Node::SenseOtherDirY,
+        Node::MoveTowardY,
+        // fire when other_dist < 1  ==  (-other_dist) > -1
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-1.0),
+        Node::FireWeapon,
+    ])
+}
+
 /// Pack hunter: approach prey, broadcast its presence on channel 0 when within
 /// ~5 units, and fire when within ~3 units.
 pub fn starter_pack_hunter() -> Program {
@@ -314,6 +347,8 @@ pub fn starter_library() -> &'static [fn() -> Program] {
     &[
         starter_grazer,
         starter_stalker,
+        starter_spiner,
+        starter_bruiser,
         starter_pack_hunter,
         starter_sentinel,
         starter_herd,

@@ -5,7 +5,6 @@ All runs are deterministic per scenario seed, so every shot is reproducible
 with the same env vars. Camera close-ups use `ANABIOS_CAM_ZOOM/_CAM_X/_CAM_Y`.
 
 ## weapons-arena (new scenario: stalkers + pack hunters + fast hunters vs herds)
-
 | File | Tick | What you're seeing |
 |---|---|---|
 | arena-t080-ambush.png | 145 | Opening ambush: stalkers seeded inside the grazer range. First `Predation` and `PackHunting` already in the log. |
@@ -13,6 +12,16 @@ with the same env vars. Camera close-ups use `ANABIOS_CAM_ZOOM/_CAM_X/_CAM_Y`.
 | arena-t620-raid.png | 661 | Aftermath of a `CombatRaid` (sp3, t=475); two fresh `Speciation` events at t=600. 8 species now live. |
 | arena-t3000-evolved.png | 3091 | The arena at carrying capacity: 59 species, 14 extinctions, 68 speciations, raids and pack hunts in the record. |
 | arena-t300-inspector.png | 361 | Inspector pinned on agent id 24 (species 1): genome, modules, and learning stats. |
+
+## weapons-arms-race (three weapon systems: contact Weapon vs ranged Spines vs heavy Jaws)
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| armsrace-t020-volley.png | 44 | The spiner pack (sp4) right after its opening `CombatRaid` at t=18 — spines kill from standoff range before contact weapons can answer. |
+| armsrace-t160-standoff.png | 161 | Five species in play: grazers, herd prey, stalkers (sp3), spiners (sp4), bruisers (sp5). Standoff along the northeast flank. |
+| armsrace-t400-brawl.png | 461 | The contested northeast border: bruiser clusters (magenta Jaws glyphs) pressing into the herd range. |
+| armsrace-t3000-evolved.png | 3091 | End state: 162 species, 171 speciations, a dense migratory swarm sweeping the eastern half of the world. |
+| armsrace-t160-inspector.png | 201 | Inspector pinned on a bruiser (id 117, species 5): `Jaws` + `Armor` in its six-module body plan. |
 
 ## classic scenarios
 

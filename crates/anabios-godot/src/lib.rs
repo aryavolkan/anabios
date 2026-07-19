@@ -682,17 +682,17 @@ impl Simulation {
     /// Number of module types (for the GDScript layer loop).
     #[func]
     fn module_type_count(&self) -> i64 {
-        9
+        11
     }
 
     /// All module glyphs in ONE alive pass, bucketed by module type. Returns an
-    /// array of length `module_type_count()` (9); entry `t` is a
+    /// array of length `module_type_count()` (11); entry `t` is a
     /// `PackedVector2Array` of world positions for every module of type `t`.
     /// Read-only view — replaces nine separate `module_glyphs(t)` passes.
     #[func]
     fn module_glyphs_all(&self) -> Array<PackedVector2Array> {
         use anabios_core::genome::GenomeSlot;
-        let type_count = 9usize; // matches module_type_count()
+        let type_count = 11usize; // matches module_type_count()
         let mut buckets: Vec<PackedVector2Array> =
             (0..type_count).map(|_| PackedVector2Array::new()).collect();
         if let Some(w) = self.inner.as_ref() {

@@ -47,7 +47,12 @@ func _run(path: String, wait_frames: int) -> void:
 			var sim2 := main.get_node_or_null("Simulation")
 			var insp := main.get_node_or_null("UI/Inspector")
 			if sim2 != null and insp != null:
-				var id: int = int(sim2.call("agent_near", Vector2(512, 512), 400.0))
+				var pin_pos := Vector2(512, 512)
+				if OS.has_environment("ANABIOS_INSPECT_X"):
+					pin_pos = Vector2(
+						float(OS.get_environment("ANABIOS_INSPECT_X")),
+						float(OS.get_environment("ANABIOS_INSPECT_Y")))
+				var id: int = int(sim2.call("agent_near", pin_pos, 400.0))
 				if id >= 0:
 					insp.call("pin", id)
 		# Optionally override the camera: ANABIOS_CAM_X/_CAM_Y take world coords,

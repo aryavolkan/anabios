@@ -755,6 +755,8 @@ fn inventions_scenario_is_deterministic() {
 // Refreshed 2026-07-19 (merge): merged the two branches (FORMAT_VERSION 8). Both
 // feature sets off in this scenario ⇒ trajectory byte-identical; the moved
 // hashes are pure layout growth from carrying both. Regenerated post-merge.
+// Refreshed 2026-07-19 (weapons): Spines/Jaws module types join the structural-
+// mutation pool (random_any 9 → 11 types) — trajectory drift only.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
     &[(0, 0xcbb85476565f3620), (100, 0x19d08a2d39b70830), (300, 0x1a43988b0836051c)];
 

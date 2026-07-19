@@ -63,6 +63,11 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // feature sets are opt-in and off in minimal.toml, so the trajectory is
 // byte-identical to either branch's — the tick-0 move is pure layout growth from
 // carrying BOTH sets of new serialized fields. Regenerated post-merge.
+// Refreshed 2026-07-19 (weapons): Spines/Jaws weapon module types join the
+// structural-mutation pool (`Module::random_any` 9 → 11 types). New variants
+// are appended at the end of the `Module` enum, so existing variant encodings
+// are byte-identical; only the evolutionary trajectory drifts once a
+// structural mutation draw resolves differently.
 const GOLDEN: &[(u64, u64)] =
     &[(0, 0x61ed514ea28b61f5), (100, 0x179a38d5aed5eb2f), (1000, 0x80873dcc6ff6ad28)];
 

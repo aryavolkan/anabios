@@ -180,16 +180,20 @@ impl Default for Placement {
 /// names fall back to the grazer defaults.
 fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Program) {
     use crate::module::{
-        communicator_kit, fast_hunter_kit, marker_kit, predator_kit, slow_hunter_kit, starter_kit,
+        bruiser_kit, communicator_kit, fast_hunter_kit, marker_kit, predator_kit, slow_hunter_kit,
+        spiner_kit, starter_kit,
     };
     use crate::program::{
-        starter_asocial_forager, starter_asocial_prey, starter_communicator, starter_cooperator,
-        starter_cultural_cooperator, starter_cultural_hunter, starter_culture_prey, starter_grazer,
-        starter_herd, starter_marker, starter_pack_hunter, starter_sentinel, starter_stalker,
+        starter_asocial_forager, starter_asocial_prey, starter_bruiser, starter_communicator,
+        starter_cooperator, starter_cultural_cooperator, starter_cultural_hunter,
+        starter_culture_prey, starter_grazer, starter_herd, starter_marker, starter_pack_hunter,
+        starter_sentinel, starter_spiner, starter_stalker,
     };
     match name {
         "stalker" => (predator_kit(), starter_stalker()),
         "pack_hunter" => (predator_kit(), starter_pack_hunter()),
+        "spiner" => (spiner_kit(), starter_spiner()),
+        "bruiser" => (bruiser_kit(), starter_bruiser()),
         "sentinel" => (starter_kit(), starter_sentinel()),
         "herd" => (starter_kit(), starter_herd()),
         "marker" => (marker_kit(), starter_marker()),

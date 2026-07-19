@@ -1,0 +1,61 @@
+name = "weapons-arms-race"
+seed = 0
+inventions_enabled = true
+# Three armed lineages with three different weapon systems — contact Weapon
+# (stalker), ranged Spines (spiner), heavy Jaws (bruiser) — sharing one prey
+# pool. Combat targets the nearest *other-species* agent, so the hunters
+# fight each other as readily as they hunt: spines volleys at standoff
+# range, bruisers wading in point-blank, stalkers between the two. Spiner
+# and bruiser kits carry Reproductive, so those lineages establish, speciate,
+# and evolve their weapon parameters; Metalworking (when discovered) buffs
+# every weapon type.
+max_population = 500
+
+# Prey pool: a dense grazer herd at world center.
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 140.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+
+# Secondary herd prey northeast — a contested border for the packs.
+[[agents]]
+count = 24
+archetype = "herd"
+placement = { kind = "cluster", center_x = 700.0, center_y = 340.0, radius = 80.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+
+# Contact-weapon stalkers inside the grazer range.
+[[agents]]
+count = 10
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 150.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+
+# Ranged spiners on the herd species' flank. High perception keeps targets
+# inside their long reach; they open fire well before contact weapons can
+# answer.
+[[agents]]
+count = 12
+archetype = "spiner"
+placement = { kind = "cluster", center_x = 700.0, center_y = 340.0, radius = 120.0 }
+[agents.traits]
+size = 0.6
+perception_radius = 0.9
+lifespan_bias = 1.0
+
+# Armored bruisers southwest: slow, point-blank Jaws, but the hardest hit
+# and the thickest hide in the arena.
+[[agents]]
+count = 12
+archetype = "bruiser"
+placement = { kind = "cluster", center_x = 330.0, center_y = 700.0, radius = 90.0 }
+[agents.traits]
+size = 0.8
+lifespan_bias = 1.0

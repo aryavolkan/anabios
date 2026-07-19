@@ -18,9 +18,9 @@ pub const BITE_MAX: f32 = 0.5;
 pub const FOOD_ENERGY_PER_BIOMASS: f32 = 4.0;
 /// `fire_intent` above this threshold triggers a weapon attack.
 pub const FIRE_THRESHOLD: f32 = 0.5;
-/// Contact range (world units) within which combat can land. Mirrors
-/// `reproduce::MATING_RANGE`.
-pub const COMBAT_RANGE: f32 = 2.0;
+/// Contact range (world units) within which basic combat can land. Mirrors
+/// `reproduce::MATING_RANGE` and `module::WEAPON_RANGE`.
+pub const COMBAT_RANGE: f32 = crate::module::WEAPON_RANGE;
 
 /// Run all interaction rules for one tick: feed, combat, scavenge, pheromone
 /// deposit, then share. Each pass iterates alive agents in ascending id
@@ -132,23 +132,24 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
     }
 }
 
-/// Combat: a Weapon-bearing agent that fires deals `damage - target_armor`
-/// energy damage to the nearest *other-species* agent within `COMBAT_RANGE`,
-/// spending its own weapon `energy_cost`.
+/// Combat: a weapon-bearing agent that fires deals `damage - target_armor`
+/// energy damage to the nearest *other-species* agent within its weapon's
+/// reach (contact for `Weapon`/`Jaws`, several units for `Spines`), spending
+/// its own weapon `energy_cost`.
 fn combat_pass(world: &mut World, alive_ids: &[u32]) {
     for &id in alive_ids {
         let i = id as usize;
         if world.actions[i].fire_intent <= FIRE_THRESHOLD {
             continue;
         }
-        let Some((damage, cost)) = module::effective_weapon(&world.agents.modules[i]) else {
-            continue; // no Weapon module → gated out
+        let Some(weapon) = module::effective_weapon(&world.agents.modules[i]) else {
+            continue; // no weapon module → gated out
         };
         let tgt = world.sensors[i].nearest_other_id;
         if tgt == crate::sense::NO_NEIGHBOR_ID {
             continue;
         }
-        if world.sensors[i].nearest_other_dist >= COMBAT_RANGE {
+        if world.sensors[i].nearest_other_dist >= weapon.range {
             continue;
         }
         let t = tgt as usize;
@@ -156,14 +157,14 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
             continue;
         }
         // Metalworking buff: better weapons deal more damage.
-        let damage = damage
+        let damage = weapon.damage
             * crate::invention::weapon_multiplier(crate::invention::held_mask(
                 &world.agents.meme_vector[i],
             ));
         let armor = module::effective_armor_protection(&world.agents.modules[t]);
         let net = (damage - armor).max(0.0);
         world.agents.energy[t] -= net;
-        world.agents.energy[i] -= cost;
+        world.agents.energy[i] -= weapon.energy_cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
         // Record hit for the PackHunting detector.
