@@ -358,6 +358,17 @@ count = 25
     }
 
     #[test]
+    fn instantiate_applies_max_population_override() {
+        let with_cap = Scenario::parse_toml("name = \"t\"\nseed = 1\nmax_population = 42\n")
+            .expect("parse")
+            .instantiate();
+        assert_eq!(with_cap.max_population, 42);
+        let without =
+            Scenario::parse_toml("name = \"t\"\nseed = 1\n").expect("parse").instantiate();
+        assert_eq!(without.max_population, crate::reproduce::MAX_POPULATION);
+    }
+
+    #[test]
     fn instantiation_is_deterministic() {
         let text = r#"
 name = "test"

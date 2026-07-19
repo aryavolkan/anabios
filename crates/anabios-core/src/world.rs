@@ -46,13 +46,15 @@ pub struct World {
     pub pheromones: crate::pheromone::PheromoneField,
     /// DIT environmental-variability period (experiment). `0` = mechanism OFF
     /// (all pre-existing scenarios). `> 0` enables the gene-culture technique
-    /// mechanism; `culture::ENV_STATIC_PERIOD` means active-but-static. Defaulted
-    /// so old snapshots without this field still deserialize.
+    /// mechanism; `culture::ENV_STATIC_PERIOD` means active-but-static.
+    /// `#[serde(default)]` helps self-describing formats only — bincode
+    /// snapshots from before this field was added are rejected by the
+    /// `FORMAT_VERSION` gate (see `snapshot.rs`).
     #[serde(default)]
     pub env_period: u32,
     /// When true, the biome-adaptation feeding bonus (EnvAffinity vs local
-    /// climate) is active. Off by default; opt-in per scenario. Defaulted so
-    /// old snapshots without this field still deserialize.
+    /// climate) is active. Off by default; opt-in per scenario. Same
+    /// bincode/`FORMAT_VERSION` caveat as `env_period`.
     #[serde(default)]
     pub biome_adaptation: bool,
     /// When true, depleted biome cells recolonize from vegetated neighbours
@@ -69,8 +71,8 @@ pub struct World {
     pub season_period: u32,
     /// Hard cap on alive agents; `reproduce_all` skips mating at/above this.
     /// Defaults to `reproduce::MAX_POPULATION` (the design's 10k budget);
-    /// scenarios/tests can pin it lower. Defaulted so old snapshots without
-    /// this field still deserialize.
+    /// scenarios/tests can pin it lower. Same bincode/`FORMAT_VERSION` caveat
+    /// as `env_period`.
     #[serde(default = "default_max_population")]
     pub max_population: u32,
     /// World extent per axis (torus size). Defaults to `WORLD_SIZE_DEFAULT`

@@ -105,3 +105,49 @@ impl PheromoneField {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deposit_sets_nonzero_and_decay_applies() {
+        let mut f = PheromoneField::new();
+        assert!(!f.nonzero, "fresh field has the early-out flag clear");
+        f.decay_step(); // no-op on the empty field
+        f.deposit(Vec2::new(10.0, 10.0), 0, 1.0);
+        assert!(f.nonzero, "deposit latches the flag");
+        f.decay_step();
+        assert!(
+            (f.sample(Vec2::new(10.0, 10.0), 0) - (1.0 - PHEROMONE_DECAY)).abs() < 1e-6,
+            "decay multiplies once the flag is set"
+        );
+    }
+
+    #[test]
+    fn deposit_and_sample_clamp_out_of_range_channels() {
+        let mut f = PheromoneField::new();
+        f.deposit(Vec2::new(5.0, 5.0), usize::MAX, 2.0);
+        assert_eq!(f.sample(Vec2::new(5.0, 5.0), PHEROMONE_CHANNELS - 1), 2.0);
+        assert_eq!(f.sample(Vec2::new(5.0, 5.0), usize::MAX), 2.0);
+    }
+
+    #[test]
+    fn refresh_nonzero_recovers_flag_from_cells() {
+        let mut f = PheromoneField::new();
+        f.deposit(Vec2::new(7.0, 7.0), 1, 0.5);
+        // Simulate a snapshot roundtrip: serde skips the flag, so it comes
+        // back false while the cells keep their values.
+        f.nonzero = false;
+        f.decay_step();
+        assert_eq!(
+            f.sample(Vec2::new(7.0, 7.0), 1),
+            0.5,
+            "with the flag lost, decay is (incorrectly) skipped — hence refresh on load"
+        );
+        f.refresh_nonzero();
+        assert!(f.nonzero);
+        f.decay_step();
+        assert!((f.sample(Vec2::new(7.0, 7.0), 1) - 0.5 * (1.0 - PHEROMONE_DECAY)).abs() < 1e-6);
+    }
+}
