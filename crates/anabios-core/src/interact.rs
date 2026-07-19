@@ -47,6 +47,9 @@ pub fn interact_all(world: &mut World) {
     }
     deposit_pass(world, &alive_ids);
     share_pass(world, &alive_ids);
+    if world.resources_enabled {
+        trade_pass(world, &alive_ids);
+    }
     world.agents.scratch_ids = alive_ids;
 }
 
@@ -339,6 +342,96 @@ fn share_pass(world: &mut World, alive_ids: &[u32]) {
     }
 }
 
+/// Choose a mutually-beneficial one-for-one swap between two inventories, from
+/// A's perspective: A gives good `give` (its lowest-want good it can spare a
+/// `TRADE_UNIT` of that B still wants) and receives good `recv` (B's lowest-want
+/// spare good that A wants). Returns `None` if no complementary, strictly-
+/// beneficial swap exists. Ties in "lowest want" break toward the lower index.
+fn pick_swap(
+    inv_a: &[f32; crate::resource::GOOD_COUNT],
+    inv_b: &[f32; crate::resource::GOOD_COUNT],
+) -> Option<(usize, usize)> {
+    use crate::resource::{want, GOOD_COUNT, TRADE_UNIT};
+    // A's most-spareable good (lowest want) that it holds >= TRADE_UNIT of.
+    let mut give: Option<usize> = None;
+    let mut give_want = f32::INFINITY;
+    for k in 0..GOOD_COUNT {
+        if inv_a[k] >= TRADE_UNIT {
+            let wk = want(inv_a, k);
+            if wk < give_want {
+                give_want = wk;
+                give = Some(k);
+            }
+        }
+    }
+    let give = give?;
+    // B's most-spareable good (lowest want) that it holds >= TRADE_UNIT of.
+    let mut recv: Option<usize> = None;
+    let mut recv_want_b = f32::INFINITY;
+    for k in 0..GOOD_COUNT {
+        if inv_b[k] >= TRADE_UNIT {
+            let wk = want(inv_b, k);
+            if wk < recv_want_b {
+                recv_want_b = wk;
+                recv = Some(k);
+            }
+        }
+    }
+    let recv = recv?;
+    if give == recv {
+        return None; // swapping the same good is pointless
+    }
+    // Mutual benefit: each side values what it receives more than what it gives.
+    let a_gains = want(inv_a, recv) > want(inv_a, give);
+    let b_gains = want(inv_b, give) > want(inv_b, recv);
+    if a_gains && b_gains {
+        Some((give, recv))
+    } else {
+        None
+    }
+}
+
+/// Trade: each alive agent A (ascending) trades one `TRADE_UNIT` with its
+/// nearest OTHER-species neighbor B (from the sensor register), if a mutually-
+/// beneficial complementary swap exists and B is within `TRADE_RANGE`.
+/// Conserves total units of each good. No RNG. Each agent trades at most once.
+fn trade_pass(world: &mut World, alive_ids: &[u32]) {
+    use crate::resource::TRADE_UNIT;
+    let mut traded = std::collections::HashSet::new();
+    for &id in alive_ids {
+        if traded.contains(&id) {
+            continue;
+        }
+        let i = id as usize;
+        let tgt = world.sensors[i].nearest_other_id;
+        if tgt == crate::sense::NO_NEIGHBOR_ID {
+            continue;
+        }
+        if traded.contains(&tgt) {
+            continue;
+        }
+        if world.sensors[i].nearest_other_dist >= crate::resource::TRADE_RANGE {
+            continue;
+        }
+        let t = tgt as usize;
+        if t == i || !world.agents.is_alive(tgt) {
+            continue;
+        }
+        let inv_a = world.agents.inventory[i];
+        let inv_b = world.agents.inventory[t];
+        let Some((give, recv)) = pick_swap(&inv_a, &inv_b) else {
+            continue;
+        };
+        // Execute the swap (totals conserved: each side's sum is unchanged).
+        world.agents.inventory[i][give] -= TRADE_UNIT;
+        world.agents.inventory[t][give] += TRADE_UNIT;
+        world.agents.inventory[t][recv] -= TRADE_UNIT;
+        world.agents.inventory[i][recv] += TRADE_UNIT;
+        traded.insert(id);
+        traded.insert(tgt);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,5 +475,99 @@ mod tests {
 
         assert_eq!(w.agents.inventory[id as usize][Good::Salt.index()], 0.0, "at cap: no harvest");
         assert_eq!(w.resources[0].amount, 5.0, "node untouched");
+    }
+
+    #[test]
+    fn pick_swap_is_mutually_beneficial_and_complementary() {
+        use crate::resource::GOOD_COUNT;
+        // A rich in good 0, poor in good 1; B the mirror image.
+        let mut a = [0.0f32; GOOD_COUNT];
+        let mut b = [0.0f32; GOOD_COUNT];
+        a[0] = 5.0; // A surplus Salt
+        b[1] = 5.0; // B surplus Obsidian
+        let (give, recv) = pick_swap(&a, &b).expect("a beneficial swap exists");
+        assert_eq!(give, 0, "A gives its surplus good 0");
+        assert_eq!(recv, 1, "A receives good 1 (B's surplus)");
+    }
+
+    #[test]
+    fn pick_swap_returns_none_without_complementary_surplus() {
+        use crate::resource::GOOD_COUNT;
+        // Both empty → nothing to give.
+        let a = [0.0f32; GOOD_COUNT];
+        let b = [0.0f32; GOOD_COUNT];
+        assert!(pick_swap(&a, &b).is_none());
+    }
+
+    #[test]
+    fn trade_pass_swaps_and_conserves_units() {
+        use crate::resource::{Good, GOOD_COUNT, TRADE_UNIT};
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        let pos = Vec2::new(300.0, 300.0);
+        let a = w.spawn_agent(pos, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+        // Different species so it counts as cross-species trade.
+        w.agents.species_id[b as usize] = 1;
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+
+        // Sense fills nearest_other_id/dist (trade_pass reads those, like combat_pass).
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &mut w.sensors,
+            w.world_size,
+        );
+
+        let total_salt_before: f32 =
+            (0..2).map(|id| w.agents.inventory[id][Good::Salt.index()]).sum();
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        trade_pass(&mut w, &alive);
+
+        // A gave a unit of Salt, received a unit of Obsidian.
+        assert!(
+            (w.agents.inventory[a as usize][Good::Salt.index()] - (5.0 - TRADE_UNIT)).abs() < 1e-6
+        );
+        assert!((w.agents.inventory[a as usize][Good::Obsidian.index()] - TRADE_UNIT).abs() < 1e-6);
+        // Conservation of Salt across the two agents.
+        let total_salt_after: f32 =
+            (0..2).map(|id| w.agents.inventory[id][Good::Salt.index()]).sum();
+        assert!((total_salt_before - total_salt_after).abs() < 1e-6);
+        let _ = GOOD_COUNT;
+    }
+
+    #[test]
+    fn trade_pass_skips_same_species() {
+        use crate::resource::Good;
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        let pos = Vec2::new(300.0, 300.0);
+        let a = w.spawn_agent(pos, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+        // SAME species (both 0).
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &mut w.sensors,
+            w.world_size,
+        );
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        trade_pass(&mut w, &alive);
+        assert_eq!(
+            w.agents.inventory[a as usize][Good::Obsidian.index()],
+            0.0,
+            "no same-species trade"
+        );
     }
 }
