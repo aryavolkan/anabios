@@ -60,7 +60,11 @@ pub enum GenomeSlot {
     KinPreference = 14,
     /// Declared; not yet read by behavior. Reserved: future territory-defense drive.
     Territoriality = 15,
-    _DriveReserved16 = 16,
+    /// Heritable cognitive potential in `[0,1]` — the *nature* baseline for an
+    /// agent's realized IQ (`iq.rs`). Unlike the personality slots this counts
+    /// toward speciation distance (it is adaptive). Read only when
+    /// `World::cognition_enabled`; inert otherwise.
+    CognitivePotential = 16,
     _DriveReserved17 = 17,
     _DriveReserved18 = 18,
     _DriveReserved19 = 19,
@@ -222,6 +226,12 @@ impl Genome {
     /// Neuroticism in `[-1,+1]`. +1 anxious/reactive, −1 stable/bold.
     pub fn neuroticism(&self) -> f32 {
         2.0 * self.get(GenomeSlot::Neuroticism) - 1.0
+    }
+
+    /// Heritable cognitive potential in `[0,1]` — the genetic (nature) baseline
+    /// realized IQ develops from (`iq.rs`).
+    pub fn cognitive_potential(&self) -> f32 {
+        self.get(GenomeSlot::CognitivePotential)
     }
 
     /// Overwrite the 5 OCEAN slots with `N(0.5, INIT_SIGMA)` clamped to `[0,1]`,

@@ -69,6 +69,13 @@ pub struct World {
     /// Defaulted so old snapshots without this field still deserialize.
     #[serde(default)]
     pub inventions_enabled: bool,
+    /// When true, the cognitive layer is active: each agent develops a realized
+    /// IQ (heritable `CognitivePotential` × juvenile nutrition/social enrichment,
+    /// `iq.rs`) that costs basal metabolism and (Phase 2+) gates meme
+    /// acquisition. Off by default; opt-in per scenario. When false, IQ stays
+    /// `0.0` for every agent, so the metabolic multiplier is exact identity.
+    #[serde(default)]
+    pub cognition_enabled: bool,
     /// When true, depleted biome cells recolonize from vegetated neighbours
     /// each biome step (`BiomeField::recolonize_step`), before regrowth. Off
     /// by default; opt-in per scenario. Defaulted so old snapshots without
@@ -189,6 +196,7 @@ impl World {
             biome_adaptation: false,
             terrain_habitat: false,
             inventions_enabled: false,
+            cognition_enabled: false,
             living_biome: false,
             season_period: 0,
             resources: Vec::new(),

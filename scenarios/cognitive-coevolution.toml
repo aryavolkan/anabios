@@ -1,0 +1,49 @@
+name = "cognitive-coevolution"
+seed = 0
+inventions_enabled = true
+cognition_enabled = true
+# Keep the world below carrying-capacity saturation so cognition and culture —
+# not Malthusian collapse — drive the dynamics.
+max_population = 400
+
+# Cognitive gene–culture demo. Every agent has a realized IQ (heritable
+# CognitivePotential × juvenile nutrition + social enrichment) that gates which
+# cultural traits it can acquire: high-era tech needs high IQ, while the
+# maladaptive practices (inbreeding, child sacrifice) need almost none. Watch
+# InventionDiscovered/Adopted climb the tech tree in the high-IQ lineages while
+# PracticeDiscovered/Adopted flare up and get selected against — the gene↔culture
+# conflict. IQ costs basal metabolism, so it evolves toward an intermediate
+# optimum rather than fixation.
+
+# Innovators: high Openness → strong discovery of BOTH tech and practices; their
+# realized IQ decides which they can actually keep.
+[[agents]]
+count = 30
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 340.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Traditionalists: low Openness → weak discovery, strong social copying. They
+# adopt whatever their neighbours carry — good tech and bad customs alike.
+[[agents]]
+count = 30
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 684.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Acultural control: no Communicator — the pre-culture baseline (no IQ gating
+# matters, no memes acquired).
+[[agents]]
+count = 20
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 300.0, radius = 70.0 }
+[agents.traits]
+altruism = 0.0
+basal_metabolism = 0.6
+lifespan_bias = 1.0

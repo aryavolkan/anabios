@@ -36,6 +36,10 @@ struct CoevoSample {
     /// World adoption fraction per invention (share of alive agents at or
     /// above the held threshold; all zero when the tree is inactive).
     inv_adopt_frac: [f32; anabios_core::invention::INVENTION_COUNT],
+    /// Mean realized IQ over alive agents (0 when cognition is inactive).
+    mean_iq: f32,
+    /// World adoption fraction per maladaptive practice (0 when cognition off).
+    practice_adopt_frac: [f32; anabios_core::practice::PRACTICE_COUNT],
 }
 
 /// Soft cap on retained samples (~tens of KB each thousand ticks). Past this we
@@ -213,7 +217,19 @@ impl Simulation {
             }
             return out;
         }
+        if let Some(pkey) = key_str.strip_prefix("practice_").and_then(|k| k.strip_suffix("_frac"))
+        {
+            let Some(idx) = anabios_core::practice::PRACTICES.iter().position(|p| p.key == pkey)
+            else {
+                return out;
+            };
+            for s in &self.history {
+                out.push(s.practice_adopt_frac[idx]);
+            }
+            return out;
+        }
         let pick: fn(&CoevoSample) -> f32 = match key_str.as_str() {
+            "mean_iq" => |s| s.mean_iq,
             "tick" => |s| s.tick,
             "communicator_frac" => |s| s.communicator_frac,
             "mean_social_learning" => |s| s.mean_social_learning,
@@ -398,6 +414,7 @@ impl Simulation {
         );
         d.set("skill", meme[SKILL_CHANNEL]);
         d.set("technique", meme[TECH_CHANNEL]);
+        d.set("iq", w.agents.iq[i]);
         d.set("indiv_learn", g.get(GenomeSlot::IndividualLearning) > 0.5);
         d.set("social_learn", g.get(GenomeSlot::SocialLearning) > 0.5);
         d.set("dialect_hue", dialect_hue(meme));
@@ -797,6 +814,7 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
     scratch.xs.clear();
     scratch.comm.clear();
     scratch.species_set.clear();
+    let mut iq_sum = 0.0f32;
     for id in w.agents.iter_alive() {
         let i = id as usize;
         scratch.memes.push(w.agents.meme_vector[i]);
@@ -805,6 +823,7 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
         scratch.xs.push(w.agents.position[i].x);
         scratch.comm.push(module::has(&w.agents.modules[i], ModuleType::Communicator));
         scratch.species_set.insert(w.agents.species_id[i]);
+        iq_sum += w.agents.iq[i];
     }
     let (memes, genomes, species, xs, comm) =
         (&scratch.memes, &scratch.genomes, &scratch.species, &scratch.xs, &scratch.comm);
@@ -821,6 +840,20 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
             *f /= memes.len() as f32;
         }
     }
+    let mut practice_adopt_frac = [0.0f32; anabios_core::practice::PRACTICE_COUNT];
+    if w.cognition_enabled && !memes.is_empty() {
+        for m in memes {
+            for (p, f) in practice_adopt_frac.iter_mut().enumerate() {
+                if anabios_core::practice::has(m, p) {
+                    *f += 1.0;
+                }
+            }
+        }
+        for f in practice_adopt_frac.iter_mut() {
+            *f /= memes.len() as f32;
+        }
+    }
+    let mean_iq = if memes.is_empty() { 0.0 } else { iq_sum / memes.len() as f32 };
     CoevoSample {
         tick: w.tick as f32,
         communicator_frac: coevo::frac_true(comm),
@@ -834,6 +867,8 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
         species_count: scratch.species_set.len() as f32,
         env_optimum: if active { opt } else { -1.0 },
         inv_adopt_frac,
+        mean_iq,
+        practice_adopt_frac,
     }
 }
 
@@ -857,6 +892,12 @@ fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
         inv.set(anabios_core::invention::INVENTIONS[k].key, *f);
     }
     d.set("inv_adopt_frac", &inv);
+    d.set("mean_iq", s.mean_iq);
+    let mut practices = VarDictionary::new();
+    for (p, f) in s.practice_adopt_frac.iter().enumerate() {
+        practices.set(anabios_core::practice::PRACTICES[p].key, *f);
+    }
+    d.set("practice_adopt_frac", &practices);
     d
 }
 

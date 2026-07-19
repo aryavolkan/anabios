@@ -52,14 +52,19 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // and 1000, and this undoes that trajectory perturbation for every non-
 // invention culture scenario.
 // Refreshed 2026-07-19: biome trade goods added AgentBuffers.inventory,
-// World.{resources,resources_enabled}, CodexState.first_cross_species_trade.
-// Flag off = byte-identical trajectory; only serialized layout grew, so all
-// three hashes moved.
-// Refreshed 2026-07-19: added World.terrain_habitat flag (geographic trade
-// routes). Flag off = byte-identical trajectory; only serialized layout
-// grew, so all three hashes moved.
+// World.{resources,resources_enabled}, CodexState.first_cross_species_trade,
+// then World.terrain_habitat (geographic trade routes). All flags off =
+// byte-identical trajectory; only serialized layout grew.
+// Refreshed 2026-07-19 (main): cognitive layer Phases 1/3/4 — AgentBuffers
+// realized-IQ fields, MEME_CHANNELS widened 18→20 (practice channels 18-19),
+// CodexState practice latches. `cognition_enabled` off = behavior unchanged;
+// only serialized layout grew.
+// Refreshed 2026-07-19 (merge): merged the two branches (FORMAT_VERSION 8). Both
+// feature sets are opt-in and off in minimal.toml, so the trajectory is
+// byte-identical to either branch's — the tick-0 move is pure layout growth from
+// carrying BOTH sets of new serialized fields. Regenerated post-merge.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xe837d5355d249ad5), (100, 0x5d5c9a9aa89bb554), (1000, 0xde602be45d01a105)];
+    &[(0, 0x61ed514ea28b61f5), (100, 0x179a38d5aed5eb2f), (1000, 0x80873dcc6ff6ad28)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

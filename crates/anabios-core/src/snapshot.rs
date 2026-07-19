@@ -25,10 +25,19 @@ use crate::world::World;
 /// v6: biome trade goods — AgentBuffers.inventory, World.{resources,
 ///     resources_enabled}, CodexState.first_cross_species_trade. Behavior
 ///     unchanged with resources_enabled off; only serialized layout grew.
+/// v6 (main, merged): cognitive layer Phase 1 — World.cognition_enabled +
+///     AgentBuffers realized-IQ phenotype fields (iq / iq_enrich_acc /
+///     iq_enrich_ticks).
 /// v7: geographic trade routes — World.terrain_habitat flag (opt-in terrain
 ///     habitat selection). Behavior unchanged with the flag off; only the
 ///     serialized layout grew.
-pub const FORMAT_VERSION: u32 = 7;
+/// v7 (main, merged): cognitive layer Phase 3/4 — MEME_CHANNELS widened 18→20
+///     for the maladaptive-practice block (channels 18-19) + CodexState practice
+///     latches (practices_discovered / practices_adopted).
+/// v8: merge of the biome-trade-goods branch with main's cognitive layer — the
+///     combined serialized layout carries BOTH feature sets' new fields, so the
+///     version advances past both branches' v7.
+pub const FORMAT_VERSION: u32 = 8;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

@@ -82,7 +82,9 @@ pub(super) fn detect_meme_sweep(world: &mut World, agg: &SpeciesAggTable) {
         let (lx, ly) = centroid_of(agg, sid);
         let nf = entry.count as f64;
         for (ch, &s) in entry.meme_sums.iter().enumerate() {
-            if crate::invention::is_invention_channel(ch) {
+            if crate::invention::is_invention_channel(ch)
+                || crate::practice::is_practice_channel(ch)
+            {
                 continue;
             }
             let mean = (s / nf) as f32;

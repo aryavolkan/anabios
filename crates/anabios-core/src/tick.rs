@@ -42,6 +42,12 @@ pub fn step(world: &mut World) {
     // M3: module upkeep — every alive agent pays for its modules.
     crate::module::upkeep_all(&mut world.agents);
 
+    // Stage 5b: cognitive development — juveniles fold this tick's nutrition
+    // (post-feeding energy) + social enrichment (this tick's sensed crowding)
+    // into their realized IQ. Runs before reproduce so newborns are processed
+    // starting next tick. No-op when `cognition_enabled` is false.
+    crate::iq::develop_all(world);
+
     // Stage 6: reproduce. Mutates the alive set; do not rely on `cap` after
     // this point.
     crate::reproduce::reproduce_all(world);
@@ -52,6 +58,10 @@ pub fn step(world: &mut World) {
     // Stage 6c: inventions — discovery rolls + per-holder upkeep/income/
     // stress/pollution (opt-in; no-op when `inventions_enabled` is false).
     crate::invention::invention_step(world);
+
+    // Stage 6d: maladaptive-practice discovery — inventive agents can stumble
+    // onto a harmful custom (opt-in; no-op when `cognition_enabled` is false).
+    crate::practice::discover_step(world);
 
     // Keep scratch sized to the post-reproduce capacity so end-of-tick detectors
     // (AlarmCall) that read actions/sensors/desired_direction see every agent —

@@ -5,7 +5,7 @@ const CHAPTER_NAMES: PackedStringArray = [
 	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior",
 	"Predation", "CombatRaid", "ArmsRace", "Territory", "NichePartition",
 	"Dialect", "MemeSweep", "AlarmCall", "Cooperation", "PackHunting", "HerdCohesion",
-	"Discovery", "Adoption"
+	"Discovery", "Adoption", "BadIdea", "BadAdopt"
 ]
 # One color per event type so the timeline is scannable at a glance (matches
 # the co-evolution chart's marker hues where they overlap).
@@ -29,6 +29,8 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.6, 0.8, 1.0),     # 16 HerdCohesion — sky
 	Color(1.0, 0.9, 0.35),    # 17 Discovery  — gold
 	Color(0.55, 0.95, 1.0),   # 18 Adoption   — light sky
+	Color(0.95, 0.45, 0.55),  # 19 PracticeDiscovered — rose
+	Color(0.85, 0.3, 0.3),    # 20 PracticeAdopted    — dark red
 ]
 const MAX_RECENT: int = 30
 

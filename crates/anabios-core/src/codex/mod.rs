@@ -22,6 +22,7 @@ mod combat;
 mod culture;
 mod invention;
 mod population;
+mod practice;
 mod spatial;
 
 /// Maximum events buffered before the oldest are dropped.
@@ -139,10 +140,16 @@ pub enum EventType {
     /// An invention crosses ≥50% adoption inside a species (`value` =
     /// invention id).
     InventionAdopted = 18,
+    /// A maladaptive cultural practice is held for the first time anywhere
+    /// (`value` = practice id). Fires once per practice.
+    PracticeDiscovered = 19,
+    /// A maladaptive practice crosses ≥50% penetration inside a species
+    /// (`value` = practice id).
+    PracticeAdopted = 20,
     /// First bilateral cross-species resource swap in the world (latched once).
-    ResourceTraded = 19,
+    ResourceTraded = 21,
     /// An offspring was produced by spending a full dowry basket.
-    DowryBirth = 20,
+    DowryBirth = 22,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -247,6 +254,12 @@ pub struct CodexState {
     /// Latch: the first cross-species `ResourceTraded` event has been emitted
     /// (biome trade goods feature). Kept with the other one-shot latches.
     pub first_cross_species_trade: bool,
+    /// Maladaptive practices held at least once anywhere (latched;
+    /// `PracticeDiscovered` fires once per practice id).
+    pub practices_discovered: BTreeSet<u8>,
+    /// (species, practice) pairs currently latched as adopted (≥50% penetration).
+    /// Re-arms when penetration drops below the threshold.
+    pub practices_adopted: BTreeSet<(u32, u8)>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -399,6 +412,9 @@ pub struct SpeciesAgg {
     /// Per-invention count of members at or above the held threshold (for
     /// `InventionAdopted`). All zero when the invention tree is inactive.
     pub invention_counts: [u32; crate::invention::INVENTION_COUNT],
+    /// Per-practice count of members holding each maladaptive practice (for
+    /// `PracticeAdopted`). All zero when cognition is inactive.
+    pub practice_counts: [u32; crate::practice::PRACTICE_COUNT],
 }
 
 impl SpeciesAgg {
@@ -417,6 +433,7 @@ impl SpeciesAgg {
         self.weapon_sum = 0.0;
         self.armor_sum = 0.0;
         self.invention_counts = [0; crate::invention::INVENTION_COUNT];
+        self.practice_counts = [0; crate::practice::PRACTICE_COUNT];
     }
 
     /// This tick's centroid (mean alive position), `(0,0)` when empty.
@@ -494,6 +511,13 @@ impl SpeciesAggTable {
                 let inv_mask = crate::invention::held_mask(&world.agents.meme_vector[i]);
                 crate::invention::for_each_set_bit(inv_mask, |k| e.invention_counts[k] += 1);
             }
+            if world.cognition_enabled {
+                for (p, c) in e.practice_counts.iter_mut().enumerate() {
+                    if crate::practice::has(&world.agents.meme_vector[i], p) {
+                        *c += 1;
+                    }
+                }
+            }
             e.weapon_sum += module::effective_weapon(modules).map(|(d, _)| d).unwrap_or(0.0) as f64;
             e.armor_sum += module::effective_armor_protection(modules) as f64;
         }
@@ -570,6 +594,7 @@ pub fn observe_all(world: &mut World) {
     culture::detect_alarm_call(world);
     culture::detect_evolved_cooperation(world, &agg);
     invention::detect_inventions(world, &agg);
+    practice::detect_practices(world, &agg);
     combat::detect_pack_hunting(world, &agg);
     spatial::detect_herd_cohesion(world, &agg);
 
