@@ -634,6 +634,90 @@ fn spread_respects_the_iq_gate() {
     );
 }
 
+// --- Maladaptive practices (Phase 3) ----------------------------------------------
+
+#[test]
+fn practice_spreads_socially_and_respects_the_iq_gate() {
+    use anabios_core::practice;
+    let mut w = World::new(83);
+    w.cognition_enabled = true;
+    let holder = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let receiver = w.spawn_agent(Vec2::new(505.0, 500.0), Genome::neutral());
+    w.agents.modules[holder as usize] = comm_kit();
+    w.agents.modules[receiver as usize] = comm_kit();
+    w.agents.program[holder as usize] = Program::from_slice(&[Node::Idle]);
+    w.agents.program[receiver as usize] = Program::from_slice(&[Node::Idle]);
+    let ch = practice::channel(practice::CHILD_SACRIFICE);
+    w.agents.meme_vector[holder as usize][ch] = 1.0; // holder practices it
+    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+    size_scratch(&mut w);
+
+    // Receiver IQ below the practice gate: no social acquisition.
+    w.agents.iq[receiver as usize] = practice::PRACTICE_IQ_REQ - 0.01;
+    anabios_core::culture::culture_step(&mut w);
+    assert_eq!(w.agents.meme_vector[receiver as usize][ch], 0.0, "below IQ gate: no spread");
+
+    // Raise IQ above the gate: copies toward the holder at the practice rate.
+    w.agents.iq[receiver as usize] = 0.5;
+    anabios_core::culture::culture_step(&mut w);
+    assert!(
+        (w.agents.meme_vector[receiver as usize][ch] - practice::PRACTICE_SPREAD_RATE).abs() < 1e-6,
+        "payoff-blind copy toward the holder at the practice spread rate"
+    );
+}
+
+#[test]
+fn practice_discovery_requires_the_flag_and_iq() {
+    use anabios_core::practice;
+    let seed_pop = |cognition: bool, iq: f32| -> (World, Vec<u32>) {
+        let mut w = World::new(91);
+        w.cognition_enabled = cognition;
+        let mut ids = Vec::new();
+        for n in 0..8 {
+            let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+            w.agents.modules[id as usize] = comm_kit();
+            let mut g = w.agents.genome[id as usize];
+            g.set(GenomeSlot::Openness, 1.0);
+            w.agents.genome[id as usize] = g;
+            w.agents.iq[id as usize] = iq;
+            ids.push(id);
+        }
+        (w, ids)
+    };
+    let holds_any = |w: &World, ids: &[u32]| {
+        ids.iter().any(|&id| {
+            (0..practice::PRACTICE_COUNT)
+                .any(|p| practice::has(&w.agents.meme_vector[id as usize], p))
+        })
+    };
+
+    // Flag off → never (discover_step early-returns, zero RNG).
+    let (mut off, off_ids) = seed_pop(false, 1.0);
+    for _ in 0..20_000 {
+        practice::discover_step(&mut off);
+    }
+    assert!(!holds_any(&off, &off_ids), "no discovery with cognition off");
+
+    // IQ below the practice threshold → never, even with the flag on.
+    let (mut dull, dull_ids) = seed_pop(true, practice::PRACTICE_IQ_REQ - 0.01);
+    for _ in 0..20_000 {
+        practice::discover_step(&mut dull);
+    }
+    assert!(!holds_any(&dull, &dull_ids), "IQ below the practice gate never invents one");
+
+    // Flag on + sufficient IQ + high Openness → eventually invents a practice.
+    let (mut on, on_ids) = seed_pop(true, 1.0);
+    let mut discovered = false;
+    for _ in 0..60_000 {
+        practice::discover_step(&mut on);
+        if holds_any(&on, &on_ids) {
+            discovered = true;
+            break;
+        }
+    }
+    assert!(discovered, "inventive, cognate agents eventually coin a maladaptive practice");
+}
+
 // --- End-to-end -------------------------------------------------------------------
 
 const INVENTIONS_SCENARIO: &str = include_str!("../../../scenarios/inventions.toml");
@@ -666,8 +750,13 @@ fn inventions_scenario_is_deterministic() {
 // realized-IQ phenotype fields (FORMAT_VERSION 6). `cognition_enabled` is off
 // in this scenario, so IQ stays 0 and behavior is unchanged — only the
 // serialized layout grew, moving all three hashes.
+// Refreshed 2026-07-19 (3): Phase 3 widened MEME_CHANNELS 18→20 for the
+// practice block (FORMAT_VERSION 7). `cognition_enabled` off here, so practices
+// are inert and inherit_meme still jitters exactly the 18 base+invention
+// channels (draw count unchanged) — only the serialized meme vector grew,
+// moving all three hashes by layout.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x28124fb693cec2d6), (100, 0xf43b05b0220ed0db), (300, 0xef44f1b9bbb4760a)];
+    &[(0, 0x6cc6db7cf47922d6), (100, 0xaeb775f69af1f15b), (300, 0x0c9c17a5c5003aaa)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

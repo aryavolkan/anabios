@@ -21,6 +21,7 @@ pub mod mathf;
 pub mod module;
 pub mod personality;
 pub mod pheromone;
+pub mod practice;
 pub mod program;
 pub mod reproduce;
 pub mod rng;

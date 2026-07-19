@@ -226,7 +226,7 @@ pub const fn channel(inv: usize) -> usize {
 /// otherwise fight the copy-toward-best spread dynamic).
 #[inline]
 pub const fn is_invention_channel(ch: usize) -> bool {
-    ch >= INVENTION_CHANNEL_BASE && ch < MEME_CHANNELS
+    ch >= INVENTION_CHANNEL_BASE && ch < INVENTION_CHANNEL_BASE + INVENTION_COUNT
 }
 
 /// Adoption level of invention `inv` in a meme vector.
@@ -619,7 +619,10 @@ mod tests {
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE - 1));
         assert!(is_invention_channel(INVENTION_CHANNEL_BASE));
         assert!(is_invention_channel(channel(NUCLEAR_POWER)));
-        assert_eq!(channel(NUCLEAR_POWER), MEME_CHANNELS - 1);
+        // The last invention channel is the top of the tree block; the practice
+        // channels above it (`PRACTICE_CHANNEL_BASE..`) are NOT invention channels.
+        assert_eq!(channel(NUCLEAR_POWER), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
+        assert!(!is_invention_channel(INVENTION_CHANNEL_BASE + INVENTION_COUNT));
         assert!(!is_invention_channel(MEME_CHANNELS));
     }
 

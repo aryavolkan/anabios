@@ -59,6 +59,10 @@ pub fn step(world: &mut World) {
     // stress/pollution (opt-in; no-op when `inventions_enabled` is false).
     crate::invention::invention_step(world);
 
+    // Stage 6d: maladaptive-practice discovery — inventive agents can stumble
+    // onto a harmful custom (opt-in; no-op when `cognition_enabled` is false).
+    crate::practice::discover_step(world);
+
     // Keep scratch sized to the post-reproduce capacity so end-of-tick detectors
     // (AlarmCall) that read actions/sensors/desired_direction see every agent —
     // reproduce (stage 6) can grow capacity past the top-of-tick resize.

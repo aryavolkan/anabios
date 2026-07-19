@@ -150,8 +150,39 @@ pub fn reproduce_all(world: &mut World) {
             let a_meme = world.agents.meme_vector[i];
             let b_meme = world.agents.meme_vector[j];
             let inventions_enabled = world.inventions_enabled;
-            world.agents.meme_vector[child_id as usize] =
-                crate::culture::inherit_meme(&a_meme, &b_meme, &mut world.rng, inventions_enabled);
+            let cognition_enabled = world.cognition_enabled;
+            world.agents.meme_vector[child_id as usize] = crate::culture::inherit_meme(
+                &a_meme,
+                &b_meme,
+                &mut world.rng,
+                inventions_enabled,
+                cognition_enabled,
+            );
+        }
+
+        // Maladaptive-practice fitness costs (cognition-gated). A parent's held
+        // practice damages the offspring's reproductive/genetic fitness. Read
+        // the holdings first (releasing the meme-vector borrow) so the energy /
+        // kill mutations below don't alias it.
+        if world.cognition_enabled {
+            use crate::practice::{self, CHILD_SACRIFICE, INBREEDING};
+            let inbred = practice::has(&world.agents.meme_vector[i], INBREEDING)
+                || practice::has(&world.agents.meme_vector[j], INBREEDING);
+            let sacrifices = practice::has(&world.agents.meme_vector[i], CHILD_SACRIFICE)
+                || practice::has(&world.agents.meme_vector[j], CHILD_SACRIFICE);
+            // Inbreeding depression: a kin-mating custom expresses recessive
+            // genetic load — the closer the parents, the frailer the child.
+            if inbred {
+                let closeness = practice::inbreeding_closeness(&a_genome, &b_genome);
+                world.agents.energy[child_id as usize] *=
+                    1.0 - practice::INBREEDING_DEPRESSION * closeness;
+            }
+            // Child sacrifice: a holder culls its own newborn. One RNG draw per
+            // qualifying birth (zero when cognition is off).
+            if sacrifices && world.rng.f32_unit() < practice::CHILD_SACRIFICE_CULL {
+                world.agents.kill(child_id);
+                world.remove_from_species(a_species);
+            }
         }
     }
     world.agents.scratch_ids = alive_ids;
@@ -329,6 +360,68 @@ mod tests {
         assert_eq!(w.agents.live_count(), 3, "one free slot: exactly one offspring");
         reproduce_all(&mut w);
         assert_eq!(w.agents.live_count(), 3, "cap holds on the next pass too");
+    }
+
+    #[test]
+    fn inbreeding_meme_depresses_close_kin_offspring_energy() {
+        use crate::practice;
+        let birth_energy = |inbreeding: bool| -> f32 {
+            let mut w = World::new(71);
+            w.cognition_enabled = true;
+            let pos = find_grass_cell_center(&w);
+            let a = w.spawn_agent(pos, fertile_genome());
+            let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+            // Identical genomes → closeness 1 → maximal depression.
+            w.agents.genome[b as usize] = w.agents.genome[a as usize];
+            w.agents.energy[a as usize] = SPAWN_ENERGY * 2.0;
+            w.agents.energy[b as usize] = SPAWN_ENERGY * 2.0;
+            if inbreeding {
+                w.agents.meme_vector[a as usize][practice::channel(practice::INBREEDING)] = 1.0;
+            }
+            w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+            reproduce_all(&mut w);
+            assert_eq!(w.agents.live_count(), 3, "the pair produced one child");
+            w.agents.energy[2] // the newborn occupies the next fresh slot
+        };
+        let control = birth_energy(false);
+        let inbred = birth_energy(true);
+        assert!((control - SPAWN_ENERGY).abs() < 1e-4, "control child starts at spawn energy");
+        assert!(
+            (inbred - SPAWN_ENERGY * (1.0 - practice::INBREEDING_DEPRESSION)).abs() < 1e-3,
+            "identical-parent inbreeding halves the child's starting energy: {inbred}"
+        );
+    }
+
+    #[test]
+    fn child_sacrifice_culls_about_half_of_newborns() {
+        use crate::practice;
+        let survivors = |sacrifice: bool| -> u32 {
+            let mut count = 0;
+            for seed in 0..80u64 {
+                let mut w = World::new(1000 + seed);
+                w.cognition_enabled = true;
+                let pos = find_grass_cell_center(&w);
+                let a = w.spawn_agent(pos, fertile_genome());
+                let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+                w.agents.energy[a as usize] = SPAWN_ENERGY * 2.0;
+                w.agents.energy[b as usize] = SPAWN_ENERGY * 2.0;
+                if sacrifice {
+                    w.agents.meme_vector[a as usize]
+                        [practice::channel(practice::CHILD_SACRIFICE)] = 1.0;
+                }
+                w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+                reproduce_all(&mut w);
+                if w.agents.live_count() == 3 {
+                    count += 1; // the newborn survived
+                }
+            }
+            count
+        };
+        let control = survivors(false);
+        let sacrificed = survivors(true);
+        assert_eq!(control, 80, "no practice → every pair rears its child");
+        assert!(sacrificed < control, "child sacrifice culls some: {sacrificed}/80");
+        assert!((20..=60).contains(&sacrificed), "roughly half survive: {sacrificed}/80");
     }
 
     #[test]

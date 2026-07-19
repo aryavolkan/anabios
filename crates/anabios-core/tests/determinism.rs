@@ -57,8 +57,14 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // for every agent (metabolic multiplier is exact identity) and behavior is
 // unchanged — but the serialized layout grew from tick 0, so all three hashes
 // moved by layout only (the tick-0 move proves there is no trajectory change).
+// Refreshed 2026-07-19 (5): cognitive layer Phase 3 — MEME_CHANNELS widened
+// 18→20 for the maladaptive-practice block (channels 18-19); FORMAT_VERSION 7.
+// `cognition_enabled` off ⇒ practice channels stay 0, draw no jitter (inherit_meme
+// gates them on the flag), and no reproductive effect applies — behavior
+// unchanged; only the serialized meme vector grew, so all three hashes moved by
+// layout (tick-0 move again proves no trajectory change).
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x095cf168478d1dbd), (100, 0x85e5250e67f87ec4), (1000, 0x6128decb3cc1f497)];
+    &[(0, 0x0e6dcdf26e39bcbd), (100, 0xb5a371c1c48346a4), (1000, 0x04f2eaad01e93df7)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

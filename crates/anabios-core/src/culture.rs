@@ -128,30 +128,32 @@ pub fn env_optimum_at(tick: u64, period: u32) -> f32 {
 /// Jitter uses a centered uniform draw scaled by `MEME_INHERIT_JITTER` (matches
 /// the codebase's `perturb` style; determinism via the shared `rng`).
 ///
-/// When `inventions_enabled` is false the invention channels (`>=
-/// INVENTION_CHANNEL_BASE`) are unused and always 0, so their jitter is skipped
-/// entirely — no RNG draw, exact `0.0` inherited. This keeps the RNG draw count
-/// (and thus every non-invention culture scenario's trajectory) byte-identical
-/// to the pre-tree 8-channel behaviour: widening `MEME_CHANNELS` to fit the tree
-/// must not perturb scenarios that never opted into it. With the flag on, the
-/// draw count is exactly `MEME_CHANNELS` and invention adoption is inherited
-/// with jitter like any other meme.
+/// A channel is jittered only when its block is active, so widening the meme
+/// vector to fit a new block never perturbs a scenario that has not opted into
+/// it: base channels (`0..INVENTION_CHANNEL_BASE`) always jitter; invention
+/// channels jitter iff `inventions_enabled`; practice channels jitter iff
+/// `cognition_enabled`. An inactive block inherits the exact parent average with
+/// no RNG draw, so the draw count (and thus every unrelated scenario's
+/// trajectory) is byte-identical to before that block existed.
 pub fn inherit_meme(
     a: &[f32; MEME_CHANNELS],
     b: &[f32; MEME_CHANNELS],
     rng: &mut Rng,
     inventions_enabled: bool,
+    cognition_enabled: bool,
 ) -> [f32; MEME_CHANNELS] {
-    let jitter_channels =
-        if inventions_enabled { MEME_CHANNELS } else { crate::invention::INVENTION_CHANNEL_BASE };
     let mut out = [0.0f32; MEME_CHANNELS];
     for ch in 0..MEME_CHANNELS {
         let avg = 0.5 * (a[ch] + b[ch]);
-        out[ch] = if ch < jitter_channels {
-            avg + (rng.f32_unit() - 0.5) * 2.0 * MEME_INHERIT_JITTER
+        let active = if crate::invention::is_invention_channel(ch) {
+            inventions_enabled
+        } else if crate::practice::is_practice_channel(ch) {
+            cognition_enabled
         } else {
-            avg
+            true
         };
+        out[ch] =
+            if active { avg + (rng.f32_unit() - 0.5) * 2.0 * MEME_INHERIT_JITTER } else { avg };
     }
     out
 }
@@ -183,6 +185,9 @@ pub fn culture_step(world: &mut World) {
         // invention channel — the copy-toward-best target, like the skill
         // channel's rule.
         let mut max_neighbour_inv = [0.0f32; crate::invention::INVENTION_COUNT];
+        // Practice spread: best neighbour level per maladaptive-practice channel
+        // (same copy-toward-best rule; only tracked when cognition is enabled).
+        let mut max_neighbour_practice = [0.0f32; crate::practice::PRACTICE_COUNT];
         // DIT env mode: the current optimum, and the neighbour whose technique
         // best matches it (minimizes |tech - opt|). Only computed when active.
         let env_on = world.env_period > 0;
@@ -206,6 +211,11 @@ pub fn culture_step(world: &mut World) {
             if world.inventions_enabled {
                 for (k, best) in max_neighbour_inv.iter_mut().enumerate() {
                     *best = best.max(world.agents.meme_vector[j][crate::invention::channel(k)]);
+                }
+            }
+            if world.cognition_enabled {
+                for (p, best) in max_neighbour_practice.iter_mut().enumerate() {
+                    *best = best.max(world.agents.meme_vector[j][crate::practice::channel(p)]);
                 }
             }
             if env_on {
@@ -236,6 +246,7 @@ pub fn culture_step(world: &mut World) {
             if ch == SKILL_CHANNEL
                 || ch == TECH_CHANNEL
                 || crate::invention::is_invention_channel(ch)
+                || crate::practice::is_practice_channel(ch)
             {
                 continue;
             }
@@ -273,6 +284,23 @@ pub fn culture_step(world: &mut World) {
                 let cur = world.agents.meme_vector[i][ch];
                 if target > cur {
                     world.agents.meme_vector[i][ch] = cur + rate * (target - cur);
+                }
+            }
+        }
+        // Maladaptive practice spread: copy each practice toward the best-holding
+        // neighbour (payoff-blind — the receiver has no idea it is harmful).
+        // IQ-gated on the receiver so low-cognition agents can still catch them.
+        if world.cognition_enabled {
+            let receiver_iq = world.agents.iq[i];
+            for (p, &target) in max_neighbour_practice.iter().enumerate() {
+                if receiver_iq < crate::practice::PRACTICE_IQ_REQ {
+                    continue;
+                }
+                let ch = crate::practice::channel(p);
+                let cur = world.agents.meme_vector[i][ch];
+                if target > cur {
+                    world.agents.meme_vector[i][ch] =
+                        cur + crate::practice::PRACTICE_SPREAD_RATE * (target - cur);
                 }
             }
         }
