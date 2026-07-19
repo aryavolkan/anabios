@@ -387,6 +387,42 @@ fn pollution_penalizes_biome_regrowth() {
     );
 }
 
+#[test]
+fn crowding_stress_applies_to_established_holder_when_capacity_grew_this_tick() {
+    // `invention_step` (tick stage 6c) runs before the second `resize_scratch`,
+    // so on a tick where reproduction grew capacity the sensors buffer is still
+    // sized to the top-of-tick population. The per-agent bounds check must keep
+    // charging crowding stress to the established Farming holder (index 0) —
+    // only the just-born slot beyond the buffer is skipped. Regression guard for
+    // the old all-or-nothing `sensors_ok = len >= capacity` gate, which dropped
+    // the debuff for the WHOLE population on every growth tick.
+    let mut w = World::new(61);
+    w.inventions_enabled = true;
+    let holder = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let _newborn = w.spawn_agent(Vec2::new(503.0, 500.0), Genome::neutral());
+    assert!(w.agents.capacity() >= 2, "two agents → capacity ≥ 2");
+    // Full chain so Farming is supported (no atrophy) and pays no flat upkeep,
+    // isolating crowding stress as the only energy change this tick.
+    set_held(&mut w, holder, invention::STONE_TOOLS);
+    set_held(&mut w, holder, invention::FIRE);
+    set_held(&mut w, holder, invention::FARMING);
+    // Sensors sized to ONLY the holder (len 1 < capacity 2) — the newborn slot
+    // sits beyond the buffer, exactly the mid-growth-tick condition.
+    w.sensors.resize(1, Default::default());
+    let crowding = invention::FARMING_CROWDING_FREE + 10;
+    w.sensors[holder as usize].crowding = crowding;
+    let mask = invention::held_mask(&w.agents.meme_vector[holder as usize]);
+    let expected = invention::crowding_stress(mask, crowding);
+    assert!(expected > 0.0, "test setup: crowding must exceed the free allowance");
+    let e0 = w.agents.energy[holder as usize];
+    invention::invention_step(&mut w);
+    let drained = e0 - w.agents.energy[holder as usize];
+    assert!(
+        (drained - expected).abs() < 1e-6,
+        "established holder pays crowding stress on a growth tick: drained={drained} expected={expected}"
+    );
+}
+
 // --- Codex ----------------------------------------------------------------------
 
 #[test]

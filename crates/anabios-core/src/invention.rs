@@ -417,7 +417,6 @@ pub fn invention_step(world: &mut World) {
     let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
     alive_ids.clear();
     alive_ids.extend(world.agents.iter_alive());
-    let sensors_ok = world.sensors.len() >= world.agents.capacity();
     for &id in &alive_ids {
         let i = id as usize;
         let mut mask = held_mask(&world.agents.meme_vector[i]);
@@ -468,7 +467,13 @@ pub fn invention_step(world: &mut World) {
         }
         // --- Per-holder per-tick effects. ---
         world.agents.energy[i] -= flat_upkeep(mask);
-        if sensors_ok {
+        // Per-agent sensor bounds check: `invention_step` (stage 6c) runs before
+        // the second `resize_scratch`, so on a tick where reproduce grew capacity
+        // the sensors buffer is still sized to the top-of-tick population. Guard
+        // per agent — not globally — so established Farming holders keep paying
+        // crowding stress during growth ticks; only the just-born agents beyond
+        // the buffer (no valid sensor reading yet) are skipped.
+        if i < world.sensors.len() {
             world.agents.energy[i] -= crowding_stress(mask, world.sensors[i].crowding);
         }
         if mask & bit(MACHINERY) != 0 {
