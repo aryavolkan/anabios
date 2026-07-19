@@ -63,8 +63,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // gates them on the flag), and no reproductive effect applies — behavior
 // unchanged; only the serialized meme vector grew, so all three hashes moved by
 // layout (tick-0 move again proves no trajectory change).
+// Refreshed 2026-07-19 (6): cognitive layer Phase 4 — CodexState gained the
+// practice detector latches (practices_discovered / practices_adopted). Empty
+// BTreeSets when cognition is off, but they serialize into the state, so all
+// three hashes moved by layout only (tick-0 move proves no trajectory change).
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x0e6dcdf26e39bcbd), (100, 0xb5a371c1c48346a4), (1000, 0x04f2eaad01e93df7)];
+    &[(0, 0xbb2e1bbdc3f090bd), (100, 0x55614f8943fbc164), (1000, 0xc907e7e7ca079537)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

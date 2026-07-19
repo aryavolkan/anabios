@@ -40,6 +40,15 @@ const CHARTS := [
 		],
 	},
 	{
+		"title": "cognition & maladaptive culture",
+		"unit": "01",
+		"series": [
+			{"key": "mean_iq", "label": "mean IQ", "color": Color(0.5, 0.85, 1.0)},
+			{"key": "practice_inbreeding_frac", "label": "inbreeding", "color": Color(0.95, 0.45, 0.55)},
+			{"key": "practice_child_sacrifice_frac", "label": "child sacrifice", "color": Color(0.85, 0.3, 0.3)},
+		],
+	},
+	{
 		"title": "population",
 		"unit": "auto",
 		"series": [
@@ -69,6 +78,8 @@ const MARKER_COLORS := {
 	12: Color(1.0, 0.9, 0.3, 0.6),   # MemeSweep
 	17: Color(1.0, 0.9, 0.35, 0.5),  # InventionDiscovered
 	18: Color(0.55, 0.95, 1.0, 0.4), # InventionAdopted
+	19: Color(0.95, 0.45, 0.55, 0.5), # PracticeDiscovered
+	20: Color(0.85, 0.3, 0.3, 0.45),  # PracticeAdopted
 }
 
 var _shown: bool = false

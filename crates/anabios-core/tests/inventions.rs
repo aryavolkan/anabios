@@ -755,8 +755,11 @@ fn inventions_scenario_is_deterministic() {
 // are inert and inherit_meme still jitters exactly the 18 base+invention
 // channels (draw count unchanged) — only the serialized meme vector grew,
 // moving all three hashes by layout.
+// Refreshed 2026-07-19 (4): Phase 4 added the practice codex latches to
+// CodexState (empty here — cognition off), which serialize into the state, so
+// all three hashes moved by layout only.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x6cc6db7cf47922d6), (100, 0xaeb775f69af1f15b), (300, 0x0c9c17a5c5003aaa)];
+    &[(0, 0x0b027cceb0bdcb56), (100, 0x3cb5888c52550a5b), (300, 0xd670d33f22e7c92a)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
