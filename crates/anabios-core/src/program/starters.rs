@@ -57,19 +57,40 @@ pub fn starter_stalker() -> Program {
     ])
 }
 
-/// Spiner: approach the nearest other-species agent and loose spines from
-/// standoff distance — fires when within ~6 units, inside the Spines
-/// module's reach but beyond a contact Weapon's.
+/// Spiner: a kiting standoff hunter. Approaches only while the target is
+/// beyond spine range (dist > 6), backs off when a target closes inside ~4
+/// units, and fires from the 4–6 unit standoff ring — inside the Spines
+/// module's reach (7.0 at kit values) but beyond any contact Weapon's.
 pub fn starter_spiner() -> Program {
     Program::from_slice(&[
+        // approach when far: move toward × (dist > 6)
+        Node::SenseOtherDist,
+        Node::ThresholdGt(6.0),
         Node::SenseOtherDirX,
+        Node::Mul,
         Node::MoveTowardX,
+        Node::SenseOtherDist,
+        Node::ThresholdGt(6.0),
         Node::SenseOtherDirY,
+        Node::Mul,
         Node::MoveTowardY,
-        // fire when other_dist < 6  ==  (-other_dist) > -6
+        // back off when too close: move away × (dist < 4)
         Node::SenseOtherDist,
         Node::Neg,
-        Node::ThresholdGt(-6.0),
+        Node::ThresholdGt(-4.0),
+        Node::SenseOtherDirX,
+        Node::Mul,
+        Node::MoveAwayX,
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-4.0),
+        Node::SenseOtherDirY,
+        Node::Mul,
+        Node::MoveAwayY,
+        // fire from the standoff ring (dist < 6.5)
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-6.5),
         Node::FireWeapon,
     ])
 }

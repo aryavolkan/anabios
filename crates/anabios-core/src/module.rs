@@ -289,12 +289,14 @@ pub fn predator_kit() -> ModuleList {
 }
 
 /// A ranged-hunter kit: keen eyes, a carnivore mouth, and a `Spines` volley
-/// weapon that kills from beyond contact range. Includes `Reproductive` so
-/// the lineage can establish and evolve (unlike the founder predator kits).
-/// Used by the `spiner` scenario archetype.
+/// weapon that kills from beyond contact range. Speed 0.65 outspeeds grazers
+/// (0.6) and bruisers (0.5) so the kiting program can hold its standoff ring,
+/// while stalkers (0.7) still run it down — a rock-paper-scissors balance.
+/// Includes `Reproductive` so the lineage can establish and evolve (unlike
+/// the founder predator kits). Used by the `spiner` scenario archetype.
 pub fn spiner_kit() -> ModuleList {
     smallvec![
-        Module::Locomotor { max_speed: 0.55, terrain_affinity: 0.5 },
+        Module::Locomotor { max_speed: 0.65, terrain_affinity: 0.5 },
         Module::Sensor { sensor_type: SensorType::Vision, radius: 0.9, acuity: 0.75 },
         Module::Mouth { bite_size: 0.5, diet_affinity: 1.0 },
         Module::Spines { damage: 4.0, energy_cost: 1.5, range: 0.8 },

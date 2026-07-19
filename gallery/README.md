@@ -17,7 +17,7 @@ with the same env vars. Camera close-ups use `ANABIOS_CAM_ZOOM/_CAM_X/_CAM_Y`.
 
 | File | Tick | What you're seeing |
 |---|---|---|
-| armsrace-t020-volley.png | 44 | The spiner pack (sp4) right after its opening `CombatRaid` at t=18 — spines kill from standoff range before contact weapons can answer. |
+| armsrace-t020-volley.png | 58 | The kiting spiner pack (sp4) after its `PackHunting` (t=19) and `CombatRaid` (t=27) — spines kill from the standoff ring before contact weapons can answer. |
 | armsrace-t160-standoff.png | 161 | Five species in play: grazers, herd prey, stalkers (sp3), spiners (sp4), bruisers (sp5). Standoff along the northeast flank. |
 | armsrace-t400-brawl.png | 461 | The contested northeast border: bruiser clusters (magenta Jaws glyphs) pressing into the herd range. |
 | armsrace-t3000-evolved.png | 3091 | End state: 162 species, 171 speciations, a dense migratory swarm sweeping the eastern half of the world. |
