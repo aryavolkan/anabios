@@ -57,6 +57,12 @@ pub struct World {
     /// bincode/`FORMAT_VERSION` caveat as `env_period`.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// When true, agents are pulled toward their `TerrainAffinity` preferred
+    /// terrain (terrain-based habitat selection), so species sort into biomes
+    /// and trade at borders. Off by default; opt-in per scenario. Same
+    /// bincode/`FORMAT_VERSION` caveat as `biome_adaptation`.
+    #[serde(default)]
+    pub terrain_habitat: bool,
     /// When true, the cultural invention tree is active: Communicator agents
     /// discover inventions (innovation roll) and copy them socially, with
     /// per-holder buffs/debuffs. Off by default; opt-in per scenario.
@@ -181,6 +187,7 @@ impl World {
             pheromones: crate::pheromone::PheromoneField::new(),
             env_period: 0,
             biome_adaptation: false,
+            terrain_habitat: false,
             inventions_enabled: false,
             living_biome: false,
             season_period: 0,

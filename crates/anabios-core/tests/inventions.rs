@@ -565,8 +565,11 @@ fn inventions_scenario_is_deterministic() {
 // World.{resources,resources_enabled}, CodexState.first_cross_species_trade.
 // Flag off = byte-identical trajectory; only serialized layout grew, so all
 // three hashes moved.
+// Refreshed 2026-07-19 (3): added World.terrain_habitat flag (geographic
+// trade routes). Flag off = byte-identical trajectory; only serialized
+// layout grew, so all three hashes moved.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x42e824d08884afe2), (100, 0x13b8f86034d07d53), (300, 0xfbdacadb91f76b9e)];
+    &[(0, 0xf691b5efa48827f6), (100, 0x24898a39cd314b21), (300, 0x87c995f8dadfdc2a)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

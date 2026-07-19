@@ -55,8 +55,11 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // World.{resources,resources_enabled}, CodexState.first_cross_species_trade.
 // Flag off = byte-identical trajectory; only serialized layout grew, so all
 // three hashes moved.
+// Refreshed 2026-07-19: added World.terrain_habitat flag (geographic trade
+// routes). Flag off = byte-identical trajectory; only serialized layout
+// grew, so all three hashes moved.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x70b271b55532c61d), (100, 0x383f0bb4f1680042), (1000, 0x43f0bb375973c16d)];
+    &[(0, 0xe837d5355d249ad5), (100, 0x5d5c9a9aa89bb554), (1000, 0xde602be45d01a105)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

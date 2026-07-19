@@ -25,7 +25,10 @@ use crate::world::World;
 /// v6: biome trade goods — AgentBuffers.inventory, World.{resources,
 ///     resources_enabled}, CodexState.first_cross_species_trade. Behavior
 ///     unchanged with resources_enabled off; only serialized layout grew.
-pub const FORMAT_VERSION: u32 = 6;
+/// v7: geographic trade routes — World.terrain_habitat flag (opt-in terrain
+///     habitat selection). Behavior unchanged with the flag off; only the
+///     serialized layout grew.
+pub const FORMAT_VERSION: u32 = 7;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
