@@ -1,0 +1,49 @@
+# Biome trade goods: five species clustered across the map. Each harvests the
+# goods native to its local biomes, then swaps surpluses with other species to
+# assemble the balanced dowry basket every birth requires. Trade + reproduction
+# emerge from geography.
+name = "biome-trade"
+seed = 20260719
+resources_enabled = true
+living_biome = true
+max_population = 600
+
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 200.0, center_y = 200.0, radius = 90.0 }
+[agents.traits]
+reproduction_threshold = 0.4
+size = 0.4
+
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 800.0, center_y = 200.0, radius = 90.0 }
+[agents.traits]
+reproduction_threshold = 0.4
+size = 0.4
+
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 200.0, center_y = 800.0, radius = 90.0 }
+[agents.traits]
+reproduction_threshold = 0.4
+size = 0.4
+
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 800.0, center_y = 800.0, radius = 90.0 }
+[agents.traits]
+reproduction_threshold = 0.4
+size = 0.4
+
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+reproduction_threshold = 0.4
+size = 0.4

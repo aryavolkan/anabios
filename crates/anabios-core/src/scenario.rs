@@ -37,6 +37,11 @@ pub struct Scenario {
     /// the productive band over a `2 * season_period`-tick cycle.
     #[serde(default)]
     pub season_period: u32,
+    /// Opt-in: enable the biome-trade-goods economy (resource nodes spawn,
+    /// agents harvest and trade them, reproduction needs a dowry basket).
+    /// `false` (default) leaves the world unchanged.
+    #[serde(default)]
+    pub resources_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -276,6 +281,7 @@ impl Scenario {
         w.inventions_enabled = self.inventions_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
+        w.resources_enabled = self.resources_enabled;
         if let Some(cap) = self.max_population {
             w.max_population = cap;
         }
@@ -469,5 +475,24 @@ placement = { kind = "uniform" }
                 "stalker has a Weapon"
             );
         }
+    }
+
+    #[test]
+    fn resources_flag_parses_and_wires_into_world() {
+        let text = r#"
+name = "t"
+seed = 1
+resources_enabled = true
+[[agents]]
+count = 3
+placement = { kind = "uniform" }
+"#;
+        let s = Scenario::parse_toml(text).expect("parse");
+        assert!(s.resources_enabled);
+        let w = s.instantiate();
+        assert!(w.resources_enabled);
+        // Default (absent) stays false.
+        let off = Scenario::parse_toml("name=\"t\"\nseed=1\n").expect("parse").instantiate();
+        assert!(!off.resources_enabled);
     }
 }
