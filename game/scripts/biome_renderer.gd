@@ -12,22 +12,34 @@ var _frame: int = 0
 var _last_mode: int = -999   # last (channel, or -1 biome, or -2 optimum) drawn
 
 func _ready() -> void:
-	_res = int(sim.biome_resolution())
-	if _res <= 0:
-		return
-	_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
-	_tex = ImageTexture.create_from_image(_img)
-	texture = _tex
 	centered = false
-	var world: float = sim.world_size()
-	scale = Vector2(world / _res, world / _res)
 	position = Vector2.ZERO
 	z_index = -10
 	# Slightly dim + cool the ground so organisms and overlays read clearly on
 	# top and the terrain harmonizes with the dark instrument HUD.
 	modulate = Color(0.78, 0.82, 0.88)
+	_setup(int(sim.biome_resolution()))
+
+# (Re)build the texture at `res`. Needed because the scenario loads AFTER this
+# child node's _ready (children ready before the Main parent), so at _ready the
+# sim still reports the DEFAULT resolution — a larger scenario would otherwise
+# leave a size mismatch and a blank ground. Also re-runs on Restart into a
+# different-size scenario.
+func _setup(res: int) -> void:
+	_res = res
+	if _res <= 0:
+		return
+	_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
+	_tex = ImageTexture.create_from_image(_img)
+	texture = _tex
+	var world: float = sim.world_size()
+	scale = Vector2(world / _res, world / _res)
+	_last_mode = -999  # force an immediate redraw
 
 func _process(_delta: float) -> void:
+	var res: int = int(sim.biome_resolution())
+	if res != _res:
+		_setup(res)
 	if _res <= 0:
 		return
 	# Current ground selection encoded as one int: -2 optimum, -1 biome, else channel.
