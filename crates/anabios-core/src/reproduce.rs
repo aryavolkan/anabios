@@ -103,6 +103,14 @@ pub fn reproduce_all(world: &mut World) {
                 world.agents.inventory[i][g.index()] -= crate::resource::DOWRY_REQ;
                 world.agents.inventory[j][g.index()] -= crate::resource::DOWRY_REQ;
             }
+            world.codex.push_event(crate::codex::CodexEvent {
+                event_type: crate::codex::EventType::DowryBirth,
+                tick: world.tick,
+                species_id: a_species,
+                value: 0.0,
+                loc_x: world.agents.position[i].x,
+                loc_y: world.agents.position[i].y,
+            });
         }
 
         // Build child genome: crossover + mutate. Nuclear Power debuff:
@@ -476,5 +484,29 @@ mod tests {
         let before = w.agents.live_count();
         reproduce_all(&mut w);
         assert_eq!(w.agents.live_count(), before + 1, "flag off: dowry not required");
+    }
+
+    #[test]
+    fn dowry_birth_emits_event() {
+        use crate::codex::EventType;
+        use crate::resource::{Good, DOWRY_REQ};
+        let mut w = World::new(13);
+        w.resources_enabled = true;
+        let pos = find_grass_cell_center(&w);
+        let id0 = w.spawn_agent(pos, fertile_genome());
+        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
+        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
+        for id in [id0, id1] {
+            for g in Good::ALL {
+                w.agents.inventory[id as usize][g.index()] = DOWRY_REQ;
+            }
+        }
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        reproduce_all(&mut w);
+        assert!(
+            w.codex.events.iter().any(|e| e.event_type == EventType::DowryBirth),
+            "a DowryBirth event was recorded"
+        );
     }
 }

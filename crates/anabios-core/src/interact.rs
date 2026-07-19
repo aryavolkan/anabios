@@ -420,6 +420,17 @@ fn trade_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.inventory[t][give] += TRADE_UNIT;
         world.agents.inventory[t][recv] -= TRADE_UNIT;
         world.agents.inventory[i][recv] += TRADE_UNIT;
+        if !world.codex.first_cross_species_trade {
+            world.codex.first_cross_species_trade = true;
+            world.codex.push_event(crate::codex::CodexEvent {
+                event_type: crate::codex::EventType::ResourceTraded,
+                tick: world.tick,
+                species_id: world.agents.species_id[i],
+                value: give as f32,
+                loc_x: world.agents.position[i].x,
+                loc_y: world.agents.position[i].y,
+            });
+        }
     }
 }
 
@@ -566,6 +577,37 @@ mod tests {
             w.agents.inventory[a as usize][Good::Obsidian.index()],
             0.0,
             "no same-species trade"
+        );
+    }
+
+    #[test]
+    fn first_cross_species_trade_emits_event() {
+        use crate::codex::EventType;
+        use crate::resource::Good;
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        let pos = Vec2::new(300.0, 300.0);
+        let a = w.spawn_agent(pos, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+        w.agents.species_id[b as usize] = 1;
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &mut w.sensors,
+            w.world_size,
+        );
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        trade_pass(&mut w, &alive);
+        assert!(w.codex.first_cross_species_trade, "latch set after first trade");
+        assert!(
+            w.codex.events.iter().any(|e| e.event_type == EventType::ResourceTraded),
+            "a ResourceTraded event was recorded"
         );
     }
 }

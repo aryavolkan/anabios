@@ -139,6 +139,10 @@ pub enum EventType {
     /// An invention crosses ≥50% adoption inside a species (`value` =
     /// invention id).
     InventionAdopted = 18,
+    /// First bilateral cross-species resource swap in the world (latched once).
+    ResourceTraded = 19,
+    /// An offspring was produced by spending a full dowry basket.
+    DowryBirth = 20,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
