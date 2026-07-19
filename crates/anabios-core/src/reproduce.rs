@@ -149,8 +149,9 @@ pub fn reproduce_all(world: &mut World) {
         ) {
             let a_meme = world.agents.meme_vector[i];
             let b_meme = world.agents.meme_vector[j];
+            let inventions_enabled = world.inventions_enabled;
             world.agents.meme_vector[child_id as usize] =
-                crate::culture::inherit_meme(&a_meme, &b_meme, &mut world.rng);
+                crate::culture::inherit_meme(&a_meme, &b_meme, &mut world.rng, inventions_enabled);
         }
     }
     world.agents.scratch_ids = alive_ids;

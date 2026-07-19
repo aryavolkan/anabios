@@ -744,10 +744,17 @@ fn phero_intensity(v: f32) -> f32 {
 /// render as distinct body colors. The per-channel weights are normalized to
 /// sum to 1, so the hue is a weighted average of the meme values (bounded and
 /// not dominated by any single high-index channel) wrapped into `[0,1)`.
+///
+/// Only the pre-invention dialect channels (`0..INVENTION_CHANNEL_BASE`)
+/// contribute. The invention-adoption channels are 0 in every non-invention
+/// scenario, yet still carry weight in the sum — averaging them in would drag
+/// every dialect hue toward zero once `MEME_CHANNELS` widened 8->18, so they
+/// are excluded here (mirroring `is_invention_channel` in the core meme lerp).
 fn dialect_hue(meme: &[f32]) -> f32 {
+    let n = meme.len().min(anabios_core::invention::INVENTION_CHANNEL_BASE);
     let mut acc = 0.0_f32;
     let mut wsum = 0.0_f32;
-    for (k, v) in meme.iter().enumerate() {
+    for (k, v) in meme[..n].iter().enumerate() {
         let w = 0.37 + 0.11 * k as f32;
         acc += v * w;
         wsum += w;
@@ -899,5 +906,17 @@ mod tests {
         assert!((0.0..1.0).contains(&dialect_hue(&a)));
         assert!((0.0..1.0).contains(&dialect_hue(&b)));
         assert!(dialect_hue(&a) != dialect_hue(&b));
+
+        // Regression guard for the MEME_CHANNELS 8->18 widening: the full-width
+        // meme vector must hue-match its 8-channel dialect prefix. The invention
+        // channels must not dilute the hue — neither when zero (the common case)
+        // nor when populated.
+        let mut wide = [0.0_f32; anabios_core::program::MEME_CHANNELS];
+        wide[..8].copy_from_slice(&b);
+        assert_eq!(dialect_hue(&wide), dialect_hue(&b));
+        for v in wide[anabios_core::invention::INVENTION_CHANNEL_BASE..].iter_mut() {
+            *v = 0.7;
+        }
+        assert_eq!(dialect_hue(&wide), dialect_hue(&b));
     }
 }

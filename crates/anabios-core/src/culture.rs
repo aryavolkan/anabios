@@ -127,16 +127,31 @@ pub fn env_optimum_at(tick: u64, period: u32) -> f32 {
 /// Child meme = per-channel parent average plus small centered-uniform jitter.
 /// Jitter uses a centered uniform draw scaled by `MEME_INHERIT_JITTER` (matches
 /// the codebase's `perturb` style; determinism via the shared `rng`).
-/// Draw count is exactly `MEME_CHANNELS` per inheriting birth.
+///
+/// When `inventions_enabled` is false the invention channels (`>=
+/// INVENTION_CHANNEL_BASE`) are unused and always 0, so their jitter is skipped
+/// entirely — no RNG draw, exact `0.0` inherited. This keeps the RNG draw count
+/// (and thus every non-invention culture scenario's trajectory) byte-identical
+/// to the pre-tree 8-channel behaviour: widening `MEME_CHANNELS` to fit the tree
+/// must not perturb scenarios that never opted into it. With the flag on, the
+/// draw count is exactly `MEME_CHANNELS` and invention adoption is inherited
+/// with jitter like any other meme.
 pub fn inherit_meme(
     a: &[f32; MEME_CHANNELS],
     b: &[f32; MEME_CHANNELS],
     rng: &mut Rng,
+    inventions_enabled: bool,
 ) -> [f32; MEME_CHANNELS] {
+    let jitter_channels =
+        if inventions_enabled { MEME_CHANNELS } else { crate::invention::INVENTION_CHANNEL_BASE };
     let mut out = [0.0f32; MEME_CHANNELS];
     for ch in 0..MEME_CHANNELS {
-        let jitter = (rng.f32_unit() - 0.5) * 2.0 * MEME_INHERIT_JITTER;
-        out[ch] = 0.5 * (a[ch] + b[ch]) + jitter;
+        let avg = 0.5 * (a[ch] + b[ch]);
+        out[ch] = if ch < jitter_channels {
+            avg + (rng.f32_unit() - 0.5) * 2.0 * MEME_INHERIT_JITTER
+        } else {
+            avg
+        };
     }
     out
 }

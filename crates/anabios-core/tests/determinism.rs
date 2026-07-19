@@ -44,8 +44,15 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // (InventionAdopted reports those sweeps explicitly). Simulation physics
 // unchanged; only codex bookkeeping/serialized bytes differ — tick 1000 moved
 // because minimal's grazers evolve a Communicator by then.
+// Refreshed 2026-07-19 (3): `inherit_meme` now skips the invention channels'
+// jitter draws when `inventions_enabled` is false, restoring the pre-tree
+// 8-channel RNG draw count for flag-off scenarios (the widening had silently
+// drawn 10 extra jitters per Communicator birth even with the flag off). Only
+// tick 1000 moved — minimal's grazers evolve a Communicator between ticks 100
+// and 1000, and this undoes that trajectory perturbation for every non-
+// invention culture scenario.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xe51e55efb59c20ed), (100, 0x26b7b341a207605f), (1000, 0xd1fda01ecff496d3)];
+    &[(0, 0xe51e55efb59c20ed), (100, 0x26b7b341a207605f), (1000, 0x9ff2c2487fdec8fa)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
