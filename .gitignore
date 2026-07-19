@@ -38,3 +38,9 @@ Thumbs.db
 # Profiling artifacts
 *.flamegraph.svg
 trace-*.json
+
+# Claude Code (worktrees, session state)
+.claude/
+
+# Godot resource UID caches (regenerated on import)
+*.gd.uid
