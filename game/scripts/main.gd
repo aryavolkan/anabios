@@ -23,6 +23,7 @@ const GLYPH_SIZE: float = 1.6
 @onready var overlay = $OverlayManager
 @onready var carcasses: MultiMeshInstance2D = $Carcasses
 @onready var flashes: MultiMeshInstance2D = $Flashes
+@onready var streaks: MultiMeshInstance2D = $Streaks
 
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
@@ -42,6 +43,7 @@ func _ready() -> void:
 	bodies.texture = disc
 	carcasses.texture = disc
 	flashes.texture = disc
+	# streaks keep the raw quad: a solid line reads as a crisp shot streak.
 
 # Give every HUD panel the shared instrument theme, and make the top-left
 # readout legible over any terrain with a dark outline.
@@ -66,6 +68,7 @@ func _process(_delta: float) -> void:
 	_refresh_bodies()
 	_refresh_carcasses()
 	_refresh_flashes()
+	_refresh_streaks()
 	var rate: String = "paused" if paused else ("%d×" % ticks_per_frame)
 	hud.text = "tick %d · %d alive · %s" % [sim.tick(), sim.alive_count(), rate]
 
@@ -155,6 +158,35 @@ func _refresh_flashes() -> void:
 	for i in m:
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(6.0, 6.0), 0.0, pts[i]))
 		mm.set_instance_color(i, Color(1.0, 0.92, 0.45, 0.95))
+
+# Combat streaks: attacker→target segments, kept on screen for a few ticks
+# as fading tracers so ranged (Spines) volleys read as volleys rather than
+# single-frame slivers that are easy to miss between frames.
+const STREAK_TTL: int = 8
+var _streak_trail: Array = [] # entries: [from: Vector2, to: Vector2, ttl: int]
+
+func _refresh_streaks() -> void:
+	var segs: PackedVector2Array = sim.combat_streaks()
+	for i in segs.size() / 2:
+		_streak_trail.append([segs[2 * i], segs[2 * i + 1], STREAK_TTL])
+	var mm: MultiMesh = streaks.multimesh
+	var kept: Array = []
+	for s in _streak_trail:
+		s[2] -= 1
+		if s[2] > 0:
+			kept.append(s)
+	_streak_trail = kept
+	var m: int = mini(_streak_trail.size(), mm.instance_count)
+	mm.visible_instance_count = m
+	for i in m:
+		var from: Vector2 = _streak_trail[i][0]
+		var to: Vector2 = _streak_trail[i][1]
+		var delta: Vector2 = to - from
+		var len: float = maxf(delta.length(), 0.001)
+		var mid: Vector2 = (from + to) * 0.5
+		mm.set_instance_transform_2d(i, Transform2D(delta.angle(), Vector2(len, 0.6), 0.0, mid))
+		var a: float = 0.85 * float(_streak_trail[i][2]) / float(STREAK_TTL)
+		mm.set_instance_color(i, Color(1.0, 0.55, 0.25, a))
 
 func _refresh_module_layers() -> void:
 	var all: Array = sim.module_glyphs_all()

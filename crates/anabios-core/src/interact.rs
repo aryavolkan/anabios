@@ -38,6 +38,7 @@ pub fn interact_all(world: &mut World) {
     for v in world.combat_attacker.iter_mut() {
         *v = crate::sense::NO_NEIGHBOR_SPECIES;
     }
+    world.combat_streaks.clear();
 
     feed_pass(world, &alive_ids);
     combat_pass(world, &alive_ids);
@@ -167,6 +168,8 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.energy[i] -= weapon.energy_cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
+        // Viewer scratch: draw a streak from the attacker to its target.
+        world.combat_streaks.push((world.agents.position[i], world.agents.position[t]));
         // Record hit for the PackHunting detector.
         world.codex.combat_hits.push_back(crate::codex::CombatHit {
             tick: world.tick,

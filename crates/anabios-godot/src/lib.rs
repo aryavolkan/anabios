@@ -664,6 +664,21 @@ impl Simulation {
         out
     }
 
+    /// Attacker→target position pairs for every combat hit on the most recent
+    /// tick, flattened as [from1, to1, from2, to2, ...]. Lets the viewer draw
+    /// streaks, which makes ranged (Spines) fire visible at standoff range.
+    /// Read-only view of a scratch buffer that is not serialized.
+    #[func]
+    fn combat_streaks(&self) -> PackedVector2Array {
+        let mut out = PackedVector2Array::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for (from, to) in &w.combat_streaks {
+            out.push(Vector2::new(from.x, from.y));
+            out.push(Vector2::new(to.x, to.y));
+        }
+        out
+    }
+
     /// Body rotation (radians) per alive agent, from velocity direction.
     /// Non-moving agents keep rotation 0. Same order as `alive_positions`.
     #[func]
