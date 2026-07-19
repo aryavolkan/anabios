@@ -10,8 +10,14 @@ use thiserror::Error;
 use crate::world::World;
 
 /// Current snapshot format version. Bump on any breaking change to the
-/// serialized layout.
-pub const FORMAT_VERSION: u32 = 2;
+/// serialized layout — and note bincode is NOT self-describing: adding,
+/// removing, or reordering a serialized field anywhere in `World` (or a type
+/// it contains) changes the byte layout, so such changes MUST bump this
+/// constant. `#[serde(default)]` on a new field does not let bincode read
+/// old payloads; it only helps self-describing formats.
+/// v2: BiomeCell.env climate field + World.biome_adaptation/env_period.
+/// v3: World.max_population.
+pub const FORMAT_VERSION: u32 = 3;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
@@ -106,5 +112,76 @@ mod tests {
         tampered[0] = 99;
         let err = load_from_bytes(&tampered).expect_err("should error");
         assert!(matches!(err, SnapshotError::Version { .. }));
+    }
+
+    #[test]
+    fn old_format_version_is_rejected_cleanly() {
+        // Forge a previous-version envelope around an otherwise-valid payload:
+        // the version gate must reject it with the clean `Version` error —
+        // not the cryptic bincode EOF error the payload parse would produce
+        // (bincode is not self-describing, so an older `World` layout can
+        // never reach deserialization).
+        let mut w = World::new(3);
+        let _ = w.spawn_agent(Vec2::ZERO, Genome::neutral());
+        let env = Envelope {
+            format_version: FORMAT_VERSION - 1,
+            payload: bincode::serialize(&w).unwrap(),
+        };
+        let bytes = bincode::serialize(&env).unwrap();
+        let err = load_from_bytes(&bytes).expect_err("old version must be rejected");
+        match err {
+            SnapshotError::Version { found, expected } => {
+                assert_eq!(found, FORMAT_VERSION - 1);
+                assert_eq!(expected, FORMAT_VERSION);
+            }
+            other => panic!("expected Version error, got {other}"),
+        }
+    }
+
+    #[test]
+    fn pheromone_decay_continues_after_roundtrip() {
+        let mut w = World::new(9);
+        w.pheromones.deposit(Vec2::new(100.0, 100.0), 0, 1.0);
+        let mut w2 = load_from_bytes(&save_to_bytes(&w).expect("save")).expect("load");
+        // The serde-skipped `nonzero` cache must be refreshed on load, or the
+        // loaded world's decay_step would silently become a no-op.
+        w.pheromones.decay_step();
+        w2.pheromones.decay_step();
+        assert_eq!(w.pheromones.cells, w2.pheromones.cells);
+        assert!(
+            w2.pheromones.sample(Vec2::new(100.0, 100.0), 0) < 1.0,
+            "loaded world keeps decaying its pheromone field"
+        );
+    }
+
+    #[test]
+    fn loaded_world_continues_bit_identically() {
+        let mut w = World::new(77);
+        // Populate the subsystems whose state lives behind serde(skip)
+        // scratch: two species (codex agg), pheromones (nonzero flag), a
+        // carcass (carcass_spatial).
+        for k in 0..5 {
+            let _ = w.spawn_agent(Vec2::new(500.0 + k as f32, 500.0), Genome::neutral());
+        }
+        let migrant = w.spawn_agent(Vec2::new(700.0, 700.0), Genome::neutral());
+        crate::prelude_test::reassign_to_new_species(&mut w, migrant);
+        w.pheromones.deposit(Vec2::new(500.0, 500.0), 0, 2.0);
+        w.carcasses.push(crate::carcass::Carcass {
+            pos: Vec2::new(501.0, 500.0),
+            flesh: 5.0,
+            age: 0,
+            species_id: 0,
+        });
+        for _ in 0..30 {
+            step(&mut w);
+        }
+        let mut w2 = load_from_bytes(&save_to_bytes(&w).expect("save")).expect("load");
+        for _ in 0..30 {
+            step(&mut w);
+            step(&mut w2);
+        }
+        // Every #[serde(skip)] scratch buffer (agent + carcass spatial hashes,
+        // codex agg, sensors, pheromone flag) must rebuild itself on the fly.
+        assert_eq!(state_hash(&w), state_hash(&w2));
     }
 }
