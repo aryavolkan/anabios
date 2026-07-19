@@ -34,8 +34,11 @@ pub const CONST_SIGMA: f32 = 0.1;
 
 /// Number of pheromone channels (design §3.6). Wired by M13.
 pub const PHEROMONE_CHANNELS: usize = 4;
-/// Number of meme/broadcast channels (design §3.1). Wired by M14.
-pub const MEME_CHANNELS: usize = 8;
+/// Number of meme/broadcast channels (design §3.1). Wired by M14. Channels
+/// 0..8 carry the original culture (alarm, dialects, cooperation norm, hunt
+/// technique, skill, DIT technique); channels 8..18 carry the invention
+/// tree's adoption levels (`invention::INVENTION_CHANNEL_BASE`).
+pub const MEME_CHANNELS: usize = 18;
 /// Sentinel in `ActionRegister.target_id` meaning "no action target".
 pub const NO_TARGET: u32 = u32::MAX;
 

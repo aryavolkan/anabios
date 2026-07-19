@@ -1,0 +1,45 @@
+name = "inventions"
+seed = 0
+inventions_enabled = true
+# Keep the world well below carrying-capacity saturation so the tech race —
+# not Malthusian collapse — dominates the dynamics.
+max_population = 400
+
+# Three-population cultural-advancement demo: two culture-bearing lineages
+# with opposite innovation temperaments share one grazing range, plus an
+# acultural control lineage that can never invent (no Communicator). Watch
+# `InventionDiscovered`/`InventionAdopted` codex events to see the innovators
+# climb the tree (Stone Tools → Fire → Farming/Metalworking → …) while the
+# traditionalists adopt late via social spread and the asocials stay at era 0.
+
+# Innovators: high Openness + fast learners → strong discovery rolls.
+[[agents]]
+count = 24
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 300.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Traditionalists: low Openness + slow learners → weak discovery rolls, but
+# strong social copying: they adopt what the innovators' diaspora carries in.
+[[agents]]
+count = 24
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 724.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Acultural control: same ecology, no Communicator — the pre-invention
+# baseline every cultural lineage is measured against.
+[[agents]]
+count = 16
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 280.0, radius = 60.0 }
+[agents.traits]
+altruism = 0.0
+basal_metabolism = 0.6
+lifespan_bias = 1.0

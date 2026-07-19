@@ -12,9 +12,10 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 
 - **Core sim** — deterministic SoA agent simulation: uniform-grid spatial hashing, evolvable postfix behavior programs, 50-slot float genome, modular morphology, speciation
 - **Interaction substrate (M11–M15)** — combat & predation, carcass scavenging, pheromone fields, communication/meme culture, kin-directed cooperation
-- **Codex** — 17 emergence detectors (extinction → herd cohesion) writing a persistent event timeline
-- **Experiments** — DIT gene-culture technique model; biome climate adaptation (opt-in per scenario)
-- **Viewer** — Godot 4.6+ client: biome/species/pheromone overlays, inspector, codex panel, co-evolution charts
+- **Invention tree** — 10-tech cumulative culture tree (Stone Tools → Fire → Farming/Metalworking → Writing/Medicine/Husbandry → Machinery/Electricity/Nuclear Power) riding the meme channels: individual discovery (Openness + skill gated), social spread, per-holder buffs *and* debuffs (metabolism, upkeep, crowding stress, biome pollution, radiation mutation); `InventionDiscovered`/`InventionAdopted` codex events. Opt-in per scenario (`inventions_enabled`)
+- **Codex** — 19 emergence detectors (extinction → herd cohesion → invention adoption) writing a persistent event timeline
+- **Experiments** — DIT gene-culture technique model; biome climate adaptation (opt-in per scenario); runtime world dimensions + living/seasonal biomes
+- **Viewer** — Godot 4.6+ client: biome/species/pheromone overlays, inspector, codex panel, co-evolution charts, per-species tech panel
 - **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV), criterion benchmark suite
 
 ## Testing
@@ -55,7 +56,20 @@ cargo build --release --bin anabios-headless
 cat runs/divergent-32/summary.csv
 ```
 
-The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
+The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion, invention_discovered, invention_adopted` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
+
+## Watching the invention race (headless demo)
+
+The `demo` subcommand narrates cultural advancement between competing populations — discovery/adoption events as they fire, per-culture tech tables, and final standings. Cultures are tracked by lineage ancestry (speciation splinters stay in their founders' culture):
+
+```bash
+cargo build --release --bin anabios-headless
+./target/release/anabios-headless demo \
+    --scenario scenarios/inventions.toml \
+    --ticks 8000 --report-every 1000
+```
+
+`scenarios/inventions.toml` seeds three populations — high-Openness **innovators**, low-Openness **traditionalists** (who rarely invent but copy what diffuses in), and an acultural control group — competing for one grazing range. Expect the innovators to climb the tree (discoveries tick ~300–2700), the traditionalists to adopt each invention a few hundred ticks later via pure social diffusion, and the control group to stay at era 0. The same scenario is in the Godot viewer's menu ("Inventions — innovators vs traditionalists") with a per-species tech panel and adoption-fraction charts.
 
 ## Running the viewer
 

@@ -107,47 +107,43 @@ fn living_sandbox_smoke() {
     assert!(w.agents.live_count() > 0, "population should survive 200 ticks");
 }
 
-/// Dedicated smoke test for the Task 3.1 mutation-gated cultural-inventions
-/// scenario: `cultural_inventions` must be enabled on the instantiated world,
-/// both cohorts must start alive, and the culture-vs-control design must hold
-/// — species 1 (culture) carries a Communicator AND the Inventiveness gene,
-/// species 2 (control) carries neither.
+/// Dedicated smoke test for the invention-tree demo scenario:
+/// `inventions_enabled` must be set on the instantiated world, all three
+/// populations must start alive, and the demo's design must hold — species 1
+/// (innovators) and 2 (traditionalists) carry a Communicator (culture-
+/// capable) and their contrasting Openness genes, species 3 (acultural
+/// control) carries none.
 #[test]
-fn cultural_inventions_smoke() {
-    let toml = include_str!("../../../scenarios/cultural-inventions.toml");
+fn inventions_scenario_smoke() {
+    let toml = include_str!("../../../scenarios/inventions.toml");
     let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
 
-    assert!(w.cultural_inventions, "scenario should enable cultural_inventions");
+    assert!(w.inventions_enabled, "scenario should enable inventions_enabled");
 
-    let species1_alive =
-        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 1).count();
-    let species2_alive =
-        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 2).count();
-    assert!(species1_alive > 0, "culture cohort (species 1) should start alive");
-    assert!(species2_alive > 0, "control cohort (species 2) should start alive");
+    for sid in [1u32, 2, 3] {
+        let alive =
+            w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == sid).count();
+        assert!(alive > 0, "founding species {sid} should start alive");
+    }
 
     for id in w.agents.iter_alive() {
         let mods = &w.agents.modules[id as usize];
         let has_communicator =
             anabios_core::module::has(mods, anabios_core::module::ModuleType::Communicator);
-        let inventiveness =
-            w.agents.genome[id as usize].get(anabios_core::genome::GenomeSlot::Inventiveness);
+        let openness = w.agents.genome[id as usize].get(anabios_core::genome::GenomeSlot::Openness);
         match w.agents.species_id[id as usize] {
             1 => {
-                assert!(has_communicator, "agent {id}: culture cohort must have a Communicator");
-                assert!(
-                    inventiveness > 0.5,
-                    "agent {id}: culture cohort must carry the Inventiveness gene"
-                );
+                assert!(has_communicator, "agent {id}: innovators must have a Communicator");
+                assert!(openness > 0.5, "agent {id}: innovators must be high-Openness");
             }
             2 => {
+                assert!(has_communicator, "agent {id}: traditionalists must have a Communicator");
+                assert!(openness < 0.5, "agent {id}: traditionalists must be low-Openness");
+            }
+            3 => {
                 assert!(
                     !has_communicator,
-                    "agent {id}: control cohort must NOT have a Communicator"
-                );
-                assert!(
-                    inventiveness <= 0.5,
-                    "agent {id}: control cohort must NOT carry the Inventiveness gene"
+                    "agent {id}: acultural control must NOT have a Communicator"
                 );
             }
             _ => {}

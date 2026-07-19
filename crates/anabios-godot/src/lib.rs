@@ -33,6 +33,9 @@ struct CoevoSample {
     live_count: f32,
     species_count: f32,
     env_optimum: f32,
+    /// World adoption fraction per invention (share of alive agents at or
+    /// above the held threshold; all zero when the tree is inactive).
+    inv_adopt_frac: [f32; anabios_core::invention::INVENTION_COUNT],
 }
 
 /// Soft cap on retained samples (~tens of KB each thousand ticks). Past this we
@@ -194,10 +197,23 @@ impl Simulation {
     }
 
     /// Full history of one series, oldest-first. Unknown key returns empty.
+    /// Invention adoption series are `inv_<key>_frac` (e.g. `inv_farming_frac`).
     #[func]
     fn coevo_series(&self, key: GString) -> PackedFloat32Array {
         let mut out = PackedFloat32Array::new();
-        let pick: fn(&CoevoSample) -> f32 = match String::from(key).as_str() {
+        let key_str = String::from(key);
+        if let Some(inv_key) = key_str.strip_prefix("inv_").and_then(|k| k.strip_suffix("_frac")) {
+            let Some(idx) =
+                anabios_core::invention::INVENTIONS.iter().position(|i| i.key == inv_key)
+            else {
+                return out;
+            };
+            for s in &self.history {
+                out.push(s.inv_adopt_frac[idx]);
+            }
+            return out;
+        }
+        let pick: fn(&CoevoSample) -> f32 = match key_str.as_str() {
             "tick" => |s| s.tick,
             "communicator_frac" => |s| s.communicator_frac,
             "mean_social_learning" => |s| s.mean_social_learning,
@@ -390,7 +406,42 @@ impl Simulation {
             names.push(&format!("{:?}", m.module_type()));
         }
         d.set("module_names", &names);
+        // Invention tree: held techs, their levels, and the tech era.
+        let mask = anabios_core::invention::held_mask(meme);
+        let mut held = PackedStringArray::new();
+        let mut levels = VarDictionary::new();
+        anabios_core::invention::for_each_set_bit(mask, |k| {
+            let inv = &anabios_core::invention::INVENTIONS[k];
+            held.push(inv.name);
+            levels.set(inv.key, anabios_core::invention::level(meme, k));
+        });
+        d.set("inventions", &held);
+        d.set("invention_levels", &levels);
+        d.set("tech_era", anabios_core::invention::tech_era(mask) as i64);
         d
+    }
+
+    /// The full invention tree metadata (static): one Dictionary per
+    /// invention — `{ key, name, era, prereqs: PackedStringArray of keys,
+    /// buff, debuff }`. Lets GDScript render the tree without duplicating it.
+    #[func]
+    fn invention_catalog(&self) -> Array<VarDictionary> {
+        let mut out = Array::<VarDictionary>::new();
+        for inv in &anabios_core::invention::INVENTIONS {
+            let mut d = VarDictionary::new();
+            d.set("key", inv.key);
+            d.set("name", inv.name);
+            d.set("era", inv.era as i64);
+            let mut prereqs = PackedStringArray::new();
+            anabios_core::invention::for_each_set_bit(inv.prereqs, |p| {
+                prereqs.push(anabios_core::invention::INVENTIONS[p].key);
+            });
+            d.set("prereqs", &prereqs);
+            d.set("buff", inv.buff);
+            d.set("debuff", inv.debuff);
+            out.push(&d);
+        }
+        out
     }
 
     /// Total codex events recorded so far.
@@ -499,11 +550,15 @@ impl Simulation {
 
     /// Per-live-species aggregate stats. `mean_technique_match` is the mean of
     /// `technique_match(meme[TECH_CHANNEL], optimum)` when the env mechanism is
-    /// active, else `0.0`. Each entry is
-    /// `{ species_id, count, mean_energy, mean_technique_match }`.
+    /// active, else `0.0`. `adopted_inventions` lists the keys of inventions at
+    /// ≥50% adoption inside the species, `tech_era` the highest era among them.
+    /// Each entry is
+    /// `{ species_id, count, mean_energy, mean_technique_match,
+    ///    adopted_inventions, tech_era }`.
     #[func]
     fn species_stats(&self) -> Array<VarDictionary> {
         use anabios_core::culture::{env_optimum_at, technique_match, TECH_CHANNEL};
+        use anabios_core::invention::{for_each_set_bit, held_mask, INVENTIONS, INVENTION_COUNT};
         use std::collections::BTreeMap;
         let mut out = Array::<VarDictionary>::new();
         let Some(w) = self.inner.as_ref() else { return out };
@@ -514,6 +569,7 @@ impl Simulation {
         let mut count: BTreeMap<u32, i64> = BTreeMap::new();
         let mut energy: BTreeMap<u32, f32> = BTreeMap::new();
         let mut matchsum: BTreeMap<u32, f32> = BTreeMap::new();
+        let mut inv_counts: BTreeMap<u32, [u32; INVENTION_COUNT]> = BTreeMap::new();
         for id in w.agents.iter_alive() {
             let i = id as usize;
             let sp = w.agents.species_id[i];
@@ -523,6 +579,10 @@ impl Simulation {
                 let tech = w.agents.meme_vector[i][TECH_CHANNEL];
                 *matchsum.entry(sp).or_insert(0.0) += technique_match(tech, opt);
             }
+            if w.inventions_enabled {
+                let counts = inv_counts.entry(sp).or_insert([0; INVENTION_COUNT]);
+                for_each_set_bit(held_mask(&w.agents.meme_vector[i]), |k| counts[k] += 1);
+            }
         }
         for (sp, n) in count.iter() {
             let mut d = VarDictionary::new();
@@ -531,9 +591,27 @@ impl Simulation {
             d.set("count", *n);
             d.set("mean_energy", energy[sp] / nf);
             d.set("mean_technique_match", if active { matchsum[sp] / nf } else { 0.0 });
+            let mut adopted = PackedStringArray::new();
+            let mut mask = 0u32;
+            if let Some(counts) = inv_counts.get(sp) {
+                for (k, &holders) in counts.iter().enumerate() {
+                    if holders as f32 / nf >= 0.5 {
+                        adopted.push(INVENTIONS[k].key);
+                        mask |= anabios_core::invention::bit(k);
+                    }
+                }
+            }
+            d.set("adopted_inventions", &adopted);
+            d.set("tech_era", anabios_core::invention::tech_era(mask) as i64);
             out.push(&d);
         }
         out
+    }
+
+    /// Whether the loaded world has the invention tree active.
+    #[func]
+    fn inventions_enabled(&self) -> bool {
+        self.inner.as_ref().map(|w| w.inventions_enabled).unwrap_or(false)
     }
 
     /// One entry per carcass currently in the world:
@@ -666,10 +744,17 @@ fn phero_intensity(v: f32) -> f32 {
 /// render as distinct body colors. The per-channel weights are normalized to
 /// sum to 1, so the hue is a weighted average of the meme values (bounded and
 /// not dominated by any single high-index channel) wrapped into `[0,1)`.
+///
+/// Only the pre-invention dialect channels (`0..INVENTION_CHANNEL_BASE`)
+/// contribute. The invention-adoption channels are 0 in every non-invention
+/// scenario, yet still carry weight in the sum — averaging them in would drag
+/// every dialect hue toward zero once `MEME_CHANNELS` widened 8->18, so they
+/// are excluded here (mirroring `is_invention_channel` in the core meme lerp).
 fn dialect_hue(meme: &[f32]) -> f32 {
+    let n = meme.len().min(anabios_core::invention::INVENTION_CHANNEL_BASE);
     let mut acc = 0.0_f32;
     let mut wsum = 0.0_f32;
-    for (k, v) in meme.iter().enumerate() {
+    for (k, v) in meme[..n].iter().enumerate() {
         let w = 0.37 + 0.11 * k as f32;
         acc += v * w;
         wsum += w;
@@ -725,6 +810,17 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
         (&scratch.memes, &scratch.genomes, &scratch.species, &scratch.xs, &scratch.comm);
     let active = w.env_period > 0;
     let opt = if active { env_optimum_at(w.tick, w.env_period) } else { 0.0 };
+    let mut inv_adopt_frac = [0.0f32; anabios_core::invention::INVENTION_COUNT];
+    if w.inventions_enabled && !memes.is_empty() {
+        for m in memes {
+            anabios_core::invention::for_each_set_bit(anabios_core::invention::held_mask(m), |k| {
+                inv_adopt_frac[k] += 1.0
+            });
+        }
+        for f in inv_adopt_frac.iter_mut() {
+            *f /= memes.len() as f32;
+        }
+    }
     CoevoSample {
         tick: w.tick as f32,
         communicator_frac: coevo::frac_true(comm),
@@ -737,6 +833,7 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
         live_count: memes.len() as f32,
         species_count: scratch.species_set.len() as f32,
         env_optimum: if active { opt } else { -1.0 },
+        inv_adopt_frac,
     }
 }
 
@@ -755,6 +852,11 @@ fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
     d.set("live_count", s.live_count);
     d.set("species_count", s.species_count);
     d.set("env_optimum", s.env_optimum);
+    let mut inv = VarDictionary::new();
+    for (k, f) in s.inv_adopt_frac.iter().enumerate() {
+        inv.set(anabios_core::invention::INVENTIONS[k].key, *f);
+    }
+    d.set("inv_adopt_frac", &inv);
     d
 }
 
@@ -804,5 +906,17 @@ mod tests {
         assert!((0.0..1.0).contains(&dialect_hue(&a)));
         assert!((0.0..1.0).contains(&dialect_hue(&b)));
         assert!(dialect_hue(&a) != dialect_hue(&b));
+
+        // Regression guard for the MEME_CHANNELS 8->18 widening: the full-width
+        // meme vector must hue-match its 8-channel dialect prefix. The invention
+        // channels must not dilute the hue — neither when zero (the common case)
+        // nor when populated.
+        let mut wide = [0.0_f32; anabios_core::program::MEME_CHANNELS];
+        wide[..8].copy_from_slice(&b);
+        assert_eq!(dialect_hue(&wide), dialect_hue(&b));
+        for v in wide[anabios_core::invention::INVENTION_CHANNEL_BASE..].iter_mut() {
+            *v = 0.7;
+        }
+        assert_eq!(dialect_hue(&wide), dialect_hue(&b));
     }
 }

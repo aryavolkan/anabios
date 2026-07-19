@@ -66,7 +66,10 @@ pub(super) fn detect_dialect_formed(world: &mut World, agg: &SpeciesAggTable) {
 /// track per-channel mean meme values over a MEME_SWEEP_WINDOW window. Fire
 /// once per (species, channel) when the front of the window was ≤ MEME_SWEEP_LOW
 /// and the back is ≥ MEME_SWEEP_HIGH (a sweep from rare to dominant). Re-arms
-/// when the back drops below MEME_SWEEP_LOW again.
+/// when the back drops below MEME_SWEEP_LOW again. Invention channels are
+/// skipped: an invention sweeping IS a meme sweep, but `InventionAdopted`
+/// already reports it explicitly with the invention id — firing both would
+/// double-count the same phenomenon.
 pub(super) fn detect_meme_sweep(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
     let mut to_push: Vec<CodexEvent> = Vec::new();
@@ -79,6 +82,9 @@ pub(super) fn detect_meme_sweep(world: &mut World, agg: &SpeciesAggTable) {
         let (lx, ly) = centroid_of(agg, sid);
         let nf = entry.count as f64;
         for (ch, &s) in entry.meme_sums.iter().enumerate() {
+            if crate::invention::is_invention_channel(ch) {
+                continue;
+            }
             let mean = (s / nf) as f32;
             let key = (sid, ch as u8);
             let buf = world.codex.meme_mean_history.entry(key).or_default();

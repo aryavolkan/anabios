@@ -34,8 +34,25 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-18: added World.cultural_inventions flag + renamed genome
 // slot 42 to Inventiveness (flag off = byte-identical; only serialized layout
 // grew — the slot value semantics are unchanged).
+// Refreshed 2026-07-19: the cultural-inventions ratchet is replaced by the
+// full invention tree — MEME_CHANNELS widened 8→18 (inventions ride meme
+// channels), BiomeCell.pollution, World.cultural_inventions renamed to
+// inventions_enabled, genome slot 42 back to reserved, CodexState invention
+// latches. Flag-off behavior unchanged (identity multipliers at mask 0, zero
+// invention RNG draws); serialized layout changed, so all three hashes moved.
+// Refreshed 2026-07-19 (2): MemeSweep no longer tracks invention channels
+// (InventionAdopted reports those sweeps explicitly). Simulation physics
+// unchanged; only codex bookkeeping/serialized bytes differ — tick 1000 moved
+// because minimal's grazers evolve a Communicator by then.
+// Refreshed 2026-07-19 (3): `inherit_meme` now skips the invention channels'
+// jitter draws when `inventions_enabled` is false, restoring the pre-tree
+// 8-channel RNG draw count for flag-off scenarios (the widening had silently
+// drawn 10 extra jitters per Communicator birth even with the flag off). Only
+// tick 1000 moved — minimal's grazers evolve a Communicator between ticks 100
+// and 1000, and this undoes that trajectory perturbation for every non-
+// invention culture scenario.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x658c24c37e37122d), (100, 0x486eb08475de250f), (1000, 0xcc8ddc27eb59212a)];
+    &[(0, 0xe51e55efb59c20ed), (100, 0x26b7b341a207605f), (1000, 0x9ff2c2487fdec8fa)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

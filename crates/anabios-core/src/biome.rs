@@ -97,6 +97,11 @@ pub struct BiomeCell {
     /// independent of terrain. Static after generation. Read by the biome-
     /// adaptation feeding bonus when `World.biome_adaptation` is on.
     pub env: f32,
+    /// Industrial pollution in `[0, invention::POLLUTION_CAP]`. Deposited by
+    /// Machinery holders (`invention_step`), decays per biome step, and
+    /// penalizes logistic regrowth. Always 0.0 unless the invention tree is
+    /// active.
+    pub pollution: f32,
 }
 
 /// 128×128 biome field (at default dims). Indexed `[row * res + col]` with
@@ -139,7 +144,12 @@ impl BiomeField {
                 let terrain = elevation_to_terrain(n);
                 let env = (0.85 * climate_coarse.sample(u, v) + 0.15 * climate_fine.sample(u, v))
                     .clamp(0.0, 1.0);
-                cells.push(BiomeCell { terrain, plant_biomass: terrain.carrying_capacity(), env });
+                cells.push(BiomeCell {
+                    terrain,
+                    plant_biomass: terrain.carrying_capacity(),
+                    env,
+                    pollution: 0.0,
+                });
             }
         }
         Self { cells, res, world_size, cell_size: world_size / res as f32 }
@@ -178,16 +188,33 @@ impl BiomeField {
         self.at(col, row)
     }
 
+    /// Decay one biome step's worth of pollution (Machinery debuff).
+    fn decay_pollution(cell: &mut BiomeCell) {
+        if cell.pollution > 0.0 {
+            cell.pollution *= crate::invention::POLLUTION_DECAY;
+            if cell.pollution < 1e-6 {
+                cell.pollution = 0.0;
+            }
+        }
+    }
+
+    /// Regrowth-rate multiplier from pollution: `1 - min(pollution, MAX_EFFECT)`.
+    fn pollution_mult(cell: &BiomeCell) -> f32 {
+        1.0 - cell.pollution.min(crate::invention::POLLUTION_MAX_EFFECT)
+    }
+
     /// Apply logistic regrowth: `b += r * b * (1 - b / K)` clamped to `[0, K]`.
-    /// Empty cells stay empty — no spontaneous regeneration or neighbour
-    /// recolonization (not implemented).
+    /// Empty cells stay empty — no spontaneous regeneration (see
+    /// `recolonize_step` for the opt-in renewal). Pollution (Machinery debuff)
+    /// decays once per biome step and scales the regrowth increment down.
     pub fn regrow_step(&mut self) {
         for cell in self.cells.iter_mut() {
+            Self::decay_pollution(cell);
             let capacity = cell.terrain.carrying_capacity();
             if capacity <= 0.0 || cell.plant_biomass <= 0.0 {
                 continue;
             }
-            let r = cell.terrain.regrowth_rate();
+            let r = cell.terrain.regrowth_rate() * Self::pollution_mult(cell);
             let b = cell.plant_biomass;
             let next = b + r * b * (1.0 - b / capacity);
             cell.plant_biomass = next.clamp(0.0, capacity);
@@ -199,11 +226,12 @@ impl BiomeField {
     /// productive band migrates. `phase` in \[0,1\]. Deterministic, no RNG.
     pub fn regrow_step_seasonal(&mut self, phase: f32) {
         for cell in self.cells.iter_mut() {
+            Self::decay_pollution(cell);
             let capacity = cell.terrain.carrying_capacity();
             if capacity <= 0.0 || cell.plant_biomass <= 0.0 {
                 continue;
             }
-            let base_r = cell.terrain.regrowth_rate();
+            let base_r = cell.terrain.regrowth_rate() * Self::pollution_mult(cell);
             let r = base_r * (1.0 + SEASON_AMPLITUDE * season_match(cell.env, phase));
             let b = cell.plant_biomass;
             let next = b + r * b * (1.0 - b / capacity);

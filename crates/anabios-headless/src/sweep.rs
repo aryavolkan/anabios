@@ -109,6 +109,8 @@ fn event_name(t: EventType) -> &'static str {
         EventType::EvolvedCooperation => "evolved_cooperation",
         EventType::PackHunting => "pack_hunting",
         EventType::HerdCohesion => "herd_cohesion",
+        EventType::InventionDiscovered => "invention_discovered",
+        EventType::InventionAdopted => "invention_adopted",
     }
 }
 
@@ -122,13 +124,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          predation,combat_raid,arms_race,\
          territory_formation,niche_partitioning,\
          dialect_formed,meme_sweep,alarm_call,\
-         evolved_cooperation,pack_hunting,herd_cohesion"
+         evolved_cooperation,pack_hunting,herd_cohesion,\
+         invention_discovered,invention_adopted"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -151,6 +154,8 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("evolved_cooperation"),
             g("pack_hunting"),
             g("herd_cohesion"),
+            g("invention_discovered"),
+            g("invention_adopted"),
         )?;
     }
     Ok(())
@@ -187,5 +192,12 @@ mod tests {
         use anabios_core::codex::EventType;
         assert_eq!(super::event_name(EventType::TerritoryFormation), "territory_formation");
         assert_eq!(super::event_name(EventType::NichePartitioning), "niche_partitioning");
+    }
+
+    #[test]
+    fn event_name_covers_invention_events() {
+        use anabios_core::codex::EventType;
+        assert_eq!(super::event_name(EventType::InventionDiscovered), "invention_discovered");
+        assert_eq!(super::event_name(EventType::InventionAdopted), "invention_adopted");
     }
 }

@@ -60,7 +60,7 @@ pub fn reproduce_all(world: &mut World) {
         if world.reproduced_this_tick[i] {
             continue;
         }
-        if !is_eligible(&world.agents, a_id, world.cultural_inventions) {
+        if !is_eligible(&world.agents, a_id) {
             continue;
         }
 
@@ -78,7 +78,6 @@ pub fn reproduce_all(world: &mut World) {
             a_pos,
             a_species,
             world.world_size,
-            world.cultural_inventions,
         );
         let Some(b_id) = mate else { continue };
 
@@ -92,9 +91,15 @@ pub fn reproduce_all(world: &mut World) {
         world.agents.energy[i] -= cost;
         world.agents.energy[j] -= cost;
 
-        // Build child genome: crossover + mutate.
+        // Build child genome: crossover + mutate. Nuclear Power debuff:
+        // radiation scales the child's mutation sigma when either parent
+        // holds it (draw count unchanged — only magnitudes).
         let mut child_genome = Genome::crossover(&a_genome, &b_genome, &mut world.rng);
-        child_genome.mutate_in_place(&mut world.rng);
+        let sigma_mult = crate::invention::mutation_multiplier(
+            crate::invention::held_mask(&world.agents.meme_vector[i]),
+            crate::invention::held_mask(&world.agents.meme_vector[j]),
+        );
+        child_genome.mutate_in_place_scaled(&mut world.rng, sigma_mult);
 
         // Mark both parents as reproduced this tick before spawning so the
         // newborn's slot (which gets a fresh bitvec bit) isn't accidentally
@@ -144,14 +149,15 @@ pub fn reproduce_all(world: &mut World) {
         ) {
             let a_meme = world.agents.meme_vector[i];
             let b_meme = world.agents.meme_vector[j];
+            let inventions_enabled = world.inventions_enabled;
             world.agents.meme_vector[child_id as usize] =
-                crate::culture::inherit_meme(&a_meme, &b_meme, &mut world.rng);
+                crate::culture::inherit_meme(&a_meme, &b_meme, &mut world.rng, inventions_enabled);
         }
     }
     world.agents.scratch_ids = alive_ids;
 }
 
-fn is_eligible(agents: &AgentBuffers, id: u32, cultural_inventions: bool) -> bool {
+fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
     let i = id as usize;
     if !agents.is_alive(id) {
         return false;
@@ -161,23 +167,8 @@ fn is_eligible(agents: &AgentBuffers, id: u32, cultural_inventions: bool) -> boo
         return false;
     }
     // Conscientiousness raises the effective breeding threshold.
-    let mut repro_threshold_gene = agents.genome[i].get(GenomeSlot::ReproductionThreshold);
-    // Industrial Revolution tier (Task 2.1): an inventive Communicator at the
-    // top of the invention ratchet reproduces more easily — a lower effective
-    // threshold gene, clamped to a sane floor so it can never go non-positive.
-    let has_comm = crate::module::has(&agents.modules[i], crate::module::ModuleType::Communicator);
-    if crate::culture::invention_active(
-        cultural_inventions,
-        &agents.genome[i],
-        &agents.meme_vector[i],
-        has_comm,
-        crate::culture::INDUSTRY_THRESHOLD,
-    ) {
-        repro_threshold_gene =
-            (repro_threshold_gene - crate::culture::INDUSTRY_REPRO_DISCOUNT).max(0.05);
-    }
     let threshold = SPAWN_ENERGY
-        * repro_threshold_gene
+        * agents.genome[i].get(GenomeSlot::ReproductionThreshold)
         * 1.5
         * crate::personality::personality_reproduction_factor(&agents.genome[i]);
     agents.energy[i] >= threshold
@@ -192,7 +183,6 @@ fn find_mate(
     a_pos: Vec2,
     a_species: u32,
     world_size: f32,
-    cultural_inventions: bool,
 ) -> Option<u32> {
     let mut best: Option<u32> = None;
     spatial.query(a_pos, MATING_RANGE, |other_id| {
@@ -203,7 +193,7 @@ fn find_mate(
         if reproduced[j] {
             return;
         }
-        if !is_eligible(agents, other_id, cultural_inventions) {
+        if !is_eligible(agents, other_id) {
             return;
         }
         if agents.species_id[j] != a_species {

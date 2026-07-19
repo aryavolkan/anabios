@@ -113,8 +113,7 @@ pub enum GenomeSlot {
     /// Read by the biome-adaptation feeding bonus when `World.biome_adaptation`
     /// is on. Counts toward speciation distance (drives biome-driven divergence).
     EnvAffinity = 41,
-    /// Genetic propensity to invent/adopt cultural inventions (>0.5 = inventive).
-    Inventiveness = 42,
+    _SensoryReserved42 = 42,
     _SensoryReserved43 = 43,
     _SensoryReserved44 = 44,
     _SensoryReserved45 = 45,
@@ -286,7 +285,14 @@ impl Genome {
     /// genome's own `MutationRate` slot. Values are clamped back into
     /// `[0, 1]` after perturbation.
     pub fn mutate_in_place(&mut self, rng: &mut Rng) {
-        let sigma = MUTATION_SIGMA_MAX * self.get(GenomeSlot::MutationRate);
+        self.mutate_in_place_scaled(rng, 1.0);
+    }
+
+    /// `mutate_in_place` with the sigma scaled by `sigma_mult` (Nuclear
+    /// Power's radiation debuff scales child mutation). The RNG draw count
+    /// is identical to `mutate_in_place` — only the magnitudes change.
+    pub fn mutate_in_place_scaled(&mut self, rng: &mut Rng, sigma_mult: f32) {
+        let sigma = MUTATION_SIGMA_MAX * self.get(GenomeSlot::MutationRate) * sigma_mult;
         if sigma <= 0.0 {
             return;
         }

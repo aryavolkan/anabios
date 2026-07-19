@@ -515,27 +515,18 @@ pub fn crossover_and_mutate(a: &ModuleList, b: &ModuleList, rng: &mut Rng) -> Mo
 /// agents with too many modules for their food intake go negative and
 /// die in the subsequent `age_and_starve` stage.
 ///
-/// `cultural_inventions` gates the Industrial Revolution tier (Task 2.1): an
-/// inventive Communicator that has reached the top of the invention ratchet
-/// pays a discounted upkeep. Fully inert (byte-identical) when the flag is
-/// off, since `culture::invention_active` short-circuits on it first.
-pub fn upkeep_all(agents: &mut crate::agent::AgentBuffers, cultural_inventions: bool) {
+/// Metalworking (invention debuff) scales the cost up; identity when the
+/// agent holds nothing (flag-off masks are always 0, so byte-identical).
+pub fn upkeep_all(agents: &mut crate::agent::AgentBuffers) {
     let mut ids = std::mem::take(&mut agents.scratch_ids);
     ids.clear();
     ids.extend(agents.iter_alive());
     for &id in &ids {
         let i = id as usize;
-        let mut cost = total_upkeep(&agents.modules[i]);
-        let has_comm = has(&agents.modules[i], ModuleType::Communicator);
-        if crate::culture::invention_active(
-            cultural_inventions,
-            &agents.genome[i],
-            &agents.meme_vector[i],
-            has_comm,
-            crate::culture::INDUSTRY_THRESHOLD,
-        ) {
-            cost = (cost - crate::culture::INDUSTRY_UPKEEP_DISCOUNT).max(0.0);
-        }
+        let cost = total_upkeep(&agents.modules[i])
+            * crate::invention::module_upkeep_multiplier(crate::invention::held_mask(
+                &agents.meme_vector[i],
+            ));
         agents.energy[i] -= cost;
     }
     agents.scratch_ids = ids;
@@ -651,7 +642,7 @@ mod tests {
         let mut w = World::new(1);
         let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
         let before = w.agents.energy[id as usize];
-        upkeep_all(&mut w.agents, w.cultural_inventions);
+        upkeep_all(&mut w.agents);
         let after = w.agents.energy[id as usize];
         let expected_cost = total_upkeep(&w.agents.modules[id as usize]);
         assert!((before - after - expected_cost).abs() < 1e-5);

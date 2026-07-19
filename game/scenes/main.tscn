@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/overlay_manager.gd" id="9_overlay"]
 [ext_resource type="Script" path="res://scripts/population_panel.gd" id="10_pop"]
 [ext_resource type="Script" path="res://scripts/dit_panel.gd" id="11_dit"]
+[ext_resource type="Script" path="res://scripts/tech_panel.gd" id="14_tech"]
 [ext_resource type="Script" path="res://scripts/legend_panel.gd" id="12_legend"]
 [ext_resource type="Script" path="res://scripts/coevolution_panel.gd" id="13_coevo"]
 
@@ -227,6 +228,16 @@ offset_right = 1270.0
 offset_bottom = 620.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/DitPanel"]
+
+[node name="TechPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("14_tech")
+visible = false
+offset_left = 1050.0
+offset_top = 430.0
+offset_right = 1270.0
+offset_bottom = 620.0
+
+[node name="VBox" type="VBoxContainer" parent="UI/TechPanel"]
 
 [node name="LegendPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("12_legend")
