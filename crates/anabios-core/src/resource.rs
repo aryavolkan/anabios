@@ -46,8 +46,13 @@ pub const HARVEST_RATE: f32 = 1.0;
 pub const INVENTORY_BASE_CAP: f32 = 12.0;
 /// Extra carrying capacity granted by a `Storage` module.
 pub const INVENTORY_STORAGE_BONUS: f32 = 12.0;
-/// Max distance for a bilateral trade (world units).
-pub const TRADE_RANGE: f32 = 2.0;
+/// Max distance for a bilateral trade (world units). A "marketplace" reach a
+/// bit larger than one biome cell (`CELL_SIZE` = 8.0), so agents on opposite
+/// sides of a terrain border (see `biome::best_terrain_direction`'s border-
+/// seeking pull) are close enough to actually transact. The old value of 2.0
+/// mirrored combat range and made border trade impossible even for perfectly
+/// positioned neighbours.
+pub const TRADE_RANGE: f32 = 10.0;
 /// Units of a good moved in one direction per trade event.
 pub const TRADE_UNIT: f32 = 1.0;
 /// Units of EACH good a parent must hold and spend to reproduce — the balanced
