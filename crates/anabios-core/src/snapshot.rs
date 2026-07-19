@@ -115,6 +115,30 @@ mod tests {
     }
 
     #[test]
+    fn old_format_version_is_rejected_cleanly() {
+        // Forge a previous-version envelope around an otherwise-valid payload:
+        // the version gate must reject it with the clean `Version` error —
+        // not the cryptic bincode EOF error the payload parse would produce
+        // (bincode is not self-describing, so an older `World` layout can
+        // never reach deserialization).
+        let mut w = World::new(3);
+        let _ = w.spawn_agent(Vec2::ZERO, Genome::neutral());
+        let env = Envelope {
+            format_version: FORMAT_VERSION - 1,
+            payload: bincode::serialize(&w).unwrap(),
+        };
+        let bytes = bincode::serialize(&env).unwrap();
+        let err = load_from_bytes(&bytes).expect_err("old version must be rejected");
+        match err {
+            SnapshotError::Version { found, expected } => {
+                assert_eq!(found, FORMAT_VERSION - 1);
+                assert_eq!(expected, FORMAT_VERSION);
+            }
+            other => panic!("expected Version error, got {other}"),
+        }
+    }
+
+    #[test]
     fn pheromone_decay_continues_after_roundtrip() {
         let mut w = World::new(9);
         w.pheromones.deposit(Vec2::new(100.0, 100.0), 0, 1.0);
