@@ -15,6 +15,17 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.65, 0.75, 1.0),   # 3 Migration   — blue
 	Color(1.0, 0.85, 0.4),    # 4 NovelModule — amber
 	Color(0.55, 0.95, 0.6),   # 5 NovelBehavior — green
+	Color(1.0, 0.5, 0.5),     # 6 Predation   — salmon
+	Color(1.0, 0.55, 0.3),    # 7 CombatRaid  — deep orange
+	Color(1.0, 0.5, 0.85),    # 8 ArmsRace    — magenta
+	Color(0.45, 0.9, 0.85),   # 9 Territory   — teal
+	Color(0.7, 0.95, 0.5),    # 10 NichePartition — lime
+	Color(1.0, 0.7, 0.35),    # 11 Dialect    — light orange
+	Color(1.0, 0.9, 0.4),     # 12 MemeSweep  — yellow
+	Color(1.0, 0.6, 0.75),    # 13 AlarmCall  — pink
+	Color(0.6, 1.0, 0.7),     # 14 Cooperation — mint
+	Color(0.85, 0.7, 0.5),    # 15 PackHunting — tan
+	Color(0.6, 0.8, 1.0),     # 16 HerdCohesion — sky
 ]
 const MAX_RECENT: int = 30
 
@@ -30,6 +41,8 @@ var _cursor: int = 0
 func _ready() -> void:
 	# The running tally reads as the panel's title — mark it with the accent.
 	counts_label.add_theme_color_override("font_color", UiTheme.ACCENT)
+	# With 17 event types the single-line tally overflows the panel; wrap it.
+	counts_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_counts.resize(CHAPTER_NAMES.size())
 	_counts.fill(0)
 
@@ -54,10 +67,13 @@ func _process(_delta: float) -> void:
 	_render()
 
 func _render() -> void:
+	# Show only event types that have actually occurred — most of the 17 are
+	# zero, and listing them all overflows the panel with noise.
 	var parts: PackedStringArray = []
 	for i in CHAPTER_NAMES.size():
-		parts.append("%s: %d" % [CHAPTER_NAMES[i], _counts[i]])
-	counts_label.text = "  ".join(parts)
+		if _counts[i] > 0:
+			parts.append("%s: %d" % [CHAPTER_NAMES[i], _counts[i]])
+	counts_label.text = "  ".join(parts) if not parts.is_empty() else "codex"
 
 	for child in recent_list.get_children():
 		child.queue_free()
