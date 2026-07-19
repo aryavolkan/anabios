@@ -561,8 +561,12 @@ fn inventions_scenario_is_deterministic() {
 // Refreshed 2026-07-19: MemeSweep no longer fires on invention channels (the
 // InventionAdopted detector already reports those sweeps explicitly) — the
 // codex event stream is serialized into the hash, so ticks 100/300 moved.
+// Refreshed 2026-07-19 (2): biome trade goods added AgentBuffers.inventory,
+// World.{resources,resources_enabled}, CodexState.first_cross_species_trade.
+// Flag off = byte-identical trajectory; only serialized layout grew, so all
+// three hashes moved.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x4bb0b808775f7768), (100, 0x70eaf00a0cf48136), (300, 0x9a9cd3de326c1bc4)];
+    &[(0, 0x42e824d08884afe2), (100, 0x13b8f86034d07d53), (300, 0xfbdacadb91f76b9e)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

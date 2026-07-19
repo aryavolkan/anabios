@@ -240,6 +240,9 @@ pub struct CodexState {
     /// (species, invention) pairs currently latched as adopted (≥50% of the
     /// species holds it). Re-arms when adoption drops below the threshold.
     pub inventions_adopted: BTreeSet<(u32, u8)>,
+    /// Latch: the first cross-species `ResourceTraded` event has been emitted
+    /// (biome trade goods feature). Kept with the other one-shot latches.
+    pub first_cross_species_trade: bool,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }

@@ -22,7 +22,10 @@ use crate::world::World;
 ///     tree: MEME_CHANNELS widened 8→18 (inventions ride meme channels),
 ///     BiomeCell.pollution, World.inventions_enabled (renamed from
 ///     cultural_inventions), CodexState invention latches.
-pub const FORMAT_VERSION: u32 = 5;
+/// v6: biome trade goods — AgentBuffers.inventory, World.{resources,
+///     resources_enabled}, CodexState.first_cross_species_trade. Behavior
+///     unchanged with resources_enabled off; only serialized layout grew.
+pub const FORMAT_VERSION: u32 = 6;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

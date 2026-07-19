@@ -51,8 +51,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // tick 1000 moved — minimal's grazers evolve a Communicator between ticks 100
 // and 1000, and this undoes that trajectory perturbation for every non-
 // invention culture scenario.
+// Refreshed 2026-07-19: biome trade goods added AgentBuffers.inventory,
+// World.{resources,resources_enabled}, CodexState.first_cross_species_trade.
+// Flag off = byte-identical trajectory; only serialized layout grew, so all
+// three hashes moved.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xe51e55efb59c20ed), (100, 0x26b7b341a207605f), (1000, 0x9ff2c2487fdec8fa)];
+    &[(0, 0x70b271b55532c61d), (100, 0x383f0bb4f1680042), (1000, 0x43f0bb375973c16d)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
