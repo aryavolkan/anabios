@@ -1,0 +1,20 @@
+name = "sandbox-large"
+seed = 7
+world_size = 2048.0
+biome_res = 256
+hash_res = 128
+living_biome = true
+season_period = 3000
+max_population = 6000
+
+# A big herbivore population spread across the whole world.
+[[agents]]
+count = 1500
+placement = { kind = "uniform" }
+archetype = "asocial_forager"
+
+# A scattering of communicating foragers (culture) for lineage variety.
+[[agents]]
+count = 300
+placement = { kind = "uniform" }
+archetype = "skilled_forager"

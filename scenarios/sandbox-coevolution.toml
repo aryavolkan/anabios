@@ -1,0 +1,33 @@
+name = "sandbox-coevolution"
+seed = 7
+world_size = 2048.0
+biome_res = 256
+hash_res = 128
+living_biome = true
+season_period = 2500
+cultural_inventions = true
+max_population = 8000
+
+# Culture cohort: Inventiveness gene + Communicator → the invention ratchet
+# (domestication / writing / industry) climbs and stacks robust benefits.
+[[agents]]
+count = 700
+placement = { kind = "uniform" }
+archetype = "inventive_forager"
+
+# Asocial control: identical starter kit, no gene, no Communicator.
+[[agents]]
+count = 700
+placement = { kind = "uniform" }
+archetype = "asocial_forager"
+
+# Predators seed a coevolutionary arms race across the large biome.
+[[agents]]
+count = 120
+placement = { kind = "uniform" }
+archetype = "stalker"
+
+[[agents]]
+count = 60
+placement = { kind = "uniform" }
+archetype = "pack_hunter"

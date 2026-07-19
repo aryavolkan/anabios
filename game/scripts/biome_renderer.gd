@@ -10,24 +10,41 @@ var _res: int = 0
 const REDRAW_EVERY := 6
 var _frame: int = 0
 var _last_mode: int = -999   # last (channel, or -1 biome, or -2 optimum) drawn
+# Rebuild interval, scaled up for big biomes: the per-pixel GDScript rebuild is
+# O(res²) (262k px at res=512), and the biome changes slowly, so large worlds
+# redraw less often. Default res (128) keeps the original 6-frame cadence.
+var _redraw_interval := REDRAW_EVERY
 
 func _ready() -> void:
-	_res = int(sim.biome_resolution())
-	if _res <= 0:
-		return
-	_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
-	_tex = ImageTexture.create_from_image(_img)
-	texture = _tex
 	centered = false
-	var world: float = sim.world_size()
-	scale = Vector2(world / _res, world / _res)
 	position = Vector2.ZERO
 	z_index = -10
 	# Slightly dim + cool the ground so organisms and overlays read clearly on
 	# top and the terrain harmonizes with the dark instrument HUD.
 	modulate = Color(0.78, 0.82, 0.88)
+	_setup(int(sim.biome_resolution()))
+
+# (Re)build the texture at `res`. Needed because the scenario loads AFTER this
+# child node's _ready (children ready before the Main parent), so at _ready the
+# sim still reports the DEFAULT resolution — a larger scenario would otherwise
+# leave a size mismatch and a blank ground. Also re-runs on Restart into a
+# different-size scenario.
+func _setup(res: int) -> void:
+	_res = res
+	if _res <= 0:
+		return
+	_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
+	_tex = ImageTexture.create_from_image(_img)
+	texture = _tex
+	var world: float = sim.world_size()
+	scale = Vector2(world / _res, world / _res)
+	_redraw_interval = REDRAW_EVERY * maxi(1, _res / 128)
+	_last_mode = -999  # force an immediate redraw
 
 func _process(_delta: float) -> void:
+	var res: int = int(sim.biome_resolution())
+	if res != _res:
+		_setup(res)
 	if _res <= 0:
 		return
 	# Current ground selection encoded as one int: -2 optimum, -1 biome, else channel.
@@ -41,7 +58,7 @@ func _process(_delta: float) -> void:
 	# Throttle: rebuild every REDRAW_EVERY frames, but immediately when the ground
 	# selection changed (so [G]/overlay toggles feel instant).
 	_frame += 1
-	if mode == _last_mode and _frame % REDRAW_EVERY != 0:
+	if mode == _last_mode and _frame % _redraw_interval != 0:
 		return
 	_last_mode = mode
 
