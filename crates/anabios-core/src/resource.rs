@@ -16,24 +16,30 @@ pub const RESOURCE_STEP_INTERVAL: u64 = 10;
 /// Random placement attempts per spawn step (fixed → deterministic RNG draw count).
 pub const NODE_SPAWN_ATTEMPTS: usize = 64;
 /// Target live node count per good; spawning stops adding a good at/above this.
-/// Raised from 40 (with `DOWRY_REQ` lowered to 1.0, see below) to give more
-/// simultaneous harvest opportunities per good, since a scarce terrain (e.g.
-/// Rock) still spawns far below this ceiling in practice — the true limiter
-/// for rare terrain is its map-area fraction, not this target.
+/// Unchanged at 80: turnover testing (basket-accumulating `pick_swap` +
+/// `DOWRY_REQ` = 2.0) showed this ceiling isn't the bottleneck — a scarce
+/// terrain's live node count near any one cluster is already far below it,
+/// so lowering it (tried 60) starved the trade scenario without freeing up
+/// any other resource; the real limiter is map-area fraction per terrain.
 pub const NODE_TARGET_PER_GOOD: usize = 80;
 /// Hard cap on total live nodes.
 pub const NODE_MAX_TOTAL: usize = 400;
-/// Amount a fresh node carries. Raised from 20 so that the handful of nodes
-/// spawning on scarce terrain (e.g. a small Rock deposit) can still supply
-/// many agents over a run via harvesting *and* onward bilateral trade,
-/// rather than depleting after one or two visits.
-pub const NODE_START_AMOUNT: f32 = 200.0;
+/// Amount a fresh node carries. Raised from 200: basket-accumulating
+/// `pick_swap` (deficit valuation, see `want` below) fixed the old
+/// equal-holdings absorbing state, but `DOWRY_REQ` doubling (1.0 -> 2.0)
+/// doubles the raw goods each agent needs, and that dominates. Turnover
+/// testing showed 200 (and everything below it down to 40) fails to produce
+/// a `DowryBirth` in the trade scenario's 600-tick window; 225 clears it with
+/// margin (first dowry birth ~tick 507, several agents holding a full basket
+/// by the end) — a modest supply increase, not the hoped-for decrease.
+pub const NODE_START_AMOUNT: f32 = 225.0;
 /// Max distance an agent can harvest a node from (world units).
 pub const HARVEST_RANGE: f32 = 2.0;
-/// Max amount harvested from a node per tick per agent. Raised from 1.0
-/// alongside `NODE_START_AMOUNT` so agents fill out a full 4-good dowry
-/// basket well before the reproduction window (600 ticks in the trade
-/// scenario test) closes.
+/// Max amount harvested from a node per tick per agent. Unchanged at 5.0:
+/// turnover testing showed the per-tick harvest rate has much less leverage
+/// on `DowryBirth` reachability than total node supply (`NODE_START_AMOUNT`)
+/// does — raising it alone (to 6.0, 7.0) while lowering start amount did not
+/// recover a passing run, so it stays at its prior value.
 pub const HARVEST_RATE: f32 = 5.0;
 /// Base per-agent carrying capacity (summed across all goods).
 pub const INVENTORY_BASE_CAP: f32 = 12.0;
@@ -43,20 +49,12 @@ pub const INVENTORY_STORAGE_BONUS: f32 = 12.0;
 pub const TRADE_RANGE: f32 = 2.0;
 /// Units of a good moved in one direction per trade event.
 pub const TRADE_UNIT: f32 = 1.0;
-/// Units of EACH good a parent must hold and spend to reproduce.
-///
-/// Reproduction needs 1 unit of each of the 4 goods. This is set to the
-/// *reachable* ceiling rather than a round number: `pick_swap` (see
-/// `interact.rs`) only executes a bilateral swap under a strict `>` mutual-
-/// benefit rule, so once both sides hold an equal amount of every good,
-/// giving up any one good is worth exactly what receiving another would be —
-/// trade can never move an agent past "1 unit of each good it holds" for
-/// goods obtained solely via trade (a mathematically absorbing state).
-/// Fresh harvesting can still push an agent past 1.0 on goods local to its
-/// terrain, but cross-biome goods realistically cap near 1.0 per agent. 1.0
-/// is therefore the reachable, balanced-basket dowry size; 2.0 made
-/// `DowryBirth` unreachable for cross-species trade economies.
-pub const DOWRY_REQ: f32 = 1.0;
+/// Units of EACH good a parent must hold and spend to reproduce — the balanced
+/// basket. Reachable because `pick_swap` (see `interact.rs`) values goods by
+/// their deficit below this target, so agents accumulate toward a full basket
+/// instead of stalling at "equal holdings" (the old strict-`>` / diminishing-
+/// utility rule capped trade-only goods near 1 unit and forced this to 1.0).
+pub const DOWRY_REQ: f32 = 2.0;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,11 +96,14 @@ pub struct Resource {
     pub amount: f32,
 }
 
-/// Marginal desire for good `k`: high when the agent holds little of it
-/// (diminishing marginal utility). You value what you are short of.
+/// Trade valuation of good `k`: how far the agent is BELOW the dowry target
+/// `DOWRY_REQ` for that good, clamped at 0. An agent values a good it still
+/// needs to complete its basket and stops valuing it once that slot is full —
+/// so bilateral trade drives agents to ACCUMULATE a full balanced basket
+/// rather than merely equalize holdings against a neighbor.
 #[inline]
 pub fn want(inventory: &[f32; GOOD_COUNT], k: usize) -> f32 {
-    1.0 / (1.0 + inventory[k])
+    (DOWRY_REQ - inventory[k]).max(0.0)
 }
 
 /// Total units held across all goods.
@@ -227,13 +228,16 @@ mod tests {
     }
 
     #[test]
-    fn want_falls_as_holdings_rise() {
+    fn want_is_dowry_deficit() {
         let mut inv = [0.0f32; GOOD_COUNT];
-        let scarce = want(&inv, 0);
-        inv[0] = 5.0;
-        let plentiful = want(&inv, 0);
-        assert!(scarce > plentiful, "scarcer good must be wanted more");
-        assert!((scarce - 1.0).abs() < 1e-6, "empty holding => want 1.0");
+        // Empty slot: want equals the full dowry target.
+        assert!((want(&inv, 0) - DOWRY_REQ).abs() < 1e-6);
+        // Partially filled: want is the remaining deficit.
+        inv[0] = DOWRY_REQ - 0.5;
+        assert!((want(&inv, 0) - 0.5).abs() < 1e-6);
+        // Full (or over-full) slot: want is zero (satiated), never negative.
+        inv[0] = DOWRY_REQ + 3.0;
+        assert_eq!(want(&inv, 0), 0.0);
     }
 
     #[test]

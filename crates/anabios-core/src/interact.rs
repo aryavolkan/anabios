@@ -342,53 +342,41 @@ fn share_pass(world: &mut World, alive_ids: &[u32]) {
     }
 }
 
-/// Choose a mutually-beneficial one-for-one swap between two inventories, from
-/// A's perspective: A gives good `give` (its lowest-want good it can spare a
-/// `TRADE_UNIT` of that B still wants) and receives good `recv` (B's lowest-want
-/// spare good that A wants). Returns `None` if no complementary, strictly-
-/// beneficial swap exists. Ties in "lowest want" break toward the lower index.
+/// Choose the most mutually-beneficial one-for-one swap between two inventories,
+/// from A's perspective: A gives good `give` and receives good `recv`. Considers
+/// every (give, recv) pair where A can spare a `TRADE_UNIT` of `give` and B can
+/// spare a `TRADE_UNIT` of `recv`, and returns the pair maximizing the summed
+/// deficit-reduction of both sides, requiring BOTH to strictly gain. `None` if no
+/// such swap exists. Iteration is ascending (give, then recv) with a strict `>`
+/// on the score, so ties keep the lowest-index pair — deterministic, no RNG.
 fn pick_swap(
     inv_a: &[f32; crate::resource::GOOD_COUNT],
     inv_b: &[f32; crate::resource::GOOD_COUNT],
 ) -> Option<(usize, usize)> {
     use crate::resource::{want, GOOD_COUNT, TRADE_UNIT};
-    // A's most-spareable good (lowest want) that it holds >= TRADE_UNIT of.
-    let mut give: Option<usize> = None;
-    let mut give_want = f32::INFINITY;
-    for k in 0..GOOD_COUNT {
-        if inv_a[k] >= TRADE_UNIT {
-            let wk = want(inv_a, k);
-            if wk < give_want {
-                give_want = wk;
-                give = Some(k);
+    let mut best: Option<(usize, usize)> = None;
+    let mut best_score = 0.0f32;
+    for give in 0..GOOD_COUNT {
+        if inv_a[give] < TRADE_UNIT {
+            continue; // A cannot spare `give`
+        }
+        for recv in 0..GOOD_COUNT {
+            if recv == give || inv_b[recv] < TRADE_UNIT {
+                continue; // same good, or B cannot spare `recv`
+            }
+            // A gives `give`, receives `recv`; B gives `recv`, receives `give`.
+            let a_gain = want(inv_a, recv) - want(inv_a, give);
+            let b_gain = want(inv_b, give) - want(inv_b, recv);
+            if a_gain > 0.0 && b_gain > 0.0 {
+                let score = a_gain + b_gain;
+                if score > best_score {
+                    best_score = score;
+                    best = Some((give, recv));
+                }
             }
         }
     }
-    let give = give?;
-    // B's most-spareable good (lowest want) that it holds >= TRADE_UNIT of.
-    let mut recv: Option<usize> = None;
-    let mut recv_want_b = f32::INFINITY;
-    for k in 0..GOOD_COUNT {
-        if inv_b[k] >= TRADE_UNIT {
-            let wk = want(inv_b, k);
-            if wk < recv_want_b {
-                recv_want_b = wk;
-                recv = Some(k);
-            }
-        }
-    }
-    let recv = recv?;
-    if give == recv {
-        return None; // swapping the same good is pointless
-    }
-    // Mutual benefit: each side values what it receives more than what it gives.
-    let a_gains = want(inv_a, recv) > want(inv_a, give);
-    let b_gains = want(inv_b, give) > want(inv_b, recv);
-    if a_gains && b_gains {
-        Some((give, recv))
-    } else {
-        None
-    }
+    best
 }
 
 /// Trade: each alive agent A (ascending) trades one `TRADE_UNIT` with its
