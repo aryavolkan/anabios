@@ -672,9 +672,22 @@ impl Simulation {
     fn combat_streaks(&self) -> PackedVector2Array {
         let mut out = PackedVector2Array::new();
         let Some(w) = self.inner.as_ref() else { return out };
-        for (from, to) in &w.combat_streaks {
+        for (from, to, _) in &w.combat_streaks {
             out.push(Vector2::new(from.x, from.y));
             out.push(Vector2::new(to.x, to.y));
+        }
+        out
+    }
+
+    /// One color per combat streak (same order as `combat_streaks` pairs),
+    /// tinted by the attacker's genome hue so volleys read as belonging to a
+    /// species. Alpha is managed GDScript-side for the fade-out trail.
+    #[func]
+    fn combat_streak_colors(&self) -> PackedColorArray {
+        let mut out = PackedColorArray::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for (_, _, hue) in &w.combat_streaks {
+            out.push(hsv_to_color(*hue, 0.75, 1.0));
         }
         out
     }

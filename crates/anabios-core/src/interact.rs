@@ -168,8 +168,13 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.energy[i] -= weapon.energy_cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
-        // Viewer scratch: draw a streak from the attacker to its target.
-        world.combat_streaks.push((world.agents.position[i], world.agents.position[t]));
+        // Viewer scratch: draw a streak from the attacker to its target,
+        // tinted by the attacker's genome hue.
+        world.combat_streaks.push((
+            world.agents.position[i],
+            world.agents.position[t],
+            world.agents.genome[i].get(GenomeSlot::ColorHue),
+        ));
         // Record hit for the PackHunting detector.
         world.codex.combat_hits.push_back(crate::codex::CombatHit {
             tick: world.tick,

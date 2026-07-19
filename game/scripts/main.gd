@@ -161,15 +161,20 @@ func _refresh_flashes() -> void:
 
 # Combat streaks: attacker→target segments, kept on screen for a few ticks
 # as fading tracers so ranged (Spines) volleys read as volleys rather than
-# single-frame slivers that are easy to miss between frames.
+# single-frame slivers that are easy to miss between frames. Streaks tint to
+# the attacker's genome hue, so each species' fire is distinguishable.
 const STREAK_TTL: int = 8
-var _streak_trail: Array = [] # entries: [from: Vector2, to: Vector2, ttl: int]
+var _streak_trail: Array = [] # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
 
 func _refresh_streaks() -> void:
 	var segs: PackedVector2Array = sim.combat_streaks()
+	var cols: PackedColorArray = sim.combat_streak_colors()
 	for i in segs.size() / 2:
-		_streak_trail.append([segs[2 * i], segs[2 * i + 1], STREAK_TTL])
+		_streak_trail.append([segs[2 * i], segs[2 * i + 1], STREAK_TTL, cols[i]])
 	var mm: MultiMesh = streaks.multimesh
+	# Perf: cap the trail at the multimesh budget, dropping the oldest first.
+	if _streak_trail.size() > mm.instance_count:
+		_streak_trail = _streak_trail.slice(_streak_trail.size() - mm.instance_count)
 	var kept: Array = []
 	for s in _streak_trail:
 		s[2] -= 1
@@ -185,8 +190,9 @@ func _refresh_streaks() -> void:
 		var len: float = maxf(delta.length(), 0.001)
 		var mid: Vector2 = (from + to) * 0.5
 		mm.set_instance_transform_2d(i, Transform2D(delta.angle(), Vector2(len, 0.6), 0.0, mid))
-		var a: float = 0.85 * float(_streak_trail[i][2]) / float(STREAK_TTL)
-		mm.set_instance_color(i, Color(1.0, 0.55, 0.25, a))
+		var c: Color = _streak_trail[i][3]
+		c.a = 0.85 * float(_streak_trail[i][2]) / float(STREAK_TTL)
+		mm.set_instance_color(i, c)
 
 func _refresh_module_layers() -> void:
 	var all: Array = sim.module_glyphs_all()
