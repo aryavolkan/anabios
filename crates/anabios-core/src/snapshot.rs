@@ -22,6 +22,11 @@ use crate::world::World;
 ///     tree: MEME_CHANNELS widened 8→18 (inventions ride meme channels),
 ///     BiomeCell.pollution, World.inventions_enabled (renamed from
 ///     cultural_inventions), CodexState invention latches.
+/// v6: cognitive layer Phase 1 — World.cognition_enabled + AgentBuffers realized-
+///     IQ phenotype fields (iq / iq_enrich_acc / iq_enrich_ticks).
+/// v7: cognitive layer Phase 3/4 — MEME_CHANNELS widened 18→20 for the
+///     maladaptive-practice block (channels 18-19) + CodexState practice latches
+///     (practices_discovered / practices_adopted).
 pub const FORMAT_VERSION: u32 = 7;
 
 #[derive(Debug, Serialize, Deserialize)]

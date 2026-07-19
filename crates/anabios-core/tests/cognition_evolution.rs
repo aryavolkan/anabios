@@ -12,9 +12,10 @@
 //!     can't re-feed away, so the practising population is out-grown. (An earlier
 //!     energy-only form was too weak; strengthening it was the point of this
 //!     mechanic — see `INBREEDING_STILLBIRTH`.)
-//!  3. Realized IQ carries both **heritable** (gene) and **plastic** (social
-//!     upbringing) variation — the raw material selection needs — measured from
-//!     real juvenile development.
+//!  3. Realized IQ carries both **heritable** (gene) and **plastic** variation —
+//!     the raw material selection needs — measured from real juvenile
+//!     development, with each nurture channel isolated: a food-rich upbringing
+//!     AND a socially-embedded one each raise realized IQ over their opposite.
 //!  4. A reported coevolution verdict: with cognition on, mean IQ + the
 //!     maladaptive-practice load are printed over a long run. The sweep
 //!     direction is genuinely uncertain (culture genes often don't sweep from
@@ -25,6 +26,7 @@
 
 use anabios_core::biome::{TerrainType, BIOME_RES, CELL_SIZE};
 use anabios_core::genome::{Genome, GenomeSlot};
+use anabios_core::module::Module;
 use anabios_core::prelude_test::Vec2;
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
@@ -121,7 +123,7 @@ fn inbreeding_is_selected_against() {
     assert!(mean_ratio < 0.9, "and carry a clear population deficit: {mean_ratio:.3}");
 }
 
-/// Centre of a well-fed grass cell to stand a cohort on.
+/// Centre of a well-fed grass cell / a barren cell to stand a cohort on.
 fn grass_spot(w: &World) -> Vec2 {
     for row in 0..BIOME_RES {
         for col in 0..BIOME_RES {
@@ -133,23 +135,41 @@ fn grass_spot(w: &World) -> Vec2 {
     }
     Vec2::splat(CELL_SIZE * 0.5)
 }
+fn barren_spot(w: &World) -> Vec2 {
+    for row in 0..BIOME_RES {
+        for col in 0..BIOME_RES {
+            if w.biome.at(col, row).plant_biomass <= 0.0 {
+                return Vec2::new((col as f32 + 0.5) * CELL_SIZE, (row as f32 + 0.5) * CELL_SIZE);
+            }
+        }
+    }
+    Vec2::splat(CELL_SIZE * 0.5)
+}
 
-/// Mean realized IQ of a cohort grown through the whole juvenile window on
-/// well-fed grass. `crowded` = tightly clustered (rich social enrichment);
-/// otherwise each juvenile grows up alone in its own world (no social
-/// enrichment). Nutrition is held constant (grass) so this isolates the social
-/// (nurture) channel — the nutrition proxy stays saturated from spawn energy
-/// alone, so social embedding is the developmental signal that actually moves.
-fn cohort_iq(gene: f32, crowded: bool, n: usize, seed: u64) -> f32 {
+/// Mean realized IQ of a cohort grown through the whole juvenile window, with
+/// the two nurture channels cleanly separable. Each agent is stripped to just a
+/// Sensor — no Locomotor (stays on its placed cell → stable local food), no
+/// Mouth (no grazing → the cell's food isn't depleted), no Reproductive (no
+/// births to perturb survival) — so `nutrition` = the cell's standing food and
+/// `social` = clustering, each set independently:
+/// - `rich_food`: grown on vegetated grass vs barren ground.
+/// - `crowded`: tightly clustered (high crowding) vs each alone in its own world.
+fn cohort_iq(gene: f32, rich_food: bool, crowded: bool, n: usize, seed: u64) -> f32 {
     let mut g = Genome::neutral();
     g.set(GenomeSlot::CognitivePotential, gene);
+    let spawn_dev = |w: &mut World, spot: Vec2| -> u32 {
+        let id = w.spawn_agent(spot, g);
+        w.agents.modules[id as usize].retain(|m| matches!(m, Module::Sensor { .. }));
+        id
+    };
+    let place = |w: &World| if rich_food { grass_spot(w) } else { barren_spot(w) };
     let mut iqs = Vec::new();
     if crowded {
         let mut w = World::new(seed);
         w.cognition_enabled = true;
-        let spot = grass_spot(&w);
+        let spot = place(&w);
         let ids: Vec<u32> = (0..n)
-            .map(|k| w.spawn_agent(spot + Vec2::new((k % 5) as f32, (k / 5) as f32), g))
+            .map(|k| spawn_dev(&mut w, spot + Vec2::new((k % 5) as f32, (k / 5) as f32)))
             .collect();
         for _ in 0..=iq::IQ_MATURATION_AGE {
             step(&mut w);
@@ -158,12 +178,12 @@ fn cohort_iq(gene: f32, crowded: bool, n: usize, seed: u64) -> f32 {
             ids.iter().filter(|&&id| w.agents.is_alive(id)).map(|&id| w.agents.iq[id as usize]),
         );
     } else {
-        // Each juvenile alone → zero social enrichment.
+        // Each juvenile alone in its own world → zero social enrichment.
         for k in 0..n {
             let mut w = World::new(seed.wrapping_add(k as u64));
             w.cognition_enabled = true;
-            let spot = grass_spot(&w);
-            let id = w.spawn_agent(spot, g);
+            let spot = place(&w);
+            let id = spawn_dev(&mut w, spot);
             for _ in 0..=iq::IQ_MATURATION_AGE {
                 step(&mut w);
             }
@@ -179,23 +199,32 @@ fn cohort_iq(gene: f32, crowded: bool, n: usize, seed: u64) -> f32 {
 #[ignore = "experiment harness — run explicitly with --ignored --nocapture"]
 #[test]
 fn realized_iq_is_heritable_and_plastic() {
-    // Heritability: same (crowded) environment, brighter gene → higher IQ.
-    let dull = cohort_iq(0.1, true, 25, 7);
-    let bright = cohort_iq(0.9, true, 25, 7);
-    println!("RESULT heritability: dull={dull:.3} bright={bright:.3} (shared social env)");
+    // Heritability: same environment (crowded grass), brighter gene → higher IQ.
+    let dull = cohort_iq(0.1, true, true, 25, 7);
+    let bright = cohort_iq(0.9, true, true, 25, 7);
+    println!("RESULT heritability: dull={dull:.3} bright={bright:.3} (shared env)");
     assert!(
         bright > dull + 0.1,
         "the heritable gene must lift realized IQ under a shared environment"
     );
 
-    // Plasticity: same gene, a socially-embedded upbringing → higher IQ than
-    // growing up alone. This is the developmental (nurture) channel — the
-    // variation selection cannot read from the genes alone. (Nutrition is held
-    // constant; spawn energy buffers juveniles, so the social channel is the one
-    // that meaningfully moves realized IQ.)
-    let crowded = cohort_iq(0.5, true, 25, 11);
-    let solo = cohort_iq(0.5, false, 25, 11);
-    println!("RESULT plasticity: crowded={crowded:.3} solo={solo:.3} (gene=0.5)");
+    // Nutrition plasticity: same gene + same (crowded) social env, grown on rich
+    // grass vs barren ground → the local FOOD of the growing environment lifts
+    // realized IQ. (This is what the biome-food nutrition channel fixed — with
+    // the old spawn-energy proxy this signal was ~0.)
+    let fed = cohort_iq(0.5, true, true, 25, 13);
+    let starved = cohort_iq(0.5, false, true, 25, 13);
+    println!("RESULT nutrition plasticity: fed={fed:.3} starved={starved:.3} (gene=0.5)");
+    assert!(
+        fed > starved + 0.05,
+        "a food-rich upbringing must raise realized IQ above a barren one"
+    );
+
+    // Social plasticity: same gene + same (rich) food, a socially-embedded
+    // upbringing vs growing up alone → clustering lifts realized IQ.
+    let crowded = cohort_iq(0.5, true, true, 25, 11);
+    let solo = cohort_iq(0.5, true, false, 25, 11);
+    println!("RESULT social plasticity: crowded={crowded:.3} solo={solo:.3} (gene=0.5)");
     assert!(
         crowded > solo + 0.05,
         "a socially-embedded upbringing must raise realized IQ above growing up alone"

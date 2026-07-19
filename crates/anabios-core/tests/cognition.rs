@@ -39,8 +39,14 @@ fn cognitive_scenario_is_self_consistent() {
 // offspring. A behavior change (not layout): an inbreeding holder reproduces
 // after tick 0, so ticks 100/300 moved while tick 0 held. Flag-off (minimal /
 // inventions) goldens are unaffected — the mechanic is cognition-gated.
+// Refreshed 2026-07-19 (2): IQ nutrition channel now samples LOCAL BIOME FOOD
+// (plant_biomass / carrying_capacity) instead of the spawn-energy-buffered
+// energy level, so the "growing environment" actually shapes realized IQ.
+// Behavior change: juvenile IQ development differs from tick 1 on, so ticks
+// 100/300 moved (tick 0 holds — no development yet). Cognition-gated, so
+// minimal / inventions are unaffected.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x42f7a6e1c6717d0b), (100, 0x6981d4ad38e4ac1e), (300, 0x74fc44238908108f)];
+    &[(0, 0x42f7a6e1c6717d0b), (100, 0xb9aa2d57e6450748), (300, 0x6a0f377010b8816f)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

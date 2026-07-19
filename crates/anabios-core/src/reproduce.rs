@@ -503,6 +503,42 @@ mod tests {
     }
 
     #[test]
+    fn species_count_stays_consistent_after_a_cull() {
+        use crate::practice;
+        // A child culled mid-`reproduce_all` (stillbirth / child-sacrifice) does
+        // `kill` + `remove_from_species`, undoing the `add_to_species` from its
+        // spawn. Verify `species_member_counts` still equals the true alive count
+        // per species after such a birth — on both the culled and non-culled path.
+        let alive_in_species = |w: &World, sid: u32| -> u32 {
+            w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == sid).count()
+                as u32
+        };
+        let mut saw_cull = false;
+        for seed in 0..64u64 {
+            let mut w = World::new(seed);
+            w.cognition_enabled = true;
+            let pos = find_grass_cell_center(&w);
+            let a = w.spawn_agent(pos, fertile_genome());
+            let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+            w.agents.energy[a as usize] = SPAWN_ENERGY * 2.0;
+            w.agents.energy[b as usize] = SPAWN_ENERGY * 2.0;
+            w.agents.meme_vector[a as usize][practice::channel(practice::CHILD_SACRIFICE)] = 1.0;
+            w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+            reproduce_all(&mut w);
+            let sid = w.agents.species_id[a as usize];
+            assert_eq!(
+                w.species_member_counts[sid as usize],
+                alive_in_species(&w, sid),
+                "species_member_counts must match the true alive count (seed {seed})"
+            );
+            if w.agents.live_count() == 2 {
+                saw_cull = true; // confirmed the cull path was exercised
+            }
+        }
+        assert!(saw_cull, "no seed produced a cull in 64 tries");
+    }
+
+    #[test]
     fn low_energy_pair_does_not_mate() {
         let mut w = World::new(13);
         let pos = find_grass_cell_center(&w);
