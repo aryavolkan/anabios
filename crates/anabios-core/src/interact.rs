@@ -531,10 +531,7 @@ mod tests {
             (0..2).map(|id| w.agents.inventory[id][Good::Obsidian.index()]).sum();
         assert!((total_salt_before - total_salt_after).abs() < 1e-6, "Salt conserved");
         assert!((total_obsidian_after - 5.0).abs() < 1e-6, "Obsidian conserved");
-        assert!(
-            w.agents.inventory[a as usize][Good::Salt.index()] < 5.0,
-            "A gave up some Salt"
-        );
+        assert!(w.agents.inventory[a as usize][Good::Salt.index()] < 5.0, "A gave up some Salt");
         assert!(
             w.agents.inventory[a as usize][Good::Obsidian.index()] > 0.0,
             "A received some Obsidian"
