@@ -51,8 +51,24 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // tick 1000 moved — minimal's grazers evolve a Communicator between ticks 100
 // and 1000, and this undoes that trajectory perturbation for every non-
 // invention culture scenario.
+// Refreshed 2026-07-19 (4): cognitive layer Phase 1 — AgentBuffers gained the
+// realized-IQ phenotype fields (iq / iq_enrich_acc / iq_enrich_ticks) and
+// FORMAT_VERSION bumped to 6. `cognition_enabled` defaults off, so IQ stays 0
+// for every agent (metabolic multiplier is exact identity) and behavior is
+// unchanged — but the serialized layout grew from tick 0, so all three hashes
+// moved by layout only (the tick-0 move proves there is no trajectory change).
+// Refreshed 2026-07-19 (5): cognitive layer Phase 3 — MEME_CHANNELS widened
+// 18→20 for the maladaptive-practice block (channels 18-19); FORMAT_VERSION 7.
+// `cognition_enabled` off ⇒ practice channels stay 0, draw no jitter (inherit_meme
+// gates them on the flag), and no reproductive effect applies — behavior
+// unchanged; only the serialized meme vector grew, so all three hashes moved by
+// layout (tick-0 move again proves no trajectory change).
+// Refreshed 2026-07-19 (6): cognitive layer Phase 4 — CodexState gained the
+// practice detector latches (practices_discovered / practices_adopted). Empty
+// BTreeSets when cognition is off, but they serialize into the state, so all
+// three hashes moved by layout only (tick-0 move proves no trajectory change).
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xe51e55efb59c20ed), (100, 0x26b7b341a207605f), (1000, 0x9ff2c2487fdec8fa)];
+    &[(0, 0xbb2e1bbdc3f090bd), (100, 0x55614f8943fbc164), (1000, 0xc907e7e7ca079537)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

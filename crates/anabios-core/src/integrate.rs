@@ -32,12 +32,13 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], worl
         // Action gating: no Locomotor → no motion.
         if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Locomotor) {
             agents.velocity[i] = Vec2::ZERO;
-            // Still pay basal metabolism (invention debuffs scale it).
+            // Still pay basal metabolism (invention debuffs + IQ scale it).
             let basal = BASAL_METABOLISM_COST
                 * agents.genome[i].get(GenomeSlot::BasalMetabolism)
                 * crate::invention::metabolism_multiplier(crate::invention::held_mask(
                     &agents.meme_vector[i],
-                ));
+                ))
+                * crate::iq::metabolism_multiplier(agents.iq[i]);
             agents.energy[i] -= basal;
             continue;
         }
@@ -62,7 +63,8 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], worl
             * agents.genome[i].get(GenomeSlot::BasalMetabolism)
             * crate::invention::metabolism_multiplier(crate::invention::held_mask(
                 &agents.meme_vector[i],
-            ));
+            ))
+            * crate::iq::metabolism_multiplier(agents.iq[i]);
         agents.energy[i] -= move_cost + basal;
     }
     agents.scratch_ids = ids;

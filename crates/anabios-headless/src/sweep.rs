@@ -111,6 +111,8 @@ fn event_name(t: EventType) -> &'static str {
         EventType::HerdCohesion => "herd_cohesion",
         EventType::InventionDiscovered => "invention_discovered",
         EventType::InventionAdopted => "invention_adopted",
+        EventType::PracticeDiscovered => "practice_discovered",
+        EventType::PracticeAdopted => "practice_adopted",
     }
 }
 
@@ -125,13 +127,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          territory_formation,niche_partitioning,\
          dialect_formed,meme_sweep,alarm_call,\
          evolved_cooperation,pack_hunting,herd_cohesion,\
-         invention_discovered,invention_adopted"
+         invention_discovered,invention_adopted,\
+         practice_discovered,practice_adopted"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -156,6 +159,8 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("herd_cohesion"),
             g("invention_discovered"),
             g("invention_adopted"),
+            g("practice_discovered"),
+            g("practice_adopted"),
         )?;
     }
     Ok(())

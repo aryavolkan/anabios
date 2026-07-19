@@ -54,6 +54,16 @@ pub struct AgentBuffers {
     /// Channels `invention::INVENTION_CHANNEL_BASE..` carry the invention
     /// tree's adoption levels.
     pub meme_vector: Vec<[f32; crate::program::MEME_CHANNELS]>,
+    /// Realized IQ in `[0,1]` — a gene×environment phenotype developed over the
+    /// juvenile window by `iq::develop_all` (heritable `CognitivePotential`
+    /// modulated by juvenile nutrition + social enrichment) and frozen at
+    /// maturity. Stays `0.0` for every agent when `World::cognition_enabled` is
+    /// false, so it is cost/gate-neutral there. Serialized (persistent state).
+    pub iq: Vec<f32>,
+    /// Running sum of per-tick juvenile enrichment samples (nutrition + social),
+    /// and the sample count — together the developmental average feeding `iq`.
+    pub iq_enrich_acc: Vec<f32>,
+    pub iq_enrich_ticks: Vec<u32>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -117,6 +127,9 @@ impl AgentBuffers {
             self.modules[i] = modules;
             self.program[i] = program;
             self.meme_vector[i] = [0.0; crate::program::MEME_CHANNELS];
+            self.iq[i] = 0.0;
+            self.iq_enrich_acc[i] = 0.0;
+            self.iq_enrich_ticks[i] = 0;
             self.alive.set(i, true);
             id
         } else {
@@ -132,6 +145,9 @@ impl AgentBuffers {
             self.modules.push(modules);
             self.program.push(program);
             self.meme_vector.push([0.0; crate::program::MEME_CHANNELS]);
+            self.iq.push(0.0);
+            self.iq_enrich_acc.push(0.0);
+            self.iq_enrich_ticks.push(0);
             self.alive.push(true);
             i as AgentId
         };

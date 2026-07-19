@@ -533,6 +533,191 @@ fn meme_sweep_does_not_double_fire_on_invention_channels() {
     );
 }
 
+// --- Cognition: IQ-gated acquisition (Phase 2) ------------------------------------
+
+#[test]
+fn iq_req_scales_with_era_and_gate_respects_flag() {
+    use invention::{iq_permits, iq_req};
+    // Higher-era tech demands more cognition.
+    assert!(iq_req(invention::STONE_TOOLS) < iq_req(invention::FARMING));
+    assert!(iq_req(invention::FARMING) < iq_req(invention::NUCLEAR_POWER));
+    // Gate is off entirely when cognition is disabled (non-cognition scenarios).
+    assert!(iq_permits(0.0, invention::NUCLEAR_POWER, false));
+    // On: realized IQ must clear the era requirement.
+    let req = iq_req(invention::NUCLEAR_POWER);
+    assert!(!iq_permits(req - 0.01, invention::NUCLEAR_POWER, true));
+    assert!(iq_permits(req, invention::NUCLEAR_POWER, true));
+}
+
+/// Eight skilled, open communicators that only differ in realized IQ.
+fn seed_innovators(seed: u64, iq: f32) -> (World, Vec<u32>) {
+    let mut w = World::new(seed);
+    w.inventions_enabled = true;
+    w.cognition_enabled = true;
+    let mut ids = Vec::new();
+    for n in 0..8 {
+        let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+        w.agents.modules[id as usize] = comm_kit();
+        w.agents.meme_vector[id as usize][SKILL_CHANNEL] = 1.0;
+        let mut g = w.agents.genome[id as usize];
+        g.set(GenomeSlot::Openness, 1.0);
+        w.agents.genome[id as usize] = g;
+        w.agents.iq[id as usize] = iq;
+        ids.push(id);
+    }
+    (w, ids)
+}
+
+#[test]
+fn discovery_is_blocked_below_the_iq_threshold() {
+    // IQ just under the era-1 requirement: Stone Tools (the only era-1
+    // candidate) is filtered out, so total discovery probability is 0 and these
+    // maximally-open, maximally-skilled communicators never invent anything.
+    let (mut w, ids) = seed_innovators(101, invention::iq_req(invention::STONE_TOOLS) - 0.01);
+    for _ in 0..20_000 {
+        invention::invention_step(&mut w);
+    }
+    assert!(
+        ids.iter().all(|&id| invention::held_mask(&w.agents.meme_vector[id as usize]) == 0),
+        "IQ below the era-1 threshold must never discover"
+    );
+}
+
+#[test]
+fn discovery_allowed_at_or_above_the_iq_threshold() {
+    // Same population, IQ well above the era-1 requirement → Stone Tools appears.
+    let (mut w, ids) = seed_innovators(101, 1.0);
+    let mut discovered = false;
+    for _ in 0..20_000 {
+        invention::invention_step(&mut w);
+        if ids
+            .iter()
+            .any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::STONE_TOOLS))
+        {
+            discovered = true;
+            break;
+        }
+    }
+    assert!(discovered, "sufficient IQ permits discovery");
+}
+
+#[test]
+fn spread_respects_the_iq_gate() {
+    let mut w = World::new(103);
+    w.inventions_enabled = true;
+    w.cognition_enabled = true;
+    let holder = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let receiver = w.spawn_agent(Vec2::new(505.0, 500.0), Genome::neutral());
+    w.agents.modules[holder as usize] = comm_kit();
+    w.agents.modules[receiver as usize] = comm_kit();
+    w.agents.program[holder as usize] = Program::from_slice(&[Node::Idle]);
+    w.agents.program[receiver as usize] = Program::from_slice(&[Node::Idle]);
+    set_held(&mut w, holder, invention::STONE_TOOLS);
+    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+    size_scratch(&mut w);
+
+    // Receiver IQ below the era-1 threshold: cannot copy Stone Tools.
+    w.agents.iq[receiver as usize] = invention::iq_req(invention::STONE_TOOLS) - 0.01;
+    anabios_core::culture::culture_step(&mut w);
+    assert_eq!(
+        level_of(&w, receiver, invention::STONE_TOOLS),
+        0.0,
+        "IQ below threshold blocks social acquisition"
+    );
+
+    // Raise IQ above the threshold: now it copies at the spread rate.
+    w.agents.iq[receiver as usize] = 0.5;
+    anabios_core::culture::culture_step(&mut w);
+    assert!(
+        level_of(&w, receiver, invention::STONE_TOOLS) > 0.0,
+        "sufficient IQ permits social acquisition"
+    );
+}
+
+// --- Maladaptive practices (Phase 3) ----------------------------------------------
+
+#[test]
+fn practice_spreads_socially_and_respects_the_iq_gate() {
+    use anabios_core::practice;
+    let mut w = World::new(83);
+    w.cognition_enabled = true;
+    let holder = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let receiver = w.spawn_agent(Vec2::new(505.0, 500.0), Genome::neutral());
+    w.agents.modules[holder as usize] = comm_kit();
+    w.agents.modules[receiver as usize] = comm_kit();
+    w.agents.program[holder as usize] = Program::from_slice(&[Node::Idle]);
+    w.agents.program[receiver as usize] = Program::from_slice(&[Node::Idle]);
+    let ch = practice::channel(practice::CHILD_SACRIFICE);
+    w.agents.meme_vector[holder as usize][ch] = 1.0; // holder practices it
+    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+    size_scratch(&mut w);
+
+    // Receiver IQ below the practice gate: no social acquisition.
+    w.agents.iq[receiver as usize] = practice::PRACTICE_IQ_REQ - 0.01;
+    anabios_core::culture::culture_step(&mut w);
+    assert_eq!(w.agents.meme_vector[receiver as usize][ch], 0.0, "below IQ gate: no spread");
+
+    // Raise IQ above the gate: copies toward the holder at the practice rate.
+    w.agents.iq[receiver as usize] = 0.5;
+    anabios_core::culture::culture_step(&mut w);
+    assert!(
+        (w.agents.meme_vector[receiver as usize][ch] - practice::PRACTICE_SPREAD_RATE).abs() < 1e-6,
+        "payoff-blind copy toward the holder at the practice spread rate"
+    );
+}
+
+#[test]
+fn practice_discovery_requires_the_flag_and_iq() {
+    use anabios_core::practice;
+    let seed_pop = |cognition: bool, iq: f32| -> (World, Vec<u32>) {
+        let mut w = World::new(91);
+        w.cognition_enabled = cognition;
+        let mut ids = Vec::new();
+        for n in 0..8 {
+            let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+            w.agents.modules[id as usize] = comm_kit();
+            let mut g = w.agents.genome[id as usize];
+            g.set(GenomeSlot::Openness, 1.0);
+            w.agents.genome[id as usize] = g;
+            w.agents.iq[id as usize] = iq;
+            ids.push(id);
+        }
+        (w, ids)
+    };
+    let holds_any = |w: &World, ids: &[u32]| {
+        ids.iter().any(|&id| {
+            (0..practice::PRACTICE_COUNT)
+                .any(|p| practice::has(&w.agents.meme_vector[id as usize], p))
+        })
+    };
+
+    // Flag off → never (discover_step early-returns, zero RNG).
+    let (mut off, off_ids) = seed_pop(false, 1.0);
+    for _ in 0..20_000 {
+        practice::discover_step(&mut off);
+    }
+    assert!(!holds_any(&off, &off_ids), "no discovery with cognition off");
+
+    // IQ below the practice threshold → never, even with the flag on.
+    let (mut dull, dull_ids) = seed_pop(true, practice::PRACTICE_IQ_REQ - 0.01);
+    for _ in 0..20_000 {
+        practice::discover_step(&mut dull);
+    }
+    assert!(!holds_any(&dull, &dull_ids), "IQ below the practice gate never invents one");
+
+    // Flag on + sufficient IQ + high Openness → eventually invents a practice.
+    let (mut on, on_ids) = seed_pop(true, 1.0);
+    let mut discovered = false;
+    for _ in 0..60_000 {
+        practice::discover_step(&mut on);
+        if holds_any(&on, &on_ids) {
+            discovered = true;
+            break;
+        }
+    }
+    assert!(discovered, "inventive, cognate agents eventually coin a maladaptive practice");
+}
+
 // --- End-to-end -------------------------------------------------------------------
 
 const INVENTIONS_SCENARIO: &str = include_str!("../../../scenarios/inventions.toml");
@@ -561,8 +746,20 @@ fn inventions_scenario_is_deterministic() {
 // Refreshed 2026-07-19: MemeSweep no longer fires on invention channels (the
 // InventionAdopted detector already reports those sweeps explicitly) — the
 // codex event stream is serialized into the hash, so ticks 100/300 moved.
+// Refreshed 2026-07-19 (2): cognitive layer Phase 1 grew AgentBuffers by the
+// realized-IQ phenotype fields (FORMAT_VERSION 6). `cognition_enabled` is off
+// in this scenario, so IQ stays 0 and behavior is unchanged — only the
+// serialized layout grew, moving all three hashes.
+// Refreshed 2026-07-19 (3): Phase 3 widened MEME_CHANNELS 18→20 for the
+// practice block (FORMAT_VERSION 7). `cognition_enabled` off here, so practices
+// are inert and inherit_meme still jitters exactly the 18 base+invention
+// channels (draw count unchanged) — only the serialized meme vector grew,
+// moving all three hashes by layout.
+// Refreshed 2026-07-19 (4): Phase 4 added the practice codex latches to
+// CodexState (empty here — cognition off), which serialize into the state, so
+// all three hashes moved by layout only.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x4bb0b808775f7768), (100, 0x70eaf00a0cf48136), (300, 0x9a9cd3de326c1bc4)];
+    &[(0, 0x0b027cceb0bdcb56), (100, 0x3cb5888c52550a5b), (300, 0xd670d33f22e7c92a)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

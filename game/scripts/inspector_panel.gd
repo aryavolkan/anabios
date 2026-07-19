@@ -42,7 +42,7 @@ func _process(_delta: float) -> void:
 		"energy %.1f   age %d" % [info["energy"], info["age"]],
 		"program %d   modules %d" % [info["program_len"], info["module_count"]],
 		"diet %.2f (0=herb 1=carn)" % info["diet_carnivory"],
-		"skill %.2f   technique %.2f" % [info["skill"], info["technique"]],
+		"skill %.2f   technique %.2f   IQ %.2f" % [info["skill"], info["technique"], info.get("iq", 0.0)],
 		"learn: indiv=%s social=%s" % [str(info["indiv_learn"]), str(info["social_learn"])],
 		"modules: %s" % mod_str,
 	]
