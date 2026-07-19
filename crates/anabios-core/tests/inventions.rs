@@ -479,6 +479,53 @@ fn inventions_scenario_is_deterministic() {
     assert_eq!(run(300), run(300), "same seed + flag on → bit-identical");
 }
 
+/// Pinned golden hashes for the flag-ON inventions scenario. `determinism.rs`
+/// only locks the flag-OFF `minimal.toml`, so the entire invention mechanism —
+/// discovery RNG draws, copy-toward-best spread, atrophy, pollution, per-holder
+/// upkeep — would be free to drift silently while `inventions_scenario_is_
+/// deterministic` (self-consistency only) still passed. These hashes lock the
+/// mechanism's actual behavior. Regenerate deliberately with `UPDATE_HASHES=1`
+/// (prints new values to copy in) whenever an invention change is intentional.
+const INVENTIONS_GOLDEN: &[(u64, u64)] =
+    &[(0, 0x4bb0b808775f7768), (100, 0x1c57b613f7743245), (300, 0x9e3e4135f8ea5809)];
+
+#[test]
+fn inventions_scenario_matches_golden_hashes() {
+    let scenario = Scenario::parse_toml(INVENTIONS_SCENARIO).expect("parse inventions scenario");
+    let mut w = scenario.instantiate();
+
+    let max_tick = INVENTIONS_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
+    let mut idx = 0;
+    let mut observed: Vec<(u64, u64)> = Vec::new();
+    while w.tick <= max_tick {
+        while idx < INVENTIONS_GOLDEN.len() && INVENTIONS_GOLDEN[idx].0 == w.tick {
+            observed.push((w.tick, state_hash(&w)));
+            idx += 1;
+        }
+        if w.tick == max_tick {
+            break;
+        }
+        step(&mut w);
+    }
+
+    if std::env::var("UPDATE_HASHES").is_ok() {
+        println!("// regenerated inventions hashes:");
+        for (t, h) in &observed {
+            println!("    ({t}, 0x{h:016x}),");
+        }
+        return;
+    }
+
+    for ((exp_tick, exp_hash), (got_tick, got_hash)) in INVENTIONS_GOLDEN.iter().zip(&observed) {
+        assert_eq!(exp_tick, got_tick, "tick mismatch");
+        assert_eq!(
+            *exp_hash, *got_hash,
+            "invention hash drift at tick {exp_tick}: expected 0x{exp_hash:016x}, got 0x{got_hash:016x}.\n\
+             If intentional, rerun with UPDATE_HASHES=1 and copy the printed values.",
+        );
+    }
+}
+
 #[test]
 fn innovators_discover_before_traditionalists_in_demo_scenario() {
     // The demo's core promise: with the flag on, the high-Openness culture

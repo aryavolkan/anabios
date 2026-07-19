@@ -285,55 +285,65 @@ pub fn tech_era(mask: u32) -> u8 {
 
 // --- Multipliers read by effect sites (identity at mask = 0) ----------------
 
+/// `1.0` if `mask` holds invention `inv`, else `0.0`. The branchless
+/// multiplier form (`CONST * held_f32(..)`) keeps every effect site a straight
+/// fused-multiply-add with no data-dependent branch, and reads far better than
+/// the raw `(mask & bit(inv) != 0) as u8 as f32` cast it replaces. Bit-for-bit
+/// identical to that cast (a `bool` is 0/1 as `u8`, exactly `0.0`/`1.0` as
+/// `f32`).
+#[inline]
+pub fn held_f32(mask: u32, inv: usize) -> f32 {
+    (mask & bit(inv) != 0) as u8 as f32
+}
+
 /// Graze-bite multiplier (Stone Tools, Farming, Machinery) — `interact::feed_pass`.
 #[inline]
 pub fn graze_multiplier(mask: u32) -> f32 {
-    1.0 + STONE_TOOLS_BITE * (mask & bit(STONE_TOOLS) != 0) as u8 as f32
-        + FARMING_BITE * (mask & bit(FARMING) != 0) as u8 as f32
-        + MACHINERY_BITE * (mask & bit(MACHINERY) != 0) as u8 as f32
+    1.0 + STONE_TOOLS_BITE * held_f32(mask, STONE_TOOLS)
+        + FARMING_BITE * held_f32(mask, FARMING)
+        + MACHINERY_BITE * held_f32(mask, MACHINERY)
 }
 
 /// Energy-per-biomass multiplier (Fire) — `interact::feed_pass` payout.
 #[inline]
 pub fn food_energy_multiplier(mask: u32) -> f32 {
-    1.0 + FIRE_ENERGY * (mask & bit(FIRE) != 0) as u8 as f32
+    1.0 + FIRE_ENERGY * held_f32(mask, FIRE)
 }
 
 /// Weapon-damage multiplier (Metalworking) — `interact::combat_pass`.
 #[inline]
 pub fn weapon_multiplier(mask: u32) -> f32 {
-    1.0 + METALWORKING_DAMAGE * (mask & bit(METALWORKING) != 0) as u8 as f32
+    1.0 + METALWORKING_DAMAGE * held_f32(mask, METALWORKING)
 }
 
 /// Scavenge-energy multiplier (Husbandry) — `interact::scavenge_pass` payout.
 #[inline]
 pub fn scavenge_multiplier(mask: u32) -> f32 {
-    1.0 + HUSBANDRY_SCAVENGE * (mask & bit(HUSBANDRY) != 0) as u8 as f32
+    1.0 + HUSBANDRY_SCAVENGE * held_f32(mask, HUSBANDRY)
 }
 
 /// Locomotor speed multiplier (Machinery) — `integrate::integrate_all`.
 #[inline]
 pub fn speed_multiplier(mask: u32) -> f32 {
-    1.0 + MACHINERY_SPEED * (mask & bit(MACHINERY) != 0) as u8 as f32
+    1.0 + MACHINERY_SPEED * held_f32(mask, MACHINERY)
 }
 
 /// Basal-metabolism multiplier (Fire, Husbandry) — `integrate::integrate_all`.
 #[inline]
 pub fn metabolism_multiplier(mask: u32) -> f32 {
-    1.0 + FIRE_METABOLISM * (mask & bit(FIRE) != 0) as u8 as f32
-        + HUSBANDRY_METABOLISM * (mask & bit(HUSBANDRY) != 0) as u8 as f32
+    1.0 + FIRE_METABOLISM * held_f32(mask, FIRE) + HUSBANDRY_METABOLISM * held_f32(mask, HUSBANDRY)
 }
 
 /// Module-upkeep multiplier (Metalworking) — `module::upkeep_all`.
 #[inline]
 pub fn module_upkeep_multiplier(mask: u32) -> f32 {
-    1.0 + METALWORKING_UPKEEP * (mask & bit(METALWORKING) != 0) as u8 as f32
+    1.0 + METALWORKING_UPKEEP * held_f32(mask, METALWORKING)
 }
 
 /// Lifespan multiplier (Medicine) — `age::age_and_starve`.
 #[inline]
 pub fn lifespan_multiplier(mask: u32) -> f32 {
-    1.0 + MEDICINE_LIFESPAN * (mask & bit(MEDICINE) != 0) as u8 as f32
+    1.0 + MEDICINE_LIFESPAN * held_f32(mask, MEDICINE)
 }
 
 /// Child mutation-sigma multiplier (Nuclear Power, either parent) —
@@ -350,7 +360,7 @@ pub fn mutation_multiplier(parent_a: u32, parent_b: u32) -> f32 {
 /// Perception-radius multiplier (Electricity) — `sense::sense_one`.
 #[inline]
 pub fn perception_multiplier(mask: u32) -> f32 {
-    1.0 + ELECTRICITY_PERCEPTION * (mask & bit(ELECTRICITY) != 0) as u8 as f32
+    1.0 + ELECTRICITY_PERCEPTION * held_f32(mask, ELECTRICITY)
 }
 
 /// Meme-copy / invention-spread multiplier (Writing) — `culture::culture_step`.
@@ -377,11 +387,11 @@ pub fn discovery_multiplier(mask: u32) -> f32 {
 /// Electricity, Nuclear upkeep; Nuclear income). Positive = net drain.
 pub fn flat_upkeep(mask: u32) -> f32 {
     let mut cost = 0.0;
-    cost += WRITING_UPKEEP * (mask & bit(WRITING) != 0) as u8 as f32;
-    cost += MEDICINE_UPKEEP * (mask & bit(MEDICINE) != 0) as u8 as f32;
-    cost += ELECTRICITY_UPKEEP * (mask & bit(ELECTRICITY) != 0) as u8 as f32;
-    cost += NUCLEAR_UPKEEP * (mask & bit(NUCLEAR_POWER) != 0) as u8 as f32;
-    cost - NUCLEAR_INCOME * (mask & bit(NUCLEAR_POWER) != 0) as u8 as f32
+    cost += WRITING_UPKEEP * held_f32(mask, WRITING);
+    cost += MEDICINE_UPKEEP * held_f32(mask, MEDICINE);
+    cost += ELECTRICITY_UPKEEP * held_f32(mask, ELECTRICITY);
+    cost += NUCLEAR_UPKEEP * held_f32(mask, NUCLEAR_POWER);
+    cost - NUCLEAR_INCOME * held_f32(mask, NUCLEAR_POWER)
 }
 
 /// Per-tick energy drain from Farming crowding stress, given this tick's
@@ -430,17 +440,19 @@ pub fn invention_step(world: &mut World) {
                 let total = total.min(DISCOVERY_CAP);
                 let r = world.rng.f32_unit();
                 if r < total {
-                    // Weighted pick over candidates with a single draw.
+                    // Weighted pick over candidates with the same draw. `probs[k]`
+                    // is 0.0 for every non-candidate, so this plain ascending scan
+                    // accumulates exactly what a second `candidates()` walk would —
+                    // one traversal instead of two, and no prereq re-check.
                     let mut acc = 0.0f32;
                     let mut picked = usize::MAX;
-                    candidates(mask, |k| {
-                        if picked == usize::MAX {
-                            acc += probs[k];
-                            if r < acc {
-                                picked = k;
-                            }
+                    for (k, &p) in probs.iter().enumerate() {
+                        acc += p;
+                        if r < acc {
+                            picked = k;
+                            break;
                         }
-                    });
+                    }
                     if picked != usize::MAX {
                         // Breakthrough: the channel jumps straight to full
                         // adoption; neighbours now copy toward it socially.
@@ -544,5 +556,114 @@ mod tests {
         assert_eq!(tech_era(bit(FIRE)), 1);
         assert_eq!(tech_era(bit(FARMING) | bit(WRITING)), 3);
         assert_eq!(tech_era(bit(NUCLEAR_POWER)), 4);
+    }
+
+    #[test]
+    fn held_f32_is_exact_zero_or_one() {
+        assert_eq!(held_f32(0, STONE_TOOLS), 0.0);
+        assert_eq!(held_f32(bit(STONE_TOOLS), STONE_TOOLS), 1.0);
+        // Unrelated bits set → still 0 for the queried invention.
+        assert_eq!(held_f32(bit(FIRE) | bit(FARMING), STONE_TOOLS), 0.0);
+    }
+
+    #[test]
+    fn for_each_set_bit_visits_ascending() {
+        let mut got = Vec::new();
+        for_each_set_bit(bit(NUCLEAR_POWER) | bit(STONE_TOOLS) | bit(WRITING), |k| got.push(k));
+        assert_eq!(got, vec![STONE_TOOLS, WRITING, NUCLEAR_POWER]);
+        // Empty mask visits nothing.
+        got.clear();
+        for_each_set_bit(0, |k| got.push(k));
+        assert!(got.is_empty());
+    }
+
+    #[test]
+    fn is_invention_channel_covers_exactly_the_tree() {
+        assert!(!is_invention_channel(INVENTION_CHANNEL_BASE - 1));
+        assert!(is_invention_channel(INVENTION_CHANNEL_BASE));
+        assert!(is_invention_channel(channel(NUCLEAR_POWER)));
+        assert_eq!(channel(NUCLEAR_POWER), MEME_CHANNELS - 1);
+        assert!(!is_invention_channel(MEME_CHANNELS));
+    }
+
+    #[test]
+    fn graze_multiplier_stacks_all_three_bonuses() {
+        assert_eq!(graze_multiplier(bit(STONE_TOOLS)), 1.0 + STONE_TOOLS_BITE);
+        assert_eq!(graze_multiplier(bit(FARMING)), 1.0 + FARMING_BITE);
+        assert_eq!(graze_multiplier(bit(MACHINERY)), 1.0 + MACHINERY_BITE);
+        let all = bit(STONE_TOOLS) | bit(FARMING) | bit(MACHINERY);
+        assert_eq!(graze_multiplier(all), 1.0 + STONE_TOOLS_BITE + FARMING_BITE + MACHINERY_BITE);
+    }
+
+    #[test]
+    fn metabolism_multiplier_stacks_fire_and_husbandry() {
+        assert_eq!(metabolism_multiplier(bit(FIRE)), 1.0 + FIRE_METABOLISM);
+        assert_eq!(metabolism_multiplier(bit(HUSBANDRY)), 1.0 + HUSBANDRY_METABOLISM);
+        assert_eq!(
+            metabolism_multiplier(bit(FIRE) | bit(HUSBANDRY)),
+            1.0 + FIRE_METABOLISM + HUSBANDRY_METABOLISM
+        );
+    }
+
+    #[test]
+    fn single_bit_multipliers_apply_their_magnitude() {
+        assert_eq!(food_energy_multiplier(bit(FIRE)), 1.0 + FIRE_ENERGY);
+        assert_eq!(weapon_multiplier(bit(METALWORKING)), 1.0 + METALWORKING_DAMAGE);
+        assert_eq!(scavenge_multiplier(bit(HUSBANDRY)), 1.0 + HUSBANDRY_SCAVENGE);
+        assert_eq!(speed_multiplier(bit(MACHINERY)), 1.0 + MACHINERY_SPEED);
+        assert_eq!(module_upkeep_multiplier(bit(METALWORKING)), 1.0 + METALWORKING_UPKEEP);
+        assert_eq!(lifespan_multiplier(bit(MEDICINE)), 1.0 + MEDICINE_LIFESPAN);
+        assert_eq!(perception_multiplier(bit(ELECTRICITY)), 1.0 + ELECTRICITY_PERCEPTION);
+    }
+
+    #[test]
+    fn writing_and_electricity_gate_their_rate_multipliers() {
+        // Off by default, on only for the exact holder.
+        assert_eq!(spread_multiplier(bit(FARMING)), 1.0);
+        assert_eq!(spread_multiplier(bit(WRITING)), WRITING_SPREAD_MULT);
+        assert_eq!(discovery_multiplier(bit(MACHINERY)), 1.0);
+        assert_eq!(discovery_multiplier(bit(ELECTRICITY)), ELECTRICITY_DISCOVERY);
+    }
+
+    #[test]
+    fn mutation_multiplier_triggers_on_either_parent() {
+        let nuke = bit(NUCLEAR_POWER);
+        assert_eq!(mutation_multiplier(0, 0), 1.0);
+        assert_eq!(mutation_multiplier(nuke, 0), NUCLEAR_MUTATION);
+        assert_eq!(mutation_multiplier(0, nuke), NUCLEAR_MUTATION);
+        assert_eq!(mutation_multiplier(nuke, nuke), NUCLEAR_MUTATION);
+        // A non-Nuclear invention on both parents does not radiate.
+        assert_eq!(mutation_multiplier(bit(MEDICINE), bit(WRITING)), 1.0);
+    }
+
+    #[test]
+    fn crowding_stress_only_bites_farmers_above_the_free_allowance() {
+        // No Farming → no stress regardless of density.
+        assert_eq!(crowding_stress(bit(FIRE), 1000), 0.0);
+        let farm = bit(FARMING);
+        // At or below the free allowance → no stress.
+        assert_eq!(crowding_stress(farm, 0), 0.0);
+        assert_eq!(crowding_stress(farm, FARMING_CROWDING_FREE), 0.0);
+        // Above → linear in the excess.
+        let excess = 5;
+        assert_eq!(
+            crowding_stress(farm, FARMING_CROWDING_FREE + excess),
+            excess as f32 * FARMING_STRESS_PER_NEIGHBOR
+        );
+    }
+
+    #[test]
+    fn flat_upkeep_nets_income_against_costs() {
+        // Writing alone: pure cost.
+        assert_eq!(flat_upkeep(bit(WRITING)), WRITING_UPKEEP);
+        // Nuclear alone: income minus its own upkeep (design intends net income).
+        let nuke_only = NUCLEAR_UPKEEP - NUCLEAR_INCOME;
+        assert!((flat_upkeep(bit(NUCLEAR_POWER)) - nuke_only).abs() < 1e-7);
+        assert!(nuke_only < 0.0, "Nuclear should be net energy income when held alone");
+        // Full late-game stack: every upkeep plus Nuclear income.
+        let full = bit(WRITING) | bit(MEDICINE) | bit(ELECTRICITY) | bit(NUCLEAR_POWER);
+        let expected =
+            WRITING_UPKEEP + MEDICINE_UPKEEP + ELECTRICITY_UPKEEP + NUCLEAR_UPKEEP - NUCLEAR_INCOME;
+        assert!((flat_upkeep(full) - expected).abs() < 1e-7);
     }
 }
