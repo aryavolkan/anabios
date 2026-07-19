@@ -1,9 +1,10 @@
 # Geographic trade routes: four species, each pinned via `terrain_affinity`
 # to a distinct terrain's good (Salt/Desert, Obsidian/Rock, Amber/Forest,
-# Spice/Grass), spawned UNIFORM across the whole map so the `terrain_habitat`
-# pull (opt-in movement bias toward each agent's preferred terrain) has to do
-# real work sorting them into their home biome over time — starting
-# pre-sorted would hide whether the mechanism works.
+# Spice/Grass). All four spawn INTERMIXED within one broad shared cluster on a
+# four-way terrain junction (see the placement note below) — NOT pre-sorted by
+# terrain — so the `terrain_habitat` pull (opt-in movement bias toward each
+# agent's preferred terrain) has to do real work sorting them onto their home
+# terrain over time; starting pre-sorted would hide whether the mechanism works.
 #
 # Terrain area is very unequal and fixed by elevation thresholds (roughly
 # seed-independent): Grass ~48%, Desert ~26%, Forest ~17%, Rock ~0.3%. Rock
