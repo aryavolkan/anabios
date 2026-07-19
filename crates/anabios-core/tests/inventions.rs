@@ -461,6 +461,42 @@ fn detectors_do_nothing_with_flag_off() {
     );
 }
 
+#[test]
+fn meme_sweep_does_not_double_fire_on_invention_channels() {
+    // A species whose invention-channel mean sweeps 0 → ≥0.6 must fire
+    // InventionAdopted, but NOT MemeSweep (which would double-count the same
+    // phenomenon on the widened channels).
+    let mut w = World::new(61);
+    w.inventions_enabled = true;
+    let mut ids = Vec::new();
+    for n in 0..6 {
+        let id = w.spawn_agent(Vec2::new(500.0 + n as f32, 500.0), Genome::neutral());
+        w.agents.modules[id as usize] = comm_kit();
+        ids.push(id);
+    }
+    // Drive MEME_SWEEP_WINDOW+ ticks with the channel low…
+    for _ in 0..anabios_core::codex::MEME_SWEEP_WINDOW {
+        observe_all(&mut w);
+    }
+    w.codex.drain_events().for_each(drop);
+    // …then high for another full window.
+    for &id in &ids {
+        set_held(&mut w, id, invention::STONE_TOOLS);
+    }
+    for _ in 0..anabios_core::codex::MEME_SWEEP_WINDOW {
+        observe_all(&mut w);
+    }
+    let events: Vec<_> = w.codex.drain_events().collect();
+    assert!(
+        events.iter().any(|e| e.event_type == EventType::InventionAdopted),
+        "adoption reported explicitly"
+    );
+    assert!(
+        !events.iter().any(|e| e.event_type == EventType::MemeSweep),
+        "MemeSweep must not fire on an invention channel: {events:?}"
+    );
+}
+
 // --- End-to-end -------------------------------------------------------------------
 
 const INVENTIONS_SCENARIO: &str = include_str!("../../../scenarios/inventions.toml");
@@ -486,8 +522,11 @@ fn inventions_scenario_is_deterministic() {
 /// deterministic` (self-consistency only) still passed. These hashes lock the
 /// mechanism's actual behavior. Regenerate deliberately with `UPDATE_HASHES=1`
 /// (prints new values to copy in) whenever an invention change is intentional.
+// Refreshed 2026-07-19: MemeSweep no longer fires on invention channels (the
+// InventionAdopted detector already reports those sweeps explicitly) — the
+// codex event stream is serialized into the hash, so ticks 100/300 moved.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x4bb0b808775f7768), (100, 0x1c57b613f7743245), (300, 0x9e3e4135f8ea5809)];
+    &[(0, 0x4bb0b808775f7768), (100, 0x70eaf00a0cf48136), (300, 0x9a9cd3de326c1bc4)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

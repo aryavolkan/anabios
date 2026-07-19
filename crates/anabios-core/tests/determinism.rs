@@ -40,8 +40,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // inventions_enabled, genome slot 42 back to reserved, CodexState invention
 // latches. Flag-off behavior unchanged (identity multipliers at mask 0, zero
 // invention RNG draws); serialized layout changed, so all three hashes moved.
+// Refreshed 2026-07-19 (2): MemeSweep no longer tracks invention channels
+// (InventionAdopted reports those sweeps explicitly). Simulation physics
+// unchanged; only codex bookkeeping/serialized bytes differ — tick 1000 moved
+// because minimal's grazers evolve a Communicator by then.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xe51e55efb59c20ed), (100, 0x26b7b341a207605f), (1000, 0x83b82e2f3a71d0f5)];
+    &[(0, 0xe51e55efb59c20ed), (100, 0x26b7b341a207605f), (1000, 0xd1fda01ecff496d3)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
