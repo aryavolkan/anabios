@@ -299,6 +299,29 @@ mod tests {
     }
 
     #[test]
+    fn population_cap_blocks_reproduction() {
+        let mut w = World::new(13);
+        let pos = find_grass_cell_center(&w);
+        let id0 = w.spawn_agent(pos, fertile_genome());
+        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
+        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+
+        // At the cap: no offspring.
+        w.max_population = 2;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "at cap: no offspring");
+
+        // One slot free: exactly one offspring, then the cap bites again.
+        w.max_population = 3;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 3, "one free slot: exactly one offspring");
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 3, "cap holds on the next pass too");
+    }
+
+    #[test]
     fn low_energy_pair_does_not_mate() {
         let mut w = World::new(13);
         let pos = find_grass_cell_center(&w);
