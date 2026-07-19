@@ -21,13 +21,20 @@ pub fn step(world: &mut World) {
     world.spatial.rebuild(&world.agents.position, |i| world.agents.is_alive(i as u32));
 
     // Stage 2: sense.
-    sense_all(&world.agents, &world.biome, &world.pheromones, &world.spatial, &mut world.sensors);
+    sense_all(
+        &world.agents,
+        &world.biome,
+        &world.pheromones,
+        &world.spatial,
+        &mut world.sensors,
+        world.world_size,
+    );
 
     // Stage 3: decide.
     decide_all(world);
 
     // Stage 4: integrate (motion + per-tick metabolism).
-    integrate_all(&mut world.agents, &world.desired_direction[..cap]);
+    integrate_all(&mut world.agents, &world.desired_direction[..cap], world.world_size);
 
     // Stage 5: interact (feeding, combat, predation).
     interact_all(world);
@@ -64,9 +71,17 @@ pub fn step(world: &mut World) {
     // Stage 9: codex detectors (extinction, population crash, etc.).
     crate::codex::observe_all(world);
 
-    // Stage 10: periodic biome regrowth.
+    // Stage 10: periodic biome regrowth (+ recolonization in a living biome).
     if world.tick.is_multiple_of(BIOME_STEP_INTERVAL) {
-        world.biome.regrow_step();
+        if world.living_biome {
+            world.biome.recolonize_step();
+        }
+        if world.season_period > 0 {
+            let phase = crate::biome::season_phase(world.tick, world.season_period);
+            world.biome.regrow_step_seasonal(phase);
+        } else {
+            world.biome.regrow_step();
+        }
     }
 
     world.tick += 1;

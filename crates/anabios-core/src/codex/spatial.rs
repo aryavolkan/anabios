@@ -16,7 +16,8 @@ pub(super) fn detect_territory_formation(world: &mut World, agg: &SpeciesAggTabl
             world.codex.territory_active.remove(&sid);
             continue;
         }
-        let spread = species_spread_indexed(&world.agents.position, &entry.member_idx);
+        let spread =
+            species_spread_indexed(&world.agents.position, &entry.member_idx, world.world_size);
         let buf = world.codex.territory_spread.entry(sid).or_default();
         if buf.len() == TERRITORY_WINDOW {
             buf.pop_front();
@@ -47,7 +48,7 @@ pub(super) fn detect_territory_formation(world: &mut World, agg: &SpeciesAggTabl
 
 /// RMS spread over the positions of the given member indices. Identical
 /// summation order to `species_spread` over the equivalent compacted slice.
-fn species_spread_indexed(positions: &[glam::Vec2], idx: &[usize]) -> f32 {
+fn species_spread_indexed(positions: &[glam::Vec2], idx: &[usize], world_size: f32) -> f32 {
     if idx.len() < 2 {
         return 0.0;
     }
@@ -61,7 +62,7 @@ fn species_spread_indexed(positions: &[glam::Vec2], idx: &[usize]) -> f32 {
     let centroid = glam::Vec2::new((cx / n as f64) as f32, (cy / n as f64) as f32);
     let mut sumsq = 0.0f64;
     for &i in idx {
-        let d = crate::spatial::torus_distance(positions[i], centroid);
+        let d = crate::spatial::torus_distance(positions[i], centroid, world_size);
         sumsq += (d as f64) * (d as f64);
     }
     ((sumsq / n as f64).sqrt()) as f32

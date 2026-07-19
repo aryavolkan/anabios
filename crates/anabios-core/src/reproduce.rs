@@ -77,6 +77,7 @@ pub fn reproduce_all(world: &mut World) {
             a_id,
             a_pos,
             a_species,
+            world.world_size,
         );
         let Some(b_id) = mate else { continue };
 
@@ -101,7 +102,7 @@ pub fn reproduce_all(world: &mut World) {
         world.reproduced_this_tick.set(j, true);
 
         // Spawn at midpoint of parents on the torus (account for wrap).
-        let child_pos = midpoint_torus(a_pos, b_pos);
+        let child_pos = midpoint_torus(a_pos, b_pos, world.world_size);
 
         let a_modules = world.agents.modules[i].clone();
         let b_modules = world.agents.modules[j].clone();
@@ -173,6 +174,7 @@ fn find_mate(
     a_id: u32,
     a_pos: Vec2,
     a_species: u32,
+    world_size: f32,
 ) -> Option<u32> {
     let mut best: Option<u32> = None;
     spatial.query(a_pos, MATING_RANGE, |other_id| {
@@ -189,7 +191,7 @@ fn find_mate(
         if agents.species_id[j] != a_species {
             return;
         }
-        let d = torus_distance(a_pos, agents.position[j]);
+        let d = torus_distance(a_pos, agents.position[j], world_size);
         if d > MATING_RANGE {
             return;
         }
@@ -206,22 +208,21 @@ fn find_mate(
     best
 }
 
-fn midpoint_torus(a: Vec2, b: Vec2) -> Vec2 {
-    use crate::biome::WORLD_SIZE;
+fn midpoint_torus(a: Vec2, b: Vec2, world_size: f32) -> Vec2 {
     let mut dx = b.x - a.x;
     let mut dy = b.y - a.y;
-    if dx > WORLD_SIZE * 0.5 {
-        dx -= WORLD_SIZE;
-    } else if dx < -WORLD_SIZE * 0.5 {
-        dx += WORLD_SIZE;
+    if dx > world_size * 0.5 {
+        dx -= world_size;
+    } else if dx < -world_size * 0.5 {
+        dx += world_size;
     }
-    if dy > WORLD_SIZE * 0.5 {
-        dy -= WORLD_SIZE;
-    } else if dy < -WORLD_SIZE * 0.5 {
-        dy += WORLD_SIZE;
+    if dy > world_size * 0.5 {
+        dy -= world_size;
+    } else if dy < -world_size * 0.5 {
+        dy += world_size;
     }
-    let mid_x = (a.x + dx * 0.5).rem_euclid(WORLD_SIZE);
-    let mid_y = (a.y + dy * 0.5).rem_euclid(WORLD_SIZE);
+    let mid_x = (a.x + dx * 0.5).rem_euclid(world_size);
+    let mid_y = (a.y + dy * 0.5).rem_euclid(world_size);
     Vec2::new(mid_x, mid_y)
 }
 
@@ -233,13 +234,14 @@ mod tests {
     use crate::world::World;
 
     fn find_grass_cell_center(w: &World) -> Vec2 {
-        use crate::biome::{BIOME_RES, CELL_SIZE};
-        for row in 0..BIOME_RES {
-            for col in 0..BIOME_RES {
+        let res = w.biome.res;
+        let cell_size = w.biome.cell_size;
+        for row in 0..res {
+            for col in 0..res {
                 if w.biome.at(col, row).terrain == TerrainType::Grass {
                     return Vec2::new(
-                        (col as f32 + 0.5) * CELL_SIZE,
-                        (row as f32 + 0.5) * CELL_SIZE,
+                        (col as f32 + 0.5) * cell_size,
+                        (row as f32 + 0.5) * cell_size,
                     );
                 }
             }

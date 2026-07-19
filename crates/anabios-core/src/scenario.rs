@@ -3,7 +3,6 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::biome::WORLD_SIZE;
 use crate::genome::{Genome, GenomeSlot};
 use crate::prelude::Vec2;
 use crate::world::World;
@@ -23,11 +22,29 @@ pub struct Scenario {
     /// climate). `false` (default) leaves foraging behavior unchanged.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// Opt-in: enable renewing biome (depleted cells recolonize from
+    /// vegetated neighbours). `false` (default) leaves regrowth unchanged.
+    #[serde(default)]
+    pub living_biome: bool,
+    /// Opt-in: season cycle length in ticks. `0` (default) = seasonal biome
+    /// regrowth OFF (plain regrowth every biome step). `> 0` boosts regrowth
+    /// in cells whose climate matches the current season phase, migrating
+    /// the productive band over a `2 * season_period`-tick cycle.
+    #[serde(default)]
+    pub season_period: u32,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
     #[serde(default)]
     pub max_population: Option<u32>,
+    /// Opt-in larger world. Absent = default 1024/128/64. All three should be
+    /// set together and keep `world_size / hash_res ≈ 16` (the perception cap).
+    #[serde(default)]
+    pub world_size: Option<f32>,
+    #[serde(default)]
+    pub biome_res: Option<usize>,
+    #[serde(default)]
+    pub hash_res: Option<usize>,
 }
 
 /// A request for `count` agents distributed via the given placement, each
@@ -165,6 +182,16 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
         "individual_learner" => (communicator_kit(), starter_asocial_forager()),
         "pure_imitator" => (communicator_kit(), starter_asocial_forager()),
         "critical_learner" => (communicator_kit(), starter_asocial_forager()),
+        // Living-sandbox coevolution (Task 3.1): the culture cohort, matched
+        // against `asocial_forager` (the control) on everything except the
+        // Communicator module. Deliberately NOT `communicator_kit()` — that
+        // kit drops Reproductive, which would cripple the culture lineage's
+        // reproduction and bias the experiment for the wrong reason.
+        "cultural_forager" => {
+            let mut m = starter_kit();
+            m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
+            (m, starter_asocial_forager())
+        }
         _ => (starter_kit(), starter_grazer()),
     }
 }
@@ -205,9 +232,19 @@ impl Scenario {
     /// from `seed`; agent positions for `Placement::Uniform` come from this
     /// RNG in agent-id order.
     pub fn instantiate(&self) -> World {
-        let mut w = World::new(self.seed);
+        let mut w = match (self.world_size, self.biome_res, self.hash_res) {
+            (None, None, None) => World::new(self.seed),
+            (ws, br, hr) => World::with_dims(
+                self.seed,
+                ws.unwrap_or(crate::biome::WORLD_SIZE_DEFAULT),
+                br.unwrap_or(crate::biome::BIOME_RES_DEFAULT),
+                hr.unwrap_or(crate::spatial::HASH_RES_DEFAULT),
+            ),
+        };
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
+        w.living_biome = self.living_biome;
+        w.season_period = self.season_period;
         if let Some(cap) = self.max_population {
             w.max_population = cap;
         }
@@ -243,8 +280,8 @@ impl Scenario {
             for _ in 0..spec.count {
                 let position = match spec.placement {
                     Placement::Uniform => {
-                        let x = w.rng.f32_range(0.0, WORLD_SIZE);
-                        let y = w.rng.f32_range(0.0, WORLD_SIZE);
+                        let x = w.rng.f32_range(0.0, w.world_size);
+                        let y = w.rng.f32_range(0.0, w.world_size);
                         Vec2::new(x, y)
                     }
                     Placement::Cluster { center_x, center_y, radius } => {

@@ -13,6 +13,7 @@ use crate::prelude::Vec2;
 /// safely covers the maximum possible perception radius
 /// (`PERCEPTION_MAX_RADIUS`, defined below).
 pub const HASH_RES: usize = 64;
+pub const HASH_RES_DEFAULT: usize = HASH_RES;
 pub const HASH_CELL_SIZE: f32 = WORLD_SIZE / HASH_RES as f32;
 
 /// Hard upper bound on perception radius — must hold for the
@@ -27,17 +28,39 @@ pub struct UniformSpatialHash {
     flat: Vec<u32>,
     /// Reusable per-cell count buffer for `rebuild` (avoids a per-tick alloc).
     counts: Vec<u32>,
+    /// Grid resolution per axis (was the `HASH_RES` const).
+    res: usize,
+    /// World-units per cell (was the `HASH_CELL_SIZE` const): `world_size / res`.
+    cell_size: f32,
+    /// World extent per axis (was the `WORLD_SIZE` const).
+    world_size: f32,
 }
 
 impl UniformSpatialHash {
     pub fn new() -> Self {
-        let total_cells = HASH_RES * HASH_RES;
+        Self::with_dims(WORLD_SIZE, HASH_RES)
+    }
+
+    /// Build a hash sized for a `world_size`-extent torus divided into
+    /// `hash_res × hash_res` cells.
+    pub fn with_dims(world_size: f32, hash_res: usize) -> Self {
+        let total_cells = hash_res * hash_res;
         Self {
             bucket_offsets: vec![0; total_cells],
             bucket_lens: vec![0; total_cells],
             flat: Vec::new(),
             counts: vec![0; total_cells],
+            res: hash_res,
+            cell_size: world_size / hash_res as f32,
+            world_size,
         }
+    }
+
+    /// Hard upper bound on perception radius this hash supports — must hold
+    /// for the "one-ring-of-neighbours is sufficient" guarantee.
+    #[inline]
+    pub fn perception_max_radius(&self) -> f32 {
+        self.cell_size
     }
 
     /// Rebuild from the alive agent positions. Agents whose `alive` bit is
@@ -56,7 +79,7 @@ impl UniformSpatialHash {
         pos_of: impl Fn(usize) -> Vec2,
         alive: impl Fn(usize) -> bool,
     ) {
-        let total_cells = HASH_RES * HASH_RES;
+        let total_cells = self.res * self.res;
         // Phase 1: count agents per cell (reused buffer, no per-tick alloc).
         self.counts.clear();
         self.counts.resize(total_cells, 0);
@@ -64,7 +87,7 @@ impl UniformSpatialHash {
             if !alive(i) {
                 continue;
             }
-            let cell = Self::cell_of(pos_of(i));
+            let cell = self.cell_of(pos_of(i));
             self.counts[cell] += 1;
         }
 
@@ -83,7 +106,7 @@ impl UniformSpatialHash {
             if !alive(i) {
                 continue;
             }
-            let cell = Self::cell_of(pos_of(i));
+            let cell = self.cell_of(pos_of(i));
             let off = self.bucket_offsets[cell] + self.bucket_lens[cell];
             self.flat[off as usize] = i as u32;
             self.bucket_lens[cell] += 1;
@@ -93,19 +116,20 @@ impl UniformSpatialHash {
     /// Visit every agent in the wrap-aware bounding box of a position +
     /// radius. The caller is responsible for the exact distance check.
     ///
-    /// `radius` must not exceed `PERCEPTION_MAX_RADIUS`; debug builds assert.
+    /// `radius` must not exceed `self.perception_max_radius()`; debug builds assert.
     pub fn query<F: FnMut(u32)>(&self, pos: Vec2, radius: f32, mut f: F) {
         debug_assert!(
-            radius <= PERCEPTION_MAX_RADIUS + 1e-3,
-            "query radius {radius} exceeds PERCEPTION_MAX_RADIUS={PERCEPTION_MAX_RADIUS}"
+            radius <= self.perception_max_radius() + 1e-3,
+            "query radius {radius} exceeds perception_max_radius={}",
+            self.perception_max_radius()
         );
-        let (cx, cy) = Self::cell_coords(pos);
+        let (cx, cy) = self.cell_coords(pos);
         // One-cell ring; positions wrap around the torus.
-        for dy in [HASH_RES - 1, 0, 1] {
-            let row = (cy + dy) % HASH_RES;
-            for dx in [HASH_RES - 1, 0, 1] {
-                let col = (cx + dx) % HASH_RES;
-                let cell = row * HASH_RES + col;
+        for dy in [self.res - 1, 0, 1] {
+            let row = (cy + dy) % self.res;
+            for dx in [self.res - 1, 0, 1] {
+                let col = (cx + dx) % self.res;
+                let cell = row * self.res + col;
                 let off = self.bucket_offsets[cell] as usize;
                 let len = self.bucket_lens[cell] as usize;
                 for id in &self.flat[off..off + len] {
@@ -116,18 +140,18 @@ impl UniformSpatialHash {
     }
 
     #[inline]
-    fn cell_coords(pos: Vec2) -> (usize, usize) {
-        let x = pos.x.rem_euclid(WORLD_SIZE);
-        let y = pos.y.rem_euclid(WORLD_SIZE);
-        let col = ((x / HASH_CELL_SIZE) as usize).min(HASH_RES - 1);
-        let row = ((y / HASH_CELL_SIZE) as usize).min(HASH_RES - 1);
+    fn cell_coords(&self, pos: Vec2) -> (usize, usize) {
+        let x = pos.x.rem_euclid(self.world_size);
+        let y = pos.y.rem_euclid(self.world_size);
+        let col = ((x / self.cell_size) as usize).min(self.res - 1);
+        let row = ((y / self.cell_size) as usize).min(self.res - 1);
         (col, row)
     }
 
     #[inline]
-    fn cell_of(pos: Vec2) -> usize {
-        let (col, row) = Self::cell_coords(pos);
-        row * HASH_RES + col
+    fn cell_of(&self, pos: Vec2) -> usize {
+        let (col, row) = self.cell_coords(pos);
+        row * self.res + col
     }
 }
 
@@ -137,16 +161,16 @@ impl Default for UniformSpatialHash {
     }
 }
 
-/// Wrap-aware distance between two points on the torus.
+/// Wrap-aware distance between two points on a torus of the given `world_size`.
 #[inline]
-pub fn torus_distance(a: Vec2, b: Vec2) -> f32 {
+pub fn torus_distance(a: Vec2, b: Vec2, world_size: f32) -> f32 {
     let mut dx = (a.x - b.x).abs();
     let mut dy = (a.y - b.y).abs();
-    if dx > WORLD_SIZE * 0.5 {
-        dx = WORLD_SIZE - dx;
+    if dx > world_size * 0.5 {
+        dx = world_size - dx;
     }
-    if dy > WORLD_SIZE * 0.5 {
-        dy = WORLD_SIZE - dy;
+    if dy > world_size * 0.5 {
+        dy = world_size - dy;
     }
     (dx * dx + dy * dy).sqrt()
 }
@@ -157,7 +181,7 @@ mod tests {
 
     fn brute_force_neighbors(positions: &[Vec2], origin: Vec2, radius: f32) -> Vec<u32> {
         let mut out: Vec<u32> = (0..positions.len() as u32)
-            .filter(|i| torus_distance(positions[*i as usize], origin) <= radius)
+            .filter(|i| torus_distance(positions[*i as usize], origin, WORLD_SIZE) <= radius)
             .collect();
         out.sort();
         out
@@ -192,7 +216,9 @@ mod tests {
         for probe in probes {
             let mut got: Vec<u32> = Vec::new();
             h.query(probe, PERCEPTION_MAX_RADIUS, |id| {
-                if torus_distance(positions[id as usize], probe) <= PERCEPTION_MAX_RADIUS {
+                if torus_distance(positions[id as usize], probe, WORLD_SIZE)
+                    <= PERCEPTION_MAX_RADIUS
+                {
                     got.push(id);
                 }
             });
@@ -218,6 +244,6 @@ mod tests {
     fn torus_distance_wraps_short_way() {
         let a = Vec2::new(2.0, 0.0);
         let b = Vec2::new(WORLD_SIZE - 2.0, 0.0);
-        assert!((torus_distance(a, b) - 4.0).abs() < 1e-3);
+        assert!((torus_distance(a, b, WORLD_SIZE) - 4.0).abs() < 1e-3);
     }
 }

@@ -1,0 +1,22 @@
+name = "living-sandbox-coevolution"
+seed = 1
+world_size = 2048.0
+biome_res = 256
+hash_res = 128
+living_biome = true
+season_period = 2000
+max_population = 8000
+
+# Culture lineage (species 1): starter kit + Communicator → learned foraging skill.
+# Uniform placement mixes the cohorts so they share one environment (no regional
+# biome confound). See tests/living_sandbox.rs for the finding this produces.
+[[agents]]
+count = 400
+placement = { kind = "uniform" }
+archetype = "cultural_forager"
+
+# Control lineage (species 2): identical starter kit WITHOUT a Communicator.
+[[agents]]
+count = 400
+placement = { kind = "uniform" }
+archetype = "asocial_forager"

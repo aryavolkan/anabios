@@ -20,8 +20,19 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // budget) and became a per-world field (`World::max_population`, scenario-
 // overridable). minimal.toml pins 2000, restoring pre-raise behavior; all three
 // hashes moved because the serialized World layout gained the new field.
+// Refreshed 2026-07-18: added World.{world_size,biome_res,hash_res} runtime
+// dimension fields (unused; behaviour identical at defaults, only serialized
+// layout grew).
+// Refreshed 2026-07-18: BiomeField/pheromone grid became dimension-aware
+// (byte-identical at default res=128).
+// Refreshed 2026-07-18: UniformSpatialHash dimension-aware (skip, no layout
+// change) + PheromoneField gained world_size (serialized) — byte-identical
+// at defaults.
+// Refreshed 2026-07-18: added World.living_biome flag (off = byte-identical;
+// only serialized layout grew).
+// Refreshed 2026-07-18: added World.season_period (off = byte-identical).
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xecd34b053a7aa32e), (100, 0xf1feb6b23de48cbc), (1000, 0xd5190146a2f62551)];
+    &[(0, 0x3249470b7bc4efa5), (100, 0xf3f061ad14845ab3), (1000, 0x5f49083d2a0baee4)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

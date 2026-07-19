@@ -91,7 +91,11 @@ pub(super) fn detect_migration(world: &mut World, agg: &SpeciesAggTable) {
         }
         let first = *buf.front().unwrap();
         let last = *buf.back().unwrap();
-        let d = torus_distance(glam::Vec2::new(first.0, first.1), glam::Vec2::new(last.0, last.1));
+        let d = torus_distance(
+            glam::Vec2::new(first.0, first.1),
+            glam::Vec2::new(last.0, last.1),
+            world.world_size,
+        );
         if d >= MIGRATION_DISTANCE {
             to_push.push(CodexEvent {
                 event_type: EventType::Migration,

@@ -3,6 +3,7 @@
 //! metabolism cost.
 
 use crate::agent::AgentBuffers;
+#[cfg(test)]
 use crate::biome::WORLD_SIZE;
 use crate::genome::GenomeSlot;
 use crate::prelude::{wrap_torus, Vec2};
@@ -21,7 +22,7 @@ pub const SPEED_MAX_CAP: f32 = 4.0;
 /// Apply `desired_direction[i]` to each alive agent, scaled by the agent's
 /// effective Locomotor speed. Agents without a Locomotor still pay basal
 /// metabolism but do not move.
-pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2]) {
+pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], world_size: f32) {
     let mut ids = std::mem::take(&mut agents.scratch_ids);
     ids.clear();
     ids.extend(agents.iter_alive());
@@ -45,7 +46,7 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2]) {
         agents.velocity[i] = v;
 
         let new_pos = agents.position[i] + v;
-        agents.position[i] = wrap_torus(new_pos, Vec2::splat(WORLD_SIZE));
+        agents.position[i] = wrap_torus(new_pos, Vec2::splat(world_size));
 
         let move_dist = v.length();
         let size = agents.genome[i].get(GenomeSlot::Size).max(0.1);
@@ -78,7 +79,7 @@ mod tests {
         // Move 3 ticks worth in one call by scaling the direction? No — direction
         // must be unit. Instead place agent close enough that one 4-unit step wraps.
         // WORLD_SIZE - 1.0 + 4.0 = WORLD_SIZE + 3.0 → wraps to 3.0.
-        integrate_all(&mut w.agents, &desired);
+        integrate_all(&mut w.agents, &desired, w.world_size);
         let p = w.agents.position[id as usize];
         assert!(p.x >= 0.0 && p.x < WORLD_SIZE);
         assert!((p.x - 3.0).abs() < 1e-3, "expected wrap-around to ~3.0, got {}", p.x);
@@ -96,7 +97,7 @@ mod tests {
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
         let before = w.agents.energy[id as usize];
-        integrate_all(&mut w.agents, &desired);
+        integrate_all(&mut w.agents, &desired, w.world_size);
         let after = w.agents.energy[id as usize];
         assert!(after < before);
         // Speed is now SPEED_MAX_CAP * 1.0 = 4.0 units per tick.
@@ -123,7 +124,7 @@ mod tests {
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
         let pos_before = w.agents.position[id as usize];
-        integrate_all(&mut w.agents, &desired);
+        integrate_all(&mut w.agents, &desired, w.world_size);
         let pos_after = w.agents.position[id as usize];
         assert_eq!(pos_before, pos_after, "no Locomotor → no motion");
     }
@@ -141,7 +142,7 @@ mod tests {
 
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
-        integrate_all(&mut w.agents, &desired);
+        integrate_all(&mut w.agents, &desired, w.world_size);
         let new_pos = w.agents.position[id as usize];
         // Moved roughly SPEED_MAX_CAP × 1.0 = 4.0 in +x.
         assert!((new_pos.x - 504.0).abs() < 0.1);

@@ -6,7 +6,7 @@ use bitvec::vec::BitVec;
 use serde::{Deserialize, Serialize};
 
 use crate::agent::{AgentBuffers, AgentId, LineageId, LINEAGE_NONE};
-use crate::biome::{BiomeField, WORLD_SIZE};
+use crate::biome::BiomeField;
 use crate::genome::Genome;
 use crate::prelude::Vec2;
 use crate::rng::Rng;
@@ -57,12 +57,37 @@ pub struct World {
     /// bincode/`FORMAT_VERSION` caveat as `env_period`.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// When true, depleted biome cells recolonize from vegetated neighbours
+    /// each biome step (`BiomeField::recolonize_step`), before regrowth. Off
+    /// by default; opt-in per scenario. Defaulted so old snapshots without
+    /// this field still deserialize.
+    #[serde(default)]
+    pub living_biome: bool,
+    /// Season cycle length in ticks (half-period of `biome::season_phase`'s
+    /// triangle wave). `0` = seasonal regrowth OFF (plain `regrow_step` runs
+    /// unconditionally). `> 0` opts a scenario into a migrating productive
+    /// band. Defaulted so old snapshots without this field still deserialize.
+    #[serde(default)]
+    pub season_period: u32,
     /// Hard cap on alive agents; `reproduce_all` skips mating at/above this.
     /// Defaults to `reproduce::MAX_POPULATION` (the design's 10k budget);
     /// scenarios/tests can pin it lower. Same bincode/`FORMAT_VERSION` caveat
     /// as `env_period`.
     #[serde(default = "default_max_population")]
     pub max_population: u32,
+    /// World extent per axis (torus size). Defaults to `WORLD_SIZE_DEFAULT`
+    /// (1024). Larger values opt a scenario into a bigger sandbox. Defaulted
+    /// so old snapshots without this field still deserialize.
+    #[serde(default = "default_world_size")]
+    pub world_size: f32,
+    /// Biome grid resolution per axis. Defaults to `BIOME_RES_DEFAULT` (128).
+    #[serde(default = "default_biome_res")]
+    pub biome_res: usize,
+    /// Spatial-hash resolution per axis. Defaults to `HASH_RES_DEFAULT` (64).
+    /// Kept so `world_size / hash_res` (the hash cell size, == perception cap)
+    /// stays ~16 when the world scales.
+    #[serde(default = "default_hash_res")]
+    pub hash_res: usize,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     /// Spatial hash over `carcasses` (indexed by carcass index), rebuilt each
@@ -100,6 +125,15 @@ pub struct World {
 fn default_max_population() -> u32 {
     crate::reproduce::MAX_POPULATION
 }
+fn default_world_size() -> f32 {
+    crate::biome::WORLD_SIZE_DEFAULT
+}
+fn default_biome_res() -> usize {
+    crate::biome::BIOME_RES_DEFAULT
+}
+fn default_hash_res() -> usize {
+    crate::spatial::HASH_RES_DEFAULT
+}
 
 impl World {
     /// Build a world from a seed: deterministic biome + empty agent
@@ -109,7 +143,11 @@ impl World {
             tick: 0,
             seed,
             rng: Rng::from_seed(seed),
-            biome: BiomeField::generate(seed),
+            biome: BiomeField::generate(
+                seed,
+                crate::biome::BIOME_RES_DEFAULT,
+                crate::biome::WORLD_SIZE_DEFAULT,
+            ),
             agents: AgentBuffers::new(),
             // Start at 1 — id 0 is reserved as LINEAGE_NONE for founder parents.
             next_lineage_id: 1,
@@ -124,9 +162,20 @@ impl World {
             pheromones: crate::pheromone::PheromoneField::new(),
             env_period: 0,
             biome_adaptation: false,
+            living_biome: false,
+            season_period: 0,
             max_population: crate::reproduce::MAX_POPULATION,
-            spatial: UniformSpatialHash::new(),
-            carcass_spatial: UniformSpatialHash::new(),
+            world_size: crate::biome::WORLD_SIZE_DEFAULT,
+            biome_res: crate::biome::BIOME_RES_DEFAULT,
+            hash_res: crate::spatial::HASH_RES_DEFAULT,
+            spatial: UniformSpatialHash::with_dims(
+                crate::biome::WORLD_SIZE_DEFAULT,
+                crate::spatial::HASH_RES_DEFAULT,
+            ),
+            carcass_spatial: UniformSpatialHash::with_dims(
+                crate::biome::WORLD_SIZE_DEFAULT,
+                crate::spatial::HASH_RES_DEFAULT,
+            ),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),
@@ -135,6 +184,21 @@ impl World {
             combat_damaged: Vec::new(),
             combat_attacker: Vec::new(),
         }
+    }
+
+    /// Build a world with explicit dimensions. The biome, pheromone grid, and
+    /// spatial hashes are all regenerated at the requested resolution/extent.
+    /// At default dimensions this is identical to `new`.
+    pub fn with_dims(seed: u64, world_size: f32, biome_res: usize, hash_res: usize) -> Self {
+        let mut w = Self::new(seed);
+        w.world_size = world_size;
+        w.biome_res = biome_res;
+        w.hash_res = hash_res;
+        w.biome = crate::biome::BiomeField::generate(seed, biome_res, world_size);
+        w.pheromones = crate::pheromone::PheromoneField::with_dims(biome_res, world_size);
+        w.spatial = crate::spatial::UniformSpatialHash::with_dims(world_size, hash_res);
+        w.carcass_spatial = crate::spatial::UniformSpatialHash::with_dims(world_size, hash_res);
+        w
     }
 
     /// Allocate a fresh, globally-unique lineage id. Never reuses values.
@@ -214,11 +278,11 @@ impl World {
         self.species_member_counts[idx] = self.species_member_counts[idx].saturating_sub(1);
     }
 
-    /// World dimensions (for callers that want the constant without
-    /// importing the biome module directly).
+    /// World dimensions (for callers that want the runtime extent without
+    /// reading `world_size` directly).
     #[inline]
     pub fn size(&self) -> f32 {
-        WORLD_SIZE
+        self.world_size
     }
 
     /// Sanity helper used by tests and the headless CLI.

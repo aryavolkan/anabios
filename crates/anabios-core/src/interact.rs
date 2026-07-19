@@ -217,7 +217,7 @@ fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
             if world.carcasses[ci].flesh <= 0.0 {
                 return;
             }
-            let d = crate::spatial::torus_distance(pos, world.carcasses[ci].pos);
+            let d = crate::spatial::torus_distance(pos, world.carcasses[ci].pos, world.world_size);
             // Strict `<` on distance plus lowest-index tie-break reproduces the
             // old ascending-index linear scan exactly.
             if d < best_d || (d == best_d && best.is_some_and(|b| ci < b)) {

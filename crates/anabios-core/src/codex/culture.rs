@@ -143,7 +143,7 @@ pub(super) fn detect_alarm_call(world: &mut World) {
             continue;
         }
         let range = crate::module::effective_communicator_range(&world.agents.modules[i])
-            .min(PERCEPTION_MAX_RADIUS);
+            .min(world.spatial.perception_max_radius());
         if range <= 0.0 {
             continue;
         }

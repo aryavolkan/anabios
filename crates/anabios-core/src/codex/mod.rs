@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::culture::{ALARM_MEME_CHANNEL, MEME_BROADCAST_THRESHOLD};
 use crate::program::MEME_CHANNELS;
-use crate::spatial::{torus_distance, PERCEPTION_MAX_RADIUS};
+use crate::spatial::torus_distance;
 use crate::world::World;
 
 mod combat;
@@ -264,9 +264,9 @@ impl CodexState {
     }
 }
 
-/// RMS distance (torus-aware) of `positions` from their coordinate mean.
-/// Returns 0.0 for fewer than 2 points.
-pub fn species_spread(positions: &[glam::Vec2]) -> f32 {
+/// RMS distance (torus-aware) of `positions` from their coordinate mean, on a
+/// torus of the given `world_size`. Returns 0.0 for fewer than 2 points.
+pub fn species_spread(positions: &[glam::Vec2], world_size: f32) -> f32 {
     if positions.len() < 2 {
         return 0.0;
     }
@@ -280,7 +280,7 @@ pub fn species_spread(positions: &[glam::Vec2]) -> f32 {
     let centroid = glam::Vec2::new((cx / n as f64) as f32, (cy / n as f64) as f32);
     let mut sumsq = 0.0f64;
     for p in positions {
-        let d = crate::spatial::torus_distance(*p, centroid);
+        let d = crate::spatial::torus_distance(*p, centroid, world_size);
         sumsq += (d as f64) * (d as f64);
     }
     ((sumsq / n as f64).sqrt()) as f32
@@ -458,7 +458,7 @@ impl SpeciesAggTable {
             for node in world.agents.program[i].nodes.iter().copied() {
                 e.node_mask |= 1u64 << crate::program::Program::node_kind(node);
             }
-            let (col, row) = crate::biome::BiomeField::cell_coords(pos);
+            let (col, row) = world.biome.cell_coords(pos);
             let terrain = world.biome.at(col, row).terrain as usize;
             e.terrain_counts[terrain.min(TERRAIN_SLOTS - 1)] += 1.0;
             for (ch, s) in e.meme_sums.iter_mut().enumerate() {
