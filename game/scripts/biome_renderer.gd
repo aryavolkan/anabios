@@ -10,6 +10,10 @@ var _res: int = 0
 const REDRAW_EVERY := 6
 var _frame: int = 0
 var _last_mode: int = -999   # last (channel, or -1 biome, or -2 optimum) drawn
+# Rebuild interval, scaled up for big biomes: the per-pixel GDScript rebuild is
+# O(res²) (262k px at res=512), and the biome changes slowly, so large worlds
+# redraw less often. Default res (128) keeps the original 6-frame cadence.
+var _redraw_interval := REDRAW_EVERY
 
 func _ready() -> void:
 	centered = false
@@ -34,6 +38,7 @@ func _setup(res: int) -> void:
 	texture = _tex
 	var world: float = sim.world_size()
 	scale = Vector2(world / _res, world / _res)
+	_redraw_interval = REDRAW_EVERY * maxi(1, _res / 128)
 	_last_mode = -999  # force an immediate redraw
 
 func _process(_delta: float) -> void:
@@ -53,7 +58,7 @@ func _process(_delta: float) -> void:
 	# Throttle: rebuild every REDRAW_EVERY frames, but immediately when the ground
 	# selection changed (so [G]/overlay toggles feel instant).
 	_frame += 1
-	if mode == _last_mode and _frame % REDRAW_EVERY != 0:
+	if mode == _last_mode and _frame % _redraw_interval != 0:
 		return
 	_last_mode = mode
 
