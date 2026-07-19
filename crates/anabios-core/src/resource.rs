@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::biome::TerrainType;
 use crate::prelude::Vec2;
+use crate::world::World;
 
 /// Number of distinct trade goods. One per land terrain.
 pub const GOOD_COUNT: usize = 4;
@@ -88,10 +89,94 @@ pub fn inventory_total(inv: &[f32; GOOD_COUNT]) -> f32 {
     inv.iter().sum()
 }
 
+/// Spawn new resource nodes in their home terrain and remove depleted ones.
+/// Gated on `resources_enabled` — draws ZERO RNG and touches nothing when off.
+/// Called on the biome cadence (`RESOURCE_STEP_INTERVAL`).
+pub fn resource_step(world: &mut World) {
+    if !world.resources_enabled {
+        return;
+    }
+    // Drop depleted nodes first (retain preserves order → deterministic).
+    world.resources.retain(|r| r.amount > 0.0);
+
+    // Per-good live counts.
+    let mut counts = [0usize; GOOD_COUNT];
+    for r in &world.resources {
+        counts[r.kind.index()] += 1;
+    }
+
+    // Fixed attempt budget → fixed RNG draw count per step (2 draws/attempt),
+    // independent of how many actually land, keeping the stream deterministic.
+    for _ in 0..NODE_SPAWN_ATTEMPTS {
+        if world.resources.len() >= NODE_MAX_TOTAL {
+            // Still draw so the RNG stream does not depend on the early exit.
+            let _ = world.rng.f32_range(0.0, world.world_size);
+            let _ = world.rng.f32_range(0.0, world.world_size);
+            continue;
+        }
+        let x = world.rng.f32_range(0.0, world.world_size);
+        let y = world.rng.f32_range(0.0, world.world_size);
+        let pos = crate::prelude::Vec2::new(x, y);
+        let Some(good) = Good::from_terrain(world.biome.sample(pos).terrain) else {
+            continue;
+        };
+        let k = good.index();
+        if counts[k] >= NODE_TARGET_PER_GOOD {
+            continue;
+        }
+        world.resources.push(Resource { pos, kind: good, amount: NODE_START_AMOUNT });
+        counts[k] += 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::biome::TerrainType;
+
+    #[test]
+    fn resource_step_is_inert_when_disabled() {
+        let mut w = World::new(7);
+        // resources_enabled defaults false.
+        for _ in 0..50 {
+            resource_step(&mut w);
+        }
+        assert!(w.resources.is_empty(), "no nodes spawn while feature is off");
+    }
+
+    #[test]
+    fn resource_step_spawns_nodes_in_matching_terrain() {
+        let mut w = World::new(7);
+        w.resources_enabled = true;
+        for _ in 0..50 {
+            resource_step(&mut w);
+        }
+        assert!(!w.resources.is_empty(), "nodes spawn when enabled");
+        // Every node's terrain matches its good.
+        for r in &w.resources {
+            let terrain = w.biome.sample(r.pos).terrain;
+            assert_eq!(Good::from_terrain(terrain), Some(r.kind), "node good matches its terrain");
+            assert!(r.amount > 0.0);
+        }
+        // Per-good counts respect the target ceiling.
+        for g in Good::ALL {
+            let n = w.resources.iter().filter(|r| r.kind == g).count();
+            assert!(n <= NODE_TARGET_PER_GOOD, "{g:?} count {n} exceeds target");
+        }
+    }
+
+    #[test]
+    fn resource_step_removes_depleted_nodes() {
+        let mut w = World::new(7);
+        w.resources_enabled = true;
+        resource_step(&mut w);
+        let before = w.resources.len();
+        assert!(before > 0);
+        // Deplete the first node; the next step must drop it.
+        w.resources[0].amount = 0.0;
+        resource_step(&mut w);
+        assert!(w.resources.len() < before || !w.resources.iter().any(|r| r.amount <= 0.0));
+    }
 
     #[test]
     fn terrain_maps_to_expected_good() {

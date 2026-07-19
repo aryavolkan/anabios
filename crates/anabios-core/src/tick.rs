@@ -86,6 +86,8 @@ pub fn step(world: &mut World) {
         } else {
             world.biome.regrow_step();
         }
+        // Stage 10b: resource node spawn/cleanup (opt-in; no-op when off).
+        crate::resource::resource_step(world);
     }
 
     world.tick += 1;
