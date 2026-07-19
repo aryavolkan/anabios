@@ -66,9 +66,10 @@ They are discovered and spread by the **same** copy-toward-best-neighbour mechan
 
 **Reproductive/genetic effect sites (all gated on `cognition_enabled`):**
 - **`child_sacrifice`** — in `reproduce`, if the primary parent holds it, cull the newborn with probability `CHILD_SACRIFICE_CULL = 0.5` (one RNG draw per such birth). Direct fecundity cut.
-- **`inbreeding`** — two coupled effects:
-  1. *Mate-choice bias:* a holder prefers the genetically-nearest eligible partner (lowest genome distance) instead of the default pairing.
-  2. *Inbreeding depression:* when a mated pair's genome distance `< INBREEDING_DIST` (= 0.15), the child's starting energy is scaled by `1 - INBREEDING_DEPRESSION * (1 - dist/INBREEDING_DIST)` (`INBREEDING_DEPRESSION = 0.5`) — close-kin offspring start frail and die young. Depression is gated on `cognition_enabled`, so non-cognition scenarios are unchanged; the meme raises the *frequency* of close pairings while depression supplies the fitness cost.
+- **`inbreeding`** — three coupled effects (the mate bias raises the *frequency* of close pairings; the depression supplies the *cost*):
+  1. *Mate-choice bias:* a holder seeks the genetically-nearest eligible partner (min genome distance, tie-break lowest id) in `find_mate` instead of the default lowest-id pairing.
+  2. *Inbreeding depression — frailty:* the child's starting energy is scaled by `1 - INBREEDING_DEPRESSION * closeness` (`INBREEDING_DEPRESSION = 0.5`), where `closeness` rises 0→1 as parent genome distance falls from `INBREEDING_DIST` (= 0.15) to 0.
+  3. *Inbreeding depression — viability:* the child is stillborn with probability `INBREEDING_STILLBIRTH * closeness` (`INBREEDING_STILLBIRTH = 0.45`, one RNG draw per inbred birth). **This lethal cost is what makes inbreeding a real population-level selector** — the energy-only frailty penalty proved too weak (a frailed newborn just re-feeds in a rich biome; validated by the `cognition_evolution` harness). All three effects gated on `cognition_enabled`, so non-cognition scenarios are byte-identical.
 
 ### 3.5 The coevolutionary loop
 
@@ -82,7 +83,7 @@ Low-IQ lineages are wide open to `iq_req=0.1` maladaptive practices but cannot r
 
 - **New gene slot is a rename only** — reserved slot 16 already held `0.5` in every neutral genome, so naming it changes no values.
 - **Meme widening 18 → 20** grows the serialized meme vector ⇒ all goldens move once by *layout* (documented refresh, exactly like the invention PR). Behavior is unchanged: `inherit_meme` jitters practice channels **only when `cognition_enabled`**, so the flag-ON *inventions* scenario keeps its exact RNG draw count and the flag-OFF *minimal* scenario keeps its stream — only the serialized bytes grow. (This relies on the existing `inherit_meme` flag-gated-jitter fix.)
-- **IQ development consumes no RNG** (pure function of energy + neighbour count). The only new RNG draw is `child_sacrifice`'s cull roll, gated on `cognition_enabled` — zero draws when off.
+- **IQ development consumes no RNG** (pure function of energy + neighbour count). The new RNG draws are `child_sacrifice`'s cull roll and `inbreeding`'s stillbirth roll, both gated on `cognition_enabled` *and* a holder — zero draws when off, and `&&` short-circuits so a non-inbreeding/non-sacrificing birth draws nothing, keeping unrelated scenarios' streams unchanged.
 - **Sensor reads** (social enrichment, mate neighbours) use the per-agent bounds discipline (`i < sensors.len()`) established by the crowding-stress fix.
 - **New golden:** pin a flag-ON `cognitive-coevolution.toml` hash at fixed ticks, alongside the existing minimal + inventions goldens.
 

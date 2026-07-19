@@ -34,8 +34,13 @@ fn cognitive_scenario_is_self_consistent() {
 /// Pinned golden for the flag-ON cognitive scenario. Regenerate deliberately
 /// with `UPDATE_HASHES=1` (prints new values) whenever a cognitive change is
 /// intentional.
+// Refreshed 2026-07-19: inbreeding strengthened into a real selector — kin-
+// seeking mate bias (`find_mate`) + a viability (stillbirth) cost on close-kin
+// offspring. A behavior change (not layout): an inbreeding holder reproduces
+// after tick 0, so ticks 100/300 moved while tick 0 held. Flag-off (minimal /
+// inventions) goldens are unaffected — the mechanic is cognition-gated.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x42f7a6e1c6717d0b), (100, 0xe113d89d6b29b3c6), (300, 0x4da78f4c4a5e0e5a)];
+    &[(0, 0x42f7a6e1c6717d0b), (100, 0x6981d4ad38e4ac1e), (300, 0x74fc44238908108f)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

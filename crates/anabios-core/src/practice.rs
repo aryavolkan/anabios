@@ -67,6 +67,11 @@ pub const CHILD_SACRIFICE_CULL: f32 = 0.5;
 /// * closeness`, where closeness rises from 0 to 1 as the parents' genome
 /// distance falls from `INBREEDING_DIST` to 0.
 pub const INBREEDING_DEPRESSION: f32 = 0.5;
+/// Inbreeding depression, viability form: probability (at closeness 1) that an
+/// inbred newborn is stillborn — a *lethal* cost food cannot buffer away, so
+/// (paired with the kin-seeking mate bias) inbreeding becomes a real
+/// population-level selector, not just a recoverable energy dip.
+pub const INBREEDING_STILLBIRTH: f32 = 0.45;
 /// Genome distance below which inbreeding depression starts to bite.
 pub const INBREEDING_DIST: f32 = 0.15;
 

@@ -7,10 +7,11 @@
 //!
 //!  1. A maladaptive practice (`child_sacrifice`) inflicts a real reproductive
 //!     deficit — a seeded population is clearly out-grown by the control.
-//!  2. `inbreeding` (energy-penalty form) turns out to be a WEAK population-level
-//!     selector in a food-rich biome — reported honestly rather than forced to
-//!     pass (the per-birth cost is real and unit-tested; the population signal
-//!     needs a stronger mechanic).
+//!  2. `inbreeding` is likewise selected against — the kin-seeking mate bias
+//!     drives close-kin pairings and a viability (stillbirth) cost those pairings
+//!     can't re-feed away, so the practising population is out-grown. (An earlier
+//!     energy-only form was too weak; strengthening it was the point of this
+//!     mechanic — see `INBREEDING_STILLBIRTH`.)
 //!  3. Realized IQ carries both **heritable** (gene) and **plastic** (social
 //!     upbringing) variation — the raw material selection needs — measured from
 //!     real juvenile development.
@@ -100,26 +101,24 @@ fn child_sacrifice_is_selected_against() {
 
 #[ignore = "experiment harness — run explicitly with --ignored --nocapture"]
 #[test]
-fn inbreeding_cost_is_weak_at_the_population_level() {
-    // FINDING (reported, not a directional pass/fail): inbreeding depression as
-    // implemented — a one-time cut to the newborn's *starting* energy — is too
-    // mild to produce a population-level selection signal in a food-rich biome.
-    // A frailed newborn simply re-feeds and survives, and the population ratio
-    // comes out at or above 1.0. The per-birth cost is real and unit-tested
-    // (`reproduce::inbreeding_meme_depresses_close_kin_offspring_energy`); to
-    // make it bite at the population/evolutionary level it needs a stronger
-    // mechanic (the deferred kin-seeking mate-choice bias, or a viability rather
-    // than energy penalty). This harness documents that gap.
+fn inbreeding_is_selected_against() {
+    // With the kin-seeking mate bias (`find_mate`) driving close-kin pairings and
+    // a viability (stillbirth) cost those pairings can't re-feed away, inbreeding
+    // is now a genuine population-level selector — a population practising it is
+    // out-grown by the control. (The earlier energy-only form was too weak; see
+    // the git history / `INBREEDING_STILLBIRTH`.)
     let seeds = env_u64("COG_SEEDS", 8);
     let ticks = env_u64("COG_TICKS", 300);
     let (wins, mean_ratio) = differential(practice::INBREEDING, seeds, ticks);
     println!(
         "RESULT inbreeding: practice arm smaller in {wins}/{seeds} seeds, \
-         mean pop ratio (treated/control) = {mean_ratio:.3} \
-         (energy-penalty inbreeding is a weak population-level selector)"
+         mean pop ratio (treated/control) = {mean_ratio:.3}"
     );
-    // Robust invariant only: the mechanic runs without destabilising the world.
-    assert!(mean_ratio > 0.0 && mean_ratio.is_finite(), "both arms produced a live population");
+    assert!(
+        wins as f64 >= 0.6 * seeds as f64,
+        "an inbreeding population should be out-grown by the control in most seeds"
+    );
+    assert!(mean_ratio < 0.9, "and carry a clear population deficit: {mean_ratio:.3}");
 }
 
 /// Centre of a well-fed grass cell to stand a cohort on.
