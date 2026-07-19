@@ -31,8 +31,11 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-18: added World.living_biome flag (off = byte-identical;
 // only serialized layout grew).
 // Refreshed 2026-07-18: added World.season_period (off = byte-identical).
+// Refreshed 2026-07-18: added World.cultural_inventions flag + renamed genome
+// slot 42 to Inventiveness (flag off = byte-identical; only serialized layout
+// grew — the slot value semantics are unchanged).
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x3249470b7bc4efa5), (100, 0xf3f061ad14845ab3), (1000, 0x5f49083d2a0baee4)];
+    &[(0, 0x658c24c37e37122d), (100, 0x486eb08475de250f), (1000, 0xcc8ddc27eb59212a)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

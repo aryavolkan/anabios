@@ -60,7 +60,7 @@ pub fn reproduce_all(world: &mut World) {
         if world.reproduced_this_tick[i] {
             continue;
         }
-        if !is_eligible(&world.agents, a_id) {
+        if !is_eligible(&world.agents, a_id, world.cultural_inventions) {
             continue;
         }
 
@@ -78,6 +78,7 @@ pub fn reproduce_all(world: &mut World) {
             a_pos,
             a_species,
             world.world_size,
+            world.cultural_inventions,
         );
         let Some(b_id) = mate else { continue };
 
@@ -150,7 +151,7 @@ pub fn reproduce_all(world: &mut World) {
     world.agents.scratch_ids = alive_ids;
 }
 
-fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
+fn is_eligible(agents: &AgentBuffers, id: u32, cultural_inventions: bool) -> bool {
     let i = id as usize;
     if !agents.is_alive(id) {
         return false;
@@ -160,13 +161,29 @@ fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
         return false;
     }
     // Conscientiousness raises the effective breeding threshold.
+    let mut repro_threshold_gene = agents.genome[i].get(GenomeSlot::ReproductionThreshold);
+    // Industrial Revolution tier (Task 2.1): an inventive Communicator at the
+    // top of the invention ratchet reproduces more easily — a lower effective
+    // threshold gene, clamped to a sane floor so it can never go non-positive.
+    let has_comm = crate::module::has(&agents.modules[i], crate::module::ModuleType::Communicator);
+    if crate::culture::invention_active(
+        cultural_inventions,
+        &agents.genome[i],
+        &agents.meme_vector[i],
+        has_comm,
+        crate::culture::INDUSTRY_THRESHOLD,
+    ) {
+        repro_threshold_gene =
+            (repro_threshold_gene - crate::culture::INDUSTRY_REPRO_DISCOUNT).max(0.05);
+    }
     let threshold = SPAWN_ENERGY
-        * agents.genome[i].get(GenomeSlot::ReproductionThreshold)
+        * repro_threshold_gene
         * 1.5
         * crate::personality::personality_reproduction_factor(&agents.genome[i]);
     agents.energy[i] >= threshold
 }
 
+#[allow(clippy::too_many_arguments)]
 fn find_mate(
     spatial: &UniformSpatialHash,
     agents: &AgentBuffers,
@@ -175,6 +192,7 @@ fn find_mate(
     a_pos: Vec2,
     a_species: u32,
     world_size: f32,
+    cultural_inventions: bool,
 ) -> Option<u32> {
     let mut best: Option<u32> = None;
     spatial.query(a_pos, MATING_RANGE, |other_id| {
@@ -185,7 +203,7 @@ fn find_mate(
         if reproduced[j] {
             return;
         }
-        if !is_eligible(agents, other_id) {
+        if !is_eligible(agents, other_id, cultural_inventions) {
             return;
         }
         if agents.species_id[j] != a_species {

@@ -1,0 +1,21 @@
+name = "cultural-inventions"
+seed = 1
+world_size = 2048.0
+biome_res = 256
+hash_res = 128
+living_biome = true
+season_period = 2000
+cultural_inventions = true
+max_population = 8000
+
+# Culture (species 1): starter kit + Communicator + Inventiveness gene → invention ratchet.
+[[agents]]
+count = 400
+placement = { kind = "uniform" }
+archetype = "inventive_forager"
+
+# Control (species 2): identical starter kit, no Communicator, no Inventiveness.
+[[agents]]
+count = 400
+placement = { kind = "uniform" }
+archetype = "asocial_forager"

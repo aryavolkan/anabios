@@ -115,6 +115,31 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
                 let s = &mut world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL];
                 *s += crate::culture::SKILL_LEARN_RATE * (1.0 - *s);
             }
+            // Cultural-inventions ratchet (gated): an Inventiveness-gened
+            // Communicator makes slow solo progress on a successful graze.
+            // Fast social copy of a neighbour's level happens in
+            // `culture::culture_step`.
+            if world.cultural_inventions
+                && is_comm
+                && crate::culture::is_inventive(&world.agents.genome[i])
+            {
+                let inv = &mut world.agents.meme_vector[i][crate::culture::INVENTION_CHANNEL];
+                *inv = (*inv + crate::culture::INVENT_RATE * (1.0 - *inv)).clamp(0.0, 1.0);
+            }
+        }
+        // Domestication tier (Task 2.1): a flat, additive steady food income —
+        // reliable independent of whether this tick's graze succeeded, unlike
+        // the multiplicative bonuses above (which only apply to `taken > 0.0`).
+        // Applies once per foraging tick (this agent has Mouth + herbivory>0 +
+        // bite_cap>0, i.e. reached this point in the loop).
+        if crate::culture::invention_active(
+            world.cultural_inventions,
+            &world.agents.genome[i],
+            &world.agents.meme_vector[i],
+            is_comm,
+            crate::culture::DOMESTICATION_THRESHOLD,
+        ) {
+            world.agents.energy[i] += crate::culture::DOMESTICATION_ENERGY;
         }
     }
 }

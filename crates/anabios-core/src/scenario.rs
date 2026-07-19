@@ -22,6 +22,10 @@ pub struct Scenario {
     /// climate). `false` (default) leaves foraging behavior unchanged.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// Opt-in: enable the mutation-gated cultural-inventions mechanism.
+    /// `false` (default) leaves behavior unchanged.
+    #[serde(default)]
+    pub cultural_inventions: bool,
     /// Opt-in: enable renewing biome (depleted cells recolonize from
     /// vegetated neighbours). `false` (default) leaves regrowth unchanged.
     #[serde(default)]
@@ -192,6 +196,16 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
             (m, starter_asocial_forager())
         }
+        // Mutation-gated cultural inventions (Task 3.1): identical to
+        // `cultural_forager`'s kit (starter_kit + Communicator, keeping
+        // Reproductive), matched against `asocial_forager` (the control) on
+        // everything except the Communicator module + the Inventiveness gene
+        // (see `archetype_genome`).
+        "inventive_forager" => {
+            let mut m = starter_kit();
+            m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
+            (m, starter_asocial_forager())
+        }
         _ => (starter_kit(), starter_grazer()),
     }
 }
@@ -213,6 +227,9 @@ fn archetype_genome(name: &str, g: &mut Genome) {
             g.set(GenomeSlot::IndividualLearning, 1.0);
             g.set(GenomeSlot::SocialLearning, 1.0);
         }
+        // Mutation-gated cultural inventions (Task 3.1): the culture cohort
+        // carries the Inventiveness gene, gating the invention ratchet.
+        "inventive_forager" => g.set(GenomeSlot::Inventiveness, 1.0),
         _ => {}
     }
 }
@@ -243,6 +260,7 @@ impl Scenario {
         };
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
+        w.cultural_inventions = self.cultural_inventions;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
         if let Some(cap) = self.max_population {

@@ -40,7 +40,7 @@ pub fn step(world: &mut World) {
     interact_all(world);
 
     // M3: module upkeep — every alive agent pays for its modules.
-    crate::module::upkeep_all(&mut world.agents);
+    crate::module::upkeep_all(&mut world.agents, world.cultural_inventions);
 
     // Stage 6: reproduce. Mutates the alive set; do not rely on `cap` after
     // this point.

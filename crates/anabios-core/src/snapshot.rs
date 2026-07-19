@@ -17,7 +17,8 @@ use crate::world::World;
 /// old payloads; it only helps self-describing formats.
 /// v2: BiomeCell.env climate field + World.biome_adaptation/env_period.
 /// v3: World.max_population.
-pub const FORMAT_VERSION: u32 = 3;
+/// v4: World.cultural_inventions flag.
+pub const FORMAT_VERSION: u32 = 4;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
