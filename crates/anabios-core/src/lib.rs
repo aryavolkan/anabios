@@ -22,6 +22,7 @@ pub mod personality;
 pub mod pheromone;
 pub mod program;
 pub mod reproduce;
+pub mod resource;
 pub mod rng;
 pub mod scenario;
 pub mod sense;
