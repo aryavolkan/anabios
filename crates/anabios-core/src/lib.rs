@@ -15,6 +15,7 @@ pub mod genome;
 pub mod integrate;
 pub mod interact;
 pub mod invention;
+pub mod iq;
 pub mod kin;
 pub mod mathf;
 pub mod module;

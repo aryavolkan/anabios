@@ -27,6 +27,11 @@ pub struct Scenario {
     /// `false` (default) leaves culture unchanged.
     #[serde(default)]
     pub inventions_enabled: bool,
+    /// Opt-in: enable the cognitive layer (per-agent realized IQ from the
+    /// `CognitivePotential` gene + juvenile enrichment, with a metabolic cost).
+    /// `false` (default) leaves metabolism and culture unchanged.
+    #[serde(default)]
+    pub cognition_enabled: bool,
     /// Opt-in: enable renewing biome (depleted cells recolonize from
     /// vegetated neighbours). `false` (default) leaves regrowth unchanged.
     #[serde(default)]
@@ -274,6 +279,7 @@ impl Scenario {
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
         w.inventions_enabled = self.inventions_enabled;
+        w.cognition_enabled = self.cognition_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
         if let Some(cap) = self.max_population {

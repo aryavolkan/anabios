@@ -42,6 +42,12 @@ pub fn step(world: &mut World) {
     // M3: module upkeep — every alive agent pays for its modules.
     crate::module::upkeep_all(&mut world.agents);
 
+    // Stage 5b: cognitive development — juveniles fold this tick's nutrition
+    // (post-feeding energy) + social enrichment (this tick's sensed crowding)
+    // into their realized IQ. Runs before reproduce so newborns are processed
+    // starting next tick. No-op when `cognition_enabled` is false.
+    crate::iq::develop_all(world);
+
     // Stage 6: reproduce. Mutates the alive set; do not rely on `cap` after
     // this point.
     crate::reproduce::reproduce_all(world);

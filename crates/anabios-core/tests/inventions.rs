@@ -561,8 +561,12 @@ fn inventions_scenario_is_deterministic() {
 // Refreshed 2026-07-19: MemeSweep no longer fires on invention channels (the
 // InventionAdopted detector already reports those sweeps explicitly) — the
 // codex event stream is serialized into the hash, so ticks 100/300 moved.
+// Refreshed 2026-07-19 (2): cognitive layer Phase 1 grew AgentBuffers by the
+// realized-IQ phenotype fields (FORMAT_VERSION 6). `cognition_enabled` is off
+// in this scenario, so IQ stays 0 and behavior is unchanged — only the
+// serialized layout grew, moving all three hashes.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x4bb0b808775f7768), (100, 0x70eaf00a0cf48136), (300, 0x9a9cd3de326c1bc4)];
+    &[(0, 0x28124fb693cec2d6), (100, 0xf43b05b0220ed0db), (300, 0xef44f1b9bbb4760a)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
