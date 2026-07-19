@@ -135,7 +135,7 @@ pub fn carrying_cap(modules: &crate::module::ModuleList) -> f32 {
 }
 
 /// The good (hence home terrain) an agent with the given `TerrainAffinity`
-/// gene value prefers. Splits [0,1] into `GOOD_COUNT` equal bands.
+/// gene value prefers. Splits `[0,1]` into `GOOD_COUNT` equal bands.
 #[inline]
 pub fn preferred_good(affinity: f32) -> Good {
     let idx = ((affinity * GOOD_COUNT as f32) as usize).min(GOOD_COUNT - 1);
