@@ -89,6 +89,16 @@ pub fn inventory_total(inv: &[f32; GOOD_COUNT]) -> f32 {
     inv.iter().sum()
 }
 
+/// Per-agent carrying capacity: a flat base, plus a bonus for agents that
+/// carry a `Storage` module (reuses the existing morphology).
+pub fn carrying_cap(modules: &crate::module::ModuleList) -> f32 {
+    let mut cap = INVENTORY_BASE_CAP;
+    if crate::module::has(modules, crate::module::ModuleType::Storage) {
+        cap += INVENTORY_STORAGE_BONUS;
+    }
+    cap
+}
+
 /// Spawn new resource nodes in their home terrain and remove depleted ones.
 /// Gated on `resources_enabled` — draws ZERO RNG and touches nothing when off.
 /// Called on the biome cadence (`RESOURCE_STEP_INTERVAL`).
@@ -202,5 +212,14 @@ mod tests {
         let plentiful = want(&inv, 0);
         assert!(scarce > plentiful, "scarcer good must be wanted more");
         assert!((scarce - 1.0).abs() < 1e-6, "empty holding => want 1.0");
+    }
+
+    #[test]
+    fn storage_module_raises_carrying_cap() {
+        let base = crate::module::starter_kit();
+        let mut with_storage = base.clone();
+        with_storage.push(crate::module::Module::Storage { capacity: 1.0 });
+        assert_eq!(carrying_cap(&base), INVENTORY_BASE_CAP);
+        assert_eq!(carrying_cap(&with_storage), INVENTORY_BASE_CAP + INVENTORY_STORAGE_BONUS);
     }
 }

@@ -42,6 +42,9 @@ pub fn interact_all(world: &mut World) {
     feed_pass(world, &alive_ids);
     combat_pass(world, &alive_ids);
     scavenge_pass(world, &alive_ids);
+    if world.resources_enabled {
+        harvest_pass(world, &alive_ids);
+    }
     deposit_pass(world, &alive_ids);
     share_pass(world, &alive_ids);
     world.agents.scratch_ids = alive_ids;
@@ -253,6 +256,53 @@ fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
     }
 }
 
+/// Harvest: any agent standing within `HARVEST_RANGE` of a resource node pulls
+/// up to `HARVEST_RATE` of its good into inventory, bounded by carrying
+/// capacity, depleting the node. Nodes are indexed in `resource_spatial`
+/// (rebuilt here) so each agent's search touches only nearby nodes.
+fn harvest_pass(world: &mut World, alive_ids: &[u32]) {
+    use crate::resource::{carrying_cap, inventory_total, HARVEST_RANGE, HARVEST_RATE};
+    if world.resources.is_empty() {
+        return;
+    }
+    world.resource_spatial.rebuild_indexed(
+        world.resources.len(),
+        |ri| world.resources[ri].pos,
+        |ri| world.resources[ri].amount > 0.0,
+    );
+    for &id in alive_ids {
+        let i = id as usize;
+        let cap = carrying_cap(&world.agents.modules[i]);
+        let room = cap - inventory_total(&world.agents.inventory[i]);
+        if room <= 0.0 {
+            continue;
+        }
+        let pos = world.agents.position[i];
+        let mut best: Option<usize> = None;
+        let mut best_d = HARVEST_RANGE;
+        world.resource_spatial.query(pos, HARVEST_RANGE, |ri| {
+            let ri = ri as usize;
+            if world.resources[ri].amount <= 0.0 {
+                return;
+            }
+            let d = crate::spatial::torus_distance(pos, world.resources[ri].pos, world.world_size);
+            // Strict `<` plus lowest-index tie-break = deterministic nearest.
+            if d < best_d || (d == best_d && best.is_some_and(|b| ri < b)) {
+                best_d = d;
+                best = Some(ri);
+            }
+        });
+        if let Some(ri) = best {
+            let taken = HARVEST_RATE.min(world.resources[ri].amount).min(room);
+            if taken > 0.0 {
+                let k = world.resources[ri].kind.index();
+                world.agents.inventory[i][k] += taken;
+                world.resources[ri].amount -= taken;
+            }
+        }
+    }
+}
+
 /// Altruism: a donor with `share_intent` transfers a fraction of its energy to
 /// its action target (the nearest neighbor), scaled by the `Altruism` genome
 /// slot. Donor loses, recipient gains. Program-level gating on `SenseKinship`
@@ -286,5 +336,51 @@ fn share_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.energy[t] += amount;
         // Record for the EvolvedCooperation detector.
         world.codex.share_events.push_back((world.tick, world.agents.species_id[i]));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::genome::Genome;
+    use crate::prelude::Vec2;
+    use crate::world::World;
+
+    #[test]
+    fn harvest_fills_inventory_and_depletes_node() {
+        use crate::resource::{Good, Resource, HARVEST_RATE};
+        let mut w = World::new(3);
+        w.resources_enabled = true;
+        let pos = Vec2::new(200.0, 200.0);
+        let id = w.spawn_agent(pos, Genome::neutral());
+        w.resources.push(Resource { pos, kind: Good::Salt, amount: 5.0 });
+        // Build the agent spatial hash (harvest_pass rebuilds resource_spatial itself).
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        harvest_pass(&mut w, &alive);
+
+        assert!((w.agents.inventory[id as usize][Good::Salt.index()] - HARVEST_RATE).abs() < 1e-6);
+        assert!((w.resources[0].amount - (5.0 - HARVEST_RATE)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn harvest_respects_carrying_cap() {
+        use crate::resource::{carrying_cap, Good, Resource};
+        let mut w = World::new(3);
+        w.resources_enabled = true;
+        let pos = Vec2::new(200.0, 200.0);
+        let id = w.spawn_agent(pos, Genome::neutral());
+        let cap = carrying_cap(&w.agents.modules[id as usize]);
+        // Pre-fill to the cap; no room to harvest more.
+        w.agents.inventory[id as usize][Good::Amber.index()] = cap;
+        w.resources.push(Resource { pos, kind: Good::Salt, amount: 5.0 });
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        harvest_pass(&mut w, &alive);
+
+        assert_eq!(w.agents.inventory[id as usize][Good::Salt.index()], 0.0, "at cap: no harvest");
+        assert_eq!(w.resources[0].amount, 5.0, "node untouched");
     }
 }
