@@ -1,0 +1,96 @@
+# Geographic trade routes: four species, each pinned via `terrain_affinity`
+# to a distinct terrain's good (Salt/Desert, Obsidian/Rock, Amber/Forest,
+# Spice/Grass), spawned UNIFORM across the whole map so the `terrain_habitat`
+# pull (opt-in movement bias toward each agent's preferred terrain) has to do
+# real work sorting them into their home biome over time — starting
+# pre-sorted would hide whether the mechanism works.
+#
+# Terrain area is very unequal and fixed by elevation thresholds (roughly
+# seed-independent): Grass ~48%, Desert ~26%, Forest ~17%, Rock ~0.3%. Rock
+# is a sliver, so the Obsidian species is deliberately the smallest
+# population and is NOT expected to sort well on its own — the geographic
+# sorting test (`geographic_trade_sorts_by_terrain`) uses the ROBUST
+# "sorted-fraction increased" metric across the whole population, not
+# per-species perfection.
+#
+# `archetype = "asocial_forager"` (plant-seek only, no neighbor-seeking) was
+# picked over the default grazer program deliberately: the grazer's
+# `energy > 30` branch switches to nearest-neighbor-seeking, which (per
+# `biome-trade.toml`'s own notes) can dominate movement and suppress
+# relocation. Asocial-forager's movement intent is plant-direction only, so
+# the additive `TERRAIN_HABITAT_PULL` bias (see `tick.rs::decide_all`) reads
+# cleanly against it instead of competing with a second strong drive.
+#
+# Cross-species trade and same-species dowry-gated reproduction both still
+# need contact: resource nodes spawn near wherever the population currently
+# is (in matching terrain), so as agents sort into borders between adjacent
+# patches (terrain noise makes small, plentiful patches — not one giant
+# region per type), goods of different kinds end up close together and
+# same-species pairs cluster locally on their shared home patches.
+name = "geographic-trade"
+seed = 424242
+terrain_habitat = true
+resources_enabled = true
+max_population = 2200
+
+# All four species spawn UNIFORM-ish within one broad shared cluster rather
+# than across the whole 1024x1024 map. `best_terrain_direction` (biome.rs) is
+# a binary on/off pull: it goes to ZERO the instant an agent's current cell
+# already matches its target terrain, with no further push once "home". At
+# true map-wide Uniform placement, that meant most agents settled just
+# inside their first-found home patch and simply stayed there — their
+# species' home terrain regions turned out to be large enough, and far
+# enough apart (elevation ordering is Water < Desert < Grass < Forest <
+# Rock, so e.g. Desert and Forest never border directly), that in 800 ticks
+# no two different-species agents ever came within `TRADE_RANGE` (2.0) of
+# each other: zero trades. A first broad-cluster attempt (radius 130,
+# center (192, 320), all-three-common-terrains-diverse) fixed cross-species
+# contact (trades started firing) but NOT dowry births: `DowryBirth` needs
+# ONE agent to hold a FULL 4-good basket simultaneously (`DOWRY_REQ` = 2.0 of
+# EVERY good), and with species geographically separated by design, that
+# needs either a multi-hop trade chain or a lucky agent parked where 3-4
+# terrains meet at once — a diffuse "any two adjacent terrains" cluster
+# rarely produces that. The fix: center on an actual FOUR-WAY terrain
+# junction, found by scanning the seed's biome field for the best
+# grass/forest/desert/rock balance within a tight radius (`grass=0.33
+# forest=0.29 desert=0.34 rock=0.047 water=0.00` at radius 60 around
+# `(544, 768)` — rock is normally ~0.3% of the map; this hub has ~16x that
+# density). A small, dense, four-terrain "marketplace" hub like this is what
+# lets the same handful of border-straddling agents collect all four goods.
+
+# Salt / Desert (~26% of the map).
+[[agents]]
+count = 240
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 544.0, center_y = 768.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.12
+
+# Obsidian / Rock (~0.3% of the map — deliberately the smallest population;
+# not expected to sort as well as the other three, see header note).
+[[agents]]
+count = 50
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 544.0, center_y = 768.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.37
+
+# Amber / Forest (~17% of the map).
+[[agents]]
+count = 150
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 544.0, center_y = 768.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.62
+
+# Spice / Grass (~48% of the map — the largest population).
+[[agents]]
+count = 300
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 544.0, center_y = 768.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.87
