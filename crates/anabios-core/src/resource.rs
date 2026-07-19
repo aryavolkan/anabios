@@ -16,15 +16,25 @@ pub const RESOURCE_STEP_INTERVAL: u64 = 10;
 /// Random placement attempts per spawn step (fixed → deterministic RNG draw count).
 pub const NODE_SPAWN_ATTEMPTS: usize = 64;
 /// Target live node count per good; spawning stops adding a good at/above this.
-pub const NODE_TARGET_PER_GOOD: usize = 40;
+/// Raised from 40 (with `DOWRY_REQ` lowered to 1.0, see below) to give more
+/// simultaneous harvest opportunities per good, since a scarce terrain (e.g.
+/// Rock) still spawns far below this ceiling in practice — the true limiter
+/// for rare terrain is its map-area fraction, not this target.
+pub const NODE_TARGET_PER_GOOD: usize = 80;
 /// Hard cap on total live nodes.
 pub const NODE_MAX_TOTAL: usize = 400;
-/// Amount a fresh node carries.
-pub const NODE_START_AMOUNT: f32 = 20.0;
+/// Amount a fresh node carries. Raised from 20 so that the handful of nodes
+/// spawning on scarce terrain (e.g. a small Rock deposit) can still supply
+/// many agents over a run via harvesting *and* onward bilateral trade,
+/// rather than depleting after one or two visits.
+pub const NODE_START_AMOUNT: f32 = 200.0;
 /// Max distance an agent can harvest a node from (world units).
 pub const HARVEST_RANGE: f32 = 2.0;
-/// Max amount harvested from a node per tick per agent.
-pub const HARVEST_RATE: f32 = 1.0;
+/// Max amount harvested from a node per tick per agent. Raised from 1.0
+/// alongside `NODE_START_AMOUNT` so agents fill out a full 4-good dowry
+/// basket well before the reproduction window (600 ticks in the trade
+/// scenario test) closes.
+pub const HARVEST_RATE: f32 = 5.0;
 /// Base per-agent carrying capacity (summed across all goods).
 pub const INVENTORY_BASE_CAP: f32 = 12.0;
 /// Extra carrying capacity granted by a `Storage` module.
@@ -34,7 +44,19 @@ pub const TRADE_RANGE: f32 = 2.0;
 /// Units of a good moved in one direction per trade event.
 pub const TRADE_UNIT: f32 = 1.0;
 /// Units of EACH good a parent must hold and spend to reproduce.
-pub const DOWRY_REQ: f32 = 2.0;
+///
+/// Reproduction needs 1 unit of each of the 4 goods. This is set to the
+/// *reachable* ceiling rather than a round number: `pick_swap` (see
+/// `interact.rs`) only executes a bilateral swap under a strict `>` mutual-
+/// benefit rule, so once both sides hold an equal amount of every good,
+/// giving up any one good is worth exactly what receiving another would be —
+/// trade can never move an agent past "1 unit of each good it holds" for
+/// goods obtained solely via trade (a mathematically absorbing state).
+/// Fresh harvesting can still push an agent past 1.0 on goods local to its
+/// terrain, but cross-biome goods realistically cap near 1.0 per agent. 1.0
+/// is therefore the reachable, balanced-basket dowry size; 2.0 made
+/// `DowryBirth` unreachable for cross-species trade economies.
+pub const DOWRY_REQ: f32 = 1.0;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
