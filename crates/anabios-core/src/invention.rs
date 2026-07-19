@@ -283,6 +283,29 @@ pub fn tech_era(mask: u32) -> u8 {
     era
 }
 
+// --- Cognitive (IQ) acquisition gate (Phase 2) ------------------------------
+
+/// Realized-IQ required to acquire an invention, indexed by `era - 1`. Era-1
+/// tech is nearly free to learn; era-4 tech demands high cognition. Only
+/// consulted when `World::cognition_enabled` is true (see `iq_permits`).
+pub const IQ_REQ_BY_ERA: [f32; 4] = [0.15, 0.35, 0.55, 0.75];
+
+/// Realized-IQ threshold to discover or copy invention `k` (scales with era).
+#[inline]
+pub fn iq_req(k: usize) -> f32 {
+    IQ_REQ_BY_ERA[(INVENTIONS[k].era - 1) as usize]
+}
+
+/// Whether an agent with realized `iq` may acquire invention `k`. With
+/// `cognition_enabled` false the IQ gate is off (always permitted), so
+/// non-cognition scenarios keep their exact behavior; otherwise the agent
+/// needs `iq >= iq_req(k)`. `Openness` still governs discovery *rate*; this is
+/// the hard capability *ceiling*.
+#[inline]
+pub fn iq_permits(iq: f32, k: usize, cognition_enabled: bool) -> bool {
+    !cognition_enabled || iq >= iq_req(k)
+}
+
 // --- Multipliers read by effect sites (identity at mask = 0) ----------------
 
 /// `1.0` if `mask` holds invention `inv`, else `0.0`. The branchless
@@ -426,9 +449,18 @@ pub fn invention_step(world: &mut World) {
             let openness = world.agents.genome[i].get(crate::genome::GenomeSlot::Openness);
             let skill = world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL].clamp(0.0, 1.0);
             let disc_mult = discovery_multiplier(mask);
+            // Cognitive gate: an agent can only discover a trait its realized IQ
+            // clears (no-op when cognition is disabled). Filtering the candidate
+            // here keeps it out of both the summed probability and the weighted
+            // pick below (its `probs` entry stays 0).
+            let cognition = world.cognition_enabled;
+            let agent_iq = world.agents.iq[i];
             let mut total = 0.0f32;
             let mut probs = [0.0f32; INVENTION_COUNT];
             candidates(mask, |k| {
+                if !iq_permits(agent_iq, k, cognition) {
+                    return;
+                }
                 let p = (BASE_DISCOVERY * openness * (0.3 + skill) * disc_mult
                     / INVENTIONS[k].era as f32)
                     .min(DISCOVERY_CAP);

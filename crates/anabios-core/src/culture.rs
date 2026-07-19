@@ -260,9 +260,14 @@ pub fn culture_step(world: &mut World) {
         if world.inventions_enabled {
             let rate = crate::invention::INVENTION_SPREAD_RATE
                 * crate::invention::spread_multiplier(self_mask);
+            let cognition = world.cognition_enabled;
+            let receiver_iq = world.agents.iq[i];
             for (k, &target) in max_neighbour_inv.iter().enumerate() {
                 if crate::invention::INVENTIONS[k].prereqs & !self_mask != 0 {
                     continue; // missing foundations
+                }
+                if !crate::invention::iq_permits(receiver_iq, k, cognition) {
+                    continue; // insufficient IQ to acquire this trait
                 }
                 let ch = crate::invention::channel(k);
                 let cur = world.agents.meme_vector[i][ch];

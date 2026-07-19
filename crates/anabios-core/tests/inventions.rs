@@ -533,6 +533,107 @@ fn meme_sweep_does_not_double_fire_on_invention_channels() {
     );
 }
 
+// --- Cognition: IQ-gated acquisition (Phase 2) ------------------------------------
+
+#[test]
+fn iq_req_scales_with_era_and_gate_respects_flag() {
+    use invention::{iq_permits, iq_req};
+    // Higher-era tech demands more cognition.
+    assert!(iq_req(invention::STONE_TOOLS) < iq_req(invention::FARMING));
+    assert!(iq_req(invention::FARMING) < iq_req(invention::NUCLEAR_POWER));
+    // Gate is off entirely when cognition is disabled (non-cognition scenarios).
+    assert!(iq_permits(0.0, invention::NUCLEAR_POWER, false));
+    // On: realized IQ must clear the era requirement.
+    let req = iq_req(invention::NUCLEAR_POWER);
+    assert!(!iq_permits(req - 0.01, invention::NUCLEAR_POWER, true));
+    assert!(iq_permits(req, invention::NUCLEAR_POWER, true));
+}
+
+/// Eight skilled, open communicators that only differ in realized IQ.
+fn seed_innovators(seed: u64, iq: f32) -> (World, Vec<u32>) {
+    let mut w = World::new(seed);
+    w.inventions_enabled = true;
+    w.cognition_enabled = true;
+    let mut ids = Vec::new();
+    for n in 0..8 {
+        let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+        w.agents.modules[id as usize] = comm_kit();
+        w.agents.meme_vector[id as usize][SKILL_CHANNEL] = 1.0;
+        let mut g = w.agents.genome[id as usize];
+        g.set(GenomeSlot::Openness, 1.0);
+        w.agents.genome[id as usize] = g;
+        w.agents.iq[id as usize] = iq;
+        ids.push(id);
+    }
+    (w, ids)
+}
+
+#[test]
+fn discovery_is_blocked_below_the_iq_threshold() {
+    // IQ just under the era-1 requirement: Stone Tools (the only era-1
+    // candidate) is filtered out, so total discovery probability is 0 and these
+    // maximally-open, maximally-skilled communicators never invent anything.
+    let (mut w, ids) = seed_innovators(101, invention::iq_req(invention::STONE_TOOLS) - 0.01);
+    for _ in 0..20_000 {
+        invention::invention_step(&mut w);
+    }
+    assert!(
+        ids.iter().all(|&id| invention::held_mask(&w.agents.meme_vector[id as usize]) == 0),
+        "IQ below the era-1 threshold must never discover"
+    );
+}
+
+#[test]
+fn discovery_allowed_at_or_above_the_iq_threshold() {
+    // Same population, IQ well above the era-1 requirement → Stone Tools appears.
+    let (mut w, ids) = seed_innovators(101, 1.0);
+    let mut discovered = false;
+    for _ in 0..20_000 {
+        invention::invention_step(&mut w);
+        if ids
+            .iter()
+            .any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::STONE_TOOLS))
+        {
+            discovered = true;
+            break;
+        }
+    }
+    assert!(discovered, "sufficient IQ permits discovery");
+}
+
+#[test]
+fn spread_respects_the_iq_gate() {
+    let mut w = World::new(103);
+    w.inventions_enabled = true;
+    w.cognition_enabled = true;
+    let holder = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let receiver = w.spawn_agent(Vec2::new(505.0, 500.0), Genome::neutral());
+    w.agents.modules[holder as usize] = comm_kit();
+    w.agents.modules[receiver as usize] = comm_kit();
+    w.agents.program[holder as usize] = Program::from_slice(&[Node::Idle]);
+    w.agents.program[receiver as usize] = Program::from_slice(&[Node::Idle]);
+    set_held(&mut w, holder, invention::STONE_TOOLS);
+    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+    size_scratch(&mut w);
+
+    // Receiver IQ below the era-1 threshold: cannot copy Stone Tools.
+    w.agents.iq[receiver as usize] = invention::iq_req(invention::STONE_TOOLS) - 0.01;
+    anabios_core::culture::culture_step(&mut w);
+    assert_eq!(
+        level_of(&w, receiver, invention::STONE_TOOLS),
+        0.0,
+        "IQ below threshold blocks social acquisition"
+    );
+
+    // Raise IQ above the threshold: now it copies at the spread rate.
+    w.agents.iq[receiver as usize] = 0.5;
+    anabios_core::culture::culture_step(&mut w);
+    assert!(
+        level_of(&w, receiver, invention::STONE_TOOLS) > 0.0,
+        "sufficient IQ permits social acquisition"
+    );
+}
+
 // --- End-to-end -------------------------------------------------------------------
 
 const INVENTIONS_SCENARIO: &str = include_str!("../../../scenarios/inventions.toml");
