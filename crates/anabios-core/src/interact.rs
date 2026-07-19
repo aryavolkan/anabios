@@ -394,20 +394,13 @@ fn pick_swap(
 /// Trade: each alive agent A (ascending) trades one `TRADE_UNIT` with its
 /// nearest OTHER-species neighbor B (from the sensor register), if a mutually-
 /// beneficial complementary swap exists and B is within `TRADE_RANGE`.
-/// Conserves total units of each good. No RNG. Each agent trades at most once.
+/// Conserves total units of each good. No RNG.
 fn trade_pass(world: &mut World, alive_ids: &[u32]) {
     use crate::resource::TRADE_UNIT;
-    let mut traded = std::collections::HashSet::new();
     for &id in alive_ids {
-        if traded.contains(&id) {
-            continue;
-        }
         let i = id as usize;
         let tgt = world.sensors[i].nearest_other_id;
         if tgt == crate::sense::NO_NEIGHBOR_ID {
-            continue;
-        }
-        if traded.contains(&tgt) {
             continue;
         }
         if world.sensors[i].nearest_other_dist >= crate::resource::TRADE_RANGE {
@@ -427,8 +420,6 @@ fn trade_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.inventory[t][give] += TRADE_UNIT;
         world.agents.inventory[t][recv] -= TRADE_UNIT;
         world.agents.inventory[i][recv] += TRADE_UNIT;
-        traded.insert(id);
-        traded.insert(tgt);
     }
 }
 
