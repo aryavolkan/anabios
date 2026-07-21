@@ -781,7 +781,30 @@ mod tests {
 
     #[test]
     fn starter_library_has_all_starters() {
-        assert_eq!(starter_library().len(), 9);
+        assert_eq!(starter_library().len(), 11);
+    }
+
+    #[test]
+    fn spiner_kites_standoff_ring() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let ctx_at = |d: f32| EvalContext {
+            other_distance: d,
+            other_dir: glam::Vec2::new(1.0, 0.0),
+            ..dummy_ctx(&g)
+        };
+        // Far target (dist 8): approach, hold fire.
+        let a = evaluate(&starter_spiner(), ctx_at(8.0), &mut stack);
+        assert!(a.move_x > 0.0, "far target → close in: {:?}", a);
+        assert!(a.fire_intent <= 0.0, "far target → no shot: {:?}", a);
+        // Standoff ring (dist 5): hold position, fire.
+        let a = evaluate(&starter_spiner(), ctx_at(5.0), &mut stack);
+        assert!(a.move_x.abs() < 1e-6, "in the ring → no approach/flee: {:?}", a);
+        assert!(a.fire_intent > 0.5, "in the ring → fire: {:?}", a);
+        // Crowded target (dist 2): back off, still firing.
+        let a = evaluate(&starter_spiner(), ctx_at(2.0), &mut stack);
+        assert!(a.move_x < 0.0, "crowded → kite away: {:?}", a);
+        assert!(a.fire_intent > 0.5, "crowded → defensive fire: {:?}", a);
     }
 
     #[test]

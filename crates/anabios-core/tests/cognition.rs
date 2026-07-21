@@ -49,8 +49,10 @@ fn cognitive_scenario_is_self_consistent() {
 // trade routes branch (FORMAT_VERSION 8). Those features are opt-in and off in
 // this scenario, so cognition behavior/trajectory is unchanged — the moved
 // hashes are pure serialized-layout growth from the merged-in fields.
+// Refreshed 2026-07-19 (weapons): Spines/Jaws module types join the
+// structural-mutation pool (random_any 9 → 11 types) — trajectory drift only.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xa965cff3fb2b08b3), (100, 0x6fad7c516f057cdd), (300, 0xbbe20d39c5d3331c)];
+    &[(0, 0xa965cff3fb2b08b3), (100, 0x6fad7c516f057cdd), (300, 0xd91851020e8558d4)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

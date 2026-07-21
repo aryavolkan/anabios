@@ -518,7 +518,8 @@ impl SpeciesAggTable {
                     }
                 }
             }
-            e.weapon_sum += module::effective_weapon(modules).map(|(d, _)| d).unwrap_or(0.0) as f64;
+            e.weapon_sum +=
+                module::effective_weapon(modules).map(|w| w.damage).unwrap_or(0.0) as f64;
             e.armor_sum += module::effective_armor_protection(modules) as f64;
         }
         self.active.sort_unstable();

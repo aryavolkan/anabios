@@ -664,6 +664,34 @@ impl Simulation {
         out
     }
 
+    /// Attacker→target position pairs for every combat hit on the most recent
+    /// tick, flattened as [from1, to1, from2, to2, ...]. Lets the viewer draw
+    /// streaks, which makes ranged (Spines) fire visible at standoff range.
+    /// Read-only view of a scratch buffer that is not serialized.
+    #[func]
+    fn combat_streaks(&self) -> PackedVector2Array {
+        let mut out = PackedVector2Array::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for (from, to, _) in &w.combat_streaks {
+            out.push(Vector2::new(from.x, from.y));
+            out.push(Vector2::new(to.x, to.y));
+        }
+        out
+    }
+
+    /// One color per combat streak (same order as `combat_streaks` pairs),
+    /// tinted by the attacker's genome hue so volleys read as belonging to a
+    /// species. Alpha is managed GDScript-side for the fade-out trail.
+    #[func]
+    fn combat_streak_colors(&self) -> PackedColorArray {
+        let mut out = PackedColorArray::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for (_, _, hue) in &w.combat_streaks {
+            out.push(hsv_to_color(*hue, 0.75, 1.0));
+        }
+        out
+    }
+
     /// Body rotation (radians) per alive agent, from velocity direction.
     /// Non-moving agents keep rotation 0. Same order as `alive_positions`.
     #[func]
@@ -682,17 +710,17 @@ impl Simulation {
     /// Number of module types (for the GDScript layer loop).
     #[func]
     fn module_type_count(&self) -> i64 {
-        9
+        11
     }
 
     /// All module glyphs in ONE alive pass, bucketed by module type. Returns an
-    /// array of length `module_type_count()` (9); entry `t` is a
+    /// array of length `module_type_count()` (11); entry `t` is a
     /// `PackedVector2Array` of world positions for every module of type `t`.
     /// Read-only view — replaces nine separate `module_glyphs(t)` passes.
     #[func]
     fn module_glyphs_all(&self) -> Array<PackedVector2Array> {
         use anabios_core::genome::GenomeSlot;
-        let type_count = 9usize; // matches module_type_count()
+        let type_count = 11usize; // matches module_type_count()
         let mut buckets: Vec<PackedVector2Array> =
             (0..type_count).map(|_| PackedVector2Array::new()).collect();
         if let Some(w) = self.inner.as_ref() {

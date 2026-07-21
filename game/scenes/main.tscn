@@ -80,6 +80,20 @@ instance_count = 10000
 visible_instance_count = 0
 mesh = SubResource("QuadMesh_glyph")
 
+[sub_resource type="MultiMesh" id="MM_mod9"]
+transform_format = 0
+use_colors = true
+instance_count = 10000
+visible_instance_count = 0
+mesh = SubResource("QuadMesh_glyph")
+
+[sub_resource type="MultiMesh" id="MM_mod10"]
+transform_format = 0
+use_colors = true
+instance_count = 10000
+visible_instance_count = 0
+mesh = SubResource("QuadMesh_glyph")
+
 [sub_resource type="MultiMesh" id="MM_carcass"]
 transform_format = 0
 use_colors = true
@@ -88,6 +102,13 @@ visible_instance_count = 0
 mesh = SubResource("QuadMesh_glyph")
 
 [sub_resource type="MultiMesh" id="MM_flash"]
+transform_format = 0
+use_colors = true
+instance_count = 4096
+visible_instance_count = 0
+mesh = SubResource("QuadMesh_glyph")
+
+[sub_resource type="MultiMesh" id="MM_streak"]
 transform_format = 0
 use_colors = true
 instance_count = 4096
@@ -121,6 +142,10 @@ z_index = -5
 multimesh = SubResource("MM_flash")
 z_index = 5
 
+[node name="Streaks" type="MultiMeshInstance2D" parent="."]
+multimesh = SubResource("MM_streak")
+z_index = 4
+
 [node name="ModuleLayers" type="Node2D" parent="."]
 
 [node name="Layer0" type="MultiMeshInstance2D" parent="ModuleLayers"]
@@ -149,6 +174,12 @@ multimesh = SubResource("MM_mod7")
 
 [node name="Layer8" type="MultiMeshInstance2D" parent="ModuleLayers"]
 multimesh = SubResource("MM_mod8")
+
+[node name="Layer9" type="MultiMeshInstance2D" parent="ModuleLayers"]
+multimesh = SubResource("MM_mod9")
+
+[node name="Layer10" type="MultiMeshInstance2D" parent="ModuleLayers"]
+multimesh = SubResource("MM_mod10")
 
 [node name="UI" type="CanvasLayer" parent="."]
 

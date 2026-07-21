@@ -1,0 +1,58 @@
+name = "weapons-arena"
+seed = 0
+inventions_enabled = true
+# Well below saturation: the story here is weapon combat — stalkers, pack
+# hunters, and fast hunters clashing over a shared prey pool — not Malthusian
+# collapse.
+max_population = 500
+
+# Prey pool: a dense grazer herd at world center. Every predator in the arena
+# converges on this range, so hunting and inter-pack fights overlap.
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 140.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+
+# Secondary prey: a tighter herd-forming species northeast. Their clustering
+# draws pack hunters away from the center and creates a contested border.
+[[agents]]
+count = 24
+archetype = "herd"
+placement = { kind = "cluster", center_x = 700.0, center_y = 340.0, radius = 80.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+
+# Solitary ambush predators seeded inside the grazer range — instant predation
+# pressure and carcasses for scavengers from the first ticks.
+[[agents]]
+count = 10
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 150.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+
+# Coordinated pack hunters southwest. They broadcast on channel 0 before
+# firing, so hunts read as synchronized flashes on the southwest flank.
+[[agents]]
+count = 12
+archetype = "pack_hunter"
+placement = { kind = "cluster", center_x = 330.0, center_y = 700.0, radius = 90.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+
+# Fast cultural weapon hunters northeast, overlapping the herd species' range.
+# Their hunt-technique meme spreads socially while they chase down prey —
+# gene-culture coevolution in the middle of the arena's brawl.
+[[agents]]
+count = 12
+archetype = "fast_hunter"
+placement = { kind = "cluster", center_x = 700.0, center_y = 340.0, radius = 110.0 }
+[agents.traits]
+size = 0.65
+lifespan_bias = 1.0

@@ -151,6 +151,14 @@ pub struct World {
     /// `combat_damaged[t]` is true this tick).
     #[serde(skip)]
     pub combat_attacker: Vec<u32>,
+    /// Per-tick combat streak buffer for the viewer: `(attacker_pos,
+    /// target_pos, attacker_hue)` records by `combat_pass` and cleared at
+    /// the start of the next `interact_all`. The hue is the attacker's
+    /// genome `ColorHue` slot, so streaks tint to match the attacker's body
+    /// color. Scratch only — never read by the simulation, so it is skipped
+    /// by serialization like the other per-tick combat buffers.
+    #[serde(skip)]
+    pub combat_streaks: Vec<(crate::prelude::Vec2, crate::prelude::Vec2, f32)>,
 }
 
 /// Serde default for `World::max_population` (old snapshots lack the field).
@@ -224,6 +232,7 @@ impl World {
             codex_agg: crate::codex::SpeciesAggTable::default(),
             combat_damaged: Vec::new(),
             combat_attacker: Vec::new(),
+            combat_streaks: Vec::new(),
         }
     }
 

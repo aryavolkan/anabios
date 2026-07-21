@@ -111,6 +111,8 @@ Each agent owns a `SmallVec<[Module; 8]>` (typically 3–12 modules). Modules ar
 | `Sensor` | provides one channel of perception | type (vision/smell/heat/sound), radius, acuity |
 | `Mouth` | enables feeding | bite_size, diet_affinity (plant 0 ↔ meat 1) |
 | `Weapon` | inflicts damage on contact | damage, energy_cost |
+| `Spines` | inflicts damage at standoff range (3–8 units) | damage, energy_cost, range |
+| `Jaws` | inflicts heavy damage point-blank | damage, energy_cost |
 | `Armor` | reduces incoming damage | protection, mass_penalty |
 | `Storage` | increases energy capacity | capacity |
 | `Communicator` | emits/receives meme signals | range, channel_id |

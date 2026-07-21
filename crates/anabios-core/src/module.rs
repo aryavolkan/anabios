@@ -15,9 +15,11 @@
 //! type that currently just pays upkeep. Every module pays per-tick
 //! upkeep when present.
 //!
-//! All parameters are `f32` in `[0, 1]` and are perturbed by Gaussian
-//! mutation during reproduction. Whole-module mutation (add, delete,
-//! duplicate, replace) is also applied with low probability.
+//! Most parameters are `f32` in `[0, 1]`; combat parameters (weapon damage
+//! and energy cost, armor protection) evolve over wider ranges — see
+//! `DAMAGE_MAX` / `ENERGY_COST_MAX` / `PROTECTION_MAX`. All parameters are
+//! perturbed by Gaussian mutation during reproduction. Whole-module mutation
+//! (add, delete, duplicate, replace) is also applied with low probability.
 
 use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
@@ -42,6 +44,31 @@ pub const REPLACE_MODULE_PROB: f32 = 0.01;
 
 /// Gaussian sigma when perturbing a single module parameter.
 pub const PARAM_SIGMA: f32 = 0.05;
+
+/// Upper bounds for combat-relevant module parameters under mutation. Most
+/// module parameters live in `[0, 1]`, but founder kits carry weapon damage
+/// of 4–14 and costs of 1–2 — clamping those to 1.0 on the first mutation
+/// would collapse every armed lineage's damage within a generation instead
+/// of letting it evolve. These caps keep combat traits perturbable around
+/// their founder values (and let armor meaningfully contest them).
+pub const DAMAGE_MAX: f32 = 16.0;
+pub const ENERGY_COST_MAX: f32 = 4.0;
+pub const PROTECTION_MAX: f32 = 8.0;
+
+/// Effective reach (world units) of each weapon type in `combat_pass`.
+/// `Weapon` fights at contact range; `Jaws` is point-blank; `Spines` is the
+/// only weapon that outranges contact, mapping its `[0, 1]` `range` param
+/// onto `[SPINES_MIN_RANGE, SPINES_MAX_RANGE]`.
+pub const WEAPON_RANGE: f32 = 2.0;
+pub const JAWS_RANGE: f32 = 1.2;
+pub const SPINES_MIN_RANGE: f32 = 3.0;
+pub const SPINES_MAX_RANGE: f32 = 8.0;
+
+/// Map a `Spines.range` parameter to its effective reach in world units.
+#[inline]
+pub fn effective_spines_range(range: f32) -> f32 {
+    SPINES_MIN_RANGE + (SPINES_MAX_RANGE - SPINES_MIN_RANGE) * range.clamp(0.0, 1.0)
+}
 
 /// Sensor channel type. Vision sees plants and other agents; Smell gates
 /// pheromone perception (`has_smell` → `SensePheromone` reads). Heat and
@@ -104,6 +131,14 @@ pub enum Module {
     /// (reserved: `viability` for mating-cost modulation, `brood_size_bias`
     /// for multi-offspring births); the module only pays upkeep.
     Reproductive { viability: f32, brood_size_bias: f32 },
+    /// Ranged weapon: fires at the nearest other-species agent out to
+    /// `effective_spines_range(range)` world units — well beyond `Weapon`'s
+    /// contact range — for lower damage and a higher energy cost. `range`
+    /// stays in `[0, 1]` so parameter mutation remains meaningful.
+    Spines { damage: f32, energy_cost: f32, range: f32 },
+    /// Heavy melee weapon: short reach (`JAWS_RANGE`) but the highest
+    /// damage per hit in the arsenal, at the highest energy cost.
+    Jaws { damage: f32, energy_cost: f32 },
 }
 
 /// Discriminant tag — useful when generating a random module or checking
@@ -120,6 +155,8 @@ pub enum ModuleType {
     Communicator = 6,
     Pheromone = 7,
     Reproductive = 8,
+    Spines = 9,
+    Jaws = 10,
 }
 
 impl Module {
@@ -131,6 +168,8 @@ impl Module {
             Module::Sensor { .. } => ModuleType::Sensor,
             Module::Mouth { .. } => ModuleType::Mouth,
             Module::Weapon { .. } => ModuleType::Weapon,
+            Module::Spines { .. } => ModuleType::Spines,
+            Module::Jaws { .. } => ModuleType::Jaws,
             Module::Armor { .. } => ModuleType::Armor,
             Module::Storage { .. } => ModuleType::Storage,
             Module::Communicator { .. } => ModuleType::Communicator,
@@ -148,6 +187,8 @@ impl Module {
             Module::Sensor { radius, acuity, .. } => 0.5 * (radius + acuity),
             Module::Mouth { bite_size, .. } => *bite_size,
             Module::Weapon { damage, .. } => *damage,
+            Module::Spines { damage, range, .. } => 0.5 * (damage + range),
+            Module::Jaws { damage, .. } => *damage,
             Module::Armor { protection, mass_penalty } => 0.5 * (protection + mass_penalty),
             Module::Storage { capacity } => *capacity,
             Module::Communicator { range, .. } => *range,
@@ -176,6 +217,10 @@ impl Module {
             },
             ModuleType::Mouth => Module::Mouth { bite_size: p(rng), diet_affinity: p(rng) },
             ModuleType::Weapon => Module::Weapon { damage: p(rng), energy_cost: p(rng) },
+            ModuleType::Spines => {
+                Module::Spines { damage: p(rng), energy_cost: p(rng), range: p(rng) }
+            }
+            ModuleType::Jaws => Module::Jaws { damage: p(rng), energy_cost: p(rng) },
             ModuleType::Armor => Module::Armor { protection: p(rng), mass_penalty: p(rng) },
             ModuleType::Storage => Module::Storage { capacity: p(rng) },
             ModuleType::Communicator => {
@@ -200,7 +245,7 @@ impl Module {
     /// Construct a random module of any type. Used by the structural
     /// "add" and "replace" mutation operators.
     pub fn random_any(rng: &mut Rng) -> Module {
-        let t = match (rng.f32_unit() * 9.0) as u8 {
+        let t = match (rng.f32_unit() * 11.0) as u8 {
             0 => ModuleType::Locomotor,
             1 => ModuleType::Sensor,
             2 => ModuleType::Mouth,
@@ -209,7 +254,9 @@ impl Module {
             5 => ModuleType::Storage,
             6 => ModuleType::Communicator,
             7 => ModuleType::Pheromone,
-            _ => ModuleType::Reproductive,
+            8 => ModuleType::Reproductive,
+            9 => ModuleType::Spines,
+            _ => ModuleType::Jaws,
         };
         Module::random_of_type(t, rng)
     }
@@ -238,6 +285,37 @@ pub fn predator_kit() -> ModuleList {
         Module::Sensor { sensor_type: SensorType::Vision, radius: 0.8, acuity: 0.7 },
         Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 },
         Module::Weapon { damage: 8.0, energy_cost: 1.0 },
+    ]
+}
+
+/// A ranged-hunter kit: keen eyes, a carnivore mouth, and a `Spines` volley
+/// weapon that kills from beyond contact range. Speed 0.65 outspeeds grazers
+/// (0.6) and bruisers (0.5) so the kiting program can hold its standoff ring,
+/// while stalkers (0.7) still run it down — a rock-paper-scissors balance.
+/// Includes `Reproductive` so the lineage can establish and evolve (unlike
+/// the founder predator kits). Used by the `spiner` scenario archetype.
+pub fn spiner_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.65, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.9, acuity: 0.75 },
+        Module::Mouth { bite_size: 0.5, diet_affinity: 1.0 },
+        Module::Spines { damage: 4.0, energy_cost: 1.5, range: 0.8 },
+        Module::Reproductive { viability: 0.6, brood_size_bias: 0.5 },
+    ]
+}
+
+/// A heavy-assault kit: slow, armored, and equipped with `Jaws` — the
+/// hardest-hitting but shortest-reaching weapon in the arsenal. Includes
+/// `Reproductive` so the lineage can establish and evolve. Used by the
+/// `bruiser` scenario archetype.
+pub fn bruiser_kit() -> ModuleList {
+    smallvec![
+        Module::Locomotor { max_speed: 0.5, terrain_affinity: 0.5 },
+        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.7, acuity: 0.6 },
+        Module::Mouth { bite_size: 0.7, diet_affinity: 1.0 },
+        Module::Jaws { damage: 14.0, energy_cost: 2.0 },
+        Module::Armor { protection: 1.0, mass_penalty: 0.2 },
+        Module::Reproductive { viability: 0.6, brood_size_bias: 0.5 },
     ]
 }
 
@@ -347,17 +425,38 @@ pub fn effective_diet_carnivory(modules: &ModuleList) -> f32 {
     })
 }
 
-/// Damage + energy_cost of the highest-damage `Weapon`, or `None` if the
-/// agent has no `Weapon` module (combat gating, design §3.5).
+/// The strongest weapon an agent carries: damage, per-shot energy cost, and
+/// effective reach (world units), resolved across all weapon module types.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WeaponStats {
+    pub damage: f32,
+    pub energy_cost: f32,
+    pub range: f32,
+}
+
+/// Stats of the highest-damage weapon module (`Weapon`, `Spines`, or
+/// `Jaws`), or `None` if the agent is unarmed (combat gating, design §3.5).
 #[inline]
-pub fn effective_weapon(modules: &ModuleList) -> Option<(f32, f32)> {
+pub fn effective_weapon(modules: &ModuleList) -> Option<WeaponStats> {
     modules
         .iter()
         .filter_map(|m| match m {
-            Module::Weapon { damage, energy_cost } => Some((*damage, *energy_cost)),
+            Module::Weapon { damage, energy_cost } => Some(WeaponStats {
+                damage: *damage,
+                energy_cost: *energy_cost,
+                range: WEAPON_RANGE,
+            }),
+            Module::Spines { damage, energy_cost, range } => Some(WeaponStats {
+                damage: *damage,
+                energy_cost: *energy_cost,
+                range: effective_spines_range(*range),
+            }),
+            Module::Jaws { damage, energy_cost } => {
+                Some(WeaponStats { damage: *damage, energy_cost: *energy_cost, range: JAWS_RANGE })
+            }
             _ => None,
         })
-        .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))
+        .max_by(|a, b| a.damage.partial_cmp(&b.damage).unwrap_or(std::cmp::Ordering::Equal))
 }
 
 /// Max `Pheromone.strength`, or `0.0` if the agent has no `Pheromone` module.
@@ -395,13 +494,17 @@ pub fn effective_communicator_range(modules: &ModuleList) -> f32 {
 }
 
 /// Perturb every parameter of `module` with probability `MUTATE_PARAM_PROB`,
-/// drawing perturbations from `N(0, PARAM_SIGMA)` and clamping back into
-/// `[0, 1]`. Per-slot decisions consume the RNG in a fixed order so the
-/// result is deterministic.
+/// drawing perturbations from `N(0, PARAM_SIGMA)` and clamping back into its
+/// range — `[0, 1]` for most parameters, `[0, *_MAX]` for combat parameters
+/// (see `DAMAGE_MAX`). Per-slot decisions consume the RNG in a fixed order
+/// so the result is deterministic.
 pub fn mutate_params(module: &mut Module, rng: &mut Rng) {
     fn perturb(v: &mut f32, rng: &mut Rng) {
+        perturb_max(v, rng, 1.0);
+    }
+    fn perturb_max(v: &mut f32, rng: &mut Rng, max: f32) {
         if rng.f32_unit() < MUTATE_PARAM_PROB {
-            *v = (*v + rng.gaussian(0.0, PARAM_SIGMA)).clamp(0.0, 1.0);
+            *v = (*v + rng.gaussian(0.0, PARAM_SIGMA)).clamp(0.0, max);
         }
     }
     match module {
@@ -418,11 +521,20 @@ pub fn mutate_params(module: &mut Module, rng: &mut Rng) {
             perturb(diet_affinity, rng);
         }
         Module::Weapon { damage, energy_cost } => {
-            perturb(damage, rng);
-            perturb(energy_cost, rng);
+            perturb_max(damage, rng, DAMAGE_MAX);
+            perturb_max(energy_cost, rng, ENERGY_COST_MAX);
+        }
+        Module::Spines { damage, energy_cost, range } => {
+            perturb_max(damage, rng, DAMAGE_MAX);
+            perturb_max(energy_cost, rng, ENERGY_COST_MAX);
+            perturb(range, rng);
+        }
+        Module::Jaws { damage, energy_cost } => {
+            perturb_max(damage, rng, DAMAGE_MAX);
+            perturb_max(energy_cost, rng, ENERGY_COST_MAX);
         }
         Module::Armor { protection, mass_penalty } => {
-            perturb(protection, rng);
+            perturb_max(protection, rng, PROTECTION_MAX);
             perturb(mass_penalty, rng);
         }
         Module::Storage { capacity } => {
@@ -550,6 +662,74 @@ mod tests {
         let small = Module::Locomotor { max_speed: 0.1, terrain_affinity: 0.5 };
         let big = Module::Locomotor { max_speed: 1.0, terrain_affinity: 0.5 };
         assert!(big.upkeep() > small.upkeep());
+    }
+
+    #[test]
+    fn effective_weapon_picks_highest_damage_across_types() {
+        let mut k = starter_kit();
+        assert!(effective_weapon(&k).is_none(), "unarmed starter kit");
+        k.push(Module::Weapon { damage: 8.0, energy_cost: 1.0 });
+        k.push(Module::Spines { damage: 4.0, energy_cost: 1.5, range: 0.8 });
+        k.push(Module::Jaws { damage: 14.0, energy_cost: 2.0 });
+        let w = effective_weapon(&k).expect("armed");
+        assert_eq!(w.damage, 14.0, "Jaws out-damage Weapon and Spines");
+        assert_eq!(w.range, JAWS_RANGE, "the selected weapon's own reach is used");
+    }
+
+    #[test]
+    fn spines_range_maps_unit_interval() {
+        assert_eq!(effective_spines_range(0.0), SPINES_MIN_RANGE);
+        assert_eq!(effective_spines_range(1.0), SPINES_MAX_RANGE);
+        let mid = effective_spines_range(0.5);
+        assert!(mid > SPINES_MIN_RANGE && mid < SPINES_MAX_RANGE);
+        // Reach ordering is a design invariant: Spines outranges contact
+        // weapons, Jaws is the short-reach heavy option.
+        let spines = effective_weapon(&smallvec![Module::Spines {
+            damage: 4.0,
+            energy_cost: 1.5,
+            range: 0.0
+        }])
+        .unwrap();
+        let contact =
+            effective_weapon(&smallvec![Module::Weapon { damage: 8.0, energy_cost: 1.0 }]).unwrap();
+        let jaws =
+            effective_weapon(&smallvec![Module::Jaws { damage: 14.0, energy_cost: 2.0 }]).unwrap();
+        assert!(spines.range > contact.range);
+        assert!(jaws.range < contact.range);
+    }
+
+    #[test]
+    fn new_weapon_kits_are_armed_and_fertile() {
+        let sp = spiner_kit();
+        assert!(has(&sp, ModuleType::Spines) && has(&sp, ModuleType::Reproductive));
+        assert!(effective_weapon(&sp).unwrap().range > WEAPON_RANGE);
+        let br = bruiser_kit();
+        assert!(has(&br, ModuleType::Jaws) && has(&br, ModuleType::Armor));
+        assert!(has(&br, ModuleType::Reproductive));
+    }
+
+    #[test]
+    fn mutation_preserves_founder_combat_param_scale() {
+        // Founder kits carry damage 4–14 / costs 1–2. Before the combat caps,
+        // the first mutation clamped them to 1.0, collapsing every armed
+        // lineage's damage within a generation.
+        let mut rng = Rng::from_seed(42);
+        let mut jaws = Module::Jaws { damage: 14.0, energy_cost: 2.0 };
+        for _ in 0..20 {
+            mutate_params(&mut jaws, &mut rng);
+        }
+        let Module::Jaws { damage, energy_cost } = jaws else { unreachable!() };
+        assert!(
+            damage > 1.0 && damage <= DAMAGE_MAX,
+            "damage evolves around the founder scale: {damage}"
+        );
+        assert!(energy_cost > 1.0 && energy_cost <= ENERGY_COST_MAX);
+        let mut armor = Module::Armor { protection: 1.0, mass_penalty: 0.2 };
+        for _ in 0..20 {
+            mutate_params(&mut armor, &mut rng);
+        }
+        let Module::Armor { protection, .. } = armor else { unreachable!() };
+        assert!((0.0..=PROTECTION_MAX).contains(&protection));
     }
 
     #[test]

@@ -47,9 +47,25 @@ func _run(path: String, wait_frames: int) -> void:
 			var sim2 := main.get_node_or_null("Simulation")
 			var insp := main.get_node_or_null("UI/Inspector")
 			if sim2 != null and insp != null:
-				var id: int = int(sim2.call("agent_near", Vector2(512, 512), 400.0))
+				var pin_pos := Vector2(512, 512)
+				if OS.has_environment("ANABIOS_INSPECT_X"):
+					pin_pos = Vector2(
+						float(OS.get_environment("ANABIOS_INSPECT_X")),
+						float(OS.get_environment("ANABIOS_INSPECT_Y")))
+				var id: int = int(sim2.call("agent_near", pin_pos, 400.0))
 				if id >= 0:
 					insp.call("pin", id)
+		# Optionally override the camera: ANABIOS_CAM_X/_CAM_Y take world coords,
+		# ANABIOS_CAM_ZOOM takes a zoom factor (1.0 = 1 world unit per pixel).
+		if OS.has_environment("ANABIOS_CAM_ZOOM"):
+			var cam := main.get_node_or_null("Camera2D")
+			if cam != null:
+				var z := float(OS.get_environment("ANABIOS_CAM_ZOOM"))
+				cam.set("zoom", Vector2(z, z))
+				if OS.has_environment("ANABIOS_CAM_X"):
+					cam.set("position", Vector2(
+						float(OS.get_environment("ANABIOS_CAM_X")),
+						float(OS.get_environment("ANABIOS_CAM_Y"))))
 	for _i in wait_frames:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
