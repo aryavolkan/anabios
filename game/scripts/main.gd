@@ -44,6 +44,28 @@ func _ready() -> void:
 	carcasses.texture = disc
 	flashes.texture = disc
 	# streaks keep the raw quad: a solid line reads as a crisp shot streak.
+	_make_wrap_clones()
+
+# The world is a torus but rendering is not: a camera near a seam sees agents
+# vanish at the edge. Duplicate every agent layer into the 8 neighboring world
+# offsets; each clone shares its source's MultiMesh and texture, so per-frame
+# instance updates propagate with zero extra CPU work.
+func _make_wrap_clones() -> void:
+	var world: float = sim.world_size()
+	var sources: Array[MultiMeshInstance2D] = [bodies, carcasses, flashes, streaks]
+	for child in module_layers.get_children():
+		sources.append(child)
+	for src in sources:
+		for gy in range(-1, 2):
+			for gx in range(-1, 2):
+				if gx == 0 and gy == 0:
+					continue
+				var clone := MultiMeshInstance2D.new()
+				clone.multimesh = src.multimesh
+				clone.texture = src.texture
+				clone.position = Vector2(gx * world, gy * world)
+				add_child(clone)
+				move_child(clone, src.get_index())
 
 # Give every HUD panel the shared instrument theme, and make the top-left
 # readout legible over any terrain with a dark outline.

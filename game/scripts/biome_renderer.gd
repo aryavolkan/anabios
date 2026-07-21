@@ -15,6 +15,11 @@ var _last_mode: int = -999   # last (channel, or -1 biome, or -2 optimum) drawn
 # redraw less often. Default res (128) keeps the original 6-frame cadence.
 var _redraw_interval := REDRAW_EVERY
 
+# The world is a torus, so the ground is tiled 3x3 around the origin copy:
+# a camera near a seam (or zoomed out past a world edge) sees the terrain wrap
+# instead of the empty backdrop. All nine sprites share this node's ImageTexture.
+var _tiles: Array[Sprite2D] = []
+
 func _ready() -> void:
 	centered = false
 	position = Vector2.ZERO
@@ -22,6 +27,15 @@ func _ready() -> void:
 	# Slightly dim + cool the ground so organisms and overlays read clearly on
 	# top and the terrain harmonizes with the dark instrument HUD.
 	modulate = Color(0.78, 0.82, 0.88)
+	for gy in range(-1, 2):
+		for gx in range(-1, 2):
+			if gx == 0 and gy == 0:
+				continue
+			var tile := Sprite2D.new()
+			tile.centered = false
+			tile.z_index = -10
+			add_child(tile)
+			_tiles.append(tile)
 	_setup(int(sim.biome_resolution()))
 
 # (Re)build the texture at `res`. Needed because the scenario loads AFTER this
@@ -38,6 +52,17 @@ func _setup(res: int) -> void:
 	texture = _tex
 	var world: float = sim.world_size()
 	scale = Vector2(world / _res, world / _res)
+	# Neighbor tiles are children (they inherit the wrap scale), each offset by
+	# whole worlds in biome-pixel units.
+	var i := 0
+	for gy in range(-1, 2):
+		for gx in range(-1, 2):
+			if gx == 0 and gy == 0:
+				continue
+			var tile := _tiles[i]
+			i += 1
+			tile.texture = _tex
+			tile.position = Vector2(gx * _res, gy * _res)
 	_redraw_interval = REDRAW_EVERY * maxi(1, _res / 128)
 	_last_mode = -999  # force an immediate redraw
 
