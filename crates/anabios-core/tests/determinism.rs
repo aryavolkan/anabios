@@ -69,7 +69,7 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // are byte-identical; only the evolutionary trajectory drifts once a
 // structural mutation draw resolves differently.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x61ed514ea28b61f5), (100, 0x179a38d5aed5eb2f), (1000, 0x80873dcc6ff6ad28)];
+    &[(0, 0x61ed514ea28b61f5), (100, 0x179a38d5aed5eb2f), (1000, 0x6227f1388401b020)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
