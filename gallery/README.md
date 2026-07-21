@@ -21,7 +21,8 @@ of their home terrain, where `TRADE_RANGE` 10.0 lets border neighbors
 transact. Successful swaps render as trade routes: thin links tinted by the
 initiating trader's hue, held on a 24-tick fading trail so recurring trades
 along species borders accumulate into visible lanes (thinner and dimmer than
-the 8-tick combat streaks). Capture env: `ANABIOS_SEED=424242
+the 8-tick combat streaks). The HUD tallies the run's cumulative swaps
+(`· N trades`). Capture env: `ANABIOS_SEED=424242
 ANABIOS_CAM_X=948 ANABIOS_CAM_Y=60 ANABIOS_CAM_ZOOM=2`. The ground and agent
 layers wrap across the seam, so the junction reads as one continuous
 landscape.
