@@ -152,9 +152,5 @@ fn geographic_trade_turnover_is_ongoing() {
         }
     }
     assert!(early > 0, "expected trades in ticks 0..400, got {early}");
-    assert!(
-        late > early / 4,
-        "expected trade to stay alive late: early={early}, late={late}"
-    );
+    assert!(late > early / 4, "expected trade to stay alive late: early={early}, late={late}");
 }
-
