@@ -30,7 +30,7 @@ clearly — the full-world shots above show them only as faint slivers.
 
 | File | Tick | Capture env | What you're seeing |
 |---|---|---|---|
-| armsrace-volley-closeup.png | 21 | `ZOOM=4.0 X=650 Y=340 TICKS=14 FRAMES=6` | The opening spiner volley up close: three bright cyan tracers stretch from the spiner pack (sp4) across the standoff gap into the herd — the ranged Spines kill *before* contact weapons can close. This is exactly the behavior that was invisible in the viewer before the streak layer landed. |
+| armsrace-volley-closeup.png | 27 | `ZOOM=5.0 X=690 Y=335 TICKS=21 FRAMES=5` | The opening spiner volley up close: four bright cyan tracers stretch from the spiner pack (sp4), each ending on a yellow just-hit target, converging on the clustered herd prey below — the ranged Spines kill *before* contact weapons can close. This is exactly the behavior that was invisible in the viewer before the streak layer landed. |
 | armsrace-brawl-closeup.png | 109 | `ZOOM=3.6 X=660 Y=320 TICKS=100 FRAMES=8` | Why the tracers matter: once the lineages collide, the melee is a knot of mixed body plans — cyan spiner, magenta Jaws bruiser, orange/green glyphs — fighting at point-blank. The streaks tint to each attacker's species hue, so ranged fire stays legible even in the scrum. |
 
 ## classic scenarios
