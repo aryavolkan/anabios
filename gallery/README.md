@@ -8,7 +8,9 @@ exactly `ANABIOS_SHOT_TICKS + ANABIOS_SHOT_FRAMES (+1)` ticks — the Tick
 column below is the actual HUD tick in each shot. `ANABIOS_SEED` overrides
 the viewer's default seed (12345); geographic-trade is shot on its tuned
 scenario seed 424242 (its four-way terrain junction hub is seed-specific),
-the other scenarios on the viewer default.
+the other scenarios on the viewer default. Captures run windowed (not
+`--headless`): the harness reads the viewport texture after
+`frame_post_draw`, which never completes on the dummy renderer.
 
 ## geographic-trade (border-seeking terrain pull + marketplace trade reach)
 
@@ -16,14 +18,19 @@ Four goods species (Salt/Desert, Obsidian/Rock, Amber/Forest, Spice/Grass)
 spawn INTERMIXED in one cluster on a four-way terrain junction that straddles
 the torus seam at (948, 4); the `terrain_habitat` pull sorts them onto borders
 of their home terrain, where `TRADE_RANGE` 10.0 lets border neighbors
-transact. Capture env: `ANABIOS_SEED=424242 ANABIOS_CAM_X=948
-ANABIOS_CAM_Y=60 ANABIOS_CAM_ZOOM=2`. The ground and agent layers wrap across
-the seam, so the junction reads as one continuous landscape.
+transact. Successful swaps render as trade routes: thin links tinted by the
+initiating trader's hue, held on a 24-tick fading trail so recurring trades
+along species borders accumulate into visible lanes (thinner and dimmer than
+the 8-tick combat streaks). Capture env: `ANABIOS_SEED=424242
+ANABIOS_CAM_X=948 ANABIOS_CAM_Y=60 ANABIOS_CAM_ZOOM=2`. The ground and agent
+layers wrap across the seam, so the junction reads as one continuous
+landscape.
 
 | File | Tick | What you're seeing |
 |---|---|---|
-| geotrade-t041-mixed.png | 41 | Opening state: 962 agents of all four lineages intermixed in one swarm on the junction; the first cross-species `Trade` has already latched (t=2, sp3). |
+| geotrade-t041-mixed.png | 41 | Opening state: 962 agents of all four lineages intermixed in one swarm on the junction; the first cross-species `Trade` has already latched (t=2, sp3) and routes thread the swarm core. |
 | geotrade-t461-sorted.png | 461 | Sorting underway: the swarm has spread along the forest band and terrain borders; `DowryBirth: 47` and counting — dowry-gated reproduction running on traded goods. Population growing (1,002 alive). |
+| geotrade-t461-routes.png | 461 | Close-up (zoom 4) of the same tick: trade-route lanes lighting the species borders — each link is one cross-species swap, tinted by the initiating trader. |
 | geotrade-t868-economy.png | 868 | Mature border economy: `DowryBirth: 72`, `NichePartition: 10`; energy declining (E=25-42) as the ~900 agents press the junction's carrying capacity. |
 
 ## weapons-arena (new scenario: stalkers + pack hunters + fast hunters vs herds)
