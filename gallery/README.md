@@ -23,6 +23,35 @@ with the same env vars. Camera close-ups use `ANABIOS_CAM_ZOOM/_CAM_X/_CAM_Y`.
 | armsrace-t3000-evolved.png | 3091 | End state: 162 species, 171 speciations, a dense migratory swarm sweeping the eastern half of the world. |
 | armsrace-t160-inspector.png | 201 | Inspector pinned on a bruiser (id 117, species 5): `Jaws` + `Armor` in its six-module body plan. |
 
+### combat-streak close-ups (feature: attacker→target tracers for ranged fire)
+
+Camera zoomed onto the action so the [combat streaks](../game/scripts/main.gd) read
+clearly — the full-world shots above show them only as faint slivers. Ranged fire
+in this scenario is concentrated in the opening spiner skirmish (sp4's
+`PackHunting` at t=19 and `CombatRaid` at t=27); later fights are contact-weapon
+only, so both close-ups sit early.
+
+| File | Tick | Capture env | What you're seeing |
+|---|---|---|---|
+| armsrace-t027-volley-closeup.png | 27 | `ZOOM=5.0 X=690 Y=335 TICKS=21 FRAMES=5` | The opening spiner volley up close: three thin cyan tracers stretch from the kiting spiner pack (sp4) into the herd prey below, one ending on a yellow just-hit flash — the ranged Spines kill *before* contact weapons can close. This is exactly the behavior that was invisible in the viewer before the streak layer landed. |
+| armsrace-t029-raid-closeup.png | 29 | `ZOOM=4.5 X=695 Y=340 TICKS=27 FRAMES=1` | Moments after the `CombatRaid sp=4` (t=27, top of the log): two cyan tracers end on yellow hit flashes as the raiders finish their volley. The streaks tint to the attacker's species hue, which is what keeps ranged fire legible once lineages mix. |
+
+(`ZOOM`/`X`/`Y` are `ANABIOS_CAM_*`; `TICKS`/`FRAMES` are `ANABIOS_SHOT_*`.)
+
+Reproduce from `game/` — needs the real renderer, `--headless` hangs at
+`frame_post_draw` under the dummy driver:
+
+```
+ANABIOS_SHOT=out.png ANABIOS_SCENARIO="res://../scenarios/weapons-arms-race.toml" \
+  ANABIOS_CAM_ZOOM=4.5 ANABIOS_CAM_X=695 ANABIOS_CAM_Y=340 \
+  ANABIOS_SHOT_TICKS=27 ANABIOS_SHOT_FRAMES=1 \
+  godot --path . res://scenes/main.tscn
+```
+
+The HUD tick lands a few ticks past `ANABIOS_SHOT_TICKS` because the sim keeps
+running at 1x during the warm-up/wait frames, and streaks live only
+`STREAK_TTL` (8) ticks — keep `FRAMES` small when hunting tracers.
+
 ## classic scenarios
 
 | File | Tick | What you're seeing |
