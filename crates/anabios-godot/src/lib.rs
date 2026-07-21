@@ -708,6 +708,15 @@ impl Simulation {
         out
     }
 
+    /// Cumulative count of successful cross-species swaps since scenario
+    /// load (observability only; not serialized). Feeds the HUD trade
+    /// counter, which stays accurate across step_n jumps that skip frames.
+    #[func]
+    fn total_trades(&self) -> i64 {
+        let Some(w) = self.inner.as_ref() else { return 0 };
+        w.total_trades as i64
+    }
+
     /// One color per trade route (same order as `trade_routes` pairs),
     /// tinted by the initiating trader's genome hue so routes read as
     /// belonging to a species. Alpha is managed GDScript-side for the

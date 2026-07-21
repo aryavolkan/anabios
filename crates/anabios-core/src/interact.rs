@@ -418,6 +418,7 @@ fn trade_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.inventory[t][give] += TRADE_UNIT;
         world.agents.inventory[t][recv] -= TRADE_UNIT;
         world.agents.inventory[i][recv] += TRADE_UNIT;
+        world.total_trades += 1;
         // Viewer scratch: draw a route from the initiating trader to its
         // partner, tinted by the initiator's genome hue.
         world.trade_routes.push((

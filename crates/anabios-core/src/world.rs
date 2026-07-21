@@ -167,6 +167,12 @@ pub struct World {
     /// skipped by serialization like the other per-tick buffers.
     #[serde(skip)]
     pub trade_routes: Vec<(crate::prelude::Vec2, crate::prelude::Vec2, f32)>,
+    /// Cumulative count of successful cross-species swaps over the run.
+    /// Observability only (HUD trade counter / tests) — never read by the
+    /// simulation, so it is skipped by serialization and does not affect
+    /// state hashes; it resets to zero on snapshot load.
+    #[serde(skip)]
+    pub total_trades: u64,
 }
 
 /// Serde default for `World::max_population` (old snapshots lack the field).
@@ -242,6 +248,7 @@ impl World {
             combat_attacker: Vec::new(),
             combat_streaks: Vec::new(),
             trade_routes: Vec::new(),
+            total_trades: 0,
         }
     }
 

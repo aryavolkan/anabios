@@ -153,4 +153,7 @@ fn geographic_trade_turnover_is_ongoing() {
     }
     assert!(early > 0, "expected trades in ticks 0..400, got {early}");
     assert!(late > early / 4, "expected trade to stay alive late: early={early}, late={late}");
+    // The cumulative counter (HUD observability) must equal the summed
+    // per-tick buffer — both count exactly one record per swap.
+    assert_eq!(w.total_trades, (early + late) as u64, "total_trades must track every swap");
 }
