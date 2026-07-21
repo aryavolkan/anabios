@@ -132,3 +132,29 @@ fn minimal_scenario_keeps_resources_off() {
     assert!(!w.resources_enabled);
     assert!(w.resources.is_empty());
 }
+
+/// Trade is ongoing, not a one-off: the per-tick trade-route buffer (which
+/// also feeds the viewer) keeps recording fresh trades late into the run.
+/// The codex `ResourceTraded` event is latched on the first trade, so event
+/// counts alone cannot prove turnover — this asserts the underlying swap
+/// flow stays alive across the whole run.
+#[test]
+fn geographic_trade_turnover_is_ongoing() {
+    let mut w = Scenario::parse_toml(GEO).expect("parse").instantiate();
+    let mut early = 0usize; // ticks 0..400
+    let mut late = 0usize; // ticks 400..800
+    for t in 0..800 {
+        step(&mut w);
+        if t < 400 {
+            early += w.trade_routes.len();
+        } else {
+            late += w.trade_routes.len();
+        }
+    }
+    assert!(early > 0, "expected trades in ticks 0..400, got {early}");
+    assert!(
+        late > early / 4,
+        "expected trade to stay alive late: early={early}, late={late}"
+    );
+}
+

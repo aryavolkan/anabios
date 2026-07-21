@@ -159,6 +159,14 @@ pub struct World {
     /// by serialization like the other per-tick combat buffers.
     #[serde(skip)]
     pub combat_streaks: Vec<(crate::prelude::Vec2, crate::prelude::Vec2, f32)>,
+    /// Per-tick trade route buffer for the viewer: `(trader_pos,
+    /// partner_pos, trader_hue)` records pushed by `trade_pass` and cleared
+    /// at the start of the next `interact_all`. The hue is the initiating
+    /// trader's genome `ColorHue` slot, so routes tint to match the trader's
+    /// body color. Scratch only — never read by the simulation, so it is
+    /// skipped by serialization like the other per-tick buffers.
+    #[serde(skip)]
+    pub trade_routes: Vec<(crate::prelude::Vec2, crate::prelude::Vec2, f32)>,
 }
 
 /// Serde default for `World::max_population` (old snapshots lack the field).
@@ -233,6 +241,7 @@ impl World {
             combat_damaged: Vec::new(),
             combat_attacker: Vec::new(),
             combat_streaks: Vec::new(),
+            trade_routes: Vec::new(),
         }
     }
 

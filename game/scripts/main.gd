@@ -24,6 +24,7 @@ const GLYPH_SIZE: float = 1.6
 @onready var carcasses: MultiMeshInstance2D = $Carcasses
 @onready var flashes: MultiMeshInstance2D = $Flashes
 @onready var streaks: MultiMeshInstance2D = $Streaks
+@onready var trade_routes: MultiMeshInstance2D = $TradeRoutes
 
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
@@ -52,7 +53,7 @@ func _ready() -> void:
 # instance updates propagate with zero extra CPU work.
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
-	var sources: Array[MultiMeshInstance2D] = [bodies, carcasses, flashes, streaks]
+	var sources: Array[MultiMeshInstance2D] = [bodies, carcasses, flashes, streaks, trade_routes]
 	for child in module_layers.get_children():
 		sources.append(child)
 	for src in sources:
@@ -93,6 +94,7 @@ func _process(_delta: float) -> void:
 	_refresh_carcasses()
 	_refresh_flashes()
 	_refresh_streaks()
+	_refresh_trade_routes()
 	var rate: String = "paused" if paused else ("%d×" % ticks_per_frame)
 	hud.text = "tick %d · %d alive · %s" % [sim.tick(), sim.alive_count(), rate]
 
@@ -190,6 +192,23 @@ func _refresh_flashes() -> void:
 const STREAK_TTL: int = 8
 var _streak_trail: Array = [] # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
 
+# Shortest-path delta on the torus: a segment recorded across the seam
+# (|delta| near world size) is really a short hop the other way. Drawing it
+# with the wrapped delta lets it extend just past the world edge, where the
+# wrap clones render its continuation seamlessly.
+func _torus_delta(from: Vector2, to: Vector2) -> Vector2:
+	var d: Vector2 = to - from
+	var world: float = sim.world_size()
+	if d.x > world * 0.5:
+		d.x -= world
+	elif d.x < -world * 0.5:
+		d.x += world
+	if d.y > world * 0.5:
+		d.y -= world
+	elif d.y < -world * 0.5:
+		d.y += world
+	return d
+
 func _refresh_streaks() -> void:
 	var segs: PackedVector2Array = sim.combat_streaks()
 	var cols: PackedColorArray = sim.combat_streak_colors()
@@ -209,13 +228,48 @@ func _refresh_streaks() -> void:
 	mm.visible_instance_count = m
 	for i in m:
 		var from: Vector2 = _streak_trail[i][0]
-		var to: Vector2 = _streak_trail[i][1]
-		var delta: Vector2 = to - from
+		var delta: Vector2 = _torus_delta(from, _streak_trail[i][1])
 		var len: float = maxf(delta.length(), 0.001)
-		var mid: Vector2 = (from + to) * 0.5
+		var mid: Vector2 = from + delta * 0.5
 		mm.set_instance_transform_2d(i, Transform2D(delta.angle(), Vector2(len, 1.0), 0.0, mid))
 		var c: Color = _streak_trail[i][3]
 		c.a = 0.85 * float(_streak_trail[i][2]) / float(STREAK_TTL)
+		mm.set_instance_color(i, c)
+
+# Trade routes: trader→partner segments for each successful cross-species
+# swap. Trades are short-range (TRADE_RANGE = 10) and recur along species
+# boundaries, so a long-lived trail accumulates them into visible lanes —
+# the economy reads as a network rather than isolated blips. Routes tint to
+# the initiating trader's genome hue; they are thinner and dimmer than
+# combat streaks so fire and trade stay distinguishable.
+const TRADE_TTL: int = 24
+var _trade_trail: Array = [] # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
+
+func _refresh_trade_routes() -> void:
+	var segs: PackedVector2Array = sim.trade_routes()
+	var cols: PackedColorArray = sim.trade_route_colors()
+	for i in segs.size() / 2:
+		_trade_trail.append([segs[2 * i], segs[2 * i + 1], TRADE_TTL, cols[i]])
+	var mm: MultiMesh = trade_routes.multimesh
+	# Perf: cap the trail at the multimesh budget, dropping the oldest first.
+	if _trade_trail.size() > mm.instance_count:
+		_trade_trail = _trade_trail.slice(_trade_trail.size() - mm.instance_count)
+	var kept: Array = []
+	for s in _trade_trail:
+		s[2] -= 1
+		if s[2] > 0:
+			kept.append(s)
+	_trade_trail = kept
+	var m: int = mini(_trade_trail.size(), mm.instance_count)
+	mm.visible_instance_count = m
+	for i in m:
+		var from: Vector2 = _trade_trail[i][0]
+		var delta: Vector2 = _torus_delta(from, _trade_trail[i][1])
+		var len: float = maxf(delta.length(), 0.001)
+		var mid: Vector2 = from + delta * 0.5
+		mm.set_instance_transform_2d(i, Transform2D(delta.angle(), Vector2(len, 0.5), 0.0, mid))
+		var c: Color = _trade_trail[i][3]
+		c.a = 0.6 * float(_trade_trail[i][2]) / float(TRADE_TTL)
 		mm.set_instance_color(i, c)
 
 func _refresh_module_layers() -> void:
