@@ -50,7 +50,8 @@ func _ready() -> void:
 # The world is a torus but rendering is not: a camera near a seam sees agents
 # vanish at the edge. Duplicate every agent layer into the 8 neighboring world
 # offsets; each clone shares its source's MultiMesh and texture, so per-frame
-# instance updates propagate with zero extra CPU work.
+# instance updates propagate with zero extra CPU work. Clones attach to Main
+# (never to ModuleLayers, whose children are indexed by module type).
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
 	var sources: Array[MultiMeshInstance2D] = [bodies, carcasses, flashes, streaks, trade_routes]
@@ -64,6 +65,7 @@ func _make_wrap_clones() -> void:
 				var clone := MultiMeshInstance2D.new()
 				clone.multimesh = src.multimesh
 				clone.texture = src.texture
+				clone.z_index = src.z_index
 				clone.position = Vector2(gx * world, gy * world)
 				add_child(clone)
 				move_child(clone, src.get_index())

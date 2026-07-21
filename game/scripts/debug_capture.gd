@@ -8,6 +8,13 @@ extends Node
 func _ready() -> void:
 	if not OS.has_environment("ANABIOS_SHOT"):
 		return
+	# Fail fast: the capture reads the viewport texture after frame_post_draw,
+	# which never completes on the headless dummy renderer — without this guard
+	# the run hangs forever instead of producing a shot.
+	if DisplayServer.get_name() == "headless":
+		push_error("[capture] ANABIOS_SHOT requires a windowed run; --headless cannot read back the viewport")
+		get_tree().quit(1)
+		return
 	# Optional scenario/overlay override (autoloads run before the main scene
 	# reads GameConfig), so we can screenshot any scenario headlessly.
 	if OS.has_environment("ANABIOS_SCENARIO"):
