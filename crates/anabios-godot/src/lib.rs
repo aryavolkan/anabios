@@ -708,6 +708,15 @@ impl Simulation {
         out
     }
 
+    /// Number of codex `EventType` variants. The viewer's chronicle panel
+    /// asserts its parallel name/color arrays against this at boot so a
+    /// forgotten GDScript-side update surfaces immediately instead of
+    /// rendering an event as "kind N".
+    #[func]
+    fn event_type_count(&self) -> i64 {
+        anabios_core::codex::EVENT_TYPE_COUNT as i64
+    }
+
     /// Cumulative count of successful cross-species swaps since scenario
     /// load (observability only; not serialized). Feeds the HUD trade
     /// counter, which stays accurate across step_n jumps that skip frames.

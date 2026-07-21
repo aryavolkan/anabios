@@ -168,6 +168,10 @@ pub struct World {
     #[serde(skip)]
     pub trade_routes: Vec<(crate::prelude::Vec2, crate::prelude::Vec2, f32)>,
     /// Cumulative count of successful cross-species swaps over the run.
+    /// Counts each initiator-side swap: `trade_pass` visits every agent as an
+    /// initiator, so a reciprocal pair (each is the other's nearest partner)
+    /// trades — and increments this — twice in one tick. It is a swap tally,
+    /// not a distinct-exchange tally.
     /// Observability only (HUD trade counter / tests) — never read by the
     /// simulation, so it is skipped by serialization and does not affect
     /// state hashes; it resets to zero on snapshot load.

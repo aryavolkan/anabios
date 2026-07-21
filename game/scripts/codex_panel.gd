@@ -46,6 +46,14 @@ var _cursor: int = 0
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
 
 func _ready() -> void:
+	# These arrays are indexed by the core EventType discriminant, so they must
+	# stay one-per-variant and in sync with each other. Assert it at boot: a new
+	# EventType added core-side without a name/color here would otherwise render
+	# as "kind N" (or index out of range) with no other warning.
+	assert(CHAPTER_NAMES.size() == CHAPTER_COLORS.size(),
+		"codex name/color arrays out of sync")
+	assert(CHAPTER_NAMES.size() == int(sim.event_type_count()),
+		"codex arrays lag core EventType — add the new variant's name and color")
 	# The running tally reads as the panel's title — mark it with the accent.
 	counts_label.add_theme_color_override("font_color", UiTheme.ACCENT)
 	# With 23 event types the single-line tally overflows the panel; wrap it.
