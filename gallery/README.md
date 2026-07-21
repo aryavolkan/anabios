@@ -23,6 +23,16 @@ with the same env vars. Camera close-ups use `ANABIOS_CAM_ZOOM/_CAM_X/_CAM_Y`.
 | armsrace-t3000-evolved.png | 3091 | End state: 162 species, 171 speciations, a dense migratory swarm sweeping the eastern half of the world. |
 | armsrace-t160-inspector.png | 201 | Inspector pinned on a bruiser (id 117, species 5): `Jaws` + `Armor` in its six-module body plan. |
 
+### combat-streak close-ups (feature: attacker→target tracers for ranged fire)
+
+Camera zoomed onto the action so the [combat streaks](../game/scripts/main.gd) read
+clearly — the full-world shots above show them only as faint slivers.
+
+| File | Tick | Capture env | What you're seeing |
+|---|---|---|---|
+| armsrace-volley-closeup.png | 21 | `ZOOM=4.0 X=650 Y=340 TICKS=14 FRAMES=6` | The opening spiner volley up close: three bright cyan tracers stretch from the spiner pack (sp4) across the standoff gap into the herd — the ranged Spines kill *before* contact weapons can close. This is exactly the behavior that was invisible in the viewer before the streak layer landed. |
+| armsrace-brawl-closeup.png | 109 | `ZOOM=3.6 X=660 Y=320 TICKS=100 FRAMES=8` | Why the tracers matter: once the lineages collide, the melee is a knot of mixed body plans — cyan spiner, magenta Jaws bruiser, orange/green glyphs — fighting at point-blank. The streaks tint to each attacker's species hue, so ranged fire stays legible even in the scrum. |
+
 ## classic scenarios
 
 | File | Tick | What you're seeing |
