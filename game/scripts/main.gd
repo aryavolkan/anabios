@@ -80,8 +80,10 @@ func _apply_ui_theme() -> void:
 	hud.add_theme_font_size_override("font_size", 17)
 
 func _notification(what: int) -> void:
-	# Pause when the window loses focus; user resumes manually.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+	# Pause when the window loses focus; user resumes manually. Screenshot
+	# runs (ANABIOS_SHOT) opt out: the capture harness needs the sim to keep
+	# stepping even when the headless window reports focus loss.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and not OS.has_environment("ANABIOS_SHOT"):
 		paused = true
 
 func _process(_delta: float) -> void:
@@ -211,7 +213,7 @@ func _refresh_streaks() -> void:
 		var delta: Vector2 = to - from
 		var len: float = maxf(delta.length(), 0.001)
 		var mid: Vector2 = (from + to) * 0.5
-		mm.set_instance_transform_2d(i, Transform2D(delta.angle(), Vector2(len, 0.6), 0.0, mid))
+		mm.set_instance_transform_2d(i, Transform2D(delta.angle(), Vector2(len, 1.0), 0.0, mid))
 		var c: Color = _streak_trail[i][3]
 		c.a = 0.85 * float(_streak_trail[i][2]) / float(STREAK_TTL)
 		mm.set_instance_color(i, c)
