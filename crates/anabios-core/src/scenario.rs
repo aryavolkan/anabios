@@ -22,6 +22,12 @@ pub struct Scenario {
     /// climate). `false` (default) leaves foraging behavior unchanged.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// Opt-in: enable terrain-based habitat selection (agents pulled toward
+    /// their `TerrainAffinity` preferred terrain, so species sort into
+    /// biomes and trade at borders). `false` (default) leaves movement
+    /// unchanged.
+    #[serde(default)]
+    pub terrain_habitat: bool,
     /// Opt-in: enable the cultural invention tree (discovery + social spread
     /// on the invention meme channels, with per-holder buffs/debuffs).
     /// `false` (default) leaves culture unchanged.
@@ -42,6 +48,11 @@ pub struct Scenario {
     /// the productive band over a `2 * season_period`-tick cycle.
     #[serde(default)]
     pub season_period: u32,
+    /// Opt-in: enable the biome-trade-goods economy (resource nodes spawn,
+    /// agents harvest and trade them, reproduction needs a dowry basket).
+    /// `false` (default) leaves the world unchanged.
+    #[serde(default)]
+    pub resources_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -94,6 +105,9 @@ pub struct TraitOverrides {
     pub extraversion: Option<f32>,
     pub agreeableness: Option<f32>,
     pub neuroticism: Option<f32>,
+    /// Preferred-terrain drive (`GenomeSlot::TerrainAffinity`); pairs with
+    /// `World::terrain_habitat` (geographic trade routes).
+    pub terrain_affinity: Option<f32>,
 }
 
 impl TraitOverrides {
@@ -139,6 +153,9 @@ impl TraitOverrides {
         }
         if let Some(v) = self.neuroticism {
             g.set(GenomeSlot::Neuroticism, v);
+        }
+        if let Some(v) = self.terrain_affinity {
+            g.set(GenomeSlot::TerrainAffinity, v);
         }
     }
 }
@@ -278,10 +295,12 @@ impl Scenario {
         };
         w.env_period = self.env_period;
         w.biome_adaptation = self.biome_adaptation;
+        w.terrain_habitat = self.terrain_habitat;
         w.inventions_enabled = self.inventions_enabled;
         w.cognition_enabled = self.cognition_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
+        w.resources_enabled = self.resources_enabled;
         if let Some(cap) = self.max_population {
             w.max_population = cap;
         }
@@ -475,5 +494,48 @@ placement = { kind = "uniform" }
                 "stalker has a Weapon"
             );
         }
+    }
+
+    #[test]
+    fn resources_flag_parses_and_wires_into_world() {
+        let text = r#"
+name = "t"
+seed = 1
+resources_enabled = true
+[[agents]]
+count = 3
+placement = { kind = "uniform" }
+"#;
+        let s = Scenario::parse_toml(text).expect("parse");
+        assert!(s.resources_enabled);
+        let w = s.instantiate();
+        assert!(w.resources_enabled);
+        // Default (absent) stays false.
+        let off = Scenario::parse_toml("name=\"t\"\nseed=1\n").expect("parse").instantiate();
+        assert!(!off.resources_enabled);
+    }
+
+    #[test]
+    fn terrain_habitat_flag_and_affinity_override_parse_and_wire_into_world() {
+        let text = r#"
+name = "t"
+seed = 1
+terrain_habitat = true
+[[agents]]
+count = 3
+placement = { kind = "uniform" }
+[agents.traits]
+terrain_affinity = 0.87
+"#;
+        let s = Scenario::parse_toml(text).expect("parse");
+        assert!(s.terrain_habitat);
+        assert_eq!(s.agents[0].traits.terrain_affinity, Some(0.87));
+        let w = s.instantiate();
+        assert!(w.terrain_habitat);
+        let id = w.agents.iter_alive().next().expect("one agent");
+        assert_eq!(w.agents.genome[id as usize].get(GenomeSlot::TerrainAffinity), 0.87);
+        // Default (absent) stays false, and the genome slot stays untouched.
+        let off = Scenario::parse_toml("name=\"t\"\nseed=1\n").expect("parse").instantiate();
+        assert!(!off.terrain_habitat);
     }
 }

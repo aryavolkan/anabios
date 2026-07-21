@@ -57,6 +57,12 @@ pub struct World {
     /// bincode/`FORMAT_VERSION` caveat as `env_period`.
     #[serde(default)]
     pub biome_adaptation: bool,
+    /// When true, agents are pulled toward their `TerrainAffinity` preferred
+    /// terrain (terrain-based habitat selection), so species sort into biomes
+    /// and trade at borders. Off by default; opt-in per scenario. Same
+    /// bincode/`FORMAT_VERSION` caveat as `biome_adaptation`.
+    #[serde(default)]
+    pub terrain_habitat: bool,
     /// When true, the cultural invention tree is active: Communicator agents
     /// discover inventions (innovation roll) and copy them socially, with
     /// per-holder buffs/debuffs. Off by default; opt-in per scenario.
@@ -82,6 +88,15 @@ pub struct World {
     /// band. Defaulted so old snapshots without this field still deserialize.
     #[serde(default)]
     pub season_period: u32,
+    /// Discrete trade-good nodes on the map (biome trade goods feature).
+    /// Empty and inert unless `resources_enabled`. Serialized.
+    #[serde(default)]
+    pub resources: Vec<crate::resource::Resource>,
+    /// When true, the biome-trade-goods economy is active: nodes spawn, agents
+    /// harvest and trade them, and reproduction requires a dowry basket. Off by
+    /// default; opt-in per scenario. Draws zero RNG and changes no state when off.
+    #[serde(default)]
+    pub resources_enabled: bool,
     /// Hard cap on alive agents; `reproduce_all` skips mating at/above this.
     /// Defaults to `reproduce::MAX_POPULATION` (the design's 10k budget);
     /// scenarios/tests can pin it lower. Same bincode/`FORMAT_VERSION` caveat
@@ -107,6 +122,10 @@ pub struct World {
     /// tick in `scavenge_pass` so carnivores don't linearly scan every carcass.
     #[serde(skip)]
     pub carcass_spatial: UniformSpatialHash,
+    /// Spatial hash over `resources` (indexed by node index), rebuilt each
+    /// tick in `harvest_pass`. `#[serde(skip)]` — reconstructed on load.
+    #[serde(skip)]
+    pub resource_spatial: UniformSpatialHash,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
@@ -175,10 +194,13 @@ impl World {
             pheromones: crate::pheromone::PheromoneField::new(),
             env_period: 0,
             biome_adaptation: false,
+            terrain_habitat: false,
             inventions_enabled: false,
             cognition_enabled: false,
             living_biome: false,
             season_period: 0,
+            resources: Vec::new(),
+            resources_enabled: false,
             max_population: crate::reproduce::MAX_POPULATION,
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
             biome_res: crate::biome::BIOME_RES_DEFAULT,
@@ -188,6 +210,10 @@ impl World {
                 crate::spatial::HASH_RES_DEFAULT,
             ),
             carcass_spatial: UniformSpatialHash::with_dims(
+                crate::biome::WORLD_SIZE_DEFAULT,
+                crate::spatial::HASH_RES_DEFAULT,
+            ),
+            resource_spatial: UniformSpatialHash::with_dims(
                 crate::biome::WORLD_SIZE_DEFAULT,
                 crate::spatial::HASH_RES_DEFAULT,
             ),
@@ -213,6 +239,7 @@ impl World {
         w.pheromones = crate::pheromone::PheromoneField::with_dims(biome_res, world_size);
         w.spatial = crate::spatial::UniformSpatialHash::with_dims(world_size, hash_res);
         w.carcass_spatial = crate::spatial::UniformSpatialHash::with_dims(world_size, hash_res);
+        w.resource_spatial = crate::spatial::UniformSpatialHash::with_dims(world_size, hash_res);
         w
     }
 

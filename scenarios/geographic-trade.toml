@@ -1,0 +1,113 @@
+# Geographic trade routes: four species, each pinned via `terrain_affinity`
+# to a distinct terrain's good (Salt/Desert, Obsidian/Rock, Amber/Forest,
+# Spice/Grass). All four spawn INTERMIXED within one broad shared cluster on a
+# four-way terrain junction (see the placement note below) — NOT pre-sorted by
+# terrain — so the `terrain_habitat` pull (opt-in movement bias toward each
+# agent's preferred terrain) has to do real work sorting them onto their home
+# terrain over time; starting pre-sorted would hide whether the mechanism works.
+#
+# Terrain area is very unequal and fixed by elevation thresholds (roughly
+# seed-independent): Grass ~48%, Desert ~26%, Forest ~17%, Rock ~0.3%. Rock
+# is a sliver, so the Obsidian species is deliberately the smallest
+# population and is NOT expected to sort well on its own — the geographic
+# sorting test (`geographic_trade_sorts_by_terrain`) uses the ROBUST
+# "sorted-fraction increased" metric across the whole population, not
+# per-species perfection.
+#
+# `archetype = "asocial_forager"` (plant-seek only, no neighbor-seeking) was
+# picked over the default grazer program deliberately: the grazer's
+# `energy > 30` branch switches to nearest-neighbor-seeking, which (per
+# `biome-trade.toml`'s own notes) can dominate movement and suppress
+# relocation. Asocial-forager's movement intent is plant-direction only, so
+# the additive `TERRAIN_HABITAT_PULL` bias (see `tick.rs::decide_all`) reads
+# cleanly against it instead of competing with a second strong drive.
+#
+# Cross-species trade and same-species dowry-gated reproduction both still
+# need contact: resource nodes spawn near wherever the population currently
+# is (in matching terrain), so as agents sort into borders between adjacent
+# patches (terrain noise makes small, plentiful patches — not one giant
+# region per type), goods of different kinds end up close together and
+# same-species pairs cluster locally on their shared home patches.
+#
+# Placement (Task G6 v2 retune): `best_terrain_direction` (biome.rs) is now a
+# BORDER-seeking pull — it drives agents to the nearest cell of their target
+# terrain that is ADJACENT to a different terrain, and zeroes only once
+# standing on such a border cell (see `is_border_target`). Combined with
+# `TRADE_RANGE` widened 2.0 -> 10.0 (a "marketplace" reach a bit larger than
+# one biome cell), border-adjacent agents of different species can now
+# actually transact. Re-scanning the seed's biome field for a four-way
+# grass/forest/desert/rock balance within radius 60 turned up a noticeably
+# better hub than the original `(544, 768)` one: `(948, 4)` — `grass=0.322
+# forest=0.379 desert=0.254 rock=0.045` (rock is normally ~0.3% of the map;
+# this hub has ~15x that density, similar to before, but with much better
+# desert coverage than every other rock-bearing spot found on this seed,
+# which turned out to matter a lot for the Salt/Desert species collecting a
+# full dowry basket). This hub happens to straddle the world's torus seam
+# (`y` wraps from just above 0 back to just under `WORLD_SIZE`) — the world
+# is a genuine torus throughout the engine (`wrap_torus`, `cell_coords`
+# `rem_euclid`), so this is not a bug or an edge case, just where the best
+# four-terrain interleaving on this seed happens to sit. Nearby non-seam
+# candidates with similar bulk terrain fractions were tried and measurably
+# underperformed (0 dowry births vs dozens here), so bulk terrain-fraction
+# balance alone does not predict a good hub — the fine-grained interleaving
+# of the four terrains matters, and this was found empirically, not derived.
+# Population was also bumped 1.3x over the original counts (see below) —
+# still comfortably under `max_population` — because higher local density
+# measurably increases dowry-basket completion without changing placement.
+#
+# Honest result (measured, not the "which config produces the biggest number"
+# search target): sorted-fraction (fraction of agents standing on their own
+# preferred terrain) rises from ~0.27 at tick 0 to ~0.85-0.87 by tick 400-800.
+# `DowryBirth` events: ~38 by tick 400 and ~70 by tick 800 (vs. 1 birth by
+# tick 605 before this task, and the mechanism change alone — same placement,
+# unchanged population — already got 8 by tick 400 / 24 by tick 800). The
+# border-seeking pull + wider trade reach are the load-bearing change; the
+# re-placed hub and population bump add a further, smaller improvement on top.
+name = "geographic-trade"
+seed = 424242
+terrain_habitat = true
+resources_enabled = true
+max_population = 2200
+
+# All four species spawn UNIFORM-ish within one broad shared cluster rather
+# than across the whole 1024x1024 map. `best_terrain_direction` (biome.rs) now
+# pulls to the nearest BORDER of the target terrain rather than the nearest
+# cell of any kind, and stops there rather than at the first-found interior
+# cell — see the placement note above for why this hub was chosen.
+
+# Salt / Desert (~26% of the map).
+[[agents]]
+count = 312
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.12
+
+# Obsidian / Rock (~0.3% of the map — deliberately the smallest population;
+# not expected to sort as well as the other three, see header note).
+[[agents]]
+count = 65
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.37
+
+# Amber / Forest (~17% of the map).
+[[agents]]
+count = 195
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.62
+
+# Spice / Grass (~48% of the map — the largest population).
+[[agents]]
+count = 390
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.87

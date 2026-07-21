@@ -746,20 +746,17 @@ fn inventions_scenario_is_deterministic() {
 // Refreshed 2026-07-19: MemeSweep no longer fires on invention channels (the
 // InventionAdopted detector already reports those sweeps explicitly) — the
 // codex event stream is serialized into the hash, so ticks 100/300 moved.
-// Refreshed 2026-07-19 (2): cognitive layer Phase 1 grew AgentBuffers by the
-// realized-IQ phenotype fields (FORMAT_VERSION 6). `cognition_enabled` is off
-// in this scenario, so IQ stays 0 and behavior is unchanged — only the
-// serialized layout grew, moving all three hashes.
-// Refreshed 2026-07-19 (3): Phase 3 widened MEME_CHANNELS 18→20 for the
-// practice block (FORMAT_VERSION 7). `cognition_enabled` off here, so practices
-// are inert and inherit_meme still jitters exactly the 18 base+invention
-// channels (draw count unchanged) — only the serialized meme vector grew,
-// moving all three hashes by layout.
-// Refreshed 2026-07-19 (4): Phase 4 added the practice codex latches to
-// CodexState (empty here — cognition off), which serialize into the state, so
-// all three hashes moved by layout only.
+// Refreshed 2026-07-19 (2/3): biome trade goods (AgentBuffers.inventory,
+// World.{resources,resources_enabled}, CodexState.first_cross_species_trade)
+// then World.terrain_habitat (geographic trade routes) — flags off, layout only.
+// Refreshed 2026-07-19 (main): cognitive layer Phases 1/3/4 — realized-IQ
+// fields, MEME_CHANNELS 18→20, practice latches. `cognition_enabled` off here,
+// so all inert; only the serialized layout grew.
+// Refreshed 2026-07-19 (merge): merged the two branches (FORMAT_VERSION 8). Both
+// feature sets off in this scenario ⇒ trajectory byte-identical; the moved
+// hashes are pure layout growth from carrying both. Regenerated post-merge.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x0b027cceb0bdcb56), (100, 0x3cb5888c52550a5b), (300, 0xd670d33f22e7c92a)];
+    &[(0, 0xcbb85476565f3620), (100, 0x19d08a2d39b70830), (300, 0x1a43988b0836051c)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

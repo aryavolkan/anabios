@@ -42,8 +42,14 @@ pub fn interact_all(world: &mut World) {
     feed_pass(world, &alive_ids);
     combat_pass(world, &alive_ids);
     scavenge_pass(world, &alive_ids);
+    if world.resources_enabled {
+        harvest_pass(world, &alive_ids);
+    }
     deposit_pass(world, &alive_ids);
     share_pass(world, &alive_ids);
+    if world.resources_enabled {
+        trade_pass(world, &alive_ids);
+    }
     world.agents.scratch_ids = alive_ids;
 }
 
@@ -253,6 +259,53 @@ fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
     }
 }
 
+/// Harvest: any agent standing within `HARVEST_RANGE` of a resource node pulls
+/// up to `HARVEST_RATE` of its good into inventory, bounded by carrying
+/// capacity, depleting the node. Nodes are indexed in `resource_spatial`
+/// (rebuilt here) so each agent's search touches only nearby nodes.
+fn harvest_pass(world: &mut World, alive_ids: &[u32]) {
+    use crate::resource::{carrying_cap, inventory_total, HARVEST_RANGE, HARVEST_RATE};
+    if world.resources.is_empty() {
+        return;
+    }
+    world.resource_spatial.rebuild_indexed(
+        world.resources.len(),
+        |ri| world.resources[ri].pos,
+        |ri| world.resources[ri].amount > 0.0,
+    );
+    for &id in alive_ids {
+        let i = id as usize;
+        let cap = carrying_cap(&world.agents.modules[i]);
+        let room = cap - inventory_total(&world.agents.inventory[i]);
+        if room <= 0.0 {
+            continue;
+        }
+        let pos = world.agents.position[i];
+        let mut best: Option<usize> = None;
+        let mut best_d = HARVEST_RANGE;
+        world.resource_spatial.query(pos, HARVEST_RANGE, |ri| {
+            let ri = ri as usize;
+            if world.resources[ri].amount <= 0.0 {
+                return;
+            }
+            let d = crate::spatial::torus_distance(pos, world.resources[ri].pos, world.world_size);
+            // Strict `<` plus lowest-index tie-break = deterministic nearest.
+            if d < best_d || (d == best_d && best.is_some_and(|b| ri < b)) {
+                best_d = d;
+                best = Some(ri);
+            }
+        });
+        if let Some(ri) = best {
+            let taken = HARVEST_RATE.min(world.resources[ri].amount).min(room);
+            if taken > 0.0 {
+                let k = world.resources[ri].kind.index();
+                world.agents.inventory[i][k] += taken;
+                world.resources[ri].amount -= taken;
+            }
+        }
+    }
+}
+
 /// Altruism: a donor with `share_intent` transfers a fraction of its energy to
 /// its action target (the nearest neighbor), scaled by the `Altruism` genome
 /// slot. Donor loses, recipient gains. Program-level gating on `SenseKinship`
@@ -286,5 +339,263 @@ fn share_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.energy[t] += amount;
         // Record for the EvolvedCooperation detector.
         world.codex.share_events.push_back((world.tick, world.agents.species_id[i]));
+    }
+}
+
+/// Choose the most mutually-beneficial one-for-one swap between two inventories,
+/// from A's perspective: A gives good `give` and receives good `recv`. Considers
+/// every (give, recv) pair where A can spare a `TRADE_UNIT` of `give` and B can
+/// spare a `TRADE_UNIT` of `recv`, and returns the pair maximizing the summed
+/// deficit-reduction of both sides, requiring BOTH to strictly gain. `None` if no
+/// such swap exists. Iteration is ascending (give, then recv) with a strict `>`
+/// on the score, so ties keep the lowest-index pair — deterministic, no RNG.
+fn pick_swap(
+    inv_a: &[f32; crate::resource::GOOD_COUNT],
+    inv_b: &[f32; crate::resource::GOOD_COUNT],
+) -> Option<(usize, usize)> {
+    use crate::resource::{want, GOOD_COUNT, TRADE_UNIT};
+    let mut best: Option<(usize, usize)> = None;
+    let mut best_score = 0.0f32;
+    for give in 0..GOOD_COUNT {
+        if inv_a[give] < TRADE_UNIT {
+            continue; // A cannot spare `give`
+        }
+        for recv in 0..GOOD_COUNT {
+            if recv == give || inv_b[recv] < TRADE_UNIT {
+                continue; // same good, or B cannot spare `recv`
+            }
+            // A gives `give`, receives `recv`; B gives `recv`, receives `give`.
+            let a_gain = want(inv_a, recv) - want(inv_a, give);
+            let b_gain = want(inv_b, give) - want(inv_b, recv);
+            if a_gain > 0.0 && b_gain > 0.0 {
+                let score = a_gain + b_gain;
+                if score > best_score {
+                    best_score = score;
+                    best = Some((give, recv));
+                }
+            }
+        }
+    }
+    best
+}
+
+/// Trade: each alive agent A (ascending) trades one `TRADE_UNIT` with its
+/// nearest OTHER-species neighbor B (from the sensor register), if a mutually-
+/// beneficial complementary swap exists and B is within `TRADE_RANGE`.
+/// Conserves total units of each good. No RNG.
+fn trade_pass(world: &mut World, alive_ids: &[u32]) {
+    use crate::resource::TRADE_UNIT;
+    for &id in alive_ids {
+        let i = id as usize;
+        let tgt = world.sensors[i].nearest_other_id;
+        if tgt == crate::sense::NO_NEIGHBOR_ID {
+            continue;
+        }
+        if world.sensors[i].nearest_other_dist >= crate::resource::TRADE_RANGE {
+            continue;
+        }
+        let t = tgt as usize;
+        if t == i || !world.agents.is_alive(tgt) {
+            continue;
+        }
+        let inv_a = world.agents.inventory[i];
+        let inv_b = world.agents.inventory[t];
+        let Some((give, recv)) = pick_swap(&inv_a, &inv_b) else {
+            continue;
+        };
+        // Execute the swap (totals conserved: each side's sum is unchanged).
+        world.agents.inventory[i][give] -= TRADE_UNIT;
+        world.agents.inventory[t][give] += TRADE_UNIT;
+        world.agents.inventory[t][recv] -= TRADE_UNIT;
+        world.agents.inventory[i][recv] += TRADE_UNIT;
+        if !world.codex.first_cross_species_trade {
+            world.codex.first_cross_species_trade = true;
+            world.codex.push_event(crate::codex::CodexEvent {
+                event_type: crate::codex::EventType::ResourceTraded,
+                tick: world.tick,
+                species_id: world.agents.species_id[i],
+                value: give as f32,
+                loc_x: world.agents.position[i].x,
+                loc_y: world.agents.position[i].y,
+            });
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::genome::Genome;
+    use crate::prelude::Vec2;
+    use crate::world::World;
+
+    #[test]
+    fn harvest_fills_inventory_and_depletes_node() {
+        use crate::resource::{Good, Resource, HARVEST_RATE};
+        let mut w = World::new(3);
+        w.resources_enabled = true;
+        let pos = Vec2::new(200.0, 200.0);
+        let id = w.spawn_agent(pos, Genome::neutral());
+        w.resources.push(Resource { pos, kind: Good::Salt, amount: 5.0 });
+        // Build the agent spatial hash (harvest_pass rebuilds resource_spatial itself).
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        harvest_pass(&mut w, &alive);
+
+        assert!((w.agents.inventory[id as usize][Good::Salt.index()] - HARVEST_RATE).abs() < 1e-6);
+        assert!((w.resources[0].amount - (5.0 - HARVEST_RATE)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn harvest_respects_carrying_cap() {
+        use crate::resource::{carrying_cap, Good, Resource};
+        let mut w = World::new(3);
+        w.resources_enabled = true;
+        let pos = Vec2::new(200.0, 200.0);
+        let id = w.spawn_agent(pos, Genome::neutral());
+        let cap = carrying_cap(&w.agents.modules[id as usize]);
+        // Pre-fill to the cap; no room to harvest more.
+        w.agents.inventory[id as usize][Good::Amber.index()] = cap;
+        w.resources.push(Resource { pos, kind: Good::Salt, amount: 5.0 });
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        harvest_pass(&mut w, &alive);
+
+        assert_eq!(w.agents.inventory[id as usize][Good::Salt.index()], 0.0, "at cap: no harvest");
+        assert_eq!(w.resources[0].amount, 5.0, "node untouched");
+    }
+
+    #[test]
+    fn pick_swap_is_mutually_beneficial_and_complementary() {
+        use crate::resource::GOOD_COUNT;
+        // A rich in good 0, poor in good 1; B the mirror image.
+        let mut a = [0.0f32; GOOD_COUNT];
+        let mut b = [0.0f32; GOOD_COUNT];
+        a[0] = 5.0; // A surplus Salt
+        b[1] = 5.0; // B surplus Obsidian
+        let (give, recv) = pick_swap(&a, &b).expect("a beneficial swap exists");
+        assert_eq!(give, 0, "A gives its surplus good 0");
+        assert_eq!(recv, 1, "A receives good 1 (B's surplus)");
+    }
+
+    #[test]
+    fn pick_swap_returns_none_without_complementary_surplus() {
+        use crate::resource::GOOD_COUNT;
+        // Both empty → nothing to give.
+        let a = [0.0f32; GOOD_COUNT];
+        let b = [0.0f32; GOOD_COUNT];
+        assert!(pick_swap(&a, &b).is_none());
+    }
+
+    #[test]
+    fn trade_pass_swaps_and_conserves_units() {
+        use crate::resource::{Good, GOOD_COUNT, TRADE_UNIT};
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        let pos = Vec2::new(300.0, 300.0);
+        let a = w.spawn_agent(pos, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+        // Different species so it counts as cross-species trade.
+        w.agents.species_id[b as usize] = 1;
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+
+        // Sense fills nearest_other_id/dist (trade_pass reads those, like combat_pass).
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &mut w.sensors,
+            w.world_size,
+        );
+
+        let total_salt_before: f32 =
+            (0..2).map(|id| w.agents.inventory[id][Good::Salt.index()]).sum();
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        trade_pass(&mut w, &alive);
+
+        // Both goods are conserved across the pair, and A moved toward a
+        // balanced basket (gave up some Salt, gained some Obsidian). Two
+        // adjacent agents may each initiate a trade in one pass (the design
+        // allows it), so we assert the invariants rather than a single-trade
+        // exact value.
+        let total_salt_after: f32 =
+            (0..2).map(|id| w.agents.inventory[id][Good::Salt.index()]).sum();
+        let total_obsidian_after: f32 =
+            (0..2).map(|id| w.agents.inventory[id][Good::Obsidian.index()]).sum();
+        assert!((total_salt_before - total_salt_after).abs() < 1e-6, "Salt conserved");
+        assert!((total_obsidian_after - 5.0).abs() < 1e-6, "Obsidian conserved");
+        assert!(w.agents.inventory[a as usize][Good::Salt.index()] < 5.0, "A gave up some Salt");
+        assert!(
+            w.agents.inventory[a as usize][Good::Obsidian.index()] > 0.0,
+            "A received some Obsidian"
+        );
+        let _ = (GOOD_COUNT, TRADE_UNIT);
+    }
+
+    #[test]
+    fn trade_pass_skips_same_species() {
+        use crate::resource::Good;
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        let pos = Vec2::new(300.0, 300.0);
+        let a = w.spawn_agent(pos, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+        // SAME species (both 0).
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &mut w.sensors,
+            w.world_size,
+        );
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        trade_pass(&mut w, &alive);
+        assert_eq!(
+            w.agents.inventory[a as usize][Good::Obsidian.index()],
+            0.0,
+            "no same-species trade"
+        );
+    }
+
+    #[test]
+    fn first_cross_species_trade_emits_event() {
+        use crate::codex::EventType;
+        use crate::resource::Good;
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        let pos = Vec2::new(300.0, 300.0);
+        let a = w.spawn_agent(pos, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+        w.agents.species_id[b as usize] = 1;
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &mut w.sensors,
+            w.world_size,
+        );
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        trade_pass(&mut w, &alive);
+        assert!(w.codex.first_cross_species_trade, "latch set after first trade");
+        assert!(
+            w.codex.events.iter().any(|e| e.event_type == EventType::ResourceTraded),
+            "a ResourceTraded event was recorded"
+        );
     }
 }

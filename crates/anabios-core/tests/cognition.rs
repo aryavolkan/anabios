@@ -45,8 +45,12 @@ fn cognitive_scenario_is_self_consistent() {
 // Behavior change: juvenile IQ development differs from tick 1 on, so ticks
 // 100/300 moved (tick 0 holds — no development yet). Cognition-gated, so
 // minimal / inventions are unaffected.
+// Refreshed 2026-07-19 (merge): merged with the biome-trade-goods + geographic
+// trade routes branch (FORMAT_VERSION 8). Those features are opt-in and off in
+// this scenario, so cognition behavior/trajectory is unchanged — the moved
+// hashes are pure serialized-layout growth from the merged-in fields.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x42f7a6e1c6717d0b), (100, 0xb9aa2d57e6450748), (300, 0x6a0f377010b8816f)];
+    &[(0, 0xa965cff3fb2b08b3), (100, 0x6fad7c516f057cdd), (300, 0xbbe20d39c5d3331c)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

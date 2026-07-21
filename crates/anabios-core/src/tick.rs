@@ -96,6 +96,8 @@ pub fn step(world: &mut World) {
         } else {
             world.biome.regrow_step();
         }
+        // Stage 10b: resource node spawn/cleanup (opt-in; no-op when off).
+        crate::resource::resource_step(world);
     }
 
     world.tick += 1;
@@ -113,6 +115,7 @@ fn decide_all(world: &mut World) {
     let sensors = &world.sensors;
     let biome = &world.biome;
     let biome_adaptation = world.biome_adaptation;
+    let terrain_habitat = world.terrain_habitat;
     let cap = world.agents.capacity();
     world
         .actions
@@ -152,6 +155,22 @@ fn decide_all(world: &mut World) {
                 );
                 action.move_x += crate::culture::HABITAT_PULL * pull.x;
                 action.move_y += crate::culture::HABITAT_PULL * pull.y;
+            }
+            // Terrain habitat selection (opt-in): bias movement toward the
+            // nearest cell of this agent's TerrainAffinity-preferred terrain, so
+            // species sort into biomes (and trade at borders). Gated so flag-off
+            // stays byte-identical.
+            if terrain_habitat {
+                let aff = agents.genome[i].get(crate::genome::GenomeSlot::TerrainAffinity);
+                let target = crate::resource::preferred_good(aff).home_terrain();
+                let pull = crate::biome::best_terrain_direction(
+                    biome,
+                    agents.position[i],
+                    target,
+                    crate::culture::TERRAIN_HABITAT_REACH,
+                );
+                action.move_x += crate::culture::TERRAIN_HABITAT_PULL * pull.x;
+                action.move_y += crate::culture::TERRAIN_HABITAT_PULL * pull.y;
             }
             // Normalize the movement intent to a unit direction (identical to the
             // pre-M11 logic that lived inside `decide`). Guard against a non-finite

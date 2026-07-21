@@ -113,6 +113,8 @@ fn event_name(t: EventType) -> &'static str {
         EventType::InventionAdopted => "invention_adopted",
         EventType::PracticeDiscovered => "practice_discovered",
         EventType::PracticeAdopted => "practice_adopted",
+        EventType::ResourceTraded => "resource_traded",
+        EventType::DowryBirth => "dowry_birth",
     }
 }
 
@@ -128,13 +130,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          dialect_formed,meme_sweep,alarm_call,\
          evolved_cooperation,pack_hunting,herd_cohesion,\
          invention_discovered,invention_adopted,\
-         practice_discovered,practice_adopted"
+         practice_discovered,practice_adopted,\
+         resource_traded,dowry_birth"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -161,6 +164,8 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("invention_adopted"),
             g("practice_discovered"),
             g("practice_adopted"),
+            g("resource_traded"),
+            g("dowry_birth"),
         )?;
     }
     Ok(())

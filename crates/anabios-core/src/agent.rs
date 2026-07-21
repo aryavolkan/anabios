@@ -54,6 +54,10 @@ pub struct AgentBuffers {
     /// Channels `invention::INVENTION_CHANNEL_BASE..` carry the invention
     /// tree's adoption levels.
     pub meme_vector: Vec<[f32; crate::program::MEME_CHANNELS]>,
+    /// Per-agent trade-good holdings, indexed by `crate::resource::Good::index`.
+    /// Zeroed on spawn; only the resource subsystem (harvest/trade/dowry)
+    /// mutates it, and only when `World::resources_enabled` is on.
+    pub inventory: Vec<[f32; crate::resource::GOOD_COUNT]>,
     /// Realized IQ in `[0,1]` — a gene×environment phenotype developed over the
     /// juvenile window by `iq::develop_all` (heritable `CognitivePotential`
     /// modulated by juvenile nutrition + social enrichment) and frozen at
@@ -127,6 +131,7 @@ impl AgentBuffers {
             self.modules[i] = modules;
             self.program[i] = program;
             self.meme_vector[i] = [0.0; crate::program::MEME_CHANNELS];
+            self.inventory[i] = [0.0; crate::resource::GOOD_COUNT];
             self.iq[i] = 0.0;
             self.iq_enrich_acc[i] = 0.0;
             self.iq_enrich_ticks[i] = 0;
@@ -145,6 +150,7 @@ impl AgentBuffers {
             self.modules.push(modules);
             self.program.push(program);
             self.meme_vector.push([0.0; crate::program::MEME_CHANNELS]);
+            self.inventory.push([0.0; crate::resource::GOOD_COUNT]);
             self.iq.push(0.0);
             self.iq_enrich_acc.push(0.0);
             self.iq_enrich_ticks.push(0);
@@ -298,6 +304,22 @@ mod tests {
         a.kill(id0);
         let alive: Vec<AgentId> = a.iter_alive().collect();
         assert_eq!(alive, vec![1, id2]);
+    }
+
+    #[test]
+    fn spawn_zeroes_inventory() {
+        let mut a = AgentBuffers::new();
+        let id = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            1,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+        );
+        assert_eq!(a.inventory[id as usize], [0.0; crate::resource::GOOD_COUNT]);
+        assert_eq!(a.inventory.len(), a.capacity());
     }
 
     #[test]

@@ -1,0 +1,84 @@
+# Biome trade goods: five species co-located in one cluster centered at
+# (710, 870) — found by scanning this seed's biome field for the local
+# terrain composition with the best resource-diversity/trade-proximity
+# trade-off. All four land types (and hence all four goods) are reachable
+# within radius 70, with zero water.
+#
+# Co-locating the clusters (same pattern as `predator-prey.toml`, which
+# relies on the same nearest-other-species sensor to land combat within
+# range) is what makes cross-species trade land: the grazer archetype starts
+# at full energy, so its `energy > 30` program branch immediately favors
+# nearest-neighbor-seeking over plant-seeking, and it barely relocates over
+# hundreds of ticks — whatever terrain (and neighbors) the cluster spawns
+# among is effectively fixed for the whole run. Two earlier drafts failed
+# outright: five clusters spread to the map's corners + center (centered on
+# center_x/y = 512.0, a lake in this seed's biome) put nearly the whole
+# population on Water with no terrain diversity and zero trades in 600
+# ticks; bringing those same five clusters closer together while still
+# centered on the lake had the same failure. Centering on real, water-free,
+# all-four-goods terrain (discovered by sampling the biome field directly)
+# is what unblocks `ResourceTraded`.
+#
+# `DowryBirth` needed a resource-balance change, made in `resource.rs`
+# (out of this scenario file's scope, tracked there): `pick_swap`'s original
+# strict "> " mutual-benefit rule made equal holdings an absorbing state, so
+# goods obtained only via cross-species trade capped near 1 unit per agent.
+# The follow-up fix redefines `want` as the deficit below `DOWRY_REQ` (agents
+# accumulate a full basket instead of merely equalizing) and considers all
+# good-pairs, which let `DOWRY_REQ` go back up to 2.0 (a real balanced
+# basket) — but that doubling of raw goods needed per agent meant node supply
+# (`NODE_START_AMOUNT`) had to come back UP too, not down, to keep pace.
+# The remaining bottleneck was purely spatial: at the original radius (120),
+# same-species agents that each independently completed a full 4-good basket
+# were essentially never within `MATING_RANGE` (2.0) of each other at the
+# same tick (typical same-species spacing ~10-20 world units). Shrinking the
+# cluster radius to 70 (denser population, terrain composition rechecked to
+# keep all 4 goods present) and lowering `reproduction_threshold` from 0.4 to
+# 0.2 (more energy headroom while agents wait out the basket-assembly time)
+# closes that gap: several same-species basket-holders end up within mating
+# range of each other before tick 600 (first `DowryBirth` around tick 507).
+name = "biome-trade"
+seed = 20260719
+resources_enabled = true
+living_biome = true
+max_population = 2000
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4

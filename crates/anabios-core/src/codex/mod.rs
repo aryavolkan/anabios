@@ -146,6 +146,10 @@ pub enum EventType {
     /// A maladaptive practice crosses ≥50% penetration inside a species
     /// (`value` = practice id).
     PracticeAdopted = 20,
+    /// First bilateral cross-species resource swap in the world (latched once).
+    ResourceTraded = 21,
+    /// An offspring was produced by spending a full dowry basket.
+    DowryBirth = 22,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -247,6 +251,9 @@ pub struct CodexState {
     /// (species, invention) pairs currently latched as adopted (≥50% of the
     /// species holds it). Re-arms when adoption drops below the threshold.
     pub inventions_adopted: BTreeSet<(u32, u8)>,
+    /// Latch: the first cross-species `ResourceTraded` event has been emitted
+    /// (biome trade goods feature). Kept with the other one-shot latches.
+    pub first_cross_species_trade: bool,
     /// Maladaptive practices held at least once anywhere (latched;
     /// `PracticeDiscovered` fires once per practice id).
     pub practices_discovered: BTreeSet<u8>,

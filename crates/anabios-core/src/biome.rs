@@ -332,6 +332,87 @@ pub fn best_env_direction(biome: &BiomeField, pos: Vec2, affinity: f32, radius: 
     best_offset.normalize_or_zero()
 }
 
+/// True iff `(col,row)` is `target` terrain AND has a 4-neighbour of a
+/// DIFFERENT terrain (i.e. it sits on a border of the target region).
+/// Torus-wrapped.
+fn is_border_target(biome: &BiomeField, col: usize, row: usize, target: TerrainType) -> bool {
+    if biome.at(col, row).terrain != target {
+        return false;
+    }
+    for (ddx, ddy) in [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)] {
+        let ncol = ((col as i32 + ddx).rem_euclid(biome.res as i32)) as usize;
+        let nrow = ((row as i32 + ddy).rem_euclid(biome.res as i32)) as usize;
+        if biome.at(ncol, nrow).terrain != target {
+            return true;
+        }
+    }
+    false
+}
+
+/// Unit direction toward the nearby cell whose terrain matches `target`,
+/// within `radius` world units — the terrain habitat-selection pull.
+/// BORDER-seeking: prefers the nearest cell that is both `target` terrain and
+/// adjacent to a different terrain (see `is_border_target`), so agents settle
+/// on the edges of their home terrain next to their trading neighbours rather
+/// than deep in the terrain's interior. Falls back to the nearest `target`
+/// cell of any kind if no border cell is in range. Returns `Vec2::ZERO` if the
+/// agent is already standing on a border-target cell, or if no `target` cell
+/// is in range at all. Deterministic: fixed scan order, strict improvement
+/// wins (lowest `(dy,dx)` on ties). Reads no RNG.
+pub fn best_terrain_direction(
+    biome: &BiomeField,
+    pos: Vec2,
+    target: TerrainType,
+    radius: f32,
+) -> Vec2 {
+    let cell_reach = (radius / biome.cell_size).ceil() as i32 + 1;
+    let (cx, cy) = biome.cell_coords(pos);
+    // Already on a border of our terrain -> a good trading spot, stay put.
+    if is_border_target(biome, cx, cy, target) {
+        return Vec2::ZERO;
+    }
+    let mut best_border: Option<(f32, Vec2)> = None; // nearest border-target cell
+    let mut best_any: Option<(f32, Vec2)> = None; // fallback: nearest target cell
+    for dy in -cell_reach..=cell_reach {
+        for dx in -cell_reach..=cell_reach {
+            let col = ((cx as i32 + dx).rem_euclid(biome.res as i32)) as usize;
+            let row = ((cy as i32 + dy).rem_euclid(biome.res as i32)) as usize;
+            if biome.at(col, row).terrain != target {
+                continue;
+            }
+            let cell_center = Vec2::new(
+                (col as f32 + 0.5) * biome.cell_size,
+                (row as f32 + 0.5) * biome.cell_size,
+            );
+            let offset = crate::prelude::wrap_torus(
+                cell_center - pos + Vec2::splat(biome.world_size * 0.5),
+                Vec2::splat(biome.world_size),
+            ) - Vec2::splat(biome.world_size * 0.5);
+            let d2 = offset.length_squared();
+            if d2 > radius * radius {
+                continue;
+            }
+            // strict `<` keeps the earliest (lowest dy,dx) on ties -> deterministic
+            if best_any.is_none_or(|(bd, _)| d2 < bd) {
+                best_any = Some((d2, offset));
+            }
+            if d2 > 1e-6
+                && is_border_target(biome, col, row, target)
+                && best_border.is_none_or(|(bd, _)| d2 < bd)
+            {
+                best_border = Some((d2, offset));
+            }
+        }
+    }
+    if let Some((_, off)) = best_border {
+        return off.normalize_or_zero();
+    }
+    if let Some((_, off)) = best_any {
+        return off.normalize_or_zero();
+    }
+    Vec2::ZERO
+}
+
 /// Wrap `(row, col)` onto a `res × res` torus and flatten to a cell index.
 #[inline]
 fn idx_wrap(row: usize, col: usize, res: usize) -> usize {
@@ -553,5 +634,48 @@ mod tests {
         assert!(taken > 0.0 && taken <= 2.0);
         let after = b.sample(target).plant_biomass;
         assert!((before - after - taken).abs() < 1e-5);
+    }
+
+    #[test]
+    fn best_terrain_direction_pulls_toward_border_and_zero_when_already_there() {
+        let b = BiomeField::generate(31, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+        // Find two horizontally-adjacent cells with different terrain: `t_col`
+        // is `target` terrain AND sits on a border (its neighbour `o_col`
+        // differs), i.e. `is_border_target(b, t_col, t_row, target)` is true.
+        let mut found: Option<(usize, usize, usize, usize)> = None;
+        'outer: for row in 0..b.res {
+            for col in 0..b.res {
+                let next_col = (col + 1) % b.res;
+                if b.at(col, row).terrain != b.at(next_col, row).terrain {
+                    found = Some((col, row, next_col, row));
+                    break 'outer;
+                }
+            }
+        }
+        let (t_col, t_row, o_col, o_row) =
+            found.expect("expected adjacent cells with differing terrain");
+        let target = b.at(t_col, t_row).terrain;
+        assert!(
+            is_border_target(&b, t_col, t_row, target),
+            "constructed cell should be a border-target cell by construction"
+        );
+        let target_center =
+            Vec2::new((t_col as f32 + 0.5) * b.cell_size, (t_row as f32 + 0.5) * b.cell_size);
+        let off_center =
+            Vec2::new((o_col as f32 + 0.5) * b.cell_size, (o_row as f32 + 0.5) * b.cell_size);
+
+        // Case (a): standing on a border-target cell — this is already a good
+        // trading spot, so the pull is zero.
+        let at_border = best_terrain_direction(&b, target_center, target, 200.0);
+        assert_eq!(at_border, Vec2::ZERO, "should not move when already on a border-target cell");
+
+        // Case (b): standing on an adjacent off-target cell, with the target
+        // terrain within reach — the pull should be a non-zero unit vector,
+        // toward the (border) target cell.
+        let toward_target = best_terrain_direction(&b, off_center, target, 48.0);
+        assert!(
+            toward_target.length() > 0.9 && toward_target.length() < 1.1,
+            "expected a roughly unit vector, got {toward_target:?}"
+        );
     }
 }
