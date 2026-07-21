@@ -8,10 +8,22 @@ extends Node
 func _ready() -> void:
 	if not OS.has_environment("ANABIOS_SHOT"):
 		return
+	# Fail fast: the capture reads the viewport texture after frame_post_draw,
+	# which never completes on the headless dummy renderer — without this guard
+	# the run hangs forever instead of producing a shot.
+	if DisplayServer.get_name() == "headless":
+		push_error("[capture] ANABIOS_SHOT requires a windowed run; --headless cannot read back the viewport")
+		get_tree().quit(1)
+		return
 	# Optional scenario/overlay override (autoloads run before the main scene
 	# reads GameConfig), so we can screenshot any scenario headlessly.
 	if OS.has_environment("ANABIOS_SCENARIO"):
 		GameConfig.scenario_path = OS.get_environment("ANABIOS_SCENARIO")
+	# Seed override: scenarios tuned around a specific biome field (e.g.
+	# geographic-trade's four-way junction hub) only show that behavior on
+	# their own seed, which the viewer's default GameConfig.seed would mask.
+	if OS.has_environment("ANABIOS_SEED"):
+		GameConfig.seed = int(OS.get_environment("ANABIOS_SEED"))
 	if OS.has_environment("ANABIOS_GROUND"):
 		GameConfig.default_ground = int(OS.get_environment("ANABIOS_GROUND"))
 	if OS.has_environment("ANABIOS_BODY"):
@@ -20,10 +32,16 @@ func _ready() -> void:
 	var wait_frames := 180
 	if OS.has_environment("ANABIOS_SHOT_FRAMES"):
 		wait_frames = int(OS.get_environment("ANABIOS_SHOT_FRAMES"))
+	# Freeze the scene tree while the scene builds so the sim does not tick
+	# before step_n runs: the capture lands on exactly SHOT_TICKS + SHOT_FRAMES
+	# (previously the build wait leaked ~30 ticks, drifting every capture).
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().paused = true
 	_run(path, wait_frames)
 
 func _run(path: String, wait_frames: int) -> void:
-	# Let the scene build.
+	# Let the scene build (tree is paused: nodes process no ticks, but node
+	# setup and this ALWAYS-mode coroutine still run).
 	for _i in 30:
 		await get_tree().process_frame
 	# The viewer pauses when unfocused; force it to run and (optionally) jump
@@ -66,6 +84,9 @@ func _run(path: String, wait_frames: int) -> void:
 					cam.set("position", Vector2(
 						float(OS.get_environment("ANABIOS_CAM_X")),
 						float(OS.get_environment("ANABIOS_CAM_Y"))))
+	# Unfreeze only for the capture wait, so the sim advances exactly
+	# wait_frames ticks past the step_n jump before the shot.
+	get_tree().paused = false
 	for _i in wait_frames:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw

@@ -5,7 +5,7 @@ const CHAPTER_NAMES: PackedStringArray = [
 	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior",
 	"Predation", "CombatRaid", "ArmsRace", "Territory", "NichePartition",
 	"Dialect", "MemeSweep", "AlarmCall", "Cooperation", "PackHunting", "HerdCohesion",
-	"Discovery", "Adoption", "BadIdea", "BadAdopt"
+	"Discovery", "Adoption", "BadIdea", "BadAdopt", "Trade", "DowryBirth"
 ]
 # One color per event type so the timeline is scannable at a glance (matches
 # the co-evolution chart's marker hues where they overlap).
@@ -31,6 +31,8 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.55, 0.95, 1.0),   # 18 Adoption   — light sky
 	Color(0.95, 0.45, 0.55),  # 19 PracticeDiscovered — rose
 	Color(0.85, 0.3, 0.3),    # 20 PracticeAdopted    — dark red
+	Color(0.95, 0.8, 0.45),   # 21 ResourceTraded     — wheat
+	Color(0.8, 0.95, 0.9),    # 22 DowryBirth         — pale mint
 ]
 const MAX_RECENT: int = 30
 
@@ -44,9 +46,17 @@ var _cursor: int = 0
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
 
 func _ready() -> void:
+	# These arrays are indexed by the core EventType discriminant, so they must
+	# stay one-per-variant and in sync with each other. Assert it at boot: a new
+	# EventType added core-side without a name/color here would otherwise render
+	# as "kind N" (or index out of range) with no other warning.
+	assert(CHAPTER_NAMES.size() == CHAPTER_COLORS.size(),
+		"codex name/color arrays out of sync")
+	assert(CHAPTER_NAMES.size() == int(sim.event_type_count()),
+		"codex arrays lag core EventType — add the new variant's name and color")
 	# The running tally reads as the panel's title — mark it with the accent.
 	counts_label.add_theme_color_override("font_color", UiTheme.ACCENT)
-	# With 17 event types the single-line tally overflows the panel; wrap it.
+	# With 23 event types the single-line tally overflows the panel; wrap it.
 	counts_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_counts.resize(CHAPTER_NAMES.size())
 	_counts.fill(0)
@@ -72,7 +82,7 @@ func _process(_delta: float) -> void:
 	_render()
 
 func _render() -> void:
-	# Show only event types that have actually occurred — most of the 17 are
+	# Show only event types that have actually occurred — most of the 23 are
 	# zero, and listing them all overflows the panel with noise.
 	var parts: PackedStringArray = []
 	for i in CHAPTER_NAMES.size():

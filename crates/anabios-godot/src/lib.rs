@@ -692,6 +692,54 @@ impl Simulation {
         out
     }
 
+    /// Trader→partner position pairs for every successful trade on the most
+    /// recent tick, flattened as [from1, to1, from2, to2, ...]. Lets the
+    /// viewer draw trade routes, which makes the cross-species economy
+    /// visible as links between neighboring traders. Read-only view of a
+    /// scratch buffer that is not serialized.
+    #[func]
+    fn trade_routes(&self) -> PackedVector2Array {
+        let mut out = PackedVector2Array::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for (from, to, _) in &w.trade_routes {
+            out.push(Vector2::new(from.x, from.y));
+            out.push(Vector2::new(to.x, to.y));
+        }
+        out
+    }
+
+    /// Number of codex `EventType` variants. The viewer's chronicle panel
+    /// asserts its parallel name/color arrays against this at boot so a
+    /// forgotten GDScript-side update surfaces immediately instead of
+    /// rendering an event as "kind N".
+    #[func]
+    fn event_type_count(&self) -> i64 {
+        anabios_core::codex::EVENT_TYPE_COUNT as i64
+    }
+
+    /// Cumulative count of successful cross-species swaps since scenario
+    /// load (observability only; not serialized). Feeds the HUD trade
+    /// counter, which stays accurate across step_n jumps that skip frames.
+    #[func]
+    fn total_trades(&self) -> i64 {
+        let Some(w) = self.inner.as_ref() else { return 0 };
+        w.total_trades as i64
+    }
+
+    /// One color per trade route (same order as `trade_routes` pairs),
+    /// tinted by the initiating trader's genome hue so routes read as
+    /// belonging to a species. Alpha is managed GDScript-side for the
+    /// fade-out trail.
+    #[func]
+    fn trade_route_colors(&self) -> PackedColorArray {
+        let mut out = PackedColorArray::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for (_, _, hue) in &w.trade_routes {
+            out.push(hsv_to_color(*hue, 0.6, 1.0));
+        }
+        out
+    }
+
     /// Body rotation (radians) per alive agent, from velocity direction.
     /// Non-moving agents keep rotation 0. Same order as `alive_positions`.
     #[func]

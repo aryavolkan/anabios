@@ -50,6 +50,7 @@ func _rebuild_key(body_mode: int) -> void:
 		c.queue_free()
 	_key_box.add_child(_header("modules"))
 	_key_box.add_child(_swatch_wrap(Palette.MODULE_COLORS, Palette.MODULE_NAMES))
+	_key_box.add_child(_header("links: bright brief = combat · thin lingering = trade"))
 	match body_mode:
 		1:
 			_key_box.add_child(_header("body: hue = dialect"))

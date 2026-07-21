@@ -24,6 +24,7 @@ const GLYPH_SIZE: float = 1.6
 @onready var carcasses: MultiMeshInstance2D = $Carcasses
 @onready var flashes: MultiMeshInstance2D = $Flashes
 @onready var streaks: MultiMeshInstance2D = $Streaks
+@onready var trade_routes: MultiMeshInstance2D = $TradeRoutes
 
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
@@ -44,6 +45,36 @@ func _ready() -> void:
 	carcasses.texture = disc
 	flashes.texture = disc
 	# streaks keep the raw quad: a solid line reads as a crisp shot streak.
+	_make_wrap_clones()
+
+# The world is a torus but rendering is not: a camera near a seam sees agents
+# vanish at the edge. Duplicate every agent layer into the 8 neighboring world
+# offsets; each clone shares its source's MultiMesh and texture, so per-frame
+# instance updates propagate with zero extra CPU work. Clones live in one
+# WrapClones container right after ModuleLayers: it keeps Main's child list
+# clean, keeps clones out of ModuleLayers (whose children are indexed by
+# module type), and puts glyph clones after body clones in tree order so the
+# z_index=0 layers stack at the seams the same way the origin copies do.
+func _make_wrap_clones() -> void:
+	var world: float = sim.world_size()
+	var wrap := Node2D.new()
+	wrap.name = "WrapClones"
+	add_child(wrap)
+	move_child(wrap, module_layers.get_index() + 1)
+	var sources: Array[MultiMeshInstance2D] = [bodies, carcasses, flashes, streaks, trade_routes]
+	for child in module_layers.get_children():
+		sources.append(child)
+	for src in sources:
+		for gy in range(-1, 2):
+			for gx in range(-1, 2):
+				if gx == 0 and gy == 0:
+					continue
+				var clone := MultiMeshInstance2D.new()
+				clone.multimesh = src.multimesh
+				clone.texture = src.texture
+				clone.z_index = src.z_index
+				clone.position = Vector2(gx * world, gy * world)
+				wrap.add_child(clone)
 
 # Give every HUD panel the shared instrument theme, and make the top-left
 # readout legible over any terrain with a dark outline.
@@ -58,8 +89,10 @@ func _apply_ui_theme() -> void:
 	hud.add_theme_font_size_override("font_size", 17)
 
 func _notification(what: int) -> void:
-	# Pause when the window loses focus; user resumes manually.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+	# Pause when the window loses focus; user resumes manually. Screenshot
+	# runs (ANABIOS_SHOT) opt out: the capture harness needs the sim to keep
+	# stepping even if the capture window reports focus loss.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and not OS.has_environment("ANABIOS_SHOT"):
 		paused = true
 
 func _process(_delta: float) -> void:
@@ -68,9 +101,15 @@ func _process(_delta: float) -> void:
 	_refresh_bodies()
 	_refresh_carcasses()
 	_refresh_flashes()
-	_refresh_streaks()
+	var world: float = sim.world_size()
+	_update_segment_trail(_streak_trail, streaks.multimesh,
+		sim.combat_streaks(), sim.combat_streak_colors(), STREAK_TTL, 1.0, 0.85, world)
+	_update_segment_trail(_trade_trail, trade_routes.multimesh,
+		sim.trade_routes(), sim.trade_route_colors(), TRADE_TTL, 0.5, 0.6, world)
 	var rate: String = "paused" if paused else ("%d×" % ticks_per_frame)
-	hud.text = "tick %d · %d alive · %s" % [sim.tick(), sim.alive_count(), rate]
+	var total: int = int(sim.total_trades())
+	var trades: String = "" if total == 0 else " · %d trades" % total
+	hud.text = "tick %d · %d alive · %s%s" % [sim.tick(), sim.alive_count(), rate, trades]
 
 func _refresh_bodies() -> void:
 	var n: int = int(sim.alive_count())
@@ -159,39 +198,54 @@ func _refresh_flashes() -> void:
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(6.0, 6.0), 0.0, pts[i]))
 		mm.set_instance_color(i, Color(1.0, 0.92, 0.45, 0.95))
 
-# Combat streaks: attacker→target segments, kept on screen for a few ticks
-# as fading tracers so ranged (Spines) volleys read as volleys rather than
-# single-frame slivers that are easy to miss between frames. Streaks tint to
-# the attacker's genome hue, so each species' fire is distinguishable.
+# Segment trails: world-space links kept on screen for a few ticks as fading
+# tracers. Combat streaks (attacker→target) are wide, bright, and brief so
+# ranged (Spines) volleys read as volleys; trade routes (trader→partner) are
+# thin, dim, and long-lived so recurring swaps along species borders
+# accumulate into visible lanes. Both tint to the initiator's genome hue.
 const STREAK_TTL: int = 8
+const TRADE_TTL: int = 24
 var _streak_trail: Array = [] # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
+var _trade_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
 
-func _refresh_streaks() -> void:
-	var segs: PackedVector2Array = sim.combat_streaks()
-	var cols: PackedColorArray = sim.combat_streak_colors()
+# Append this tick's segments to the trail, age it, then draw each survivor
+# as a tinted quad stretched from→to. Segments are unwrapped with the
+# shortest-path torus delta: a hop across the seam (|delta| near world size)
+# is really a short step the other way, and drawing it with the wrapped delta
+# lets the wrap clones render its continuation past the world edge.
+func _update_segment_trail(trail: Array, mm: MultiMesh, segs: PackedVector2Array, cols: PackedColorArray, ttl: int, width: float, max_alpha: float, world: float) -> void:
 	for i in segs.size() / 2:
-		_streak_trail.append([segs[2 * i], segs[2 * i + 1], STREAK_TTL, cols[i]])
-	var mm: MultiMesh = streaks.multimesh
+		trail.append([segs[2 * i], segs[2 * i + 1], ttl, cols[i]])
 	# Perf: cap the trail at the multimesh budget, dropping the oldest first.
-	if _streak_trail.size() > mm.instance_count:
-		_streak_trail = _streak_trail.slice(_streak_trail.size() - mm.instance_count)
-	var kept: Array = []
-	for s in _streak_trail:
+	while trail.size() > mm.instance_count:
+		trail.pop_front()
+	# Age in place and compact out the expired.
+	var write := 0
+	for read_i in trail.size():
+		var s: Array = trail[read_i]
 		s[2] -= 1
 		if s[2] > 0:
-			kept.append(s)
-	_streak_trail = kept
-	var m: int = mini(_streak_trail.size(), mm.instance_count)
+			trail[write] = s
+			write += 1
+	trail.resize(write)
+	var m: int = mini(trail.size(), mm.instance_count)
 	mm.visible_instance_count = m
 	for i in m:
-		var from: Vector2 = _streak_trail[i][0]
-		var to: Vector2 = _streak_trail[i][1]
-		var delta: Vector2 = to - from
-		var len: float = maxf(delta.length(), 0.001)
-		var mid: Vector2 = (from + to) * 0.5
-		mm.set_instance_transform_2d(i, Transform2D(delta.angle(), Vector2(len, 0.6), 0.0, mid))
-		var c: Color = _streak_trail[i][3]
-		c.a = 0.85 * float(_streak_trail[i][2]) / float(STREAK_TTL)
+		var from: Vector2 = trail[i][0]
+		var d: Vector2 = trail[i][1] - from
+		if d.x > world * 0.5:
+			d.x -= world
+		elif d.x < -world * 0.5:
+			d.x += world
+		if d.y > world * 0.5:
+			d.y -= world
+		elif d.y < -world * 0.5:
+			d.y += world
+		var len: float = maxf(d.length(), 0.001)
+		var mid: Vector2 = from + d * 0.5
+		mm.set_instance_transform_2d(i, Transform2D(d.angle(), Vector2(len, width), 0.0, mid))
+		var c: Color = trail[i][3]
+		c.a = max_alpha * float(trail[i][2]) / float(ttl)
 		mm.set_instance_color(i, c)
 
 func _refresh_module_layers() -> void:

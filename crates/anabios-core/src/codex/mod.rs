@@ -152,6 +152,11 @@ pub enum EventType {
     DowryBirth = 22,
 }
 
+/// Number of `EventType` variants. Derived from the last variant so it stays
+/// correct as variants are appended; the viewer asserts its parallel name/color
+/// arrays against this at boot to catch a forgotten GDScript-side update.
+pub const EVENT_TYPE_COUNT: usize = EventType::DowryBirth as usize + 1;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
     pub event_type: EventType,
