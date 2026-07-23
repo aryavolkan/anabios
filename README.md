@@ -56,7 +56,9 @@ cargo build --release --bin anabios-headless
 cat runs/divergent-32/summary.csv
 ```
 
-The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion, invention_discovered, invention_adopted` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
+The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion, invention_discovered, invention_adopted, practice_discovered, practice_adopted, resource_traded, dowry_birth, emergence_score, novel_events, coverage` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
+
+The last three columns are the **emergence scorecard**: `emergence_score` sums rarity weights (IDF) over the distinct event types a run fired, `coverage` is the fraction of all event types fired, and `novel_events` counts fired types never seen in the reference corpus. Pass `--archive runs/corpus-dir/` to recompute weights empirically against prior sweeps; runs firing corpus-unseen event types are copied to `<out>/novel/`. Use `emergence_score` as the metric when optimizing sweeps for discovery. See `docs/superpowers/specs/2026-07-22-e1-emergence-scorecard-design.md`.
 
 ## Watching the invention race (headless demo)
 
@@ -91,4 +93,4 @@ cargo build --release --bin anabios-headless
 - **`anabios-headless`** — CLI for batch runs, W&B sweeps, codex mining
 - **`game/`** — Godot 4.6+ project (viewer, codex UI, world setup, scenario authoring)
 
-See the design doc for the full architecture, agent model, and roadmap.
+See the design doc for the full architecture, agent model, and roadmap. The forward roadmap is the emergence arc: [`docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md`](docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md) (milestones E1–E10).
