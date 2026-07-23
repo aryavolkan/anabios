@@ -25,7 +25,7 @@ pub const CORPUS_RUNS: u64 = 64;
 pub const NOVELTY_BONUS: f64 = 5.158_883_083_359_671;
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 23] = [
+pub const ALL_EVENT_NAMES: [&str; 27] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -49,13 +49,19 @@ pub const ALL_EVENT_NAMES: [&str; 23] = [
     "practice_adopted",
     "resource_traded",
     "dowry_birth",
+    "pop_cycle",
+    "boom_bust",
+    "carrying_capacity",
+    "trophic_cascade",
 ];
 
 /// Rarity weights derived from the reference corpus (see module docs):
 /// 16 seeds × 5000 ticks of `divergent`, `inventions`, `predator-prey`,
 /// `cooperation` (64 runs, swept 2026-07-22). `n_t` comments record how
 /// many corpus runs fired each type; unseen types sit at `NOVELTY_BONUS`.
-pub const DEFAULT_WEIGHTS: [(&str, f64); 23] = [
+/// The corpus predates E3, so the four population-dynamics types are
+/// definitionally unseen (bonus) until the next regeneration.
+pub const DEFAULT_WEIGHTS: [(&str, f64); 27] = [
     ("extinction", 0.048009_f64),           // n_t=61
     ("pop_crash", 0.133531_f64),            // n_t=56
     ("speciation", 0.081346_f64),           // n_t=59
@@ -79,6 +85,10 @@ pub const DEFAULT_WEIGHTS: [(&str, f64); 23] = [
     ("practice_adopted", NOVELTY_BONUS),    // n_t=0
     ("resource_traded", NOVELTY_BONUS),     // n_t=0
     ("dowry_birth", NOVELTY_BONUS),         // n_t=0
+    ("pop_cycle", NOVELTY_BONUS),           // post-corpus (E3)
+    ("boom_bust", NOVELTY_BONUS),           // post-corpus (E3)
+    ("carrying_capacity", NOVELTY_BONUS),   // post-corpus (E3)
+    ("trophic_cascade", NOVELTY_BONUS),     // post-corpus (E3)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -106,6 +116,10 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::PracticeAdopted => "practice_adopted",
         EventType::ResourceTraded => "resource_traded",
         EventType::DowryBirth => "dowry_birth",
+        EventType::PopulationCycleDetected => "pop_cycle",
+        EventType::BoomAndBust => "boom_bust",
+        EventType::CarryingCapacityReached => "carrying_capacity",
+        EventType::TrophicCascade => "trophic_cascade",
     }
 }
 

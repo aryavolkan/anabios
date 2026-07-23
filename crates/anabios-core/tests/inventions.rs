@@ -755,10 +755,10 @@ fn inventions_scenario_is_deterministic() {
 // Refreshed 2026-07-19 (merge): merged the two branches (FORMAT_VERSION 8). Both
 // feature sets off in this scenario ⇒ trajectory byte-identical; the moved
 // hashes are pure layout growth from carrying both. Regenerated post-merge.
-// Refreshed 2026-07-19 (weapons): Spines/Jaws module types join the structural-
-// mutation pool (random_any 9 → 11 types) — trajectory drift only.
+// Refreshed 2026-07-22 (E3): CodexState gains cycle/plateau/cascade detector
+// scratch (FORMAT_VERSION 8→9) — serialized layout only, behavior unchanged.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xcbb85476565f3620), (100, 0x5734e56fa45b55bb), (300, 0x317439825850d54e)];
+    &[(0, 0x36aac53c314135d4), (100, 0x57e8973ee229b942), (300, 0x64fcb0977a02ba00)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

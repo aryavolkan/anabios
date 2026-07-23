@@ -51,8 +51,10 @@ fn cognitive_scenario_is_self_consistent() {
 // hashes are pure serialized-layout growth from the merged-in fields.
 // Refreshed 2026-07-19 (weapons): Spines/Jaws module types join the
 // structural-mutation pool (random_any 9 → 11 types) — trajectory drift only.
+// Refreshed 2026-07-23 (E3): CodexState cycle/plateau/cascade scratch
+// (FORMAT_VERSION 8→9) — layout growth only, behavior unchanged.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xa965cff3fb2b08b3), (100, 0x6fad7c516f057cdd), (300, 0xd91851020e8558d4)];
+    &[(0, 0x94a7c8f89c749e77), (100, 0x5f52ee028234f5fb), (300, 0x2b6863e491e46c63)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

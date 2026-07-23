@@ -20,6 +20,7 @@ use crate::world::World;
 
 mod combat;
 mod culture;
+mod cycles;
 mod invention;
 mod population;
 mod practice;
@@ -97,6 +98,41 @@ pub const MEME_SWEEP_MIN_MEMBERS: u32 = 5;
 
 /// Ticks a species must sustain high crowding to fire HerdCohesion.
 pub const HERD_WINDOW: usize = 60;
+
+/// Per-species population window for cycle/plateau analysis. Deliberately
+/// separate from the 200-tick `POP_HISTORY_WINDOW` so crash-detector
+/// semantics (and golden behavior) stay untouched.
+pub const CYCLE_WINDOW: usize = 400;
+/// Cycle/plateau checks run every this many ticks (amortized).
+pub const CYCLE_CHECK_INTERVAL: u64 = 10;
+/// Zero-crossing intervals must land in this band to count as periodic.
+pub const CYCLE_PERIOD_MIN: u64 = 40;
+pub const CYCLE_PERIOD_MAX: u64 = 200;
+/// Peak absolute deviation from the window mean, as a fraction of the mean.
+pub const CYCLE_MIN_AMPLITUDE: f32 = 0.25;
+/// Peak/trough ratio that upgrades a cycle to BoomAndBust.
+pub const BOOM_AMPLITUDE: f32 = 3.0;
+/// Minimum mean population for a carrying-capacity plateau to be meaningful.
+pub const CARRYING_MIN_POP: f32 = 20.0;
+/// Max coefficient of variation (std/mean) over the window for a plateau.
+pub const CARRYING_MAX_CV: f32 = 0.05;
+
+/// Carnivore-population window (ticks) for the cascade peak reference.
+pub const CASCADE_WINDOW: usize = 150;
+/// Carnivore drop below the window peak that opens a cascade candidate.
+pub const CASCADE_CRASH_FRAC: f32 = 0.5;
+/// Minimum carnivore peak for the crash to be ecologically meaningful.
+pub const CASCADE_MIN_PREDATORS: u32 = 5;
+/// Max ticks between cascade stages 0→1→2 before the candidate times out.
+pub const CASCADE_LAG: u64 = 300;
+/// Max ticks for the final plant-crash leg (stage 2→fire). Plant biomass
+/// responds to grazer release far more slowly than prey responds to
+/// predator release, so this leg gets its own, much longer budget.
+pub const CASCADE_PLANT_LAG: u64 = 900;
+/// Herbivore rise (over stage-entry level) required for stage 2.
+pub const CASCADE_HERB_RISE: f32 = 0.3;
+/// Plant-biomass drop (below stage-entry level) that completes the cascade.
+pub const CASCADE_PLANT_DROP: f32 = 0.3;
 /// Minimum mean same-species crowding (neighbors per member) to count as cohesive.
 pub const HERD_CROWDING_MIN: f32 = 3.0;
 /// Minimum members before herd cohesion detection is meaningful.
@@ -150,12 +186,24 @@ pub enum EventType {
     ResourceTraded = 21,
     /// An offspring was produced by spending a full dowry basket.
     DowryBirth = 22,
+    /// A species' population oscillates with a regular period (zero-crossing
+    /// analysis over `CYCLE_WINDOW`; `value` = mean period in ticks).
+    PopulationCycleDetected = 23,
+    /// A population cycle with peak/trough amplitude ≥ `BOOM_AMPLITUDE`
+    /// (`value` = peak/trough ratio).
+    BoomAndBust = 24,
+    /// A species' population variance collapses at a sustained plateau
+    /// (`value` = mean population over the window).
+    CarryingCapacityReached = 25,
+    /// Ordered trophic cascade: carnivore crash → herbivore boom → plant
+    /// crash (`value` = carnivore drop fraction; world-scale, loc = 0,0).
+    TrophicCascade = 26,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::DowryBirth as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::TrophicCascade as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -265,6 +313,40 @@ pub struct CodexState {
     /// (species, practice) pairs currently latched as adopted (≥50% penetration).
     /// Re-arms when penetration drops below the threshold.
     pub practices_adopted: BTreeSet<(u32, u8)>,
+    /// Long per-species population window for cycle/plateau analysis
+    /// (`CYCLE_WINDOW`; separate from the crash detector's `pop_history`).
+    pub cycle_history: BTreeMap<u32, VecDeque<u32>>,
+    /// Guild/world population windows for cycle/plateau analysis. Per-species
+    /// lines churn under 200-tick reclustering; the ecologically meaningful
+    /// oscillator is the trophic guild (0=herbivore, 1=carnivore series) and
+    /// the world total. Keyed as three explicit fields for serde simplicity.
+    pub herb_cycle_history: VecDeque<u32>,
+    pub carn_cycle_history: VecDeque<u32>,
+    pub total_cycle_history: VecDeque<u32>,
+    /// Guild/world series currently latched as cycling (0=herb, 1=carn, 2=total).
+    pub guild_cycle_active: BTreeSet<u8>,
+    /// Guild/world series currently latched as boom-and-bust.
+    pub guild_boom_active: BTreeSet<u8>,
+    /// Guild/world series currently latched as plateaued.
+    pub guild_carrying_active: BTreeSet<u8>,
+    /// Species currently latched as cycling (re-arms when the checks fail).
+    pub cycle_active: BTreeSet<u32>,
+    /// Species currently latched as boom-and-bust cycling.
+    pub boom_active: BTreeSet<u32>,
+    /// Species currently latched as plateaued at carrying capacity.
+    pub carrying_active: BTreeSet<u32>,
+    /// Rolling carnivore-population window for the cascade peak reference.
+    pub cascade_carn_history: VecDeque<u32>,
+    /// Cascade state machine: 0 armed, 1 predator crashed, 2 herbivores booming.
+    pub cascade_stage: u8,
+    /// Tick the machine entered the current stage (for `CASCADE_LAG` timeouts).
+    pub cascade_stage_tick: u64,
+    /// Carnivore window peak when the cascade candidate opened (for `value`).
+    pub cascade_carn_peak: u32,
+    /// Herbivore population when the cascade candidate opened (stage 1 entry).
+    pub cascade_herb_entry: u32,
+    /// Plant biomass when the cascade candidate opened (stage 1 entry).
+    pub cascade_plant_entry: f32,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -414,6 +496,10 @@ pub struct SpeciesAgg {
     pub crowding_sum: f64,
     pub weapon_sum: f64,
     pub armor_sum: f64,
+    /// Sum of per-member `effective_diet_carnivory` (0 = herbivore …
+    /// 1 = carnivore); mean classifies the species' trophic level for the
+    /// cascade detector.
+    pub diet_sum: f64,
     /// Per-invention count of members at or above the held threshold (for
     /// `InventionAdopted`). All zero when the invention tree is inactive.
     pub invention_counts: [u32; crate::invention::INVENTION_COUNT],
@@ -437,6 +523,7 @@ impl SpeciesAgg {
         self.crowding_sum = 0.0;
         self.weapon_sum = 0.0;
         self.armor_sum = 0.0;
+        self.diet_sum = 0.0;
         self.invention_counts = [0; crate::invention::INVENTION_COUNT];
         self.practice_counts = [0; crate::practice::PRACTICE_COUNT];
     }
@@ -512,6 +599,7 @@ impl SpeciesAggTable {
             if sensors_ok {
                 e.crowding_sum += world.sensors[i].crowding as f64;
             }
+            e.diet_sum += module::effective_diet_carnivory(modules) as f64;
             if world.inventions_enabled {
                 let inv_mask = crate::invention::held_mask(&world.agents.meme_vector[i]);
                 crate::invention::for_each_set_bit(inv_mask, |k| e.invention_counts[k] += 1);
@@ -584,6 +672,10 @@ pub fn observe_all(world: &mut World) {
     population::update_pop_history(world);
     population::detect_extinction(world, &agg);
     population::detect_population_crash(world, &agg);
+    cycles::update_cycle_history(world, &agg);
+    cycles::detect_cycles(world, &agg);
+    cycles::detect_carrying_capacity(world, &agg);
+    cycles::detect_trophic_cascade(world, &agg);
     population::detect_migration(world, &agg);
     population::detect_novel_modules(world, &agg);
     population::detect_novel_behavior(world, &agg);

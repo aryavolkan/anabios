@@ -1,0 +1,27 @@
+name = "trophic-cascade"
+seed = 20260722
+
+# E3 showcase: a grazer herd and a stalker pack on the default range, tuned
+# like predator-prey but with a slightly larger predator pack — deeper
+# overshoot, so the back half of the cycle (predator collapse → herbivore
+# release → plant crash) completes more often. Sweep 16+ seeds; cycles and
+# carrying-capacity plateaus fire in most runs, the full cascade in a
+# minority.
+
+# Prey: a herd of grazers clustered in the middle of the world.
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+
+# Predators: ten stalkers seeded into the same region.
+[[agents]]
+count = 10
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
