@@ -4,7 +4,8 @@ extends Node
 const GROUND_BIOME := 0
 const GROUND_PHEROMONE_0 := 1
 const GROUND_ENV_OPTIMUM := 5
-const GROUND_MAX := 6  # count of ground modes
+const GROUND_SUCCESSION := 6
+const GROUND_MAX := 7  # count of ground modes
 
 # Body color modes.
 const BODY_SPECIES := 0
@@ -28,6 +29,9 @@ func ground_is_biome() -> bool:
 func ground_is_optimum() -> bool:
 	return ground_mode == GROUND_ENV_OPTIMUM
 
+func ground_is_succession() -> bool:
+	return ground_mode == GROUND_SUCCESSION
+
 # Pheromone channel for the current ground mode, or -1 if not a pheromone mode.
 func ground_channel() -> int:
 	if ground_mode >= GROUND_PHEROMONE_0 and ground_mode <= GROUND_PHEROMONE_0 + 3:
@@ -47,6 +51,9 @@ func _cycle_ground() -> void:
 	ground_mode = (ground_mode + 1) % GROUND_MAX
 	# Skip ENV_OPTIMUM when the env mechanism is inactive.
 	if ground_mode == GROUND_ENV_OPTIMUM and not bool(sim.env_active()):
+		ground_mode = GROUND_BIOME
+	# Skip SUCCESSION when disasters are disabled.
+	if ground_mode == GROUND_SUCCESSION and not bool(sim.disasters_active()):
 		ground_mode = GROUND_BIOME
 
 func _cycle_body() -> void:

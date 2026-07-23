@@ -1,0 +1,29 @@
+name = "disturbance"
+seed = 40723
+
+# E4 showcase: fire-prone range. Two grafer starter stocks share one grass
+# range while fire/drought/freeze disasters scar the biome on a Poisson
+# schedule (mean interval 800 ticks). Watch for RangeExpansion after a burn,
+# SegregationEmerged as scars split ranges, CorridorUse along recovery
+# gradients, and the Succession event when a scar matures back to climax.
+disasters_enabled = true
+living_biome = true
+max_population = 1000
+
+# Generalist grazers: roam widely, quick to re-colonize burns.
+[[agents]]
+count = 40
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 400.0, center_y = 512.0, radius = 120.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+
+# Specialist grazers: sedentary herd, tight to their starting range.
+[[agents]]
+count = 40
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 624.0, center_y = 512.0, radius = 60.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0

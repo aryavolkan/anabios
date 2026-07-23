@@ -12,6 +12,19 @@ the other scenarios on the viewer default. Captures run windowed (not
 `--headless`): the harness reads the viewport texture after
 `frame_post_draw`, which never completes on the dummy renderer.
 
+## disturbance & succession (E4)
+
+Fire/drought/freeze disasters scar the biome into succession states (bare →
+pioneer → climax); the `succession` ground overlay ([G] cycle) shows Climax
+as dim green, Pioneer as bright new growth, Bare as scorched umber, and
+active disasters tinted (fire orange / drought sepia / freeze pale).
+`ANABIOS_SEED=40723` (the scenario seed).
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| e4-fire-ring.png | 2321 | `disturbance` seed 40723: the t=2231 fire mid-expansion — the orange burn ring consuming the grassland while a migration stream of agents threads straight through it. The tally already carries the new chapters (`RangeExpand: 4 Segregation: 2 Corridor: 5`). |
+| e4-succession.png | 2631 | The same scar ~300 ticks later, re-vegetated: bright pioneer growth fills the burn with a thin umber seam still healing down the middle. `Succession: 1` in the tally — the scar's recovery event (t=2460) fired when half its cells were vegetated again. |
+
 ## population dynamics (E3)
 
 Four new detectors (PopCycle / BoomBust / CarryingCap / TrophicCascade) read

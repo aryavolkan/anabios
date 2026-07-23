@@ -21,6 +21,7 @@ use crate::world::World;
 mod combat;
 mod culture;
 mod cycles;
+mod disturbance;
 mod invention;
 mod population;
 mod practice;
@@ -129,6 +130,43 @@ pub const CASCADE_LAG: u64 = 300;
 /// responds to grazer release far more slowly than prey responds to
 /// predator release, so this leg gets its own, much longer budget.
 pub const CASCADE_PLANT_LAG: u64 = 900;
+
+/// Per-species occupied-cell window for RangeExpansion.
+pub const RANGE_WINDOW: usize = 400;
+/// Occupied-cell growth ratio (end/start) required for RangeExpansion.
+pub const RANGE_GROWTH: f32 = 1.5;
+/// Minimum occupied cells for the expansion to be meaningful.
+pub const RANGE_MIN_CELLS: u32 = 20;
+/// Minimum centroid displacement (world units) over the migration window.
+pub const RANGE_MIN_DISPLACEMENT: f32 = 60.0;
+
+/// Ticks of consecutive low overlap before SegregationEmerged fires.
+pub const SEGREGATION_WINDOW: u32 = 200;
+/// Max fraction of a species' occupied cells shared with other species.
+pub const SEGREGATION_OVERLAP_MAX: f32 = 0.1;
+/// Minimum members / occupied cells for segregation to be meaningful.
+pub const SEGREGATION_MIN_MEMBERS: u32 = 20;
+pub const SEGREGATION_MIN_CELLS: usize = 20;
+
+/// Migrations in agreeing directions that count as corridor use.
+pub const CORRIDOR_MIN_MIGRATIONS: usize = 4;
+/// Cosine of the max pairwise angle for directions to "agree" (~14°).
+pub const CORRIDOR_MAX_ANGLE_COS: f32 = 0.97;
+/// Minimum tick span across the agreeing migrations — a corridor is a
+/// sustained habit, not a burst of same-direction hops.
+pub const CORRIDOR_MIN_SPAN: u64 = 400;
+/// Sampled points along a migration's displacement; aggregated across the
+/// recent legs, at least this many must land on barrier terrain (water/rock)
+/// for the movement to count as a corridor — plain grassland drift is not.
+pub const CORRIDOR_MIN_BARRIER_HITS: u32 = 6;
+/// Points sampled along the displacement for the barrier check.
+pub const CORRIDOR_BARRIER_SAMPLES: u32 = 16;
+/// Per-species cap on remembered migration directions.
+pub const CORRIDOR_DIR_CAP: usize = 4;
+
+/// Fraction of a fire scar's tracked cells that must return to Climax for
+/// the Succession event.
+pub const SUCCESSION_RECOVERED_FRAC: f32 = 0.5;
 /// Herbivore rise (over stage-entry level) required for stage 2.
 pub const CASCADE_HERB_RISE: f32 = 0.3;
 /// Plant-biomass drop (below stage-entry level) that completes the cascade.
@@ -198,12 +236,23 @@ pub enum EventType {
     /// Ordered trophic cascade: carnivore crash → herbivore boom → plant
     /// crash (`value` = carnivore drop fraction; world-scale, loc = 0,0).
     TrophicCascade = 26,
+    /// A species' occupied-cell count grew ≥50% over `RANGE_WINDOW` with
+    /// centroid displacement (`value` = growth ratio).
+    RangeExpansion = 27,
+    /// A species' occupied cells stay <10% shared with all other species
+    /// over `SEGREGATION_WINDOW` (`value` = 1 − overlap).
+    SegregationEmerged = 28,
+    /// A species logged ≥`CORRIDOR_MIN_MIGRATIONS` migrations in agreeing
+    /// directions — recurrent directed passage (`value` = direction angle).
+    CorridorUse = 29,
+    /// ≥50% of a fire's scar returned to Climax succession (loc = epicenter).
+    Succession = 30,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::TrophicCascade as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::Succession as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -347,6 +396,24 @@ pub struct CodexState {
     pub cascade_herb_entry: u32,
     /// Plant biomass when the cascade candidate opened (stage 1 entry).
     pub cascade_plant_entry: f32,
+    /// Per-species occupied-cell-count history for RangeExpansion.
+    pub range_occ_history: BTreeMap<u32, VecDeque<u32>>,
+    /// Species currently latched as range-expanding.
+    pub range_active: BTreeSet<u32>,
+    /// Per-species consecutive-tick streak of low spatial overlap.
+    pub segregation_streak: BTreeMap<u32, u32>,
+    /// Species observed spatially mixed (overlap ≥ threshold) at least once.
+    /// SegregationEmerged requires this — it marks segregation that EMERGED
+    /// from a mixed state, not species founded apart.
+    pub segregation_was_mixed: BTreeSet<u32>,
+    /// Species currently latched as segregated.
+    pub segregation_active: BTreeSet<u32>,
+    /// Recent migration records per species: `(tick, dir_x, dir_y,
+    /// barrier_hits)` — fed by the migration detector (cap
+    /// `CORRIDOR_DIR_CAP`).
+    pub migration_dirs: BTreeMap<u32, VecDeque<(u64, f32, f32, u32)>>,
+    /// Species currently latched as corridor users.
+    pub corridor_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -506,6 +573,9 @@ pub struct SpeciesAgg {
     /// Per-practice count of members holding each maladaptive practice (for
     /// `PracticeAdopted`). All zero when cognition is inactive.
     pub practice_counts: [u32; crate::practice::PRACTICE_COUNT],
+    /// Distinct biome cells occupied by members this tick (scratch for the
+    /// E4 spatial detectors). Cell index = row * res + col.
+    pub occ_cells: std::collections::BTreeSet<u32>,
 }
 
 impl SpeciesAgg {
@@ -526,6 +596,7 @@ impl SpeciesAgg {
         self.diet_sum = 0.0;
         self.invention_counts = [0; crate::invention::INVENTION_COUNT];
         self.practice_counts = [0; crate::practice::PRACTICE_COUNT];
+        self.occ_cells.clear();
     }
 
     /// This tick's centroid (mean alive position), `(0,0)` when empty.
@@ -593,6 +664,7 @@ impl SpeciesAggTable {
             let (col, row) = world.biome.cell_coords(pos);
             let terrain = world.biome.at(col, row).terrain as usize;
             e.terrain_counts[terrain.min(TERRAIN_SLOTS - 1)] += 1.0;
+            e.occ_cells.insert(world.biome.cell_index(col, row) as u32);
             for (ch, s) in e.meme_sums.iter_mut().enumerate() {
                 *s += world.agents.meme_vector[i][ch] as f64;
             }
@@ -676,6 +748,11 @@ pub fn observe_all(world: &mut World) {
     cycles::detect_cycles(world, &agg);
     cycles::detect_carrying_capacity(world, &agg);
     cycles::detect_trophic_cascade(world, &agg);
+    disturbance::update_range_history(world, &agg);
+    disturbance::detect_range_expansion(world, &agg);
+    disturbance::detect_segregation(world, &agg);
+    disturbance::detect_corridor_use(world, &agg);
+    disturbance::detect_succession(world);
     population::detect_migration(world, &agg);
     population::detect_novel_modules(world, &agg);
     population::detect_novel_behavior(world, &agg);

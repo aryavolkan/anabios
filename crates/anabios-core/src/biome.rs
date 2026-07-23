@@ -31,6 +31,26 @@ pub const RECOLONIZE_SEED_MIN: f32 = 0.5;
 
 /// Peak regrowth multiplier bonus for a cell whose climate matches the season.
 pub const SEASON_AMPLITUDE: f32 = 1.5;
+
+/// Succession states (E4). Climax is the default everywhere and keeps the
+/// pre-E4 regrowth arithmetic exactly; Pioneer/Bare only appear after
+/// disturbance.
+pub const SUCCESSION_CLIMAX: u8 = 0;
+pub const SUCCESSION_PIONEER: u8 = 1;
+pub const SUCCESSION_BARE: u8 = 2;
+/// Pioneer regrowth rate multiplier (fast, weedy recovery).
+pub const PIONEER_RATE_MULT: f32 = 1.5;
+/// Pioneer effective capacity, as a fraction of terrain capacity (low
+/// standing crop while the community matures).
+pub const PIONEER_CAPACITY_MULT: f32 = 0.5;
+/// Bare cells reseed spontaneously at this fraction of capacity per biome
+/// step (wind-blown seed; without it burns could never recover).
+pub const BARE_RESEED_FRAC: f32 = 0.005;
+/// Bare → Pioneer once biomass exceeds this fraction of terrain capacity.
+pub const PIONEER_ENTRY_FRAC: f32 = 0.05;
+/// Pioneer → Climax once biomass reaches this fraction of the *pioneer*
+/// capacity (the weedy ceiling signals a matured community).
+pub const CLIMAX_ENTRY_FRAC: f32 = 0.9;
 /// Climate distance beyond which the seasonal bonus is zero (triangular).
 pub const SEASON_TOLERANCE: f32 = 0.25;
 
@@ -102,6 +122,10 @@ pub struct BiomeCell {
     /// penalizes logistic regrowth. Always 0.0 unless the invention tree is
     /// active.
     pub pollution: f32,
+    /// Succession state (E4): `SUCCESSION_CLIMAX` (0) everywhere unless a
+    /// disaster scorched the cell. See the `SUCCESSION_*` consts.
+    #[serde(default)]
+    pub succession: u8,
 }
 
 /// 128×128 biome field (at default dims). Indexed `[row * res + col]` with
@@ -149,6 +173,7 @@ impl BiomeField {
                     plant_biomass: terrain.carrying_capacity(),
                     env,
                     pollution: 0.0,
+                    succession: SUCCESSION_CLIMAX,
                 });
             }
         }
@@ -203,21 +228,68 @@ impl BiomeField {
         1.0 - cell.pollution.min(crate::invention::POLLUTION_MAX_EFFECT)
     }
 
+    /// Regrow one cell on the Climax path — the exact pre-E4 arithmetic.
+    /// Kept as a separate fn so the all-Climax default is byte-identical.
+    #[inline]
+    fn regrow_climax(cell: &mut BiomeCell, capacity: f32, rate_mult: f32) {
+        if cell.plant_biomass <= 0.0 {
+            return;
+        }
+        let r = cell.terrain.regrowth_rate() * Self::pollution_mult(cell) * rate_mult;
+        let b = cell.plant_biomass;
+        let next = b + r * b * (1.0 - b / capacity);
+        cell.plant_biomass = next.clamp(0.0, capacity);
+    }
+
+    /// Regrow + advance one cell's succession state. `rate_mult` carries the
+    /// seasonal bonus (1.0 in the non-seasonal path).
+    #[inline]
+    fn regrow_succession(cell: &mut BiomeCell, rate_mult_fn: impl Fn(&BiomeCell) -> f32) {
+        let capacity = cell.terrain.carrying_capacity();
+        if capacity <= 0.0 {
+            return;
+        }
+        match cell.succession {
+            SUCCESSION_BARE => {
+                // Wind-blown reseed: slow linear recovery from scorch.
+                cell.plant_biomass =
+                    (cell.plant_biomass + BARE_RESEED_FRAC * capacity).min(capacity);
+                if cell.plant_biomass > PIONEER_ENTRY_FRAC * capacity {
+                    cell.succession = SUCCESSION_PIONEER;
+                }
+            }
+            SUCCESSION_PIONEER => {
+                let pcap = capacity * PIONEER_CAPACITY_MULT;
+                if cell.plant_biomass <= 0.0 {
+                    // Pioneer ground re-scorched to zero: back to bare.
+                    cell.succession = SUCCESSION_BARE;
+                    return;
+                }
+                let r = cell.terrain.regrowth_rate()
+                    * Self::pollution_mult(cell)
+                    * rate_mult_fn(cell)
+                    * PIONEER_RATE_MULT;
+                let b = cell.plant_biomass;
+                let next = b + r * b * (1.0 - b / pcap);
+                cell.plant_biomass = next.clamp(0.0, pcap);
+                if cell.plant_biomass >= pcap * CLIMAX_ENTRY_FRAC {
+                    cell.succession = SUCCESSION_CLIMAX;
+                }
+            }
+            _ => Self::regrow_climax(cell, capacity, rate_mult_fn(cell)),
+        }
+    }
+
     /// Apply logistic regrowth: `b += r * b * (1 - b / K)` clamped to `[0, K]`.
     /// Empty cells stay empty — no spontaneous regeneration (see
     /// `recolonize_step` for the opt-in renewal). Pollution (Machinery debuff)
     /// decays once per biome step and scales the regrowth increment down.
+    /// Climax cells follow the original arithmetic exactly; Pioneer/Bare
+    /// cells (post-disturbance) follow the succession path.
     pub fn regrow_step(&mut self) {
         for cell in self.cells.iter_mut() {
             Self::decay_pollution(cell);
-            let capacity = cell.terrain.carrying_capacity();
-            if capacity <= 0.0 || cell.plant_biomass <= 0.0 {
-                continue;
-            }
-            let r = cell.terrain.regrowth_rate() * Self::pollution_mult(cell);
-            let b = cell.plant_biomass;
-            let next = b + r * b * (1.0 - b / capacity);
-            cell.plant_biomass = next.clamp(0.0, capacity);
+            Self::regrow_succession(cell, |_| 1.0);
         }
     }
 
@@ -227,15 +299,7 @@ impl BiomeField {
     pub fn regrow_step_seasonal(&mut self, phase: f32) {
         for cell in self.cells.iter_mut() {
             Self::decay_pollution(cell);
-            let capacity = cell.terrain.carrying_capacity();
-            if capacity <= 0.0 || cell.plant_biomass <= 0.0 {
-                continue;
-            }
-            let base_r = cell.terrain.regrowth_rate() * Self::pollution_mult(cell);
-            let r = base_r * (1.0 + SEASON_AMPLITUDE * season_match(cell.env, phase));
-            let b = cell.plant_biomass;
-            let next = b + r * b * (1.0 - b / capacity);
-            cell.plant_biomass = next.clamp(0.0, capacity);
+            Self::regrow_succession(cell, |c| 1.0 + SEASON_AMPLITUDE * season_match(c.env, phase));
         }
     }
 
@@ -677,5 +741,77 @@ mod tests {
             toward_target.length() > 0.9 && toward_target.length() < 1.1,
             "expected a roughly unit vector, got {toward_target:?}"
         );
+    }
+
+    fn grass_cell(biomass: f32, succession: u8) -> BiomeCell {
+        BiomeCell {
+            terrain: TerrainType::Grass,
+            plant_biomass: biomass,
+            env: 0.5,
+            pollution: 0.0,
+            succession,
+        }
+    }
+
+    #[test]
+    fn climax_regrowth_matches_pre_succession_arithmetic() {
+        // The Climax path must be byte-identical to the original logistic
+        // regrowth: b += r*b*(1 - b/K) with r = rate * pollution_mult.
+        let cells = vec![grass_cell(5.0, SUCCESSION_CLIMAX)];
+        let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
+        field.regrow_step();
+        let c = field.cells[0];
+        let r = TerrainType::Grass.regrowth_rate();
+        let expect = 5.0 + r * 5.0 * (1.0 - 5.0 / 10.0);
+        assert_eq!(c.plant_biomass, expect);
+        assert_eq!(c.succession, SUCCESSION_CLIMAX);
+    }
+
+    #[test]
+    fn bare_cell_reseeds_to_pioneer() {
+        let cells = vec![grass_cell(0.0, SUCCESSION_BARE)];
+        let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
+        // One step: reseed by 0.5% of capacity (0.05), still below the 5%
+        // pioneer-entry threshold (0.5).
+        field.regrow_step();
+        assert!((field.cells[0].plant_biomass - 0.05).abs() < 1e-4);
+        assert_eq!(field.cells[0].succession, SUCCESSION_BARE);
+        // 10 more steps: biomass 0.55 > 0.5 → pioneer.
+        for _ in 0..10 {
+            field.regrow_step();
+        }
+        assert_eq!(field.cells[0].succession, SUCCESSION_PIONEER);
+    }
+
+    #[test]
+    fn pioneer_grows_fast_to_half_capacity_then_matures() {
+        // Start pioneer just below its effective ceiling (0.5 × 10 = 5).
+        let cells = vec![grass_cell(4.4, SUCCESSION_PIONEER)];
+        let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
+        for _ in 0..40 {
+            field.regrow_step();
+        }
+        let c = field.cells[0];
+        assert_eq!(c.succession, SUCCESSION_CLIMAX, "pioneer matures at its ceiling");
+        // Pioneer never exceeds 0.5 × terrain capacity while pioneer.
+        // (After maturing, Climax regrowth resumes toward the full 10.0.)
+        let cells2 = vec![grass_cell(0.6, SUCCESSION_PIONEER)];
+        let mut f2 = BiomeField { cells: cells2, res: 1, world_size: 8.0, cell_size: 8.0 };
+        let mut peak = 0.0f32;
+        for _ in 0..200 {
+            f2.regrow_step();
+            if f2.cells[0].succession == SUCCESSION_PIONEER {
+                peak = peak.max(f2.cells[0].plant_biomass);
+            }
+        }
+        assert!(peak <= 5.0 + 1e-3, "pioneer overshot its half capacity: {peak}");
+    }
+
+    #[test]
+    fn pioneer_rescorched_to_zero_regresses_to_bare() {
+        let cells = vec![grass_cell(0.0, SUCCESSION_PIONEER)];
+        let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
+        field.regrow_step();
+        assert_eq!(field.cells[0].succession, SUCCESSION_BARE);
     }
 }

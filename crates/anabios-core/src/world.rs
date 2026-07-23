@@ -97,6 +97,16 @@ pub struct World {
     /// default; opt-in per scenario. Draws zero RNG and changes no state when off.
     #[serde(default)]
     pub resources_enabled: bool,
+    /// When true, the disaster scheduler is active: fire/drought/freeze
+    /// disasters strike on a Poisson schedule and scar the biome into
+    /// succession states (`disaster.rs`). Off by default; opt-in per
+    /// scenario; a no-op (zero RNG draws) when off.
+    #[serde(default)]
+    pub disasters_enabled: bool,
+    /// Disaster scheduler + active disasters + succession sites. Inert
+    /// unless `disasters_enabled`. Serialized.
+    #[serde(default)]
+    pub disasters: crate::disaster::DisasterState,
     /// Hard cap on alive agents; `reproduce_all` skips mating at/above this.
     /// Defaults to `reproduce::MAX_POPULATION` (the design's 10k budget);
     /// scenarios/tests can pin it lower. Same bincode/`FORMAT_VERSION` caveat
@@ -227,6 +237,8 @@ impl World {
             season_period: 0,
             resources: Vec::new(),
             resources_enabled: false,
+            disasters_enabled: false,
+            disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
             biome_res: crate::biome::BIOME_RES_DEFAULT,

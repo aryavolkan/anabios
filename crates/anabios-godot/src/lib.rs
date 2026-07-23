@@ -598,6 +598,64 @@ impl Simulation {
         self.inner.as_ref().map(|w| w.env_period > 0).unwrap_or(false)
     }
 
+    /// Whether the disaster scheduler (E4) is enabled — gates the succession
+    /// ground overlay in the mode cycle.
+    #[func]
+    fn disasters_active(&self) -> bool {
+        self.inner.as_ref().map(|w| w.disasters_enabled).unwrap_or(false)
+    }
+
+    /// Per-cell succession/disaster tint for the E4 ground overlay: Climax
+    /// dim green, Pioneer bright new-growth, Bare scorched umber; cells
+    /// inside an active disaster's disk tint to fire/drought/freeze colors.
+    #[func]
+    fn succession_colors(&self) -> PackedColorArray {
+        use anabios_core::biome::{SUCCESSION_BARE, SUCCESSION_PIONEER};
+        use anabios_core::disaster::DisasterKind;
+        let mut out = PackedColorArray::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        let res = w.biome.res;
+        let resf = res as f32;
+        for (i, cell) in w.biome.cells.iter().enumerate() {
+            let col = (i % res) as f32;
+            let row = (i / res) as f32;
+            let mut c = match cell.succession {
+                SUCCESSION_BARE => Color::from_rgb(0.35, 0.22, 0.12),
+                SUCCESSION_PIONEER => Color::from_rgb(0.55, 0.85, 0.35),
+                _ => Color::from_rgb(0.16, 0.30, 0.16),
+            };
+            for d in w.disasters.active.iter() {
+                let mut dc = (col - d.epicenter.0 as f32).abs();
+                let mut dr = (row - d.epicenter.1 as f32).abs();
+                if dc > resf * 0.5 {
+                    dc = resf - dc;
+                }
+                if dr > resf * 0.5 {
+                    dr = resf - dr;
+                }
+                let dist = (dc * dc + dr * dr).sqrt();
+                // Fire shows its current burn ring; drought/freeze the full disk.
+                let r = match d.kind {
+                    DisasterKind::Fire => {
+                        let age = w.tick.saturating_sub(d.start_tick) + 1;
+                        d.radius * (age as f32 / d.duration as f32).min(1.0)
+                    }
+                    _ => d.radius,
+                };
+                if dist <= r {
+                    let tint = match d.kind {
+                        DisasterKind::Fire => Color::from_rgb(1.0, 0.45, 0.10),
+                        DisasterKind::Drought => Color::from_rgb(0.75, 0.60, 0.30),
+                        DisasterKind::Freeze => Color::from_rgb(0.70, 0.85, 1.00),
+                    };
+                    c = c.lerp(tint, 0.7);
+                }
+            }
+            out.push(c);
+        }
+        out
+    }
+
     /// Current global optimal technique in `[0,1]`, or `-1.0` when the env
     /// mechanism is inactive.
     #[func]

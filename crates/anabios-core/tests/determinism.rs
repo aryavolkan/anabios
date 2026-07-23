@@ -72,8 +72,11 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // scratch (FORMAT_VERSION 8→9). Pure observers — agent behavior and RNG draw
 // order unchanged; the hash moves because the serialized layout grew and the
 // event buffer can hold the four new event types.
+// Refreshed 2026-07-23 (E4): BiomeCell.succession + World.disasters + disturbance-
+// detector scratch (FORMAT_VERSION 9→10). Flag off in golden scenarios — pure
+// layout growth.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x5437f5821aa6c0e5), (100, 0x86ab43dd4bb05eef), (1000, 0x48b1ee4bc480801e)];
+    &[(0, 0xffc6220cd69e11a5), (100, 0xa527aef1deda9b23), (1000, 0xc3799dc0bcca4809)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

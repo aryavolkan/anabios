@@ -106,6 +106,42 @@ pub(super) fn detect_migration(world: &mut World, agg: &SpeciesAggTable) {
                 loc_y: last.1,
             });
             clear.push(*sid);
+            // Feed the corridor detector: shortest-path torus direction of
+            // the displacement, normalized.
+            let ws = world.world_size;
+            let mut dx = last.0 - first.0;
+            let mut dy = last.1 - first.1;
+            if dx > ws * 0.5 {
+                dx -= ws;
+            } else if dx < -ws * 0.5 {
+                dx += ws;
+            }
+            if dy > ws * 0.5 {
+                dy -= ws;
+            } else if dy < -ws * 0.5 {
+                dy += ws;
+            }
+            let len = (dx * dx + dy * dy).sqrt().max(1e-6);
+            // Corridor leg check: sample along the unwrapped displacement
+            // and count barrier-terrain (water/rock) cells crossed.
+            let mut barrier_hits = 0_u32;
+            for s in 1..CORRIDOR_BARRIER_SAMPLES {
+                let t = s as f32 / CORRIDOR_BARRIER_SAMPLES as f32;
+                let px = (first.0 + dx * t).rem_euclid(world.world_size);
+                let py = (first.1 + dy * t).rem_euclid(world.world_size);
+                let (bc, br) = world.biome.cell_coords(glam::Vec2::new(px, py));
+                match world.biome.at(bc, br).terrain {
+                    crate::biome::TerrainType::Water | crate::biome::TerrainType::Rock => {
+                        barrier_hits += 1;
+                    }
+                    _ => {}
+                }
+            }
+            let dirs = world.codex.migration_dirs.entry(*sid).or_default();
+            if dirs.len() == CORRIDOR_DIR_CAP {
+                dirs.pop_front();
+            }
+            dirs.push_back((tick, dx / len, dy / len, barrier_hits));
         }
     }
     for ev in to_push {

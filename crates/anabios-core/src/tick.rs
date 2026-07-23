@@ -77,6 +77,10 @@ pub fn step(world: &mut World) {
     // Stage 8c: pheromone field decay (design §3.7 step 9).
     world.pheromones.decay_step();
 
+    // Stage 8d: disasters — scheduler + propagation (opt-in; no-op and zero
+    // RNG draws when `disasters_enabled` is false).
+    crate::disaster::disaster_step(world);
+
     // Stage 8: periodic species clustering.
     if world.tick.is_multiple_of(crate::species::SPECIES_STEP_INTERVAL) {
         crate::species::species_step(world);
