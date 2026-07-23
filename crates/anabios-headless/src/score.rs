@@ -25,7 +25,7 @@ pub const CORPUS_RUNS: u64 = 64;
 pub const NOVELTY_BONUS: f64 = 5.158_883_083_359_671;
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 34] = [
+pub const ALL_EVENT_NAMES: [&str; 38] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -60,6 +60,10 @@ pub const ALL_EVENT_NAMES: [&str; 34] = [
     "trait_fixation",
     "rapid_adaptation",
     "convergent_evolution",
+    "evolved_ambush",
+    "evolved_tool",
+    "evolved_flight",
+    "structured_signaling",
 ];
 
 /// Rarity weights derived from the reference corpus (see module docs):
@@ -68,7 +72,7 @@ pub const ALL_EVENT_NAMES: [&str; 34] = [
 /// many corpus runs fired each type; unseen types sit at `NOVELTY_BONUS`.
 /// The corpus predates E3/E4, so the population-dynamics and disturbance
 /// types are definitionally unseen (bonus) until the next regeneration.
-pub const DEFAULT_WEIGHTS: [(&str, f64); 34] = [
+pub const DEFAULT_WEIGHTS: [(&str, f64); 38] = [
     ("extinction", 0.048009_f64),            // n_t=61
     ("pop_crash", 0.133531_f64),             // n_t=56
     ("speciation", 0.081346_f64),            // n_t=59
@@ -103,6 +107,10 @@ pub const DEFAULT_WEIGHTS: [(&str, f64); 34] = [
     ("trait_fixation", NOVELTY_BONUS),       // post-corpus (E5)
     ("rapid_adaptation", NOVELTY_BONUS),     // post-corpus (E5)
     ("convergent_evolution", NOVELTY_BONUS), // post-corpus (E5)
+    ("evolved_ambush", NOVELTY_BONUS),       // post-corpus (E6)
+    ("evolved_tool", NOVELTY_BONUS),         // post-corpus (E6)
+    ("evolved_flight", NOVELTY_BONUS),       // post-corpus (E6)
+    ("structured_signaling", NOVELTY_BONUS), // post-corpus (E6)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -141,6 +149,10 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::TraitFixation => "trait_fixation",
         EventType::RapidAdaptation => "rapid_adaptation",
         EventType::ConvergentEvolution => "convergent_evolution",
+        EventType::EvolvedAmbush => "evolved_ambush",
+        EventType::EvolvedTool => "evolved_tool",
+        EventType::EvolvedFlight => "evolved_flight",
+        EventType::StructuredSignaling => "structured_signaling",
     }
 }
 

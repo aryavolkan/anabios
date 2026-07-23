@@ -36,6 +36,10 @@ pub fn step(world: &mut World) {
     // Stage 4: integrate (motion + per-tick metabolism).
     integrate_all(&mut world.agents, &world.desired_direction[..cap], world.world_size);
 
+    // Stage 4b: E6 ambush instrumentation — consecutive still ticks per
+    // agent, read by `combat_pass` in the interact stage. Observability only.
+    crate::codex::signatures::update_still_ticks(world);
+
     // Stage 5: interact (feeding, combat, predation).
     interact_all(world);
 

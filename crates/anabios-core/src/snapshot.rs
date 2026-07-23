@@ -47,7 +47,10 @@ use crate::world::World;
 /// v11: E5 trait-evolution instruments — SpeciesAgg genome moments,
 ///     CodexState trait-detector scratch (genome_moments, fixation/rapid/
 ///     convergence state). Pure observers; behavior unchanged.
-pub const FORMAT_VERSION: u32 = 11;
+/// v12: E6 named behaviors — CombatHit ambush/tool_boosted context,
+///     CodexState signature-detector scratch. Observability only; behavior
+///     unchanged.
+pub const FORMAT_VERSION: u32 = 12;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

@@ -77,8 +77,10 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // layout growth.
 // Refreshed 2026-07-23 (E5): SpeciesAgg genome moments + trait-detector scratch
 // (FORMAT_VERSION 10→11) — observers only, layout growth.
+// Refreshed 2026-07-23 (E6): CombatHit ambush/tool context + signature-detector
+// scratch (FORMAT_VERSION 11→12) — observability only.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x630594ea2c8dada5), (100, 0x565367445c14cee0), (1000, 0x1e281adf14c3cddd)];
+    &[(0, 0x6b7935987c2b0da5), (100, 0x3f30823fb1684ad9), (1000, 0x43e8483fb1c9338c)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

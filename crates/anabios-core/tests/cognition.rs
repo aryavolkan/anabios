@@ -57,8 +57,10 @@ fn cognitive_scenario_is_self_consistent() {
 // 9→10) — layout growth only, flag off.
 // Refreshed 2026-07-23 (E5): genome moments + trait-detector scratch
 // (FORMAT_VERSION 10→11) — layout growth only.
+// Refreshed 2026-07-23 (E6): CombatHit context + signature scratch
+// (FORMAT_VERSION 11→12) — observability only.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x16c77c927987c7cb), (100, 0xf31e21a1df5101d5), (300, 0xf1421f3b55605739)];
+    &[(0, 0xe8178d29fc0d25cb), (100, 0x864c4042ca69105d), (300, 0x34cf966df1f45e7a)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

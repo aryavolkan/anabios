@@ -159,16 +159,21 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
             continue;
         }
         // Metalworking buff: better weapons deal more damage.
-        let damage = weapon.damage
-            * crate::invention::weapon_multiplier(crate::invention::held_mask(
-                &world.agents.meme_vector[i],
-            ));
+        let inv_weapon_mult = crate::invention::weapon_multiplier(crate::invention::held_mask(
+            &world.agents.meme_vector[i],
+        ));
+        let damage = weapon.damage * inv_weapon_mult;
         let armor = module::effective_armor_protection(&world.agents.modules[t]);
         let net = (damage - armor).max(0.0);
         world.agents.energy[t] -= net;
         world.agents.energy[i] -= weapon.energy_cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
+        // E6 behavioral context at fire time: lying-in-wait attacker, and
+        // invention-boosted damage.
+        let ambush =
+            world.still_ticks.get(i).copied().unwrap_or(0) >= crate::codex::AMBUSH_STILL_MIN;
+        let tool_boosted = inv_weapon_mult > 1.05;
         // Viewer scratch: draw a streak from the attacker to its target,
         // tinted by the attacker's genome hue.
         world.combat_streaks.push((
@@ -182,6 +187,15 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
             target_id: tgt,
             attacker_id: id,
             species: world.agents.species_id[i],
+            ambush,
+            tool_boosted,
+        });
+        // Rolling hit log for the E6 named-behavior detectors.
+        world.codex.sig_hit_log.push_back(crate::codex::SigHit {
+            tick: world.tick,
+            species: world.agents.species_id[i],
+            ambush,
+            tool_boosted,
         });
     }
 }

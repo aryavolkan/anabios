@@ -170,13 +170,23 @@ pub struct World {
     #[serde(skip)]
     pub combat_streaks: Vec<(crate::prelude::Vec2, crate::prelude::Vec2, f32)>,
     /// Per-tick trade route buffer for the viewer: `(trader_pos,
-    /// partner_pos, trader_hue)` records pushed by `trade_pass` and cleared
-    /// at the start of the next `interact_all`. The hue is the initiating
+    /// partner_pos, trader_hue)` records pushed by `trade_pass` and cleared at
+    /// the start of the next `interact_all`. The hue is the initiating
     /// trader's genome `ColorHue` slot, so routes tint to match the trader's
     /// body color. Scratch only — never read by the simulation, so it is
     /// skipped by serialization like the other per-tick buffers.
     #[serde(skip)]
     pub trade_routes: Vec<(crate::prelude::Vec2, crate::prelude::Vec2, f32)>,
+    /// Consecutive ticks each agent has been below the still-speed
+    /// threshold (E6 ambush instrumentation). Updated after integrate, read
+    /// by `combat_pass`. Observability only — skipped by serialization.
+    #[serde(skip)]
+    pub still_ticks: Vec<u32>,
+    /// Last tick's `desired_direction` per agent (E6 signaling: a response
+    /// is a receiver STEERING toward the caller, i.e. alignment improving
+    /// tick-over-tick). Observability only — skipped by serialization.
+    #[serde(skip)]
+    pub prev_desired_direction: Vec<crate::prelude::Vec2>,
     /// Cumulative count of successful cross-species swaps over the run.
     /// Counts each initiator-side swap: `trade_pass` visits every agent as an
     /// initiator, so a reciprocal pair (each is the other's nearest partner)
@@ -264,6 +274,8 @@ impl World {
             combat_attacker: Vec::new(),
             combat_streaks: Vec::new(),
             trade_routes: Vec::new(),
+            still_ticks: Vec::new(),
+            prev_desired_direction: Vec::new(),
             total_trades: 0,
         }
     }
@@ -402,6 +414,9 @@ impl World {
         }
         if self.combat_attacker.len() < cap {
             self.combat_attacker.resize(cap, crate::sense::NO_NEIGHBOR_SPECIES);
+        }
+        if self.still_ticks.len() < cap {
+            self.still_ticks.resize(cap, 0);
         }
     }
 }

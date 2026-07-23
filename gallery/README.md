@@ -12,6 +12,19 @@ the other scenarios on the viewer default. Captures run windowed (not
 `--headless`): the harness reads the viewport texture after
 `frame_post_draw`, which never completes on the dummy renderer.
 
+## named behaviors (E6)
+
+Fire-time behavioral context on every combat hit (was the attacker lying in
+wait? was the damage invention-boosted?) feeds the named-behavior detectors.
+Two chapters discovered in real runs so far (Flight, Signaling); Ambush and
+ToolUse remain honestly undiscovered codex entries — pursuit starters never
+sit in wait, and the Metalworking timeline misses the hunting window by a
+few hundred ticks (see the E6 plan notes).
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| e6-named-behaviors.png | 1531 | `gene-culture-alarm` seed 0 mid-bloom (4,360 alive, 513 species): the tally's bottom line carries the new chapters — `Flight: 1 Signaling: 1` — alongside `AlarmCall: 1 TraitFixed: 1 Corridor: 1 Segregation: 2` from earlier milestones. |
+
 ## trait evolution (E5)
 
 Genome-moment history (mean/variance per slot per species, 10-tick cadence)

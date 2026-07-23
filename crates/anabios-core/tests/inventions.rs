@@ -761,8 +761,10 @@ fn inventions_scenario_is_deterministic() {
 // 9→10) — layout growth only, flag off.
 // Refreshed 2026-07-23 (E5): genome moments + trait-detector scratch
 // (FORMAT_VERSION 10→11) — layout growth only.
+// Refreshed 2026-07-23 (E6): CombatHit context + signature scratch
+// (FORMAT_VERSION 11→12) — observability only.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xb0c039cc8954835e), (100, 0x1c9cce1c26d45bb4), (300, 0x42868df689f7e385)];
+    &[(0, 0x6963ce81ba30395e), (100, 0x752c106424d4a5ab), (300, 0x2f4e1bee4db50c23)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
