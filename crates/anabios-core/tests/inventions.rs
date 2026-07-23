@@ -759,8 +759,10 @@ fn inventions_scenario_is_deterministic() {
 // scratch (FORMAT_VERSION 8→9) — serialized layout only, behavior unchanged.
 // Refreshed 2026-07-23 (E4): BiomeCell.succession + World.disasters (FORMAT_VERSION
 // 9→10) — layout growth only, flag off.
+// Refreshed 2026-07-23 (E5): genome moments + trait-detector scratch
+// (FORMAT_VERSION 10→11) — layout growth only.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xa6d1cf1a31e2809e), (100, 0x2427a66c44f88e86), (300, 0x2de8b19faa547a98)];
+    &[(0, 0xb0c039cc8954835e), (100, 0x1c9cce1c26d45bb4), (300, 0x42868df689f7e385)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

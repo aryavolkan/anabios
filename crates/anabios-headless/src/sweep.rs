@@ -177,13 +177,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          resource_traded,dowry_birth,\
          pop_cycle,boom_bust,carrying_capacity,trophic_cascade,\
          range_expansion,segregation,corridor_use,succession,\
+         trait_fixation,rapid_adaptation,convergent_evolution,\
          emergence_score,novel_events,coverage"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -220,6 +221,9 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("segregation"),
             g("corridor_use"),
             g("succession"),
+            g("trait_fixation"),
+            g("rapid_adaptation"),
+            g("convergent_evolution"),
             r.emergence_score,
             r.novel_events,
             r.coverage,

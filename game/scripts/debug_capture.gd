@@ -60,6 +60,12 @@ func _run(path: String, wait_frames: int) -> void:
 			if coevo != null:
 				coevo.set("_shown", true)
 				coevo.visible = true
+		# Optionally reveal the [T] evolution panel for the capture.
+		if OS.has_environment("ANABIOS_EVO"):
+			var evo := main.get_node_or_null("UI/EvolutionPanel")
+			if evo != null:
+				evo.set("_shown", true)
+				evo.visible = true
 		# Optionally pin an agent so the inspector panel is visible.
 		if OS.has_environment("ANABIOS_INSPECT"):
 			var sim2 := main.get_node_or_null("Simulation")

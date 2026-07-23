@@ -26,6 +26,7 @@ mod invention;
 mod population;
 mod practice;
 mod spatial;
+mod traits;
 
 /// Maximum events buffered before the oldest are dropped.
 pub const CODEX_EVENT_CAPACITY: usize = 4096;
@@ -167,6 +168,38 @@ pub const CORRIDOR_DIR_CAP: usize = 4;
 /// Fraction of a fire scar's tracked cells that must return to Climax for
 /// the Succession event.
 pub const SUCCESSION_RECOVERED_FRAC: f32 = 0.5;
+
+/// Span (ticks) covered by the per-species genome-moment ring.
+pub const MOMENT_SPAN: u64 = 400;
+/// Samples per species in the genome-moment ring (at 10-tick cadence).
+pub const MOMENT_RING: usize = 40;
+/// Variance at/above which a slot counts as polymorphic (TraitFixation start).
+pub const FIX_POLY_VAR: f32 = 0.02;
+/// Variance at/below which a slot counts as collapsed/fixed.
+pub const FIX_COLLAPSE_VAR: f32 = 0.005;
+/// Minimum members for variance to be meaningful.
+pub const FIX_MIN_MEMBERS: u32 = 10;
+/// Samples (×10 ticks) compared for RapidAdaptation (100 ticks).
+pub const RAPID_WINDOW: usize = 10;
+/// Minimum absolute mean shift for RapidAdaptation.
+pub const RAPID_MIN_DELTA: f32 = 0.15;
+/// Shift must also exceed this multiple of the slot's recent σ.
+pub const RAPID_SIGMA_MULT: f32 = 3.0;
+/// Per-(species, slot) cooldown between RapidAdaptation events.
+pub const RAPID_COOLDOWN: u64 = 400;
+/// Max |Δmean| for two fixations to count as the same adaptive band.
+pub const CONVERGE_MEAN_TOL: f32 = 0.15;
+/// Bounded archive of past fixations scanned for convergence.
+pub const FIXATION_ARCHIVE_CAP: usize = 500;
+
+/// One per-species genome-moment sample (mean + variance over all 50 slots,
+/// stored genome-shaped for the manual array serde impls).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraitMoments {
+    pub tick: u64,
+    pub mean: crate::genome::Genome,
+    pub var: crate::genome::Genome,
+}
 /// Herbivore rise (over stage-entry level) required for stage 2.
 pub const CASCADE_HERB_RISE: f32 = 0.3;
 /// Plant-biomass drop (below stage-entry level) that completes the cascade.
@@ -247,12 +280,21 @@ pub enum EventType {
     CorridorUse = 29,
     /// ≥50% of a fire's scar returned to Climax succession (loc = epicenter).
     Succession = 30,
+    /// A genome slot collapsed from polymorphic to fixed within a species
+    /// (`value` = slot id).
+    TraitFixation = 31,
+    /// A genome slot's mean moved ≥ max(0.15, 3σ) within 100 ticks
+    /// (`value` = slot id).
+    RapidAdaptation = 32,
+    /// Two independent lineages (LCA = founder root) fixed the same slot in
+    /// the same band (`value` = slot id; species = the newer fixer).
+    ConvergentEvolution = 33,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::Succession as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::ConvergentEvolution as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -414,6 +456,20 @@ pub struct CodexState {
     pub migration_dirs: BTreeMap<u32, VecDeque<(u64, f32, f32, u32)>>,
     /// Species currently latched as corridor users.
     pub corridor_active: BTreeSet<u32>,
+    /// Per-species genome-moment history (10-tick cadence, ring of
+    /// `MOMENT_RING`), pruned when a species leaves the active set for a
+    /// full `MOMENT_SPAN`.
+    pub genome_moments: BTreeMap<u32, VecDeque<TraitMoments>>,
+    /// (species, slot) pairs currently latched as fixed.
+    pub fixation_latches: BTreeSet<(u32, u8)>,
+    /// (species, slot) → last RapidAdaptation fire tick (cooldown).
+    pub rapid_cooldown: BTreeMap<(u32, u8), u64>,
+    /// Bounded archive of past fixations `(species, slot, mean)` scanned by
+    /// the convergence detector.
+    pub fixation_archive: VecDeque<(u32, u8, f32)>,
+    /// Index watermark into `fixation_archive`: entries before it have
+    /// already been evaluated for convergence.
+    pub converge_watermark: usize,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -542,7 +598,7 @@ pub struct SpeciesAggTable {
 }
 
 /// Aggregates for one species for one tick.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SpeciesAgg {
     pub count: u32,
     pub sum_x: f64,
@@ -576,6 +632,36 @@ pub struct SpeciesAgg {
     /// Distinct biome cells occupied by members this tick (scratch for the
     /// E4 spatial detectors). Cell index = row * res + col.
     pub occ_cells: std::collections::BTreeSet<u32>,
+    /// Per-slot genome sums / squared sums over members (for the E5
+    /// genome-moment history). 50 slots each.
+    pub genome_sums: [f64; 50],
+    pub genome_sumsq: [f64; 50],
+}
+
+impl Default for SpeciesAgg {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            sum_x: 0.0,
+            sum_y: 0.0,
+            member_idx: Vec::new(),
+            has_comm: false,
+            has_pheromone: false,
+            module_mask: 0,
+            node_mask: 0,
+            terrain_counts: [0.0; TERRAIN_SLOTS],
+            meme_sums: [0.0; MEME_CHANNELS],
+            crowding_sum: 0.0,
+            weapon_sum: 0.0,
+            armor_sum: 0.0,
+            diet_sum: 0.0,
+            invention_counts: [0; crate::invention::INVENTION_COUNT],
+            practice_counts: [0; crate::practice::PRACTICE_COUNT],
+            occ_cells: std::collections::BTreeSet::new(),
+            genome_sums: [0.0; 50],
+            genome_sumsq: [0.0; 50],
+        }
+    }
 }
 
 impl SpeciesAgg {
@@ -597,6 +683,8 @@ impl SpeciesAgg {
         self.invention_counts = [0; crate::invention::INVENTION_COUNT];
         self.practice_counts = [0; crate::practice::PRACTICE_COUNT];
         self.occ_cells.clear();
+        self.genome_sums = [0.0; 50];
+        self.genome_sumsq = [0.0; 50];
     }
 
     /// This tick's centroid (mean alive position), `(0,0)` when empty.
@@ -672,6 +760,11 @@ impl SpeciesAggTable {
                 e.crowding_sum += world.sensors[i].crowding as f64;
             }
             e.diet_sum += module::effective_diet_carnivory(modules) as f64;
+            for (slot, gv) in world.agents.genome[i].0.iter().enumerate() {
+                let x = *gv as f64;
+                e.genome_sums[slot] += x;
+                e.genome_sumsq[slot] += x * x;
+            }
             if world.inventions_enabled {
                 let inv_mask = crate::invention::held_mask(&world.agents.meme_vector[i]);
                 crate::invention::for_each_set_bit(inv_mask, |k| e.invention_counts[k] += 1);
@@ -753,6 +846,12 @@ pub fn observe_all(world: &mut World) {
     disturbance::detect_segregation(world, &agg);
     disturbance::detect_corridor_use(world, &agg);
     disturbance::detect_succession(world);
+    // Fixation runs before convergence: convergence scans the archive
+    // entries this cycle appended.
+    traits::update_genome_moments(world, &agg);
+    traits::detect_trait_fixation(world, &agg);
+    traits::detect_rapid_adaptation(world, &agg);
+    traits::detect_convergent_evolution(world, &agg);
     population::detect_migration(world, &agg);
     population::detect_novel_modules(world, &agg);
     population::detect_novel_behavior(world, &agg);
