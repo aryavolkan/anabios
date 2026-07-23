@@ -766,8 +766,11 @@ fn inventions_scenario_is_deterministic() {
 // (FORMAT_VERSION 11→12) — observability only.
 // Refreshed 2026-07-23 (E7): hostility records + SenseHostility behind
 // war_enabled (FORMAT_VERSION 12→13) — layout growth only, flag off.
+// Refreshed 2026-07-23 (E6 merge): merged e6 in — serializes
+// World.{still_ticks, prev_desired_direction} (FORMAT_VERSION 13→14), layout
+// growth only.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xb7ecbea7c7ae7598), (100, 0xce80b65132cc5c3c), (300, 0xf7b1630c4271d80f)];
+    &[(0, 0x4952ce1bfbca1b98), (100, 0xb5e8ce0a6a08103c), (300, 0x3928638fc7233a7e)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

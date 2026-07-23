@@ -185,13 +185,17 @@ pub struct World {
     pub trade_routes: Vec<(crate::prelude::Vec2, crate::prelude::Vec2, f32)>,
     /// Consecutive ticks each agent has been below the still-speed
     /// threshold (E6 ambush instrumentation). Updated after integrate, read
-    /// by `combat_pass`. Observability only — skipped by serialization.
-    #[serde(skip)]
+    /// by `combat_pass` to stamp each `SigHit.ambush`. This is a
+    /// path-dependent accumulator that feeds serialized codex state
+    /// (`sig_hit_log` → `ambush_active`), so it MUST persist across a snapshot
+    /// round-trip — otherwise restore-and-continue diverges from a continuous
+    /// run for the next `AMBUSH_STILL_MIN` ticks. Serialized (not skipped).
     pub still_ticks: Vec<u32>,
     /// Last tick's `desired_direction` per agent (E6 signaling: a response
     /// is a receiver STEERING toward the caller, i.e. alignment improving
-    /// tick-over-tick). Observability only — skipped by serialization.
-    #[serde(skip)]
+    /// tick-over-tick). Feeds serialized codex state (`signal_responses` →
+    /// `signal_active`) via `detect_structured_signaling`, so like
+    /// `still_ticks` it MUST persist across a snapshot round-trip. Serialized.
     pub prev_desired_direction: Vec<crate::prelude::Vec2>,
     /// Cumulative count of successful cross-species swaps over the run.
     /// Counts each initiator-side swap: `trade_pass` visits every agent as an
