@@ -50,6 +50,11 @@ func _ready() -> void:
 	var replay_manager := preload("res://scripts/replay_manager.gd").new()
 	replay_manager.name = "ReplayManager"
 	add_child(replay_manager)
+	# Evolution panel (E5): trait drift + phylogeny, toggled with [T].
+	var evolution_panel := preload("res://scripts/evolution_panel.gd").new()
+	evolution_panel.name = "EvolutionPanel"
+	evolution_panel.theme = UiTheme.build()
+	$UI.add_child(evolution_panel)
 
 # The world is a torus but rendering is not: a camera near a seam sees agents
 # vanish at the edge. Duplicate every agent layer into the 8 neighboring world

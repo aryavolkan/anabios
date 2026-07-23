@@ -55,8 +55,10 @@ fn cognitive_scenario_is_self_consistent() {
 // (FORMAT_VERSION 8→9) — layout growth only, behavior unchanged.
 // Refreshed 2026-07-23 (E4): BiomeCell.succession + World.disasters (FORMAT_VERSION
 // 9→10) — layout growth only, flag off.
+// Refreshed 2026-07-23 (E5): genome moments + trait-detector scratch
+// (FORMAT_VERSION 10→11) — layout growth only.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xa23b70f1adae940b), (100, 0xf99806506746f82d), (300, 0x5fb4f1501afc42f9)];
+    &[(0, 0x16c77c927987c7cb), (100, 0xf31e21a1df5101d5), (300, 0xf1421f3b55605739)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

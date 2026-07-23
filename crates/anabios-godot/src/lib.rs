@@ -226,6 +226,55 @@ impl Simulation {
         }
     }
 
+    /// Mean history of one genome slot for one species (E5 trait-drift
+    /// charts), oldest-first, at the codex's 10-tick cadence. Empty when the
+    /// species has no moment history.
+    #[func]
+    fn species_trait_series(&self, sid: i64, slot: i64) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        let Some(buf) = w.codex.genome_moments.get(&(sid as u32)) else { return out };
+        let s = (slot as usize).min(49);
+        for m in buf.iter() {
+            out.push(m.mean.0[s]);
+        }
+        out
+    }
+
+    /// Living-species phylogeny rows for the evolution panel: `id`,
+    /// `parent` (-1 = founder root), `count`, `depth` (speciation distance
+    /// from the root). Sorted ascending by id.
+    #[func]
+    fn phylogeny(&self) -> Array<VarDictionary> {
+        let mut out = Array::<VarDictionary>::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for sid in 0..w.species_parents.len() {
+            let count = w.species_member_counts.get(sid).copied().unwrap_or(0);
+            if count == 0 {
+                continue;
+            }
+            let parent = w.species_parents[sid].map(|p| p as i64).unwrap_or(-1);
+            let mut depth: i64 = 0;
+            let mut cur = sid;
+            for _ in 0..64 {
+                match w.species_parents.get(cur).copied().flatten() {
+                    Some(p) if p as usize != cur => {
+                        depth += 1;
+                        cur = p as usize;
+                    }
+                    _ => break,
+                }
+            }
+            let mut d = VarDictionary::new();
+            d.set("id", sid as i64);
+            d.set("parent", parent);
+            d.set("count", count as i64);
+            d.set("depth", depth);
+            out.push(&d);
+        }
+        out
+    }
+
     /// Current-tick co-evolution scalars (see plan/spec for key meanings).
     /// All frequencies/means in `[0,1]`; `env_optimum` is `-1.0` when inactive.
     #[func]

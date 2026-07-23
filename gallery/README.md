@@ -12,6 +12,18 @@ the other scenarios on the viewer default. Captures run windowed (not
 `--headless`): the harness reads the viewport texture after
 `frame_post_draw`, which never completes on the dummy renderer.
 
+## trait evolution (E5)
+
+Genome-moment history (mean/variance per slot per species, 10-tick cadence)
+feeds three detectors — TraitFixation, RapidAdaptation, ConvergentEvolution
+(LCA-disciplined: sister splinters don't count) — and the [T] evolution
+panel: trait-drift lines for the dominant species plus the living phylogeny.
+`ANABIOS_SEED=50505` (the convergent scenario seed), `ANABIOS_EVO=1`.
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| e5-evolution-panel.png | 6061 | `convergent` seed 50505: the evolution panel mid-run — four trait-drift lines (size/metabolism/perception/openness) for the dominant sp1568, and the indented phylogeny below it (sp1568 → sp1 → sp1669 …). The tally carries the new chapters: `TraitFixed: 1 RapidAdapt: 1`. |
+
 ## disturbance & succession (E4)
 
 Fire/drought/freeze disasters scar the biome into succession states (bare →

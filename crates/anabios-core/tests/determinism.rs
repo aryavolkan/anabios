@@ -75,8 +75,10 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-23 (E4): BiomeCell.succession + World.disasters + disturbance-
 // detector scratch (FORMAT_VERSION 9→10). Flag off in golden scenarios — pure
 // layout growth.
+// Refreshed 2026-07-23 (E5): SpeciesAgg genome moments + trait-detector scratch
+// (FORMAT_VERSION 10→11) — observers only, layout growth.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xffc6220cd69e11a5), (100, 0xa527aef1deda9b23), (1000, 0xc3799dc0bcca4809)];
+    &[(0, 0x630594ea2c8dada5), (100, 0x565367445c14cee0), (1000, 0x1e281adf14c3cddd)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

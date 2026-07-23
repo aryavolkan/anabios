@@ -1,0 +1,29 @@
+name = "convergent"
+seed = 50505
+
+# E5 showcase: two IDENTICAL grazer stocks as separate founder species
+# (independent lineage roots), isolated at opposite ends of the world in
+# matched terrain. Matched niches should select for matched trait fixes —
+# the ConvergentEvolution detector watches for the same genome slot fixing
+# in both lineages (LCA = founder root).
+max_population = 2000
+
+[[agents]]
+count = 50
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 212.0, center_y = 512.0, radius = 100.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+basal_metabolism = 0.4
+perception_radius = 0.5
+
+[[agents]]
+count = 50
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 812.0, center_y = 512.0, radius = 100.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+basal_metabolism = 0.4
+perception_radius = 0.5

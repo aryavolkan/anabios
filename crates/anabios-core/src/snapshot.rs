@@ -44,7 +44,10 @@ use crate::world::World;
 ///     World.{disasters_enabled, disasters}, CodexState disturbance-detector
 ///     scratch. `disasters_enabled` off in all golden scenarios ⇒ behavior
 ///     unchanged; only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 10;
+/// v11: E5 trait-evolution instruments — SpeciesAgg genome moments,
+///     CodexState trait-detector scratch (genome_moments, fixation/rapid/
+///     convergence state). Pure observers; behavior unchanged.
+pub const FORMAT_VERSION: u32 = 11;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
