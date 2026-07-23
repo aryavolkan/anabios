@@ -256,11 +256,13 @@ mod tests {
 
     fn agg_with_occ(sid: u32, count: u32, cells: &[u32]) -> SpeciesAggTable {
         let mut agg = SpeciesAggTable::default();
-        let mut e = SpeciesAgg::default();
-        e.count = count;
-        e.sum_x = 500.0 * count as f64;
-        e.sum_y = 500.0 * count as f64;
-        e.occ_cells = cells.iter().copied().collect();
+        let e = SpeciesAgg {
+            count,
+            sum_x: 500.0 * count as f64,
+            sum_y: 500.0 * count as f64,
+            occ_cells: cells.iter().copied().collect(),
+            ..Default::default()
+        };
         if sid as usize >= agg.entries.len() {
             agg.entries.resize(sid as usize + 1, SpeciesAgg::default());
         }
@@ -304,18 +306,14 @@ mod tests {
         // Mixed phase: species 0 and 1 share every cell → species 0 is
         // marked as having been mixed.
         let mut agg_mixed = agg_with_occ(0, 30, &(0..30).collect::<Vec<_>>());
-        let mut e1 = SpeciesAgg::default();
-        e1.count = 30;
-        e1.occ_cells = (0..30).collect();
+        let e1 = SpeciesAgg { count: 30, occ_cells: (0..30).collect(), ..Default::default() };
         agg_mixed.entries.resize(2, SpeciesAgg::default());
         agg_mixed.entries[1] = e1;
         agg_mixed.active.push(1);
         detect_segregation(&mut w, &agg_mixed);
         // Isolated phase: species 0 alone at 0..30, species 1 at 100..130.
         let mut agg = agg_with_occ(0, 30, &(0..30).collect::<Vec<_>>());
-        let mut e2 = SpeciesAgg::default();
-        e2.count = 30;
-        e2.occ_cells = (100..130).collect();
+        let e2 = SpeciesAgg { count: 30, occ_cells: (100..130).collect(), ..Default::default() };
         agg.entries.resize(2, SpeciesAgg::default());
         agg.entries[1] = e2;
         agg.active.push(1);
@@ -352,9 +350,7 @@ mod tests {
         let mut w = world_with_agent();
         // Both species share every cell.
         let mut agg = agg_with_occ(0, 30, &(0..30).collect::<Vec<_>>());
-        let mut e1 = SpeciesAgg::default();
-        e1.count = 30;
-        e1.occ_cells = (0..30).collect();
+        let e1 = SpeciesAgg { count: 30, occ_cells: (0..30).collect(), ..Default::default() };
         agg.entries.resize(2, SpeciesAgg::default());
         agg.entries[1] = e1;
         agg.active.push(1);

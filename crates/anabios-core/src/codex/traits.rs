@@ -273,10 +273,12 @@ mod tests {
 
     fn agg_for(sid: u32, count: u32) -> SpeciesAggTable {
         let mut agg = SpeciesAggTable::default();
-        let mut e = SpeciesAgg::default();
-        e.count = count;
-        e.sum_x = 500.0 * count as f64;
-        e.sum_y = 500.0 * count as f64;
+        let e = SpeciesAgg {
+            count,
+            sum_x: 500.0 * count as f64,
+            sum_y: 500.0 * count as f64,
+            ..Default::default()
+        };
         if sid as usize >= agg.entries.len() {
             agg.entries.resize(sid as usize + 1, SpeciesAgg::default());
         }
