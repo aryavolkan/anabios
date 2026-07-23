@@ -25,7 +25,7 @@ pub const CORPUS_RUNS: u64 = 64;
 pub const NOVELTY_BONUS: f64 = 5.158_883_083_359_671;
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 38] = [
+pub const ALL_EVENT_NAMES: [&str; 42] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -64,6 +64,10 @@ pub const ALL_EVENT_NAMES: [&str; 38] = [
     "evolved_tool",
     "evolved_flight",
     "structured_signaling",
+    "war",
+    "war_ended",
+    "alliance",
+    "kin_network",
 ];
 
 /// Rarity weights derived from the reference corpus (see module docs):
@@ -72,7 +76,7 @@ pub const ALL_EVENT_NAMES: [&str; 38] = [
 /// many corpus runs fired each type; unseen types sit at `NOVELTY_BONUS`.
 /// The corpus predates E3/E4, so the population-dynamics and disturbance
 /// types are definitionally unseen (bonus) until the next regeneration.
-pub const DEFAULT_WEIGHTS: [(&str, f64); 38] = [
+pub const DEFAULT_WEIGHTS: [(&str, f64); 42] = [
     ("extinction", 0.048009_f64),            // n_t=61
     ("pop_crash", 0.133531_f64),             // n_t=56
     ("speciation", 0.081346_f64),            // n_t=59
@@ -111,6 +115,10 @@ pub const DEFAULT_WEIGHTS: [(&str, f64); 38] = [
     ("evolved_tool", NOVELTY_BONUS),         // post-corpus (E6)
     ("evolved_flight", NOVELTY_BONUS),       // post-corpus (E6)
     ("structured_signaling", NOVELTY_BONUS), // post-corpus (E6)
+    ("war", NOVELTY_BONUS),                  // post-corpus (E7)
+    ("war_ended", NOVELTY_BONUS),            // post-corpus (E7)
+    ("alliance", NOVELTY_BONUS),             // post-corpus (E7)
+    ("kin_network", NOVELTY_BONUS),          // post-corpus (E7)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -153,6 +161,10 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::EvolvedTool => "evolved_tool",
         EventType::EvolvedFlight => "evolved_flight",
         EventType::StructuredSignaling => "structured_signaling",
+        EventType::WarOrRaid => "war",
+        EventType::WarEnded => "war_ended",
+        EventType::AllianceFormed => "alliance",
+        EventType::KinNetworkStable => "kin_network",
     }
 }
 

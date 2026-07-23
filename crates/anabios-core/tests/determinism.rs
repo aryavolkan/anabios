@@ -79,14 +79,15 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // (FORMAT_VERSION 10→11) — observers only, layout growth.
 // Refreshed 2026-07-23 (E6): CombatHit ambush/tool context + signature-detector
 // scratch (FORMAT_VERSION 11→12) — observability only.
-// Refreshed 2026-07-23 (E6 fix): World.{still_ticks, prev_desired_direction} are
-// now serialized (FORMAT_VERSION 12→13) — they are path-dependent accumulators
-// feeding serialized codex state, so they must survive a snapshot round-trip.
-// `prev_desired_direction` also zeroes dead slots each tick (they held stale
-// scratch that was not restorable). Behavior/RNG-draw order unchanged; the hash
-// moves only because the serialized layout grew and dead slots now read zero.
+// Refreshed 2026-07-23 (E7): hostility records + share recipient +
+// Node::SenseHostility + World.war_enabled (FORMAT_VERSION 12→13). The mutation
+// pool only widens behind the flag (off everywhere here) — layout growth only,
+// behavior byte-identical.
+// Refreshed 2026-07-23 (E6 merge): merged e6-named-behaviors in, which
+// serializes World.{still_ticks, prev_desired_direction} (FORMAT_VERSION 13→14).
+// Layout growth only; behavior byte-identical.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xb6fd7aceedbeeee5), (100, 0x070324b1629e2c7c), (1000, 0xdb409bcf1fb8c6d0)];
+    &[(0, 0x88ffff9b0f595f6d), (100, 0x4959f1cf630e0549), (1000, 0x45d236852e49df74)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

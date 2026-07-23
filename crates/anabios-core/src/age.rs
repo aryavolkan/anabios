@@ -36,6 +36,7 @@ pub fn age_and_starve(world: &mut crate::world::World) {
             if world.combat_damaged.get(i).copied().unwrap_or(false) {
                 let attacker = world.combat_attacker[i];
                 world.codex.record_combat_death(world.tick, sid, attacker, pos.x, pos.y);
+                crate::codex::war::record_war_death(world, sid, attacker, pos.x, pos.y);
             }
             world.agents.kill(id);
             world.remove_from_species(sid);

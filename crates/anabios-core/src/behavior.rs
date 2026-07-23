@@ -37,6 +37,7 @@ pub fn decide(
         pheromone_sample: sensor.pheromone,
         meme_sample: *meme,
         nearest_kinship: sensor.nearest_kinship,
+        hostility: sensor.hostility,
     };
     let mut action = evaluate(program, ctx, eval_stack);
     action.target_id = if sensor.nearest_neighbor_id == NO_NEIGHBOR_ID {

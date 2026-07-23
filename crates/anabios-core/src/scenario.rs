@@ -58,6 +58,11 @@ pub struct Scenario {
     /// unchanged — zero RNG draws, no state.
     #[serde(default)]
     pub disasters_enabled: bool,
+    /// Opt-in: `SenseHostility` joins the program mutation pool (E7) so
+    /// war-reactive behavior can evolve. `false` (default) keeps the
+    /// baseline pool byte-identical.
+    #[serde(default)]
+    pub war_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -310,6 +315,7 @@ impl Scenario {
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
         w.resources_enabled = self.resources_enabled;
+        w.war_enabled = self.war_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);

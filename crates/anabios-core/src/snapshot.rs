@@ -55,7 +55,13 @@ use crate::world::World;
 ///     accumulators feeding serialized codex state (ambush/signal detection),
 ///     so dropping them on load made restore-and-continue diverge from a
 ///     continuous run. Behavior unchanged; only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 13;
+/// v14: E7 kin & war — CodexState hostility records + war/alliance/kin
+///     detector scratch, share_events gains recipient species, program
+///     Node::SenseHostility (appended, serde-stable), World.war_enabled.
+///     The mutation pool only widens behind the flag (off in all golden
+///     scenarios) — layout growth only, behavior byte-identical. Merged onto
+///     the E6 v13 still_ticks serialization, so the combined layout is v14.
+pub const FORMAT_VERSION: u32 = 14;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

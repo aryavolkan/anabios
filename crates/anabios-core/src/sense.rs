@@ -68,6 +68,11 @@ pub struct SensorRegister {
     /// `#[serde(skip)]` scratch — no snapshot impact.
     #[serde(skip)]
     pub nearest_kinship: f32,
+    /// War hostility of the nearest OTHER-species neighbor's species toward
+    /// the agent's own (E7), in `[0,1]`; 0 when none / no hostility.
+    /// `#[serde(skip)]` scratch — no snapshot impact.
+    #[serde(skip)]
+    pub hostility: f32,
 }
 
 impl Default for SensorRegister {
@@ -91,6 +96,7 @@ impl Default for SensorRegister {
             crowding: 0,
             pheromone: [0.0; crate::program::PHEROMONE_CHANNELS],
             nearest_kinship: 0.0,
+            hostility: 0.0,
         }
     }
 }
@@ -125,6 +131,7 @@ pub fn sense_all(
     biome: &BiomeField,
     pheromones: &crate::pheromone::PheromoneField,
     spatial: &UniformSpatialHash,
+    hostility: &std::collections::BTreeMap<(u32, u32), crate::codex::HostilityRecord>,
     registers: &mut [SensorRegister],
     world_size: f32,
 ) {
@@ -137,17 +144,21 @@ pub fn sense_all(
         if !agents.is_alive(i as u32) {
             return;
         }
-        *reg = sense_one(i as u32, agents, biome, pheromones, spatial, max_radius, world_size);
+        *reg = sense_one(
+            i as u32, agents, biome, pheromones, spatial, hostility, max_radius, world_size,
+        );
     });
 }
 
 /// Compute one alive agent's sensor register. Pure over the shared inputs.
+#[allow(clippy::too_many_arguments)]
 fn sense_one(
     id: u32,
     agents: &AgentBuffers,
     biome: &BiomeField,
     pheromones: &crate::pheromone::PheromoneField,
     spatial: &UniformSpatialHash,
+    hostility: &std::collections::BTreeMap<(u32, u32), crate::codex::HostilityRecord>,
     max_radius: f32,
     world_size: f32,
 ) -> SensorRegister {
@@ -253,8 +264,19 @@ fn sense_one(
         crowding,
         pheromone,
         nearest_kinship: 0.0,
+        hostility: 0.0,
     };
 
+    // War hostility of the nearest OTHER-species neighbor's species.
+    reg.hostility = if other_id != NO_NEIGHBOR_ID {
+        crate::codex::war::hostility_lookup(
+            hostility,
+            self_species,
+            agents.species_id[other_id as usize],
+        )
+    } else {
+        0.0
+    };
     // Kinship of the overall-nearest neighbor (0 when there is none).
     reg.nearest_kinship = if has_neighbor {
         let n = nearest_id as usize;
@@ -355,7 +377,15 @@ mod tests {
         let _ = w.spawn_agent(spawn, Genome::neutral());
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut regs,
+            w.world_size,
+        );
         assert!(regs[0].local_plant_biomass > 0.0);
     }
 
@@ -368,7 +398,15 @@ mod tests {
         let _ = w.spawn_agent(pos_b, Genome::neutral());
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut regs,
+            w.world_size,
+        );
         assert!(regs[0].has_neighbor);
         assert!((regs[0].nearest_neighbor_dist - 4.0).abs() < 1e-3);
         assert!(regs[0].nearest_neighbor_dir.x > 0.9);
@@ -383,7 +421,15 @@ mod tests {
             .retain(|m| !matches!(m, crate::module::Module::Sensor { .. }));
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut regs,
+            w.world_size,
+        );
         assert_eq!(regs[id as usize].local_plant_biomass, 0.0);
         assert!(!regs[id as usize].has_neighbor);
     }
@@ -394,7 +440,15 @@ mod tests {
         let _ = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut regs,
+            w.world_size,
+        );
         assert!(!regs[0].has_neighbor);
         assert_eq!(regs[0].nearest_neighbor_dist, f32::INFINITY);
         assert_eq!(regs[0].nearest_neighbor_species, NO_NEIGHBOR_SPECIES);
@@ -413,7 +467,15 @@ mod tests {
         w.agents.species_id[foe as usize] = 1; // make foe another species
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut regs,
+            w.world_size,
+        );
         let r = regs[me as usize];
         assert_eq!(r.nearest_same_id, kin);
         assert!((r.nearest_same_dist - 6.0).abs() < 1e-3);
@@ -438,7 +500,15 @@ mod tests {
         w.agents.energy[other as usize] = 40.0;
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut regs,
+            w.world_size,
+        );
         let r = regs[me as usize];
         assert!(
             (r.nearest_rel_size - 2.0).abs() < 1e-3,
@@ -460,7 +530,15 @@ mod tests {
         let _ = w.spawn_agent(Vec2::new(300.0, 303.0), Genome::neutral());
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(&w.agents, &w.biome, &w.pheromones, &w.spatial, &mut regs, w.world_size);
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut regs,
+            w.world_size,
+        );
         assert_eq!(regs[me as usize].crowding, 2);
     }
 }

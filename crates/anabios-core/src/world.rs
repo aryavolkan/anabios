@@ -103,6 +103,12 @@ pub struct World {
     /// scenario; a no-op (zero RNG draws) when off.
     #[serde(default)]
     pub disasters_enabled: bool,
+    /// When true, `SenseHostility` joins the program structural-mutation
+    /// pool (E7) so war-reactive behavior can evolve. Off by default:
+    /// baseline pools are byte-identical with the flag off. The hostility
+    /// record itself (and its detectors) is always on.
+    #[serde(default)]
+    pub war_enabled: bool,
     /// Disaster scheduler + active disasters + succession sites. Inert
     /// unless `disasters_enabled`. Serialized.
     #[serde(default)]
@@ -252,6 +258,7 @@ impl World {
             resources: Vec::new(),
             resources_enabled: false,
             disasters_enabled: false,
+            war_enabled: false,
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,
             world_size: crate::biome::WORLD_SIZE_DEFAULT,

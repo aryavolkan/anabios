@@ -78,6 +78,7 @@ fn bench_stages(c: &mut Criterion) {
                     &sw.biome,
                     &sw.pheromones,
                     &sw.spatial,
+                    &sw.codex.hostility,
                     &mut sensors,
                     sw.world_size,
                 )
