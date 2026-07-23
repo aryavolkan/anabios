@@ -12,6 +12,19 @@ the other scenarios on the viewer default. Captures run windowed (not
 `--headless`): the harness reads the viewport texture after
 `frame_post_draw`, which never completes on the dummy renderer.
 
+## replay & event camera (E2)
+
+The [R]/[U]/[V] modes ride a GDScript snapshot ring (250-tick cadence, 16
+entries). `ANABIOS_EVENT_CAM=1` starts the event-camera tour after the tick
+jump; `ANABIOS_REPLAY=1` replays the latest event (the harness forces a ring
+capture at the jump tick first — Main steps before ReplayManager in tree
+order, so the first organic capture would land one tick late).
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| e2-event-camera.png | 271 | `predator-prey`: the event camera mid-tour, parked on the t=113 `Predation` site (banner top-center, "[V]/Esc exit") with the camera eased in to zoom 2.0; the codex panel below shows the event log it cycles through. |
+| e2-replay-t080.png | 80 | `weapons-arms-race` seed 3: replay of the t=79 `Territory sp=2` event — rewound to the snapshot at tick 79, fast-forwarded exactly one tick (note the HUD: tick 80, paused), camera on the territory centroid with the pulsing gold highlight ring. The codex panel re-accumulated from the rewind and shows the event re-firing (`Territory: 1`) — replay determinism made visible. |
+
 ## geographic-trade (border-seeking terrain pull + marketplace trade reach)
 
 Four goods species (Salt/Desert, Obsidian/Rock, Amber/Forest, Spice/Grass)

@@ -84,9 +84,25 @@ func _run(path: String, wait_frames: int) -> void:
 					cam.set("position", Vector2(
 						float(OS.get_environment("ANABIOS_CAM_X")),
 						float(OS.get_environment("ANABIOS_CAM_Y"))))
+		# Optionally exercise the E2 event camera (replay is triggered after
+		# the unfreeze below — it needs the snapshot ring warmed first).
+		var rm := main.get_node_or_null("ReplayManager")
+		if rm != null and OS.has_environment("ANABIOS_EVENT_CAM"):
+			rm.call("start_event_cam")
 	# Unfreeze only for the capture wait, so the sim advances exactly
 	# wait_frames ticks past the step_n jump before the shot.
 	get_tree().paused = false
+	# Replay needs the ring to have captured since the jump — force one
+	# capture at the exact post-jump tick (Main steps before ReplayManager in
+	# tree order, so the first organic capture lands one tick late and would
+	# miss an event stamped at the jump tick itself), then trigger replay
+	# mid-wait.
+	var rm2 := main.get_node_or_null("ReplayManager") if main != null else null
+	if rm2 != null and OS.has_environment("ANABIOS_REPLAY"):
+		rm2.call("_capture_ring")
+		for _i in 5:
+			await get_tree().process_frame
+		rm2.call("start_replay")
 	for _i in wait_frames:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
