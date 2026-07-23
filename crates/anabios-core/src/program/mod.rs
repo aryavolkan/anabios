@@ -107,6 +107,10 @@ pub enum Node {
     /// `share_intent`. Triggers `share_pass` when above `SHARE_THRESHOLD`
     /// and `Altruism > 0`. M15. Excluded from `random_node`.
     Share,
+    /// War hostility of the nearest other-species neighbor's species toward
+    /// the agent's own, in `[0,1]` (E7). Joins the `random_node` mutation
+    /// pool like the weapons modules did (documented trajectory drift).
+    SenseHostility,
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
@@ -197,6 +201,7 @@ impl Program {
             | Node::SenseCrowding
             | Node::SensePheromone(_)
             | Node::SenseKinship
+            | Node::SenseHostility
             | Node::Const(_) => 0,
             Node::Add | Node::Sub | Node::Mul | Node::Min | Node::Max => 2,
             Node::Neg | Node::Tanh | Node::ThresholdGt(_) => 1,
@@ -280,6 +285,7 @@ impl Program {
             Node::SensePheromone(_) => 40,
             Node::SenseKinship => 41,
             Node::Share => 42,
+            Node::SenseHostility => 43,
         }
     }
 }
@@ -304,6 +310,8 @@ pub struct EvalContext<'a> {
     pub pheromone_sample: [f32; PHEROMONE_CHANNELS],
     pub meme_sample: [f32; MEME_CHANNELS],
     pub nearest_kinship: f32,
+    /// War hostility of the nearest other-species neighbor's species (E7).
+    pub hostility: f32,
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -345,6 +353,7 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
                 scratch.push(ctx.pheromone_sample[(ch as usize).min(PHEROMONE_CHANNELS - 1)])
             }
             Node::SenseKinship => scratch.push(ctx.nearest_kinship),
+            Node::SenseHostility => scratch.push(ctx.hostility),
             Node::SenseMeme(ch) => {
                 scratch.push(ctx.meme_sample[(ch as usize).min(MEME_CHANNELS - 1)])
             }
@@ -429,8 +438,12 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
 }
 
 /// Random node drawn from the full grammar. Used by structural mutation.
-pub fn random_node(rng: &mut Rng) -> Node {
-    match rng.index(20) {
+/// `war_enabled` adds `SenseHostility` as a 21st option (E7) — baseline
+/// scenarios (flag off) draw from the original 20-option pool and stay
+/// byte-identical.
+pub fn random_node(rng: &mut Rng, war_enabled: bool) -> Node {
+    let pool = if war_enabled { 21 } else { 20 };
+    match rng.index(pool) {
         0 => Node::SenseEnergy,
         1 => Node::SenseAge,
         2 => Node::SenseGenome(rng.index(GENOME_LEN) as u8),
@@ -450,13 +463,14 @@ pub fn random_node(rng: &mut Rng) -> Node {
         16 => Node::MoveTowardX,
         17 => Node::MoveTowardY,
         18 => Node::Feed,
-        _ => Node::Mate,
+        19 => Node::Mate,
+        _ => Node::SenseHostility,
     }
 }
 
 /// Per-node Gaussian perturbation: `Const` and `ThresholdGt` get nudged;
 /// other nodes are swapped with a fresh random node at `POINT_MUTATE_PROB`.
-pub fn point_mutate(program: &mut Program, rng: &mut Rng) {
+pub fn point_mutate(program: &mut Program, rng: &mut Rng, war_enabled: bool) {
     for node in program.nodes.iter_mut() {
         if rng.f32_unit() >= POINT_MUTATE_PROB {
             continue;
@@ -466,17 +480,17 @@ pub fn point_mutate(program: &mut Program, rng: &mut Rng) {
             Node::ThresholdGt(v) => {
                 Node::ThresholdGt((v + rng.gaussian(0.0, CONST_SIGMA)).clamp(-2.0, 2.0))
             }
-            _ => random_node(rng),
+            _ => random_node(rng, war_enabled),
         };
     }
 }
 
 /// Structural mutation: insert, delete, and/or subtree-replace one node each
 /// with the corresponding probability. Keeps `[1, PROGRAM_MAX_NODES]`.
-pub fn structural_mutate(program: &mut Program, rng: &mut Rng) {
+pub fn structural_mutate(program: &mut Program, rng: &mut Rng, war_enabled: bool) {
     if program.nodes.len() < PROGRAM_MAX_NODES && rng.f32_unit() < INSERT_NODE_PROB {
         let pos = if program.nodes.is_empty() { 0 } else { rng.index(program.nodes.len()) };
-        program.nodes.insert(pos, random_node(rng));
+        program.nodes.insert(pos, random_node(rng, war_enabled));
     }
     if program.nodes.len() > 1 && rng.f32_unit() < DELETE_NODE_PROB {
         let pos = rng.index(program.nodes.len());
@@ -484,7 +498,7 @@ pub fn structural_mutate(program: &mut Program, rng: &mut Rng) {
     }
     if !program.nodes.is_empty() && rng.f32_unit() < SUBTREE_REPLACE_PROB {
         let pos = rng.index(program.nodes.len());
-        program.nodes[pos] = random_node(rng);
+        program.nodes[pos] = random_node(rng, war_enabled);
     }
     while program.nodes.len() > PROGRAM_MAX_NODES {
         program.nodes.pop();
@@ -493,7 +507,7 @@ pub fn structural_mutate(program: &mut Program, rng: &mut Rng) {
 
 /// Single-point crossover: take parent A's prefix and parent B's suffix at
 /// a random split, then apply point + structural mutation.
-pub fn crossover_and_mutate(a: &Program, b: &Program, rng: &mut Rng) -> Program {
+pub fn crossover_and_mutate(a: &Program, b: &Program, rng: &mut Rng, war_enabled: bool) -> Program {
     let max_len = a.len().max(b.len());
     let split = if max_len == 0 { 0 } else { rng.index(max_len + 1) };
     let mut nodes: SmallVec<[Node; PROGRAM_INLINE]> = SmallVec::new();
@@ -508,8 +522,8 @@ pub fn crossover_and_mutate(a: &Program, b: &Program, rng: &mut Rng) -> Program 
         }
     }
     let mut child = Program { nodes };
-    point_mutate(&mut child, rng);
-    structural_mutate(&mut child, rng);
+    point_mutate(&mut child, rng, war_enabled);
+    structural_mutate(&mut child, rng, war_enabled);
     child
 }
 
@@ -569,6 +583,7 @@ mod tests {
             pheromone_sample: [0.0; PHEROMONE_CHANNELS],
             meme_sample: [0.0; MEME_CHANNELS],
             nearest_kinship: 0.0,
+            hostility: 0.0,
         }
     }
 
@@ -657,7 +672,7 @@ mod tests {
         let mut p = starter_grazer();
         let len = p.len();
         for _ in 0..50 {
-            point_mutate(&mut p, &mut rng);
+            point_mutate(&mut p, &mut rng, false);
         }
         assert_eq!(p.len(), len);
     }
@@ -667,7 +682,7 @@ mod tests {
         let mut rng = Rng::from_seed(11);
         let mut p = starter_grazer();
         for _ in 0..1000 {
-            structural_mutate(&mut p, &mut rng);
+            structural_mutate(&mut p, &mut rng, false);
             assert!(!p.is_empty());
             assert!(p.len() <= PROGRAM_MAX_NODES);
         }
@@ -678,7 +693,7 @@ mod tests {
         let mut rng = Rng::from_seed(13);
         let p = starter_grazer();
         for _ in 0..200 {
-            let c = crossover_and_mutate(&p, &p, &mut rng);
+            let c = crossover_and_mutate(&p, &p, &mut rng, false);
             assert!(c.len() <= PROGRAM_MAX_NODES);
         }
     }
@@ -688,8 +703,8 @@ mod tests {
         let p = starter_grazer();
         let mut r1 = Rng::from_seed(99);
         let mut r2 = Rng::from_seed(99);
-        let c1 = crossover_and_mutate(&p, &p, &mut r1);
-        let c2 = crossover_and_mutate(&p, &p, &mut r2);
+        let c1 = crossover_and_mutate(&p, &p, &mut r1, false);
+        let c2 = crossover_and_mutate(&p, &p, &mut r2, false);
         assert_eq!(c1, c2);
     }
 

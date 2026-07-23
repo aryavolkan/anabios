@@ -1,0 +1,43 @@
+name = "war"
+seed = 70723
+war_enabled = true
+
+# E7 showcase: two armed territorial species contesting one central grazing
+# corridor, plus a neutral communicator commune as alliance candidate.
+# Expect WarOrRaid on the contested border (and WarEnded if one side is
+# driven off), AllianceFormed between the culture-sharing communes, and
+# KinNetworkStable in the tight territorial herds.
+max_population = 1500
+
+# Prey: a grazer herd holding the central corridor both packs contest.
+[[agents]]
+count = 40
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Western pack: stalker predators, territorial on the west edge of the corridor.
+[[agents]]
+count = 14
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 496.0, center_y = 512.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Eastern band: pack hunters, territorial on the east edge.
+[[agents]]
+count = 14
+archetype = "pack_hunter"
+placement = { kind = "cluster", center_x = 528.0, center_y = 512.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Neutral commune: cultural grazers south of the fight (alliance candidate).
+[[agents]]
+count = 30
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 512.0, center_y = 760.0, radius = 70.0 }
+[agents.traits]
+lifespan_bias = 1.0
+altruism = 0.8

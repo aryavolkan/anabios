@@ -210,7 +210,7 @@ pub(super) fn detect_evolved_cooperation(world: &mut World, agg: &SpeciesAggTabl
     let tick = world.tick;
     // Prune entries older than the rolling window (mirror detect_combat_raid).
     let cutoff = tick.saturating_sub(COOPERATION_WINDOW);
-    while let Some(&(t, _)) = world.codex.share_events.front() {
+    while let Some(&(t, _, _)) = world.codex.share_events.front() {
         if t < cutoff {
             world.codex.share_events.pop_front();
         } else {
@@ -219,7 +219,7 @@ pub(super) fn detect_evolved_cooperation(world: &mut World, agg: &SpeciesAggTabl
     }
     // Tally shares per species (BTreeMap → deterministic).
     let mut counts: BTreeMap<u32, usize> = BTreeMap::new();
-    for &(_t, sid) in world.codex.share_events.iter() {
+    for &(_t, sid, _recipient) in world.codex.share_events.iter() {
         *counts.entry(sid).or_insert(0) += 1;
     }
     // Edge-trigger per species; re-arm when the count drops.

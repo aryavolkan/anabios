@@ -28,6 +28,7 @@ mod practice;
 pub(crate) mod signatures;
 mod spatial;
 mod traits;
+pub(crate) mod war;
 
 /// Maximum events buffered before the oldest are dropped.
 pub const CODEX_EVENT_CAPACITY: usize = 4096;
@@ -228,6 +229,73 @@ pub const SIGNAL_CONVERGE_MIN: u32 = 3;
 /// Cumulative responses that fire StructuredSignaling.
 pub const SIGNAL_MIN_RESPONSES: u32 = 10;
 
+/// Per-tick hostility-score decay for every species pair.
+pub const WAR_DECAY: f32 = 0.995;
+/// Hostility score that declares a war (rising edge).
+pub const WAR_THRESHOLD: f32 = 12.0;
+/// Hostility score per cross-faction combat HIT (deaths score 1.0 — wars
+/// are fought with hits, deaths are decisive moments).
+pub const WAR_HIT_SCORE: f32 = 0.1;
+/// Minimum decayed directional score on EACH side for a war — one-way
+/// killing is predation, only two-way violence is war.
+pub const WAR_MIN_BIDIRECTIONAL: f32 = 2.0;
+/// Consecutive ticks below half-threshold before a latched war ends.
+pub const WAR_END_TICKS: u64 = 200;
+
+/// Max mean-meme L2 distance for an alliance's shared culture.
+pub const ALLIANCE_MEME_MAX: f32 = 0.3;
+/// Window (ticks) of zero cross-kills + sustained sharing for an alliance.
+pub const ALLIANCE_WINDOW: u64 = 400;
+/// Minimum cross-species energy shares in the window for an alliance.
+pub const ALLIANCE_MIN_SHARES: u32 = 5;
+
+/// Minimum members for a kin network.
+pub const KIN_MIN_MEMBERS: u32 = 10;
+/// Max RMS spatial spread (world units) for a cohesive kin network.
+pub const KIN_SPREAD_MAX: f32 = 100.0;
+/// Ticks of sustained size + cohesion for KinNetworkStable.
+pub const KIN_WINDOW: u32 = 1500;
+
+/// Per-species-pair war state (E7).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HostilityRecord {
+    /// Decaying kill score; war declares at `WAR_THRESHOLD`.
+    pub score: f32,
+    /// Decaying directional scores: kills BY the lo-keyed species and by the
+    /// hi-keyed one. War requires BOTH ≥ `WAR_MIN_BIDIRECTIONAL` — one-way
+    /// killing is predation, not war.
+    pub score_lo: f32,
+    pub score_hi: f32,
+    /// Total cross-kills over the record's life.
+    pub kills: u32,
+    /// Running mean of cross-kill locations (the "front").
+    pub front_x: f32,
+    pub front_y: f32,
+    /// Last tick a cross-kill was recorded.
+    pub last_kill_tick: u64,
+    /// Tick the war latched (`u64::MAX` = not at war — tick 0 is a real
+    /// declare tick, so 0 cannot be the sentinel).
+    pub war_since: u64,
+    /// Ticks spent below half-threshold (for `WarEnded`).
+    pub below_ticks: u64,
+}
+
+impl Default for HostilityRecord {
+    fn default() -> Self {
+        Self {
+            score: 0.0,
+            score_lo: 0.0,
+            score_hi: 0.0,
+            kills: 0,
+            front_x: 0.0,
+            front_y: 0.0,
+            last_kill_tick: 0,
+            war_since: u64::MAX,
+            below_ticks: 0,
+        }
+    }
+}
+
 /// One per-species genome-moment sample (mean + variance over all 50 slots,
 /// stored genome-shaped for the manual array serde impls).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -337,12 +405,24 @@ pub enum EventType {
     /// Broadcasts reliably followed by ≥3 same-species receivers converging
     /// on the caller (`value` = cumulative responses).
     StructuredSignaling = 37,
+    /// Inter-species hostility crossed the war threshold — a sustained war,
+    /// distinct from the one-off CombatRaid burst (`value` = kills so far).
+    WarOrRaid = 38,
+    /// A latched war decayed below half-threshold for `WAR_END_TICKS`
+    /// (`value` = war duration in ticks).
+    WarEnded = 39,
+    /// Species pair with shared meme signature, zero cross-kills, and
+    /// sustained energy sharing over the alliance window (`value` = shares).
+    AllianceFormed = 40,
+    /// A species sustained ≥`KIN_MIN_MEMBERS` members and tight spatial
+    /// cohesion over `KIN_WINDOW` ticks (`value` = window ticks).
+    KinNetworkStable = 41,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::StructuredSignaling as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::KinNetworkStable as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -440,8 +520,9 @@ pub struct CodexState {
     pub alarm_responses: u32,
     /// Latch: the AlarmCall event has been emitted.
     pub alarm_emitted: bool,
-    /// Rolling window of share events (tick, donor_species) for EvolvedCooperation.
-    pub share_events: VecDeque<(u64, u32)>,
+    /// Rolling window of share events (tick, donor_species, recipient_species)
+    /// for EvolvedCooperation and the E7 alliance detector.
+    pub share_events: VecDeque<(u64, u32, u32)>,
     /// Species currently latched as having evolved cooperation (re-arms on drop).
     pub cooperation_active: BTreeSet<u32>,
     /// Rolling window of combat hits for PackHunting.
@@ -552,6 +633,14 @@ pub struct CodexState {
     pub signal_last_response: BTreeMap<u32, u64>,
     /// Species currently latched as signalers.
     pub signal_active: BTreeSet<u32>,
+    /// Per-species-pair war state (E7). Keyed by ordered pair (lo, hi).
+    pub hostility: BTreeMap<(u32, u32), HostilityRecord>,
+    /// Species pairs currently latched as allied.
+    pub alliance_active: BTreeSet<(u32, u32)>,
+    /// Per-species consecutive-tick streak of size + cohesion (KinNetwork).
+    pub kin_streak: BTreeMap<u32, u32>,
+    /// Species currently latched as stable kin networks.
+    pub kin_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -943,6 +1032,9 @@ pub fn observe_all(world: &mut World) {
     signatures::detect_ambush_and_tool(world, &agg);
     signatures::detect_flight(world, &agg);
     signatures::detect_structured_signaling(world);
+    war::detect_war(world);
+    war::detect_alliance(world, &agg);
+    war::detect_kin_network(world, &agg);
     population::detect_migration(world, &agg);
     population::detect_novel_modules(world, &agg);
     population::detect_novel_behavior(world, &agg);

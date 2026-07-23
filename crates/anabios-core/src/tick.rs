@@ -26,6 +26,7 @@ pub fn step(world: &mut World) {
         &world.biome,
         &world.pheromones,
         &world.spatial,
+        &world.codex.hostility,
         &mut world.sensors,
         world.world_size,
     );

@@ -169,6 +169,13 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.energy[i] -= weapon.energy_cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
+        // E7 war substrate: cross-faction hits feed hostility (wars are
+        // fought with hits, deaths are decisive moments).
+        crate::codex::war::record_war_hit(
+            world,
+            world.agents.species_id[t],
+            world.agents.species_id[i],
+        );
         // E6 behavioral context at fire time: lying-in-wait attacker, and
         // invention-boosted damage.
         let ambush =
@@ -361,8 +368,12 @@ fn share_pass(world: &mut World, alive_ids: &[u32]) {
         }
         world.agents.energy[i] -= amount;
         world.agents.energy[t] += amount;
-        // Record for the EvolvedCooperation detector.
-        world.codex.share_events.push_back((world.tick, world.agents.species_id[i]));
+        // Record for the EvolvedCooperation (and E7 alliance) detectors.
+        world.codex.share_events.push_back((
+            world.tick,
+            world.agents.species_id[i],
+            world.agents.species_id[t],
+        ));
     }
 }
 
@@ -542,6 +553,7 @@ mod tests {
             &w.biome,
             &w.pheromones,
             &w.spatial,
+            &w.codex.hostility,
             &mut w.sensors,
             w.world_size,
         );
@@ -588,6 +600,7 @@ mod tests {
             &w.biome,
             &w.pheromones,
             &w.spatial,
+            &w.codex.hostility,
             &mut w.sensors,
             w.world_size,
         );
@@ -619,6 +632,7 @@ mod tests {
             &w.biome,
             &w.pheromones,
             &w.spatial,
+            &w.codex.hostility,
             &mut w.sensors,
             w.world_size,
         );

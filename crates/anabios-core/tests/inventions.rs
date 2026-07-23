@@ -258,6 +258,7 @@ fn metalworking_raises_combat_damage() {
             &w.biome,
             &w.pheromones,
             &w.spatial,
+            &w.codex.hostility,
             &mut w.sensors,
             w.world_size,
         );
@@ -763,8 +764,10 @@ fn inventions_scenario_is_deterministic() {
 // (FORMAT_VERSION 10→11) — layout growth only.
 // Refreshed 2026-07-23 (E6): CombatHit context + signature scratch
 // (FORMAT_VERSION 11→12) — observability only.
+// Refreshed 2026-07-23 (E7): hostility records + SenseHostility behind
+// war_enabled (FORMAT_VERSION 12→13) — layout growth only, flag off.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x6963ce81ba30395e), (100, 0x752c106424d4a5ab), (300, 0x2f4e1bee4db50c23)];
+    &[(0, 0xb7ecbea7c7ae7598), (100, 0xce80b65132cc5c3c), (300, 0xf7b1630c4271d80f)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

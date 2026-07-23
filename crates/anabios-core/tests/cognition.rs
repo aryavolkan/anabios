@@ -59,8 +59,10 @@ fn cognitive_scenario_is_self_consistent() {
 // (FORMAT_VERSION 10→11) — layout growth only.
 // Refreshed 2026-07-23 (E6): CombatHit context + signature scratch
 // (FORMAT_VERSION 11→12) — observability only.
+// Refreshed 2026-07-23 (E7): hostility records + SenseHostility behind
+// war_enabled (FORMAT_VERSION 12→13) — layout growth only, flag off.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xe8178d29fc0d25cb), (100, 0x864c4042ca69105d), (300, 0x34cf966df1f45e7a)];
+    &[(0, 0xccbc1ca852f4c463), (100, 0x54f5da2102ce7182), (300, 0xedc2af09c8d0eee3)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

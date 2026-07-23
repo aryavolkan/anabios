@@ -179,13 +179,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          range_expansion,segregation,corridor_use,succession,\
          trait_fixation,rapid_adaptation,convergent_evolution,\
          evolved_ambush,evolved_tool,evolved_flight,structured_signaling,\
+         war,war_ended,alliance,kin_network,\
          emergence_score,novel_events,coverage"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -229,6 +230,10 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("evolved_tool"),
             g("evolved_flight"),
             g("structured_signaling"),
+            g("war"),
+            g("war_ended"),
+            g("alliance"),
+            g("kin_network"),
             r.emergence_score,
             r.novel_events,
             r.coverage,

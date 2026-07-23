@@ -11,6 +11,7 @@ const SCENARIOS: Array[Dictionary] = [
 	{ "label": "E3 — Trophic cascade", "path": "res://../scenarios/trophic-cascade.toml", "ground": 0, "body": 2 },
 	{ "label": "E4 — Disturbance (fire & succession)", "path": "res://../scenarios/disturbance.toml", "ground": 6, "body": 0 },
 	{ "label": "E5 — Convergent evolution", "path": "res://../scenarios/convergent.toml", "ground": 0, "body": 0 },
+	{ "label": "E7 — War & alliance", "path": "res://../scenarios/war.toml", "ground": 0, "body": 2 },
 	{ "label": "M13 — Territories (pheromones)", "path": "res://../scenarios/territories.toml", "ground": 1, "body": 0 },
 	{ "label": "M14 — Dialects (memes)", "path": "res://../scenarios/dialects.toml", "ground": 1, "body": 1 },
 	{ "label": "M15 — Cooperation & kin", "path": "res://../scenarios/cooperation.toml", "ground": 0, "body": 0 },

@@ -79,8 +79,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // (FORMAT_VERSION 10→11) — observers only, layout growth.
 // Refreshed 2026-07-23 (E6): CombatHit ambush/tool context + signature-detector
 // scratch (FORMAT_VERSION 11→12) — observability only.
+// Refreshed 2026-07-23 (E7): hostility records + share recipient +
+// Node::SenseHostility + World.war_enabled (FORMAT_VERSION 12→13). The mutation
+// pool only widens behind the flag (off everywhere here) — layout growth only,
+// behavior byte-identical.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x6b7935987c2b0da5), (100, 0x3f30823fb1684ad9), (1000, 0x43e8483fb1c9338c)];
+    &[(0, 0xaa9a6736febd1c2d), (100, 0x425143dce1ce6f68), (1000, 0x019df83ccb158cd8)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

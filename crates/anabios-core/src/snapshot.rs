@@ -50,7 +50,12 @@ use crate::world::World;
 /// v12: E6 named behaviors — CombatHit ambush/tool_boosted context,
 ///     CodexState signature-detector scratch. Observability only; behavior
 ///     unchanged.
-pub const FORMAT_VERSION: u32 = 12;
+/// v13: E7 kin & war — CodexState hostility records + war/alliance/kin
+///     detector scratch, share_events gains recipient species, program
+///     Node::SenseHostility (appended, serde-stable), World.war_enabled.
+///     The mutation pool only widens behind the flag (off in all golden
+///     scenarios) — layout growth only, behavior byte-identical.
+pub const FORMAT_VERSION: u32 = 13;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

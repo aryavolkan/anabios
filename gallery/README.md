@@ -12,6 +12,18 @@ the other scenarios on the viewer default. Captures run windowed (not
 `--headless`): the harness reads the viewport texture after
 `frame_post_draw`, which never completes on the dummy renderer.
 
+## war & alliance (E7)
+
+Cross-faction combat hits and deaths feed a decaying hostility record per
+lineage-faction pair; score ≥ 12 declares WarOrRaid, 200 quiet ticks ends
+it (WarEnded). Alliance (shared meme + zero cross-kills + sustained
+sharing) and KinNetworkStable (1500-tick cohesive kin cluster) round out
+the chapter. `ANABIOS_SEED=0` (scenario default).
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| e7-war.png | 51 | `weapons-arms-race` seed 0: the event list shows the full conflict hierarchy in one frame — `t=17 Predation`, `t=32 CombatRaid sp=4`, and directly beneath it `t=32 War sp=2` in blood red, the stalker pack's opening campaign. `War: 1` in the tally. |
+
 ## named behaviors (E6)
 
 Fire-time behavioral context on every combat hit (was the attacker lying in
