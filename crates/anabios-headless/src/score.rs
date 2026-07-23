@@ -5,9 +5,10 @@
 //!
 //! Default-weight regeneration recipe (bump `WEIGHTS_VERSION` when redone):
 //! sweep 16 seeds × 5000 ticks of `divergent`, `inventions`, `predator-prey`,
-//! `cooperation` into one dir (`runs/corpus-e1/`, 64 runs), compute per-type
-//! IDF `ln(N / n_t)` over per-run type sets, paste values into
-//! `DEFAULT_WEIGHTS` below.
+//! `cooperation` into one dir (`runs/corpus-e1/`, 64 runs), then paste the
+//! per-type run counts into `DEFAULT_CORPUS_NT` below. Weights are *derived*
+//! from those counts as IDF `ln(N / n_t)` — the counts are the single source
+//! of truth, so a mis-transcribed table can never desync from its weights.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -18,11 +19,22 @@ use anyhow::{Context, Result};
 /// Version of the default weight table; bump on every regeneration.
 pub const WEIGHTS_VERSION: &str = "e1.1";
 
-/// Number of runs in the reference corpus behind `DEFAULT_WEIGHTS`.
+/// Number of runs in the reference corpus behind `DEFAULT_CORPUS_NT`.
 pub const CORPUS_RUNS: u64 = 64;
 
 /// Weight of a type never observed in the corpus: `ln(CORPUS_RUNS) + 1`.
 pub const NOVELTY_BONUS: f64 = 5.158_883_083_359_671;
+
+/// IDF rarity weight for a type fired by `n_t` of the `CORPUS_RUNS` runs.
+/// Unseen types (`n_t == 0`) get the fixed novelty bonus; otherwise the
+/// standard inverse-document-frequency `ln(N / n_t)`.
+pub fn idf_weight(n_t: u64) -> f64 {
+    if n_t == 0 {
+        NOVELTY_BONUS
+    } else {
+        (CORPUS_RUNS as f64 / n_t as f64).ln()
+    }
+}
 
 /// Every scorable event name, in summary-CSV column order.
 pub const ALL_EVENT_NAMES: [&str; 23] = [
@@ -51,34 +63,35 @@ pub const ALL_EVENT_NAMES: [&str; 23] = [
     "dowry_birth",
 ];
 
-/// Rarity weights derived from the reference corpus (see module docs):
+/// Per-type corpus run counts from the reference sweep (see module docs):
 /// 16 seeds × 5000 ticks of `divergent`, `inventions`, `predator-prey`,
-/// `cooperation` (64 runs, swept 2026-07-22). `n_t` comments record how
-/// many corpus runs fired each type; unseen types sit at `NOVELTY_BONUS`.
-pub const DEFAULT_WEIGHTS: [(&str, f64); 23] = [
-    ("extinction", 0.048009_f64),           // n_t=61
-    ("pop_crash", 0.133531_f64),            // n_t=56
-    ("speciation", 0.081346_f64),           // n_t=59
-    ("migration", 0.169899_f64),            // n_t=54
-    ("novel_module", 0.081346_f64),         // n_t=59
-    ("novel_behavior", 0.048009_f64),       // n_t=61
-    ("predation", 1.386294_f64),            // n_t=16
-    ("combat_raid", 1.450833_f64),          // n_t=15
-    ("arms_race", 1.856298_f64),            // n_t=10
-    ("territory_formation", 0.397683_f64),  // n_t=43
-    ("niche_partitioning", 0.207639_f64),   // n_t=52
-    ("dialect_formed", 0.287682_f64),       // n_t=48
-    ("meme_sweep", 0.495321_f64),           // n_t=39
-    ("alarm_call", NOVELTY_BONUS),          // n_t=0
-    ("evolved_cooperation", 1.386294_f64),  // n_t=16
-    ("pack_hunting", 3.060271_f64),         // n_t=3
-    ("herd_cohesion", 0.169899_f64),        // n_t=54
-    ("invention_discovered", 1.386294_f64), // n_t=16
-    ("invention_adopted", 1.386294_f64),    // n_t=16
-    ("practice_discovered", NOVELTY_BONUS), // n_t=0
-    ("practice_adopted", NOVELTY_BONUS),    // n_t=0
-    ("resource_traded", NOVELTY_BONUS),     // n_t=0
-    ("dowry_birth", NOVELTY_BONUS),         // n_t=0
+/// `cooperation` (64 runs, swept 2026-07-22) — how many runs fired each type.
+/// `0` means unseen in the corpus. Weights are derived via [`idf_weight`], so
+/// this table is the *only* thing to update on a regeneration.
+pub const DEFAULT_CORPUS_NT: [(&str, u64); 23] = [
+    ("extinction", 61),
+    ("pop_crash", 56),
+    ("speciation", 59),
+    ("migration", 54),
+    ("novel_module", 59),
+    ("novel_behavior", 61),
+    ("predation", 16),
+    ("combat_raid", 15),
+    ("arms_race", 10),
+    ("territory_formation", 43),
+    ("niche_partitioning", 52),
+    ("dialect_formed", 48),
+    ("meme_sweep", 39),
+    ("alarm_call", 0),
+    ("evolved_cooperation", 16),
+    ("pack_hunting", 3),
+    ("herd_cohesion", 54),
+    ("invention_discovered", 16),
+    ("invention_adopted", 16),
+    ("practice_discovered", 0),
+    ("practice_adopted", 0),
+    ("resource_traded", 0),
+    ("dowry_birth", 0),
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -116,13 +129,13 @@ pub struct ScoreTable {
 }
 
 impl ScoreTable {
-    /// The shipped reference-corpus table.
+    /// The shipped reference-corpus table, derived from `DEFAULT_CORPUS_NT`.
     pub fn default_table() -> Self {
         let mut weights = BTreeMap::new();
         let mut known = BTreeSet::new();
-        for (name, w) in DEFAULT_WEIGHTS {
-            weights.insert(name, w);
-            if w < NOVELTY_BONUS {
+        for (name, n_t) in DEFAULT_CORPUS_NT {
+            weights.insert(name, idf_weight(n_t));
+            if n_t > 0 {
                 known.insert(name);
             }
         }
@@ -251,11 +264,49 @@ mod tests {
     #[test]
     fn event_name_list_covers_every_variant() {
         assert_eq!(ALL_EVENT_NAMES.len(), EVENT_TYPE_COUNT);
+        assert_eq!(DEFAULT_CORPUS_NT.len(), EVENT_TYPE_COUNT);
         for name in ALL_EVENT_NAMES {
             assert!(
-                DEFAULT_WEIGHTS.iter().any(|(n, _)| *n == name),
-                "missing default weight for {name}"
+                DEFAULT_CORPUS_NT.iter().any(|(n, _)| *n == name),
+                "missing corpus count for {name}"
             );
+        }
+    }
+
+    #[test]
+    fn default_weights_match_documented_values() {
+        // Regression guard: the derived weights must equal the human-audited
+        // reference values (from the 2026-07-22 sweep). If a corpus count in
+        // `DEFAULT_CORPUS_NT` is mis-transcribed, this pins where.
+        let expected: &[(&str, f64)] = &[
+            ("extinction", 0.048009),
+            ("pop_crash", 0.133531),
+            ("speciation", 0.081346),
+            ("migration", 0.169899),
+            ("novel_module", 0.081346),
+            ("novel_behavior", 0.048009),
+            ("predation", 1.386294),
+            ("combat_raid", 1.450833),
+            ("arms_race", 1.856298),
+            ("territory_formation", 0.397683),
+            ("niche_partitioning", 0.207639),
+            ("dialect_formed", 0.287682),
+            ("meme_sweep", 0.495321),
+            ("alarm_call", NOVELTY_BONUS),
+            ("evolved_cooperation", 1.386294),
+            ("pack_hunting", 3.060271),
+            ("herd_cohesion", 0.169899),
+            ("invention_discovered", 1.386294),
+            ("invention_adopted", 1.386294),
+            ("practice_discovered", NOVELTY_BONUS),
+            ("practice_adopted", NOVELTY_BONUS),
+            ("resource_traded", NOVELTY_BONUS),
+            ("dowry_birth", NOVELTY_BONUS),
+        ];
+        let table = ScoreTable::default_table();
+        for (name, want) in expected {
+            let got = table.weights[name];
+            assert!((got - want).abs() < 5e-6, "{name}: derived weight {got} != documented {want}");
         }
     }
 

@@ -12,11 +12,10 @@ use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 use anyhow::{Context, Result};
 use rayon::prelude::*;
-use serde::Serialize;
 
 use crate::score::{self, ScoreTable};
 
-#[derive(Serialize)]
+// Written to CSV by hand in `write_summary_csv`; no serde derive needed.
 struct RunSummary {
     seed: u64,
     ticks: u64,
@@ -144,7 +143,8 @@ fn report_novelty(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
         );
     }
 
-    let novel_runs: Vec<&&RunSummary> = ranked.iter().filter(|r| r.novel_events > 0).collect();
+    let novel_runs: Vec<&RunSummary> =
+        ranked.iter().copied().filter(|r| r.novel_events > 0).collect();
     if novel_runs.is_empty() {
         return Ok(());
     }
