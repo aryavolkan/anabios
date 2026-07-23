@@ -25,7 +25,7 @@ pub const CORPUS_RUNS: u64 = 64;
 pub const NOVELTY_BONUS: f64 = 5.158_883_083_359_671;
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 42] = [
+pub const ALL_EVENT_NAMES: [&str; 45] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -68,6 +68,9 @@ pub const ALL_EVENT_NAMES: [&str; 42] = [
     "war_ended",
     "alliance",
     "kin_network",
+    "settlement",
+    "market",
+    "specialization_split",
 ];
 
 /// Rarity weights derived from the reference corpus (see module docs):
@@ -76,7 +79,7 @@ pub const ALL_EVENT_NAMES: [&str; 42] = [
 /// many corpus runs fired each type; unseen types sit at `NOVELTY_BONUS`.
 /// The corpus predates E3/E4, so the population-dynamics and disturbance
 /// types are definitionally unseen (bonus) until the next regeneration.
-pub const DEFAULT_WEIGHTS: [(&str, f64); 42] = [
+pub const DEFAULT_WEIGHTS: [(&str, f64); 45] = [
     ("extinction", 0.048009_f64),            // n_t=61
     ("pop_crash", 0.133531_f64),             // n_t=56
     ("speciation", 0.081346_f64),            // n_t=59
@@ -119,6 +122,9 @@ pub const DEFAULT_WEIGHTS: [(&str, f64); 42] = [
     ("war_ended", NOVELTY_BONUS),            // post-corpus (E7)
     ("alliance", NOVELTY_BONUS),             // post-corpus (E7)
     ("kin_network", NOVELTY_BONUS),          // post-corpus (E7)
+    ("settlement", NOVELTY_BONUS),           // post-corpus (E8)
+    ("market", NOVELTY_BONUS),               // post-corpus (E8)
+    ("specialization_split", NOVELTY_BONUS), // post-corpus (E8)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -165,6 +171,9 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::WarEnded => "war_ended",
         EventType::AllianceFormed => "alliance",
         EventType::KinNetworkStable => "kin_network",
+        EventType::SettlementFormed => "settlement",
+        EventType::MarketEmerged => "market",
+        EventType::SpecializationSplit => "specialization_split",
     }
 }
 

@@ -327,11 +327,17 @@ fn harvest_pass(world: &mut World, alive_ids: &[u32]) {
             }
         });
         if let Some(ri) = best {
-            let taken = HARVEST_RATE.min(world.resources[ri].amount).min(room);
+            let k = world.resources[ri].kind.index();
+            // E8 harvest experience: practiced harvesters take more.
+            let rate = crate::settlement::experienced_harvest(
+                HARVEST_RATE,
+                world.agents.harvest_exp[i][k],
+            );
+            let taken = rate.min(world.resources[ri].amount).min(room);
             if taken > 0.0 {
-                let k = world.resources[ri].kind.index();
                 world.agents.inventory[i][k] += taken;
                 world.resources[ri].amount -= taken;
+                crate::settlement::gain_harvest_exp(&mut *world, i, k);
             }
         }
     }
@@ -444,6 +450,8 @@ fn trade_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.inventory[t][recv] -= TRADE_UNIT;
         world.agents.inventory[i][recv] += TRADE_UNIT;
         world.total_trades += 1;
+        // E8 market field: the swap deposits density at the initiator's cell.
+        crate::settlement::market_deposit(world, world.agents.position[i]);
         // Viewer scratch: draw a route from the initiating trader to its
         // partner, tinted by the initiator's genome hue.
         world.trade_routes.push((

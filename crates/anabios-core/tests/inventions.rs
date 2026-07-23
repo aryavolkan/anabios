@@ -766,8 +766,10 @@ fn inventions_scenario_is_deterministic() {
 // (FORMAT_VERSION 11→12) — observability only.
 // Refreshed 2026-07-23 (E7): hostility records + SenseHostility behind
 // war_enabled (FORMAT_VERSION 12→13) — layout growth only, flag off.
+// Refreshed 2026-07-23 (E8): anchors + harvest exp + market field
+// (FORMAT_VERSION 13→14) — layout growth only, flags off.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xb7ecbea7c7ae7598), (100, 0xce80b65132cc5c3c), (300, 0xf7b1630c4271d80f)];
+    &[(0, 0xeebd56c14cb9d2e2), (100, 0x7e7c8ed6c3f387db), (300, 0xc4350993c118d841)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

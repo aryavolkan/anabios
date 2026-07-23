@@ -72,9 +72,11 @@ func _process(_delta: float) -> void:
 		_setup(res)
 	if _res <= 0:
 		return
-	# Current ground selection encoded as one int: -3 succession, -2 optimum, -1 biome, else channel.
+	# Current ground selection encoded as one int: -4 markets, -3 succession, -2 optimum, -1 biome, else channel.
 	var mode: int = -1
-	if overlay.ground_is_succession():
+	if overlay.ground_is_markets():
+		mode = -4
+	elif overlay.ground_is_succession():
 		mode = -3
 	elif overlay.ground_is_optimum():
 		mode = -2
@@ -90,7 +92,9 @@ func _process(_delta: float) -> void:
 	_last_mode = mode
 
 	var colors: PackedColorArray
-	if mode == -3:
+	if mode == -4:
+		colors = sim.market_colors()
+	elif mode == -3:
 		colors = sim.succession_colors()
 	elif mode == -2:
 		# Flat tint whose hue encodes the current global optimum in [0,1].

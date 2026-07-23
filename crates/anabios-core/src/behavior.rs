@@ -10,6 +10,7 @@ use crate::program::{evaluate, ActionRegister, EvalContext, Program, NO_TARGET};
 use crate::sense::{SensorRegister, NO_NEIGHBOR_ID};
 
 /// Evaluate one agent's program and return its full action register.
+#[allow(clippy::too_many_arguments)]
 pub fn decide(
     program: &Program,
     genome: &Genome,
@@ -17,6 +18,9 @@ pub fn decide(
     meme: &[f32; crate::program::MEME_CHANNELS],
     energy: f32,
     age: u32,
+    anchor: crate::prelude::Vec2,
+    pos: crate::prelude::Vec2,
+    world_size: f32,
     eval_stack: &mut Vec<f32>,
 ) -> ActionRegister {
     let ctx = EvalContext {
@@ -38,6 +42,14 @@ pub fn decide(
         meme_sample: *meme,
         nearest_kinship: sensor.nearest_kinship,
         hostility: sensor.hostility,
+        anchor_dir: {
+            let (d, _) = crate::settlement::anchor_sense_parts(anchor, pos, world_size);
+            d
+        },
+        anchor_dist: {
+            let (_, dist) = crate::settlement::anchor_sense_parts(anchor, pos, world_size);
+            dist
+        },
     };
     let mut action = evaluate(program, ctx, eval_stack);
     action.target_id = if sensor.nearest_neighbor_id == NO_NEIGHBOR_ID {

@@ -109,6 +109,15 @@ pub struct World {
     /// record itself (and its detectors) is always on.
     #[serde(default)]
     pub war_enabled: bool,
+    /// When true, home-range anchoring is active (E8): anchors learn, the
+    /// homing pull applies, and the anchor Sense nodes join the mutation
+    /// pool. Off by default — byte-identical with the flag off.
+    #[serde(default)]
+    pub settlement_enabled: bool,
+    /// Per-cell market density field (E8). Sized to the biome grid when
+    /// `resources_enabled` at instantiate; empty (inert) otherwise.
+    #[serde(default)]
+    pub market_field: Vec<f32>,
     /// Disaster scheduler + active disasters + succession sites. Inert
     /// unless `disasters_enabled`. Serialized.
     #[serde(default)]
@@ -255,6 +264,8 @@ impl World {
             resources_enabled: false,
             disasters_enabled: false,
             war_enabled: false,
+            settlement_enabled: false,
+            market_field: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,
             world_size: crate::biome::WORLD_SIZE_DEFAULT,

@@ -3,7 +3,7 @@ extends PanelContainer
 const UiTheme = preload("res://scripts/ui_theme.gd")
 const Palette = preload("res://scripts/palette.gd")
 
-const GROUND_NAMES := ["biome", "phero-0", "phero-1", "phero-2", "phero-3", "env-optimum", "succession"]
+const GROUND_NAMES := ["biome", "phero-0", "phero-1", "phero-2", "phero-3", "env-optimum", "succession", "markets"]
 const BODY_NAMES := ["species", "dialect", "diet", "energy"]
 
 @onready var overlay = get_node("/root/Main/OverlayManager")

@@ -25,6 +25,7 @@ mod disturbance;
 mod invention;
 mod population;
 mod practice;
+pub(crate) mod settlement;
 pub(crate) mod signatures;
 mod spatial;
 mod traits;
@@ -256,6 +257,39 @@ pub const KIN_SPREAD_MAX: f32 = 100.0;
 /// Ticks of sustained size + cohesion for KinNetworkStable.
 pub const KIN_WINDOW: u32 = 1500;
 
+/// EMA rate for anchor learning (scaled by Territoriality).
+pub const ANCHOR_LEARN_RATE: f32 = 0.01;
+/// Gaussian jitter on the inherited child anchor (world units).
+pub const ANCHOR_DRIFT_SIGMA: f32 = 4.0;
+/// Homing pull strength at Territoriality = 1.
+pub const ANCHOR_PULL: f32 = 0.5;
+/// Max anchor RMS spread (world units) for a formed settlement.
+pub const SETTLEMENT_SPREAD_MAX: f32 = 100.0;
+/// Minimum anchored members for a settlement.
+pub const SETTLEMENT_MIN_MEMBERS: u32 = 10;
+/// Ticks of sustained anchor cohesion for SettlementFormed.
+pub const SETTLEMENT_WINDOW: u32 = 400;
+
+/// Market density deposited per successful swap at the initiator's cell.
+pub const MARKET_DEPOSIT: f32 = 1.0;
+/// Per-tick market-field decay.
+pub const MARKET_DECAY: f32 = 0.999;
+/// Sustained density that makes a cell a market node.
+pub const MARKET_NODE_THRESHOLD: f32 = 40.0;
+/// Ticks of sustained density for MarketEmerged.
+pub const MARKET_WINDOW: u32 = 400;
+
+/// Harvest-experience gain per harvest.
+pub const HARVEST_EXP_RATE: f32 = 0.01;
+/// Experience cap (bounds the harvest bonus).
+pub const EXP_CAP: f32 = 10.0;
+/// Harvest-amount bonus per experience point.
+pub const SPECIALIZATION_GAIN: f32 = 0.1;
+/// Experience share in one good that marks a producer specialist.
+pub const SPECIALIST_SHARE: f32 = 0.6;
+/// Minimum fraction of a species in each producer class for a split.
+pub const SPECIALIZATION_MIN_CLASS: f32 = 0.2;
+
 /// Per-species-pair war state (E7).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostilityRecord {
@@ -417,12 +451,21 @@ pub enum EventType {
     /// A species sustained ≥`KIN_MIN_MEMBERS` members and tight spatial
     /// cohesion over `KIN_WINDOW` ticks (`value` = window ticks).
     KinNetworkStable = 41,
+    /// A species' member anchors cluster within `SETTLEMENT_SPREAD_MAX`
+    /// over the settlement window (`value` = anchor RMS spread).
+    SettlementFormed = 42,
+    /// A biome cell sustained market density ≥ `MARKET_NODE_THRESHOLD`
+    /// (`value` = density; loc = cell center).
+    MarketEmerged = 43,
+    /// A species split into ≥2 producer classes specialized on different
+    /// goods (`value` = smaller class fraction).
+    SpecializationSplit = 44,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::KinNetworkStable as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::SpecializationSplit as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -641,6 +684,16 @@ pub struct CodexState {
     pub kin_streak: BTreeMap<u32, u32>,
     /// Species currently latched as stable kin networks.
     pub kin_active: BTreeSet<u32>,
+    /// Per-species consecutive-tick streak of anchor cohesion (Settlement).
+    pub settlement_streak: BTreeMap<u32, u32>,
+    /// Species currently latched as settled.
+    pub settlement_active: BTreeSet<u32>,
+    /// Per-cell consecutive-tick streak of market density (Market).
+    pub market_streak: BTreeMap<u32, u32>,
+    /// Cells currently latched as market nodes.
+    pub market_active: BTreeSet<u32>,
+    /// Species currently latched as specialization-split.
+    pub specialization_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -1035,6 +1088,9 @@ pub fn observe_all(world: &mut World) {
     war::detect_war(world);
     war::detect_alliance(world, &agg);
     war::detect_kin_network(world, &agg);
+    settlement::detect_settlement(world, &agg);
+    settlement::detect_market(world);
+    settlement::detect_specialization(world, &agg);
     population::detect_migration(world, &agg);
     population::detect_novel_modules(world, &agg);
     population::detect_novel_behavior(world, &agg);

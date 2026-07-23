@@ -55,7 +55,12 @@ use crate::world::World;
 ///     Node::SenseHostility (appended, serde-stable), World.war_enabled.
 ///     The mutation pool only widens behind the flag (off in all golden
 ///     scenarios) — layout growth only, behavior byte-identical.
-pub const FORMAT_VERSION: u32 = 13;
+/// v14: E8 settlements & economy — AgentBuffers.{anchor, harvest_exp},
+///     World.{settlement_enabled, market_field}, anchor Sense nodes
+///     (appended, mutation pool gated on settlement_enabled), CodexState
+///     settlement/market/specialization scratch. Flags off in golden
+///     scenarios — layout growth only.
+pub const FORMAT_VERSION: u32 = 14;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

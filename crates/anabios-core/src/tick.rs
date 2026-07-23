@@ -41,6 +41,11 @@ pub fn step(world: &mut World) {
     // agent, read by `combat_pass` in the interact stage. Observability only.
     crate::codex::signatures::update_still_ticks(world);
 
+    // Stage 4c: E8 anchor learning + market-field decay (opt-in; no-ops
+    // when settlement/resources are disabled).
+    crate::settlement::anchor_step(world);
+    crate::settlement::market_decay_step(world);
+
     // Stage 5: interact (feeding, combat, predation).
     interact_all(world);
 
@@ -125,6 +130,8 @@ fn decide_all(world: &mut World) {
     let biome = &world.biome;
     let biome_adaptation = world.biome_adaptation;
     let terrain_habitat = world.terrain_habitat;
+    let settlement_enabled = world.settlement_enabled;
+    let ws = world.world_size;
     let cap = world.agents.capacity();
     world
         .actions
@@ -142,6 +149,9 @@ fn decide_all(world: &mut World) {
                 &agents.meme_vector[i],
                 agents.energy[i],
                 agents.age[i],
+                agents.anchor[i],
+                agents.position[i],
+                ws,
                 stack,
             );
             // Personality modulation of the raw action intents (Big Five).
@@ -180,6 +190,19 @@ fn decide_all(world: &mut World) {
                 );
                 action.move_x += crate::culture::TERRAIN_HABITAT_PULL * pull.x;
                 action.move_y += crate::culture::TERRAIN_HABITAT_PULL * pull.y;
+            }
+            // Home-range anchoring (E8, opt-in): bias movement toward the
+            // learned anchor, so species keep a place they return to. Gated
+            // so flag-off stays byte-identical.
+            if settlement_enabled {
+                let pull = crate::settlement::anchor_pull_parts(
+                    agents.anchor[i],
+                    agents.position[i],
+                    agents.genome[i].get(crate::genome::GenomeSlot::Territoriality),
+                    ws,
+                );
+                action.move_x += pull.x;
+                action.move_y += pull.y;
             }
             // Normalize the movement intent to a unit direction (identical to the
             // pre-M11 logic that lived inside `decide`). Guard against a non-finite

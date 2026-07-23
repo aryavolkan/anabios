@@ -61,8 +61,10 @@ fn cognitive_scenario_is_self_consistent() {
 // (FORMAT_VERSION 11→12) — observability only.
 // Refreshed 2026-07-23 (E7): hostility records + SenseHostility behind
 // war_enabled (FORMAT_VERSION 12→13) — layout growth only, flag off.
+// Refreshed 2026-07-23 (E8): anchors + harvest exp + market field
+// (FORMAT_VERSION 13→14) — layout growth only, flags off.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xccbc1ca852f4c463), (100, 0x54f5da2102ce7182), (300, 0xedc2af09c8d0eee3)];
+    &[(0, 0x75d93910e5da510c), (100, 0x01c60024bfc6305c), (300, 0x86be938b69cd0fd1)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

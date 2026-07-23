@@ -149,6 +149,7 @@ pub fn reproduce_all(world: &mut World) {
             &b_program,
             &mut world.rng,
             world.war_enabled,
+            world.settlement_enabled,
         );
 
         let lineage = world.next_lineage();
@@ -162,6 +163,34 @@ pub fn reproduce_all(world: &mut World) {
             child_program,
         );
         world.add_to_species(a_species);
+
+        // Anchor inheritance (E8): child anchor = parent-anchor midpoint +
+        // drift, ONLY when settlement is enabled. Gated so flag-off draws
+        // zero extra RNG (baseline streams unchanged).
+        if world.settlement_enabled {
+            let ws = world.world_size;
+            let aa = world.agents.anchor[i];
+            let ba = world.agents.anchor[j];
+            // Torus-safe midpoint: walk from A halfway toward B.
+            let mut dx = ba.x - aa.x;
+            let mut dy = ba.y - aa.y;
+            if dx > ws * 0.5 {
+                dx -= ws;
+            } else if dx < -ws * 0.5 {
+                dx += ws;
+            }
+            if dy > ws * 0.5 {
+                dy -= ws;
+            } else if dy < -ws * 0.5 {
+                dy += ws;
+            }
+            let jx = world.rng.gaussian(0.0, crate::codex::ANCHOR_DRIFT_SIGMA);
+            let jy = world.rng.gaussian(0.0, crate::codex::ANCHOR_DRIFT_SIGMA);
+            world.agents.anchor[child_id as usize] = crate::prelude::Vec2::new(
+                (aa.x + dx * 0.5 + jx).rem_euclid(ws),
+                (aa.y + dy * 0.5 + jy).rem_euclid(ws),
+            );
+        }
 
         // Ensure the bitvec covers the new slot, mark the child as
         // "reproduced this tick" so they cannot immediately mate again.

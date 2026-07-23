@@ -654,6 +654,32 @@ impl Simulation {
         self.inner.as_ref().map(|w| w.disasters_enabled).unwrap_or(false)
     }
 
+    /// Whether the trade economy (E4 trade goods) is enabled — gates the
+    /// markets ground overlay in the mode cycle.
+    #[func]
+    fn resources_active(&self) -> bool {
+        self.inner.as_ref().map(|w| w.resources_enabled).unwrap_or(false)
+    }
+
+    /// Per-cell market-density tint for the E8 markets overlay: amber heat
+    /// over a dim base, scaled to the node threshold.
+    #[func]
+    fn market_colors(&self) -> PackedColorArray {
+        let mut out = PackedColorArray::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        if w.market_field.is_empty() {
+            return out;
+        }
+        for (i, &density) in w.market_field.iter().enumerate() {
+            let _ = i;
+            let t = (density / anabios_core::codex::MARKET_NODE_THRESHOLD).clamp(0.0, 1.5);
+            let base = Color::from_rgb(0.10, 0.12, 0.14);
+            let amber = Color::from_rgb(1.0, 0.75, 0.25);
+            out.push(base.lerp(amber, (t / 1.5) as f64));
+        }
+        out
+    }
+
     /// Per-cell succession/disaster tint for the E4 ground overlay: Climax
     /// dim green, Pioneer bright new-growth, Bare scorched umber; cells
     /// inside an active disaster's disk tint to fire/drought/freeze colors.

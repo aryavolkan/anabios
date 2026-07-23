@@ -12,6 +12,18 @@ the other scenarios on the viewer default. Captures run windowed (not
 `--headless`): the harness reads the viewport texture after
 `frame_post_draw`, which never completes on the dummy renderer.
 
+## settlements & economy (E8)
+
+Home-range anchoring (agents learn and inherit a home point), a decaying
+market-density field fed by every trade swap, and harvest experience. The
+`markets` ground overlay ([G] cycle, gated on the trade economy) renders
+density as amber heat. `ANABIOS_SEED=424242` (the geographic-trade hub seed),
+`ANABIOS_CAM_X/Y` on the four-way junction.
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| e8-market.png | 931 | `settlement` seed 424242: the amber market node crystallized at the four-way terrain hub, trade-route streaks (cyan) crossing straight through it, the four goods species ringed around their shared marketplace. Tally reads `Market: 36 Specialists: 2`; the HUD counts 113,486 trades. |
+
 ## war & alliance (E7)
 
 Cross-faction combat hits and deaths feed a decaying hostility record per
