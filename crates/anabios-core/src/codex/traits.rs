@@ -119,11 +119,7 @@ pub(super) fn detect_trait_fixation(world: &mut World, agg: &SpeciesAggTable) {
             loc_x: lx,
             loc_y: ly,
         });
-        let archive = &mut world.codex.fixation_archive;
-        if archive.len() == FIXATION_ARCHIVE_CAP {
-            archive.pop_front();
-        }
-        archive.push_back((sid, slot, mean));
+        world.codex.archive_fixation((sid, slot, mean));
     }
 }
 
@@ -402,6 +398,42 @@ mod tests {
         assert!(
             w.codex.events.is_empty(),
             "a splinter re-fixing its parent lineage's slot is not convergence"
+        );
+    }
+
+    #[test]
+    fn convergence_survives_a_full_archive() {
+        // Regression: once `fixation_archive` fills to its cap, each new
+        // fixation drops the front entry. If the convergence watermark is not
+        // decremented in lockstep it stays pinned at the cap and the detector
+        // goes permanently silent. Fill to the cap, then append an independent
+        // convergent fixation and assert it is still evaluated.
+        let mut w = world_with_agents(12);
+        w.tick = 0;
+        w.species_parents = vec![None, Some(0), Some(0)];
+        // A front filler (popped on the next append) + an already-evaluated
+        // convergent fixation for founder 1, then far-off fillers to the cap.
+        w.codex.fixation_archive.push_back((7, 5, 0.1)); // popped on append
+        w.codex.fixation_archive.push_back((1, 5, 0.70)); // survives, converges
+        while w.codex.fixation_archive.len() < FIXATION_ARCHIVE_CAP {
+            w.codex.fixation_archive.push_back((7, 5, 0.1));
+        }
+        // Everything so far counts as already evaluated: watermark at the cap.
+        w.codex.converge_watermark = FIXATION_ARCHIVE_CAP;
+
+        // New fixation for independent founder 2, mean within tolerance of 1's.
+        w.codex.archive_fixation((2, 5, 0.71));
+        let agg = agg_for(2, 20);
+        detect_convergent_evolution(&mut w, &agg);
+
+        assert_eq!(
+            w.codex
+                .events
+                .iter()
+                .filter(|e| e.event_type == EventType::ConvergentEvolution)
+                .count(),
+            1,
+            "a new fixation must still be evaluated after the archive hit its cap"
         );
     }
 }

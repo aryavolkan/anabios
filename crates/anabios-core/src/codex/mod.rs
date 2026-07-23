@@ -468,7 +468,9 @@ pub struct CodexState {
     /// the convergence detector.
     pub fixation_archive: VecDeque<(u32, u8, f32)>,
     /// Index watermark into `fixation_archive`: entries before it have
-    /// already been evaluated for convergence.
+    /// already been evaluated for convergence. Adjusted down by
+    /// `archive_fixation` whenever the bounded archive drops its front, so it
+    /// keeps tracking the same logical entry as older fixations age out.
     pub converge_watermark: usize,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
@@ -480,6 +482,18 @@ impl CodexState {
             self.events.pop_front();
         }
         self.events.push_back(ev);
+    }
+
+    /// Append a fixation `(species, slot, mean)` to the bounded convergence
+    /// archive. When the archive is full and drops its front, the convergence
+    /// watermark is decremented in lockstep — otherwise it stays pinned at the
+    /// cap and the convergence detector silently stops evaluating new entries.
+    pub fn archive_fixation(&mut self, entry: (u32, u8, f32)) {
+        if self.fixation_archive.len() == FIXATION_ARCHIVE_CAP {
+            self.fixation_archive.pop_front();
+            self.converge_watermark = self.converge_watermark.saturating_sub(1);
+        }
+        self.fixation_archive.push_back(entry);
     }
 
     /// Drain the buffer — used by the CLI JSONL writer + Godot panel.
