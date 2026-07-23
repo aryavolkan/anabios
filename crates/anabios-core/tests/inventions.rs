@@ -757,8 +757,10 @@ fn inventions_scenario_is_deterministic() {
 // hashes are pure layout growth from carrying both. Regenerated post-merge.
 // Refreshed 2026-07-22 (E3): CodexState gains cycle/plateau/cascade detector
 // scratch (FORMAT_VERSION 8→9) — serialized layout only, behavior unchanged.
+// Refreshed 2026-07-23 (E4): BiomeCell.succession + World.disasters (FORMAT_VERSION
+// 9→10) — layout growth only, flag off.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x36aac53c314135d4), (100, 0x57e8973ee229b942), (300, 0x64fcb0977a02ba00)];
+    &[(0, 0xa6d1cf1a31e2809e), (100, 0x2427a66c44f88e86), (300, 0x2de8b19faa547a98)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

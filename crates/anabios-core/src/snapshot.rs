@@ -40,7 +40,11 @@ use crate::world::World;
 /// v9: E3 population-dynamics detectors — CodexState cycle/plateau/cascade
 ///     scratch (cycle_history, cycle/boom/carrying latches, cascade state).
 ///     Agent behavior unchanged; the event stream gains the four new types.
-pub const FORMAT_VERSION: u32 = 9;
+/// v10: E4 disturbance & succession — BiomeCell.succession,
+///     World.{disasters_enabled, disasters}, CodexState disturbance-detector
+///     scratch. `disasters_enabled` off in all golden scenarios ⇒ behavior
+///     unchanged; only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 10;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

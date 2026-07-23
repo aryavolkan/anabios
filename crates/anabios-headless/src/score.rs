@@ -25,7 +25,7 @@ pub const CORPUS_RUNS: u64 = 64;
 pub const NOVELTY_BONUS: f64 = 5.158_883_083_359_671;
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 27] = [
+pub const ALL_EVENT_NAMES: [&str; 31] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -53,15 +53,19 @@ pub const ALL_EVENT_NAMES: [&str; 27] = [
     "boom_bust",
     "carrying_capacity",
     "trophic_cascade",
+    "range_expansion",
+    "segregation",
+    "corridor_use",
+    "succession",
 ];
 
 /// Rarity weights derived from the reference corpus (see module docs):
 /// 16 seeds × 5000 ticks of `divergent`, `inventions`, `predator-prey`,
 /// `cooperation` (64 runs, swept 2026-07-22). `n_t` comments record how
 /// many corpus runs fired each type; unseen types sit at `NOVELTY_BONUS`.
-/// The corpus predates E3, so the four population-dynamics types are
-/// definitionally unseen (bonus) until the next regeneration.
-pub const DEFAULT_WEIGHTS: [(&str, f64); 27] = [
+/// The corpus predates E3/E4, so the population-dynamics and disturbance
+/// types are definitionally unseen (bonus) until the next regeneration.
+pub const DEFAULT_WEIGHTS: [(&str, f64); 31] = [
     ("extinction", 0.048009_f64),           // n_t=61
     ("pop_crash", 0.133531_f64),            // n_t=56
     ("speciation", 0.081346_f64),           // n_t=59
@@ -89,6 +93,10 @@ pub const DEFAULT_WEIGHTS: [(&str, f64); 27] = [
     ("boom_bust", NOVELTY_BONUS),           // post-corpus (E3)
     ("carrying_capacity", NOVELTY_BONUS),   // post-corpus (E3)
     ("trophic_cascade", NOVELTY_BONUS),     // post-corpus (E3)
+    ("range_expansion", NOVELTY_BONUS),     // post-corpus (E4)
+    ("segregation", NOVELTY_BONUS),         // post-corpus (E4)
+    ("corridor_use", NOVELTY_BONUS),        // post-corpus (E4)
+    ("succession", NOVELTY_BONUS),          // post-corpus (E4)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -120,6 +128,10 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::BoomAndBust => "boom_bust",
         EventType::CarryingCapacityReached => "carrying_capacity",
         EventType::TrophicCascade => "trophic_cascade",
+        EventType::RangeExpansion => "range_expansion",
+        EventType::SegregationEmerged => "segregation",
+        EventType::CorridorUse => "corridor_use",
+        EventType::Succession => "succession",
     }
 }
 

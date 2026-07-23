@@ -53,6 +53,11 @@ pub struct Scenario {
     /// `false` (default) leaves the world unchanged.
     #[serde(default)]
     pub resources_enabled: bool,
+    /// Opt-in: enable natural disasters (fire/drought/freeze on a Poisson
+    /// schedule, succession scars). `false` (default) leaves the world
+    /// unchanged — zero RNG draws, no state.
+    #[serde(default)]
+    pub disasters_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -305,6 +310,10 @@ impl Scenario {
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
         w.resources_enabled = self.resources_enabled;
+        w.disasters_enabled = self.disasters_enabled;
+        if w.disasters_enabled {
+            w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
+        }
         if let Some(cap) = self.max_population {
             w.max_population = cap;
         }

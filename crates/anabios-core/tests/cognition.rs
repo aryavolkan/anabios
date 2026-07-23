@@ -53,8 +53,10 @@ fn cognitive_scenario_is_self_consistent() {
 // structural-mutation pool (random_any 9 → 11 types) — trajectory drift only.
 // Refreshed 2026-07-23 (E3): CodexState cycle/plateau/cascade scratch
 // (FORMAT_VERSION 8→9) — layout growth only, behavior unchanged.
+// Refreshed 2026-07-23 (E4): BiomeCell.succession + World.disasters (FORMAT_VERSION
+// 9→10) — layout growth only, flag off.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x94a7c8f89c749e77), (100, 0x5f52ee028234f5fb), (300, 0x2b6863e491e46c63)];
+    &[(0, 0xa23b70f1adae940b), (100, 0xf99806506746f82d), (300, 0x5fb4f1501afc42f9)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {
