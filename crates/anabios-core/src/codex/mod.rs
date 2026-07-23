@@ -236,15 +236,13 @@ pub const WAR_THRESHOLD: f32 = 12.0;
 /// Hostility score per cross-faction combat HIT (deaths score 1.0 — wars
 /// are fought with hits, deaths are decisive moments).
 pub const WAR_HIT_SCORE: f32 = 0.1;
-/// Minimum decayed directional score on EACH side for a war — one-way
-/// killing is predation, only two-way violence is war.
-pub const WAR_MIN_BIDIRECTIONAL: f32 = 2.0;
 /// Consecutive ticks below half-threshold before a latched war ends.
 pub const WAR_END_TICKS: u64 = 200;
 
 /// Max mean-meme L2 distance for an alliance's shared culture.
 pub const ALLIANCE_MEME_MAX: f32 = 0.3;
-/// Window (ticks) of zero cross-kills + sustained sharing for an alliance.
+/// Window (ticks) of zero cross-kills required for an alliance. (The share
+/// tally uses `COOPERATION_WINDOW`, the horizon `share_events` is pruned to.)
 pub const ALLIANCE_WINDOW: u64 = 400;
 /// Minimum cross-species energy shares in the window for an alliance.
 pub const ALLIANCE_MIN_SHARES: u32 = 5;
@@ -262,8 +260,9 @@ pub struct HostilityRecord {
     /// Decaying kill score; war declares at `WAR_THRESHOLD`.
     pub score: f32,
     /// Decaying directional scores: kills BY the lo-keyed species and by the
-    /// hi-keyed one. War requires BOTH ≥ `WAR_MIN_BIDIRECTIONAL` — one-way
-    /// killing is predation, not war.
+    /// hi-keyed one. Tracked for inspection only — `detect_war` declares on
+    /// the combined `score` (one-way killing already counts as war pressure),
+    /// so these do not currently gate the decision.
     pub score_lo: f32,
     pub score_hi: f32,
     /// Total cross-kills over the record's life.
