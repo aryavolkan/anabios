@@ -63,6 +63,11 @@ pub struct Scenario {
     /// baseline pool byte-identical.
     #[serde(default)]
     pub war_enabled: bool,
+    /// Opt-in: home-range anchoring (E8) — anchors learn, homing pull,
+    /// anchor Sense nodes in the mutation pool. `false` (default) keeps
+    /// the world byte-identical.
+    #[serde(default)]
+    pub settlement_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -315,7 +320,11 @@ impl Scenario {
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
         w.resources_enabled = self.resources_enabled;
+        if w.resources_enabled {
+            w.market_field = vec![0.0; w.biome.cells.len()];
+        }
         w.war_enabled = self.war_enabled;
+        w.settlement_enabled = self.settlement_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);

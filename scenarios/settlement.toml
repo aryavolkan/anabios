@@ -1,0 +1,56 @@
+# E8 settlement & economy: the geographic-trade chassis (four goods species
+# on the four-way junction hub) PLUS home-range anchoring. Watch anchors pull
+# each goods species into a lasting settlement on its home terrain border
+# (SettlementFormed), trade density crystallize into market nodes where the
+# borders meet (MarketEmerged), and practiced harvesters split into producer
+# classes (SpecializationSplit).
+#
+name = "settlement"
+seed = 424242
+terrain_habitat = true
+settlement_enabled = true
+resources_enabled = true
+max_population = 2200
+
+# All four species spawn UNIFORM-ish within one broad shared cluster rather
+# than across the whole 1024x1024 map. `best_terrain_direction` (biome.rs) now
+# pulls to the nearest BORDER of the target terrain rather than the nearest
+# cell of any kind, and stops there rather than at the first-found interior
+# cell — see the placement note above for why this hub was chosen.
+
+# Salt / Desert (~26% of the map).
+[[agents]]
+count = 312
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.12
+
+# Obsidian / Rock (~0.3% of the map — deliberately the smallest population;
+# not expected to sort as well as the other three, see header note).
+[[agents]]
+count = 65
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.37
+
+# Amber / Forest (~17% of the map).
+[[agents]]
+count = 195
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.62
+
+# Spice / Grass (~48% of the map — the largest population).
+[[agents]]
+count = 390
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.87

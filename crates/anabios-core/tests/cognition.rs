@@ -61,11 +61,13 @@ fn cognitive_scenario_is_self_consistent() {
 // (FORMAT_VERSION 11→12) — observability only.
 // Refreshed 2026-07-23 (E7): hostility records + SenseHostility behind
 // war_enabled (FORMAT_VERSION 12→13) — layout growth only, flag off.
-// Refreshed 2026-07-23 (E6 merge): merged e6 in — serializes
-// World.{still_ticks, prev_desired_direction} (FORMAT_VERSION 13→14), layout
-// growth only.
+// Refreshed 2026-07-23 (E8): anchors + harvest exp + market field
+// (FORMAT_VERSION 13→14) — layout growth only, flags off.
+// Refreshed 2026-07-23 (E6+E7 merge): merged e7 in — carries the e6
+// still_ticks/prev_desired_direction serialization (FORMAT_VERSION 14→15),
+// layout growth only.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x5df9938377ae2523), (100, 0x09426c1e145b5288), (300, 0x4fc8675b9e637628)];
+    &[(0, 0xc6106f235e03b40c), (100, 0x8440285a5f61c572), (300, 0xcbd1b6920bb066d2)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

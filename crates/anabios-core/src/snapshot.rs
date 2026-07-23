@@ -61,7 +61,12 @@ use crate::world::World;
 ///     The mutation pool only widens behind the flag (off in all golden
 ///     scenarios) — layout growth only, behavior byte-identical. Merged onto
 ///     the E6 v13 still_ticks serialization, so the combined layout is v14.
-pub const FORMAT_VERSION: u32 = 14;
+/// v15: E8 settlements & economy — AgentBuffers.{anchor, harvest_exp},
+///     World.{settlement_enabled, market_field}, anchor Sense nodes
+///     (appended, mutation pool gated on settlement_enabled), CodexState
+///     settlement/market/specialization scratch. Flags off in golden
+///     scenarios — layout growth only. Merged onto the combined E6+E7 v14.
+pub const FORMAT_VERSION: u32 = 15;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

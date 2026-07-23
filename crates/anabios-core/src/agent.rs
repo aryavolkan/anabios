@@ -68,6 +68,14 @@ pub struct AgentBuffers {
     /// and the sample count — together the developmental average feeding `iq`.
     pub iq_enrich_acc: Vec<f32>,
     pub iq_enrich_ticks: Vec<u32>,
+    /// Learned home point (E8): an EMA of position updated when
+    /// `settlement_enabled`; inherited by offspring with drift. Spawned at
+    /// the agent's spawn position; inert when the flag is off.
+    pub anchor: Vec<crate::prelude::Vec2>,
+    /// Per-good harvest experience (E8): each harvest of good k increments
+    /// `harvest_exp[k]`; the harvest amount scales with it. Only mutated
+    /// when `World::resources_enabled` is on.
+    pub harvest_exp: Vec<[f32; crate::resource::GOOD_COUNT]>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -135,6 +143,8 @@ impl AgentBuffers {
             self.iq[i] = 0.0;
             self.iq_enrich_acc[i] = 0.0;
             self.iq_enrich_ticks[i] = 0;
+            self.anchor[i] = position;
+            self.harvest_exp[i] = [0.0; crate::resource::GOOD_COUNT];
             self.alive.set(i, true);
             id
         } else {
@@ -154,6 +164,8 @@ impl AgentBuffers {
             self.iq.push(0.0);
             self.iq_enrich_acc.push(0.0);
             self.iq_enrich_ticks.push(0);
+            self.anchor.push(position);
+            self.harvest_exp.push([0.0; crate::resource::GOOD_COUNT]);
             self.alive.push(true);
             i as AgentId
         };

@@ -83,11 +83,14 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Node::SenseHostility + World.war_enabled (FORMAT_VERSION 12→13). The mutation
 // pool only widens behind the flag (off everywhere here) — layout growth only,
 // behavior byte-identical.
-// Refreshed 2026-07-23 (E6 merge): merged e6-named-behaviors in, which
-// serializes World.{still_ticks, prev_desired_direction} (FORMAT_VERSION 13→14).
+// Refreshed 2026-07-23 (E8): AgentBuffers.{anchor,harvest_exp} + World
+// .{settlement_enabled,market_field} + anchor senses (FORMAT_VERSION 13→14) —
+// flags off, layout growth only.
+// Refreshed 2026-07-23 (E6+E7 merge): merged e7 in, which carries the e6
+// still_ticks/prev_desired_direction serialization (FORMAT_VERSION 14→15).
 // Layout growth only; behavior byte-identical.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x88ffff9b0f595f6d), (100, 0x4959f1cf630e0549), (1000, 0x45d236852e49df74)];
+    &[(0, 0x38b4ee13d0e343cf), (100, 0x0a7b6391a201d876), (1000, 0x8eb806e060b1a323)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
