@@ -795,7 +795,7 @@ mod tests {
         assert_eq!(c.succession, SUCCESSION_CLIMAX, "pioneer matures at its ceiling");
         // Pioneer never exceeds 0.5 × terrain capacity while pioneer.
         // (After maturing, Climax regrowth resumes toward the full 10.0.)
-        let mut cells2 = vec![grass_cell(0.6, SUCCESSION_PIONEER)];
+        let cells2 = vec![grass_cell(0.6, SUCCESSION_PIONEER)];
         let mut f2 = BiomeField { cells: cells2, res: 1, world_size: 8.0, cell_size: 8.0 };
         let mut peak = 0.0f32;
         for _ in 0..200 {

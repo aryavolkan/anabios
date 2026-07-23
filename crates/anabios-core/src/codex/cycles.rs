@@ -428,7 +428,7 @@ mod tests {
     use super::*;
     use crate::genome::Genome;
     use crate::prelude::Vec2;
-    use std::collections::{BTreeSet, VecDeque};
+    use std::collections::VecDeque;
 
     fn world_with_agents(n: u32) -> World {
         let mut w = World::new(1);
@@ -459,11 +459,13 @@ mod tests {
 
     fn agg_with(sid: u32, count: u32, diet_sum: f64) -> SpeciesAggTable {
         let mut agg = SpeciesAggTable::default();
-        let mut e = SpeciesAgg::default();
-        e.count = count;
-        e.sum_x = 500.0 * count as f64;
-        e.sum_y = 500.0 * count as f64;
-        e.diet_sum = diet_sum;
+        let e = SpeciesAgg {
+            count,
+            sum_x: 500.0 * count as f64,
+            sum_y: 500.0 * count as f64,
+            diet_sum,
+            ..Default::default()
+        };
         if sid as usize >= agg.entries.len() {
             agg.entries.resize(sid as usize + 1, SpeciesAgg::default());
         }
@@ -577,12 +579,12 @@ mod tests {
             // One carnivore species (diet 1.0) and one herbivore (diet 0.0);
             // counts scaled by the script.
             let mut agg = SpeciesAggTable::default();
-            let mut c = SpeciesAgg::default();
-            c.count = carn.max(1);
-            c.diet_sum = c.count as f64; // mean carnivory 1.0
-            let mut h = SpeciesAgg::default();
-            h.count = herb.max(1);
-            h.diet_sum = 0.0;
+            let c = SpeciesAgg {
+                count: carn.max(1),
+                diet_sum: carn.max(1) as f64, // mean carnivory 1.0
+                ..Default::default()
+            };
+            let h = SpeciesAgg { count: herb.max(1), diet_sum: 0.0, ..Default::default() };
             agg.entries = vec![c, h];
             agg.active = vec![0, 1];
             // Zero carn count means extinction of the predator species: model
