@@ -68,8 +68,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // are appended at the end of the `Module` enum, so existing variant encodings
 // are byte-identical; only the evolutionary trajectory drifts once a
 // structural mutation draw resolves differently.
+// Refreshed 2026-07-22 (E3): CodexState gains cycle/plateau/cascade detector
+// scratch (FORMAT_VERSION 8→9). Pure observers — agent behavior and RNG draw
+// order unchanged; the hash moves because the serialized layout grew and the
+// event buffer can hold the four new event types.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x61ed514ea28b61f5), (100, 0x179a38d5aed5eb2f), (1000, 0x6227f1388401b020)];
+    &[(0, 0x5437f5821aa6c0e5), (100, 0x86ab43dd4bb05eef), (1000, 0x48b1ee4bc480801e)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

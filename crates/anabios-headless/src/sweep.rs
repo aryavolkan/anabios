@@ -175,13 +175,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          invention_discovered,invention_adopted,\
          practice_discovered,practice_adopted,\
          resource_traded,dowry_birth,\
+         pop_cycle,boom_bust,carrying_capacity,trophic_cascade,\
          emergence_score,novel_events,coverage"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -210,6 +211,10 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("practice_adopted"),
             g("resource_traded"),
             g("dowry_birth"),
+            g("pop_cycle"),
+            g("boom_bust"),
+            g("carrying_capacity"),
+            g("trophic_cascade"),
             r.emergence_score,
             r.novel_events,
             r.coverage,

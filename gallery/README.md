@@ -12,6 +12,18 @@ the other scenarios on the viewer default. Captures run windowed (not
 `--headless`): the harness reads the viewport texture after
 `frame_post_draw`, which never completes on the dummy renderer.
 
+## population dynamics (E3)
+
+Four new detectors (PopCycle / BoomBust / CarryingCap / TrophicCascade) read
+400-tick guild histories — per-species lines churn too fast under 200-tick
+reclustering, so the oscillators tracked are the herbivore guild, carnivore
+guild, and world total. `ANABIOS_SEED=0` (the scenario seed; the viewer
+default 12345 diverges into a different, dying trajectory).
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| e3-population-dynamics.png | 1821 | `predator-prey` seed 0 mid-maelstrom: 9,992 alive and 6,785 species, with the codex tally carrying all four new chapters — `PopCycle: 1 BoomBust: 1 CarryingCap: 3 TrophicCascade: 1`. The cascade (t=1690) is the real thing: stalker guild collapse → grazer release (555 → 9,989) → plant field grazed from 109k down to 13k. |
+
 ## replay & event camera (E2)
 
 The [R]/[U]/[V] modes ride a GDScript snapshot ring (250-tick cadence, 16

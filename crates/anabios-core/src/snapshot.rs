@@ -37,7 +37,10 @@ use crate::world::World;
 /// v8: merge of the biome-trade-goods branch with main's cognitive layer — the
 ///     combined serialized layout carries BOTH feature sets' new fields, so the
 ///     version advances past both branches' v7.
-pub const FORMAT_VERSION: u32 = 8;
+/// v9: E3 population-dynamics detectors — CodexState cycle/plateau/cascade
+///     scratch (cycle_history, cycle/boom/carrying latches, cascade state).
+///     Agent behavior unchanged; the event stream gains the four new types.
+pub const FORMAT_VERSION: u32 = 9;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
