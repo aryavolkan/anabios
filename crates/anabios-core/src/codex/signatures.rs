@@ -290,6 +290,16 @@ pub(super) fn detect_structured_signaling(world: &mut World) {
         world.prev_desired_direction.resize(cap, crate::prelude::Vec2::ZERO);
     }
     world.prev_desired_direction[..cap].copy_from_slice(&world.desired_direction[..cap]);
+    // `desired_direction` is per-tick scratch (`#[serde(skip)]`): its dead-slot
+    // entries are stale in a continuous run but zero after a snapshot load.
+    // `prev_desired_direction` is serialized (and hashed), so zero the dead
+    // slots here to keep it reproducible across a round-trip. Signaling reads
+    // only alive slots, so this is behavior-preserving.
+    for i in 0..cap {
+        if !world.agents.is_alive(i as u32) {
+            world.prev_desired_direction[i] = crate::prelude::Vec2::ZERO;
+        }
+    }
 
     let mut to_push: Vec<CodexEvent> = Vec::new();
     for (sid, (lx, ly)) in responses {

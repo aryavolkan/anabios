@@ -763,8 +763,10 @@ fn inventions_scenario_is_deterministic() {
 // (FORMAT_VERSION 10→11) — layout growth only.
 // Refreshed 2026-07-23 (E6): CombatHit context + signature scratch
 // (FORMAT_VERSION 11→12) — observability only.
+// Refreshed 2026-07-23 (E6 fix): World.{still_ticks, prev_desired_direction}
+// serialized (FORMAT_VERSION 12→13) — layout growth only, behavior unchanged.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x6963ce81ba30395e), (100, 0x752c106424d4a5ab), (300, 0x2f4e1bee4db50c23)];
+    &[(0, 0xa8cefa0b7a5560de), (100, 0x17b317362342f7ef), (300, 0x7c53a26de3974aa2)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

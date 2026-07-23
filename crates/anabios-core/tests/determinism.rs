@@ -79,8 +79,14 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // (FORMAT_VERSION 10→11) — observers only, layout growth.
 // Refreshed 2026-07-23 (E6): CombatHit ambush/tool context + signature-detector
 // scratch (FORMAT_VERSION 11→12) — observability only.
+// Refreshed 2026-07-23 (E6 fix): World.{still_ticks, prev_desired_direction} are
+// now serialized (FORMAT_VERSION 12→13) — they are path-dependent accumulators
+// feeding serialized codex state, so they must survive a snapshot round-trip.
+// `prev_desired_direction` also zeroes dead slots each tick (they held stale
+// scratch that was not restorable). Behavior/RNG-draw order unchanged; the hash
+// moves only because the serialized layout grew and dead slots now read zero.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x6b7935987c2b0da5), (100, 0x3f30823fb1684ad9), (1000, 0x43e8483fb1c9338c)];
+    &[(0, 0xb6fd7aceedbeeee5), (100, 0x070324b1629e2c7c), (1000, 0xdb409bcf1fb8c6d0)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

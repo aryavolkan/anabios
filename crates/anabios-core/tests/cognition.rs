@@ -59,8 +59,10 @@ fn cognitive_scenario_is_self_consistent() {
 // (FORMAT_VERSION 10→11) — layout growth only.
 // Refreshed 2026-07-23 (E6): CombatHit context + signature scratch
 // (FORMAT_VERSION 11→12) — observability only.
+// Refreshed 2026-07-23 (E6 fix): World.{still_ticks, prev_desired_direction}
+// serialized (FORMAT_VERSION 12→13) — layout growth only, behavior unchanged.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xe8178d29fc0d25cb), (100, 0x864c4042ca69105d), (300, 0x34cf966df1f45e7a)];
+    &[(0, 0x2d269bc46588a08b), (100, 0x9746fbfa897f940f), (300, 0xc6873bf679d575c9)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

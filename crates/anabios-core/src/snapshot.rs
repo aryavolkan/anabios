@@ -50,7 +50,12 @@ use crate::world::World;
 /// v12: E6 named behaviors — CombatHit ambush/tool_boosted context,
 ///     CodexState signature-detector scratch. Observability only; behavior
 ///     unchanged.
-pub const FORMAT_VERSION: u32 = 12;
+/// v13: E6 fix — `World.{still_ticks, prev_desired_direction}` are now
+///     serialized (were `#[serde(skip)]`). They are path-dependent
+///     accumulators feeding serialized codex state (ambush/signal detection),
+///     so dropping them on load made restore-and-continue diverge from a
+///     continuous run. Behavior unchanged; only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 13;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
@@ -215,6 +220,39 @@ mod tests {
         }
         // Every #[serde(skip)] scratch buffer (agent + carcass spatial hashes,
         // codex agg, sensors, pheromone flag) must rebuild itself on the fly.
+        assert_eq!(state_hash(&w), state_hash(&w2));
+    }
+
+    #[test]
+    fn ambush_and_signal_accumulators_survive_roundtrip() {
+        // Regression: `still_ticks` / `prev_desired_direction` are
+        // path-dependent accumulators that feed SERIALIZED codex state
+        // (`sig_hit_log`/`ambush_active` via combat_pass, `signal_responses`
+        // via detect_structured_signaling). If they are dropped on load, a
+        // restored world computes a different `ambush`/signaling verdict for
+        // the next several ticks and its state hash diverges from a continuous
+        // run — silently breaking replay. They must persist across a snapshot.
+        let mut w = World::new(5);
+        for _ in 0..8 {
+            let _ = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        }
+        for _ in 0..12 {
+            step(&mut w);
+        }
+        // Stamp distinctive accumulator content (some agents past the
+        // AMBUSH_STILL_MIN threshold) so the assertions are meaningful.
+        for (i, v) in w.still_ticks.iter_mut().enumerate() {
+            *v = (i as u32 * 13) % 90;
+        }
+        for (i, d) in w.prev_desired_direction.iter_mut().enumerate() {
+            *d = Vec2::new(0.1 * i as f32, -0.2);
+        }
+        let w2 = load_from_bytes(&save_to_bytes(&w).expect("save")).expect("load");
+        assert_eq!(w.still_ticks, w2.still_ticks, "still_ticks must persist across a snapshot");
+        assert_eq!(
+            w.prev_desired_direction, w2.prev_desired_direction,
+            "prev_desired_direction must persist across a snapshot"
+        );
         assert_eq!(state_hash(&w), state_hash(&w2));
     }
 }
