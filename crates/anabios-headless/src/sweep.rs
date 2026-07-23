@@ -7,13 +7,14 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use anabios_core::codex::EventType;
 use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use serde::Serialize;
+
+use crate::score::{self, ScoreTable};
 
 #[derive(Serialize)]
 struct RunSummary {
@@ -23,6 +24,10 @@ struct RunSummary {
     final_biomass: f32,
     state_hash: u64,
     counts: BTreeMap<&'static str, u64>,
+    emergence_score: f64,
+    novel_events: u64,
+    coverage: f64,
+    novel_types: Vec<&'static str>,
 }
 
 pub fn run(
@@ -31,6 +36,7 @@ pub fn run(
     ticks: u64,
     out_dir: PathBuf,
     threads: Option<usize>,
+    archive: Option<PathBuf>,
 ) -> Result<()> {
     if let Some(n) = threads {
         rayon::ThreadPoolBuilder::new().num_threads(n).build_global().ok(); // ignore "already initialised" errors
@@ -40,13 +46,33 @@ pub fn run(
     let text = std::fs::read_to_string(&scenario_path)
         .with_context(|| format!("reading scenario {}", scenario_path.display()))?;
 
+    let table = match &archive {
+        Some(dir) => {
+            let corpus = score::load_corpus(dir)?;
+            eprintln!(
+                "[sweep] archive: {} corpus runs from {} (scoring weights are empirical)",
+                corpus.len(),
+                dir.display()
+            );
+            ScoreTable::from_corpus(&corpus)
+        }
+        None => {
+            eprintln!(
+                "[sweep] no archive: scoring with default table v{} ({}-run reference corpus)",
+                score::WEIGHTS_VERSION,
+                score::CORPUS_RUNS
+            );
+            ScoreTable::default_table()
+        }
+    };
+
     let progress = Mutex::new(0_u64);
     let total = seeds;
 
     let summaries: Vec<RunSummary> = (0..seeds)
         .into_par_iter()
         .map(|seed| {
-            let r = run_one(&text, seed, ticks, &out_dir);
+            let r = run_one(&text, seed, ticks, &out_dir, &table);
             if let Ok(mut p) = progress.lock() {
                 *p += 1;
                 eprintln!("[sweep] {}/{} done (seed={})", *p, total, seed);
@@ -56,11 +82,18 @@ pub fn run(
         .collect::<Result<Vec<_>>>()?;
 
     write_summary_csv(&out_dir, &summaries)?;
+    report_novelty(&out_dir, &summaries)?;
     println!("sweep complete: {} runs × {} ticks → {}", seeds, ticks, out_dir.display());
     Ok(())
 }
 
-fn run_one(scenario_text: &str, seed: u64, ticks: u64, out_dir: &Path) -> Result<RunSummary> {
+fn run_one(
+    scenario_text: &str,
+    seed: u64,
+    ticks: u64,
+    out_dir: &Path,
+    table: &ScoreTable,
+) -> Result<RunSummary> {
     let mut scenario = Scenario::parse_toml(scenario_text)?;
     scenario.seed = seed;
     let mut world = scenario.instantiate();
@@ -73,49 +106,59 @@ fn run_one(scenario_text: &str, seed: u64, ticks: u64, out_dir: &Path) -> Result
     for _ in 0..ticks {
         step(&mut world);
         for ev in world.codex.drain_events() {
-            let name = event_name(ev.event_type);
+            let name = score::event_name(ev.event_type);
             *counts.entry(name).or_insert(0) += 1;
             serde_json::to_writer(&mut f, &ev)?;
             f.write_all(b"\n")?;
         }
     }
 
+    let novel_types = score::novel_types(&counts, table);
     Ok(RunSummary {
         seed,
         ticks,
         final_alive: world.agents.live_count(),
         final_biomass: world.plant_biomass_total(),
         state_hash: state_hash(&world),
+        emergence_score: score::score(&counts, table),
+        novel_events: novel_types.len() as u64,
+        coverage: score::coverage(&counts),
+        novel_types,
         counts,
     })
 }
 
-fn event_name(t: EventType) -> &'static str {
-    match t {
-        EventType::Extinction => "extinction",
-        EventType::PopulationCrash => "pop_crash",
-        EventType::SpeciationEvent => "speciation",
-        EventType::Migration => "migration",
-        EventType::NovelModuleAppeared => "novel_module",
-        EventType::NovelBehaviorPattern => "novel_behavior",
-        EventType::Predation => "predation",
-        EventType::CombatRaid => "combat_raid",
-        EventType::ArmsRace => "arms_race",
-        EventType::TerritoryFormation => "territory_formation",
-        EventType::NichePartitioning => "niche_partitioning",
-        EventType::DialectFormed => "dialect_formed",
-        EventType::MemeSweep => "meme_sweep",
-        EventType::AlarmCall => "alarm_call",
-        EventType::EvolvedCooperation => "evolved_cooperation",
-        EventType::PackHunting => "pack_hunting",
-        EventType::HerdCohesion => "herd_cohesion",
-        EventType::InventionDiscovered => "invention_discovered",
-        EventType::InventionAdopted => "invention_adopted",
-        EventType::PracticeDiscovered => "practice_discovered",
-        EventType::PracticeAdopted => "practice_adopted",
-        EventType::ResourceTraded => "resource_traded",
-        EventType::DowryBirth => "dowry_birth",
+fn report_novelty(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
+    let mut ranked: Vec<&RunSummary> = runs.iter().collect();
+    ranked.sort_by(|a, b| {
+        b.emergence_score
+            .partial_cmp(&a.emergence_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.seed.cmp(&b.seed))
+    });
+    println!("top runs by emergence score:");
+    for r in ranked.iter().take(5) {
+        println!(
+            "  seed={:>3} score={:.3} coverage={:.3} novel={}",
+            r.seed, r.emergence_score, r.coverage, r.novel_events
+        );
     }
+
+    let novel_runs: Vec<&&RunSummary> = ranked.iter().filter(|r| r.novel_events > 0).collect();
+    if novel_runs.is_empty() {
+        return Ok(());
+    }
+    let novel_dir = out_dir.join("novel");
+    std::fs::create_dir_all(&novel_dir)
+        .with_context(|| format!("creating {}", novel_dir.display()))?;
+    println!("novel runs (fired corpus-unseen event types):");
+    for r in novel_runs {
+        println!("  seed={:>3} novel_types={}", r.seed, r.novel_types.join(","));
+        let src = out_dir.join(format!("seed_{:08}.events.jsonl", r.seed));
+        std::fs::copy(&src, novel_dir.join(src.file_name().unwrap()))
+            .with_context(|| format!("copying {}", src.display()))?;
+    }
+    Ok(())
 }
 
 fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
@@ -131,13 +174,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          evolved_cooperation,pack_hunting,herd_cohesion,\
          invention_discovered,invention_adopted,\
          practice_discovered,practice_adopted,\
-         resource_traded,dowry_birth"
+         resource_traded,dowry_birth,\
+         emergence_score,novel_events,coverage"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -166,6 +210,9 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("practice_adopted"),
             g("resource_traded"),
             g("dowry_birth"),
+            r.emergence_score,
+            r.novel_events,
+            r.coverage,
         )?;
     }
     Ok(())
@@ -176,38 +223,41 @@ mod tests {
     #[test]
     fn event_name_covers_m12_events() {
         use anabios_core::codex::EventType;
-        assert_eq!(super::event_name(EventType::Predation), "predation");
-        assert_eq!(super::event_name(EventType::CombatRaid), "combat_raid");
-        assert_eq!(super::event_name(EventType::ArmsRace), "arms_race");
+        assert_eq!(super::score::event_name(EventType::Predation), "predation");
+        assert_eq!(super::score::event_name(EventType::CombatRaid), "combat_raid");
+        assert_eq!(super::score::event_name(EventType::ArmsRace), "arms_race");
     }
 
     #[test]
     fn event_name_covers_m14_events() {
         use anabios_core::codex::EventType;
-        assert_eq!(super::event_name(EventType::DialectFormed), "dialect_formed");
-        assert_eq!(super::event_name(EventType::MemeSweep), "meme_sweep");
-        assert_eq!(super::event_name(EventType::AlarmCall), "alarm_call");
+        assert_eq!(super::score::event_name(EventType::DialectFormed), "dialect_formed");
+        assert_eq!(super::score::event_name(EventType::MemeSweep), "meme_sweep");
+        assert_eq!(super::score::event_name(EventType::AlarmCall), "alarm_call");
     }
 
     #[test]
     fn event_name_covers_m15_events() {
         use anabios_core::codex::EventType;
-        assert_eq!(super::event_name(EventType::EvolvedCooperation), "evolved_cooperation");
-        assert_eq!(super::event_name(EventType::PackHunting), "pack_hunting");
-        assert_eq!(super::event_name(EventType::HerdCohesion), "herd_cohesion");
+        assert_eq!(super::score::event_name(EventType::EvolvedCooperation), "evolved_cooperation");
+        assert_eq!(super::score::event_name(EventType::PackHunting), "pack_hunting");
+        assert_eq!(super::score::event_name(EventType::HerdCohesion), "herd_cohesion");
     }
 
     #[test]
     fn event_name_covers_m13_events() {
         use anabios_core::codex::EventType;
-        assert_eq!(super::event_name(EventType::TerritoryFormation), "territory_formation");
-        assert_eq!(super::event_name(EventType::NichePartitioning), "niche_partitioning");
+        assert_eq!(super::score::event_name(EventType::TerritoryFormation), "territory_formation");
+        assert_eq!(super::score::event_name(EventType::NichePartitioning), "niche_partitioning");
     }
 
     #[test]
     fn event_name_covers_invention_events() {
         use anabios_core::codex::EventType;
-        assert_eq!(super::event_name(EventType::InventionDiscovered), "invention_discovered");
-        assert_eq!(super::event_name(EventType::InventionAdopted), "invention_adopted");
+        assert_eq!(
+            super::score::event_name(EventType::InventionDiscovered),
+            "invention_discovered"
+        );
+        assert_eq!(super::score::event_name(EventType::InventionAdopted), "invention_adopted");
     }
 }

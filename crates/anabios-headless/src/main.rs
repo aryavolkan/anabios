@@ -1,6 +1,7 @@
 //! Headless runner for anabios scenarios.
 
 mod demo;
+mod score;
 mod sweep;
 
 use std::io::Write;
@@ -57,6 +58,11 @@ enum Command {
         /// Override the rayon thread pool size; defaults to logical CPUs.
         #[arg(long)]
         threads: Option<usize>,
+        /// Directory of prior sweep outputs to score against: every
+        /// `*.events.jsonl` found recursively counts as one corpus run.
+        /// Runs firing corpus-unseen event types are copied to `<out>/novel/`.
+        #[arg(long)]
+        archive: Option<PathBuf>,
     },
     /// Narrate the cultural invention race: stream discovery/adoption events
     /// and periodic per-species tech tables. Best with
@@ -83,8 +89,8 @@ fn main() -> Result<()> {
             run(scenario, ticks, seed, events_jsonl)
         }
         Command::Info { scenario } => info(scenario),
-        Command::Sweep { scenario, seeds, ticks, out, threads } => {
-            sweep::run(scenario, seeds, ticks, out, threads)
+        Command::Sweep { scenario, seeds, ticks, out, threads, archive } => {
+            sweep::run(scenario, seeds, ticks, out, threads, archive)
         }
         Command::Demo { scenario, ticks, seed, report_every } => {
             demo::run(scenario, ticks, seed, report_every)
