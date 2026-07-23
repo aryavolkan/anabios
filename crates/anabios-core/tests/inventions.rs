@@ -768,8 +768,11 @@ fn inventions_scenario_is_deterministic() {
 // war_enabled (FORMAT_VERSION 12→13) — layout growth only, flag off.
 // Refreshed 2026-07-23 (E8): anchors + harvest exp + market field
 // (FORMAT_VERSION 13→14) — layout growth only, flags off.
+// Refreshed 2026-07-23 (E6+E7 merge): merged e7 in — carries the e6
+// still_ticks/prev_desired_direction serialization (FORMAT_VERSION 14→15),
+// layout growth only.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xeebd56c14cb9d2e2), (100, 0x7e7c8ed6c3f387db), (300, 0xc4350993c118d841)];
+    &[(0, 0x1c7786baf97dbb62), (100, 0x2877c7fa25b84edf), (300, 0x457d240f615f10f4)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

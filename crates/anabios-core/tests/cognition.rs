@@ -63,8 +63,11 @@ fn cognitive_scenario_is_self_consistent() {
 // war_enabled (FORMAT_VERSION 12→13) — layout growth only, flag off.
 // Refreshed 2026-07-23 (E8): anchors + harvest exp + market field
 // (FORMAT_VERSION 13→14) — layout growth only, flags off.
+// Refreshed 2026-07-23 (E6+E7 merge): merged e7 in — carries the e6
+// still_ticks/prev_desired_direction serialization (FORMAT_VERSION 14→15),
+// layout growth only.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x75d93910e5da510c), (100, 0x01c60024bfc6305c), (300, 0x86be938b69cd0fd1)];
+    &[(0, 0xc6106f235e03b40c), (100, 0x8440285a5f61c572), (300, 0xcbd1b6920bb066d2)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

@@ -86,8 +86,11 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-23 (E8): AgentBuffers.{anchor,harvest_exp} + World
 // .{settlement_enabled,market_field} + anchor senses (FORMAT_VERSION 13→14) —
 // flags off, layout growth only.
+// Refreshed 2026-07-23 (E6+E7 merge): merged e7 in, which carries the e6
+// still_ticks/prev_desired_direction serialization (FORMAT_VERSION 14→15).
+// Layout growth only; behavior byte-identical.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x8cd3fb65da30d80f), (100, 0xbc5fd2c76f4299b3), (1000, 0xd9af51f214d80cab)];
+    &[(0, 0x38b4ee13d0e343cf), (100, 0x0a7b6391a201d876), (1000, 0x8eb806e060b1a323)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

@@ -136,14 +136,17 @@ pub(super) fn detect_war(world: &mut World) {
     }
 }
 
-/// Alliance: shared culture + zero cross-kills + sustained cross-species
-/// sharing over `ALLIANCE_WINDOW`. One-shot per ordered pair.
+/// Alliance: shared culture + zero cross-kills over `ALLIANCE_WINDOW` +
+/// sustained cross-species sharing. One-shot per ordered pair.
 pub(super) fn detect_alliance(world: &mut World, agg: &SpeciesAggTable) {
     let tick = world.tick;
-    // Tally cross-species shares in the window per ordered pair.
+    // Tally cross-species shares per ordered pair. `share_events` is pruned to
+    // `COOPERATION_WINDOW` each tick by the cooperation detector, so that — not
+    // `ALLIANCE_WINDOW` — is the real accumulation horizon; filter to match it
+    // rather than imply a longer window than the data can hold.
     let mut shares: BTreeMap<(u32, u32), u32> = BTreeMap::new();
     for &(t, donor, recipient) in world.codex.share_events.iter() {
-        if tick.saturating_sub(t) >= ALLIANCE_WINDOW || donor == recipient {
+        if tick.saturating_sub(t) >= COOPERATION_WINDOW || donor == recipient {
             continue;
         }
         let key = (donor.min(recipient), donor.max(recipient));
@@ -226,6 +229,12 @@ pub(super) fn detect_kin_network(world: &mut World, agg: &SpeciesAggTable) {
             to_push.push(ev);
         }
     }
+    // Drop streak/latch entries for species no longer in the active set
+    // (extinct — species ids are never reused), so this state stays bounded,
+    // mirroring the hostility map's `retain`.
+    let active = agg.active();
+    world.codex.kin_streak.retain(|sid, _| active.contains(sid));
+    world.codex.kin_active.retain(|sid| active.contains(sid));
     for ev in to_push {
         world.codex.push_event(ev);
     }
