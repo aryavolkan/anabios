@@ -25,6 +25,7 @@ mod disturbance;
 mod invention;
 mod population;
 mod practice;
+pub(crate) mod signatures;
 mod spatial;
 mod traits;
 
@@ -192,6 +193,41 @@ pub const CONVERGE_MEAN_TOL: f32 = 0.15;
 /// Bounded archive of past fixations scanned for convergence.
 pub const FIXATION_ARCHIVE_CAP: usize = 500;
 
+/// Speed below this fraction of module max counts as "still" (ambush wait).
+pub const STILL_SPEED_FRAC: f32 = 0.05;
+/// Consecutive still ticks before firing that mark an ambush hit.
+pub const AMBUSH_STILL_MIN: u32 = 40;
+/// Rolling window (ticks) for per-species hit-share detectors.
+pub const SIG_HIT_WINDOW: u64 = 400;
+/// Minimum hits in the window for the ambush share to be meaningful.
+pub const AMBUSH_MIN_HITS: u32 = 10;
+/// Share of ambush-flagged hits that fires EvolvedAmbush (re-arm: 0.15).
+pub const AMBUSH_MIN_SHARE: f32 = 0.3;
+/// Species-level Metalworking adoption fraction required for EvolvedTool
+/// (alongside ≥1 actual boosted hit in the window — tool use is adoption
+/// put to work, robust to the sim's bursty combat).
+pub const TOOL_ADOPTION_SHARE: f32 = 0.3;
+
+/// Fast barrier crossings (agent-ticks on water/rock at ≥70% max speed)
+/// over a 400-tick window that fire EvolvedFlight — with at least
+/// `FLIGHT_MIN_PER_QUARTER` in each window quarter, so a one-off dash
+/// through a lake doesn't count (sustained behavior only).
+pub const FLIGHT_MIN_CROSSINGS: u32 = 50;
+/// Per-quarter minimum for sustained flight behavior.
+pub const FLIGHT_MIN_PER_QUARTER: u32 = 10;
+/// A flier's mean module speed must exceed the world mean by this factor —
+/// the evolutionary claim (relative adaptation), not just fast movement.
+pub const FLIGHT_RELATIVE_SPEED: f64 = 1.5;
+/// Speed fraction of module max that counts as "fast" for flight.
+pub const FLIGHT_SPEED_FRAC: f32 = 0.7;
+
+/// Ticks within which receivers must converge for a signal response.
+pub const SIGNAL_WINDOW: u64 = 30;
+/// Same-species receivers converging on the caller that count as a response.
+pub const SIGNAL_CONVERGE_MIN: u32 = 3;
+/// Cumulative responses that fire StructuredSignaling.
+pub const SIGNAL_MIN_RESPONSES: u32 = 10;
+
 /// One per-species genome-moment sample (mean + variance over all 50 slots,
 /// stored genome-shaped for the manual array serde impls).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -289,12 +325,24 @@ pub enum EventType {
     /// Two independent lineages (LCA = founder root) fixed the same slot in
     /// the same band (`value` = slot id; species = the newer fixer).
     ConvergentEvolution = 33,
+    /// ≥30% of a species' weapon hits came from attackers lying in wait
+    /// (≥40 still ticks before firing; `value` = ambush share).
+    EvolvedAmbush = 34,
+    /// ≥30% of a species' weapon hits were invention-boosted (Metalworking;
+    /// `value` = boosted share).
+    EvolvedTool = 35,
+    /// A species repeatedly crosses barrier terrain at ≥70% of max speed
+    /// (`value` = fast crossings in the window).
+    EvolvedFlight = 36,
+    /// Broadcasts reliably followed by ≥3 same-species receivers converging
+    /// on the caller (`value` = cumulative responses).
+    StructuredSignaling = 37,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::ConvergentEvolution as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::StructuredSignaling as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -331,6 +379,21 @@ pub struct CombatHit {
     pub target_id: u32,
     pub attacker_id: u32,
     pub species: u32,
+    /// Attacker had been still ≥ `AMBUSH_STILL_MIN` ticks at fire time (E6).
+    #[serde(default)]
+    pub ambush: bool,
+    /// Damage was invention-boosted at fire time (Metalworking; E6).
+    #[serde(default)]
+    pub tool_boosted: bool,
+}
+
+/// Rolling record of one combat hit for the E6 named-behavior detectors.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SigHit {
+    pub tick: u64,
+    pub species: u32,
+    pub ambush: bool,
+    pub tool_boosted: bool,
 }
 
 /// Persistent state owned by `World`. Holds detector scratch and the
@@ -472,6 +535,25 @@ pub struct CodexState {
     /// `archive_fixation` whenever the bounded archive drops its front, so it
     /// keeps tracking the same logical entry as older fixations age out.
     pub converge_watermark: usize,
+    /// Rolling per-species (species → (total, ambush, tool_boosted)) hit
+    /// counters over `SIG_HIT_WINDOW`, rebuilt from `sig_hit_log`.
+    pub sig_hit_log: VecDeque<SigHit>,
+    /// Species currently latched as ambushers / tool users.
+    pub ambush_active: BTreeSet<u32>,
+    pub tool_active: BTreeSet<u32>,
+    /// Per-species fast-barrier-crossing agent-ticks over the flight window.
+    pub flight_log: BTreeMap<u32, VecDeque<(u64, u32)>>,
+    /// Species currently latched as fliers (keyed by lineage ROOT — one
+    /// flight event per lineage, not per speciation splinter).
+    pub flight_active: BTreeSet<u32>,
+    /// Cumulative signal responses per species (StructuredSignaling).
+    pub signal_responses: BTreeMap<u32, u32>,
+    /// Last tick a signal response was counted per species (rate limit: one
+    /// response per `SIGNAL_WINDOW` so spawn-tick alignments can't dump a
+    /// full counter at once).
+    pub signal_last_response: BTreeMap<u32, u64>,
+    /// Species currently latched as signalers.
+    pub signal_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -631,6 +713,9 @@ pub struct SpeciesAgg {
     /// Sum of `SensorRegister::crowding`; 0 when the sensors scratch is
     /// undersized (standalone `observe_all` calls outside the tick).
     pub crowding_sum: f64,
+    /// Sum of per-member `effective_speed_max` (module speed; for the E6
+    /// flight detector's relative-speed test).
+    pub speed_sum: f64,
     pub weapon_sum: f64,
     pub armor_sum: f64,
     /// Sum of per-member `effective_diet_carnivory` (0 = herbivore …
@@ -666,6 +751,7 @@ impl Default for SpeciesAgg {
             terrain_counts: [0.0; TERRAIN_SLOTS],
             meme_sums: [0.0; MEME_CHANNELS],
             crowding_sum: 0.0,
+            speed_sum: 0.0,
             weapon_sum: 0.0,
             armor_sum: 0.0,
             diet_sum: 0.0,
@@ -691,6 +777,7 @@ impl SpeciesAgg {
         self.terrain_counts = [0.0; TERRAIN_SLOTS];
         self.meme_sums = [0.0; MEME_CHANNELS];
         self.crowding_sum = 0.0;
+        self.speed_sum = 0.0;
         self.weapon_sum = 0.0;
         self.armor_sum = 0.0;
         self.diet_sum = 0.0;
@@ -774,6 +861,7 @@ impl SpeciesAggTable {
                 e.crowding_sum += world.sensors[i].crowding as f64;
             }
             e.diet_sum += module::effective_diet_carnivory(modules) as f64;
+            e.speed_sum += module::effective_speed_max(modules) as f64;
             for (slot, gv) in world.agents.genome[i].0.iter().enumerate() {
                 let x = *gv as f64;
                 e.genome_sums[slot] += x;
@@ -866,6 +954,9 @@ pub fn observe_all(world: &mut World) {
     traits::detect_trait_fixation(world, &agg);
     traits::detect_rapid_adaptation(world, &agg);
     traits::detect_convergent_evolution(world, &agg);
+    signatures::detect_ambush_and_tool(world, &agg);
+    signatures::detect_flight(world, &agg);
+    signatures::detect_structured_signaling(world);
     population::detect_migration(world, &agg);
     population::detect_novel_modules(world, &agg);
     population::detect_novel_behavior(world, &agg);

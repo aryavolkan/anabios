@@ -8,7 +8,8 @@ const CHAPTER_NAMES: PackedStringArray = [
 	"Discovery", "Adoption", "BadIdea", "BadAdopt", "Trade", "DowryBirth",
 	"PopCycle", "BoomBust", "CarryingCap", "TrophicCascade",
 	"RangeExpand", "Segregation", "Corridor", "Succession",
-	"TraitFixed", "RapidAdapt", "Convergent"
+	"TraitFixed", "RapidAdapt", "Convergent",
+	"Ambush", "ToolUse", "Flight", "Signaling"
 ]
 # One color per event type so the timeline is scannable at a glance (matches
 # the co-evolution chart's marker hues where they overlap).
@@ -47,6 +48,10 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.85, 0.85, 0.5),   # 31 TraitFixed     — olive
 	Color(1.0, 0.55, 0.45),   # 32 RapidAdapt     — vermillion
 	Color(0.5, 0.8, 0.9),     # 33 Convergent     — steel blue
+	Color(0.9, 0.5, 0.4),     # 34 Ambush        — ember
+	Color(0.8, 0.8, 0.65),    # 35 ToolUse       — bone
+	Color(0.55, 0.9, 1.0),    # 36 Flight        — sky
+	Color(0.95, 0.85, 0.5),   # 37 Signaling     — beacon
 ]
 const MAX_RECENT: int = 30
 
