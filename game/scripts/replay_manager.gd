@@ -154,6 +154,10 @@ func start_replay() -> void:
 		"bytes": sim.snapshot_bytes(),
 		"paused": main.paused,
 		"speed": main.ticks_per_frame,
+		# Replay yanks the camera to the event; stash the live view so Esc
+		# restores it rather than leaving you zoomed in on the event.
+		"cam_pos": camera.position,
+		"cam_zoom": camera.zoom,
 	}
 	if not sim.restore_snapshot(snap["bytes"]):
 		_flash_banner("snapshot restore failed", 2.5)
@@ -184,6 +188,8 @@ func stop_replay() -> void:
 		sim.restore_snapshot(_live_backup["bytes"])
 		main.paused = _live_backup["paused"]
 		main.ticks_per_frame = _live_backup["speed"]
+		camera.position = _live_backup["cam_pos"]
+		camera.zoom = _live_backup["cam_zoom"]
 		_live_backup = {}
 
 # --- [U] run until next event -----------------------------------------------

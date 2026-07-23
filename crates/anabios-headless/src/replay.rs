@@ -53,6 +53,7 @@ pub fn record_run(
     ticks: u64,
     every: u64,
 ) -> Result<(SnapshotLog, Vec<EventRecord>)> {
+    anyhow::ensure!(every > 0, "snapshot interval must be > 0 (got {every})");
     let mut scenario = Scenario::parse_toml(scenario_text)?;
     if let Some(s) = seed {
         scenario.seed = s;
@@ -172,6 +173,15 @@ mod tests {
     fn predator_prey_text() -> String {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scenarios/predator-prey.toml");
         std::fs::read_to_string(path).expect("predator-prey scenario")
+    }
+
+    #[test]
+    fn zero_snapshot_interval_errors_not_panics() {
+        let text = predator_prey_text();
+        match record_run(&text, Some(7), 10, 0) {
+            Ok(_) => panic!("every=0 must error, not panic or succeed"),
+            Err(e) => assert!(e.to_string().contains("snapshot interval")),
+        }
     }
 
     #[test]
