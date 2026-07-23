@@ -181,6 +181,51 @@ impl Simulation {
         self.events.clear();
     }
 
+    /// Serialize the current world to a snapshot blob (empty on failure).
+    /// Used by the viewer's replay ring; restore with `restore_snapshot`.
+    #[func]
+    fn snapshot_bytes(&self) -> PackedByteArray {
+        let Some(w) = self.inner.as_ref() else {
+            godot_error!("snapshot_bytes: no world loaded");
+            return PackedByteArray::new();
+        };
+        match anabios_core::snapshot::save_to_bytes(w) {
+            Ok(bytes) => PackedByteArray::from(bytes.as_slice()),
+            Err(e) => {
+                godot_error!("snapshot failed: {e}");
+                PackedByteArray::new()
+            }
+        }
+    }
+
+    /// Replace the world with a snapshot blob from `snapshot_bytes`. Clears
+    /// the event log and coevo history (they restart from the snapshot's
+    /// tick); UI cursors shrink-reset on the shorter log. True on success.
+    #[func]
+    fn restore_snapshot(&mut self, bytes: PackedByteArray) -> bool {
+        match anabios_core::snapshot::load_from_bytes(bytes.as_slice()) {
+            Ok(w) => {
+                self.inner = Some(w);
+                self.reset_history();
+                true
+            }
+            Err(e) => {
+                godot_error!("restore_snapshot failed: {e}");
+                false
+            }
+        }
+    }
+
+    /// FNV-1a fingerprint of the world's persistent state, bit-cast to i64.
+    /// Equality comparison only (replay verification, not ordering).
+    #[func]
+    fn state_hash(&self) -> i64 {
+        match self.inner.as_ref() {
+            Some(w) => anabios_core::snapshot::state_hash(w) as i64,
+            None => 0,
+        }
+    }
+
     /// Current-tick co-evolution scalars (see plan/spec for key meanings).
     /// All frequencies/means in `[0,1]`; `env_optimum` is `-1.0` when inactive.
     #[func]

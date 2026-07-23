@@ -46,6 +46,10 @@ func _ready() -> void:
 	flashes.texture = disc
 	# streaks keep the raw quad: a solid line reads as a crisp shot streak.
 	_make_wrap_clones()
+	# Replay & event camera (E2): snapshot ring + R/U/V modes.
+	var replay_manager := preload("res://scripts/replay_manager.gd").new()
+	replay_manager.name = "ReplayManager"
+	add_child(replay_manager)
 
 # The world is a torus but rendering is not: a camera near a seam sees agents
 # vanish at the edge. Duplicate every agent layer into the 8 neighboring world

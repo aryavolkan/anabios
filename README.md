@@ -85,6 +85,17 @@ cargo build --release --bin anabios-headless
    - Bottom-left buttons: pause + speed (1× / 4× / 16× / 64×)
    - Left-click an agent (within 4 world units) to pin its stats in the inspector panel
    - Scrolling list at bottom-right shows codex events as they fire
+   - **R**: replay the latest codex event (rewind to a snapshot, fast-forward, pause at the moment; R/Esc resumes live) · **U**: run at max speed until the next event fires · **V**: event camera — auto-cut tour of recent event locations
+
+## Verifying emergence replay (headless)
+
+`replay` re-simulates every codex event from periodic snapshots and asserts bit-identical reproduction — same state hash at the event tick, same event refiring at the same tick. It exits non-zero on any mismatch, so it doubles as the detector-regression gate:
+
+```bash
+./target/release/anabios-headless replay \
+    --scenario scenarios/weapons-arms-race.toml \
+    --ticks 2000 --snapshot-every 250
+```
 
 ## Stack
 

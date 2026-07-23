@@ -1,6 +1,7 @@
 //! Headless runner for anabios scenarios.
 
 mod demo;
+mod replay;
 mod score;
 mod sweep;
 
@@ -64,6 +65,27 @@ enum Command {
         #[arg(long)]
         archive: Option<PathBuf>,
     },
+    /// Replay-verify codex events: re-simulate each event from the nearest
+    /// periodic snapshot and assert the same state hash and refire tick.
+    /// Exits non-zero on any mismatch (detector regression gate).
+    Replay {
+        #[arg(long)]
+        scenario: PathBuf,
+        /// Optional explicit seed; overrides the scenario seed.
+        #[arg(long)]
+        seed: Option<u64>,
+        #[arg(long, default_value_t = 2000)]
+        ticks: u64,
+        /// Ticks between rewind snapshots.
+        #[arg(long, default_value_t = 250)]
+        snapshot_every: u64,
+        /// Replay only the event with this stream index; default replays all.
+        #[arg(long)]
+        event: Option<usize>,
+        /// Explicit no-op for readability; replaying all is the default.
+        #[arg(long)]
+        all: bool,
+    },
     /// Narrate the cultural invention race: stream discovery/adoption events
     /// and periodic per-species tech tables. Best with
     /// `scenarios/inventions.toml`.
@@ -94,6 +116,13 @@ fn main() -> Result<()> {
         }
         Command::Demo { scenario, ticks, seed, report_every } => {
             demo::run(scenario, ticks, seed, report_every)
+        }
+        Command::Replay { scenario, seed, ticks, snapshot_every, event, all } => {
+            let ok = replay::run(scenario, seed, ticks, snapshot_every, event, all)?;
+            if !ok {
+                std::process::exit(1);
+            }
+            Ok(())
         }
     }
 }
