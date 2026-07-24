@@ -11,7 +11,8 @@ const CHAPTER_NAMES: PackedStringArray = [
 	"TraitFixed", "RapidAdapt", "Convergent",
 	"Ambush", "ToolUse", "Flight", "Signaling",
 	"War", "WarEnded", "Alliance", "KinNetwork",
-	"Settlement", "Market", "Specialists"
+	"Settlement", "Market", "Specialists",
+	"Tradition", "Radiation", "Ratchet"
 ]
 # One color per event type so the timeline is scannable at a glance (matches
 # the co-evolution chart's marker hues where they overlap).
@@ -61,6 +62,9 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.85, 0.65, 0.4),   # 42 Settlement    — hearth
 	Color(1.0, 0.8, 0.3),     # 43 Market        — amber market
 	Color(0.65, 0.85, 0.95),  # 44 SpecializationSplit — craftsman blue
+	Color(0.9, 0.75, 0.5),    # 45 Tradition      — parchment
+	Color(0.7, 0.6, 1.0),     # 46 Radiation      — violet bloom
+	Color(0.5, 0.85, 0.7),    # 47 Ratchet        — institutional green
 ]
 const MAX_RECENT: int = 30
 

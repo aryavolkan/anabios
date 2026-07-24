@@ -76,6 +76,10 @@ pub struct AgentBuffers {
     /// `harvest_exp[k]`; the harvest amount scales with it. Only mutated
     /// when `World::resources_enabled` is on.
     pub harvest_exp: Vec<[f32; crate::resource::GOOD_COUNT]>,
+    /// Meme-variant lineage (E9): the variant id carried per meme channel
+    /// (0 = untracked). Assigned at birth (communicator children) and on
+    /// band transitions.
+    pub meme_lineage: Vec<[u32; crate::program::MEME_CHANNELS]>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -145,6 +149,7 @@ impl AgentBuffers {
             self.iq_enrich_ticks[i] = 0;
             self.anchor[i] = position;
             self.harvest_exp[i] = [0.0; crate::resource::GOOD_COUNT];
+            self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
             self.alive.set(i, true);
             id
         } else {
@@ -166,6 +171,7 @@ impl AgentBuffers {
             self.iq_enrich_ticks.push(0);
             self.anchor.push(position);
             self.harvest_exp.push([0.0; crate::resource::GOOD_COUNT]);
+            self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
             self.alive.push(true);
             i as AgentId
         };

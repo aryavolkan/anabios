@@ -772,7 +772,9 @@ fn inventions_scenario_is_deterministic() {
 // still_ticks/prev_desired_direction serialization (FORMAT_VERSION 14→15),
 // layout growth only.
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x1c7786baf97dbb62), (100, 0x2877c7fa25b84edf), (300, 0x457d240f615f10f4)];
+    // Refreshed 2026-07-23 (E9): meme-variant registry + meme_lineage
+    // (FORMAT_VERSION 15→16) — layout growth only, fidelity gated off here.
+    &[(0, 0x1d88f00d12145cc2), (100, 0x2020e23a47f7c0a6), (300, 0xc4c749f5618be850)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

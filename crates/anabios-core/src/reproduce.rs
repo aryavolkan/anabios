@@ -211,12 +211,29 @@ pub fn reproduce_all(world: &mut World) {
             let b_meme = world.agents.meme_vector[j];
             let inventions_enabled = world.inventions_enabled;
             let cognition_enabled = world.cognition_enabled;
+            // E9 institutional memory: when BOTH parents belong to a
+            // settlement-latched species, inheritance jitter shrinks —
+            // settled cultures pass memes down more faithfully.
+            let a_species = world.agents.species_id[i];
+            let b_species = world.agents.species_id[j];
+            let settled = world.codex.settlement_active.contains(&a_species)
+                && world.codex.settlement_active.contains(&b_species);
+            let fidelity = if settled { crate::codex::SETTLED_FIDELITY } else { 1.0 };
             world.agents.meme_vector[child_id as usize] = crate::culture::inherit_meme(
                 &a_meme,
                 &b_meme,
                 &mut world.rng,
                 inventions_enabled,
                 cognition_enabled,
+                fidelity,
+            );
+            // E9 lineage: the newborn's per-channel variants descend from
+            // its parents' variants (band-matched) or are freshly minted.
+            crate::codex::traditions::assign_birth_variants(
+                world,
+                child_id as usize,
+                i,
+                j,
             );
         }
 

@@ -25,7 +25,7 @@ pub const CORPUS_RUNS: u64 = 64;
 pub const NOVELTY_BONUS: f64 = 5.158_883_083_359_671;
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 45] = [
+pub const ALL_EVENT_NAMES: [&str; 48] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -71,6 +71,9 @@ pub const ALL_EVENT_NAMES: [&str; 45] = [
     "settlement",
     "market",
     "specialization_split",
+    "tradition",
+    "cultural_radiation",
+    "institutional_ratchet",
 ];
 
 /// Rarity weights derived from the reference corpus (see module docs):
@@ -79,7 +82,7 @@ pub const ALL_EVENT_NAMES: [&str; 45] = [
 /// many corpus runs fired each type; unseen types sit at `NOVELTY_BONUS`.
 /// The corpus predates E3/E4, so the population-dynamics and disturbance
 /// types are definitionally unseen (bonus) until the next regeneration.
-pub const DEFAULT_WEIGHTS: [(&str, f64); 45] = [
+pub const DEFAULT_WEIGHTS: [(&str, f64); 48] = [
     ("extinction", 0.048009_f64),            // n_t=61
     ("pop_crash", 0.133531_f64),             // n_t=56
     ("speciation", 0.081346_f64),            // n_t=59
@@ -125,6 +128,9 @@ pub const DEFAULT_WEIGHTS: [(&str, f64); 45] = [
     ("settlement", NOVELTY_BONUS),           // post-corpus (E8)
     ("market", NOVELTY_BONUS),               // post-corpus (E8)
     ("specialization_split", NOVELTY_BONUS), // post-corpus (E8)
+    ("tradition", NOVELTY_BONUS),            // post-corpus (E9)
+    ("cultural_radiation", NOVELTY_BONUS),   // post-corpus (E9)
+    ("institutional_ratchet", NOVELTY_BONUS),// post-corpus (E9)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -174,6 +180,9 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::SettlementFormed => "settlement",
         EventType::MarketEmerged => "market",
         EventType::SpecializationSplit => "specialization_split",
+        EventType::TraditionPreserved => "tradition",
+        EventType::CulturalRadiation => "cultural_radiation",
+        EventType::InstitutionalRatchet => "institutional_ratchet",
     }
 }
 
