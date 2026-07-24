@@ -83,54 +83,54 @@ pub const ALL_EVENT_NAMES: [&str; 48] = [
 /// The corpus predates E3/E4, so the population-dynamics and disturbance
 /// types are definitionally unseen (bonus) until the next regeneration.
 pub const DEFAULT_WEIGHTS: [(&str, f64); 48] = [
-    ("extinction", 0.048009_f64),            // n_t=61
-    ("pop_crash", 0.133531_f64),             // n_t=56
-    ("speciation", 0.081346_f64),            // n_t=59
-    ("migration", 0.169899_f64),             // n_t=54
-    ("novel_module", 0.081346_f64),          // n_t=59
-    ("novel_behavior", 0.048009_f64),        // n_t=61
-    ("predation", 1.386294_f64),             // n_t=16
-    ("combat_raid", 1.450833_f64),           // n_t=15
-    ("arms_race", 1.856298_f64),             // n_t=10
-    ("territory_formation", 0.397683_f64),   // n_t=43
-    ("niche_partitioning", 0.207639_f64),    // n_t=52
-    ("dialect_formed", 0.287682_f64),        // n_t=48
-    ("meme_sweep", 0.495321_f64),            // n_t=39
-    ("alarm_call", NOVELTY_BONUS),           // n_t=0
-    ("evolved_cooperation", 1.386294_f64),   // n_t=16
-    ("pack_hunting", 3.060271_f64),          // n_t=3
-    ("herd_cohesion", 0.169899_f64),         // n_t=54
-    ("invention_discovered", 1.386294_f64),  // n_t=16
-    ("invention_adopted", 1.386294_f64),     // n_t=16
-    ("practice_discovered", NOVELTY_BONUS),  // n_t=0
-    ("practice_adopted", NOVELTY_BONUS),     // n_t=0
-    ("resource_traded", NOVELTY_BONUS),      // n_t=0
-    ("dowry_birth", NOVELTY_BONUS),          // n_t=0
-    ("pop_cycle", NOVELTY_BONUS),            // post-corpus (E3)
-    ("boom_bust", NOVELTY_BONUS),            // post-corpus (E3)
-    ("carrying_capacity", NOVELTY_BONUS),    // post-corpus (E3)
-    ("trophic_cascade", NOVELTY_BONUS),      // post-corpus (E3)
-    ("range_expansion", NOVELTY_BONUS),      // post-corpus (E4)
-    ("segregation", NOVELTY_BONUS),          // post-corpus (E4)
-    ("corridor_use", NOVELTY_BONUS),         // post-corpus (E4)
-    ("succession", NOVELTY_BONUS),           // post-corpus (E4)
-    ("trait_fixation", NOVELTY_BONUS),       // post-corpus (E5)
-    ("rapid_adaptation", NOVELTY_BONUS),     // post-corpus (E5)
-    ("convergent_evolution", NOVELTY_BONUS), // post-corpus (E5)
-    ("evolved_ambush", NOVELTY_BONUS),       // post-corpus (E6)
-    ("evolved_tool", NOVELTY_BONUS),         // post-corpus (E6)
-    ("evolved_flight", NOVELTY_BONUS),       // post-corpus (E6)
-    ("structured_signaling", NOVELTY_BONUS), // post-corpus (E6)
-    ("war", NOVELTY_BONUS),                  // post-corpus (E7)
-    ("war_ended", NOVELTY_BONUS),            // post-corpus (E7)
-    ("alliance", NOVELTY_BONUS),             // post-corpus (E7)
-    ("kin_network", NOVELTY_BONUS),          // post-corpus (E7)
-    ("settlement", NOVELTY_BONUS),           // post-corpus (E8)
-    ("market", NOVELTY_BONUS),               // post-corpus (E8)
-    ("specialization_split", NOVELTY_BONUS), // post-corpus (E8)
-    ("tradition", NOVELTY_BONUS),            // post-corpus (E9)
-    ("cultural_radiation", NOVELTY_BONUS),   // post-corpus (E9)
-    ("institutional_ratchet", NOVELTY_BONUS),// post-corpus (E9)
+    ("extinction", 0.048009_f64),             // n_t=61
+    ("pop_crash", 0.133531_f64),              // n_t=56
+    ("speciation", 0.081346_f64),             // n_t=59
+    ("migration", 0.169899_f64),              // n_t=54
+    ("novel_module", 0.081346_f64),           // n_t=59
+    ("novel_behavior", 0.048009_f64),         // n_t=61
+    ("predation", 1.386294_f64),              // n_t=16
+    ("combat_raid", 1.450833_f64),            // n_t=15
+    ("arms_race", 1.856298_f64),              // n_t=10
+    ("territory_formation", 0.397683_f64),    // n_t=43
+    ("niche_partitioning", 0.207639_f64),     // n_t=52
+    ("dialect_formed", 0.287682_f64),         // n_t=48
+    ("meme_sweep", 0.495321_f64),             // n_t=39
+    ("alarm_call", NOVELTY_BONUS),            // n_t=0
+    ("evolved_cooperation", 1.386294_f64),    // n_t=16
+    ("pack_hunting", 3.060271_f64),           // n_t=3
+    ("herd_cohesion", 0.169899_f64),          // n_t=54
+    ("invention_discovered", 1.386294_f64),   // n_t=16
+    ("invention_adopted", 1.386294_f64),      // n_t=16
+    ("practice_discovered", NOVELTY_BONUS),   // n_t=0
+    ("practice_adopted", NOVELTY_BONUS),      // n_t=0
+    ("resource_traded", NOVELTY_BONUS),       // n_t=0
+    ("dowry_birth", NOVELTY_BONUS),           // n_t=0
+    ("pop_cycle", NOVELTY_BONUS),             // post-corpus (E3)
+    ("boom_bust", NOVELTY_BONUS),             // post-corpus (E3)
+    ("carrying_capacity", NOVELTY_BONUS),     // post-corpus (E3)
+    ("trophic_cascade", NOVELTY_BONUS),       // post-corpus (E3)
+    ("range_expansion", NOVELTY_BONUS),       // post-corpus (E4)
+    ("segregation", NOVELTY_BONUS),           // post-corpus (E4)
+    ("corridor_use", NOVELTY_BONUS),          // post-corpus (E4)
+    ("succession", NOVELTY_BONUS),            // post-corpus (E4)
+    ("trait_fixation", NOVELTY_BONUS),        // post-corpus (E5)
+    ("rapid_adaptation", NOVELTY_BONUS),      // post-corpus (E5)
+    ("convergent_evolution", NOVELTY_BONUS),  // post-corpus (E5)
+    ("evolved_ambush", NOVELTY_BONUS),        // post-corpus (E6)
+    ("evolved_tool", NOVELTY_BONUS),          // post-corpus (E6)
+    ("evolved_flight", NOVELTY_BONUS),        // post-corpus (E6)
+    ("structured_signaling", NOVELTY_BONUS),  // post-corpus (E6)
+    ("war", NOVELTY_BONUS),                   // post-corpus (E7)
+    ("war_ended", NOVELTY_BONUS),             // post-corpus (E7)
+    ("alliance", NOVELTY_BONUS),              // post-corpus (E7)
+    ("kin_network", NOVELTY_BONUS),           // post-corpus (E7)
+    ("settlement", NOVELTY_BONUS),            // post-corpus (E8)
+    ("market", NOVELTY_BONUS),                // post-corpus (E8)
+    ("specialization_split", NOVELTY_BONUS),  // post-corpus (E8)
+    ("tradition", NOVELTY_BONUS),             // post-corpus (E9)
+    ("cultural_radiation", NOVELTY_BONUS),    // post-corpus (E9)
+    ("institutional_ratchet", NOVELTY_BONUS), // post-corpus (E9)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {

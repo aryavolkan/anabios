@@ -36,9 +36,8 @@ pub(crate) fn variant_for(
     let id = world.codex.next_variant_id.max(1);
     world.codex.next_variant_id = id + 1;
     let parent = (parent_variant != 0).then_some(parent_variant);
-    let root = parent
-        .and_then(|p| world.codex.meme_variants.get(&p).map(|pv| pv.root))
-        .unwrap_or(id);
+    let root =
+        parent.and_then(|p| world.codex.meme_variants.get(&p).map(|pv| pv.root)).unwrap_or(id);
     world.codex.meme_variants.insert(
         id,
         MemeVariant { id, channel, band, parent, root, born_tick: tick, born_species: species },
@@ -101,12 +100,7 @@ pub(super) fn variant_sweep(world: &mut World) {
             let stale = if cur == 0 {
                 band > 0
             } else {
-                world
-                    .codex
-                    .meme_variants
-                    .get(&cur)
-                    .map(|v| v.band != band)
-                    .unwrap_or(true)
+                world.codex.meme_variants.get(&cur).map(|v| v.band != band).unwrap_or(true)
             };
             if stale {
                 let parent = cur;
@@ -175,16 +169,9 @@ pub(super) fn detect_tradition(world: &mut World, agg: &SpeciesAggTable) {
         let streak = world.codex.tradition_streaks.entry(key).or_insert(0);
         // Cadence is VARIANT_SWEEP_INTERVAL ticks per call — count ticks.
         *streak += VARIANT_SWEEP_INTERVAL as u32;
-        let channel = world
-            .codex
-            .meme_variants
-            .get(&vid)
-            .map(|v| v.channel)
-            .unwrap_or(0);
+        let channel = world.codex.meme_variants.get(&vid).map(|v| v.channel).unwrap_or(0);
         let latch_key = (channel as u32, faction);
-        if *streak < TRADITION_WINDOW
-            || world.codex.tradition_active.contains(&latch_key)
-        {
+        if *streak < TRADITION_WINDOW || world.codex.tradition_active.contains(&latch_key) {
             continue;
         }
         let old_enough = world
@@ -243,12 +230,7 @@ pub(super) fn detect_radiation(world: &mut World, agg: &SpeciesAggTable) {
         let factions = factions_of.get(&anc);
         if n >= RADIATION_MIN_DESCENDANTS && factions.map(|f| f.len() >= 2).unwrap_or(false) {
             world.codex.radiation_active.insert(anc);
-            let sid = world
-                .codex
-                .meme_variants
-                .get(&anc)
-                .map(|v| v.born_species)
-                .unwrap_or(0);
+            let sid = world.codex.meme_variants.get(&anc).map(|v| v.born_species).unwrap_or(0);
             let (lx, ly) = centroid_of(agg, sid);
             to_push.push(CodexEvent {
                 event_type: EventType::CulturalRadiation,
@@ -356,7 +338,10 @@ mod tests {
         let child = b;
         w.agents.meme_vector[child][2] = 0.52;
         assign_birth_variants(&mut w, child, a, a);
-        assert_eq!(w.agents.meme_lineage[child][2], root, "matching band inherits the parent's variant");
+        assert_eq!(
+            w.agents.meme_lineage[child][2], root,
+            "matching band inherits the parent's variant"
+        );
     }
 
     #[test]
@@ -373,19 +358,11 @@ mod tests {
             last = variant_for(&mut w, last, ch, band, (i % 2) as u32);
         }
         detect_radiation(&mut w, &agg);
-        assert!(w
-            .codex
-            .events
-            .iter()
-            .any(|e| e.event_type == EventType::CulturalRadiation));
+        assert!(w.codex.events.iter().any(|e| e.event_type == EventType::CulturalRadiation));
         // Latched: no refire.
         detect_radiation(&mut w, &agg);
         assert_eq!(
-            w.codex
-                .events
-                .iter()
-                .filter(|e| e.event_type == EventType::CulturalRadiation)
-                .count(),
+            w.codex.events.iter().filter(|e| e.event_type == EventType::CulturalRadiation).count(),
             1
         );
     }
@@ -408,11 +385,7 @@ mod tests {
             w.tick = t * CYCLE_CHECK_INTERVAL;
             detect_ratchet(&mut w, &agg);
         }
-        assert!(w
-            .codex
-            .events
-            .iter()
-            .any(|e| e.event_type == EventType::InstitutionalRatchet));
+        assert!(w.codex.events.iter().any(|e| e.event_type == EventType::InstitutionalRatchet));
     }
 
     #[test]
@@ -513,8 +486,14 @@ mod tests {
         // exact per-channel jitter and check the scaling assumption-free.
         let base = crate::culture::inherit_meme(&a, &b, &mut Rng::from_seed(7), false, false, 0.0);
         let full = crate::culture::inherit_meme(&a, &b, &mut Rng::from_seed(7), false, false, 1.0);
-        let settled =
-            crate::culture::inherit_meme(&a, &b, &mut Rng::from_seed(7), false, false, SETTLED_FIDELITY);
+        let settled = crate::culture::inherit_meme(
+            &a,
+            &b,
+            &mut Rng::from_seed(7),
+            false,
+            false,
+            SETTLED_FIDELITY,
+        );
         let mut jittered = 0;
         for ch in 0..MEME_CHANNELS {
             let jf = full[ch] - base[ch];

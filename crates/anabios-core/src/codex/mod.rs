@@ -28,8 +28,8 @@ mod practice;
 pub(crate) mod settlement;
 pub(crate) mod signatures;
 mod spatial;
-mod traits;
 pub(crate) mod traditions;
+mod traits;
 pub(crate) mod war;
 
 /// Maximum events buffered before the oldest are dropped.

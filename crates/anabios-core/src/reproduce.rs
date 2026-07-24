@@ -229,12 +229,7 @@ pub fn reproduce_all(world: &mut World) {
             );
             // E9 lineage: the newborn's per-channel variants descend from
             // its parents' variants (band-matched) or are freshly minted.
-            crate::codex::traditions::assign_birth_variants(
-                world,
-                child_id as usize,
-                i,
-                j,
-            );
+            crate::codex::traditions::assign_birth_variants(world, child_id as usize, i, j);
         }
 
         // Maladaptive-practice fitness costs (cognition-gated). A parent's held
