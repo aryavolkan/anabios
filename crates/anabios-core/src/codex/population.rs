@@ -161,7 +161,7 @@ pub(super) fn detect_novel_modules(world: &mut World, agg: &SpeciesAggTable) {
         match world.codex.seen_modules.get_mut(&sid) {
             None => {
                 // Debut: seed silently.
-                world.codex.seen_modules.insert(sid, bits_to_set_u16(mask));
+                world.codex.seen_modules.insert(sid, bits_to_set(mask as u64));
             }
             Some(seen) => {
                 let mut m = mask;
@@ -195,7 +195,7 @@ pub(super) fn detect_novel_behavior(world: &mut World, agg: &SpeciesAggTable) {
         let mask = agg.get(sid).expect("active species has an entry").node_mask;
         match world.codex.seen_node_kinds.get_mut(&sid) {
             None => {
-                world.codex.seen_node_kinds.insert(sid, bits_to_set_u64(mask));
+                world.codex.seen_node_kinds.insert(sid, bits_to_set(mask));
             }
             Some(seen) => {
                 let mut m = mask;
@@ -222,24 +222,14 @@ pub(super) fn detect_novel_behavior(world: &mut World, agg: &SpeciesAggTable) {
     }
 }
 
-/// Set bits of a u16 mask as a BTreeSet of discriminants (ascending).
-fn bits_to_set_u16(mask: u16) -> BTreeSet<u8> {
+/// Set bits of a mask as a BTreeSet of discriminants (ascending). Callers with
+/// a narrower mask (e.g. `u16` module bits) widen it — zero-extension preserves
+/// the low bit positions, so the discriminants are identical.
+fn bits_to_set(mut mask: u64) -> BTreeSet<u8> {
     let mut out = BTreeSet::new();
-    let mut m = mask;
-    while m != 0 {
-        out.insert(m.trailing_zeros() as u8);
-        m &= m - 1;
-    }
-    out
-}
-
-/// Set bits of a u64 mask as a BTreeSet of discriminants (ascending).
-fn bits_to_set_u64(mask: u64) -> BTreeSet<u8> {
-    let mut out = BTreeSet::new();
-    let mut m = mask;
-    while m != 0 {
-        out.insert(m.trailing_zeros() as u8);
-        m &= m - 1;
+    while mask != 0 {
+        out.insert(mask.trailing_zeros() as u8);
+        mask &= mask - 1;
     }
     out
 }

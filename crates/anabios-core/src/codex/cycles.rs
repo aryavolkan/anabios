@@ -174,7 +174,7 @@ fn detect_guild_cycles(world: &mut World, agg: &SpeciesAggTable) {
             None => (0.0, 0.0, false),
         };
         if let Some(ev) =
-            edge_trigger_species_u8(&mut world.codex.guild_cycle_active, guild, cycling, || {
+            edge_trigger_species(&mut world.codex.guild_cycle_active, guild, cycling, || {
                 let (sid, (lx, ly)) = guild_representative(agg, guild);
                 CodexEvent {
                     event_type: EventType::PopulationCycleDetected,
@@ -190,7 +190,7 @@ fn detect_guild_cycles(world: &mut World, agg: &SpeciesAggTable) {
         }
         let boom = cycling && ratio >= BOOM_AMPLITUDE;
         if let Some(ev) =
-            edge_trigger_species_u8(&mut world.codex.guild_boom_active, guild, boom, || {
+            edge_trigger_species(&mut world.codex.guild_boom_active, guild, boom, || {
                 let (sid, (lx, ly)) = guild_representative(agg, guild);
                 CodexEvent {
                     event_type: EventType::BoomAndBust,
@@ -208,23 +208,6 @@ fn detect_guild_cycles(world: &mut World, agg: &SpeciesAggTable) {
     for ev in to_push {
         world.codex.push_event(ev);
     }
-}
-
-/// `edge_trigger_species` for u8-keyed guild latches.
-fn edge_trigger_species_u8(
-    active: &mut BTreeSet<u8>,
-    key: u8,
-    fired: bool,
-    make: impl FnOnce() -> CodexEvent,
-) -> Option<CodexEvent> {
-    if fired {
-        if active.insert(key) {
-            return Some(make());
-        }
-    } else {
-        active.remove(&key);
-    }
-    None
 }
 
 pub(super) fn detect_cycles(world: &mut World, agg: &SpeciesAggTable) {
