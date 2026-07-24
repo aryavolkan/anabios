@@ -29,6 +29,7 @@ pub(crate) mod settlement;
 pub(crate) mod signatures;
 mod spatial;
 mod traits;
+pub(crate) mod traditions;
 pub(crate) mod war;
 
 /// Maximum events buffered before the oldest are dropped.
@@ -283,6 +284,46 @@ pub const HARVEST_EXP_RATE: f32 = 0.01;
 pub const EXP_CAP: f32 = 10.0;
 /// Harvest-amount bonus per experience point.
 pub const SPECIALIZATION_GAIN: f32 = 0.1;
+
+/// Ticks a lineage must stay above the adoption streak for TraditionPreserved.
+pub const TRADITION_WINDOW: u32 = 2000;
+/// Adoption fraction (of a species) that counts as "held" — a tradition is
+/// the majority custom, not a subculture.
+pub const TRADITION_ADOPTION_SHARE: f32 = 0.5;
+/// Minimum age of the lineage root for a tradition (2× the window: the
+/// custom predates its current carriers by generations).
+pub const TRADITION_MIN_AGE: u64 = 4000;
+/// Minimum descendants (distinct variants, across ≥2 factions) for radiation.
+pub const RADIATION_MIN_DESCENDANTS: usize = 50;
+/// Ticks of continuous era ≥ 2 for InstitutionalRatchet.
+pub const RATCHET_WINDOW: u32 = 2000;
+/// Minimum era for the ratchet.
+pub const RATCHET_MIN_ERA: u8 = 2;
+/// Transmission/inheritance jitter scale when both parties are
+/// settlement-latched (institutional fidelity).
+pub const SETTLED_FIDELITY: f32 = 0.25;
+/// Ticks between per-agent band-transition sweeps (amortized).
+pub const VARIANT_SWEEP_INTERVAL: u64 = 50;
+/// Cap on the variant registry — beyond it, band transitions reuse the
+/// parent variant (lineage collapses gracefully instead of growing memory).
+pub const VARIANT_REGISTRY_CAP: usize = 20_000;
+
+/// A meme variant: one quantized band of one meme channel, with parentage —
+/// the lineage unit of cultural descent (E9).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemeVariant {
+    pub id: u32,
+    pub channel: u8,
+    /// `floor(value × 10)` at birth, clamped to [0, 10].
+    pub band: u8,
+    pub parent: Option<u32>,
+    /// The lineage root variant (self when `parent` is None) — stored at
+    /// birth so tradition/radiation aggregation is O(1) per holder instead
+    /// of a per-tick ancestor walk (quadratic blowup measured in profile).
+    pub root: u32,
+    pub born_tick: u64,
+    pub born_species: u32,
+}
 /// Experience share in one good that marks a producer specialist.
 pub const SPECIALIST_SHARE: f32 = 0.6;
 /// Minimum fraction of a species in each producer class for a split.
@@ -459,12 +500,21 @@ pub enum EventType {
     /// A species split into ≥2 producer classes specialized on different
     /// goods (`value` = smaller class fraction).
     SpecializationSplit = 44,
+    /// A meme variant held by ≥30% of a species for `TRADITION_WINDOW`
+    /// ticks, outliving its founders (`value` = variant id).
+    TraditionPreserved = 45,
+    /// A variant's descendant tree reached ≥`RADIATION_MIN_DESCENDANTS`
+    /// variants across ≥2 species (`value` = descendant count).
+    CulturalRadiation = 46,
+    /// A species held tech era ≥2 continuously for `RATCHET_WINDOW` ticks
+    /// despite holder turnover (`value` = era).
+    InstitutionalRatchet = 47,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::SpecializationSplit as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::InstitutionalRatchet as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -695,6 +745,19 @@ pub struct CodexState {
     pub market_active: BTreeSet<u32>,
     /// Species currently latched as specialization-split.
     pub specialization_active: BTreeSet<u32>,
+    /// Meme variant registry (E9), keyed by variant id.
+    pub meme_variants: BTreeMap<u32, MemeVariant>,
+    pub next_variant_id: u32,
+    /// (variant, species) → consecutive-tick streak above adoption share.
+    pub tradition_streaks: BTreeMap<(u32, u32), u32>,
+    /// (variant, species) pairs currently latched as traditions.
+    pub tradition_active: BTreeSet<(u32, u32)>,
+    /// Ancestor variant ids whose radiation has been reported.
+    pub radiation_active: BTreeSet<u32>,
+    /// Per-species consecutive-tick streak at era ≥ `RATCHET_MIN_ERA`.
+    pub ratchet_streak: BTreeMap<u32, u32>,
+    /// Species currently latched as institutional-ratcheted.
+    pub ratchet_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -1104,6 +1167,10 @@ pub fn observe_all(world: &mut World) {
     settlement::detect_settlement(world, &agg);
     settlement::detect_market(world);
     settlement::detect_specialization(world, &agg);
+    traditions::variant_sweep(world);
+    traditions::detect_tradition(world, &agg);
+    traditions::detect_radiation(world, &agg);
+    traditions::detect_ratchet(world, &agg);
     population::detect_migration(world, &agg);
     population::detect_novel_modules(world, &agg);
     population::detect_novel_behavior(world, &agg);

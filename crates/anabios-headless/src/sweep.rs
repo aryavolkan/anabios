@@ -181,13 +181,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          evolved_ambush,evolved_tool,evolved_flight,structured_signaling,\
          war,war_ended,alliance,kin_network,\
          settlement,market,specialization_split,\
+         tradition,cultural_radiation,institutional_ratchet,\
          emergence_score,novel_events,coverage"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -238,6 +239,9 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("settlement"),
             g("market"),
             g("specialization_split"),
+            g("tradition"),
+            g("cultural_radiation"),
+            g("institutional_ratchet"),
             r.emergence_score,
             r.novel_events,
             r.coverage,

@@ -89,8 +89,11 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-23 (E6+E7 merge): merged e7 in, which carries the e6
 // still_ticks/prev_desired_direction serialization (FORMAT_VERSION 14→15).
 // Layout growth only; behavior byte-identical.
+// Refreshed 2026-07-23 (E9): meme-variant registry + AgentBuffers.meme_lineage
+// (FORMAT_VERSION 15→16). The settled-fidelity effect is gated on settlement
+// latches (off here), so behavior is byte-identical — layout growth only.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x38b4ee13d0e343cf), (100, 0x0a7b6391a201d876), (1000, 0x8eb806e060b1a323)];
+    &[(0, 0xefeb136c9e139367), (100, 0x5f075a3a61ac0c3b), (1000, 0x64ac626e43fccf49)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

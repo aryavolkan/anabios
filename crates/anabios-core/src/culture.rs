@@ -146,6 +146,7 @@ pub fn inherit_meme(
     rng: &mut Rng,
     inventions_enabled: bool,
     cognition_enabled: bool,
+    fidelity: f32,
 ) -> [f32; MEME_CHANNELS] {
     let mut out = [0.0f32; MEME_CHANNELS];
     for ch in 0..MEME_CHANNELS {
@@ -157,8 +158,13 @@ pub fn inherit_meme(
         } else {
             true
         };
-        out[ch] =
-            if active { avg + (rng.f32_unit() - 0.5) * 2.0 * MEME_INHERIT_JITTER } else { avg };
+        // `fidelity` scales the jitter (E9 institutional memory: settled
+        // cultures pass memes down more faithfully). 1.0 = baseline.
+        out[ch] = if active {
+            avg + (rng.f32_unit() - 0.5) * 2.0 * MEME_INHERIT_JITTER * fidelity
+        } else {
+            avg
+        };
     }
     out
 }
@@ -199,6 +205,10 @@ pub fn culture_step(world: &mut World) {
         let opt = if env_on { env_optimum_at(world.tick, world.env_period) } else { 0.0 };
         let mut best_tech: Option<f32> = None;
         let mut best_tech_err = f32::INFINITY;
+        // E9 variant-of-best-neighbor tracking (social variant adoption).
+        let mut best_skill_neighbor: Option<usize> = None;
+        let mut max_neighbour_inv_variant = [0u32; crate::invention::INVENTION_COUNT];
+        let mut max_neighbour_practice_variant = [0u32; crate::practice::PRACTICE_COUNT];
         world.spatial.query(pos, range, |oid| {
             if oid == id {
                 return;
@@ -211,16 +221,31 @@ pub fn culture_step(world: &mut World) {
                 sum[ch] += world.actions[j].broadcast_intent[ch];
                 count[ch] += 1;
             }
-            max_neighbour_skill =
-                max_neighbour_skill.max(world.agents.meme_vector[j][SKILL_CHANNEL]);
+            let j_skill = world.agents.meme_vector[j][SKILL_CHANNEL];
+            if j_skill > max_neighbour_skill {
+                max_neighbour_skill = j_skill;
+                best_skill_neighbor = Some(j);
+            }
             if world.inventions_enabled {
                 for (k, best) in max_neighbour_inv.iter_mut().enumerate() {
-                    *best = best.max(world.agents.meme_vector[j][crate::invention::channel(k)]);
+                    let ch = crate::invention::channel(k);
+                    let v = world.agents.meme_vector[j][ch];
+                    if v > *best {
+                        *best = v;
+                        // E9: remember whose variant the best level came from,
+                        // so adoption can follow the variant socially.
+                        max_neighbour_inv_variant[k] = world.agents.meme_lineage[j][ch];
+                    }
                 }
             }
             if world.cognition_enabled {
                 for (p, best) in max_neighbour_practice.iter_mut().enumerate() {
-                    *best = best.max(world.agents.meme_vector[j][crate::practice::channel(p)]);
+                    let ch = crate::practice::channel(p);
+                    let v = world.agents.meme_vector[j][ch];
+                    if v > *best {
+                        *best = v;
+                        max_neighbour_practice_variant[p] = world.agents.meme_lineage[j][ch];
+                    }
                 }
             }
             if env_on {
@@ -268,6 +293,22 @@ pub fn culture_step(world: &mut World) {
         if count[0] > 0 && max_neighbour_skill > cur_skill {
             world.agents.meme_vector[i][SKILL_CHANNEL] =
                 cur_skill + SKILL_SOCIAL_RATE * (max_neighbour_skill - cur_skill);
+            // E9: if the learned value lands in the teacher's band, adopt the
+            // teacher's variant (descent through social spread).
+            if let Some(j) = best_skill_neighbor {
+                let tv = world.agents.meme_lineage[j][SKILL_CHANNEL];
+                let new_val = world.agents.meme_vector[i][SKILL_CHANNEL];
+                if tv != 0
+                    && world
+                        .codex
+                        .meme_variants
+                        .get(&tv)
+                        .map(|v| v.band == crate::codex::traditions::band_of(new_val))
+                        .unwrap_or(false)
+                {
+                    world.agents.meme_lineage[i][SKILL_CHANNEL] = tv;
+                }
+            }
         }
         // Invention spread: copy each adoptable invention toward the
         // best-holding neighbour's level (learn-from-the-expert, the same
@@ -289,6 +330,20 @@ pub fn culture_step(world: &mut World) {
                 let cur = world.agents.meme_vector[i][ch];
                 if target > cur {
                     world.agents.meme_vector[i][ch] = cur + rate * (target - cur);
+                    // E9: adopt the teacher's variant when the learned level
+                    // lands in its band.
+                    let tv = max_neighbour_inv_variant[k];
+                    let new_val = world.agents.meme_vector[i][ch];
+                    if tv != 0
+                        && world
+                            .codex
+                            .meme_variants
+                            .get(&tv)
+                            .map(|v| v.band == crate::codex::traditions::band_of(new_val))
+                            .unwrap_or(false)
+                    {
+                        world.agents.meme_lineage[i][ch] = tv;
+                    }
                 }
             }
         }
@@ -306,6 +361,19 @@ pub fn culture_step(world: &mut World) {
                 if target > cur {
                     world.agents.meme_vector[i][ch] =
                         cur + crate::practice::PRACTICE_SPREAD_RATE * (target - cur);
+                    // E9: adopt the teacher's variant when it lands in-band.
+                    let tv = max_neighbour_practice_variant[p];
+                    let new_val = world.agents.meme_vector[i][ch];
+                    if tv != 0
+                        && world
+                            .codex
+                            .meme_variants
+                            .get(&tv)
+                            .map(|v| v.band == crate::codex::traditions::band_of(new_val))
+                            .unwrap_or(false)
+                    {
+                        world.agents.meme_lineage[i][ch] = tv;
+                    }
                 }
             }
         }
