@@ -39,7 +39,7 @@ pub fn idf_weight(n_t: u64) -> f64 {
 }
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 45] = [
+pub const ALL_EVENT_NAMES: [&str; 48] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -85,6 +85,9 @@ pub const ALL_EVENT_NAMES: [&str; 45] = [
     "settlement",
     "market",
     "specialization_split",
+    "tradition",
+    "cultural_radiation",
+    "institutional_ratchet",
 ];
 
 /// Per-type corpus run counts from the reference sweep (see module docs):
@@ -94,7 +97,7 @@ pub const ALL_EVENT_NAMES: [&str; 45] = [
 /// after the reference sweep (E3+) are definitionally unseen (`n_t = 0`) until
 /// the next regeneration. Weights are derived via [`idf_weight`], so this
 /// table is the *only* thing to update on a regeneration.
-pub const DEFAULT_CORPUS_NT: [(&str, u64); 45] = [
+pub const DEFAULT_CORPUS_NT: [(&str, u64); 48] = [
     ("extinction", 61),
     ("pop_crash", 56),
     ("speciation", 59),
@@ -118,28 +121,31 @@ pub const DEFAULT_CORPUS_NT: [(&str, u64); 45] = [
     ("practice_adopted", 0),
     ("resource_traded", 0),
     ("dowry_birth", 0),
-    ("pop_cycle", 0),            // post-corpus (E3)
-    ("boom_bust", 0),            // post-corpus (E3)
-    ("carrying_capacity", 0),    // post-corpus (E3)
-    ("trophic_cascade", 0),      // post-corpus (E3)
-    ("range_expansion", 0),      // post-corpus (E4)
-    ("segregation", 0),          // post-corpus (E4)
-    ("corridor_use", 0),         // post-corpus (E4)
-    ("succession", 0),           // post-corpus (E4)
-    ("trait_fixation", 0),       // post-corpus (E5)
-    ("rapid_adaptation", 0),     // post-corpus (E5)
-    ("convergent_evolution", 0), // post-corpus (E5)
-    ("evolved_ambush", 0),       // post-corpus (E6)
-    ("evolved_tool", 0),         // post-corpus (E6)
-    ("evolved_flight", 0),       // post-corpus (E6)
-    ("structured_signaling", 0), // post-corpus (E6)
-    ("war", 0),                  // post-corpus (E7)
-    ("war_ended", 0),            // post-corpus (E7)
-    ("alliance", 0),             // post-corpus (E7)
-    ("kin_network", 0),          // post-corpus (E7)
-    ("settlement", 0),           // post-corpus (E8)
-    ("market", 0),               // post-corpus (E8)
-    ("specialization_split", 0), // post-corpus (E8)
+    ("pop_cycle", 0),             // post-corpus (E3)
+    ("boom_bust", 0),             // post-corpus (E3)
+    ("carrying_capacity", 0),     // post-corpus (E3)
+    ("trophic_cascade", 0),       // post-corpus (E3)
+    ("range_expansion", 0),       // post-corpus (E4)
+    ("segregation", 0),           // post-corpus (E4)
+    ("corridor_use", 0),          // post-corpus (E4)
+    ("succession", 0),            // post-corpus (E4)
+    ("trait_fixation", 0),        // post-corpus (E5)
+    ("rapid_adaptation", 0),      // post-corpus (E5)
+    ("convergent_evolution", 0),  // post-corpus (E5)
+    ("evolved_ambush", 0),        // post-corpus (E6)
+    ("evolved_tool", 0),          // post-corpus (E6)
+    ("evolved_flight", 0),        // post-corpus (E6)
+    ("structured_signaling", 0),  // post-corpus (E6)
+    ("war", 0),                   // post-corpus (E7)
+    ("war_ended", 0),             // post-corpus (E7)
+    ("alliance", 0),              // post-corpus (E7)
+    ("kin_network", 0),           // post-corpus (E7)
+    ("settlement", 0),            // post-corpus (E8)
+    ("market", 0),                // post-corpus (E8)
+    ("specialization_split", 0),  // post-corpus (E8)
+    ("tradition", 0),             // post-corpus (E9)
+    ("cultural_radiation", 0),    // post-corpus (E9)
+    ("institutional_ratchet", 0), // post-corpus (E9)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -189,6 +195,9 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::SettlementFormed => "settlement",
         EventType::MarketEmerged => "market",
         EventType::SpecializationSplit => "specialization_split",
+        EventType::TraditionPreserved => "tradition",
+        EventType::CulturalRadiation => "cultural_radiation",
+        EventType::InstitutionalRatchet => "institutional_ratchet",
     }
 }
 

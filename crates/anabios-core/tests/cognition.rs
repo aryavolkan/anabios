@@ -67,7 +67,9 @@ fn cognitive_scenario_is_self_consistent() {
 // still_ticks/prev_desired_direction serialization (FORMAT_VERSION 14→15),
 // layout growth only.
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xc6106f235e03b40c), (100, 0x8440285a5f61c572), (300, 0xcbd1b6920bb066d2)];
+    // Refreshed 2026-07-23 (E9): meme-variant registry + meme_lineage
+    // (FORMAT_VERSION 15→16) — layout growth only, fidelity gated off here.
+    &[(0, 0x877ed060d217c8ec), (100, 0x38a660d5d09089fd), (300, 0x2f8b60e32bb6734d)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

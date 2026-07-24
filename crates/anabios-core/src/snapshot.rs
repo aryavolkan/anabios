@@ -66,7 +66,12 @@ use crate::world::World;
 ///     (appended, mutation pool gated on settlement_enabled), CodexState
 ///     settlement/market/specialization scratch. Flags off in golden
 ///     scenarios — layout growth only. Merged onto the combined E6+E7 v14.
-pub const FORMAT_VERSION: u32 = 15;
+/// v16: E9 traditions — AgentBuffers.meme_lineage, CodexState variant
+///     registry + tradition/radiation/ratchet scratch, inherit_meme fidelity
+///     parameter (1.0 baseline = byte-identical draw values). Layout growth
+///     only; the fidelity effect is gated on settlement latches (off in all
+///     golden scenarios), so behavior is byte-identical there.
+pub const FORMAT_VERSION: u32 = 16;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

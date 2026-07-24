@@ -69,7 +69,7 @@ fn feed_hostility(
 /// `Some(0)`, so walking into 0 would collapse every founder faction into
 /// one "lineage" and no war could ever be declared (E5's convergence logic
 /// treats LCA=0 as independent for the same reason).
-fn lineage_root(world: &World, sid: u32) -> u32 {
+pub(crate) fn lineage_root(world: &World, sid: u32) -> u32 {
     let mut cur = sid;
     for _ in 0..64 {
         match world.species_parents.get(cur as usize).copied().flatten() {

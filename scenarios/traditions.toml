@@ -1,0 +1,35 @@
+name = "traditions"
+seed = 90923
+inventions_enabled = true
+settlement_enabled = true
+living_biome = true
+
+# E9 showcase: a long-run cultural world. The innovator commune climbs the
+# tree and settles; traditionalists copy what diffuses in. Watch for meme
+# variants that outlive their founders (TraditionPreserved), variants
+# diversifying across lineages (CulturalRadiation), and a species whose
+# institutions never regress (InstitutionalRatchet). Designed for ≥12k ticks.
+max_population = 1500
+
+# Innovators: high-Openness communicators, anchored (high territoriality via
+# the settlement substrate's default — they form settlements to teach inside).
+[[agents]]
+count = 30
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 400.0, center_y = 512.0, radius = 100.0 }
+[agents.traits]
+lifespan_bias = 1.0
+openness = 1.0
+basal_metabolism = 0.3
+reproduction_threshold = 0.35
+
+# Traditionalists: low-Openness — rarely invent, adopt what diffuses in.
+[[agents]]
+count = 30
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 624.0, center_y = 512.0, radius = 100.0 }
+[agents.traits]
+lifespan_bias = 1.0
+openness = 0.05
+basal_metabolism = 0.3
+reproduction_threshold = 0.35
