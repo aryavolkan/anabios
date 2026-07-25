@@ -75,17 +75,14 @@ pub(super) fn detect_ambush_and_tool(world: &mut World, agg: &SpeciesAggTable) {
             to_push.push(ev);
         }
 
-        let tool_fired = if world.inventions_enabled {
-            // Adoption put to work: ≥30% Metalworking adoption in the
-            // species AND at least one invention-boosted hit in the window.
-            let adopted = agg.get(sid).map(|e| {
+        // Adoption put to work: ≥30% Metalworking adoption in the species AND
+        // at least one invention-boosted hit in the window.
+        let tool_fired = world.inventions_enabled
+            && t >= 1
+            && agg.get(sid).is_some_and(|e| {
                 e.invention_counts[crate::invention::METALWORKING] as f32 / e.count.max(1) as f32
                     >= TOOL_ADOPTION_SHARE
             });
-            t >= 1 && adopted == Some(true)
-        } else {
-            false
-        };
         if let Some(ev) =
             edge_trigger_species(&mut world.codex.tool_active, sid, tool_fired, || {
                 let (lx, ly) = centroid_of(agg, sid);
