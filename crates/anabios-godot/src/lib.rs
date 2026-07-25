@@ -40,6 +40,11 @@ struct CoevoSample {
     mean_iq: f32,
     /// World adoption fraction per maladaptive practice (0 when cognition off).
     practice_adopt_frac: [f32; anabios_core::practice::PRACTICE_COUNT],
+    /// Per affinity-bearing invention: mean affinity gene over holders vs
+    /// non-holders. The selection differential is `holder − nonholder`. Zero
+    /// for inventions with no affinity; all zero when the tree is inactive.
+    affinity_holder_mean: [f32; anabios_core::invention::INVENTION_COUNT],
+    affinity_nonholder_mean: [f32; anabios_core::invention::INVENTION_COUNT],
 }
 
 /// Soft cap on retained samples (~tens of KB each thousand ticks). Past this we
@@ -68,6 +73,9 @@ struct SampleScratch {
     xs: Vec<f32>,
     comm: Vec<bool>,
     species_set: std::collections::BTreeSet<u32>,
+    /// Per-agent "holds invention k" mask, reused for the affinity-gene
+    /// holder/non-holder means (avoids a per-tick allocation).
+    keep: Vec<bool>,
 }
 
 /// One in-process anabios simulation, owned by a Godot `Simulation` node.
@@ -319,6 +327,30 @@ impl Simulation {
             };
             for s in &self.history {
                 out.push(s.practice_adopt_frac[idx]);
+            }
+            return out;
+        }
+        // Affinity-gene selection series: `aff_<key>_holder`, `aff_<key>_nonholder`,
+        // or `aff_<key>_diff` (holder − nonholder) — one per affinity invention.
+        if let Some(rest) = key_str.strip_prefix("aff_") {
+            for (which, suffix) in
+                [("holder", "_holder"), ("nonholder", "_nonholder"), ("diff", "_diff")]
+            {
+                if let Some(inv_key) = rest.strip_suffix(suffix) {
+                    let Some(idx) =
+                        anabios_core::invention::INVENTIONS.iter().position(|i| i.key == inv_key)
+                    else {
+                        return out;
+                    };
+                    for s in &self.history {
+                        out.push(match which {
+                            "holder" => s.affinity_holder_mean[idx],
+                            "nonholder" => s.affinity_nonholder_mean[idx],
+                            _ => s.affinity_holder_mean[idx] - s.affinity_nonholder_mean[idx],
+                        });
+                    }
+                    return out;
+                }
             }
             return out;
         }
@@ -1109,6 +1141,24 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
         }
     }
     let mean_iq = if memes.is_empty() { 0.0 } else { iq_sum / memes.len() as f32 };
+    // Per-invention affinity-gene selection differential: mean gene over holders
+    // vs non-holders. Reuses `scratch.keep` (holder mask, flipped in place for
+    // the non-holder pass) so there is no per-tick allocation.
+    let mut affinity_holder_mean = [0.0f32; anabios_core::invention::INVENTION_COUNT];
+    let mut affinity_nonholder_mean = [0.0f32; anabios_core::invention::INVENTION_COUNT];
+    if w.inventions_enabled && !memes.is_empty() {
+        use anabios_core::invention::{bit, held_mask, INVENTIONS};
+        for (k, inv) in INVENTIONS.iter().enumerate() {
+            let Some(a) = inv.affinity else { continue };
+            scratch.keep.clear();
+            scratch.keep.extend(memes.iter().map(|m| held_mask(m) & bit(k) != 0));
+            affinity_holder_mean[k] = coevo::mean_slot_over(genomes, &scratch.keep, a.slot);
+            for b in scratch.keep.iter_mut() {
+                *b = !*b;
+            }
+            affinity_nonholder_mean[k] = coevo::mean_slot_over(genomes, &scratch.keep, a.slot);
+        }
+    }
     CoevoSample {
         tick: w.tick as f32,
         communicator_frac: coevo::frac_true(comm),
@@ -1124,6 +1174,8 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
         inv_adopt_frac,
         mean_iq,
         practice_adopt_frac,
+        affinity_holder_mean,
+        affinity_nonholder_mean,
     }
 }
 
@@ -1153,6 +1205,15 @@ fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
         practices.set(anabios_core::practice::PRACTICES[p].key, *f);
     }
     d.set("practice_adopt_frac", &practices);
+    // Per-invention affinity-gene selection differential (holder − nonholder),
+    // keyed by invention key; only affinity-bearing inventions are non-zero.
+    let mut aff = VarDictionary::new();
+    for (k, inv) in anabios_core::invention::INVENTIONS.iter().enumerate() {
+        if inv.affinity.is_some() {
+            aff.set(inv.key, s.affinity_holder_mean[k] - s.affinity_nonholder_mean[k]);
+        }
+    }
+    d.set("affinity_selection_diff", &aff);
     d
 }
 
