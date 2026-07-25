@@ -99,8 +99,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // EventType::MaladaptationLag (FORMAT_VERSION 17→18). env_period == 0 in minimal,
 // so the detector short-circuits and never fires — behavior byte-identical, only
 // the serialized layout grew.
+// Refreshed 2026-07-25: BiomeCell.{nutrient_quality,fertility} +
+// World.{nutrient_variation,soil_fertility} (FORMAT_VERSION 18→19). Both flags off
+// in minimal, so every new multiplier is exactly 1.0 (bit-exact identity) —
+// behavior byte-identical, only the serialized layout grew by two f32 per cell.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xb2a5432b0afff587), (100, 0x98455f8f6a45990b), (1000, 0xddc4d66298241689)];
+    &[(0, 0x8fe9e5098d51f78c), (100, 0xa467511875e2aeb4), (1000, 0xd374c95100b99012)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

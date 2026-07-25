@@ -54,6 +54,16 @@ pub const CLIMAX_ENTRY_FRAC: f32 = 0.9;
 /// Climate distance beyond which the seasonal bonus is zero (triangular).
 pub const SEASON_TOLERANCE: f32 = 0.25;
 
+/// Per-cell nutrient-quality range (energy-per-bite multiplier). Mean ~1.0 so
+/// the global energy economy is roughly conserved vs a flat world; the spatial
+/// *variation* is the foraging-selection signal.
+pub const NUTRIENT_QUALITY_MIN: f32 = 0.6;
+pub const NUTRIENT_QUALITY_MAX: f32 = 1.4;
+/// Per-cell soil-fertility range (scales carrying capacity AND regrowth rate).
+/// Mean ~1.0 so global productivity is roughly conserved.
+pub const FERTILITY_MIN: f32 = 0.5;
+pub const FERTILITY_MAX: f32 = 1.5;
+
 /// Season phase in \[0,1\], a triangle wave with full cycle `2*period` ticks.
 pub fn season_phase(tick: u64, period: u32) -> f32 {
     if period == 0 {
@@ -126,6 +136,16 @@ pub struct BiomeCell {
     /// disaster scorched the cell. See the `SUCCESSION_*` consts.
     #[serde(default)]
     pub succession: u8,
+    /// Static energy-per-bite multiplier for food grazed in this cell, in
+    /// `[NUTRIENT_QUALITY_MIN, NUTRIENT_QUALITY_MAX]`. Generated once; consumed
+    /// only when `World::nutrient_variation` is on.
+    #[serde(default)]
+    pub nutrient_quality: f32,
+    /// Static soil-fertility multiplier scaling this cell's carrying capacity
+    /// and regrowth rate, in `[FERTILITY_MIN, FERTILITY_MAX]`. Generated once;
+    /// consumed only when `World::soil_fertility` is on.
+    #[serde(default)]
+    pub fertility: f32,
 }
 
 /// 128×128 biome field (at default dims). Indexed `[row * res + col]` with
@@ -158,6 +178,13 @@ impl BiomeField {
         // texture without breaking the large-scale gradient.
         let climate_coarse = NoiseGrid::new(&mut rng, 3);
         let climate_fine = NoiseGrid::new(&mut rng, 9);
+        // Nutrient-quality and fertility fields — drawn AFTER the climate grids
+        // so terrain/env generation is byte-identical. Distinct frequencies from
+        // env (3/9) and from each other so the three landscapes are uncorrelated.
+        let nutrient_coarse = NoiseGrid::new(&mut rng, 5);
+        let nutrient_fine = NoiseGrid::new(&mut rng, 13);
+        let fertility_coarse = NoiseGrid::new(&mut rng, 4);
+        let fertility_fine = NoiseGrid::new(&mut rng, 11);
 
         let mut cells = Vec::with_capacity(res * res);
         for row in 0..res {
@@ -168,12 +195,21 @@ impl BiomeField {
                 let terrain = elevation_to_terrain(n);
                 let env = (0.85 * climate_coarse.sample(u, v) + 0.15 * climate_fine.sample(u, v))
                     .clamp(0.0, 1.0);
+                let nq = (0.8 * nutrient_coarse.sample(u, v) + 0.2 * nutrient_fine.sample(u, v))
+                    .clamp(0.0, 1.0);
+                let nutrient_quality =
+                    NUTRIENT_QUALITY_MIN + (NUTRIENT_QUALITY_MAX - NUTRIENT_QUALITY_MIN) * nq;
+                let fe = (0.8 * fertility_coarse.sample(u, v) + 0.2 * fertility_fine.sample(u, v))
+                    .clamp(0.0, 1.0);
+                let fertility = FERTILITY_MIN + (FERTILITY_MAX - FERTILITY_MIN) * fe;
                 cells.push(BiomeCell {
                     terrain,
                     plant_biomass: terrain.carrying_capacity(),
                     env,
                     pollution: 0.0,
                     succession: SUCCESSION_CLIMAX,
+                    nutrient_quality,
+                    fertility,
                 });
             }
         }
@@ -750,6 +786,8 @@ mod tests {
             env: 0.5,
             pollution: 0.0,
             succession,
+            nutrient_quality: 1.0,
+            fertility: 1.0,
         }
     }
 
