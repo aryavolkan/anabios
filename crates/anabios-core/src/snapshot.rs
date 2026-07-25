@@ -75,7 +75,11 @@ use crate::world::World;
 ///     secular drift added to culture::env_optimum_at on top of the seasonal
 ///     cycle). `0.0` in every golden scenario ⇒ env_optimum_at short-circuits to
 ///     the exact undrifted value; only the serialized layout grew by one f32.
-pub const FORMAT_VERSION: u32 = 17;
+/// v18: E11 climate maladaptation — CodexState.{maladapt_streak, maladapt_active}
+///     + EventType::MaladaptationLag. The detector short-circuits when
+///     `env_period == 0` (every golden scenario), so it never fires there;
+///     behavior is byte-identical and only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 18;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

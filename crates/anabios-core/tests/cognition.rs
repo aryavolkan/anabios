@@ -71,7 +71,9 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // (FORMAT_VERSION 15→16) — layout growth only, fidelity gated off here.
     // Refreshed 2026-07-24 (E10): World.climate_drift_rate (FORMAT_VERSION 16→17),
     // drift 0.0 here — layout growth only, behavior byte-identical.
-    &[(0, 0xc2e2bc2700a5367c), (100, 0xf304e61846260abd), (300, 0xcb6f2449973f311d)];
+    // Refreshed 2026-07-24 (E11): maladapt scratch + MaladaptationLag
+    // (FORMAT_VERSION 17→18), env_period == 0 here — layout growth only.
+    &[(0, 0x0057e654a28c41bc), (100, 0x16d3dd27a6b73efd), (300, 0xfc22bec73c17b59d)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

@@ -39,7 +39,7 @@ pub fn idf_weight(n_t: u64) -> f64 {
 }
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 48] = [
+pub const ALL_EVENT_NAMES: [&str; 49] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -88,6 +88,7 @@ pub const ALL_EVENT_NAMES: [&str; 48] = [
     "tradition",
     "cultural_radiation",
     "institutional_ratchet",
+    "maladaptation_lag",
 ];
 
 /// Per-type corpus run counts from the reference sweep (see module docs):
@@ -97,7 +98,7 @@ pub const ALL_EVENT_NAMES: [&str; 48] = [
 /// after the reference sweep (E3+) are definitionally unseen (`n_t = 0`) until
 /// the next regeneration. Weights are derived via [`idf_weight`], so this
 /// table is the *only* thing to update on a regeneration.
-pub const DEFAULT_CORPUS_NT: [(&str, u64); 48] = [
+pub const DEFAULT_CORPUS_NT: [(&str, u64); 49] = [
     ("extinction", 61),
     ("pop_crash", 56),
     ("speciation", 59),
@@ -146,6 +147,7 @@ pub const DEFAULT_CORPUS_NT: [(&str, u64); 48] = [
     ("tradition", 0),             // post-corpus (E9)
     ("cultural_radiation", 0),    // post-corpus (E9)
     ("institutional_ratchet", 0), // post-corpus (E9)
+    ("maladaptation_lag", 0),     // post-corpus (E11)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -198,6 +200,7 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::TraditionPreserved => "tradition",
         EventType::CulturalRadiation => "cultural_radiation",
         EventType::InstitutionalRatchet => "institutional_ratchet",
+        EventType::MaladaptationLag => "maladaptation_lag",
     }
 }
 
