@@ -5,10 +5,12 @@ use anabios_core::biome::{
     BiomeField, TerrainType, FERTILITY_MAX, FERTILITY_MIN, NUTRIENT_QUALITY_MAX,
     NUTRIENT_QUALITY_MIN, SUCCESSION_CLIMAX,
 };
+use anabios_core::metrics::{forage_fertility_gain, forage_quality_gain};
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 
 const MINIMAL: &str = include_str!("../../../scenarios/minimal.toml");
+const FORAGING: &str = include_str!("../../../scenarios/foraging-selection.toml");
 
 #[test]
 fn generated_fields_land_in_range() {
@@ -113,4 +115,22 @@ fn nutrient_quality_scales_forage_energy() {
         sum(&hi),
         sum(&lo)
     );
+}
+
+/// End-to-end: the foraging-selection scenario (both flags on) runs without
+/// collapsing and the forage-gain observables are computable. The scientific
+/// result (does the gain rise over generations?) is read from a long
+/// `emergence.sh soak` run, not asserted here.
+#[test]
+fn foraging_scenario_runs_and_metrics_are_finite() {
+    let mut w = Scenario::parse_toml(FORAGING).expect("parse").instantiate();
+    assert!(w.nutrient_variation && w.soil_fertility, "flags must be on");
+    w.max_population = 500; // keep the run fast
+    for _ in 0..300 {
+        step(&mut w);
+    }
+    assert!(w.agents.iter_alive().count() > 0, "population collapsed");
+    let q = forage_quality_gain(&w);
+    let f = forage_fertility_gain(&w);
+    assert!(q.is_finite() && f.is_finite(), "metrics must be finite: q={q} f={f}");
 }
