@@ -778,10 +778,12 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // drift 0.0 here — layout growth only, behavior byte-identical.
     // Refreshed 2026-07-24 (E11): maladapt scratch + MaladaptationLag
     // (FORMAT_VERSION 17→18), env_period == 0 here — layout growth only.
-    // Refreshed 2026-07-25: BiomeCell.{nutrient_quality,fertility} +
-    // World.{nutrient_variation,soil_fertility} (FORMAT_VERSION 18→19). Both flags
-    // off here, so behavior is byte-identical — pure serialized-layout growth.
-    &[(0, 0x1fca21e5e97871af), (100, 0x7d9e3851b66d2b71), (300, 0x8102b4e5e069118d)];
+    // Refreshed 2026-07-25 (merge of TG1 + nutrient/fertility, FORMAT_VERSION 18→19):
+    // World.gene_tech_coupling + BiomeCell.{nutrient_quality,fertility} +
+    // World.{nutrient_variation,soil_fertility}. All flags off here, so coupled
+    // multipliers, discovery weight, and quality yield are identity — trajectory
+    // byte-identical; only the serialized layout grew.
+    &[(0, 0xdaca677ba00e24ff), (100, 0xe8a351a62251ef65), (300, 0xd2f65e48da61a35f)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

@@ -33,6 +33,11 @@ pub struct Scenario {
     /// `false` (default) leaves culture unchanged.
     #[serde(default)]
     pub inventions_enabled: bool,
+    /// Opt-in: couple invention buffs and discovery to genome slots
+    /// (`invention::GeneAffinity`), so adoption selects the genome and vice
+    /// versa. `false` (default) is bit-identical to no coupling.
+    #[serde(default)]
+    pub gene_tech_coupling: bool,
     /// Opt-in: enable the cognitive layer (per-agent realized IQ from the
     /// `CognitivePotential` gene + juvenile enrichment, with a metabolic cost).
     /// `false` (default) leaves metabolism and culture unchanged.
@@ -330,6 +335,7 @@ impl Scenario {
         w.biome_adaptation = self.biome_adaptation;
         w.terrain_habitat = self.terrain_habitat;
         w.inventions_enabled = self.inventions_enabled;
+        w.gene_tech_coupling = self.gene_tech_coupling;
         w.cognition_enabled = self.cognition_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
@@ -441,6 +447,35 @@ size = 0.5
         assert_eq!(s.agents[0].count, 10);
         assert!(matches!(s.agents[0].placement, Placement::Uniform));
         assert_eq!(s.agents[0].traits.size, Some(0.5));
+    }
+
+    #[test]
+    fn gene_tech_coupling_defaults_off_and_scenario_applies() {
+        // Omitting the field leaves it off (serde default) for baseline identity.
+        let base = r#"
+name = "base"
+seed = 1
+
+[[agents]]
+count = 5
+[agents.traits]
+"#;
+        let s0 = Scenario::parse_toml(base).expect("parse");
+        assert!(!s0.gene_tech_coupling);
+        assert!(!s0.instantiate().gene_tech_coupling);
+        // Setting it propagates into the instantiated world.
+        let coupled = r#"
+name = "coupled"
+seed = 1
+gene_tech_coupling = true
+
+[[agents]]
+count = 5
+[agents.traits]
+"#;
+        let s1 = Scenario::parse_toml(coupled).expect("parse");
+        assert!(s1.gene_tech_coupling);
+        assert!(s1.instantiate().gene_tech_coupling);
     }
 
     #[test]

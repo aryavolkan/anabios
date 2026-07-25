@@ -69,6 +69,13 @@ pub struct World {
     /// Defaulted so old snapshots without this field still deserialize.
     #[serde(default)]
     pub inventions_enabled: bool,
+    /// When true, holding an invention scales its buff by the holder's affinity
+    /// gene (`invention::GeneAffinity`), so adoption exerts directional
+    /// selection on the genome, and per-candidate discovery is reweighted by
+    /// the affinity gene. Off by default; opt-in per scenario. Bit-identity
+    /// when false. Defaulted so old snapshots without this field deserialize.
+    #[serde(default)]
+    pub gene_tech_coupling: bool,
     /// When true, the cognitive layer is active: each agent develops a realized
     /// IQ (heritable `CognitivePotential` × juvenile nutrition/social enrichment,
     /// `iq.rs`) that costs basal metabolism and (Phase 2+) gates meme
@@ -282,6 +289,7 @@ impl World {
             biome_adaptation: false,
             terrain_habitat: false,
             inventions_enabled: false,
+            gene_tech_coupling: false,
             cognition_enabled: false,
             living_biome: false,
             season_period: 0,

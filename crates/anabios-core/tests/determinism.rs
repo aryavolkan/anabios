@@ -5,8 +5,35 @@
 //! (b) fix the regression. Hash changes must be deliberate.
 
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::state_hash;
+use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
 use anabios_core::tick::step;
+
+/// The gene↔tech coupling showcase must survive a save→load→step round-trip:
+/// stepping a freshly-loaded world one tick must reproduce the same state hash
+/// as stepping the original. Guards the new `gene_tech_coupling` flag (and the
+/// coupled effect sites / discovery arm it drives) against any hidden state that
+/// serialization would drop — the serde-skip replay footgun.
+#[test]
+fn gene_tech_coupling_survives_save_load_step() {
+    const COUPLED: &str = include_str!("../../../scenarios/tech-gene-coupling.toml");
+    let mut world = Scenario::parse_toml(COUPLED).expect("parse coupled scenario").instantiate();
+    assert!(world.gene_tech_coupling, "scenario must enable coupling");
+    // Warm the world up so inventions are discovered and the coupled paths run.
+    for _ in 0..300 {
+        step(&mut world);
+    }
+    let bytes = save_to_bytes(&world).expect("save");
+    let mut reloaded = load_from_bytes(&bytes).expect("load");
+    assert_eq!(state_hash(&world), state_hash(&reloaded), "load must restore identical state");
+    // One more tick on both must land on the same hash.
+    step(&mut world);
+    step(&mut reloaded);
+    assert_eq!(
+        state_hash(&world),
+        state_hash(&reloaded),
+        "coupled world diverged after save→load→step (hidden non-serialized state?)",
+    );
+}
 
 const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 
@@ -99,12 +126,13 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // EventType::MaladaptationLag (FORMAT_VERSION 17→18). env_period == 0 in minimal,
 // so the detector short-circuits and never fires — behavior byte-identical, only
 // the serialized layout grew.
-// Refreshed 2026-07-25: BiomeCell.{nutrient_quality,fertility} +
-// World.{nutrient_variation,soil_fertility} (FORMAT_VERSION 18→19). Both flags off
-// in minimal, so every new multiplier is exactly 1.0 (bit-exact identity) —
-// behavior byte-identical, only the serialized layout grew by two f32 per cell.
+// Refreshed 2026-07-25 (merge of TG1 + nutrient/fertility): FORMAT_VERSION 18→19
+// adds World.gene_tech_coupling (TG1) plus BiomeCell.{nutrient_quality,fertility}
+// and World.{nutrient_variation,soil_fertility}. All flags are false in the minimal
+// scenario, so every coupled/quality multiplier is exactly 1.0 and the discovery
+// roll is unchanged — trajectory byte-identical, only the serialized layout grew.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x8fe9e5098d51f78c), (100, 0xa467511875e2aeb4), (1000, 0xd374c95100b99012)];
+    &[(0, 0x85b2e433dad77022), (100, 0x6ab23304dfd3d3d4), (1000, 0xcd6795899ce6abbc)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

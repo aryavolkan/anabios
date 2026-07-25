@@ -110,7 +110,12 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         // Invention buffs (Stone Tools / Farming / Machinery). Identity when
         // the agent holds nothing (flag-off masks are always 0).
         let inv_mask = crate::invention::held_mask(&world.agents.meme_vector[i]);
-        desired_bite *= crate::invention::graze_multiplier(inv_mask);
+        let coupling = world.gene_tech_coupling;
+        desired_bite *= crate::invention::graze_multiplier_coupled(
+            inv_mask,
+            crate::invention::affinity_gene(&world.agents.genome[i], crate::invention::FARMING),
+            coupling,
+        );
         // Individual technique learning (env mode): an ONGOING cognitive process
         // that runs each foraging tick, decoupled from whether this tick's bite
         // landed — so a learner's technique tracks the shifting optimum reliably,
@@ -140,7 +145,14 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
             // Fire buff: cooked food yields more energy per biomass unit.
             world.agents.energy[i] += taken
                 * FOOD_ENERGY_PER_BIOMASS
-                * crate::invention::food_energy_multiplier(inv_mask)
+                * crate::invention::food_energy_multiplier_coupled(
+                    inv_mask,
+                    crate::invention::affinity_gene(
+                        &world.agents.genome[i],
+                        crate::invention::FIRE,
+                    ),
+                    coupling,
+                )
                 * quality_mult;
             // C cumulative-skill learning-by-doing (env_period == 0) is still gated
             // on a successful graze — skill is mastery earned through feeding.
