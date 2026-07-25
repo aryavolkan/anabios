@@ -675,6 +675,39 @@ git commit -m "docs(tg1): headless evidence of tech->gene selection + hysteresis
 
 ---
 
+## Evidence
+
+**Directional selection (tech→gene arm), `tests/tg1_selection.rs`.** Discovery is
+too slow to climb naturally to an affinity-bearing tech before a small world
+thins out, so the test seeds the `tech-gene-coupling` population holding Fire (+
+Stone Tools, so Fire doesn't atrophy) with a deterministic Openness spread
+(mean 0.485), then runs 2500 ticks under coupling and — from the identical seed —
+a flag-off control. Result:
+
+- start Openness (over Fire-holders) = **0.485**
+- coupled = **0.610** (39 alive)
+- flag-off control = **0.551** (400 alive)
+- **selection differential = +0.059** (coupled − control), isolating the coupling
+  effect from the baseline drift/clamping the control also sees.
+
+Fire's energy buff scales with Openness under coupling, so high-Openness holders
+out-reproduce and pull the mean up. The control's smaller rise is mutation-clamp
+drift toward 0.5; the differential is the mechanism's signal. Reproducible on the
+fixed scenario seed via `cargo test -p anabios-core --test tg1_selection --release`.
+
+**Observation / follow-up:** at `coeff = 0.8` the coupled population is much
+smaller than the control (39 vs 400) — the coupling culls low-Openness holders
+(selective mortality), which is genuine selection but strong. Coefficient
+tuning and scenario carrying-capacity are the roadmap's open question 2; a gentler
+`coeff` would trade demo-visible selection for a healthier standing population.
+
+**Hysteresis + gallery capture:** deferred to the view milestones (TG3/TG4),
+where the coevolution panel renders the affinity-selection series over a live run
+and the relaxation-after-collapse is visible — there is no headless capture of the
+affinity series until TG5 adds it, so a static gallery frame here would not show
+the loop. The mechanism's reversibility already follows from the design (the
+buff/selection vanish the moment `held_mask` drops the invention).
+
 ## Self-Review
 
 **Spec coverage:**
