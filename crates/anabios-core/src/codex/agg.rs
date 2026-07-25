@@ -220,3 +220,48 @@ impl SpeciesAggTable {
         self.active.sort_unstable();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::genome::Genome;
+    use crate::prelude::Vec2;
+
+    /// Drift guard for the serde-skip accumulator footgun. `SpeciesAggTable`
+    /// reuses `SpeciesAgg` entries across ticks: `build` populates them and
+    /// `reset` is supposed to zero them again. If a field is ever added to
+    /// `build` (and `Default`) but not to `reset`, a reused entry would carry
+    /// stale scratch into the next tick — and because those values feed hashed
+    /// detector events, that silently corrupts determinism.
+    ///
+    /// Rather than enumerate fields (which would drift with the struct), this
+    /// populates an entry through a real `build`, then asserts `reset` returns
+    /// it to exactly `Default`. Any field `build` writes but `reset` misses
+    /// shows up as a mismatch here. Debug-string comparison is intentional:
+    /// it ignores `Vec`/`BTreeSet` spare capacity (which `reset`'s `clear`
+    /// retains) and compares only observable contents.
+    #[test]
+    fn reset_restores_default_state() {
+        let mut w = World::new(7);
+        for k in 0..8u32 {
+            let pos = Vec2::new(100.0 + k as f32 * 13.0, 200.0 + k as f32 * 7.0);
+            w.spawn_agent(pos, Genome::neutral());
+        }
+        let mut table = SpeciesAggTable::default();
+        table.build(&w);
+        assert!(!table.active.is_empty(), "expected at least one active species");
+
+        let mut entry = table.entries[table.active[0] as usize].clone();
+        let default_dbg = format!("{:?}", SpeciesAgg::default());
+        // Guard against a vacuous test: build must actually have populated it.
+        assert_ne!(format!("{entry:?}"), default_dbg, "build() should populate the entry");
+
+        entry.reset();
+        assert_eq!(
+            format!("{entry:?}"),
+            default_dbg,
+            "reset() must zero every field build() populates — a field added to \
+             build()+Default but not reset() would leak stale scratch across ticks"
+        );
+    }
+}
