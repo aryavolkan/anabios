@@ -138,7 +138,10 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
                 * FOOD_ENERGY_PER_BIOMASS
                 * crate::invention::food_energy_multiplier_coupled(
                     inv_mask,
-                    crate::invention::affinity_gene(&world.agents.genome[i], crate::invention::FIRE),
+                    crate::invention::affinity_gene(
+                        &world.agents.genome[i],
+                        crate::invention::FIRE,
+                    ),
                     coupling,
                 );
             // C cumulative-skill learning-by-doing (env_period == 0) is still gated

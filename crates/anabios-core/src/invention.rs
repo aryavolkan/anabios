@@ -694,8 +694,14 @@ mod tests {
         assert!(spread_multiplier_coupled(w, 1.0, true) > spread_multiplier(w));
         assert_eq!(spread_multiplier_coupled(w, 0.0, false), spread_multiplier(w));
         // Fire energy + Medicine lifespan coupled variants are identity when off.
-        assert_eq!(food_energy_multiplier_coupled(bit(FIRE), 1.0, false), food_energy_multiplier(bit(FIRE)));
-        assert_eq!(lifespan_multiplier_coupled(bit(MEDICINE), 1.0, false), lifespan_multiplier(bit(MEDICINE)));
+        assert_eq!(
+            food_energy_multiplier_coupled(bit(FIRE), 1.0, false),
+            food_energy_multiplier(bit(FIRE))
+        );
+        assert_eq!(
+            lifespan_multiplier_coupled(bit(MEDICINE), 1.0, false),
+            lifespan_multiplier(bit(MEDICINE))
+        );
     }
 
     #[test]

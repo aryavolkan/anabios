@@ -778,7 +778,10 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // drift 0.0 here — layout growth only, behavior byte-identical.
     // Refreshed 2026-07-24 (E11): maladapt scratch + MaladaptationLag
     // (FORMAT_VERSION 17→18), env_period == 0 here — layout growth only.
-    &[(0, 0x075087e87a636932), (100, 0xadc3004c04c51a56), (300, 0xac1b5870b392b7f0)];
+    // Refreshed 2026-07-25 (TG1): World.gene_tech_coupling (FORMAT_VERSION 18→19),
+    // flag off here — coupled multipliers + discovery weight are identity, so the
+    // trajectory is byte-identical; only the serialized layout grew.
+    &[(0, 0x527b389029e491a4), (100, 0x62953328aad6422c), (300, 0x1c7508a4f87d8b44)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

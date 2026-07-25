@@ -19,7 +19,10 @@ pub fn age_and_starve(world: &mut crate::world::World) {
         let lifespan = (lifespan_of(&world.agents.genome[i]) as f32
             * crate::invention::lifespan_multiplier_coupled(
                 crate::invention::held_mask(&world.agents.meme_vector[i]),
-                crate::invention::affinity_gene(&world.agents.genome[i], crate::invention::MEDICINE),
+                crate::invention::affinity_gene(
+                    &world.agents.genome[i],
+                    crate::invention::MEDICINE,
+                ),
                 world.gene_tech_coupling,
             )) as u32;
         let died =
