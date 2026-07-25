@@ -85,3 +85,32 @@ fn fertility_scales_capacity_and_regrowth() {
     assert!(b.cells[0].plant_biomass > 10.0);
     assert_eq!(b.cells[2].plant_biomass, 0.0, "water stays barren");
 }
+
+/// With nutrient_variation ON, uniformly high-quality cells yield more total
+/// forage energy than uniformly low-quality cells over the same run.
+#[test]
+fn nutrient_quality_scales_forage_energy() {
+    let make = |q: f32| {
+        let mut w = Scenario::parse_toml(MINIMAL).expect("parse").instantiate();
+        w.nutrient_variation = true;
+        for cell in w.biome.cells.iter_mut() {
+            cell.nutrient_quality = q;
+        }
+        w
+    };
+    let mut hi = make(1.4);
+    let mut lo = make(0.6);
+    for _ in 0..20 {
+        step(&mut hi);
+        step(&mut lo);
+    }
+    let sum = |w: &anabios_core::world::World| -> f32 {
+        w.agents.iter_alive().map(|id| w.agents.energy[id as usize]).sum()
+    };
+    assert!(
+        sum(&hi) > sum(&lo),
+        "high-quality total energy {} should exceed low {}",
+        sum(&hi),
+        sum(&lo)
+    );
+}
