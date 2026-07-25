@@ -85,6 +85,8 @@ default 12345 diverges into a different, dying trajectory).
 | File | Tick | What you're seeing |
 |---|---|---|
 | e3-population-dynamics.png | 1821 | `predator-prey` seed 0 mid-maelstrom: 9,992 alive and 6,785 species, with the codex tally carrying all four new chapters — `PopCycle: 1 BoomBust: 1 CarryingCap: 3 TrophicCascade: 1`. The cascade (t=1690) is the real thing: stalker guild collapse → grazer release (555 → 9,989) → plant field grazed from 109k down to 13k. |
+| trophic-t157-hunt.png | 157 | `trophic-cascade` seed 20260722, the *top* of the cascade (`ZOOM=3 X=512 Y=512 TICKS=150 FRAMES=6`): the whole cast in one cluster — 65 grazers (`sp 1`) and the 10-stalker pack (`sp 2`) intermixed on the central lake. The tally already carries the opening predator chain, `Predation: 1 CombatRaid: 1 PackHunting: 1`, and the log reads it back in order: `t=8 Predation`, `t=26 PackHunting sp=2`, `t=29 CombatRaid sp=2`. |
+| trophic-t1661-boom.png | 1661 | The same seed ~1,500 ticks later, the cascade's payoff: the stalker guild has collapsed and the released grazers have exploded to 9,989 alive / 6,958 species, carpeting the whole biome (default full-map view). The tally now carries the full E3 chapter set — `TrophicCascade: 1 BoomBust: 2 PopCycle: 5 CarryingCap: 6` — with the event log streaming `PopCrash` as the boom overshoots carrying capacity. The founder grazer lineage `sp 1` is still present (n=279). |
 
 ## replay & event camera (E2)
 
