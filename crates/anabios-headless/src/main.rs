@@ -3,6 +3,7 @@
 mod demo;
 mod replay;
 mod score;
+mod soak;
 mod sweep;
 
 use std::io::Write;
@@ -65,6 +66,25 @@ enum Command {
         #[arg(long)]
         archive: Option<PathBuf>,
     },
+    /// Soak one scenario over a long horizon; every window record novelty
+    /// (new vs cumulative distinct event types), activity, and telemetry
+    /// (ticks/s, live agents, serialized state size). Writes a per-window CSV.
+    Soak {
+        #[arg(long)]
+        scenario: PathBuf,
+        /// Total ticks to run. Default 1,000,000.
+        #[arg(long, default_value_t = 1_000_000)]
+        ticks: u64,
+        /// Window size in ticks for each measurement row. Default 100,000.
+        #[arg(long, default_value_t = 100_000)]
+        window: u64,
+        /// Optional explicit seed; overrides the scenario seed.
+        #[arg(long)]
+        seed: Option<u64>,
+        /// Path to write the per-window curve CSV. Default `soak-curve.csv`.
+        #[arg(long, default_value = "soak-curve.csv")]
+        out: PathBuf,
+    },
     /// Replay-verify codex events: re-simulate each event from the nearest
     /// periodic snapshot and assert the same state hash and refire tick.
     /// Exits non-zero on any mismatch (detector regression gate).
@@ -116,6 +136,9 @@ fn main() -> Result<()> {
         }
         Command::Demo { scenario, ticks, seed, report_every } => {
             demo::run(scenario, ticks, seed, report_every)
+        }
+        Command::Soak { scenario, ticks, window, seed, out } => {
+            soak::run(scenario, ticks, window, seed, out)
         }
         Command::Replay { scenario, seed, ticks, snapshot_every, event, all } => {
             let ok = replay::run(scenario, seed, ticks, snapshot_every, event, all)?;
