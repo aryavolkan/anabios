@@ -48,6 +48,12 @@ pub struct Scenario {
     /// the productive band over a `2 * season_period`-tick cycle.
     #[serde(default)]
     pub season_period: u32,
+    /// Opt-in secular climate drift (E10): radians/tick of a slow non-stationary
+    /// drift added to the environmental optimum on top of the seasonal cycle.
+    /// `0.0` (default) leaves the optimum purely seasonal (byte-identical to
+    /// pre-E10). A small value like `0.00005` gives a multi-100k-tick wander.
+    #[serde(default)]
+    pub climate_drift_rate: f32,
     /// Opt-in: enable the biome-trade-goods economy (resource nodes spawn,
     /// agents harvest and trade them, reproduction needs a dowry basket).
     /// `false` (default) leaves the world unchanged.
@@ -319,6 +325,7 @@ impl Scenario {
         w.cognition_enabled = self.cognition_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
+        w.climate_drift_rate = self.climate_drift_rate;
         w.resources_enabled = self.resources_enabled;
         if w.resources_enabled {
             w.market_field = vec![0.0; w.biome.cells.len()];

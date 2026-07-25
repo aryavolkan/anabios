@@ -69,7 +69,9 @@ fn cognitive_scenario_is_self_consistent() {
 const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-07-23 (E9): meme-variant registry + meme_lineage
     // (FORMAT_VERSION 15→16) — layout growth only, fidelity gated off here.
-    &[(0, 0x877ed060d217c8ec), (100, 0x38a660d5d09089fd), (300, 0x2f8b60e32bb6734d)];
+    // Refreshed 2026-07-24 (E10): World.climate_drift_rate (FORMAT_VERSION 16→17),
+    // drift 0.0 here — layout growth only, behavior byte-identical.
+    &[(0, 0xc2e2bc2700a5367c), (100, 0xf304e61846260abd), (300, 0xcb6f2449973f311d)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

@@ -71,7 +71,11 @@ use crate::world::World;
 ///     parameter (1.0 baseline = byte-identical draw values). Layout growth
 ///     only; the fidelity effect is gated on settlement latches (off in all
 ///     golden scenarios), so behavior is byte-identical there.
-pub const FORMAT_VERSION: u32 = 16;
+/// v17: E10 drifting climate — World.climate_drift_rate (radians/tick of a slow
+///     secular drift added to culture::env_optimum_at on top of the seasonal
+///     cycle). `0.0` in every golden scenario ⇒ env_optimum_at short-circuits to
+///     the exact undrifted value; only the serialized layout grew by one f32.
+pub const FORMAT_VERSION: u32 = 17;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

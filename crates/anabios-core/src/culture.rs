@@ -47,6 +47,12 @@ pub const ENV_STATIC_PERIOD: u32 = u32::MAX;
 /// The two technique optima the environment alternates between.
 pub const ENV_TECH_LOW: f32 = 0.25;
 pub const ENV_TECH_HIGH: f32 = 0.75;
+/// Amplitude of the E10 secular climate-drift term added on top of the seasonal
+/// optimum (`env_optimum_at`). The seasonal sweep spans `[0.25, 0.75]`; a `0.25`
+/// amplitude lets a fully-drifted optimum reach the `[0, 1]` extremes (then
+/// clamped), so the moving target can leave any camped genetic strategy behind.
+/// Only active when a scenario sets `World.climate_drift_rate > 0`.
+pub const CLIMATE_DRIFT_AMPLITUDE: f32 = 0.25;
 /// The static-env optimum (what the genetic strategy can evolve toward).
 pub const ENV_STATIC_OPTIMUM: f32 = 0.75;
 /// Extra feeding multiplier when technique matches the optimum: bite *= 1 + ENV_BONUS*match.
@@ -119,14 +125,32 @@ pub const TERRAIN_HABITAT_PULL: f32 = 1.0;
 /// optimum (rather than two discrete states) denies a fixed genetic strategy any
 /// permanent "refuge" optimum to camp — which is what lets a tracker actually win
 /// under slow change and lose under fast change (the canonical DIT boundary).
-pub fn env_optimum_at(tick: u64, period: u32) -> f32 {
-    if period == ENV_STATIC_PERIOD {
-        return ENV_STATIC_OPTIMUM;
+///
+/// `drift_rate` (E10 drifting climate) adds a slow SECULAR term on top of the
+/// seasonal sweep: `CLIMATE_DRIFT_AMPLITUDE * sin(drift_rate * tick)`, clamped
+/// to `[0,1]`. Unlike the bounded seasonal cycle it never stationarizes — the
+/// optimum's mean keeps wandering as the world ages, so selection pressure stays
+/// non-stationary indefinitely. `drift_rate == 0.0` (every pre-E10 scenario)
+/// short-circuits to the exact undrifted seasonal value, byte-identical to the
+/// pre-drift codebase. Still pure (no RNG, no stored state).
+pub fn env_optimum_at(tick: u64, period: u32, drift_rate: f32) -> f32 {
+    let base = if period == ENV_STATIC_PERIOD {
+        ENV_STATIC_OPTIMUM
+    } else {
+        let full = period as u64 * 2;
+        let phase = (tick % full) as f32 / period as f32; // 0.0 .. 2.0
+        let tri = if phase <= 1.0 { phase } else { 2.0 - phase }; // 0→1→0
+        ENV_TECH_LOW + (ENV_TECH_HIGH - ENV_TECH_LOW) * tri
+    };
+    if drift_rate == 0.0 {
+        // Determinism guarantee: with drift off, no float op touches `base`, so
+        // the result is bit-identical to the pre-E10 function for every world.
+        return base;
     }
-    let full = period as u64 * 2;
-    let phase = (tick % full) as f32 / period as f32; // 0.0 .. 2.0
-    let tri = if phase <= 1.0 { phase } else { 2.0 - phase }; // 0→1→0
-    ENV_TECH_LOW + (ENV_TECH_HIGH - ENV_TECH_LOW) * tri
+    // Secular term computed in f64 (the phase `drift_rate * tick` grows without
+    // bound) then folded to f32. Deterministic: a fixed-order pure expression.
+    let secular = CLIMATE_DRIFT_AMPLITUDE * (drift_rate as f64 * tick as f64).sin() as f32;
+    (base + secular).clamp(0.0, 1.0)
 }
 
 /// Child meme = per-channel parent average plus small centered-uniform jitter.
@@ -202,7 +226,11 @@ pub fn culture_step(world: &mut World) {
         // DIT env mode: the current optimum, and the neighbour whose technique
         // best matches it (minimizes |tech - opt|). Only computed when active.
         let env_on = world.env_period > 0;
-        let opt = if env_on { env_optimum_at(world.tick, world.env_period) } else { 0.0 };
+        let opt = if env_on {
+            env_optimum_at(world.tick, world.env_period, world.climate_drift_rate)
+        } else {
+            0.0
+        };
         let mut best_tech: Option<f32> = None;
         let mut best_tech_err = f32::INFINITY;
         // E9 variant-of-best-neighbor tracking (social variant adoption).
@@ -408,5 +436,69 @@ mod tests {
             let v = super::env_affinity_match(a, e);
             assert!((0.0..=1.0).contains(&v));
         }
+    }
+
+    /// The undrifted seasonal triangle, recomputed independently of the function
+    /// under test — the reference for "exactly as before" (drift_rate == 0.0).
+    fn seasonal_reference(tick: u64, period: u32) -> f32 {
+        let full = period as u64 * 2;
+        let phase = (tick % full) as f32 / period as f32;
+        let tri = if phase <= 1.0 { phase } else { 2.0 - phase };
+        super::ENV_TECH_LOW + (super::ENV_TECH_HIGH - super::ENV_TECH_LOW) * tri
+    }
+
+    #[test]
+    fn drift_off_is_exactly_seasonal() {
+        // (a) rate 0.0 → the optimum is bit-identical to the pure seasonal value
+        // at every tick across several periods and phases.
+        let period = 4000u32;
+        for tick in [0u64, 1, 999, 2000, 4000, 6001, 123_457, 1_000_000] {
+            let got = super::env_optimum_at(tick, period, 0.0);
+            let want = seasonal_reference(tick, period);
+            assert_eq!(got.to_bits(), want.to_bits(), "drift-off mismatch at tick {tick}");
+        }
+        // Static-optimum branch is likewise untouched with drift off.
+        assert_eq!(
+            super::env_optimum_at(500, super::ENV_STATIC_PERIOD, 0.0),
+            super::ENV_STATIC_OPTIMUM
+        );
+    }
+
+    #[test]
+    fn drift_shifts_long_run_mean_monotonically() {
+        // (b) rate > 0 → the optimum's long-run mean wanders. Average over whole
+        // seasonal cycles (so the triangle contributes exactly 0.5, isolating the
+        // secular term), across three successive early windows on the rising
+        // quarter of the drift sine; the windowed mean must climb monotonically.
+        let period = 4000u32;
+        let window_ticks = (period as u64) * 2 * 4; // four full seasonal cycles
+                                                    // Slow rate: rising quarter of the sine lasts ~PI/2 / rate ticks; keep the
+                                                    // sampled windows well inside it so drift is strictly increasing.
+        let rate = 1.0e-6f32;
+
+        let window_mean = |start: u64| -> f64 {
+            let mut sum = 0.0f64;
+            for t in start..start + window_ticks {
+                sum += super::env_optimum_at(t, period, rate) as f64;
+            }
+            sum / window_ticks as f64
+        };
+
+        let m0 = window_mean(0);
+        let m1 = window_mean(200_000);
+        let m2 = window_mean(400_000);
+
+        // Drift is real and monotone-ish over this horizon.
+        assert!(m1 > m0 + 1e-3, "expected rising mean: m0={m0}, m1={m1}");
+        assert!(m2 > m1 + 1e-3, "expected rising mean: m1={m1}, m2={m2}");
+        // And the total shift is a meaningful fraction of the drift amplitude,
+        // not float noise — the optimum genuinely moved, not just wobbled.
+        assert!((m2 - m0) > 0.05, "drift too weak to matter: {}", m2 - m0);
+        // Sanity: the undrifted mean over whole cycles is exactly the 0.5 midpoint.
+        let mut base_sum = 0.0f64;
+        for t in 0..window_ticks {
+            base_sum += super::env_optimum_at(t, period, 0.0) as f64;
+        }
+        assert!((base_sum / window_ticks as f64 - 0.5).abs() < 1e-6);
     }
 }
