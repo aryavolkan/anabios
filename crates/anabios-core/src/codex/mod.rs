@@ -662,8 +662,13 @@ pub struct SpeciesAgg {
     /// `PracticeAdopted`). All zero when cognition is inactive.
     pub practice_counts: [u32; crate::practice::PRACTICE_COUNT],
     /// Distinct biome cells occupied by members this tick (scratch for the
-    /// E4 spatial detectors). Cell index = row * res + col.
-    pub occ_cells: std::collections::BTreeSet<u32>,
+    /// E4 spatial detectors). Cell index = row * res + col. Held as a
+    /// capacity-retaining `Vec` (cleared, not freed, each tick) that `build`
+    /// leaves **sorted and deduplicated** — so `.len()` is the distinct-cell
+    /// count and iteration is deterministic (ascending), preserving the
+    /// codex's "ordered iteration, never a hash container" invariant while
+    /// avoiding the per-tick `BTreeSet` node churn.
+    pub occ_cells: Vec<u32>,
     /// Per-slot genome sums / squared sums over members (for the E5
     /// genome-moment history). 50 slots each.
     pub genome_sums: [f64; 50],
@@ -690,7 +695,7 @@ impl Default for SpeciesAgg {
             diet_sum: 0.0,
             invention_counts: [0; crate::invention::INVENTION_COUNT],
             practice_counts: [0; crate::practice::PRACTICE_COUNT],
-            occ_cells: std::collections::BTreeSet::new(),
+            occ_cells: Vec::new(),
             genome_sums: [0.0; 50],
             genome_sumsq: [0.0; 50],
         }
@@ -786,7 +791,7 @@ impl SpeciesAggTable {
             let (col, row) = world.biome.cell_coords(pos);
             let terrain = world.biome.at(col, row).terrain as usize;
             e.terrain_counts[terrain.min(TERRAIN_SLOTS - 1)] += 1.0;
-            e.occ_cells.insert(world.biome.cell_index(col, row) as u32);
+            e.occ_cells.push(world.biome.cell_index(col, row) as u32);
             for (ch, s) in e.meme_sums.iter_mut().enumerate() {
                 *s += world.agents.meme_vector[i][ch] as f64;
             }
@@ -814,6 +819,15 @@ impl SpeciesAggTable {
             e.weapon_sum +=
                 module::effective_weapon(modules).map(|w| w.damage).unwrap_or(0.0) as f64;
             e.armor_sum += module::effective_armor_protection(modules) as f64;
+        }
+        // `occ_cells` was pushed once per member (with duplicates when members
+        // share a cell); collapse each active species' list to the sorted set
+        // of distinct cells so `.len()` and iteration match the former
+        // `BTreeSet` exactly.
+        for &sid in &self.active {
+            let cells = &mut self.entries[sid as usize].occ_cells;
+            cells.sort_unstable();
+            cells.dedup();
         }
         self.active.sort_unstable();
     }

@@ -5,8 +5,35 @@
 //! (b) fix the regression. Hash changes must be deliberate.
 
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::state_hash;
+use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
 use anabios_core::tick::step;
+
+/// The gene↔tech coupling showcase must survive a save→load→step round-trip:
+/// stepping a freshly-loaded world one tick must reproduce the same state hash
+/// as stepping the original. Guards the new `gene_tech_coupling` flag (and the
+/// coupled effect sites / discovery arm it drives) against any hidden state that
+/// serialization would drop — the serde-skip replay footgun.
+#[test]
+fn gene_tech_coupling_survives_save_load_step() {
+    const COUPLED: &str = include_str!("../../../scenarios/tech-gene-coupling.toml");
+    let mut world = Scenario::parse_toml(COUPLED).expect("parse coupled scenario").instantiate();
+    assert!(world.gene_tech_coupling, "scenario must enable coupling");
+    // Warm the world up so inventions are discovered and the coupled paths run.
+    for _ in 0..300 {
+        step(&mut world);
+    }
+    let bytes = save_to_bytes(&world).expect("save");
+    let mut reloaded = load_from_bytes(&bytes).expect("load");
+    assert_eq!(state_hash(&world), state_hash(&reloaded), "load must restore identical state");
+    // One more tick on both must land on the same hash.
+    step(&mut world);
+    step(&mut reloaded);
+    assert_eq!(
+        state_hash(&world),
+        state_hash(&reloaded),
+        "coupled world diverged after save→load→step (hidden non-serialized state?)",
+    );
+}
 
 const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 
@@ -99,8 +126,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // EventType::MaladaptationLag (FORMAT_VERSION 17→18). env_period == 0 in minimal,
 // so the detector short-circuits and never fires — behavior byte-identical, only
 // the serialized layout grew.
+// Refreshed 2026-07-25 (TG1): World.gene_tech_coupling (FORMAT_VERSION 18→19).
+// The flag is false in the minimal scenario, so every coupled buff multiplier
+// is exactly its pre-coupling value and the discovery roll is unchanged —
+// trajectory byte-identical, only the serialized layout grew by one bool.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xb2a5432b0afff587), (100, 0x98455f8f6a45990b), (1000, 0xddc4d66298241689)];
+    &[(0, 0x3d3d76b2070e0ecb), (100, 0x9845dcc38931606d), (1000, 0x988f5d8463222499)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
