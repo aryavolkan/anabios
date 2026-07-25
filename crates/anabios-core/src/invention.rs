@@ -490,6 +490,19 @@ pub fn spread_multiplier(mask: u32) -> f32 {
     spread_multiplier_coupled(mask, 0.5, false)
 }
 
+/// Multiplier on invention `inv`'s per-tick discovery probability from the
+/// holder's affinity gene (the gene→tech arm). `1.0` when coupling is off, the
+/// invention has no affinity, or the gene sits at the `0.5` neutral point;
+/// ranges `[0.5, 1.5]`. Reweights the existing single RNG draw's probability
+/// table — adds no draw, so flag-off behavior is unchanged.
+#[inline]
+pub fn discovery_affinity_weight(genome: &Genome, inv: usize, coupling: bool) -> f32 {
+    match (coupling, INVENTIONS[inv].affinity) {
+        (true, Some(a)) => 0.5 + genome.get(a.slot),
+        _ => 1.0,
+    }
+}
+
 /// Discovery-rate multiplier (Electricity) — discovery roll below.
 #[inline]
 pub fn discovery_multiplier(mask: u32) -> f32 {
@@ -549,6 +562,12 @@ pub fn invention_step(world: &mut World) {
             // pick below (its `probs` entry stays 0).
             let cognition = world.cognition_enabled;
             let agent_iq = world.agents.iq[i];
+            // Gene→tech arm: a lineage rich in a tech's affinity gene discovers
+            // that tech faster (identity when coupling is off — the weight is
+            // 1.0, so the probability table and its single RNG draw are
+            // unchanged). Borrow ends when the closure returns, before the roll.
+            let coupling = world.gene_tech_coupling;
+            let genome = &world.agents.genome[i];
             let mut total = 0.0f32;
             let mut probs = [0.0f32; INVENTION_COUNT];
             candidates(mask, |k| {
@@ -556,8 +575,9 @@ pub fn invention_step(world: &mut World) {
                     return;
                 }
                 let p = (BASE_DISCOVERY * openness * (0.3 + skill) * disc_mult
-                    / INVENTIONS[k].era as f32)
-                    .min(DISCOVERY_CAP);
+                    / INVENTIONS[k].era as f32
+                    * discovery_affinity_weight(genome, k, coupling))
+                .min(DISCOVERY_CAP);
                 probs[k] = p;
                 total += p;
             });
@@ -676,6 +696,25 @@ mod tests {
         // Fire energy + Medicine lifespan coupled variants are identity when off.
         assert_eq!(food_energy_multiplier_coupled(bit(FIRE), 1.0, false), food_energy_multiplier(bit(FIRE)));
         assert_eq!(lifespan_multiplier_coupled(bit(MEDICINE), 1.0, false), lifespan_multiplier(bit(MEDICINE)));
+    }
+
+    #[test]
+    fn discovery_affinity_weight_is_neutral_off_and_scales_on() {
+        use crate::genome::{Genome, GenomeSlot};
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::Openness, 1.0);
+        // OFF -> 1.0 always.
+        assert_eq!(discovery_affinity_weight(&g, FIRE, false), 1.0);
+        // ON, coupled invention: > 1.0 for a high affinity gene.
+        assert!(discovery_affinity_weight(&g, FIRE, true) > 1.0);
+        // ON, uncoupled invention: exactly 1.0.
+        assert_eq!(discovery_affinity_weight(&g, STONE_TOOLS, true), 1.0);
+        // Neutral gene -> 1.0 (keeps near-identity so tuning stays legible).
+        assert_eq!(discovery_affinity_weight(&Genome::neutral(), FIRE, true), 1.0);
+        // Low gene damps discovery below 1.0.
+        let mut lo = Genome::neutral();
+        lo.set(GenomeSlot::Openness, 0.0);
+        assert!(discovery_affinity_weight(&lo, FIRE, true) < 1.0);
     }
 
     #[test]
