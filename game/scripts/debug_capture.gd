@@ -6,6 +6,12 @@ extends Node
 #   ANABIOS_SHOT_FRAMES -> frames to wait before capture (default 180)
 
 func _ready() -> void:
+	# GameConfig overrides apply to ANY direct boot of main.tscn — the CLI
+	# `emergence.sh view` command and the screenshot harness both bypass the
+	# menu. Autoloads run before the main scene reads GameConfig, so setting
+	# them here (not just in screenshot mode) is what makes a windowed
+	# `--scenario` launch land on the right scenario/seed.
+	_apply_config_overrides()
 	if not OS.has_environment("ANABIOS_SHOT"):
 		return
 	# Fail fast: the capture reads the viewport texture after frame_post_draw,
@@ -15,8 +21,22 @@ func _ready() -> void:
 		push_error("[capture] ANABIOS_SHOT requires a windowed run; --headless cannot read back the viewport")
 		get_tree().quit(1)
 		return
-	# Optional scenario/overlay override (autoloads run before the main scene
-	# reads GameConfig), so we can screenshot any scenario headlessly.
+	var path := OS.get_environment("ANABIOS_SHOT")
+	var wait_frames := 180
+	if OS.has_environment("ANABIOS_SHOT_FRAMES"):
+		wait_frames = int(OS.get_environment("ANABIOS_SHOT_FRAMES"))
+	# Freeze the scene tree while the scene builds so the sim does not tick
+	# before step_n runs: the capture lands on exactly SHOT_TICKS + SHOT_FRAMES
+	# (previously the build wait leaked ~30 ticks, drifting every capture).
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().paused = true
+	_run(path, wait_frames)
+
+# Apply env-var overrides onto GameConfig before the main scene reads it.
+# Shared by the windowed `view` launch and the screenshot harness.
+func _apply_config_overrides() -> void:
+	# Scenario path (a res:// .toml). Lets a direct main.tscn boot pick any
+	# scenario without going through the menu.
 	if OS.has_environment("ANABIOS_SCENARIO"):
 		GameConfig.scenario_path = OS.get_environment("ANABIOS_SCENARIO")
 	# Seed override: scenarios tuned around a specific biome field (e.g.
@@ -28,16 +48,6 @@ func _ready() -> void:
 		GameConfig.default_ground = int(OS.get_environment("ANABIOS_GROUND"))
 	if OS.has_environment("ANABIOS_BODY"):
 		GameConfig.default_body = int(OS.get_environment("ANABIOS_BODY"))
-	var path := OS.get_environment("ANABIOS_SHOT")
-	var wait_frames := 180
-	if OS.has_environment("ANABIOS_SHOT_FRAMES"):
-		wait_frames = int(OS.get_environment("ANABIOS_SHOT_FRAMES"))
-	# Freeze the scene tree while the scene builds so the sim does not tick
-	# before step_n runs: the capture lands on exactly SHOT_TICKS + SHOT_FRAMES
-	# (previously the build wait leaked ~30 ticks, drifting every capture).
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	get_tree().paused = true
-	_run(path, wait_frames)
 
 func _run(path: String, wait_frames: int) -> void:
 	# Let the scene build (tree is paused: nodes process no ticks, but node
