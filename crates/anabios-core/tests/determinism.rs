@@ -99,8 +99,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // EventType::MaladaptationLag (FORMAT_VERSION 17→18). env_period == 0 in minimal,
 // so the detector short-circuits and never fires — behavior byte-identical, only
 // the serialized layout grew.
+// Refreshed 2026-07-25 (TG1): World.gene_tech_coupling (FORMAT_VERSION 18→19).
+// The flag is false in the minimal scenario, so every coupled buff multiplier
+// is exactly its pre-coupling value and the discovery roll is unchanged —
+// trajectory byte-identical, only the serialized layout grew by one bool.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xb2a5432b0afff587), (100, 0x98455f8f6a45990b), (1000, 0xddc4d66298241689)];
+    &[(0, 0x3d3d76b2070e0ecb), (100, 0x9845dcc38931606d), (1000, 0x988f5d8463222499)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
