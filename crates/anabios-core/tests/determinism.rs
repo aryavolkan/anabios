@@ -95,8 +95,12 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-24 (E10): World.climate_drift_rate (FORMAT_VERSION 16→17).
 // Drift is 0.0 in the minimal scenario, so env_optimum_at short-circuits to the
 // exact undrifted value — behavior byte-identical, only the layout grew by one f32.
+// Refreshed 2026-07-24 (E11): CodexState.{maladapt_streak,maladapt_active} +
+// EventType::MaladaptationLag (FORMAT_VERSION 17→18). env_period == 0 in minimal,
+// so the detector short-circuits and never fires — behavior byte-identical, only
+// the serialized layout grew.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xf12405a7fd504507), (100, 0x70dd3d48d832a6cb), (1000, 0xfd737d3a88eec6c9)];
+    &[(0, 0xb2a5432b0afff587), (100, 0x98455f8f6a45990b), (1000, 0xddc4d66298241689)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

@@ -776,7 +776,9 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // (FORMAT_VERSION 15→16) — layout growth only, fidelity gated off here.
     // Refreshed 2026-07-24 (E10): World.climate_drift_rate (FORMAT_VERSION 16→17),
     // drift 0.0 here — layout growth only, behavior byte-identical.
-    &[(0, 0xff8c9bc7d4c453b2), (100, 0x915899d72dc2b5d6), (300, 0x28536a7ea79462f0)];
+    // Refreshed 2026-07-24 (E11): maladapt scratch + MaladaptationLag
+    // (FORMAT_VERSION 17→18), env_period == 0 here — layout growth only.
+    &[(0, 0x075087e87a636932), (100, 0xadc3004c04c51a56), (300, 0xac1b5870b392b7f0)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

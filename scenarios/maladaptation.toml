@@ -1,0 +1,36 @@
+name = "maladaptation"
+seed = 0
+
+# E11 showcase: CLIMATE MALADAPTATION. The DIT env-variability optimum sweeps
+# seasonally (env_period = 400) and a slow SECULAR drift wanders its baseline on
+# top (climate_drift_rate = 0.00008 rad/tick) — a moving target that never
+# stationarizes. The dominant population here is a SLOW-learning forager stock
+# (asocial innate foragers with no Communicator, so their foraging skill never
+# climbs) whose mean skill stays chronically far from the drifting optimum.
+# The MaladaptationLag detector fires once per species after 500 ticks of
+# sustained lag (|mean skill − optimum| ≥ 0.25) and re-arms if the species ever
+# catches up. A minority of critical learners is included for contrast.
+env_period = 400
+climate_drift_rate = 0.00008
+# Cap the population so the world stays stable across a long run (the founder
+# stock persists rather than churning through reclustering).
+max_population = 1200
+
+# Slow-learning stock: fixed innate technique, asocial (no Communicator) so the
+# learned foraging skill never advances — chronically off the moving optimum.
+[[agents]]
+count = 90
+archetype = "innate_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# Contrast: critical learners (learn by doing + copy neighbours).
+[[agents]]
+count = 30
+archetype = "critical_learner"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3

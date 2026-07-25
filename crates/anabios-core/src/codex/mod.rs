@@ -18,6 +18,7 @@ use crate::program::MEME_CHANNELS;
 use crate::spatial::torus_distance;
 use crate::world::World;
 
+mod climate;
 mod combat;
 mod culture;
 mod cycles;
@@ -308,6 +309,15 @@ pub const VARIANT_SWEEP_INTERVAL: u64 = 50;
 /// parent variant (lineage collapses gracefully instead of growing memory).
 pub const VARIANT_REGISTRY_CAP: usize = 20_000;
 
+/// Minimum absolute lag (|mean skill − current optimum|) for a check to count
+/// toward the maladaptation streak (E11). The seasonal optimum sweeps a 0.5-wide
+/// band, so a quarter-band gap is a species chronically off the moving target.
+pub const MALADAPT_LAG_MIN: f32 = 0.25;
+/// Consecutive-lag ticks required before MaladaptationLag fires. The streak
+/// advances by `CYCLE_CHECK_INTERVAL` per amortized check, so this is 500 ticks
+/// (50 checks) of sustained lag — a persistent stress, not a transient dip.
+pub const MALADAPT_WINDOW: u32 = 500;
+
 /// A meme variant: one quantized band of one meme channel, with parentage —
 /// the lineage unit of cultural descent (E9).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -509,12 +519,16 @@ pub enum EventType {
     /// A species held tech era ≥2 continuously for `RATCHET_WINDOW` ticks
     /// despite holder turnover (`value` = era).
     InstitutionalRatchet = 47,
+    /// A species' mean skill stayed ≥`MALADAPT_LAG_MIN` from the drifting
+    /// environmental optimum for `MALADAPT_WINDOW` ticks — chronic climate
+    /// maladaptation, only meaningful under a moving optimum (`value` = lag).
+    MaladaptationLag = 48,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::InstitutionalRatchet as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::MaladaptationLag as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -758,6 +772,12 @@ pub struct CodexState {
     pub ratchet_streak: BTreeMap<u32, u32>,
     /// Species currently latched as institutional-ratcheted.
     pub ratchet_active: BTreeSet<u32>,
+    /// Per-species consecutive-lag streak (ticks) for MaladaptationLag (E11).
+    /// Advances by `CYCLE_CHECK_INTERVAL` per check while lag ≥
+    /// `MALADAPT_LAG_MIN`; resets to 0 when the species catches up.
+    pub maladapt_streak: BTreeMap<u32, u32>,
+    /// Species currently latched as climate-maladapted (re-arms on catch-up).
+    pub maladapt_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -1190,6 +1210,7 @@ pub fn observe_all(world: &mut World) {
     practice::detect_practices(world, &agg);
     combat::detect_pack_hunting(world, &agg);
     spatial::detect_herd_cohesion(world, &agg);
+    climate::detect_maladaptation(world, &agg);
 
     world.codex_agg = agg;
 }

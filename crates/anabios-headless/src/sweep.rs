@@ -182,13 +182,14 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
          war,war_ended,alliance,kin_network,\
          settlement,market,specialization_split,\
          tradition,cultural_radiation,institutional_ratchet,\
+         maladaptation_lag,\
          emergence_score,novel_events,coverage"
     )?;
     for r in runs {
         let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
         writeln!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
+            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
             r.seed,
             r.ticks,
             r.final_alive,
@@ -242,6 +243,7 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             g("tradition"),
             g("cultural_radiation"),
             g("institutional_ratchet"),
+            g("maladaptation_lag"),
             r.emergence_score,
             r.novel_events,
             r.coverage,
