@@ -260,7 +260,7 @@ mod tests {
             count,
             sum_x: 500.0 * count as f64,
             sum_y: 500.0 * count as f64,
-            occ_cells: cells.iter().copied().collect(),
+            occ_cells: cells.to_vec(),
             ..Default::default()
         };
         if sid as usize >= agg.entries.len() {
