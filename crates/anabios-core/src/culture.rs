@@ -292,7 +292,14 @@ pub fn culture_step(world: &mut World) {
         } else {
             0
         };
-        let meme_copy_rate = MEME_COPY_RATE * crate::invention::spread_multiplier(self_mask);
+        // Writing↔CommunicationStrength coupling: the literacy spread bonus
+        // scales with the holder's gene when gene_tech_coupling is on (identity
+        // otherwise). Computed once for both spread sites in this iteration.
+        let coupling = world.gene_tech_coupling;
+        let writing_gene =
+            crate::invention::affinity_gene(&world.agents.genome[i], crate::invention::WRITING);
+        let meme_copy_rate = MEME_COPY_RATE
+            * crate::invention::spread_multiplier_coupled(self_mask, writing_gene, coupling);
         for ch in 0..MEME_CHANNELS {
             // The skill and technique channels carry cumulative learned values
             // transmitted by their own social-learning rules below — they must NOT
@@ -344,7 +351,7 @@ pub fn culture_step(world: &mut World) {
         // held mask, so the tree can't be skipped socially either.
         if world.inventions_enabled {
             let rate = crate::invention::INVENTION_SPREAD_RATE
-                * crate::invention::spread_multiplier(self_mask);
+                * crate::invention::spread_multiplier_coupled(self_mask, writing_gene, coupling);
             let cognition = world.cognition_enabled;
             let receiver_iq = world.agents.iq[i];
             for (k, &target) in max_neighbour_inv.iter().enumerate() {

@@ -79,7 +79,7 @@ use crate::world::World;
 ///     + EventType::MaladaptationLag. The detector short-circuits when
 ///     `env_period == 0` (every golden scenario), so it never fires there;
 ///     behavior is byte-identical and only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 18;
+pub const FORMAT_VERSION: u32 = 19;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
