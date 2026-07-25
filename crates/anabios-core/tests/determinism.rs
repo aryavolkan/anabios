@@ -5,8 +5,35 @@
 //! (b) fix the regression. Hash changes must be deliberate.
 
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::state_hash;
+use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
 use anabios_core::tick::step;
+
+/// The gene↔tech coupling showcase must survive a save→load→step round-trip:
+/// stepping a freshly-loaded world one tick must reproduce the same state hash
+/// as stepping the original. Guards the new `gene_tech_coupling` flag (and the
+/// coupled effect sites / discovery arm it drives) against any hidden state that
+/// serialization would drop — the serde-skip replay footgun.
+#[test]
+fn gene_tech_coupling_survives_save_load_step() {
+    const COUPLED: &str = include_str!("../../../scenarios/tech-gene-coupling.toml");
+    let mut world = Scenario::parse_toml(COUPLED).expect("parse coupled scenario").instantiate();
+    assert!(world.gene_tech_coupling, "scenario must enable coupling");
+    // Warm the world up so inventions are discovered and the coupled paths run.
+    for _ in 0..300 {
+        step(&mut world);
+    }
+    let bytes = save_to_bytes(&world).expect("save");
+    let mut reloaded = load_from_bytes(&bytes).expect("load");
+    assert_eq!(state_hash(&world), state_hash(&reloaded), "load must restore identical state");
+    // One more tick on both must land on the same hash.
+    step(&mut world);
+    step(&mut reloaded);
+    assert_eq!(
+        state_hash(&world),
+        state_hash(&reloaded),
+        "coupled world diverged after save→load→step (hidden non-serialized state?)",
+    );
+}
 
 const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 
