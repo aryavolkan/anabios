@@ -74,7 +74,11 @@ fn ensure_species(w: &mut World, species: u32) {
 /// pathological cold start.
 fn spawn_lineage(w: &mut World, species: u32, n: usize, s: Strat, cx: f32, cy: f32, repro: f32) {
     ensure_species(w, species);
-    let seed_opt = if w.env_period > 0 { Some(env_optimum_at(0, w.env_period)) } else { None };
+    let seed_opt = if w.env_period > 0 {
+        Some(env_optimum_at(0, w.env_period, w.climate_drift_rate))
+    } else {
+        None
+    };
     for k in 0..n {
         let ang = k as f32 * 0.7;
         let rad = 12.0 + (k % 11) as f32 * 7.0;
@@ -110,7 +114,7 @@ fn count(w: &World, species: u32) -> usize {
 
 /// Per-species instantaneous (sum of technique-match, member count) at this tick.
 fn match_sum(w: &World, species: u32) -> (f64, u64) {
-    let opt = env_optimum_at(w.tick, w.env_period);
+    let opt = env_optimum_at(w.tick, w.env_period, w.climate_drift_rate);
     let mut sm = 0.0f64;
     let mut n = 0u64;
     for id in w.agents.iter_alive() {
@@ -468,7 +472,7 @@ fn run_coevolution(seed: u64, ticks: u32) -> Coevo {
     let mut w = World::new(seed);
     w.env_period = ENV_SLOW;
     ensure_species(&mut w, 1);
-    let seed_opt = env_optimum_at(0, ENV_SLOW);
+    let seed_opt = env_optimum_at(0, ENV_SLOW, w.climate_drift_rate);
     let n = 80usize;
     for k in 0..n {
         let ang = k as f32 * 0.7;
@@ -489,7 +493,7 @@ fn run_coevolution(seed: u64, ticks: u32) -> Coevo {
     let (mut lsum, mut lcnt, mut nsum, mut ncnt) = (0.0f64, 0u64, 0.0f64, 0u64);
     for t in 0..ticks {
         step(&mut w);
-        let opt = env_optimum_at(w.tick, w.env_period);
+        let opt = env_optimum_at(w.tick, w.env_period, w.climate_drift_rate);
         for id in w.agents.iter_alive() {
             let i = id as usize;
             let m = technique_match(tech_of(&w, i), opt) as f64;

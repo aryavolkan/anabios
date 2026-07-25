@@ -88,7 +88,11 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
             } else {
                 world.agents.genome[i].get(GenomeSlot::InnateTechnique)
             };
-            let opt = crate::culture::env_optimum_at(world.tick, world.env_period);
+            let opt = crate::culture::env_optimum_at(
+                world.tick,
+                world.env_period,
+                world.climate_drift_rate,
+            );
             let m = crate::culture::technique_match(technique, opt);
             desired_bite *= 1.0 + crate::culture::ENV_BONUS * m;
         } else if is_comm {
@@ -113,7 +117,11 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         // while the feeding BONUS above still rewards actually matching it. The
         // per-tick energy cost is what makes learning a real (survivable) expense.
         if world.env_period > 0 && cultural && il {
-            let opt = crate::culture::env_optimum_at(world.tick, world.env_period);
+            let opt = crate::culture::env_optimum_at(
+                world.tick,
+                world.env_period,
+                world.climate_drift_rate,
+            );
             let t = &mut world.agents.meme_vector[i][crate::culture::TECH_CHANNEL];
             *t += crate::culture::ENV_LEARN_RATE * (opt - *t);
             world.agents.energy[i] -= crate::culture::ENV_LEARN_COST;

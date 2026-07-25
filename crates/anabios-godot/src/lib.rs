@@ -737,7 +737,7 @@ impl Simulation {
     fn env_optimum(&self) -> f32 {
         match self.inner.as_ref() {
             Some(w) if w.env_period > 0 => {
-                anabios_core::culture::env_optimum_at(w.tick, w.env_period)
+                anabios_core::culture::env_optimum_at(w.tick, w.env_period, w.climate_drift_rate)
             }
             _ => -1.0,
         }
@@ -758,7 +758,8 @@ impl Simulation {
         let mut out = Array::<VarDictionary>::new();
         let Some(w) = self.inner.as_ref() else { return out };
         let active = w.env_period > 0;
-        let opt = if active { env_optimum_at(w.tick, w.env_period) } else { 0.0 };
+        let opt =
+            if active { env_optimum_at(w.tick, w.env_period, w.climate_drift_rate) } else { 0.0 };
         // Aggregate over live agents, keyed by species_id (BTreeMap keeps the
         // output stable and ascending).
         let mut count: BTreeMap<u32, i64> = BTreeMap::new();
@@ -1082,7 +1083,7 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
     let (memes, genomes, species, xs, comm) =
         (&scratch.memes, &scratch.genomes, &scratch.species, &scratch.xs, &scratch.comm);
     let active = w.env_period > 0;
-    let opt = if active { env_optimum_at(w.tick, w.env_period) } else { 0.0 };
+    let opt = if active { env_optimum_at(w.tick, w.env_period, w.climate_drift_rate) } else { 0.0 };
     let mut inv_adopt_frac = [0.0f32; anabios_core::invention::INVENTION_COUNT];
     if w.inventions_enabled && !memes.is_empty() {
         for m in memes {

@@ -88,6 +88,14 @@ pub struct World {
     /// band. Defaulted so old snapshots without this field still deserialize.
     #[serde(default)]
     pub season_period: u32,
+    /// Secular climate-drift rate (E10 drifting climate), radians per tick. `0.0`
+    /// (default) = the environmental optimum only oscillates seasonally, exactly
+    /// as before. `> 0.0` adds a slow non-stationary drift term to
+    /// `culture::env_optimum_at`, so the selective optimum keeps wandering and
+    /// pressures never stationarize. Pure function of `tick` (no RNG, no stored
+    /// state). Same bincode/`FORMAT_VERSION` caveat as `env_period`.
+    #[serde(default)]
+    pub climate_drift_rate: f32,
     /// Discrete trade-good nodes on the map (biome trade goods feature).
     /// Empty and inert unless `resources_enabled`. Serialized.
     #[serde(default)]
@@ -264,6 +272,7 @@ impl World {
             cognition_enabled: false,
             living_biome: false,
             season_period: 0,
+            climate_drift_rate: 0.0,
             resources: Vec::new(),
             resources_enabled: false,
             disasters_enabled: false,

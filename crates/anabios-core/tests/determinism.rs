@@ -92,8 +92,11 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // Refreshed 2026-07-23 (E9): meme-variant registry + AgentBuffers.meme_lineage
 // (FORMAT_VERSION 15→16). The settled-fidelity effect is gated on settlement
 // latches (off here), so behavior is byte-identical — layout growth only.
+// Refreshed 2026-07-24 (E10): World.climate_drift_rate (FORMAT_VERSION 16→17).
+// Drift is 0.0 in the minimal scenario, so env_optimum_at short-circuits to the
+// exact undrifted value — behavior byte-identical, only the layout grew by one f32.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0xefeb136c9e139367), (100, 0x5f075a3a61ac0c3b), (1000, 0x64ac626e43fccf49)];
+    &[(0, 0xf12405a7fd504507), (100, 0x70dd3d48d832a6cb), (1000, 0xfd737d3a88eec6c9)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

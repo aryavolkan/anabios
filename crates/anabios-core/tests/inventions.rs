@@ -774,7 +774,9 @@ fn inventions_scenario_is_deterministic() {
 const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-07-23 (E9): meme-variant registry + meme_lineage
     // (FORMAT_VERSION 15→16) — layout growth only, fidelity gated off here.
-    &[(0, 0x1d88f00d12145cc2), (100, 0x2020e23a47f7c0a6), (300, 0xc4c749f5618be850)];
+    // Refreshed 2026-07-24 (E10): World.climate_drift_rate (FORMAT_VERSION 16→17),
+    // drift 0.0 here — layout growth only, behavior byte-identical.
+    &[(0, 0xff8c9bc7d4c453b2), (100, 0x915899d72dc2b5d6), (300, 0x28536a7ea79462f0)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
