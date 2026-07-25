@@ -2,7 +2,8 @@
 //! flagged off, and (later tasks) consumption behavior.
 
 use anabios_core::biome::{
-    BiomeField, FERTILITY_MAX, FERTILITY_MIN, NUTRIENT_QUALITY_MAX, NUTRIENT_QUALITY_MIN,
+    BiomeField, TerrainType, FERTILITY_MAX, FERTILITY_MIN, NUTRIENT_QUALITY_MAX,
+    NUTRIENT_QUALITY_MIN, SUCCESSION_CLIMAX,
 };
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
@@ -50,4 +51,37 @@ fn fields_are_inert_when_flags_off() {
     let energy_a: Vec<f32> = a.agents.iter_alive().map(|id| a.agents.energy[id as usize]).collect();
     let energy_b: Vec<f32> = b.agents.iter_alive().map(|id| b.agents.energy[id as usize]).collect();
     assert_eq!(energy_a, energy_b, "field values leaked into agent energy");
+}
+
+/// With soil_fertility ON, a high-fertility Grass cell reaches a higher standing
+/// crop than a low-fertility one; Water stays barren regardless.
+#[test]
+fn fertility_scales_capacity_and_regrowth() {
+    let mut b = BiomeField::generate(0, 8, 1024.0);
+    // Cell 0: fertile grass. Cell 1: poor grass. Cell 2: water (barren).
+    for (idx, (terr, fert)) in
+        [(TerrainType::Grass, 1.5), (TerrainType::Grass, 0.5), (TerrainType::Water, 1.5)]
+            .into_iter()
+            .enumerate()
+    {
+        let c = &mut b.cells[idx];
+        c.terrain = terr;
+        c.fertility = fert;
+        c.plant_biomass = if terr == TerrainType::Water { 0.0 } else { 1.0 };
+        c.succession = SUCCESSION_CLIMAX;
+        c.pollution = 0.0;
+    }
+    for _ in 0..2000 {
+        b.regrow_step(true);
+    }
+    assert!(
+        b.cells[0].plant_biomass > b.cells[1].plant_biomass,
+        "fertile {} should exceed poor {}",
+        b.cells[0].plant_biomass,
+        b.cells[1].plant_biomass
+    );
+    // Fertile grass should exceed the flat carrying capacity (10.0) it would cap
+    // at with fertility ignored.
+    assert!(b.cells[0].plant_biomass > 10.0);
+    assert_eq!(b.cells[2].plant_biomass, 0.0, "water stays barren");
 }
