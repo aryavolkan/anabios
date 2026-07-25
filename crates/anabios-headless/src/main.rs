@@ -6,7 +6,7 @@ mod score;
 mod soak;
 mod sweep;
 
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 use anabios_core::scenario::Scenario;
@@ -172,11 +172,13 @@ fn run(
         world.plant_biomass_total()
     );
 
+    // Buffer the per-event JSONL writes (two raw syscalls per event otherwise).
+    // Output bytes are unchanged.
     let mut events_file = match &events_jsonl {
-        Some(p) => Some(
+        Some(p) => Some(BufWriter::new(
             std::fs::File::create(p)
                 .with_context(|| format!("creating events file {}", p.display()))?,
-        ),
+        )),
         None => None,
     };
 
@@ -188,6 +190,10 @@ fn run(
                 f.write_all(b"\n")?;
             }
         }
+    }
+    // Surface any buffered-write error rather than letting drop swallow it.
+    if let Some(f) = events_file.as_mut() {
+        f.flush().context("flushing events file")?;
     }
 
     let hash = state_hash(&world);
