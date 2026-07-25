@@ -16,6 +16,7 @@
 //! off every invention channel stays 0.0, every multiplier below is exactly
 //! 1.0, and no RNG draws are consumed, so baseline scenarios stay unchanged.
 
+use crate::genome::{Genome, GenomeSlot};
 use crate::module::{self, ModuleType};
 use crate::program::MEME_CHANNELS;
 use crate::world::World;
@@ -47,6 +48,19 @@ pub const NUCLEAR_POWER: usize = 9;
 /// debuffs apply, prereqs count as satisfied, codex counts it).
 pub const HELD_THRESHOLD: f32 = 0.5;
 
+/// Couples an invention to a genome slot. When `World::gene_tech_coupling` is
+/// on, holding the invention scales its buff by the holder's slot value, so
+/// adoption exerts directional selection on that gene (the tech→gene arm), and
+/// per-candidate discovery is reweighted by the same gene (the gene→tech arm).
+#[derive(Clone, Copy)]
+pub struct GeneAffinity {
+    /// The genome slot this invention selects for.
+    pub slot: GenomeSlot,
+    /// Fraction of the buff scaled by `(gene - 0.5)`. `|coeff| < 2` keeps the
+    /// buff strictly positive across `gene ∈ [0,1]`.
+    pub coeff: f32,
+}
+
 /// Static per-invention metadata. Effect magnitudes live in the constants
 /// below (kept separate so the table stays display-friendly for the headless
 /// demo and the Godot inspector).
@@ -65,11 +79,24 @@ pub struct Invention {
     pub buff: &'static str,
     /// One-line downside summary (UI).
     pub debuff: &'static str,
+    /// Optional genome-slot coupling (gene↔tech coevolution). `None` = the
+    /// buff is genome-independent (behaves as if coupling were off).
+    pub affinity: Option<GeneAffinity>,
 }
 
 #[inline]
 pub const fn bit(inv: usize) -> u32 {
     1u32 << inv
+}
+
+/// The holder's value of invention `inv`'s affinity gene, or `0.5` (the neutral
+/// point → identity in `coupled_held`) when the invention has no affinity.
+#[inline]
+pub fn affinity_gene(genome: &Genome, inv: usize) -> f32 {
+    match INVENTIONS[inv].affinity {
+        Some(a) => genome.get(a.slot),
+        None => 0.5,
+    }
 }
 
 pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
@@ -80,6 +107,7 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: 0,
         buff: "+25% graze bite",
         debuff: "none",
+        affinity: None,
     },
     Invention {
         name: "Fire",
@@ -88,6 +116,9 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: bit(STONE_TOOLS),
         buff: "+40% energy per biomass",
         debuff: "+10% metabolism",
+        // Bold experimenters harness fire: its energy buff scales with Openness,
+        // which also drives discovery — a clean innovation feedback loop.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Openness, coeff: 0.8 }),
     },
     Invention {
         name: "Farming",
@@ -96,6 +127,9 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: bit(FIRE),
         buff: "+60% graze yield",
         debuff: "crowding stress",
+        // Sedentary farming rewards prudent planners: its yield scales with
+        // Conscientiousness.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Conscientiousness, coeff: 0.8 }),
     },
     Invention {
         name: "Metalworking",
@@ -104,6 +138,7 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: bit(FIRE),
         buff: "+50% weapon damage",
         debuff: "+10% module upkeep",
+        affinity: None,
     },
     Invention {
         name: "Writing",
@@ -112,6 +147,9 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: bit(FARMING),
         buff: "2x meme + invention spread",
         debuff: "small upkeep",
+        // Literacy rewards communicators: the spread buff scales with the
+        // (previously inert) CommunicationStrength slot.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::CommunicationStrength, coeff: 0.8 }),
     },
     Invention {
         name: "Medicine",
@@ -120,6 +158,9 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: bit(WRITING),
         buff: "+50% lifespan",
         debuff: "small upkeep",
+        // Medicine's lifespan buff rewards the cognitive lineage that could
+        // reach era-3 tech: scales with CognitivePotential.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::CognitivePotential, coeff: 0.8 }),
     },
     Invention {
         name: "Husbandry",
@@ -128,6 +169,7 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: bit(FARMING),
         buff: "+40% scavenge energy",
         debuff: "+8% metabolism",
+        affinity: None,
     },
     Invention {
         name: "Machinery",
@@ -136,6 +178,7 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: bit(METALWORKING) | bit(WRITING),
         buff: "+25% speed & bite",
         debuff: "pollutes local biome",
+        affinity: None,
     },
     Invention {
         name: "Electricity",
@@ -144,6 +187,7 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: bit(MACHINERY),
         buff: "+30% perception, 1.5x discovery",
         debuff: "upkeep",
+        affinity: None,
     },
     Invention {
         name: "Nuclear Power",
@@ -152,6 +196,7 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         prereqs: bit(ELECTRICITY),
         buff: "flat energy income",
         debuff: "1.5x child mutation + upkeep",
+        affinity: None,
     },
 ];
 
@@ -530,6 +575,34 @@ pub fn invention_step(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn affinity_table_is_well_formed() {
+        use crate::genome::{Genome, GenomeSlot};
+        // Exactly the four coupled inventions carry an affinity; the rest None.
+        assert!(INVENTIONS[FIRE].affinity.is_some());
+        assert!(INVENTIONS[FARMING].affinity.is_some());
+        assert!(INVENTIONS[MEDICINE].affinity.is_some());
+        assert!(INVENTIONS[WRITING].affinity.is_some());
+        assert!(INVENTIONS[STONE_TOOLS].affinity.is_none());
+        assert!(INVENTIONS[METALWORKING].affinity.is_none());
+        assert!(INVENTIONS[HUSBANDRY].affinity.is_none());
+        assert!(INVENTIONS[MACHINERY].affinity.is_none());
+        assert!(INVENTIONS[ELECTRICITY].affinity.is_none());
+        assert!(INVENTIONS[NUCLEAR_POWER].affinity.is_none());
+        // Coeffs keep the buff strictly positive across gene ∈ [0,1]:
+        // 1 + coeff*(gene-0.5) > 0  <=>  |coeff| < 2.
+        for inv in INVENTIONS.iter() {
+            if let Some(a) = inv.affinity {
+                assert!(a.coeff.abs() < 2.0, "{} coeff too large", inv.name);
+            }
+        }
+        // affinity_gene returns the slot value for coupled inventions, 0.5 else.
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::Openness, 0.9);
+        assert!((affinity_gene(&g, FIRE) - 0.9).abs() < 1e-6);
+        assert_eq!(affinity_gene(&g, STONE_TOOLS), 0.5);
+    }
 
     #[test]
     fn prereq_chain_shape() {
