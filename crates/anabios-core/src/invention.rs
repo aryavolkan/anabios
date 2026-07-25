@@ -364,18 +364,49 @@ pub fn held_f32(mask: u32, inv: usize) -> f32 {
     (mask & bit(inv) != 0) as u8 as f32
 }
 
-/// Graze-bite multiplier (Stone Tools, Farming, Machinery) — `interact::feed_pass`.
+/// Held-weight for `inv` inside a buff multiplier. With `coupling` off, or the
+/// invention unheld, or no affinity, this is exactly `held_f32(mask, inv)`
+/// (`0.0`/`1.0`) — so the base multipliers stay bit-identical. With coupling on
+/// and `inv` held with an affinity, it is `1.0 + coeff*(gene-0.5)`, scaling that
+/// invention's buff term by the holder's gene (the tech→gene selection arm).
 #[inline]
-pub fn graze_multiplier(mask: u32) -> f32 {
+pub fn coupled_held(mask: u32, inv: usize, gene: f32, coupling: bool) -> f32 {
+    let h = held_f32(mask, inv);
+    if !coupling || h == 0.0 {
+        return h;
+    }
+    match INVENTIONS[inv].affinity {
+        Some(a) => h * (1.0 + a.coeff * (gene - 0.5)),
+        None => h,
+    }
+}
+
+/// Graze-bite multiplier (Stone Tools, Farming, Machinery) — `interact::feed_pass`.
+/// `farming_gene` scales only the Farming term when `coupling` is on.
+#[inline]
+pub fn graze_multiplier_coupled(mask: u32, farming_gene: f32, coupling: bool) -> f32 {
     1.0 + STONE_TOOLS_BITE * held_f32(mask, STONE_TOOLS)
-        + FARMING_BITE * held_f32(mask, FARMING)
+        + FARMING_BITE * coupled_held(mask, FARMING, farming_gene, coupling)
         + MACHINERY_BITE * held_f32(mask, MACHINERY)
 }
 
+/// Graze-bite multiplier with coupling off (genome-independent, as before).
+#[inline]
+pub fn graze_multiplier(mask: u32) -> f32 {
+    graze_multiplier_coupled(mask, 0.5, false)
+}
+
 /// Energy-per-biomass multiplier (Fire) — `interact::feed_pass` payout.
+/// `fire_gene` scales the Fire term when `coupling` is on.
+#[inline]
+pub fn food_energy_multiplier_coupled(mask: u32, fire_gene: f32, coupling: bool) -> f32 {
+    1.0 + FIRE_ENERGY * coupled_held(mask, FIRE, fire_gene, coupling)
+}
+
+/// Energy-per-biomass multiplier with coupling off.
 #[inline]
 pub fn food_energy_multiplier(mask: u32) -> f32 {
-    1.0 + FIRE_ENERGY * held_f32(mask, FIRE)
+    food_energy_multiplier_coupled(mask, 0.5, false)
 }
 
 /// Weapon-damage multiplier (Metalworking) — `interact::combat_pass`.
@@ -408,10 +439,17 @@ pub fn module_upkeep_multiplier(mask: u32) -> f32 {
     1.0 + METALWORKING_UPKEEP * held_f32(mask, METALWORKING)
 }
 
-/// Lifespan multiplier (Medicine) — `age::age_and_starve`.
+/// Lifespan multiplier (Medicine) — `age::age_and_starve`. `medicine_gene`
+/// scales the Medicine term when `coupling` is on.
+#[inline]
+pub fn lifespan_multiplier_coupled(mask: u32, medicine_gene: f32, coupling: bool) -> f32 {
+    1.0 + MEDICINE_LIFESPAN * coupled_held(mask, MEDICINE, medicine_gene, coupling)
+}
+
+/// Lifespan multiplier with coupling off.
 #[inline]
 pub fn lifespan_multiplier(mask: u32) -> f32 {
-    1.0 + MEDICINE_LIFESPAN * held_f32(mask, MEDICINE)
+    lifespan_multiplier_coupled(mask, 0.5, false)
 }
 
 /// Child mutation-sigma multiplier (Nuclear Power, either parent) —
@@ -432,13 +470,24 @@ pub fn perception_multiplier(mask: u32) -> f32 {
 }
 
 /// Meme-copy / invention-spread multiplier (Writing) — `culture::culture_step`.
+/// `writing_gene` scales the literacy bonus above `1.0` when `coupling` is on.
+#[inline]
+pub fn spread_multiplier_coupled(mask: u32, writing_gene: f32, coupling: bool) -> f32 {
+    if mask & bit(WRITING) == 0 {
+        return 1.0;
+    }
+    let bonus = WRITING_SPREAD_MULT - 1.0;
+    let scale = match (coupling, INVENTIONS[WRITING].affinity) {
+        (true, Some(a)) => 1.0 + a.coeff * (writing_gene - 0.5),
+        _ => 1.0,
+    };
+    1.0 + bonus * scale
+}
+
+/// Meme-copy / invention-spread multiplier with coupling off.
 #[inline]
 pub fn spread_multiplier(mask: u32) -> f32 {
-    if mask & bit(WRITING) != 0 {
-        WRITING_SPREAD_MULT
-    } else {
-        1.0
-    }
+    spread_multiplier_coupled(mask, 0.5, false)
 }
 
 /// Discovery-rate multiplier (Electricity) — discovery roll below.
@@ -602,6 +651,31 @@ mod tests {
         g.set(GenomeSlot::Openness, 0.9);
         assert!((affinity_gene(&g, FIRE) - 0.9).abs() < 1e-6);
         assert_eq!(affinity_gene(&g, STONE_TOOLS), 0.5);
+    }
+
+    #[test]
+    fn coupling_is_identity_when_off_and_monotonic_when_on() {
+        let farm = bit(FARMING);
+        // OFF: coupled == base, regardless of gene.
+        assert_eq!(graze_multiplier_coupled(farm, 0.0, false), graze_multiplier(farm));
+        assert_eq!(graze_multiplier_coupled(farm, 1.0, false), graze_multiplier(farm));
+        // ON, gene = 0.5: neutral, equals base.
+        assert!((graze_multiplier_coupled(farm, 0.5, true) - graze_multiplier(farm)).abs() < 1e-6);
+        // ON: strictly increasing in the gene; the Farming term is what moves.
+        let lo = graze_multiplier_coupled(farm, 0.0, true);
+        let hi = graze_multiplier_coupled(farm, 1.0, true);
+        assert!(hi > graze_multiplier(farm) && graze_multiplier(farm) > lo);
+        assert!(lo > 0.0, "buff must stay positive");
+        // Unheld invention: gene has no effect (coupled_held returns 0).
+        assert_eq!(graze_multiplier_coupled(0, 1.0, true), graze_multiplier(0));
+        // Writing spread scales the same way.
+        let w = bit(WRITING);
+        assert_eq!(spread_multiplier_coupled(w, 0.5, true), spread_multiplier(w));
+        assert!(spread_multiplier_coupled(w, 1.0, true) > spread_multiplier(w));
+        assert_eq!(spread_multiplier_coupled(w, 0.0, false), spread_multiplier(w));
+        // Fire energy + Medicine lifespan coupled variants are identity when off.
+        assert_eq!(food_energy_multiplier_coupled(bit(FIRE), 1.0, false), food_energy_multiplier(bit(FIRE)));
+        assert_eq!(lifespan_multiplier_coupled(bit(MEDICINE), 1.0, false), lifespan_multiplier(bit(MEDICINE)));
     }
 
     #[test]
