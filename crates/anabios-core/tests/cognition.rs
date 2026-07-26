@@ -73,7 +73,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // drift 0.0 here — layout growth only, behavior byte-identical.
     // Refreshed 2026-07-24 (E11): maladapt scratch + MaladaptationLag
     // (FORMAT_VERSION 17→18), env_period == 0 here — layout growth only.
-    &[(0, 0x0057e654a28c41bc), (100, 0x16d3dd27a6b73efd), (300, 0xfc22bec73c17b59d)];
+    // Refreshed 2026-07-25 (merge of TG1 + nutrient/fertility, FORMAT_VERSION 18→19):
+    // World.gene_tech_coupling + BiomeCell.{nutrient_quality,fertility} +
+    // World.{nutrient_variation,soil_fertility}. All flags off here, so cognition
+    // behavior is byte-identical — pure serialized-layout growth.
+    &[(0, 0xf2d43c64e4317e5b), (100, 0x20f4fb1d9088a15a), (300, 0x5df237f57b169006)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

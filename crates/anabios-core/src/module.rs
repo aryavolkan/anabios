@@ -630,18 +630,22 @@ pub fn crossover_and_mutate(a: &ModuleList, b: &ModuleList, rng: &mut Rng) -> Mo
 /// Metalworking (invention debuff) scales the cost up; identity when the
 /// agent holds nothing (flag-off masks are always 0, so byte-identical).
 pub fn upkeep_all(agents: &mut crate::agent::AgentBuffers) {
-    let mut ids = std::mem::take(&mut agents.scratch_ids);
-    ids.clear();
-    ids.extend(agents.iter_alive());
-    for &id in &ids {
-        let i = id as usize;
-        let cost = total_upkeep(&agents.modules[i])
+    use rayon::prelude::*;
+    let cap = agents.capacity();
+    // Per-agent write of `energy[i]` from the agent's own modules + meme mask —
+    // index-disjoint, no RNG. Bit-identical to the old serial ascending-id loop.
+    let crate::agent::AgentBuffers { energy, modules, meme_vector, alive, .. } = agents;
+    let (modules, meme_vector, alive) = (&*modules, &*meme_vector, &*alive);
+    energy[..cap].par_iter_mut().enumerate().for_each(|(i, en)| {
+        if !alive[i] {
+            return;
+        }
+        let cost = total_upkeep(&modules[i])
             * crate::invention::module_upkeep_multiplier(crate::invention::held_mask(
-                &agents.meme_vector[i],
+                &meme_vector[i],
             ));
-        agents.energy[i] -= cost;
-    }
-    agents.scratch_ids = ids;
+        *en -= cost;
+    });
 }
 
 #[cfg(test)]

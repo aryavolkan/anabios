@@ -10,22 +10,30 @@ use crate::biome::TerrainType;
 /// Consecutive ticks each agent has been below the still-speed threshold.
 /// Observability only — does not feed back into the sim.
 pub(crate) fn update_still_ticks(world: &mut World) {
+    use rayon::prelude::*;
     let cap = world.agents.capacity();
     if world.still_ticks.len() < cap {
         world.still_ticks.resize(cap, 0);
     }
-    for id in world.agents.iter_alive() {
-        let i = id as usize;
-        let module_speed = crate::module::effective_speed_max(&world.agents.modules[i]);
-        let speed = world.agents.velocity[i].length();
+    // Per-agent write of `still_ticks[i]` from the agent's own module speed +
+    // velocity — index-disjoint, no RNG, observability-only. Bit-identical to
+    // the old serial loop. `world.still_ticks` (mut) and `world.agents` (shared)
+    // are disjoint fields of `World`.
+    let agents = &world.agents;
+    world.still_ticks[..cap].par_iter_mut().enumerate().for_each(|(i, st)| {
+        if !agents.is_alive(i as u32) {
+            return;
+        }
+        let module_speed = crate::module::effective_speed_max(&agents.modules[i]);
+        let speed = agents.velocity[i].length();
         if module_speed > 0.0
             && speed < STILL_SPEED_FRAC * crate::integrate::SPEED_MAX_CAP * module_speed
         {
-            world.still_ticks[i] = world.still_ticks[i].saturating_add(1);
+            *st = st.saturating_add(1);
         } else {
-            world.still_ticks[i] = 0;
+            *st = 0;
         }
-    }
+    });
 }
 
 pub(super) fn detect_ambush_and_tool(world: &mut World, agg: &SpeciesAggTable) {
