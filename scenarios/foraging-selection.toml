@@ -1,0 +1,11 @@
+name = "foraging-selection"
+seed = 0
+nutrient_variation = true
+soil_fertility = true
+
+[[agents]]
+count = 300
+placement = { kind = "uniform" }
+[agents.traits]
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

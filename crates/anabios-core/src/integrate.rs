@@ -23,51 +23,67 @@ pub const SPEED_MAX_CAP: f32 = 4.0;
 /// effective Locomotor speed. Agents without a Locomotor still pay basal
 /// metabolism but do not move.
 pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], world_size: f32) {
-    let mut ids = std::mem::take(&mut agents.scratch_ids);
-    ids.clear();
-    ids.extend(agents.iter_alive());
-    for &id in &ids {
-        let i = id as usize;
+    use rayon::prelude::*;
+    let cap = agents.capacity();
+    // Each agent's motion + metabolism is a pure function of its OWN
+    // modules/genome/meme/desired_direction, writing only its own
+    // position/velocity/energy — index-disjoint, no RNG, no cross-agent read.
+    // So the parallel loop is bit-identical to the old serial ascending-id
+    // loop (same argument as `sense_all`/`decide_all`). Disjoint field borrows
+    // give the mutated columns `&mut` while the read columns stay shared `&`.
+    let AgentBuffers {
+        position, velocity, energy, modules, genome, meme_vector, iq, alive, ..
+    } = agents;
+    let (modules, genome, meme_vector, iq, alive) =
+        (&*modules, &*genome, &*meme_vector, &*iq, &*alive);
+    position[..cap]
+        .par_iter_mut()
+        .zip(velocity[..cap].par_iter_mut())
+        .zip(energy[..cap].par_iter_mut())
+        .enumerate()
+        .for_each(|(i, ((pos, vel), en))| {
+            if !alive[i] {
+                return;
+            }
 
-        // Action gating: no Locomotor → no motion.
-        if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Locomotor) {
-            agents.velocity[i] = Vec2::ZERO;
-            // Still pay basal metabolism (invention debuffs + IQ scale it).
+            // Action gating: no Locomotor → no motion.
+            if !crate::module::has(&modules[i], crate::module::ModuleType::Locomotor) {
+                *vel = Vec2::ZERO;
+                // Still pay basal metabolism (invention debuffs + IQ scale it).
+                let basal = BASAL_METABOLISM_COST
+                    * genome[i].get(GenomeSlot::BasalMetabolism)
+                    * crate::invention::metabolism_multiplier(crate::invention::held_mask(
+                        &meme_vector[i],
+                    ))
+                    * crate::iq::metabolism_multiplier(iq[i]);
+                *en -= basal;
+                return;
+            }
+
+            let direction = desired_direction[i];
+            let module_speed = crate::module::effective_speed_max(&modules[i]).clamp(0.0, 1.0);
+            // Openness scales effective speed (identity at neutral personality).
+            let speed_factor = crate::personality::personality_speed_factor(&genome[i]);
+            // Machinery buff: powered locomotion.
+            let inv_speed =
+                crate::invention::speed_multiplier(crate::invention::held_mask(&meme_vector[i]));
+            let v = direction * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed);
+            *vel = v;
+
+            let new_pos = *pos + v;
+            *pos = wrap_torus(new_pos, Vec2::splat(world_size));
+
+            let move_dist = v.length();
+            let size = genome[i].get(GenomeSlot::Size).max(0.1);
+            let move_cost = MOVE_ENERGY_COST * move_dist * size;
             let basal = BASAL_METABOLISM_COST
-                * agents.genome[i].get(GenomeSlot::BasalMetabolism)
+                * genome[i].get(GenomeSlot::BasalMetabolism)
                 * crate::invention::metabolism_multiplier(crate::invention::held_mask(
-                    &agents.meme_vector[i],
+                    &meme_vector[i],
                 ))
-                * crate::iq::metabolism_multiplier(agents.iq[i]);
-            agents.energy[i] -= basal;
-            continue;
-        }
-
-        let direction = desired_direction[i];
-        let module_speed = crate::module::effective_speed_max(&agents.modules[i]).clamp(0.0, 1.0);
-        // Openness scales effective speed (identity at neutral personality).
-        let speed_factor = crate::personality::personality_speed_factor(&agents.genome[i]);
-        // Machinery buff: powered locomotion.
-        let inv_speed =
-            crate::invention::speed_multiplier(crate::invention::held_mask(&agents.meme_vector[i]));
-        let v = direction * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed);
-        agents.velocity[i] = v;
-
-        let new_pos = agents.position[i] + v;
-        agents.position[i] = wrap_torus(new_pos, Vec2::splat(world_size));
-
-        let move_dist = v.length();
-        let size = agents.genome[i].get(GenomeSlot::Size).max(0.1);
-        let move_cost = MOVE_ENERGY_COST * move_dist * size;
-        let basal = BASAL_METABOLISM_COST
-            * agents.genome[i].get(GenomeSlot::BasalMetabolism)
-            * crate::invention::metabolism_multiplier(crate::invention::held_mask(
-                &agents.meme_vector[i],
-            ))
-            * crate::iq::metabolism_multiplier(agents.iq[i]);
-        agents.energy[i] -= move_cost + basal;
-    }
-    agents.scratch_ids = ids;
+                * crate::iq::metabolism_multiplier(iq[i]);
+            *en -= move_cost + basal;
+        });
 }
 
 #[cfg(test)]

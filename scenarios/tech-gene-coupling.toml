@@ -1,0 +1,51 @@
+name = "tech-gene-coupling"
+seed = 0
+inventions_enabled = true
+cognition_enabled = true
+gene_tech_coupling = true
+# Keep the world below carrying-capacity saturation so gene↔tech coevolution —
+# not Malthusian collapse — drives the dynamics.
+max_population = 400
+
+# TG1 gene↔tech coevolution demo. Same substrate as cognitive-coevolution, but
+# holding an invention now scales its buff by a coupled genome slot (Fire↔
+# Openness, Farming↔Conscientiousness, Medicine↔CognitivePotential, Writing↔
+# CommunicationStrength) AND discovery is reweighted by that gene. So adoption
+# exerts directional selection on the genome (the tech→gene arm) while the gene
+# distribution enables discovery (the gene→tech arm). Watch the coevolution
+# panel's affinity-selection series: a coupled gene's holder-mean should climb
+# above its non-holder mean once the invention adopts, and relax back if the
+# meme collapses (hysteresis).
+
+# Innovators: high Openness → strong discovery of BOTH tech and practices; their
+# realized IQ decides which they can actually keep.
+[[agents]]
+count = 30
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 340.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Traditionalists: low Openness → weak discovery, strong social copying. They
+# adopt whatever their neighbours carry — good tech and bad customs alike.
+[[agents]]
+count = 30
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 684.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Acultural control: no Communicator — the pre-culture baseline (no IQ gating
+# matters, no memes acquired).
+[[agents]]
+count = 20
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 300.0, radius = 70.0 }
+[agents.traits]
+altruism = 0.0
+basal_metabolism = 0.6
+lifespan_bias = 1.0

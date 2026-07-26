@@ -65,6 +65,25 @@ pub(crate) fn mean_tech_match(memes: &[[f32; MEME_CHANNELS]], keep: &[bool], opt
     }
 }
 
+/// Mean of one genome slot over agents where `keep[i]` is true. No kept agents
+/// returns 0.0 (never NaN). Used for the per-invention affinity-gene selection
+/// differential (holder mean vs non-holder mean).
+pub(crate) fn mean_slot_over(genomes: &[Genome], keep: &[bool], slot: GenomeSlot) -> f32 {
+    let mut sum = 0.0;
+    let mut n = 0u32;
+    for (g, &k) in genomes.iter().zip(keep) {
+        if k {
+            sum += g.get(slot);
+            n += 1;
+        }
+    }
+    if n == 0 {
+        0.0
+    } else {
+        sum / n as f32
+    }
+}
+
 /// Mean per-slot variance across `genomes` (summed variance over the 50 slots
 /// divided by 50). Empty returns 0.0. A cheap scalar for genetic spread.
 pub(crate) fn genetic_diversity(genomes: &[Genome]) -> f32 {
@@ -168,6 +187,21 @@ mod tests {
         assert_eq!(mean_channel_over(&memes, &[false, false], 5), 0.0);
         // Bad channel returns 0.0.
         assert_eq!(mean_channel_over(&memes, &[true, true], 99), 0.0);
+    }
+
+    #[test]
+    fn mean_slot_over_respects_keep_mask() {
+        let mut a = Genome([0.5; GENOME_LEN]);
+        a.set(GenomeSlot::Openness, 1.0);
+        let mut b = Genome([0.5; GENOME_LEN]);
+        b.set(GenomeSlot::Openness, 0.0);
+        let gs = [a, b];
+        // Only the first agent kept -> mean == its value.
+        assert_eq!(mean_slot_over(&gs, &[true, false], GenomeSlot::Openness), 1.0);
+        // Both kept -> average.
+        assert_eq!(mean_slot_over(&gs, &[true, true], GenomeSlot::Openness), 0.5);
+        // None kept -> 0.0 (not NaN).
+        assert_eq!(mean_slot_over(&gs, &[false, false], GenomeSlot::Openness), 0.0);
     }
 
     #[test]

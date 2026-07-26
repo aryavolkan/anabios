@@ -54,6 +54,16 @@ pub const CLIMAX_ENTRY_FRAC: f32 = 0.9;
 /// Climate distance beyond which the seasonal bonus is zero (triangular).
 pub const SEASON_TOLERANCE: f32 = 0.25;
 
+/// Per-cell nutrient-quality range (energy-per-bite multiplier). Mean ~1.0 so
+/// the global energy economy is roughly conserved vs a flat world; the spatial
+/// *variation* is the foraging-selection signal.
+pub const NUTRIENT_QUALITY_MIN: f32 = 0.6;
+pub const NUTRIENT_QUALITY_MAX: f32 = 1.4;
+/// Per-cell soil-fertility range (scales carrying capacity AND regrowth rate).
+/// Mean ~1.0 so global productivity is roughly conserved.
+pub const FERTILITY_MIN: f32 = 0.5;
+pub const FERTILITY_MAX: f32 = 1.5;
+
 /// Season phase in \[0,1\], a triangle wave with full cycle `2*period` ticks.
 pub fn season_phase(tick: u64, period: u32) -> f32 {
     if period == 0 {
@@ -126,6 +136,16 @@ pub struct BiomeCell {
     /// disaster scorched the cell. See the `SUCCESSION_*` consts.
     #[serde(default)]
     pub succession: u8,
+    /// Static energy-per-bite multiplier for food grazed in this cell, in
+    /// `[NUTRIENT_QUALITY_MIN, NUTRIENT_QUALITY_MAX]`. Generated once; consumed
+    /// only when `World::nutrient_variation` is on.
+    #[serde(default)]
+    pub nutrient_quality: f32,
+    /// Static soil-fertility multiplier scaling this cell's carrying capacity
+    /// and regrowth rate, in `[FERTILITY_MIN, FERTILITY_MAX]`. Generated once;
+    /// consumed only when `World::soil_fertility` is on.
+    #[serde(default)]
+    pub fertility: f32,
 }
 
 /// 128×128 biome field (at default dims). Indexed `[row * res + col]` with
@@ -158,6 +178,13 @@ impl BiomeField {
         // texture without breaking the large-scale gradient.
         let climate_coarse = NoiseGrid::new(&mut rng, 3);
         let climate_fine = NoiseGrid::new(&mut rng, 9);
+        // Nutrient-quality and fertility fields — drawn AFTER the climate grids
+        // so terrain/env generation is byte-identical. Distinct frequencies from
+        // env (3/9) and from each other so the three landscapes are uncorrelated.
+        let nutrient_coarse = NoiseGrid::new(&mut rng, 5);
+        let nutrient_fine = NoiseGrid::new(&mut rng, 13);
+        let fertility_coarse = NoiseGrid::new(&mut rng, 4);
+        let fertility_fine = NoiseGrid::new(&mut rng, 11);
 
         let mut cells = Vec::with_capacity(res * res);
         for row in 0..res {
@@ -168,12 +195,21 @@ impl BiomeField {
                 let terrain = elevation_to_terrain(n);
                 let env = (0.85 * climate_coarse.sample(u, v) + 0.15 * climate_fine.sample(u, v))
                     .clamp(0.0, 1.0);
+                let nq = (0.8 * nutrient_coarse.sample(u, v) + 0.2 * nutrient_fine.sample(u, v))
+                    .clamp(0.0, 1.0);
+                let nutrient_quality =
+                    NUTRIENT_QUALITY_MIN + (NUTRIENT_QUALITY_MAX - NUTRIENT_QUALITY_MIN) * nq;
+                let fe = (0.8 * fertility_coarse.sample(u, v) + 0.2 * fertility_fine.sample(u, v))
+                    .clamp(0.0, 1.0);
+                let fertility = FERTILITY_MIN + (FERTILITY_MAX - FERTILITY_MIN) * fe;
                 cells.push(BiomeCell {
                     terrain,
                     plant_biomass: terrain.carrying_capacity(),
                     env,
                     pollution: 0.0,
                     succession: SUCCESSION_CLIMAX,
+                    nutrient_quality,
+                    fertility,
                 });
             }
         }
@@ -228,27 +264,21 @@ impl BiomeField {
         1.0 - cell.pollution.min(crate::invention::POLLUTION_MAX_EFFECT)
     }
 
-    /// Regrow one cell on the Climax path — the exact pre-E4 arithmetic.
-    /// Kept as a separate fn so the all-Climax default is byte-identical.
+    /// Regrow + advance one cell's succession state. `rate_mult_fn` carries the
+    /// seasonal bonus (1.0 in the non-seasonal path). `fert` is the soil-fertility
+    /// multiplier (1.0 when `World::soil_fertility` is off — a bit-exact identity),
+    /// applied to BOTH the carrying capacity and the regrowth rate.
     #[inline]
-    fn regrow_climax(cell: &mut BiomeCell, capacity: f32, rate_mult: f32) {
-        if cell.plant_biomass <= 0.0 {
+    fn regrow_succession(
+        cell: &mut BiomeCell,
+        rate_mult_fn: impl Fn(&BiomeCell) -> f32,
+        fert: f32,
+    ) {
+        let base_cap = cell.terrain.carrying_capacity();
+        if base_cap <= 0.0 {
             return;
         }
-        let r = cell.terrain.regrowth_rate() * Self::pollution_mult(cell) * rate_mult;
-        let b = cell.plant_biomass;
-        let next = b + r * b * (1.0 - b / capacity);
-        cell.plant_biomass = next.clamp(0.0, capacity);
-    }
-
-    /// Regrow + advance one cell's succession state. `rate_mult` carries the
-    /// seasonal bonus (1.0 in the non-seasonal path).
-    #[inline]
-    fn regrow_succession(cell: &mut BiomeCell, rate_mult_fn: impl Fn(&BiomeCell) -> f32) {
-        let capacity = cell.terrain.carrying_capacity();
-        if capacity <= 0.0 {
-            return;
-        }
+        let capacity = base_cap * fert;
         match cell.succession {
             SUCCESSION_BARE => {
                 // Wind-blown reseed: slow linear recovery from scorch.
@@ -268,6 +298,7 @@ impl BiomeField {
                 let r = cell.terrain.regrowth_rate()
                     * Self::pollution_mult(cell)
                     * rate_mult_fn(cell)
+                    * fert
                     * PIONEER_RATE_MULT;
                 let b = cell.plant_biomass;
                 let next = b + r * b * (1.0 - b / pcap);
@@ -276,7 +307,19 @@ impl BiomeField {
                     cell.succession = SUCCESSION_CLIMAX;
                 }
             }
-            _ => Self::regrow_climax(cell, capacity, rate_mult_fn(cell)),
+            // Climax path — the pre-E4 logistic arithmetic, now with the
+            // fertility-scaled capacity and rate.
+            _ => {
+                if cell.plant_biomass > 0.0 {
+                    let r = cell.terrain.regrowth_rate()
+                        * Self::pollution_mult(cell)
+                        * rate_mult_fn(cell)
+                        * fert;
+                    let b = cell.plant_biomass;
+                    let next = b + r * b * (1.0 - b / capacity);
+                    cell.plant_biomass = next.clamp(0.0, capacity);
+                }
+            }
         }
     }
 
@@ -286,34 +329,41 @@ impl BiomeField {
     /// decays once per biome step and scales the regrowth increment down.
     /// Climax cells follow the original arithmetic exactly; Pioneer/Bare
     /// cells (post-disturbance) follow the succession path.
-    pub fn regrow_step(&mut self) {
+    pub fn regrow_step(&mut self, soil_fertility: bool) {
         for cell in self.cells.iter_mut() {
             Self::decay_pollution(cell);
-            Self::regrow_succession(cell, |_| 1.0);
+            let fert = if soil_fertility { cell.fertility } else { 1.0 };
+            Self::regrow_succession(cell, |_| 1.0, fert);
         }
     }
 
     /// Logistic regrowth with a per-cell seasonal multiplier: cells whose
     /// climate matches the current season phase regrow faster, so the
     /// productive band migrates. `phase` in \[0,1\]. Deterministic, no RNG.
-    pub fn regrow_step_seasonal(&mut self, phase: f32) {
+    pub fn regrow_step_seasonal(&mut self, phase: f32, soil_fertility: bool) {
         for cell in self.cells.iter_mut() {
             Self::decay_pollution(cell);
-            Self::regrow_succession(cell, |c| 1.0 + SEASON_AMPLITUDE * season_match(c.env, phase));
+            let fert = if soil_fertility { cell.fertility } else { 1.0 };
+            Self::regrow_succession(
+                cell,
+                |c| 1.0 + SEASON_AMPLITUDE * season_match(c.env, phase),
+                fert,
+            );
         }
     }
 
     /// Spread vegetation into depleted cells from their 4-neighbours (torus).
     /// Only cells with positive carrying capacity can recolonize. Double-
     /// buffered so the result is independent of scan order. Deterministic.
-    pub fn recolonize_step(&mut self) {
+    pub fn recolonize_step(&mut self, soil_fertility: bool) {
         let res = self.res;
         // Read the pre-step biomass; write deltas, apply after.
         let mut add = vec![0.0f32; self.cells.len()];
         for row in 0..res {
             for col in 0..res {
                 let idx = row * res + col;
-                let cap = self.cells[idx].terrain.carrying_capacity();
+                let cap = self.cells[idx].terrain.carrying_capacity()
+                    * if soil_fertility { self.cells[idx].fertility } else { 1.0 };
                 if cap <= 0.0 || self.cells[idx].plant_biomass > RECOLONIZE_SEED_MIN {
                     continue; // only depleted, colonizable cells receive seed
                 }
@@ -339,7 +389,8 @@ impl BiomeField {
         }
         for (cell, a) in self.cells.iter_mut().zip(add.iter()) {
             if *a > 0.0 {
-                let cap = cell.terrain.carrying_capacity();
+                let cap = cell.terrain.carrying_capacity()
+                    * if soil_fertility { cell.fertility } else { 1.0 };
                 cell.plant_biomass = (cell.plant_biomass + *a).min(cap);
             }
         }
@@ -630,7 +681,7 @@ mod tests {
             .map(|c| c.plant_biomass)
             .sum();
         for _ in 0..50 {
-            b.regrow_step();
+            b.regrow_step(false);
         }
         let after_total: f32 = b
             .cells
@@ -645,7 +696,7 @@ mod tests {
     fn regrow_does_not_exceed_carrying_capacity() {
         let mut b = BiomeField::generate(13, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
         for _ in 0..1000 {
-            b.regrow_step();
+            b.regrow_step(false);
         }
         for cell in &b.cells {
             let cap = cell.terrain.carrying_capacity();
@@ -667,7 +718,7 @@ mod tests {
             }
         }
         for _ in 0..100 {
-            b.regrow_step();
+            b.regrow_step(false);
         }
         for cell in &b.cells {
             if cell.terrain == TerrainType::Grass {
@@ -750,6 +801,8 @@ mod tests {
             env: 0.5,
             pollution: 0.0,
             succession,
+            nutrient_quality: 1.0,
+            fertility: 1.0,
         }
     }
 
@@ -759,7 +812,7 @@ mod tests {
         // regrowth: b += r*b*(1 - b/K) with r = rate * pollution_mult.
         let cells = vec![grass_cell(5.0, SUCCESSION_CLIMAX)];
         let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
-        field.regrow_step();
+        field.regrow_step(false);
         let c = field.cells[0];
         let r = TerrainType::Grass.regrowth_rate();
         let expect = 5.0 + r * 5.0 * (1.0 - 5.0 / 10.0);
@@ -773,12 +826,12 @@ mod tests {
         let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
         // One step: reseed by 0.5% of capacity (0.05), still below the 5%
         // pioneer-entry threshold (0.5).
-        field.regrow_step();
+        field.regrow_step(false);
         assert!((field.cells[0].plant_biomass - 0.05).abs() < 1e-4);
         assert_eq!(field.cells[0].succession, SUCCESSION_BARE);
         // 10 more steps: biomass 0.55 > 0.5 → pioneer.
         for _ in 0..10 {
-            field.regrow_step();
+            field.regrow_step(false);
         }
         assert_eq!(field.cells[0].succession, SUCCESSION_PIONEER);
     }
@@ -789,7 +842,7 @@ mod tests {
         let cells = vec![grass_cell(4.4, SUCCESSION_PIONEER)];
         let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
         for _ in 0..40 {
-            field.regrow_step();
+            field.regrow_step(false);
         }
         let c = field.cells[0];
         assert_eq!(c.succession, SUCCESSION_CLIMAX, "pioneer matures at its ceiling");
@@ -799,7 +852,7 @@ mod tests {
         let mut f2 = BiomeField { cells: cells2, res: 1, world_size: 8.0, cell_size: 8.0 };
         let mut peak = 0.0f32;
         for _ in 0..200 {
-            f2.regrow_step();
+            f2.regrow_step(false);
             if f2.cells[0].succession == SUCCESSION_PIONEER {
                 peak = peak.max(f2.cells[0].plant_biomass);
             }
@@ -811,7 +864,7 @@ mod tests {
     fn pioneer_rescorched_to_zero_regresses_to_bare() {
         let cells = vec![grass_cell(0.0, SUCCESSION_PIONEER)];
         let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
-        field.regrow_step();
+        field.regrow_step(false);
         assert_eq!(field.cells[0].succession, SUCCESSION_BARE);
     }
 }

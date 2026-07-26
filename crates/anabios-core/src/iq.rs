@@ -47,39 +47,63 @@ pub fn develop_all(world: &mut World) {
     if !world.cognition_enabled {
         return;
     }
-    let mut ids = std::mem::take(&mut world.agents.scratch_ids);
-    ids.clear();
-    ids.extend(world.agents.iter_alive());
-    for &id in &ids {
-        let i = id as usize;
-        if world.agents.age[i] >= IQ_MATURATION_AGE {
-            continue; // crystallized — IQ is fixed for life
-        }
-        // Nutrition: the food richness of the cell this juvenile is growing up
-        // in — its `plant_biomass` as a fraction of the local carrying capacity.
-        // (The agent's own energy is a poor proxy: the spawn-energy buffer keeps
-        // it saturated through the juvenile window regardless of feeding, so it
-        // can't tell a starved upbringing from a fed one. Local food can — a
-        // juvenile raised on barren or grazed-out ground develops a lower IQ.)
-        let (col, row) = world.biome.cell_coords(world.agents.position[i]);
-        let cell = world.biome.at(col, row);
-        let cap = cell.terrain.carrying_capacity();
-        let nutrition = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };
-        // Social enrichment: local neighbour density from this tick's sense.
-        // Per-agent bounds check — on a growth tick the sensors buffer can be
-        // shorter than capacity (same discipline as invention crowding stress).
-        let social = if i < world.sensors.len() {
-            (world.sensors[i].crowding as f32 / IQ_SOCIAL_REF).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        world.agents.iq_enrich_acc[i] += 0.5 * nutrition + 0.5 * social;
-        world.agents.iq_enrich_ticks[i] += 1;
-        let enrich = world.agents.iq_enrich_acc[i] / world.agents.iq_enrich_ticks[i] as f32;
-        let gene = world.agents.genome[i].cognitive_potential();
-        world.agents.iq[i] = gene + (enrich - gene) * IQ_PLASTICITY;
-    }
-    world.agents.scratch_ids = ids;
+    use rayon::prelude::*;
+    let cap = world.agents.capacity();
+    // Each juvenile folds its OWN cell nutrition + sensed crowding into its OWN
+    // iq accumulators — index-disjoint, no RNG (see the doc above). Bit-identical
+    // to the old serial ascending-id loop. `biome`/`sensors` (shared) and
+    // `agents` (destructured into disjoint columns) are disjoint `World` fields.
+    let biome = &world.biome;
+    let sensors = &world.sensors;
+    let crate::agent::AgentBuffers {
+        iq_enrich_acc,
+        iq_enrich_ticks,
+        iq,
+        age,
+        position,
+        genome,
+        alive,
+        ..
+    } = &mut world.agents;
+    let (age, position, genome, alive) = (&*age, &*position, &*genome, &*alive);
+    iq_enrich_acc[..cap]
+        .par_iter_mut()
+        .zip(iq_enrich_ticks[..cap].par_iter_mut())
+        .zip(iq[..cap].par_iter_mut())
+        .enumerate()
+        .for_each(|(i, ((acc, ticks), iq_i))| {
+            if !alive[i] {
+                return;
+            }
+            if age[i] >= IQ_MATURATION_AGE {
+                return; // crystallized — IQ is fixed for life
+            }
+            // Nutrition: the food richness of the cell this juvenile is growing
+            // up in — its `plant_biomass` as a fraction of the local carrying
+            // capacity. (The agent's own energy is a poor proxy: the spawn-energy
+            // buffer keeps it saturated through the juvenile window regardless of
+            // feeding, so it can't tell a starved upbringing from a fed one.
+            // Local food can — a juvenile raised on barren or grazed-out ground
+            // develops a lower IQ.)
+            let (col, row) = biome.cell_coords(position[i]);
+            let cell = biome.at(col, row);
+            let carry = cell.terrain.carrying_capacity();
+            let nutrition =
+                if carry > 0.0 { (cell.plant_biomass / carry).clamp(0.0, 1.0) } else { 0.0 };
+            // Social enrichment: local neighbour density from this tick's sense.
+            // Per-agent bounds check — on a growth tick the sensors buffer can be
+            // shorter than capacity (same discipline as invention crowding stress).
+            let social = if i < sensors.len() {
+                (sensors[i].crowding as f32 / IQ_SOCIAL_REF).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            *acc += 0.5 * nutrition + 0.5 * social;
+            *ticks += 1;
+            let enrich = *acc / *ticks as f32;
+            let gene = genome[i].cognitive_potential();
+            *iq_i = gene + (enrich - gene) * IQ_PLASTICITY;
+        });
 }
 
 #[cfg(test)]

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -98,8 +98,13 @@ fn run_one(
     let mut world = scenario.instantiate();
 
     let events_path = out_dir.join(format!("seed_{seed:08}.events.jsonl"));
-    let mut f = File::create(&events_path)
-        .with_context(|| format!("creating {}", events_path.display()))?;
+    // Buffer the per-event JSONL writes: without this each event is two raw
+    // `write` syscalls, across `ticks` × every parallel seed. Output bytes are
+    // unchanged.
+    let mut f = BufWriter::new(
+        File::create(&events_path)
+            .with_context(|| format!("creating {}", events_path.display()))?,
+    );
 
     let mut counts: BTreeMap<&'static str, u64> = BTreeMap::new();
     for _ in 0..ticks {
@@ -111,6 +116,9 @@ fn run_one(
             f.write_all(b"\n")?;
         }
     }
+    // Flush explicitly so a write error surfaces here rather than being
+    // swallowed by `BufWriter`'s drop.
+    f.flush().with_context(|| format!("flushing {}", events_path.display()))?;
 
     let novel_types = score::novel_types(&counts, table);
     Ok(RunSummary {
@@ -164,90 +172,24 @@ fn report_novelty(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
 fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
     let path = out_dir.join("summary.csv");
     let mut f = File::create(&path).with_context(|| format!("creating {}", path.display()))?;
-    writeln!(
-        f,
-        "seed,ticks,final_alive,final_biomass,state_hash,\
-         extinction,pop_crash,speciation,migration,novel_module,novel_behavior,\
-         predation,combat_raid,arms_race,\
-         territory_formation,niche_partitioning,\
-         dialect_formed,meme_sweep,alarm_call,\
-         evolved_cooperation,pack_hunting,herd_cohesion,\
-         invention_discovered,invention_adopted,\
-         practice_discovered,practice_adopted,\
-         resource_traded,dowry_birth,\
-         pop_cycle,boom_bust,carrying_capacity,trophic_cascade,\
-         range_expansion,segregation,corridor_use,succession,\
-         trait_fixation,rapid_adaptation,convergent_evolution,\
-         evolved_ambush,evolved_tool,evolved_flight,structured_signaling,\
-         war,war_ended,alliance,kin_network,\
-         settlement,market,specialization_split,\
-         tradition,cultural_radiation,institutional_ratchet,\
-         maladaptation_lag,\
-         emergence_score,novel_events,coverage"
-    )?;
+    // The event columns are driven by `score::ALL_EVENT_NAMES` (the single
+    // source of truth for their names and order) so header and rows can never
+    // drift out of sync. Fixed prefix / suffix columns bracket them.
+    write!(f, "seed,ticks,final_alive,final_biomass,state_hash")?;
+    for name in score::ALL_EVENT_NAMES {
+        write!(f, ",{name}")?;
+    }
+    writeln!(f, ",emergence_score,novel_events,coverage")?;
     for r in runs {
-        let g = |k: &str| r.counts.get(k).copied().unwrap_or(0);
-        writeln!(
+        write!(
             f,
-            "{},{},{},{:.1},0x{:016x},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.3},{},{:.3}",
-            r.seed,
-            r.ticks,
-            r.final_alive,
-            r.final_biomass,
-            r.state_hash,
-            g("extinction"),
-            g("pop_crash"),
-            g("speciation"),
-            g("migration"),
-            g("novel_module"),
-            g("novel_behavior"),
-            g("predation"),
-            g("combat_raid"),
-            g("arms_race"),
-            g("territory_formation"),
-            g("niche_partitioning"),
-            g("dialect_formed"),
-            g("meme_sweep"),
-            g("alarm_call"),
-            g("evolved_cooperation"),
-            g("pack_hunting"),
-            g("herd_cohesion"),
-            g("invention_discovered"),
-            g("invention_adopted"),
-            g("practice_discovered"),
-            g("practice_adopted"),
-            g("resource_traded"),
-            g("dowry_birth"),
-            g("pop_cycle"),
-            g("boom_bust"),
-            g("carrying_capacity"),
-            g("trophic_cascade"),
-            g("range_expansion"),
-            g("segregation"),
-            g("corridor_use"),
-            g("succession"),
-            g("trait_fixation"),
-            g("rapid_adaptation"),
-            g("convergent_evolution"),
-            g("evolved_ambush"),
-            g("evolved_tool"),
-            g("evolved_flight"),
-            g("structured_signaling"),
-            g("war"),
-            g("war_ended"),
-            g("alliance"),
-            g("kin_network"),
-            g("settlement"),
-            g("market"),
-            g("specialization_split"),
-            g("tradition"),
-            g("cultural_radiation"),
-            g("institutional_ratchet"),
-            g("maladaptation_lag"),
-            r.emergence_score,
-            r.novel_events,
-            r.coverage,
+            "{},{},{},{:.1},0x{:016x}",
+            r.seed, r.ticks, r.final_alive, r.final_biomass, r.state_hash
         )?;
+        for name in score::ALL_EVENT_NAMES {
+            write!(f, ",{}", r.counts.get(name).copied().unwrap_or(0))?;
+        }
+        writeln!(f, ",{:.3},{},{:.3}", r.emergence_score, r.novel_events, r.coverage)?;
     }
     Ok(())
 }

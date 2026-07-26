@@ -164,15 +164,15 @@ fn recolonization_recovers_dead_cells_only_when_living() {
     f.cells[idx].plant_biomass = 0.0;
     // Flag OFF path: regrow_step leaves it dead.
     for _ in 0..50 {
-        f.regrow_step();
+        f.regrow_step(false);
     }
     assert_eq!(f.cells[idx].plant_biomass, 0.0, "dead cell stays dead without living biome");
     // Flag ON path: recolonize_step revives it from neighbours.
     let mut g = make();
     g.cells[idx].plant_biomass = 0.0;
     for _ in 0..50 {
-        g.recolonize_step();
-        g.regrow_step();
+        g.recolonize_step(false);
+        g.regrow_step(false);
     }
     assert!(
         g.cells[idx].plant_biomass > 0.1,
