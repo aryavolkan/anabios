@@ -59,6 +59,14 @@ pub struct Scenario {
     /// pre-E10). A small value like `0.00005` gives a multi-100k-tick wander.
     #[serde(default)]
     pub climate_drift_rate: f32,
+    /// Opt-in: enable per-cell nutrient-value variation (energy per bite scaled
+    /// by `nutrient_quality`). `false` (default) leaves foraging energy unchanged.
+    #[serde(default)]
+    pub nutrient_variation: bool,
+    /// Opt-in: enable per-cell soil fertility (scales carrying capacity and
+    /// regrowth). `false` (default) leaves regrowth unchanged.
+    #[serde(default)]
+    pub soil_fertility: bool,
     /// Opt-in: enable the biome-trade-goods economy (resource nodes spawn,
     /// agents harvest and trade them, reproduction needs a dowry basket).
     /// `false` (default) leaves the world unchanged.
@@ -332,6 +340,8 @@ impl Scenario {
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
         w.climate_drift_rate = self.climate_drift_rate;
+        w.nutrient_variation = self.nutrient_variation;
+        w.soil_fertility = self.soil_fertility;
         w.resources_enabled = self.resources_enabled;
         if w.resources_enabled {
             w.market_field = vec![0.0; w.biome.cells.len()];

@@ -133,6 +133,15 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         }
         let taken = world.biome.graze(pos, desired_bite);
         if taken > 0.0 {
+            // Nutrient variation (opt-in): the local cell's static nutrient_quality
+            // scales energy YIELD per biomass unit (not the biomass removed), so
+            // poor cells cost the same bite for less energy — the foraging pressure.
+            // Exactly 1.0 when the flag is off, so the payout is byte-identical.
+            let quality_mult = if world.nutrient_variation {
+                world.biome.sample(pos).nutrient_quality
+            } else {
+                1.0
+            };
             // Fire buff: cooked food yields more energy per biomass unit.
             world.agents.energy[i] += taken
                 * FOOD_ENERGY_PER_BIOMASS
@@ -143,7 +152,8 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
                         crate::invention::FIRE,
                     ),
                     coupling,
-                );
+                )
+                * quality_mult;
             // C cumulative-skill learning-by-doing (env_period == 0) is still gated
             // on a successful graze — skill is mastery earned through feeding.
             if world.env_period == 0 && is_comm {

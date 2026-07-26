@@ -372,13 +372,13 @@ fn pollution_penalizes_biome_regrowth() {
     w.biome.cells[idx].plant_biomass = 1.0;
     let unpolluted_step = {
         let mut b = w.biome.clone();
-        b.regrow_step();
+        b.regrow_step(false);
         b.cells[idx].plant_biomass - 1.0
     };
     w.biome.cells[idx].pollution = 0.5;
     let polluted_step = {
         let mut b = w.biome.clone();
-        b.regrow_step();
+        b.regrow_step(false);
         b.cells[idx].plant_biomass - 1.0
     };
     assert!(unpolluted_step > 0.0, "grass regrows");
@@ -778,10 +778,12 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // drift 0.0 here — layout growth only, behavior byte-identical.
     // Refreshed 2026-07-24 (E11): maladapt scratch + MaladaptationLag
     // (FORMAT_VERSION 17→18), env_period == 0 here — layout growth only.
-    // Refreshed 2026-07-25 (TG1): World.gene_tech_coupling (FORMAT_VERSION 18→19),
-    // flag off here — coupled multipliers + discovery weight are identity, so the
-    // trajectory is byte-identical; only the serialized layout grew.
-    &[(0, 0x527b389029e491a4), (100, 0x62953328aad6422c), (300, 0x1c7508a4f87d8b44)];
+    // Refreshed 2026-07-25 (merge of TG1 + nutrient/fertility, FORMAT_VERSION 18→19):
+    // World.gene_tech_coupling + BiomeCell.{nutrient_quality,fertility} +
+    // World.{nutrient_variation,soil_fertility}. All flags off here, so coupled
+    // multipliers, discovery weight, and quality yield are identity — trajectory
+    // byte-identical; only the serialized layout grew.
+    &[(0, 0xdaca677ba00e24ff), (100, 0xe8a351a62251ef65), (300, 0xd2f65e48da61a35f)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

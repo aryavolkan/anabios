@@ -19,6 +19,7 @@ pub mod invention;
 pub mod iq;
 pub mod kin;
 pub mod mathf;
+pub mod metrics;
 pub mod module;
 pub mod personality;
 pub mod pheromone;

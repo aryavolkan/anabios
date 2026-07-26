@@ -103,6 +103,19 @@ pub struct World {
     /// state). Same bincode/`FORMAT_VERSION` caveat as `env_period`.
     #[serde(default)]
     pub climate_drift_rate: f32,
+    /// Opt-in: vary energy-per-bite by the local cell's `nutrient_quality`.
+    /// `false` (default) forces the multiplier to exactly 1.0, leaving foraging
+    /// energy unchanged. Zero RNG. The `nutrient_quality` field is always
+    /// generated and serialized regardless of this flag. Same bincode/
+    /// `FORMAT_VERSION` caveat as `env_period`.
+    #[serde(default)]
+    pub nutrient_variation: bool,
+    /// Opt-in: scale each cell's carrying capacity AND regrowth rate by its
+    /// `fertility`. `false` (default) forces the multiplier to exactly 1.0,
+    /// leaving regrowth unchanged. Zero RNG. The `fertility` field is always
+    /// generated and serialized regardless of this flag.
+    #[serde(default)]
+    pub soil_fertility: bool,
     /// Discrete trade-good nodes on the map (biome trade goods feature).
     /// Empty and inert unless `resources_enabled`. Serialized.
     #[serde(default)]
@@ -281,6 +294,8 @@ impl World {
             living_biome: false,
             season_period: 0,
             climate_drift_rate: 0.0,
+            nutrient_variation: false,
+            soil_fertility: false,
             resources: Vec::new(),
             resources_enabled: false,
             disasters_enabled: false,

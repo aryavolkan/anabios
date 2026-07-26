@@ -101,14 +101,15 @@ pub fn step(world: &mut World) {
 
     // Stage 10: periodic biome regrowth (+ recolonization in a living biome).
     if world.tick.is_multiple_of(BIOME_STEP_INTERVAL) {
+        let sf = world.soil_fertility;
         if world.living_biome {
-            world.biome.recolonize_step();
+            world.biome.recolonize_step(sf);
         }
         if world.season_period > 0 {
             let phase = crate::biome::season_phase(world.tick, world.season_period);
-            world.biome.regrow_step_seasonal(phase);
+            world.biome.regrow_step_seasonal(phase, sf);
         } else {
-            world.biome.regrow_step();
+            world.biome.regrow_step(sf);
         }
         // Stage 10b: resource node spawn/cleanup (opt-in; no-op when off).
         crate::resource::resource_step(world);
