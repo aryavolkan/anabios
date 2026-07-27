@@ -131,8 +131,13 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // and World.{nutrient_variation,soil_fertility}. All flags are false in the minimal
 // scenario, so every coupled/quality multiplier is exactly 1.0 and the discovery
 // roll is unchanged — trajectory byte-identical, only the serialized layout grew.
+// Refreshed 2026-07-27 (E12 sexual dimorphism): FORMAT_VERSION 19→20 adds
+// AgentBuffers.sex + World.sexual_dimorphism_enabled + codex dimorphism latches
+// and the two new event types. The flag is off in minimal, so sex draws are
+// skipped and every dimorphism factor is exactly 1.0 — trajectory
+// byte-identical, only the serialized layout grew.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x85b2e433dad77022), (100, 0x6ab23304dfd3d3d4), (1000, 0xcd6795899ce6abbc)];
+    &[(0, 0x1ab9596251fd32d3), (100, 0x2d55b5946a8cb7a8), (1000, 0x001eab367ab41e7a)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

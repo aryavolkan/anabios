@@ -201,12 +201,20 @@ pub enum EventType {
     /// environmental optimum for `MALADAPT_WINDOW` ticks — chronic climate
     /// maladaptation, only meaningful under a moving optimum (`value` = lag).
     MaladaptationLag = 48,
+    /// A species' mean dimorphism gene (slot 33) rose ≥`SEXSEL_MIN_DELTA`
+    /// across the genome-moment ring to ≥`SEXSEL_MIN_MEAN` — directional
+    /// sexual selection on the dimorphism knob (`value` = newest mean d).
+    SexualSelection = 49,
+    /// A species with ≥`SEXRATIO_MIN_TOTAL` members dropped below
+    /// `SEXRATIO_MIN_MINORITY` of one sex — one bad tick from losing a sex
+    /// and going reproductively extinct (`value` = minority fraction).
+    SexRatioCollapse = 50,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::MaladaptationLag as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::SexRatioCollapse as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {

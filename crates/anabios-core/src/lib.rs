@@ -11,6 +11,7 @@ pub mod biome;
 pub mod carcass;
 pub mod codex;
 pub mod culture;
+pub mod dimorphism;
 pub mod disaster;
 pub mod genome;
 pub mod integrate;

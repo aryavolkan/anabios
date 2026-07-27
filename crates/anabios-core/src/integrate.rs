@@ -21,8 +21,14 @@ pub const SPEED_MAX_CAP: f32 = 4.0;
 
 /// Apply `desired_direction[i]` to each alive agent, scaled by the agent's
 /// effective Locomotor speed. Agents without a Locomotor still pay basal
-/// metabolism but do not move.
-pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], world_size: f32) {
+/// metabolism but do not move. `dimorphism_enabled` (E12) switches on the
+/// sex-linked basal-metabolism factor; pass `false` for exact identity.
+pub fn integrate_all(
+    agents: &mut AgentBuffers,
+    desired_direction: &[Vec2],
+    world_size: f32,
+    dimorphism_enabled: bool,
+) {
     use rayon::prelude::*;
     let cap = agents.capacity();
     // Each agent's motion + metabolism is a pure function of its OWN
@@ -32,10 +38,19 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], worl
     // loop (same argument as `sense_all`/`decide_all`). Disjoint field borrows
     // give the mutated columns `&mut` while the read columns stay shared `&`.
     let AgentBuffers {
-        position, velocity, energy, modules, genome, meme_vector, iq, alive, ..
+        position,
+        velocity,
+        energy,
+        modules,
+        genome,
+        meme_vector,
+        iq,
+        sex,
+        alive,
+        ..
     } = agents;
-    let (modules, genome, meme_vector, iq, alive) =
-        (&*modules, &*genome, &*meme_vector, &*iq, &*alive);
+    let (modules, genome, meme_vector, iq, sex, alive) =
+        (&*modules, &*genome, &*meme_vector, &*iq, &*sex, &*alive);
     position[..cap]
         .par_iter_mut()
         .zip(velocity[..cap].par_iter_mut())
@@ -45,6 +60,8 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], worl
             if !alive[i] {
                 return;
             }
+            let dimorph_basal =
+                crate::dimorphism::metabolism_factor(&genome[i], sex[i], dimorphism_enabled);
 
             // Action gating: no Locomotor → no motion.
             if !crate::module::has(&modules[i], crate::module::ModuleType::Locomotor) {
@@ -55,7 +72,8 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], worl
                     * crate::invention::metabolism_multiplier(crate::invention::held_mask(
                         &meme_vector[i],
                     ))
-                    * crate::iq::metabolism_multiplier(iq[i]);
+                    * crate::iq::metabolism_multiplier(iq[i])
+                    * dimorph_basal;
                 *en -= basal;
                 return;
             }
@@ -81,7 +99,8 @@ pub fn integrate_all(agents: &mut AgentBuffers, desired_direction: &[Vec2], worl
                 * crate::invention::metabolism_multiplier(crate::invention::held_mask(
                     &meme_vector[i],
                 ))
-                * crate::iq::metabolism_multiplier(iq[i]);
+                * crate::iq::metabolism_multiplier(iq[i])
+                * dimorph_basal;
             *en -= move_cost + basal;
         });
 }
@@ -108,7 +127,7 @@ mod tests {
         // Move 3 ticks worth in one call by scaling the direction? No — direction
         // must be unit. Instead place agent close enough that one 4-unit step wraps.
         // WORLD_SIZE - 1.0 + 4.0 = WORLD_SIZE + 3.0 → wraps to 3.0.
-        integrate_all(&mut w.agents, &desired, w.world_size);
+        integrate_all(&mut w.agents, &desired, w.world_size, false);
         let p = w.agents.position[id as usize];
         assert!(p.x >= 0.0 && p.x < WORLD_SIZE);
         assert!((p.x - 3.0).abs() < 1e-3, "expected wrap-around to ~3.0, got {}", p.x);
@@ -126,7 +145,7 @@ mod tests {
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
         let before = w.agents.energy[id as usize];
-        integrate_all(&mut w.agents, &desired, w.world_size);
+        integrate_all(&mut w.agents, &desired, w.world_size, false);
         let after = w.agents.energy[id as usize];
         assert!(after < before);
         // Speed is now SPEED_MAX_CAP * 1.0 = 4.0 units per tick.
@@ -153,9 +172,30 @@ mod tests {
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
         let pos_before = w.agents.position[id as usize];
-        integrate_all(&mut w.agents, &desired, w.world_size);
+        integrate_all(&mut w.agents, &desired, w.world_size, false);
         let pos_after = w.agents.position[id as usize];
         assert_eq!(pos_before, pos_after, "no Locomotor → no motion");
+    }
+
+    #[test]
+    fn dimorphism_shifts_basal_metabolism_by_sex() {
+        let drain = |male: bool, enabled: bool| -> f32 {
+            let mut w = World::new(1);
+            let mut g = Genome::neutral();
+            g.set(GenomeSlot::SexualDimorphism, 1.0);
+            let id = w.spawn_agent(Vec2::new(500.0, 500.0), g);
+            w.agents.sex.set(id as usize, male);
+            let desired = vec![Vec2::ZERO; w.agents.capacity()];
+            let before = w.agents.energy[id as usize];
+            integrate_all(&mut w.agents, &desired, w.world_size, enabled);
+            before - w.agents.energy[id as usize]
+        };
+        let plain = drain(false, false);
+        let female = drain(false, true);
+        let male = drain(true, true);
+        // d = 1: females pay ×(1 − 0.20), males ×(1 + 0.30) of neutral basal.
+        assert!((female - plain * 0.8).abs() < 1e-5, "female discount: {plain} -> {female}");
+        assert!((male - plain * 1.3).abs() < 1e-5, "male surcharge: {plain} -> {male}");
     }
 
     #[test]
@@ -171,7 +211,7 @@ mod tests {
 
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
-        integrate_all(&mut w.agents, &desired, w.world_size);
+        integrate_all(&mut w.agents, &desired, w.world_size, false);
         let new_pos = w.agents.position[id as usize];
         // Moved roughly SPEED_MAX_CAP × 1.0 = 4.0 in +x.
         assert!((new_pos.x - 504.0).abs() < 0.1);

@@ -86,6 +86,7 @@ pub fn reproduce_all(world: &mut World) {
             world.world_size,
             kin_seeking,
             &a_genome,
+            world.sexual_dimorphism_enabled,
         );
         let Some(b_id) = mate else { continue };
         if world.resources_enabled && !has_dowry(&world.agents, b_id) {
@@ -153,6 +154,10 @@ pub fn reproduce_all(world: &mut World) {
         );
 
         let lineage = world.next_lineage();
+        // E12: child sex is a fresh 50/50 draw when dimorphism is active.
+        // Gated on the flag so flag-off births draw zero extra RNG and the
+        // pre-E12 stream is unchanged.
+        let child_sex = world.sexual_dimorphism_enabled && world.rng.f32_unit() < 0.5;
         let child_id = world.agents.spawn(
             child_pos,
             child_genome,
@@ -161,6 +166,7 @@ pub fn reproduce_all(world: &mut World) {
             a_species,
             child_modules,
             child_program,
+            child_sex,
         );
         world.add_to_species(a_species);
 
@@ -309,10 +315,12 @@ fn find_mate(
     world_size: f32,
     kin_seeking: bool,
     a_genome: &Genome,
+    dimorphism: bool,
 ) -> Option<u32> {
     let mut best: Option<u32> = None;
     // Genome distance of `best` — only consulted when `kin_seeking`.
     let mut best_gd = f32::INFINITY;
+    let a_sex = agents.sex.get(a_id as usize).map(|b| *b).unwrap_or(false);
     spatial.query(a_pos, MATING_RANGE, |other_id| {
         if other_id <= a_id {
             return;
@@ -330,6 +338,23 @@ fn find_mate(
         let d = torus_distance(a_pos, agents.position[j], world_size);
         if d > MATING_RANGE {
             return;
+        }
+        if dimorphism {
+            // E12: mating requires opposite sexes, and the female partner
+            // (whichever side of the pair she is) applies her choosiness bar
+            // to the male's display quality. Deterministic — no RNG here.
+            let b_sex = agents.sex.get(j).map(|b| *b).unwrap_or(false);
+            if a_sex == b_sex {
+                return;
+            }
+            let (female, male) = if a_sex == crate::dimorphism::FEMALE {
+                (a_genome, &agents.genome[j])
+            } else {
+                (&agents.genome[j], a_genome)
+            };
+            if !crate::dimorphism::female_accepts(female, male) {
+                return;
+            }
         }
         if kin_seeking {
             // Inbreeding custom: prefer the genetically-NEAREST eligible mate
@@ -604,6 +629,84 @@ mod tests {
             }
         }
         assert!(saw_cull, "no seed produced a cull in 64 tries");
+    }
+
+    #[test]
+    fn opposite_sexes_mate_when_dimorphism_on() {
+        let mut w = World::new(13);
+        w.sexual_dimorphism_enabled = true;
+        let pos = find_grass_cell_center(&w);
+        let id0 = w.spawn_agent(pos, fertile_genome());
+        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+        w.agents.sex.set(id0 as usize, crate::dimorphism::FEMALE);
+        w.agents.sex.set(id1 as usize, crate::dimorphism::MALE);
+        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
+        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+
+        let before = w.agents.live_count();
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), before + 1, "female + male must mate");
+    }
+
+    #[test]
+    fn same_sex_pair_does_not_mate_when_dimorphism_on() {
+        for sex in [crate::dimorphism::FEMALE, crate::dimorphism::MALE] {
+            let mut w = World::new(13);
+            w.sexual_dimorphism_enabled = true;
+            let pos = find_grass_cell_center(&w);
+            let id0 = w.spawn_agent(pos, fertile_genome());
+            let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+            w.agents.sex.set(id0 as usize, sex);
+            w.agents.sex.set(id1 as usize, sex);
+            w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
+            w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
+            w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+
+            let before = w.agents.live_count();
+            reproduce_all(&mut w);
+            assert_eq!(w.agents.live_count(), before, "same-sex pair must not mate");
+        }
+    }
+
+    #[test]
+    fn choosy_female_rejects_low_quality_male() {
+        // fertile_genome size 0.4 → male display quality 0.4×1.3 = 0.52.
+        // Choosiness 0.9 → bar 0.72: rejected. Choosiness 0.5 → bar 0.4: ok.
+        let mates_with = |choosiness: f32| -> bool {
+            let mut w = World::new(13);
+            w.sexual_dimorphism_enabled = true;
+            let pos = find_grass_cell_center(&w);
+            let mut fg = fertile_genome();
+            fg.set(GenomeSlot::MateChoosiness, choosiness);
+            let id0 = w.spawn_agent(pos, fg);
+            let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fg);
+            w.agents.sex.set(id0 as usize, crate::dimorphism::FEMALE);
+            w.agents.sex.set(id1 as usize, crate::dimorphism::MALE);
+            w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
+            w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
+            w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+            let before = w.agents.live_count();
+            reproduce_all(&mut w);
+            w.agents.live_count() == before + 1
+        };
+        assert!(mates_with(0.5), "neutral choosiness accepts the neutral male");
+        assert!(!mates_with(0.9), "choosy female rejects the low-quality male");
+    }
+
+    #[test]
+    fn flag_off_leaves_all_agents_female_and_mating_sexless() {
+        let mut w = World::new(13);
+        let pos = find_grass_cell_center(&w);
+        let id0 = w.spawn_agent(pos, fertile_genome());
+        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+        assert!(!w.agents.sex[id0 as usize] && !w.agents.sex[id1 as usize]);
+        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
+        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let before = w.agents.live_count();
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), before + 1, "flag off: sex bits unread");
     }
 
     #[test]

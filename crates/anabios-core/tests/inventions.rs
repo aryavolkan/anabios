@@ -327,7 +327,7 @@ fn fire_holder_pays_extra_metabolism() {
         }
         let desired = vec![Vec2::ZERO; w.agents.capacity()];
         let before = w.agents.energy[id as usize];
-        anabios_core::integrate::integrate_all(&mut w.agents, &desired, w.world_size);
+        anabios_core::integrate::integrate_all(&mut w.agents, &desired, w.world_size, false);
         before - w.agents.energy[id as usize]
     };
     let plain = drain_with(None);
@@ -783,7 +783,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // World.{nutrient_variation,soil_fertility}. All flags off here, so coupled
     // multipliers, discovery weight, and quality yield are identity — trajectory
     // byte-identical; only the serialized layout grew.
-    &[(0, 0xdaca677ba00e24ff), (100, 0xe8a351a62251ef65), (300, 0xd2f65e48da61a35f)];
+    // Refreshed 2026-07-27 (E12 sexual dimorphism, FORMAT_VERSION 19→20):
+    // AgentBuffers.sex + World.sexual_dimorphism_enabled + codex dimorphism
+    // latches. Flag off here — zero extra draws, identity factors; pure
+    // serialized-layout growth.
+    &[(0, 0x7e5abe0708eceecb), (100, 0xa2ac7285f896130f), (300, 0xc79d84fd38b25735)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

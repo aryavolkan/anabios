@@ -77,7 +77,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // World.gene_tech_coupling + BiomeCell.{nutrient_quality,fertility} +
     // World.{nutrient_variation,soil_fertility}. All flags off here, so cognition
     // behavior is byte-identical — pure serialized-layout growth.
-    &[(0, 0xf2d43c64e4317e5b), (100, 0x20f4fb1d9088a15a), (300, 0x5df237f57b169006)];
+    // Refreshed 2026-07-27 (E12 sexual dimorphism, FORMAT_VERSION 19→20):
+    // AgentBuffers.sex + World.sexual_dimorphism_enabled + codex dimorphism
+    // latches. Flag off here — zero extra draws, identity factors; pure
+    // serialized-layout growth.
+    &[(0, 0x867977936dd97b72), (100, 0xadee9df50db6af72), (300, 0x34ad442cc69d072d)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

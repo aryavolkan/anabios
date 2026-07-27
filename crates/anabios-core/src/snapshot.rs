@@ -79,7 +79,14 @@ use crate::world::World;
 ///     + EventType::MaladaptationLag. The detector short-circuits when
 ///     `env_period == 0` (every golden scenario), so it never fires there;
 ///     behavior is byte-identical and only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 19;
+/// v19: TG1 gene↔tech coupling — World.gene_tech_coupling flag. Off in every
+///     golden scenario ⇒ byte-identical behavior; only the layout grew.
+/// v20: E12 sexual dimorphism — AgentBuffers.sex bit column,
+///     World.sexual_dimorphism_enabled flag, CodexState dimorphism-detector
+///     latches, EventType::{SexualSelection, SexRatioCollapse}. Flag off ⇒
+///     zero extra RNG draws and identity stat factors; only the serialized
+///     layout grew.
+pub const FORMAT_VERSION: u32 = 20;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

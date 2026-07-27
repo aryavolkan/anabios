@@ -98,9 +98,14 @@ pub enum GenomeSlot {
     ReproductionThreshold = 30,
     /// Declared; not yet read by behavior. Reserved: future per-offspring energy-investment knob.
     OffspringInvestment = 31,
-    /// Declared; not yet read by behavior. Reserved: future mate-selection choosiness knob.
+    /// Female mate-choice bar (E12): the female partner accepts a male iff his
+    /// display quality ≥ `dimorphism::CHOOSINESS_QUALITY_SCALE × choosiness`.
+    /// Read only when `World::sexual_dimorphism_enabled`; inert otherwise.
     MateChoosiness = 32,
-    /// Declared; not yet read by behavior. Reserved: future sexual-dimorphism knob.
+    /// Heritable dimorphism magnitude `d ∈ [0,1]` (E12): scales male upkeep/
+    /// damage/display and female metabolic efficiency via `dimorphism.rs`.
+    /// Counts toward speciation distance (non-personality slot). Read only
+    /// when `World::sexual_dimorphism_enabled`; inert otherwise.
     SexualDimorphism = 33,
     _ReproReserved34 = 34,
     _ReproReserved35 = 35,

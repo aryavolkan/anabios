@@ -303,3 +303,19 @@ pub const MALADAPT_LAG_MIN: f32 = 0.25;
 /// advances by `CYCLE_CHECK_INTERVAL` per amortized check, so this is 500 ticks
 /// (50 checks) of sustained lag — a persistent stress, not a transient dip.
 pub const MALADAPT_WINDOW: u32 = 500;
+
+/// Minimum rise in a species' mean dimorphism gene (slot 33) across the
+/// genome-moment ring for SexualSelection (E12) — a clear directional trend,
+/// not drift noise (matches the RapidAdaptation delta).
+pub const SEXSEL_MIN_DELTA: f32 = 0.15;
+/// Newest ring mean required for SexualSelection — the knob must end up
+/// strongly expressed, not merely trending.
+pub const SEXSEL_MIN_MEAN: f32 = 0.65;
+/// Re-arm threshold below SEXSEL_MIN_MEAN (hysteresis band).
+pub const SEXSEL_REARM_MEAN: f32 = 0.55;
+/// Minimum species size for the SexRatioCollapse check (small species churn
+/// their sex ratio harmlessly).
+pub const SEXRATIO_MIN_TOTAL: u32 = 12;
+/// A species this size with fewer than this many members of either sex is
+/// one bad tick from reproductive extinction.
+pub const SEXRATIO_MIN_MINORITY: u32 = 3;
