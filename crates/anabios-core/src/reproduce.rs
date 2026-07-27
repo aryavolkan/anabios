@@ -172,23 +172,12 @@ pub fn reproduce_all(world: &mut World) {
             let aa = world.agents.anchor[i];
             let ba = world.agents.anchor[j];
             // Torus-safe midpoint: walk from A halfway toward B.
-            let mut dx = ba.x - aa.x;
-            let mut dy = ba.y - aa.y;
-            if dx > ws * 0.5 {
-                dx -= ws;
-            } else if dx < -ws * 0.5 {
-                dx += ws;
-            }
-            if dy > ws * 0.5 {
-                dy -= ws;
-            } else if dy < -ws * 0.5 {
-                dy += ws;
-            }
+            let d = crate::spatial::torus_delta(ba, aa, ws);
             let jx = world.rng.gaussian(0.0, crate::codex::ANCHOR_DRIFT_SIGMA);
             let jy = world.rng.gaussian(0.0, crate::codex::ANCHOR_DRIFT_SIGMA);
             world.agents.anchor[child_id as usize] = crate::prelude::Vec2::new(
-                (aa.x + dx * 0.5 + jx).rem_euclid(ws),
-                (aa.y + dy * 0.5 + jy).rem_euclid(ws),
+                (aa.x + d.x * 0.5 + jx).rem_euclid(ws),
+                (aa.y + d.y * 0.5 + jy).rem_euclid(ws),
             );
         }
 
@@ -361,20 +350,9 @@ fn find_mate(
 }
 
 fn midpoint_torus(a: Vec2, b: Vec2, world_size: f32) -> Vec2 {
-    let mut dx = b.x - a.x;
-    let mut dy = b.y - a.y;
-    if dx > world_size * 0.5 {
-        dx -= world_size;
-    } else if dx < -world_size * 0.5 {
-        dx += world_size;
-    }
-    if dy > world_size * 0.5 {
-        dy -= world_size;
-    } else if dy < -world_size * 0.5 {
-        dy += world_size;
-    }
-    let mid_x = (a.x + dx * 0.5).rem_euclid(world_size);
-    let mid_y = (a.y + dy * 0.5).rem_euclid(world_size);
+    let d = crate::spatial::torus_delta(b, a, world_size);
+    let mid_x = (a.x + d.x * 0.5).rem_euclid(world_size);
+    let mid_y = (a.y + d.y * 0.5).rem_euclid(world_size);
     Vec2::new(mid_x, mid_y)
 }
 
