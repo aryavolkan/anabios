@@ -26,6 +26,11 @@ use smallvec::{smallvec, SmallVec};
 
 use crate::rng::Rng;
 
+mod kits;
+pub use kits::*;
+mod stats;
+pub use stats::*;
+
 /// Maximum number of modules per agent. The `SmallVec` inline storage is
 /// also 8; agents with > 8 modules spill to the heap.
 pub const MODULE_INLINE_CAPACITY: usize = 8;
@@ -265,107 +270,6 @@ impl Module {
 /// Variable-length module list owned by an agent.
 pub type ModuleList = SmallVec<[Module; MODULE_INLINE_CAPACITY]>;
 
-/// The default 4-module kit assigned to every founder spawned via
-/// `World::spawn_agent`. All four are at parameter value 0.6 (above the
-/// upkeep dead-band, below max).
-pub fn starter_kit() -> ModuleList {
-    smallvec![
-        Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 },
-        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.6, acuity: 0.6 },
-        Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 },
-        Module::Reproductive { viability: 0.6, brood_size_bias: 0.5 },
-    ]
-}
-
-/// A carnivore starter kit: mobile, sighted, meat-eating, and armed. Used by
-/// the `stalker`/`pack_hunter` scenario archetypes.
-pub fn predator_kit() -> ModuleList {
-    smallvec![
-        Module::Locomotor { max_speed: 0.7, terrain_affinity: 0.5 },
-        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.8, acuity: 0.7 },
-        Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 },
-        Module::Weapon { damage: 8.0, energy_cost: 1.0 },
-    ]
-}
-
-/// A ranged-hunter kit: keen eyes, a carnivore mouth, and a `Spines` volley
-/// weapon that kills from beyond contact range. Speed 0.65 outspeeds grazers
-/// (0.6) and bruisers (0.5) so the kiting program can hold its standoff ring,
-/// while stalkers (0.7) still run it down — a rock-paper-scissors balance.
-/// Includes `Reproductive` so the lineage can establish and evolve (unlike
-/// the founder predator kits). Used by the `spiner` scenario archetype.
-pub fn spiner_kit() -> ModuleList {
-    smallvec![
-        Module::Locomotor { max_speed: 0.65, terrain_affinity: 0.5 },
-        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.9, acuity: 0.75 },
-        Module::Mouth { bite_size: 0.5, diet_affinity: 1.0 },
-        Module::Spines { damage: 4.0, energy_cost: 1.5, range: 0.8 },
-        Module::Reproductive { viability: 0.6, brood_size_bias: 0.5 },
-    ]
-}
-
-/// A heavy-assault kit: slow, armored, and equipped with `Jaws` — the
-/// hardest-hitting but shortest-reaching weapon in the arsenal. Includes
-/// `Reproductive` so the lineage can establish and evolve. Used by the
-/// `bruiser` scenario archetype.
-pub fn bruiser_kit() -> ModuleList {
-    smallvec![
-        Module::Locomotor { max_speed: 0.5, terrain_affinity: 0.5 },
-        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.7, acuity: 0.6 },
-        Module::Mouth { bite_size: 0.7, diet_affinity: 1.0 },
-        Module::Jaws { damage: 14.0, energy_cost: 2.0 },
-        Module::Armor { protection: 1.0, mass_penalty: 0.2 },
-        Module::Reproductive { viability: 0.6, brood_size_bias: 0.5 },
-    ]
-}
-
-/// A pheromone-marking herbivore: mobile, smells pheromones, grazes, and marks
-/// territory on the Marker channel. Used by the `marker` scenario archetype.
-pub fn marker_kit() -> ModuleList {
-    smallvec![
-        Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 },
-        Module::Sensor { sensor_type: SensorType::Smell, radius: 0.7, acuity: 0.6 },
-        Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 },
-        Module::Pheromone { channel: PheromoneChannel::Marker, strength: 1.0, decay: 0.1 },
-    ]
-}
-
-/// A meme-broadcasting herbivore: mobile, sighted, grazes, and communicates on
-/// channel 0. Used by the `communicator` scenario archetype.
-pub fn communicator_kit() -> ModuleList {
-    smallvec![
-        Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 },
-        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.6, acuity: 0.6 },
-        Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 },
-        Module::Communicator { range: 12.0, channel_id: 0 },
-    ]
-}
-
-/// Gene-culture experiment: an omnivore hunter — grazes (fallback) AND can hunt
-/// (Weapon + carnivore-capable Mouth) + communicates. `FAST` sets a high
-/// Locomotor max_speed (the primal "speed gene"); the slow variant is identical
-/// but slow. The hunt-technique meme's payoff is conditional on this gene.
-pub fn fast_hunter_kit() -> ModuleList {
-    smallvec![
-        Module::Locomotor { max_speed: 0.95, terrain_affinity: 0.5 },
-        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.8, acuity: 0.7 },
-        Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 },
-        Module::Weapon { damage: 8.0, energy_cost: 1.0 },
-        Module::Communicator { range: 12.0, channel_id: 0 },
-    ]
-}
-
-/// Slow variant of `fast_hunter_kit` — identical except a low Locomotor speed.
-pub fn slow_hunter_kit() -> ModuleList {
-    smallvec![
-        Module::Locomotor { max_speed: 0.3, terrain_affinity: 0.5 },
-        Module::Sensor { sensor_type: SensorType::Vision, radius: 0.8, acuity: 0.7 },
-        Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 },
-        Module::Weapon { damage: 8.0, energy_cost: 1.0 },
-        Module::Communicator { range: 12.0, channel_id: 0 },
-    ]
-}
-
 /// `true` iff the list contains at least one module of the given type.
 #[inline]
 pub fn has(modules: &ModuleList, module_type: ModuleType) -> bool {
@@ -376,121 +280,6 @@ pub fn has(modules: &ModuleList, module_type: ModuleType) -> bool {
 #[inline]
 pub fn total_upkeep(modules: &ModuleList) -> f32 {
     modules.iter().map(|m| m.upkeep()).sum()
-}
-
-/// Sum the `max_speed` of every Locomotor in the list. Used by the
-/// integrate stage; 0.0 if no Locomotor is present (agent can't move).
-#[inline]
-pub fn effective_speed_max(modules: &ModuleList) -> f32 {
-    modules
-        .iter()
-        .filter_map(|m| match m {
-            Module::Locomotor { max_speed, .. } => Some(*max_speed),
-            _ => None,
-        })
-        .sum()
-}
-
-/// Fold the extracted per-module parameter with `f32::max`, defaulting to 0.0
-/// when no module contributes. Shared by the "strongest module wins" accessors.
-fn max_param(modules: &ModuleList, extract: impl Fn(&Module) -> Option<f32>) -> f32 {
-    modules.iter().filter_map(extract).fold(0.0_f32, f32::max)
-}
-
-/// Maximum perception radius across all Sensor modules. 0.0 if no Sensor.
-#[inline]
-pub fn effective_perception_radius(modules: &ModuleList) -> f32 {
-    max_param(modules, |m| match m {
-        Module::Sensor { radius, .. } => Some(*radius),
-        _ => None,
-    })
-}
-
-/// Maximum bite size across all Mouth modules. 0.0 if no Mouth.
-#[inline]
-pub fn effective_bite_size(modules: &ModuleList) -> f32 {
-    max_param(modules, |m| match m {
-        Module::Mouth { bite_size, .. } => Some(*bite_size),
-        _ => None,
-    })
-}
-
-/// Maximum diet affinity across all Mouth modules. 0.0 (pure herbivore)
-/// if no Mouth, but action gating means feeding is skipped anyway.
-#[inline]
-pub fn effective_diet_carnivory(modules: &ModuleList) -> f32 {
-    max_param(modules, |m| match m {
-        Module::Mouth { diet_affinity, .. } => Some(*diet_affinity),
-        _ => None,
-    })
-}
-
-/// The strongest weapon an agent carries: damage, per-shot energy cost, and
-/// effective reach (world units), resolved across all weapon module types.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct WeaponStats {
-    pub damage: f32,
-    pub energy_cost: f32,
-    pub range: f32,
-}
-
-/// Stats of the highest-damage weapon module (`Weapon`, `Spines`, or
-/// `Jaws`), or `None` if the agent is unarmed (combat gating, design §3.5).
-#[inline]
-pub fn effective_weapon(modules: &ModuleList) -> Option<WeaponStats> {
-    modules
-        .iter()
-        .filter_map(|m| match m {
-            Module::Weapon { damage, energy_cost } => Some(WeaponStats {
-                damage: *damage,
-                energy_cost: *energy_cost,
-                range: WEAPON_RANGE,
-            }),
-            Module::Spines { damage, energy_cost, range } => Some(WeaponStats {
-                damage: *damage,
-                energy_cost: *energy_cost,
-                range: effective_spines_range(*range),
-            }),
-            Module::Jaws { damage, energy_cost } => {
-                Some(WeaponStats { damage: *damage, energy_cost: *energy_cost, range: JAWS_RANGE })
-            }
-            _ => None,
-        })
-        .max_by(|a, b| a.damage.partial_cmp(&b.damage).unwrap_or(std::cmp::Ordering::Equal))
-}
-
-/// Max `Pheromone.strength`, or `0.0` if the agent has no `Pheromone` module.
-#[inline]
-pub fn effective_pheromone_strength(modules: &ModuleList) -> f32 {
-    max_param(modules, |m| match m {
-        Module::Pheromone { strength, .. } => Some(*strength),
-        _ => None,
-    })
-}
-
-/// `true` iff the agent has a `Sensor` module of type `Smell` (gates pheromone
-/// perception, design §3.6).
-#[inline]
-pub fn has_smell(modules: &ModuleList) -> bool {
-    modules.iter().any(|m| matches!(m, Module::Sensor { sensor_type: SensorType::Smell, .. }))
-}
-
-/// Max `Armor.protection`, or `0.0` if the agent has no `Armor` module.
-#[inline]
-pub fn effective_armor_protection(modules: &ModuleList) -> f32 {
-    max_param(modules, |m| match m {
-        Module::Armor { protection, .. } => Some(*protection),
-        _ => None,
-    })
-}
-
-/// Max `Communicator.range`, or `0.0` if the agent has no `Communicator`.
-#[inline]
-pub fn effective_communicator_range(modules: &ModuleList) -> f32 {
-    max_param(modules, |m| match m {
-        Module::Communicator { range, .. } => Some(*range),
-        _ => None,
-    })
 }
 
 /// Perturb every parameter of `module` with probability `MUTATE_PARAM_PROB`,
