@@ -92,6 +92,12 @@ pub struct Scenario {
     /// keeps the world byte-identical (zero extra RNG draws).
     #[serde(default)]
     pub sexual_dimorphism_enabled: bool,
+    /// Opt-in: domestication (E13) — Husbandry holders tame wild juvenile
+    /// herbivores into penned, milk-yielding livestock that breeds
+    /// born-tamed. `false` (default) keeps the world byte-identical.
+    /// Effectively requires `inventions_enabled` (taming needs Husbandry).
+    #[serde(default)]
+    pub domestication_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -363,6 +369,7 @@ impl Scenario {
         w.war_enabled = self.war_enabled;
         w.settlement_enabled = self.settlement_enabled;
         w.sexual_dimorphism_enabled = self.sexual_dimorphism_enabled;
+        w.domestication_enabled = self.domestication_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);

@@ -136,11 +136,22 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // and the two new event types. The flag is off in minimal, so sex draws are
 // skipped and every dimorphism factor is exactly 1.0 — trajectory
 // byte-identical, only the serialized layout grew.
+// Refreshed 2026-07-27 (E13 domestication): FORMAT_VERSION 20→21 adds
+// AgentBuffers.livestock_of + World.domestication_enabled + codex herd latches.
+// The flag is off in minimal, so husbandry_step early-returns with zero draws —
+// trajectory byte-identical, only the serialized layout grew.
+// Refreshed 2026-07-27 (scratch-staleness fix): sense_all/decide_all now reset
+// dead slots to defaults instead of leaving stale occupant values, so a newborn
+// reusing a slot mid-tick is observed with the same scratch a snapshot-loaded
+// world has (replay gate caught the divergence). Behavior changes only when a
+// newborn reuses a dead slot between sense/decide and observe — ticks 0/100 are
+// unchanged, tick 1000 moved.
 const GOLDEN: &[(u64, u64)] =
-    // Refreshed 2026-07-27 (climate-driven worldgen, FORMAT_VERSION 20→21):
-    // gradient-noise + Whittaker generator changes every world's terrain — a
-    // genuine trajectory change on top of the E12 dimorphism layout.
-    &[(0, 0x347af02d7b78c855), (100, 0xf744901bb46459ad), (1000, 0xc79c46510c7c4407)];
+    // Refreshed 2026-07-27 (climate worldgen merged onto E13, FORMAT_VERSION 22):
+    // the gradient-noise + Whittaker generator changes every world's terrain — a
+    // genuine trajectory change — layered on E13's livestock_of /
+    // domestication_enabled serialized layout. Regenerated from the merged code.
+    &[(0, 0xfb8c60896692b595), (100, 0x668599613735eb6e), (1000, 0xa2e37317e219fbce)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

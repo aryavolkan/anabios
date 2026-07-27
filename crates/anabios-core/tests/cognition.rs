@@ -81,9 +81,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // AgentBuffers.sex + World.sexual_dimorphism_enabled + codex dimorphism
     // latches. Flag off here — zero extra draws, identity factors; pure
     // serialized-layout growth.
-    // Refreshed 2026-07-27 (climate-driven worldgen, FORMAT_VERSION 20→21): new
-    // terrain reshapes the agents' environment — a genuine trajectory change.
-    &[(0, 0x7d6886c171edc631), (100, 0x6453cef51be2b174), (300, 0x3611318a79b08c80)];
+    // Refreshed 2026-07-27 (climate worldgen merged onto E13, FORMAT_VERSION 22):
+    // new Whittaker terrain reshapes the agents' environment — a genuine
+    // trajectory change — on top of E13's livestock_of / domestication_enabled
+    // layout. Regenerated from the merged code.
+    &[(0, 0x8833a2a1dbf208e9), (100, 0xddc6ea4e5f30db72), (300, 0xa350e5135337ccad)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

@@ -149,6 +149,12 @@ pub struct World {
     /// draws and identity stat factors with the flag off.
     #[serde(default)]
     pub sexual_dimorphism_enabled: bool,
+    /// When true, domestication is active (E13): Husbandry holders tame wild
+    /// juvenile herbivores into livestock, pen them (movement override), and
+    /// draw milk yields; penned stock breeds born-tamed. Off by default —
+    /// the tick stage early-returns and zero RNG is drawn with the flag off.
+    #[serde(default)]
+    pub domestication_enabled: bool,
     /// Per-cell market density field (E8). Sized to the biome grid when
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
@@ -309,6 +315,7 @@ impl World {
             war_enabled: false,
             settlement_enabled: false,
             sexual_dimorphism_enabled: false,
+            domestication_enabled: false,
             market_field: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,

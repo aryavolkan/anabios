@@ -548,6 +548,15 @@ impl Simulation {
         d.set("dimorphism_enabled", w.sexual_dimorphism_enabled);
         d.set("sex_male", w.agents.sex.get(i).map(|b| *b).unwrap_or(false));
         d.set("dimorphism", g.get(GenomeSlot::SexualDimorphism));
+        // E13: livestock ownership, with the world flag so the inspector
+        // only renders the line in domestication scenarios.
+        d.set("domestication_enabled", w.domestication_enabled);
+        let owner =
+            w.agents.livestock_of.get(i).copied().unwrap_or(anabios_core::agent::AGENT_NULL);
+        d.set(
+            "livestock_of",
+            if owner == anabios_core::agent::AGENT_NULL { -1 } else { owner as i64 },
+        );
         d.set("dialect_hue", dialect_hue(meme));
         let mut names = PackedStringArray::new();
         for m in w.agents.modules[i].iter() {

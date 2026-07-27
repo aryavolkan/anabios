@@ -86,12 +86,17 @@ use crate::world::World;
 ///     latches, EventType::{SexualSelection, SexRatioCollapse}. Flag off ⇒
 ///     zero extra RNG draws and identity stat factors; only the serialized
 ///     layout grew.
-/// v21: climate-driven worldgen — BiomeCell.moisture (new f32); env now holds
+/// v21: E13 domestication — AgentBuffers.livestock_of column,
+///     World.domestication_enabled flag, CodexState.{domesticated_species,
+///     livestock_herd_streak, livestock_herd_active}, EventType::
+///     {AnimalDomesticated, LivestockHerd}. Flag off ⇒ the tick stage
+///     early-returns and zero RNG is drawn; only the serialized layout grew.
+/// v22: climate-driven worldgen — BiomeCell.moisture (new f32); env now holds
 ///     temperature; TerrainType gained Savanna/Rainforest/Taiga/Tundra;
 ///     `generate` replaced by the gradient-noise + Whittaker pipeline. This
 ///     changes every world's terrain, so ALL golden hashes are regenerated
 ///     (a genuine trajectory change, not a byte-identical layout growth).
-pub const FORMAT_VERSION: u32 = 21;
+pub const FORMAT_VERSION: u32 = 22;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

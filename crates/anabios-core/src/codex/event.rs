@@ -209,12 +209,18 @@ pub enum EventType {
     /// `SEXRATIO_MIN_MINORITY` of one sex — one bad tick from losing a sex
     /// and going reproductively extinct (`value` = minority fraction).
     SexRatioCollapse = 50,
+    /// A member of this species was tamed by a Husbandry holder for the
+    /// first time (`value` = the herder's species id).
+    AnimalDomesticated = 51,
+    /// A livestock species sustained ≥`LIVESTOCK_HERD_MIN` living tamed members for
+    /// `LIVESTOCK_HERD_WINDOW` consecutive ticks (`value` = tamed count).
+    LivestockHerd = 52,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::SexRatioCollapse as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::LivestockHerd as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {

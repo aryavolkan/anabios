@@ -142,6 +142,14 @@ pub fn sense_all(
 
     registers[..cap].par_iter_mut().enumerate().for_each(|(i, reg)| {
         if !agents.is_alive(i as u32) {
+            // Dead slots carry no stale state. `registers` is per-tick
+            // scratch (`#[serde(skip)]`): a dead slot's stale register would
+            // survive in a continuous run but read as default after a
+            // snapshot load — and a newborn reusing the slot mid-tick would
+            // then diverge between the two (the codex agg reads crowding for
+            // alive newborns). Same invariant as the dead-slot zeroing of
+            // `prev_desired_direction` in `codex::signatures`.
+            *reg = SensorRegister::default();
             return;
         }
         *reg = sense_one(
@@ -420,6 +428,46 @@ mod tests {
         );
         assert_eq!(regs[id as usize].local_plant_biomass, 0.0);
         assert!(!regs[id as usize].has_neighbor);
+    }
+
+    #[test]
+    fn dead_slots_are_reset_to_default() {
+        // Snapshot-restore invariant: dead slots carry no stale register, so
+        // a newborn reusing the slot mid-tick reads the same default a
+        // snapshot-loaded world would have.
+        let mut w = World::new(1);
+        let a = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(502.0, 500.0), Genome::neutral());
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut regs,
+            w.world_size,
+        );
+        assert!(regs[a as usize].crowding > 0, "neighbour seen while both alive");
+
+        w.agents.kill(a);
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut regs,
+            w.world_size,
+        );
+        assert_eq!(
+            format!("{:?}", regs[a as usize]),
+            format!("{:?}", SensorRegister::default()),
+            "dead slot's stale register is cleared"
+        );
+        assert_eq!(regs[b as usize].crowding, 0, "survivor no longer crowded");
     }
 
     #[test]
