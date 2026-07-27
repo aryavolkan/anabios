@@ -1,3 +1,12 @@
+# UPDATE 2026-07-27 (climate-driven worldgen): terrain is no longer set by
+# elevation thresholds but by a Whittaker climate classification, so the old
+# hub (948, 4) is now polar (Tundra/Taiga, no Desert -> no Salt). The four-good
+# junction was re-scanned on this seed and the cluster centers moved to
+# (816, 336) — a subtropical spot where elevation relief puts Desert (Salt),
+# Rock (Obsidian), Forest/Rainforest (Amber) and Grass/Savanna (Spice) within
+# radius 60 (0% water). The historical rationale below is kept for context; the
+# specific terrain fractions and coordinates it cites predate the new generator.
+#
 # Geographic trade routes: four species, each pinned via `terrain_affinity`
 # to a distinct terrain's good (Salt/Desert, Obsidian/Rock, Amber/Forest,
 # Spice/Grass). All four spawn INTERMIXED within one broad shared cluster on a
@@ -79,7 +88,7 @@ max_population = 2200
 [[agents]]
 count = 312
 archetype = "asocial_forager"
-placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 terrain_affinity = 0.12
@@ -89,7 +98,7 @@ terrain_affinity = 0.12
 [[agents]]
 count = 65
 archetype = "asocial_forager"
-placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 terrain_affinity = 0.37
@@ -98,7 +107,7 @@ terrain_affinity = 0.37
 [[agents]]
 count = 195
 archetype = "asocial_forager"
-placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 terrain_affinity = 0.62
@@ -107,7 +116,7 @@ terrain_affinity = 0.62
 [[agents]]
 count = 390
 archetype = "asocial_forager"
-placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 terrain_affinity = 0.87

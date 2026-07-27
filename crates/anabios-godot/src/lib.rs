@@ -644,6 +644,10 @@ impl Simulation {
                 TerrainType::Forest => Color::from_rgb(0.10, 0.30, 0.12),
                 TerrainType::Desert => Color::from_rgb(0.62, 0.56, 0.34),
                 TerrainType::Rock => Color::from_rgb(0.36, 0.36, 0.40),
+                TerrainType::Savanna => Color::from_rgb(0.72, 0.66, 0.36),
+                TerrainType::Rainforest => Color::from_rgb(0.06, 0.34, 0.16),
+                TerrainType::Taiga => Color::from_rgb(0.16, 0.34, 0.26),
+                TerrainType::Tundra => Color::from_rgb(0.62, 0.66, 0.62),
             };
             let cap = cell.terrain.carrying_capacity();
             let frac = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };

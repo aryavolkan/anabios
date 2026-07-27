@@ -22,7 +22,7 @@ max_population = 2200
 [[agents]]
 count = 312
 archetype = "asocial_forager"
-placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 terrain_affinity = 0.12
@@ -32,7 +32,7 @@ terrain_affinity = 0.12
 [[agents]]
 count = 65
 archetype = "asocial_forager"
-placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 terrain_affinity = 0.37
@@ -41,7 +41,7 @@ terrain_affinity = 0.37
 [[agents]]
 count = 195
 archetype = "asocial_forager"
-placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 terrain_affinity = 0.62
@@ -50,7 +50,7 @@ terrain_affinity = 0.62
 [[agents]]
 count = 390
 archetype = "asocial_forager"
-placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 60.0 }
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 terrain_affinity = 0.87
