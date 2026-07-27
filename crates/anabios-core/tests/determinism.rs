@@ -137,7 +137,10 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // skipped and every dimorphism factor is exactly 1.0 — trajectory
 // byte-identical, only the serialized layout grew.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x1ab9596251fd32d3), (100, 0x2d55b5946a8cb7a8), (1000, 0x001eab367ab41e7a)];
+    // Refreshed 2026-07-27 (climate-driven worldgen, FORMAT_VERSION 20→21):
+    // gradient-noise + Whittaker generator changes every world's terrain — a
+    // genuine trajectory change on top of the E12 dimorphism layout.
+    &[(0, 0x347af02d7b78c855), (100, 0xf744901bb46459ad), (1000, 0xc79c46510c7c4407)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

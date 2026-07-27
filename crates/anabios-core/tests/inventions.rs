@@ -787,7 +787,9 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // AgentBuffers.sex + World.sexual_dimorphism_enabled + codex dimorphism
     // latches. Flag off here — zero extra draws, identity factors; pure
     // serialized-layout growth.
-    &[(0, 0x7e5abe0708eceecb), (100, 0xa2ac7285f896130f), (300, 0xc79d84fd38b25735)];
+    // Refreshed 2026-07-27 (climate-driven worldgen, FORMAT_VERSION 20→21): new
+    // terrain changes the invention-race trajectory.
+    &[(0, 0xce0396b3501a2dcc), (100, 0x3ff1fe3ac2e56d3d), (300, 0x15daddd68ea0c336)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
