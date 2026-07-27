@@ -20,8 +20,8 @@ pub(super) fn update_genome_moments(world: &mut World, agg: &SpeciesAggTable) {
             let m = e.genome_sums[slot] / n;
             // Population variance: E[x²] − E[x]², clamped against fp noise.
             let v = (e.genome_sumsq[slot] / n - m * m).max(0.0);
-            mean.0[slot] = m as f32;
-            var.0[slot] = v as f32;
+            mean.set_raw(slot, m as f32);
+            var.set_raw(slot, v as f32);
         }
         let buf = world.codex.genome_moments.entry(sid).or_default();
         if buf.len() == MOMENT_RING {
@@ -56,11 +56,11 @@ fn fixed_slots(buf: &VecDeque<TraitMoments>) -> Vec<u8> {
     let mut out = Vec::new();
     for slot in 0..50u8 {
         let s = slot as usize;
-        let poly_samples = buf.iter().take(half).filter(|m| m.var.0[s] >= FIX_POLY_VAR).count();
+        let poly_samples = buf.iter().take(half).filter(|m| m.var.raw(s) >= FIX_POLY_VAR).count();
         if poly_samples * 2 < half {
             continue;
         }
-        let collapsed = buf.iter().rev().take(10).all(|m| m.var.0[s] <= FIX_COLLAPSE_VAR);
+        let collapsed = buf.iter().rev().take(10).all(|m| m.var.raw(s) <= FIX_COLLAPSE_VAR);
         if collapsed {
             out.push(slot);
         }
@@ -83,7 +83,7 @@ pub(super) fn detect_trait_fixation(world: &mut World, agg: &SpeciesAggTable) {
         for slot in fixed_slots(buf) {
             let key = (sid, slot);
             if !world.codex.fixation_latches.contains(&key) {
-                let mean = buf.back().expect("full ring").mean.0[slot as usize];
+                let mean = buf.back().expect("full ring").mean.raw(slot as usize);
                 newly.push((sid, slot, mean));
             }
         }
@@ -99,7 +99,7 @@ pub(super) fn detect_trait_fixation(world: &mut World, agg: &SpeciesAggTable) {
                 .genome_moments
                 .get(&sid)
                 .and_then(|buf| buf.back())
-                .map(|m| m.var.0[slot as usize] >= FIX_POLY_VAR)
+                .map(|m| m.var.raw(slot as usize) >= FIX_POLY_VAR)
                 .unwrap_or(true)
         })
         .copied()
@@ -142,13 +142,14 @@ pub(super) fn detect_rapid_adaptation(world: &mut World, agg: &SpeciesAggTable) 
         let baseline = &buf[MOMENT_RING - 1 - RAPID_WINDOW];
         for slot in 0..50u8 {
             let s = slot as usize;
-            let delta = (newest.mean.0[s] - baseline.mean.0[s]).abs();
+            let delta = (newest.mean.raw(s) - baseline.mean.raw(s)).abs();
             if delta < RAPID_MIN_DELTA {
                 continue;
             }
             // Recent σ: mean of per-sample σ over the window.
-            let sigma = buf.iter().rev().take(RAPID_WINDOW).map(|m| m.var.0[s].sqrt()).sum::<f32>()
-                / RAPID_WINDOW as f32;
+            let sigma =
+                buf.iter().rev().take(RAPID_WINDOW).map(|m| m.var.raw(s).sqrt()).sum::<f32>()
+                    / RAPID_WINDOW as f32;
             if delta < RAPID_SIGMA_MULT * sigma {
                 continue;
             }
@@ -263,9 +264,9 @@ mod tests {
             .map(|i| {
                 let mut mean = Genome::neutral();
                 let mut var = Genome::neutral();
-                mean.0.fill(0.5);
+                mean.as_mut_slice().fill(0.5);
                 let v = if i < half || !collapse { poly_var } else { 0.0 };
-                var.0.fill(v);
+                var.as_mut_slice().fill(v);
                 TraitMoments { tick: i as u64 * 10, mean, var }
             })
             .collect()
@@ -326,14 +327,14 @@ mod tests {
             .map(|i| {
                 let mut mean = Genome::neutral();
                 let mut var = Genome::neutral();
-                mean.0.fill(0.5);
-                var.0.fill(0.0001); // tiny σ: any real shift exceeds 3σ
+                mean.as_mut_slice().fill(0.5);
+                var.as_mut_slice().fill(0.0001); // tiny σ: any real shift exceeds 3σ
                 TraitMoments { tick: i as u64 * 10, mean, var }
             })
             .collect();
         // Shift slot 5 by +0.3 over the last 10 samples.
         for m in ring.iter_mut().rev().take(RAPID_WINDOW) {
-            m.mean.0[5] = 0.8;
+            m.mean.set_raw(5, 0.8);
         }
         w.codex.genome_moments.insert(0, ring);
         let agg = agg_for(0, 20);
@@ -353,8 +354,8 @@ mod tests {
             .map(|i| {
                 let mut mean = Genome::neutral();
                 let mut var = Genome::neutral();
-                mean.0.fill(0.5 + 0.3 * i as f32 / MOMENT_RING as f32);
-                var.0.fill(0.0001);
+                mean.as_mut_slice().fill(0.5 + 0.3 * i as f32 / MOMENT_RING as f32);
+                var.as_mut_slice().fill(0.0001);
                 TraitMoments { tick: i as u64 * 10, mean, var }
             })
             .collect();

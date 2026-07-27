@@ -244,7 +244,7 @@ impl Simulation {
         let Some(buf) = w.codex.genome_moments.get(&(sid as u32)) else { return out };
         let s = (slot as usize).min(49);
         for m in buf.iter() {
-            out.push(m.mean.0[s]);
+            out.push(m.mean.raw(s));
         }
         out
     }
@@ -511,7 +511,7 @@ impl Simulation {
         d.set("program_len", w.agents.program[i].len() as i64);
         d.set("module_count", w.agents.modules[i].len() as i64);
         let mut g = PackedFloat32Array::new();
-        for v in w.agents.genome[i].0.iter() {
+        for v in w.agents.genome[i].as_slice().iter() {
             g.push(*v);
         }
         d.set("genome", &g);

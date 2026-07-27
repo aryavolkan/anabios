@@ -202,7 +202,7 @@ impl SpeciesAggTable {
             }
             e.diet_sum += module::effective_diet_carnivory(modules) as f64;
             e.speed_sum += module::effective_speed_max(modules) as f64;
-            for (slot, gv) in world.agents.genome[i].0.iter().enumerate() {
+            for (slot, gv) in world.agents.genome[i].as_slice().iter().enumerate() {
                 let x = *gv as f64;
                 e.genome_sums[slot] += x;
                 e.genome_sumsq[slot] += x * x;
