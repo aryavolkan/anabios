@@ -87,6 +87,11 @@ pub struct Scenario {
     /// the world byte-identical.
     #[serde(default)]
     pub settlement_enabled: bool,
+    /// Opt-in: sexual dimorphism (E12) — binary sex, opposite-sex mating,
+    /// female mate choice, sex-linked stat expression. `false` (default)
+    /// keeps the world byte-identical (zero extra RNG draws).
+    #[serde(default)]
+    pub sexual_dimorphism_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -142,6 +147,9 @@ pub struct TraitOverrides {
     /// Preferred-terrain drive (`GenomeSlot::TerrainAffinity`); pairs with
     /// `World::terrain_habitat` (geographic trade routes).
     pub terrain_affinity: Option<f32>,
+    /// E12 reproductive knobs (read only with `sexual_dimorphism_enabled`).
+    pub sexual_dimorphism: Option<f32>,
+    pub mate_choosiness: Option<f32>,
 }
 
 impl TraitOverrides {
@@ -190,6 +198,12 @@ impl TraitOverrides {
         }
         if let Some(v) = self.terrain_affinity {
             g.set(GenomeSlot::TerrainAffinity, v);
+        }
+        if let Some(v) = self.sexual_dimorphism {
+            g.set(GenomeSlot::SexualDimorphism, v);
+        }
+        if let Some(v) = self.mate_choosiness {
+            g.set(GenomeSlot::MateChoosiness, v);
         }
     }
 }
@@ -348,6 +362,7 @@ impl Scenario {
         }
         w.war_enabled = self.war_enabled;
         w.settlement_enabled = self.settlement_enabled;
+        w.sexual_dimorphism_enabled = self.sexual_dimorphism_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);

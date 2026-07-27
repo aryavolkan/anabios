@@ -35,7 +35,12 @@ pub fn step(world: &mut World) {
     decide_all(world);
 
     // Stage 4: integrate (motion + per-tick metabolism).
-    integrate_all(&mut world.agents, &world.desired_direction[..cap], world.world_size);
+    integrate_all(
+        &mut world.agents,
+        &world.desired_direction[..cap],
+        world.world_size,
+        world.sexual_dimorphism_enabled,
+    );
 
     // Stage 4b: E6 ambush instrumentation — consecutive still ticks per
     // agent, read by `combat_pass` in the interact stage. Observability only.

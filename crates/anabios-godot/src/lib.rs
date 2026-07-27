@@ -543,6 +543,11 @@ impl Simulation {
         d.set("iq", w.agents.iq[i]);
         d.set("indiv_learn", g.get(GenomeSlot::IndividualLearning) > 0.5);
         d.set("social_learn", g.get(GenomeSlot::SocialLearning) > 0.5);
+        // E12: sex + dimorphism gene, with the world flag so the inspector
+        // only renders the line in dimorphic scenarios.
+        d.set("dimorphism_enabled", w.sexual_dimorphism_enabled);
+        d.set("sex_male", w.agents.sex.get(i).map(|b| *b).unwrap_or(false));
+        d.set("dimorphism", g.get(GenomeSlot::SexualDimorphism));
         d.set("dialect_hue", dialect_hue(meme));
         let mut names = PackedStringArray::new();
         for m in w.agents.modules[i].iter() {

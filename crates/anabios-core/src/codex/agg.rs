@@ -75,6 +75,10 @@ pub struct SpeciesAgg {
     /// genome-moment history). 50 slots each.
     pub genome_sums: [f64; 50],
     pub genome_sumsq: [f64; 50],
+    /// Alive male members (E12). Zero when sexual dimorphism is off (every
+    /// agent is sex=false then); the SexRatioCollapse detector reads this
+    /// only under the flag.
+    pub male_count: u32,
 }
 
 impl Default for SpeciesAgg {
@@ -100,6 +104,7 @@ impl Default for SpeciesAgg {
             occ_cells: Vec::new(),
             genome_sums: [0.0; 50],
             genome_sumsq: [0.0; 50],
+            male_count: 0,
         }
     }
 }
@@ -126,6 +131,7 @@ impl SpeciesAgg {
         self.occ_cells.clear();
         self.genome_sums = [0.0; 50];
         self.genome_sumsq = [0.0; 50];
+        self.male_count = 0;
     }
 
     /// This tick's centroid (mean alive position), `(0,0)` when empty.
@@ -221,6 +227,9 @@ impl SpeciesAggTable {
             e.weapon_sum +=
                 module::effective_weapon(modules).map(|w| w.damage).unwrap_or(0.0) as f64;
             e.armor_sum += module::effective_armor_protection(modules) as f64;
+            if world.agents.sex.get(i).map(|b| *b).unwrap_or(false) {
+                e.male_count += 1;
+            }
         }
         // `occ_cells` was pushed once per member (with duplicates when members
         // share a cell); collapse each active species' list to the sorted set

@@ -142,6 +142,13 @@ pub struct World {
     /// pool. Off by default — byte-identical with the flag off.
     #[serde(default)]
     pub settlement_enabled: bool,
+    /// When true, sexual dimorphism is active (E12): agents carry a sex bit,
+    /// mating requires opposite sexes, females apply the `MateChoosiness`
+    /// acceptance rule, and the `SexualDimorphism` gene expresses sex-linked
+    /// metabolism/damage/display differences. Off by default — zero extra RNG
+    /// draws and identity stat factors with the flag off.
+    #[serde(default)]
+    pub sexual_dimorphism_enabled: bool,
     /// Per-cell market density field (E8). Sized to the biome grid when
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
@@ -301,6 +308,7 @@ impl World {
             disasters_enabled: false,
             war_enabled: false,
             settlement_enabled: false,
+            sexual_dimorphism_enabled: false,
             market_field: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,
@@ -365,6 +373,7 @@ impl World {
     /// id is allocated here; species id is 0 (the founder species).
     pub fn spawn_agent(&mut self, position: Vec2, genome: Genome) -> AgentId {
         let lineage = self.next_lineage();
+        let sex = self.founder_sex();
         let id = self.agents.spawn(
             position,
             genome,
@@ -373,9 +382,17 @@ impl World {
             0,
             crate::module::starter_kit(),
             crate::program::starter_grazer(),
+            sex,
         );
         self.add_to_species(0);
         id
+    }
+
+    /// Founder sex assignment (E12): a 50/50 draw when sexual dimorphism is
+    /// active; `false` (female, unread) with zero RNG draws otherwise, so
+    /// flag-off scenarios keep their pre-E12 founder draw stream.
+    fn founder_sex(&mut self) -> bool {
+        self.sexual_dimorphism_enabled && self.rng.f32_unit() < 0.5
     }
 
     /// Spawn an agent with an explicit species, module kit, and program.
@@ -390,6 +407,7 @@ impl World {
         program: crate::program::Program,
     ) -> AgentId {
         let lineage = self.next_lineage();
+        let sex = self.founder_sex();
         let id = self.agents.spawn(
             position,
             genome,
@@ -398,6 +416,7 @@ impl World {
             species_id,
             modules,
             program,
+            sex,
         );
         self.add_to_species(species_id);
         id

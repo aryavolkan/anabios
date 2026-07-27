@@ -192,7 +192,14 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         let inv_weapon_mult = crate::invention::weapon_multiplier(crate::invention::held_mask(
             &world.agents.meme_vector[i],
         ));
-        let damage = weapon.damage * inv_weapon_mult;
+        // E12: males of dimorphic species hit harder (identity when the flag
+        // is off).
+        let dimorph_mult = crate::dimorphism::damage_factor(
+            &world.agents.genome[i],
+            world.agents.sex.get(i).map(|b| *b).unwrap_or(false),
+            world.sexual_dimorphism_enabled,
+        );
+        let damage = weapon.damage * inv_weapon_mult * dimorph_mult;
         let armor = module::effective_armor_protection(&world.agents.modules[t]);
         let net = (damage - armor).max(0.0);
         world.agents.energy[t] -= net;

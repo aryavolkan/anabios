@@ -1,0 +1,44 @@
+name = "dimorphism"
+seed = 0
+sexual_dimorphism_enabled = true
+
+# E12 sexual dimorphism demo: a grazer herd under stalker predation with
+# binary sex, female mate choice, and the dimorphism gene live. Predation
+# makes male size/damage matter; female choice amplifies male display; the
+# male upkeep penalty is the counterweight. Watch the codex for
+# SexualSelection (mean dimorphism gene climbing) and SexRatioCollapse
+# (a species about to lose a sex), and pin agents in the inspector to see
+# per-agent sex + dimorphism.
+
+# Prey: one grazer herd (one species) clustered in the middle of the world,
+# seeded in two dimorphism cohorts — low-d and high-d founders of the SAME
+# species, so selection has variance to act on from tick 0 (they interbreed;
+# offspring span the spectrum via crossover). Choosiness seeded above neutral
+# so female choice has teeth.
+[[agents]]
+count = 30
+placement = { kind = "cluster", center_x = 472.0, center_y = 512.0, radius = 100.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+sexual_dimorphism = 0.3
+mate_choosiness = 0.6
+
+[[agents]]
+count = 30
+placement = { kind = "cluster", center_x = 552.0, center_y = 512.0, radius = 100.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+sexual_dimorphism = 0.7
+mate_choosiness = 0.6
+
+# Predators: a handful of stalkers seeded into the same region (they are
+# dimorphic too — male stalkers hit harder and pay for it).
+[[agents]]
+count = 8
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0

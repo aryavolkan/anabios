@@ -80,6 +80,9 @@ pub struct AgentBuffers {
     /// (0 = untracked). Assigned at birth (communicator children) and on
     /// band transitions.
     pub meme_lineage: Vec<[u32; crate::program::MEME_CHANNELS]>,
+    /// Biological sex (E12): `false` = female, `true` = male. Read only when
+    /// `World::sexual_dimorphism_enabled`; all-female and unread otherwise.
+    pub sex: BitVec,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -129,6 +132,7 @@ impl AgentBuffers {
         species_id: SpeciesId,
         modules: ModuleList,
         program: Program,
+        sex: bool,
     ) -> AgentId {
         let id = if let Some(id) = self.free_list.pop() {
             let i = id as usize;
@@ -150,6 +154,7 @@ impl AgentBuffers {
             self.anchor[i] = position;
             self.harvest_exp[i] = [0.0; crate::resource::GOOD_COUNT];
             self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
+            self.sex.set(i, sex);
             self.alive.set(i, true);
             id
         } else {
@@ -172,6 +177,7 @@ impl AgentBuffers {
             self.anchor.push(position);
             self.harvest_exp.push([0.0; crate::resource::GOOD_COUNT]);
             self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
+            self.sex.push(sex);
             self.alive.push(true);
             i as AgentId
         };
@@ -217,6 +223,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         let id1 = a.spawn(
             Vec2::new(3.0, 4.0),
@@ -226,6 +233,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         assert_eq!(id0, 0);
         assert_eq!(id1, 1);
@@ -246,6 +254,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         a.kill(id);
         assert!(!a.is_alive(id));
@@ -263,6 +272,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         let id1 = a.spawn(
             Vec2::ZERO,
@@ -272,6 +282,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         a.kill(id0);
         let id2 = a.spawn(
@@ -282,6 +293,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         assert_eq!(id2, id0, "slot 0 should have been reused");
         assert_eq!(a.live_count(), 2);
@@ -300,6 +312,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         let _id1 = a.spawn(
             Vec2::ZERO,
@@ -309,6 +322,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         let id2 = a.spawn(
             Vec2::ZERO,
@@ -318,6 +332,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         a.kill(id0);
         let alive: Vec<AgentId> = a.iter_alive().collect();
@@ -335,6 +350,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         assert_eq!(a.inventory[id as usize], [0.0; crate::resource::GOOD_COUNT]);
         assert_eq!(a.inventory.len(), a.capacity());
@@ -351,6 +367,7 @@ mod tests {
             0,
             crate::module::starter_kit(),
             Program::empty(),
+            false,
         );
         a.kill(id);
         a.kill(id);

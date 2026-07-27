@@ -46,6 +46,10 @@ func _process(_delta: float) -> void:
 		"learn: indiv=%s social=%s" % [str(info["indiv_learn"]), str(info["social_learn"])],
 		"modules: %s" % mod_str,
 	]
+	if info.get("dimorphism_enabled", false):
+		lines.append(
+			"sex %s   dimorphism %.2f" % ["male" if info["sex_male"] else "female", info["dimorphism"]]
+		)
 	var held: Array = info.get("inventions", [])
 	if not held.is_empty():
 		lines.append("tech era %d: %s" % [int(info["tech_era"]), ", ".join(held)])

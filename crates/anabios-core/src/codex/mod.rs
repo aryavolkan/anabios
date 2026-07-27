@@ -23,6 +23,7 @@ mod climate;
 mod combat;
 mod culture;
 mod cycles;
+mod dimorphism;
 mod disturbance;
 mod event;
 mod invention;
@@ -253,6 +254,12 @@ pub struct CodexState {
     pub maladapt_streak: BTreeMap<u32, u32>,
     /// Species currently latched as climate-maladapted (re-arms on catch-up).
     pub maladapt_active: BTreeSet<u32>,
+    /// Species currently latched as under directional sexual selection on the
+    /// dimorphism gene (E12; re-arms below `SEXSEL_REARM_MEAN`).
+    pub sexsel_active: BTreeSet<u32>,
+    /// Species currently latched as sex-ratio-collapsed (E12; re-arms when
+    /// the minority sex recovers to `SEXRATIO_MIN_MINORITY`).
+    pub sexratio_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -332,6 +339,10 @@ pub fn observe_all(world: &mut World) {
     traits::detect_trait_fixation(world, &agg);
     traits::detect_rapid_adaptation(world, &agg);
     traits::detect_convergent_evolution(world, &agg);
+    // E12 runs after the trait pass: SexualSelection reads this tick's
+    // freshly-appended genome moments.
+    dimorphism::detect_sexual_selection(world, &agg);
+    dimorphism::detect_sex_ratio_collapse(world, &agg);
     signatures::detect_ambush_and_tool(world, &agg);
     signatures::detect_flight(world, &agg);
     signatures::detect_structured_signaling(world);
