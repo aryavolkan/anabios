@@ -639,25 +639,42 @@ impl Simulation {
     }
 
     /// One color per biome cell, row-major (`row * RES + col`). Terrain
-    /// type sets the base hue; live plant biomass brightens grass/forest
-    /// cells. Returns `RES²` colors, or empty if no world is loaded.
+    /// type sets the base hue; live plant biomass brightens each terrain
+    /// within its own hue family (so desert stays sandy at full biomass
+    /// instead of washing green). Succession scars (bare earth, pioneer
+    /// flush) and industrial pollution smudge show through on the default
+    /// ground view. Returns `RES²` colors, or empty if no world is loaded.
     #[func]
     fn biome_colors(&self) -> PackedColorArray {
-        use anabios_core::biome::TerrainType;
+        use anabios_core::biome::{TerrainType, SUCCESSION_BARE, SUCCESSION_PIONEER};
         let mut out = PackedColorArray::new();
         let Some(w) = self.inner.as_ref() else { return out };
         for cell in w.biome.cells.iter() {
             let base = match cell.terrain {
-                TerrainType::Water => Color::from_rgb(0.12, 0.22, 0.42),
-                TerrainType::Grass => Color::from_rgb(0.20, 0.42, 0.18),
-                TerrainType::Forest => Color::from_rgb(0.10, 0.30, 0.12),
-                TerrainType::Desert => Color::from_rgb(0.62, 0.56, 0.34),
-                TerrainType::Rock => Color::from_rgb(0.36, 0.36, 0.40),
+                TerrainType::Water => Color::from_rgb(0.09, 0.19, 0.44),
+                TerrainType::Grass => Color::from_rgb(0.21, 0.44, 0.19),
+                TerrainType::Forest => Color::from_rgb(0.07, 0.26, 0.11),
+                TerrainType::Desert => Color::from_rgb(0.68, 0.58, 0.33),
+                TerrainType::Rock => Color::from_rgb(0.42, 0.40, 0.45),
             };
             let cap = cell.terrain.carrying_capacity();
             let frac = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };
-            let lit = base.lerp(Color::from_rgb(0.40, 0.85, 0.35), (frac * 0.6) as f64);
-            out.push(lit);
+            let mut c = match cell.terrain {
+                TerrainType::Grass => base.lerp(Color::from_rgb(0.42, 0.80, 0.33), (frac * 0.55) as f64),
+                TerrainType::Forest => base.lerp(Color::from_rgb(0.20, 0.55, 0.24), (frac * 0.55) as f64),
+                TerrainType::Desert => base.lerp(Color::from_rgb(0.86, 0.78, 0.52), (frac * 0.45) as f64),
+                _ => base,
+            };
+            c = match cell.succession {
+                SUCCESSION_BARE => c.lerp(Color::from_rgb(0.36, 0.24, 0.13), 0.65),
+                SUCCESSION_PIONEER => c.lerp(Color::from_rgb(0.55, 0.82, 0.30), 0.45),
+                _ => c,
+            };
+            let pol = (cell.pollution / anabios_core::invention::POLLUTION_CAP).clamp(0.0, 1.0);
+            if pol > 0.0 {
+                c = c.lerp(Color::from_rgb(0.32, 0.28, 0.24), (pol * 0.55) as f64);
+            }
+            out.push(c);
         }
         out
     }
