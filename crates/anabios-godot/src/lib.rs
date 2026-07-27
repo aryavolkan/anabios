@@ -660,9 +660,15 @@ impl Simulation {
             let cap = cell.terrain.carrying_capacity();
             let frac = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };
             let mut c = match cell.terrain {
-                TerrainType::Grass => base.lerp(Color::from_rgb(0.42, 0.80, 0.33), (frac * 0.55) as f64),
-                TerrainType::Forest => base.lerp(Color::from_rgb(0.20, 0.55, 0.24), (frac * 0.55) as f64),
-                TerrainType::Desert => base.lerp(Color::from_rgb(0.86, 0.78, 0.52), (frac * 0.45) as f64),
+                TerrainType::Grass => {
+                    base.lerp(Color::from_rgb(0.42, 0.80, 0.33), (frac * 0.55) as f64)
+                }
+                TerrainType::Forest => {
+                    base.lerp(Color::from_rgb(0.20, 0.55, 0.24), (frac * 0.55) as f64)
+                }
+                TerrainType::Desert => {
+                    base.lerp(Color::from_rgb(0.86, 0.78, 0.52), (frac * 0.45) as f64)
+                }
                 _ => base,
             };
             c = match cell.succession {
