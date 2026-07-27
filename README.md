@@ -16,6 +16,7 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 - **Codex** — 21 emergence detectors (extinction → herd cohesion → invention adoption → sexual selection) writing a persistent event timeline
 - **Experiments** — DIT gene-culture technique model; biome climate adaptation (opt-in per scenario); runtime world dimensions + living/seasonal biomes
 - **Sexual dimorphism (E12)** — opt-in binary sex + female mate choice: `SexualDimorphism` gene scales male upkeep/damage/display and female metabolic efficiency; `MateChoosiness` sets the female acceptance bar; `SexualSelection`/`SexRatioCollapse` codex events. Opt-in per scenario (`sexual_dimorphism_enabled`)
+- **Domestication (E13)** — Husbandry holders tame wild juvenile herbivores into penned livestock (movement override toward the owner), draw per-tick milk yields from surplus adults, and herds breed born-tamed; `AnimalDomesticated`/`LivestockHerd` codex events. Opt-in per scenario (`domestication_enabled`, rides `inventions_enabled`)
 - **Viewer** — Godot 4.6+ client: biome/species/pheromone overlays, inspector, codex panel, co-evolution charts, per-species tech panel
 - **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV), criterion benchmark suite
 
@@ -57,7 +58,7 @@ cargo build --release --bin anabios-headless
 cat runs/divergent-32/summary.csv
 ```
 
-The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion, invention_discovered, invention_adopted, practice_discovered, practice_adopted, resource_traded, dowry_birth, sexual_selection, sex_ratio_collapse, emergence_score, novel_events, coverage` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
+The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion, invention_discovered, invention_adopted, practice_discovered, practice_adopted, resource_traded, dowry_birth, sexual_selection, sex_ratio_collapse, animal_domesticated, livestock_herd, emergence_score, novel_events, coverage` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
 
 The last three columns are the **emergence scorecard**: `emergence_score` sums rarity weights (IDF) over the distinct event types a run fired, `coverage` is the fraction of all event types fired, and `novel_events` counts fired types never seen in the reference corpus. Pass `--archive runs/corpus-dir/` to recompute weights empirically against prior sweeps; runs firing corpus-unseen event types are copied to `<out>/novel/`. Use `emergence_score` as the metric when optimizing sweeps for discovery. See `docs/superpowers/specs/2026-07-22-e1-emergence-scorecard-design.md`.
 

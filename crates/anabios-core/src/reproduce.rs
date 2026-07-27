@@ -170,6 +170,18 @@ pub fn reproduce_all(world: &mut World) {
         );
         world.add_to_species(a_species);
 
+        // Born domesticated (E13): a child of two livestock of the SAME
+        // living owner is born tamed. No RNG; gated on the flag.
+        if world.domestication_enabled {
+            let pa = world.agents.livestock_of[i];
+            if pa != crate::agent::AGENT_NULL
+                && pa == world.agents.livestock_of[j]
+                && world.agents.is_alive(pa)
+            {
+                world.agents.livestock_of[child_id as usize] = pa;
+            }
+        }
+
         // Anchor inheritance (E8): child anchor = parent-anchor midpoint +
         // drift, ONLY when settlement is enabled. Gated so flag-off draws
         // zero extra RNG (baseline streams unchanged).

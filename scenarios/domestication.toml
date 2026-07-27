@@ -1,0 +1,36 @@
+name = "domestication"
+seed = 0
+inventions_enabled = true
+domestication_enabled = true
+# Keep the world small enough that the tech race — not Malthusian collapse —
+# dominates, mirroring the inventions demo.
+max_population = 400
+
+# E13 domestication demo: an innovator culture (fast climb up the invention
+# tree: Stone Tools → Fire → Farming → Husbandry) sharing a range with a
+# wild grazer herd. Once the innovators hold Husbandry they start taming
+# juvenile grazers into penned, milk-yielding livestock; penned stock breeds
+# born-tamed. Watch the codex for InventionDiscovered (husbandry),
+# AnimalDomesticated, and LivestockHerd; pin a herder's neighbours in the
+# inspector to see "livestock of agent N".
+
+# Herders-to-be: high-Openness innovators with a Communicator (they must
+# invent Husbandry before any taming can happen).
+[[agents]]
+count = 24
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 400.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Wild stock: a plain grazer herd (species 0) clustered just east of the
+# innovators — close enough for juveniles to wander into taming range.
+[[agents]]
+count = 40
+placement = { kind = "cluster", center_x = 600.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+size = 0.5
+basal_metabolism = 0.5
+lifespan_bias = 1.0

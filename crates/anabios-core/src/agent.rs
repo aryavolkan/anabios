@@ -83,6 +83,11 @@ pub struct AgentBuffers {
     /// Biological sex (E12): `false` = female, `true` = male. Read only when
     /// `World::sexual_dimorphism_enabled`; all-female and unread otherwise.
     pub sex: BitVec,
+    /// Livestock ownership (E13): the owning herder's agent id, or
+    /// `AGENT_NULL` when wild. Set by `domestication::husbandry_step` (taming)
+    /// and at birth (born-domesticated); cleared by the orphan sweep when the
+    /// owner dies. Read only when `World::domestication_enabled`.
+    pub livestock_of: Vec<AgentId>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -155,6 +160,7 @@ impl AgentBuffers {
             self.harvest_exp[i] = [0.0; crate::resource::GOOD_COUNT];
             self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
             self.sex.set(i, sex);
+            self.livestock_of[i] = AGENT_NULL;
             self.alive.set(i, true);
             id
         } else {
@@ -178,6 +184,7 @@ impl AgentBuffers {
             self.harvest_exp.push([0.0; crate::resource::GOOD_COUNT]);
             self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
             self.sex.push(sex);
+            self.livestock_of.push(AGENT_NULL);
             self.alive.push(true);
             i as AgentId
         };

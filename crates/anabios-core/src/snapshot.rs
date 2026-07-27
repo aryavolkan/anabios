@@ -86,7 +86,12 @@ use crate::world::World;
 ///     latches, EventType::{SexualSelection, SexRatioCollapse}. Flag off ⇒
 ///     zero extra RNG draws and identity stat factors; only the serialized
 ///     layout grew.
-pub const FORMAT_VERSION: u32 = 20;
+/// v21: E13 domestication — AgentBuffers.livestock_of column,
+///     World.domestication_enabled flag, CodexState.{domesticated_species,
+///     livestock_herd_streak, livestock_herd_active}, EventType::
+///     {AnimalDomesticated, LivestockHerd}. Flag off ⇒ the tick stage
+///     early-returns and zero RNG is drawn; only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 21;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

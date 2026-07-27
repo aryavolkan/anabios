@@ -50,6 +50,9 @@ func _process(_delta: float) -> void:
 		lines.append(
 			"sex %s   dimorphism %.2f" % ["male" if info["sex_male"] else "female", info["dimorphism"]]
 		)
+	if info.get("domestication_enabled", false):
+		var owner: int = info["livestock_of"]
+		lines.append("livestock of agent %d" % owner if owner >= 0 else "wild (not livestock)")
 	var held: Array = info.get("inventions", [])
 	if not held.is_empty():
 		lines.append("tech era %d: %s" % [int(info["tech_era"]), ", ".join(held)])

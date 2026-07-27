@@ -48,7 +48,9 @@ pub fn anchor_step(world: &mut World) {
 }
 
 /// Torus shortest-path delta from `pos` to `anchor`.
-fn anchor_delta(anchor: Vec2, pos: Vec2, ws: f32) -> Vec2 {
+/// Torus-aware delta `anchor − pos` (shortest wrapped direction). Shared by
+/// the E8 homing pull and the E13 pen pull.
+pub(crate) fn anchor_delta(anchor: Vec2, pos: Vec2, ws: f32) -> Vec2 {
     let mut dx = anchor.x - pos.x;
     let mut dy = anchor.y - pos.y;
     if dx > ws * 0.5 {
