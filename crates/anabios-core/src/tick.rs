@@ -78,6 +78,10 @@ pub fn step(world: &mut World) {
     // onto a harmful custom (opt-in; no-op when `cognition_enabled` is false).
     crate::practice::discover_step(world);
 
+    // Stage 6e: husbandry — orphan sweep, milk yields, taming rolls (opt-in;
+    // no-op and zero RNG draws when `domestication_enabled` is false).
+    crate::domestication::husbandry_step(world);
+
     // Keep scratch sized to the post-reproduce capacity so end-of-tick detectors
     // (AlarmCall) that read actions/sensors/desired_direction see every agent —
     // reproduce (stage 6) can grow capacity past the top-of-tick resize.
@@ -137,6 +141,7 @@ fn decide_all(world: &mut World) {
     let biome_adaptation = world.biome_adaptation;
     let terrain_habitat = world.terrain_habitat;
     let settlement_enabled = world.settlement_enabled;
+    let domestication_enabled = world.domestication_enabled;
     let ws = world.world_size;
     let cap = world.agents.capacity();
     world
@@ -146,6 +151,17 @@ fn decide_all(world: &mut World) {
         .enumerate()
         .map_init(Vec::new, |stack, (i, (action_out, dir_out))| {
             if i >= cap || !agents.is_alive(i as u32) {
+                // Dead/out-of-range slots get clean scratch, not stale:
+                // `actions`/`desired_direction` are `#[serde(skip)]`, so a
+                // stale dead-slot value survives a continuous run but reads
+                // as default after a snapshot load — and a newborn reusing
+                // the slot mid-tick (reproduce, stage 6) is then read at
+                // observe time with divergent scratch (AlarmCall reads
+                // `actions`, StructuredSignaling reads `desired_direction`,
+                // the codex agg reads `sensors`). Same invariant as the
+                // dead-slot zeroing in `sense_all` / `codex::signatures`.
+                *action_out = crate::program::ActionRegister::default();
+                *dir_out = Vec2::ZERO;
                 return;
             }
             let mut action = decide(
@@ -209,6 +225,23 @@ fn decide_all(world: &mut World) {
                 );
                 action.move_x += pull.x;
                 action.move_y += pull.y;
+            }
+            // Livestock pen override (E13, opt-in): a tamed animal with a
+            // living owner ignores its program's movement entirely — it is
+            // pulled back beyond the pen radius and stands to graze inside
+            // it. Feeding/combat intents are untouched (grazing is
+            // position-based). Gated so flag-off stays byte-identical.
+            if domestication_enabled {
+                let owner = agents.livestock_of[i];
+                if owner != crate::agent::AGENT_NULL && agents.is_alive(owner) {
+                    let pull = crate::domestication::pen_pull_parts(
+                        agents.position[owner as usize],
+                        agents.position[i],
+                        ws,
+                    );
+                    action.move_x = pull.x;
+                    action.move_y = pull.y;
+                }
             }
             // Normalize the movement intent to a unit direction (identical to the
             // pre-M11 logic that lived inside `decide`). Guard against a non-finite
@@ -300,6 +333,32 @@ mod tests {
             }
         }
         assert!(!w.agents.is_alive(id));
+    }
+
+    #[test]
+    fn dead_slots_get_clean_decide_scratch() {
+        // Snapshot-restore invariant: after a tick, a dead slot's
+        // actions/desired_direction are defaults (not the occupant's stale
+        // values), so a newborn reusing the slot mid-tick is observed with
+        // the same scratch a snapshot-loaded world would have.
+        let mut w = World::new(1);
+        let prog = crate::program::Program::from_slice(&[
+            crate::program::Node::Const(1.0),
+            crate::program::Node::FireWeapon,
+        ]);
+        let a = w.spawn_agent(crate::prelude::Vec2::new(400.0, 400.0), Genome::neutral());
+        w.agents.program[a as usize] = prog;
+        step(&mut w);
+        assert!(w.actions[a as usize].fire_intent > 0.0, "scratch written while alive");
+
+        w.agents.kill(a);
+        step(&mut w);
+        assert_eq!(w.actions[a as usize].fire_intent, 0.0, "dead slot action reset");
+        assert_eq!(
+            w.desired_direction[a as usize],
+            crate::prelude::Vec2::ZERO,
+            "dead slot direction reset"
+        );
     }
 
     #[test]

@@ -25,6 +25,7 @@ mod culture;
 mod cycles;
 mod dimorphism;
 mod disturbance;
+mod domestication;
 mod event;
 mod invention;
 mod metrics;
@@ -260,6 +261,14 @@ pub struct CodexState {
     /// Species currently latched as sex-ratio-collapsed (E12; re-arms when
     /// the minority sex recovers to `SEXRATIO_MIN_MINORITY`).
     pub sexratio_active: BTreeSet<u32>,
+    /// Livestock species with at least one tamed member so far (E13 latch;
+    /// `AnimalDomesticated` fires once per livestock species). Written by
+    /// `domestication::husbandry_step`.
+    pub domesticated_species: BTreeSet<u32>,
+    /// Per-species consecutive-tick streak at ≥`HERD_MIN` tamed members (E13).
+    pub livestock_herd_streak: BTreeMap<u32, u64>,
+    /// Species currently latched as livestock herds (re-arms on drop).
+    pub livestock_herd_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -343,6 +352,7 @@ pub fn observe_all(world: &mut World) {
     // freshly-appended genome moments.
     dimorphism::detect_sexual_selection(world, &agg);
     dimorphism::detect_sex_ratio_collapse(world, &agg);
+    domestication::detect_livestock_herd(world, &agg);
     signatures::detect_ambush_and_tool(world, &agg);
     signatures::detect_flight(world, &agg);
     signatures::detect_structured_signaling(world);

@@ -319,3 +319,9 @@ pub const SEXRATIO_MIN_TOTAL: u32 = 12;
 /// A species this size with fewer than this many members of either sex is
 /// one bad tick from reproductive extinction.
 pub const SEXRATIO_MIN_MINORITY: u32 = 3;
+
+/// Minimum living tamed members of a livestock species for a herd to count
+/// toward LivestockHerd (E13).
+pub const LIVESTOCK_HERD_MIN: u32 = 6;
+/// Consecutive ticks at/above `LIVESTOCK_HERD_MIN` before LivestockHerd fires.
+pub const LIVESTOCK_HERD_WINDOW: u64 = 500;

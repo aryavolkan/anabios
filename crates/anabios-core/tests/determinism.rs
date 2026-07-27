@@ -136,8 +136,18 @@ const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 // and the two new event types. The flag is off in minimal, so sex draws are
 // skipped and every dimorphism factor is exactly 1.0 — trajectory
 // byte-identical, only the serialized layout grew.
+// Refreshed 2026-07-27 (E13 domestication): FORMAT_VERSION 20→21 adds
+// AgentBuffers.livestock_of + World.domestication_enabled + codex herd latches.
+// The flag is off in minimal, so husbandry_step early-returns with zero draws —
+// trajectory byte-identical, only the serialized layout grew.
+// Refreshed 2026-07-27 (scratch-staleness fix): sense_all/decide_all now reset
+// dead slots to defaults instead of leaving stale occupant values, so a newborn
+// reusing a slot mid-tick is observed with the same scratch a snapshot-loaded
+// world has (replay gate caught the divergence). Behavior changes only when a
+// newborn reuses a dead slot between sense/decide and observe — ticks 0/100 are
+// unchanged, tick 1000 moved.
 const GOLDEN: &[(u64, u64)] =
-    &[(0, 0x1ab9596251fd32d3), (100, 0x2d55b5946a8cb7a8), (1000, 0x001eab367ab41e7a)];
+    &[(0, 0x586d1afe7b5e6057), (100, 0x680ec6b621dbd273), (1000, 0x19263c1a9ae02157)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

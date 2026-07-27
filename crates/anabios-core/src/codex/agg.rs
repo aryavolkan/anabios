@@ -79,6 +79,10 @@ pub struct SpeciesAgg {
     /// agent is sex=false then); the SexRatioCollapse detector reads this
     /// only under the flag.
     pub male_count: u32,
+    /// Alive tamed members (E13, `livestock_of != AGENT_NULL`). Zero when
+    /// domestication is off; the LivestockHerd detector reads this only
+    /// under the flag.
+    pub livestock_count: u32,
 }
 
 impl Default for SpeciesAgg {
@@ -105,6 +109,7 @@ impl Default for SpeciesAgg {
             genome_sums: [0.0; 50],
             genome_sumsq: [0.0; 50],
             male_count: 0,
+            livestock_count: 0,
         }
     }
 }
@@ -132,6 +137,7 @@ impl SpeciesAgg {
         self.genome_sums = [0.0; 50];
         self.genome_sumsq = [0.0; 50];
         self.male_count = 0;
+        self.livestock_count = 0;
     }
 
     /// This tick's centroid (mean alive position), `(0,0)` when empty.
@@ -229,6 +235,9 @@ impl SpeciesAggTable {
             e.armor_sum += module::effective_armor_protection(modules) as f64;
             if world.agents.sex.get(i).map(|b| *b).unwrap_or(false) {
                 e.male_count += 1;
+            }
+            if world.agents.livestock_of[i] != crate::agent::AGENT_NULL {
+                e.livestock_count += 1;
             }
         }
         // `occ_cells` was pushed once per member (with duplicates when members

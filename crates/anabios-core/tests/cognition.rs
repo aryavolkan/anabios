@@ -81,7 +81,14 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // AgentBuffers.sex + World.sexual_dimorphism_enabled + codex dimorphism
     // latches. Flag off here — zero extra draws, identity factors; pure
     // serialized-layout growth.
-    &[(0, 0x867977936dd97b72), (100, 0xadee9df50db6af72), (300, 0x34ad442cc69d072d)];
+    // Refreshed 2026-07-27 (E13 domestication, FORMAT_VERSION 20→21):
+    // AgentBuffers.livestock_of + World.domestication_enabled + codex herd
+    // latches. Flag off here — husbandry_step early-returns; pure
+    // serialized-layout growth.
+    // Refreshed 2026-07-27 (scratch-staleness fix): dead slots now get clean
+    // sense/decide scratch (see determinism.rs note). Ticks 0/100 unchanged;
+    // tick 300 moved (first stale-slot reuse after tick 100).
+    &[(0, 0x837eafec86b35014), (100, 0x4860b4522152ed3f), (300, 0x821c4086745eae47)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

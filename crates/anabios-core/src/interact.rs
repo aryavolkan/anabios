@@ -188,6 +188,11 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         if t == i || !world.agents.is_alive(tgt) {
             continue;
         }
+        // E13: a herder does not fire on its own livestock (no cost, no
+        // damage). The owner's conspecifics are NOT exempt.
+        if world.domestication_enabled && world.agents.livestock_of[t] == id {
+            continue;
+        }
         // Metalworking buff: better weapons deal more damage.
         let inv_weapon_mult = crate::invention::weapon_multiplier(crate::invention::held_mask(
             &world.agents.meme_vector[i],
