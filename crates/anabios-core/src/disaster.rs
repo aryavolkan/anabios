@@ -86,7 +86,7 @@ impl DisasterState {
 /// Next Poisson interval: `mean × -ln(1-u)`, u ∈ (0,1].
 fn draw_interval(rng: &mut Rng, from_tick: u64) -> u64 {
     let u = 1.0 - rng.f32_unit();
-    let dt = (DISASTER_MEAN_INTERVAL as f32 * -u.ln()).max(1.0);
+    let dt = (DISASTER_MEAN_INTERVAL as f32 * -crate::mathf::lnf(u)).max(1.0);
     from_tick + dt as u64
 }
 

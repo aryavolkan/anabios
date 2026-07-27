@@ -144,8 +144,13 @@ impl GenomeSlot {
 /// Fixed-size 50-float genome.
 ///
 /// All values are kept in `[0, 1]`; constructors and mutation respect this.
+///
+/// The inner array is private so the `[0, 1]` invariant can only be broken
+/// through the explicitly-named `set_raw`/`as_mut_slice` escape hatches (used
+/// by the trait-moment statistics that reuse `Genome` as a per-slot container),
+/// never by a stray `.0` write. Named-slot writes go through `set`, which clamps.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Genome(pub [f32; GENOME_LEN]);
+pub struct Genome([f32; GENOME_LEN]);
 
 // Manual Serde impls: serde 1.x only derives Serialize/Deserialize for arrays
 // of length <= 32, so we hand-roll a tuple-shaped impl over GENOME_LEN floats.
@@ -210,6 +215,45 @@ impl Genome {
     #[inline]
     pub fn set(&mut self, slot: GenomeSlot, value: f32) {
         self.0[slot.idx()] = value.clamp(0.0, 1.0);
+    }
+
+    /// Build a `Genome` from a raw slot array **without clamping**. For the
+    /// derived "genomes" that are really per-slot statistics (species centroids,
+    /// trait means/variances), not sampled individuals; real genomes come from
+    /// `neutral`/`random`/`crossover`, which respect the `[0, 1]` invariant.
+    #[inline]
+    pub fn from_raw(slots: [f32; GENOME_LEN]) -> Self {
+        Genome(slots)
+    }
+
+    /// Read a raw slot by index — the dynamic-index escape hatch for callers
+    /// that index by a computed slot (e.g. `SenseGenome(slot)`), rather than a
+    /// named `GenomeSlot`.
+    #[inline]
+    pub fn raw(&self, i: usize) -> f32 {
+        self.0[i]
+    }
+
+    /// Write a raw slot by index, **without clamping**. Only for the trait-moment
+    /// statistics that reuse `Genome` as a per-slot `f32` container (means and
+    /// variances legitimately fall outside `[0, 1]`); real genomes must use `set`.
+    #[inline]
+    pub fn set_raw(&mut self, i: usize, value: f32) {
+        self.0[i] = value;
+    }
+
+    /// Borrow the raw slot array (read-only) — for whole-genome scans such as
+    /// species-centroid accumulation and the codex genome aggregator.
+    #[inline]
+    pub fn as_slice(&self) -> &[f32; GENOME_LEN] {
+        &self.0
+    }
+
+    /// Mutable borrow of the raw slot array, **bypassing the `[0, 1]` clamp**.
+    /// Same intent as `set_raw` (trait-moment statistics); not for real genomes.
+    #[inline]
+    pub fn as_mut_slice(&mut self) -> &mut [f32; GENOME_LEN] {
+        &mut self.0
     }
 
     /// Openness in `[-1,+1]` (`2·slot − 1`). +1 novelty-seeking, −1 routine.

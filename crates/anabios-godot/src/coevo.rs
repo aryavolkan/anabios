@@ -95,12 +95,12 @@ pub(crate) fn genetic_diversity(genomes: &[Genome]) -> f32 {
     for slot in 0..GENOME_LEN {
         let mut mean = 0.0;
         for g in genomes {
-            mean += g.0[slot];
+            mean += g.raw(slot);
         }
         mean /= n;
         let mut var = 0.0;
         for g in genomes {
-            let d = g.0[slot] - mean;
+            let d = g.raw(slot) - mean;
             var += d * d;
         }
         total_var += var / n;
@@ -154,7 +154,7 @@ mod tests {
     fn genome_with(slot: GenomeSlot, v: f32) -> Genome {
         let mut a = [0.0f32; GENOME_LEN];
         a[slot as usize] = v;
-        Genome(a)
+        Genome::from_raw(a)
     }
 
     #[test]
@@ -191,9 +191,9 @@ mod tests {
 
     #[test]
     fn mean_slot_over_respects_keep_mask() {
-        let mut a = Genome([0.5; GENOME_LEN]);
+        let mut a = Genome::from_raw([0.5; GENOME_LEN]);
         a.set(GenomeSlot::Openness, 1.0);
-        let mut b = Genome([0.5; GENOME_LEN]);
+        let mut b = Genome::from_raw([0.5; GENOME_LEN]);
         b.set(GenomeSlot::Openness, 0.0);
         let gs = [a, b];
         // Only the first agent kept -> mean == its value.

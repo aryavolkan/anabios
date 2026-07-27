@@ -346,7 +346,7 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SenseAge => scratch.push(ctx.age as f32),
             Node::SenseGenome(slot) => {
                 let s = (slot as usize).min(GENOME_LEN - 1);
-                scratch.push(ctx.genome.0[s]);
+                scratch.push(ctx.genome.raw(s));
             }
             Node::SenseNearestDistance => scratch.push(ctx.nearest_distance.min(1e6)),
             Node::SenseNearestDirX => scratch.push(ctx.nearest_dir.x),

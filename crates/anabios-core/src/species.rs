@@ -107,7 +107,7 @@ fn recompute_centroids(world: &mut World) {
     for id in world.agents.iter_alive() {
         let i = id as usize;
         let sid = world.agents.species_id[i] as usize;
-        let g = &world.agents.genome[i].0;
+        let g = world.agents.genome[i].as_slice();
         for k in 0..GENOME_LEN {
             sums[sid][k] += g[k] as f64;
         }
@@ -121,7 +121,7 @@ fn recompute_centroids(world: &mut World) {
             for k in 0..GENOME_LEN {
                 centroid[k] = (sum[k] / nf) as f32;
             }
-            world.species_centroids[sid] = Genome(centroid);
+            world.species_centroids[sid] = Genome::from_raw(centroid);
         }
     }
 }
@@ -158,7 +158,7 @@ mod tests {
         // Add one agent with a very different genome.
         let mut weird = Genome::neutral();
         for i in 0..GENOME_LEN {
-            weird.0[i] = if i % 2 == 0 { 0.0 } else { 1.0 };
+            weird.set_raw(i, if i % 2 == 0 { 0.0 } else { 1.0 });
         }
         w.spawn_agent(Vec2::new(500.0, 500.0), weird);
 

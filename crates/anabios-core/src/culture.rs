@@ -148,8 +148,11 @@ pub fn env_optimum_at(tick: u64, period: u32, drift_rate: f32) -> f32 {
         return base;
     }
     // Secular term computed in f64 (the phase `drift_rate * tick` grows without
-    // bound) then folded to f32. Deterministic: a fixed-order pure expression.
-    let secular = CLIMATE_DRIFT_AMPLITUDE * (drift_rate as f64 * tick as f64).sin() as f32;
+    // bound) then folded to f32. Deterministic across platforms: the phase is a
+    // fixed-order pure expression and the sine goes through the libm wrapper
+    // (`f64::sin` is not correctly-rounded across host libms — see `mathf`).
+    let secular =
+        CLIMATE_DRIFT_AMPLITUDE * crate::mathf::sin64(drift_rate as f64 * tick as f64) as f32;
     (base + secular).clamp(0.0, 1.0)
 }
 
@@ -212,79 +215,29 @@ pub fn culture_step(world: &mut World) {
             continue;
         }
         let pos = world.agents.position[i];
-        let mut sum = [0.0f32; MEME_CHANNELS];
-        let mut count = [0u32; MEME_CHANNELS];
-        // Social learning: track the most-skilled Communicator neighbour.
-        let mut max_neighbour_skill = 0.0f32;
-        // Invention spread: track the best (highest-level) neighbour level per
-        // invention channel — the copy-toward-best target, like the skill
-        // channel's rule.
-        let mut max_neighbour_inv = [0.0f32; crate::invention::INVENTION_COUNT];
-        // Practice spread: best neighbour level per maladaptive-practice channel
-        // (same copy-toward-best rule; only tracked when cognition is enabled).
-        let mut max_neighbour_practice = [0.0f32; crate::practice::PRACTICE_COUNT];
-        // DIT env mode: the current optimum, and the neighbour whose technique
-        // best matches it (minimizes |tech - opt|). Only computed when active.
+        // DIT env mode: the current optimum the neighbour scan matches techniques
+        // against. Only meaningful when env mode is active.
         let env_on = world.env_period > 0;
         let opt = if env_on {
             env_optimum_at(world.tick, world.env_period, world.climate_drift_rate)
         } else {
             0.0
         };
-        let mut best_tech: Option<f32> = None;
-        let mut best_tech_err = f32::INFINITY;
-        // E9 variant-of-best-neighbor tracking (social variant adoption).
-        let mut best_skill_neighbor: Option<usize> = None;
-        let mut max_neighbour_inv_variant = [0u32; crate::invention::INVENTION_COUNT];
-        let mut max_neighbour_practice_variant = [0u32; crate::practice::PRACTICE_COUNT];
-        world.spatial.query(pos, range, |oid| {
-            if oid == id {
-                return;
-            }
-            let j = oid as usize;
-            if !module::has(&world.agents.modules[j], ModuleType::Communicator) {
-                return;
-            }
-            for ch in 0..MEME_CHANNELS {
-                sum[ch] += world.actions[j].broadcast_intent[ch];
-                count[ch] += 1;
-            }
-            let j_skill = world.agents.meme_vector[j][SKILL_CHANNEL];
-            if j_skill > max_neighbour_skill {
-                max_neighbour_skill = j_skill;
-                best_skill_neighbor = Some(j);
-            }
-            if world.inventions_enabled {
-                for (k, best) in max_neighbour_inv.iter_mut().enumerate() {
-                    let ch = crate::invention::channel(k);
-                    let v = world.agents.meme_vector[j][ch];
-                    if v > *best {
-                        *best = v;
-                        // E9: remember whose variant the best level came from,
-                        // so adoption can follow the variant socially.
-                        max_neighbour_inv_variant[k] = world.agents.meme_lineage[j][ch];
-                    }
-                }
-            }
-            if world.cognition_enabled {
-                for (p, best) in max_neighbour_practice.iter_mut().enumerate() {
-                    let ch = crate::practice::channel(p);
-                    let v = world.agents.meme_vector[j][ch];
-                    if v > *best {
-                        *best = v;
-                        max_neighbour_practice_variant[p] = world.agents.meme_lineage[j][ch];
-                    }
-                }
-            }
-            if env_on {
-                let tech = world.agents.meme_vector[j][TECH_CHANNEL];
-                let err = (tech - opt).abs();
-                if err < best_tech_err {
-                    best_tech_err = err;
-                    best_tech = Some(tech);
-                }
-            }
-        });
+        // Gather the per-channel neighbour aggregates that the transmission rules
+        // below consume. Destructured back into locals so the application code is
+        // unchanged.
+        let NeighborMemeScan {
+            sum,
+            count,
+            max_neighbour_skill,
+            best_skill_neighbor,
+            max_neighbour_inv,
+            max_neighbour_inv_variant,
+            max_neighbour_practice,
+            max_neighbour_practice_variant,
+            best_tech,
+            best_tech_err,
+        } = scan_neighbor_memes(world, id, pos, range, env_on, opt);
         // Writing buff: the holder's meme copy rate and invention spread rate
         // are doubled (literacy accelerates all cultural transmission).
         let self_mask = if world.inventions_enabled {
@@ -429,6 +382,116 @@ pub fn culture_step(world: &mut World) {
         }
     }
     world.agents.scratch_ids = alive_ids;
+}
+
+/// Per-channel neighbour aggregates gathered in one spatial query, consumed by
+/// the transmission rules in `culture_step`. Splitting the ~60-line scan closure
+/// out of the driver keeps "gather" and "apply" as separate, readable phases.
+struct NeighborMemeScan {
+    /// Per-channel sum of neighbour broadcast intents.
+    sum: [f32; MEME_CHANNELS],
+    /// Per-channel count of Communicator neighbours (broadcasters).
+    count: [u32; MEME_CHANNELS],
+    /// Highest foraging-skill level seen among neighbours.
+    max_neighbour_skill: f32,
+    /// Index of the neighbour holding `max_neighbour_skill` (variant descent).
+    best_skill_neighbor: Option<usize>,
+    /// Best (highest) neighbour level per invention channel.
+    max_neighbour_inv: [f32; crate::invention::INVENTION_COUNT],
+    /// Variant id of the best-holding neighbour per invention channel.
+    max_neighbour_inv_variant: [u32; crate::invention::INVENTION_COUNT],
+    /// Best (highest) neighbour level per maladaptive-practice channel.
+    max_neighbour_practice: [f32; crate::practice::PRACTICE_COUNT],
+    /// Variant id of the best-holding neighbour per practice channel.
+    max_neighbour_practice_variant: [u32; crate::practice::PRACTICE_COUNT],
+    /// Technique of the neighbour best matching the DIT optimum (env mode only).
+    best_tech: Option<f32>,
+    /// `|tech - opt|` of `best_tech` (init `+inf`; env mode only).
+    best_tech_err: f32,
+}
+
+/// Scan the Communicator neighbours of agent `id` within `range`, aggregating
+/// the per-channel values the transmission rules need. Pure read of `world`
+/// (no mutation, no RNG) — identical iteration and comparison order to the
+/// former inline closure, so the result is byte-for-byte the same.
+fn scan_neighbor_memes(
+    world: &World,
+    id: u32,
+    pos: crate::prelude::Vec2,
+    range: f32,
+    env_on: bool,
+    opt: f32,
+) -> NeighborMemeScan {
+    let mut sum = [0.0f32; MEME_CHANNELS];
+    let mut count = [0u32; MEME_CHANNELS];
+    let mut max_neighbour_skill = 0.0f32;
+    let mut max_neighbour_inv = [0.0f32; crate::invention::INVENTION_COUNT];
+    let mut max_neighbour_practice = [0.0f32; crate::practice::PRACTICE_COUNT];
+    let mut best_tech: Option<f32> = None;
+    let mut best_tech_err = f32::INFINITY;
+    let mut best_skill_neighbor: Option<usize> = None;
+    let mut max_neighbour_inv_variant = [0u32; crate::invention::INVENTION_COUNT];
+    let mut max_neighbour_practice_variant = [0u32; crate::practice::PRACTICE_COUNT];
+    world.spatial.query(pos, range, |oid| {
+        if oid == id {
+            return;
+        }
+        let j = oid as usize;
+        if !module::has(&world.agents.modules[j], ModuleType::Communicator) {
+            return;
+        }
+        for ch in 0..MEME_CHANNELS {
+            sum[ch] += world.actions[j].broadcast_intent[ch];
+            count[ch] += 1;
+        }
+        let j_skill = world.agents.meme_vector[j][SKILL_CHANNEL];
+        if j_skill > max_neighbour_skill {
+            max_neighbour_skill = j_skill;
+            best_skill_neighbor = Some(j);
+        }
+        if world.inventions_enabled {
+            for (k, best) in max_neighbour_inv.iter_mut().enumerate() {
+                let ch = crate::invention::channel(k);
+                let v = world.agents.meme_vector[j][ch];
+                if v > *best {
+                    *best = v;
+                    // E9: remember whose variant the best level came from,
+                    // so adoption can follow the variant socially.
+                    max_neighbour_inv_variant[k] = world.agents.meme_lineage[j][ch];
+                }
+            }
+        }
+        if world.cognition_enabled {
+            for (p, best) in max_neighbour_practice.iter_mut().enumerate() {
+                let ch = crate::practice::channel(p);
+                let v = world.agents.meme_vector[j][ch];
+                if v > *best {
+                    *best = v;
+                    max_neighbour_practice_variant[p] = world.agents.meme_lineage[j][ch];
+                }
+            }
+        }
+        if env_on {
+            let tech = world.agents.meme_vector[j][TECH_CHANNEL];
+            let err = (tech - opt).abs();
+            if err < best_tech_err {
+                best_tech_err = err;
+                best_tech = Some(tech);
+            }
+        }
+    });
+    NeighborMemeScan {
+        sum,
+        count,
+        max_neighbour_skill,
+        best_skill_neighbor,
+        max_neighbour_inv,
+        max_neighbour_inv_variant,
+        max_neighbour_practice,
+        max_neighbour_practice_variant,
+        best_tech,
+        best_tech_err,
+    }
 }
 
 #[cfg(test)]

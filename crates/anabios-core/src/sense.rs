@@ -346,19 +346,7 @@ fn best_plant_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 {
 
 /// Wrap-aware direction unit vector from `from` toward `to`.
 fn torus_direction(from: Vec2, to: Vec2, world_size: f32) -> Vec2 {
-    let mut dx = to.x - from.x;
-    let mut dy = to.y - from.y;
-    if dx > world_size * 0.5 {
-        dx -= world_size;
-    } else if dx < -world_size * 0.5 {
-        dx += world_size;
-    }
-    if dy > world_size * 0.5 {
-        dy -= world_size;
-    } else if dy < -world_size * 0.5 {
-        dy += world_size;
-    }
-    Vec2::new(dx, dy).normalize_or_zero()
+    crate::spatial::torus_delta(to, from, world_size).normalize_or_zero()
 }
 
 #[cfg(test)]

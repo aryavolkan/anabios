@@ -1,0 +1,59 @@
+# A world with arid deserts and a warm tropical zone.
+#
+# Terrain (Water/Grass/Forest/Desert/Rock) is a deterministic function of the
+# seed alone — `elevation_to_terrain` in `biome.rs` maps hard-coded elevation
+# bands to terrain, and there is no per-scenario knob for biome placement. So
+# "deserts + tropical" is a SEED choice, not a config value. Seed 14 was
+# picked by scanning seeds 0..256 (see `examples/biome_scout.rs`) for the world
+# richest in BOTH desert AND tropical terrain:
+#
+#   seed 14 -> desert 22.7%, tropical 18.1%, total forest 19.8%
+#
+# "Tropical" here = Forest terrain (the wettest, highest-carrying-capacity
+# terrain, cap 20 vs desert's 3) sitting in a warm, high-`env` climate cell
+# (env >= 0.55). Deserts are the arid Desert terrain (cap 3). The scout also
+# reports each biome's densest patch (center of the window richest in that
+# terrain), used below to drop one cohort into the desert and one into the
+# tropics:
+#
+#   desert cluster   ~ (772, 500)   77% desert    within +/-8 cells
+#   tropical cluster ~ (548, 604)   94% tropical  within +/-8 cells
+#
+# Regenerate/re-scan any time with:
+#   cargo run -p anabios-core --example biome_scout
+#
+# Climate features are turned on so the two biomes are behaviorally distinct:
+#   biome_adaptation - feeding bonus where an agent's EnvAffinity matches the
+#                      local climate `env` (warm tropics vs the rest)
+#   terrain_habitat  - agents are pulled toward their TerrainAffinity terrain,
+#                      so each cohort settles into its biome
+#   living_biome     - depleted cells recolonize from vegetated neighbours,
+#                      keeping the productive tropical zone alive
+#   season_period    - seasonal regrowth band that migrates with the climate
+name = "desert-tropical"
+seed = 14
+biome_adaptation = true
+terrain_habitat = true
+living_biome = true
+season_period = 400
+# Both cohorts thrive on the feeding bonus, so cap the population — otherwise it
+# explodes (240 -> ~2000 in 200 ticks) and long runs grind on O(n^2) proximity.
+max_population = 2000
+
+# Desert cohort: terrain_affinity in [0.00, 0.25) -> prefers Desert terrain.
+[[agents]]
+count = 120
+placement = { kind = "cluster", center_x = 772.0, center_y = 500.0, radius = 80.0 }
+[agents.traits]
+terrain_affinity = 0.1
+lifespan_bias = 0.6
+reproduction_threshold = 0.5
+
+# Tropical cohort: terrain_affinity in [0.50, 0.75) -> prefers Forest terrain.
+[[agents]]
+count = 120
+placement = { kind = "cluster", center_x = 548.0, center_y = 604.0, radius = 80.0 }
+[agents.traits]
+terrain_affinity = 0.6
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

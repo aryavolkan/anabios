@@ -8,20 +8,33 @@ use super::*;
 /// RMS distance (torus-aware) of `positions` from their coordinate mean, on a
 /// torus of the given `world_size`. Returns 0.0 for fewer than 2 points.
 pub fn species_spread(positions: &[glam::Vec2], world_size: f32) -> f32 {
-    if positions.len() < 2 {
+    rms_spread(positions.iter().copied(), positions.len(), world_size)
+}
+
+/// RMS torus distance of `count` points from their coordinate mean. The point
+/// stream is consumed twice (centroid, then spread), so it must be `Clone`;
+/// callers pass either a slice (`.iter().copied()`) or an index-mapped view.
+/// Centroid and spread accumulate in `f64` in the iterator's order. Returns
+/// 0.0 for fewer than 2 points.
+pub(crate) fn rms_spread(
+    points: impl Iterator<Item = glam::Vec2> + Clone,
+    count: usize,
+    world_size: f32,
+) -> f32 {
+    if count < 2 {
         return 0.0;
     }
-    let n = positions.len() as f32;
+    let n = count as f32;
     let mut cx = 0.0f64;
     let mut cy = 0.0f64;
-    for p in positions {
+    for p in points.clone() {
         cx += p.x as f64;
         cy += p.y as f64;
     }
     let centroid = glam::Vec2::new((cx / n as f64) as f32, (cy / n as f64) as f32);
     let mut sumsq = 0.0f64;
-    for p in positions {
-        let d = crate::spatial::torus_distance(*p, centroid, world_size);
+    for p in points {
+        let d = crate::spatial::torus_distance(p, centroid, world_size);
         sumsq += (d as f64) * (d as f64);
     }
     ((sumsq / n as f64).sqrt()) as f32

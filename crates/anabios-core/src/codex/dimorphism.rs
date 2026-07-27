@@ -30,8 +30,8 @@ pub(super) fn detect_sexual_selection(world: &mut World, agg: &SpeciesAggTable) 
         if e.count < FIX_MIN_MEMBERS {
             continue;
         }
-        let newest = buf.back().expect("full ring").mean.0[DIMORPHISM_SLOT];
-        let oldest = buf.front().expect("full ring").mean.0[DIMORPHISM_SLOT];
+        let newest = buf.back().expect("full ring").mean.raw(DIMORPHISM_SLOT);
+        let oldest = buf.front().expect("full ring").mean.raw(DIMORPHISM_SLOT);
         if newest < SEXSEL_REARM_MEAN && world.codex.sexsel_active.contains(&sid) {
             rearm.push(sid);
             continue;
@@ -111,7 +111,7 @@ mod tests {
             let t = k as f32 / (MOMENT_RING - 1) as f32;
             let d = d_oldest + (d_newest - d_oldest) * t;
             let mut mean = Genome::neutral();
-            mean.0[DIMORPHISM_SLOT] = d;
+            mean.set_raw(DIMORPHISM_SLOT, d);
             ring.push_back(TraitMoments { tick: k as u64 * 10, mean, var: Genome::neutral() });
         }
         ring

@@ -161,6 +161,30 @@ impl Default for UniformSpatialHash {
     }
 }
 
+/// Wrap-aware signed shortest-path delta `a − b` on a torus of `world_size`.
+///
+/// Each component is folded into `[-world_size/2, world_size/2]` — the
+/// displacement you'd travel going the short way around the torus. This is the
+/// single source for the signed-wrap arithmetic that direction, midpoint, and
+/// homing calculations all build on; keep it in one place so the determinism-
+/// sensitive fold is identical everywhere.
+#[inline]
+pub fn torus_delta(a: Vec2, b: Vec2, world_size: f32) -> Vec2 {
+    let mut dx = a.x - b.x;
+    let mut dy = a.y - b.y;
+    if dx > world_size * 0.5 {
+        dx -= world_size;
+    } else if dx < -world_size * 0.5 {
+        dx += world_size;
+    }
+    if dy > world_size * 0.5 {
+        dy -= world_size;
+    } else if dy < -world_size * 0.5 {
+        dy += world_size;
+    }
+    Vec2::new(dx, dy)
+}
+
 /// Wrap-aware distance between two points on a torus of the given `world_size`.
 #[inline]
 pub fn torus_distance(a: Vec2, b: Vec2, world_size: f32) -> f32 {

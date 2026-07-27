@@ -190,23 +190,12 @@ pub fn reproduce_all(world: &mut World) {
             let aa = world.agents.anchor[i];
             let ba = world.agents.anchor[j];
             // Torus-safe midpoint: walk from A halfway toward B.
-            let mut dx = ba.x - aa.x;
-            let mut dy = ba.y - aa.y;
-            if dx > ws * 0.5 {
-                dx -= ws;
-            } else if dx < -ws * 0.5 {
-                dx += ws;
-            }
-            if dy > ws * 0.5 {
-                dy -= ws;
-            } else if dy < -ws * 0.5 {
-                dy += ws;
-            }
+            let d = crate::spatial::torus_delta(ba, aa, ws);
             let jx = world.rng.gaussian(0.0, crate::codex::ANCHOR_DRIFT_SIGMA);
             let jy = world.rng.gaussian(0.0, crate::codex::ANCHOR_DRIFT_SIGMA);
             world.agents.anchor[child_id as usize] = crate::prelude::Vec2::new(
-                (aa.x + dx * 0.5 + jx).rem_euclid(ws),
-                (aa.y + dy * 0.5 + jy).rem_euclid(ws),
+                (aa.x + d.x * 0.5 + jx).rem_euclid(ws),
+                (aa.y + d.y * 0.5 + jy).rem_euclid(ws),
             );
         }
 
@@ -217,74 +206,90 @@ pub fn reproduce_all(world: &mut World) {
         }
         world.reproduced_this_tick.set(child_id as usize, true);
 
-        // Meme inheritance: child = parent average + jitter, ONLY if the child
-        // has a Communicator module. This gates RNG draws so that non-communicator
-        // lineages (e.g. minimal.toml) draw zero meme RNG, keeping the golden
-        // hash stream unchanged.
-        if crate::module::has(
-            &world.agents.modules[child_id as usize],
-            crate::module::ModuleType::Communicator,
-        ) {
-            let a_meme = world.agents.meme_vector[i];
-            let b_meme = world.agents.meme_vector[j];
-            let inventions_enabled = world.inventions_enabled;
-            let cognition_enabled = world.cognition_enabled;
-            // E9 institutional memory: when BOTH parents belong to a
-            // settlement-latched species, inheritance jitter shrinks —
-            // settled cultures pass memes down more faithfully.
-            let a_species = world.agents.species_id[i];
-            let b_species = world.agents.species_id[j];
-            let settled = world.codex.settlement_active.contains(&a_species)
-                && world.codex.settlement_active.contains(&b_species);
-            let fidelity = if settled { crate::codex::SETTLED_FIDELITY } else { 1.0 };
-            world.agents.meme_vector[child_id as usize] = crate::culture::inherit_meme(
-                &a_meme,
-                &b_meme,
-                &mut world.rng,
-                inventions_enabled,
-                cognition_enabled,
-                fidelity,
-            );
-            // E9 lineage: the newborn's per-channel variants descend from
-            // its parents' variants (band-matched) or are freshly minted.
-            crate::codex::traditions::assign_birth_variants(world, child_id as usize, i, j);
-        }
+        // Meme inheritance (Communicator-gated; may draw meme RNG).
+        inherit_child_meme(world, child_id, i, j);
 
-        // Maladaptive-practice fitness costs (cognition-gated). A parent's held
-        // practice damages the offspring's reproductive/genetic fitness. Read
-        // the holdings first (releasing the meme-vector borrow) so the energy /
-        // kill mutations below don't alias it.
-        if world.cognition_enabled {
-            use crate::practice::{self, CHILD_SACRIFICE, INBREEDING};
-            let inbred = practice::has(&world.agents.meme_vector[i], INBREEDING)
-                || practice::has(&world.agents.meme_vector[j], INBREEDING);
-            let sacrifices = practice::has(&world.agents.meme_vector[i], CHILD_SACRIFICE)
-                || practice::has(&world.agents.meme_vector[j], CHILD_SACRIFICE);
-            // Inbreeding depression: a kin-mating custom expresses recessive
-            // genetic load — the closer the parents, the frailer the child
-            // (energy) and the likelier it is stillborn (viability). Paired with
-            // the kin-seeking mate bias in `find_mate`, close pairings are common,
-            // so this bites at the population level.
-            let closeness =
-                if inbred { practice::inbreeding_closeness(&a_genome, &b_genome) } else { 0.0 };
-            if inbred {
-                world.agents.energy[child_id as usize] *=
-                    1.0 - practice::INBREEDING_DEPRESSION * closeness;
-            }
-            // Two independent lethal rolls; a child removed by either is removed
-            // exactly once. `&&` short-circuits, so a non-inbreeding /
-            // non-sacrificing birth draws no RNG (keeping unrelated scenarios'
-            // streams unchanged).
-            let stillborn =
-                inbred && world.rng.f32_unit() < practice::INBREEDING_STILLBIRTH * closeness;
-            let sacrificed = sacrifices && world.rng.f32_unit() < practice::CHILD_SACRIFICE_CULL;
-            if stillborn || sacrificed {
-                world.agents.kill(child_id);
-                world.remove_from_species(a_species);
-            }
-        }
+        // Maladaptive-practice fitness costs (cognition-gated; may cull the child).
+        apply_practice_fitness_costs(world, child_id, i, j, &a_genome, &b_genome, a_species);
     }
     world.agents.scratch_ids = alive_ids;
+}
+
+/// Meme inheritance: child meme = parent average + jitter, ONLY when the child
+/// carries a Communicator module. Gating the whole block on the module keeps
+/// non-communicator lineages (e.g. minimal.toml) drawing zero meme RNG, so the
+/// golden hash stream is unchanged for them.
+fn inherit_child_meme(world: &mut World, child_id: u32, i: usize, j: usize) {
+    if !crate::module::has(
+        &world.agents.modules[child_id as usize],
+        crate::module::ModuleType::Communicator,
+    ) {
+        return;
+    }
+    let a_meme = world.agents.meme_vector[i];
+    let b_meme = world.agents.meme_vector[j];
+    let inventions_enabled = world.inventions_enabled;
+    let cognition_enabled = world.cognition_enabled;
+    // E9 institutional memory: when BOTH parents belong to a settlement-latched
+    // species, inheritance jitter shrinks — settled cultures pass memes down
+    // more faithfully.
+    let a_species = world.agents.species_id[i];
+    let b_species = world.agents.species_id[j];
+    let settled = world.codex.settlement_active.contains(&a_species)
+        && world.codex.settlement_active.contains(&b_species);
+    let fidelity = if settled { crate::codex::SETTLED_FIDELITY } else { 1.0 };
+    world.agents.meme_vector[child_id as usize] = crate::culture::inherit_meme(
+        &a_meme,
+        &b_meme,
+        &mut world.rng,
+        inventions_enabled,
+        cognition_enabled,
+        fidelity,
+    );
+    // E9 lineage: the newborn's per-channel variants descend from its parents'
+    // variants (band-matched) or are freshly minted.
+    crate::codex::traditions::assign_birth_variants(world, child_id as usize, i, j);
+}
+
+/// Maladaptive-practice fitness costs (cognition-gated). A parent's held
+/// practice damages the offspring's reproductive/genetic fitness. `a_genome`/
+/// `b_genome` are the parents' pre-spawn genome snapshots; `a_species` is the
+/// child's species (for the removal bookkeeping on a cull).
+fn apply_practice_fitness_costs(
+    world: &mut World,
+    child_id: u32,
+    i: usize,
+    j: usize,
+    a_genome: &Genome,
+    b_genome: &Genome,
+    a_species: crate::agent::SpeciesId,
+) {
+    if !world.cognition_enabled {
+        return;
+    }
+    use crate::practice::{self, CHILD_SACRIFICE, INBREEDING};
+    let inbred = practice::has(&world.agents.meme_vector[i], INBREEDING)
+        || practice::has(&world.agents.meme_vector[j], INBREEDING);
+    let sacrifices = practice::has(&world.agents.meme_vector[i], CHILD_SACRIFICE)
+        || practice::has(&world.agents.meme_vector[j], CHILD_SACRIFICE);
+    // Inbreeding depression: a kin-mating custom expresses recessive genetic
+    // load — the closer the parents, the frailer the child (energy) and the
+    // likelier it is stillborn (viability). Paired with the kin-seeking mate
+    // bias in `find_mate`, close pairings are common, so this bites at the
+    // population level.
+    let closeness = if inbred { practice::inbreeding_closeness(a_genome, b_genome) } else { 0.0 };
+    if inbred {
+        world.agents.energy[child_id as usize] *= 1.0 - practice::INBREEDING_DEPRESSION * closeness;
+    }
+    // Two independent lethal rolls; a child removed by either is removed exactly
+    // once. `&&` short-circuits, so a non-inbreeding / non-sacrificing birth
+    // draws no RNG (keeping unrelated scenarios' streams unchanged).
+    let stillborn = inbred && world.rng.f32_unit() < practice::INBREEDING_STILLBIRTH * closeness;
+    let sacrificed = sacrifices && world.rng.f32_unit() < practice::CHILD_SACRIFICE_CULL;
+    if stillborn || sacrificed {
+        world.agents.kill(child_id);
+        world.remove_from_species(a_species);
+    }
 }
 
 fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
@@ -398,20 +403,9 @@ fn find_mate(
 }
 
 fn midpoint_torus(a: Vec2, b: Vec2, world_size: f32) -> Vec2 {
-    let mut dx = b.x - a.x;
-    let mut dy = b.y - a.y;
-    if dx > world_size * 0.5 {
-        dx -= world_size;
-    } else if dx < -world_size * 0.5 {
-        dx += world_size;
-    }
-    if dy > world_size * 0.5 {
-        dy -= world_size;
-    } else if dy < -world_size * 0.5 {
-        dy += world_size;
-    }
-    let mid_x = (a.x + dx * 0.5).rem_euclid(world_size);
-    let mid_y = (a.y + dy * 0.5).rem_euclid(world_size);
+    let d = crate::spatial::torus_delta(b, a, world_size);
+    let mid_x = (a.x + d.x * 0.5).rem_euclid(world_size);
+    let mid_y = (a.y + d.y * 0.5).rem_euclid(world_size);
     Vec2::new(mid_x, mid_y)
 }
 

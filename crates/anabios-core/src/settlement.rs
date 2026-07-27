@@ -29,20 +29,9 @@ pub fn anchor_step(world: &mut World) {
         }
         let pos = world.agents.position[i];
         let a = &mut world.agents.anchor[i];
-        let mut dx = pos.x - a.x;
-        let mut dy = pos.y - a.y;
-        if dx > ws * 0.5 {
-            dx -= ws;
-        } else if dx < -ws * 0.5 {
-            dx += ws;
-        }
-        if dy > ws * 0.5 {
-            dy -= ws;
-        } else if dy < -ws * 0.5 {
-            dy += ws;
-        }
-        a.x = (a.x + dx * rate).rem_euclid(ws);
-        a.y = (a.y + dy * rate).rem_euclid(ws);
+        let d = crate::spatial::torus_delta(pos, *a, ws);
+        a.x = (a.x + d.x * rate).rem_euclid(ws);
+        a.y = (a.y + d.y * rate).rem_euclid(ws);
     }
     world.agents.scratch_ids = ids;
 }
@@ -51,19 +40,7 @@ pub fn anchor_step(world: &mut World) {
 /// Torus-aware delta `anchor − pos` (shortest wrapped direction). Shared by
 /// the E8 homing pull and the E13 pen pull.
 pub(crate) fn anchor_delta(anchor: Vec2, pos: Vec2, ws: f32) -> Vec2 {
-    let mut dx = anchor.x - pos.x;
-    let mut dy = anchor.y - pos.y;
-    if dx > ws * 0.5 {
-        dx -= ws;
-    } else if dx < -ws * 0.5 {
-        dx += ws;
-    }
-    if dy > ws * 0.5 {
-        dy -= ws;
-    } else if dy < -ws * 0.5 {
-        dy += ws;
-    }
-    Vec2::new(dx, dy)
+    crate::spatial::torus_delta(anchor, pos, ws)
 }
 
 /// Homing pull parts: `Territoriality × ANCHOR_PULL × unit(anchor − pos)`.

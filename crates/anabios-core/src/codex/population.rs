@@ -109,18 +109,12 @@ pub(super) fn detect_migration(world: &mut World, agg: &SpeciesAggTable) {
             // Feed the corridor detector: shortest-path torus direction of
             // the displacement, normalized.
             let ws = world.world_size;
-            let mut dx = last.0 - first.0;
-            let mut dy = last.1 - first.1;
-            if dx > ws * 0.5 {
-                dx -= ws;
-            } else if dx < -ws * 0.5 {
-                dx += ws;
-            }
-            if dy > ws * 0.5 {
-                dy -= ws;
-            } else if dy < -ws * 0.5 {
-                dy += ws;
-            }
+            let d = crate::spatial::torus_delta(
+                crate::prelude::Vec2::new(last.0, last.1),
+                crate::prelude::Vec2::new(first.0, first.1),
+                ws,
+            );
+            let (dx, dy) = (d.x, d.y);
             let len = (dx * dx + dy * dy).sqrt().max(1e-6);
             // Corridor leg check: sample along the unwrapped displacement
             // and count barrier-terrain (water/rock) cells crossed.
