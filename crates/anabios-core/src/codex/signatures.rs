@@ -257,18 +257,8 @@ pub(super) fn detect_structured_signaling(world: &mut World) {
             // aligned now AND materially better aligned than last tick (a
             // spawn-tick coincidence is not a response).
             let ws = world.world_size;
-            let mut dx = pos.x - world.agents.position[j].x;
-            let mut dy = pos.y - world.agents.position[j].y;
-            if dx > ws * 0.5 {
-                dx -= ws;
-            } else if dx < -ws * 0.5 {
-                dx += ws;
-            }
-            if dy > ws * 0.5 {
-                dy -= ws;
-            } else if dy < -ws * 0.5 {
-                dy += ws;
-            }
+            let d = crate::spatial::torus_delta(pos, world.agents.position[j], ws);
+            let (dx, dy) = (d.x, d.y);
             let len = (dx * dx + dy * dy).sqrt().max(1e-6);
             let (ux, uy) = (dx / len, dy / len);
             let desired = world.desired_direction[j];
