@@ -11,10 +11,20 @@
 //! Wrap every transcendental in this module and use the wrappers
 //! throughout the simulation. `sqrt` is correctly rounded by IEEE 754
 //! so the standard library's `f32::sqrt` is safe.
+//!
+//! `sin64` is the `f64` counterpart, for the few call sites that must
+//! accumulate a phase in `f64` before folding back to `f32`.
 
 #[inline]
 pub fn sinf(x: f32) -> f32 {
     libm::sinf(x)
+}
+
+/// Deterministic `f64` sine (FreeBSD msun port). Use for phases that must
+/// be accumulated in `f64` before folding to `f32`.
+#[inline]
+pub fn sin64(x: f64) -> f64 {
+    libm::sin(x)
 }
 
 #[inline]

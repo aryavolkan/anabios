@@ -148,8 +148,11 @@ pub fn env_optimum_at(tick: u64, period: u32, drift_rate: f32) -> f32 {
         return base;
     }
     // Secular term computed in f64 (the phase `drift_rate * tick` grows without
-    // bound) then folded to f32. Deterministic: a fixed-order pure expression.
-    let secular = CLIMATE_DRIFT_AMPLITUDE * (drift_rate as f64 * tick as f64).sin() as f32;
+    // bound) then folded to f32. Deterministic across platforms: the phase is a
+    // fixed-order pure expression and the sine goes through the libm wrapper
+    // (`f64::sin` is not correctly-rounded across host libms — see `mathf`).
+    let secular =
+        CLIMATE_DRIFT_AMPLITUDE * crate::mathf::sin64(drift_rate as f64 * tick as f64) as f32;
     (base + secular).clamp(0.0, 1.0)
 }
 
