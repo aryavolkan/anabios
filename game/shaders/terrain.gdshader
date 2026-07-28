@@ -6,7 +6,7 @@ shader_type canvas_item;
 // upscaled), which reads as a hard color mosaic. This shader turns that grid into
 // something that reads as *terrain*: gentle relief shading derived from color
 // luminance, softened land transitions, and living water (depth gradient, coastal
-// shallows, a slow animated shimmer).
+// shallows, a slow animated shimmer) plus sandy shorelines and a soft vignette.
 //
 // It is a pure presentation pass over READ-ONLY sim colors — no data is altered.
 // When the ground layer is showing a DATA overlay (pheromones, optimum, markets,
@@ -17,14 +17,30 @@ uniform float biome_mode = 1.0;        // 1 = terrain treatment, 0 = passthrough
 uniform float relief_strength = 0.9;   // hillshade intensity on land
 uniform float soften = 0.45;           // 0 = crisp blocks, 1 = fully smoothed
 uniform vec2 light_dir = vec2(-0.65, -0.75); // light from upper-left
+uniform float world_size = 512.0;      // sim world extent, for seamless shimmer
+uniform float vignette = 0.12;         // corner darkening on terrain (0 = off)
+
+// World-space position of this fragment. The ground is drawn as 9 separate tiles
+// (origin + 8 torus wrap copies), each with its own 0..1 UV; deriving the water
+// shimmer from world position instead of per-tile UV keeps the wave continuous
+// across tile seams (no phase jump where copies abut).
+varying vec2 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
+}
 
 float luma(vec3 c) {
 	return dot(c, vec3(0.299, 0.587, 0.114));
 }
 
-// Water biome cells are blue-dominant; land (grass/forest/desert/rock) is not.
+// Water is the only dark, blue-dominant biome. Require blue clearly above BOTH
+// red and green and the cell to be overall dark: this tolerates pollution
+// darkening water toward brown while staying clear of Rock (bright, blue≈red),
+// Tundra (pale), and every green/warm land biome. Thresholds sanity-checked
+// against the exact palette in anabios-godot::biome_colors().
 bool is_water(vec3 c) {
-	return (c.b > c.r + 0.05) && (c.b > c.g + 0.01) && (c.b > 0.18);
+	return c.b > c.r + 0.05 && c.b > c.g + 0.05 && c.b > 0.20 && max(c.r, c.g) < 0.45;
 }
 
 void fragment() {
@@ -62,9 +78,12 @@ void fragment() {
 		vec3 shallow = mix(base, vec3(0.30, 0.62, 0.72), 0.55);
 		outc = mix(deep, shallow, coast);
 
-		// Slow directional shimmer — two low-frequency wave sets in world UV.
-		float w = sin(UV.x * 90.0 + TIME * 0.6) * 0.5 + 0.5;
-		w *= sin(UV.y * 70.0 - TIME * 0.4) * 0.5 + 0.5;
+		// Slow directional shimmer in seamless world coordinates (continuous
+		// across the 9 wrap tiles). One world-width spans the same phase count
+		// the per-tile UV version used, so the look is unchanged but seam-free.
+		vec2 wuv = world_pos / world_size;
+		float w = sin(wuv.x * 90.0 + TIME * 0.6) * 0.5 + 0.5;
+		w *= sin(wuv.y * 70.0 - TIME * 0.4) * 0.5 + 0.5;
 		outc += vec3(0.05, 0.08, 0.10) * w * (0.5 + 0.5 * (1.0 - coast));
 
 		// A crisp bright rim right at the waterline (surf).
@@ -80,9 +99,23 @@ void fragment() {
 		// Brighten slopes facing the light, darken those facing away.
 		outc = base * (1.0 + clamp(shade, -0.5, 0.5));
 
-		// Slightly deepen the shoreline on the land side so coasts read cleanly.
-		outc = mix(outc, outc * 0.82, coast * 0.5);
+		// Sandy shoreline on the land side: a thin warm beach band right at the
+		// waterline, fading inland, so coasts read as coast rather than a hard
+		// color cut. Kept subtle and tinted to the cell so it reads under any
+		// biome (grass/forest/desert).
+		vec3 sand = vec3(0.80, 0.73, 0.52);
+		outc = mix(outc, sand, coast * 0.40);
+
+		// Slightly deepen the shoreline on the land side just past the beach so
+		// the transition has a little depth.
+		outc = mix(outc, outc * 0.86, max(coast - 0.25, 0.0) * 0.5);
 	}
+
+	// Soft vignette to frame the field — darkens screen corners only, and only
+	// on terrain (folded into `outc`, so the passthrough branch below is unaffected
+	// and data heatmaps keep full brightness edge-to-edge).
+	float vig = 1.0 - vignette * pow(length(SCREEN_UV - 0.5) * 1.414, 2.5);
+	outc *= vig;
 
 	// Data-overlay mode (pheromone/optimum/market/succession): faithful
 	// passthrough so heatmaps stay accurate; otherwise use the terrain result.

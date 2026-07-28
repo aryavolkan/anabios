@@ -66,6 +66,10 @@ func _setup(res: int) -> void:
 	texture = _tex
 	var world: float = sim.world_size()
 	scale = Vector2(world / _res, world / _res)
+	# Feed the world extent to the terrain shader so its water shimmer runs in
+	# seamless world coordinates across the 9 wrap tiles.
+	if _terrain_mat != null:
+		_terrain_mat.set_shader_parameter("world_size", world)
 	# Neighbor tiles are children (they inherit the wrap scale), each offset by
 	# whole worlds in biome-pixel units.
 	var i := 0
