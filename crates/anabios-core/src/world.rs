@@ -121,8 +121,9 @@ pub struct World {
     #[serde(default)]
     pub resources: Vec<crate::resource::Resource>,
     /// When true, the biome-trade-goods economy is active: nodes spawn, agents
-    /// harvest and trade them, and reproduction requires a dowry basket. Off by
-    /// default; opt-in per scenario. Draws zero RNG and changes no state when off.
+    /// harvest and trade them, and invention learning requires (and consumes)
+    /// per-tech material baskets. Off by default; opt-in per scenario. Draws
+    /// zero RNG and changes no state when off.
     #[serde(default)]
     pub resources_enabled: bool,
     /// When true, the disaster scheduler is active: fire/drought/freeze

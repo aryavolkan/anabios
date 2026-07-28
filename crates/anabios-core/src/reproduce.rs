@@ -63,9 +63,6 @@ pub fn reproduce_all(world: &mut World) {
         if !is_eligible(&world.agents, a_id) {
             continue;
         }
-        if world.resources_enabled && !has_dowry(&world.agents, a_id) {
-            continue;
-        }
 
         let a_pos = world.agents.position[i];
         let a_species = world.agents.species_id[i];
@@ -89,9 +86,6 @@ pub fn reproduce_all(world: &mut World) {
             world.sexual_dimorphism_enabled,
         );
         let Some(b_id) = mate else { continue };
-        if world.resources_enabled && !has_dowry(&world.agents, b_id) {
-            continue;
-        }
 
         let j = b_id as usize;
         let b_pos = world.agents.position[j];
@@ -102,22 +96,6 @@ pub fn reproduce_all(world: &mut World) {
         let cost = SPAWN_ENERGY * PARENT_ENERGY_COST_FRAC;
         world.agents.energy[i] -= cost;
         world.agents.energy[j] -= cost;
-
-        // Consume dowry (trade goods) from both parents when resources are enabled.
-        if world.resources_enabled {
-            for g in crate::resource::Good::ALL {
-                world.agents.inventory[i][g.index()] -= crate::resource::DOWRY_REQ;
-                world.agents.inventory[j][g.index()] -= crate::resource::DOWRY_REQ;
-            }
-            world.codex.push_event(crate::codex::CodexEvent {
-                event_type: crate::codex::EventType::DowryBirth,
-                tick: world.tick,
-                species_id: a_species,
-                value: 0.0,
-                loc_x: world.agents.position[i].x,
-                loc_y: world.agents.position[i].y,
-            });
-        }
 
         // Build child genome: crossover + mutate. Nuclear Power debuff:
         // radiation scales the child's mutation sigma when either parent
@@ -307,13 +285,6 @@ fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
         * 1.5
         * crate::personality::personality_reproduction_factor(&agents.genome[i]);
     agents.energy[i] >= threshold
-}
-
-/// True iff this agent holds at least `DOWRY_REQ` of every good — the basket
-/// required to reproduce when the trade economy is active.
-fn has_dowry(agents: &AgentBuffers, id: u32) -> bool {
-    let inv = &agents.inventory[id as usize];
-    crate::resource::Good::ALL.iter().all(|g| inv[g.index()] >= crate::resource::DOWRY_REQ)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -799,8 +770,10 @@ mod tests {
     }
 
     #[test]
-    fn dowry_blocks_then_permits_reproduction() {
-        use crate::resource::{Good, DOWRY_REQ};
+    fn resources_do_not_gate_reproduction() {
+        // The trade economy funds MEME learning, not births: with resources
+        // on, empty inventories must NOT block mating, and reproduction must
+        // not touch inventory.
         let mut w = World::new(13);
         w.resources_enabled = true;
         let pos = find_grass_cell_center(&w);
@@ -810,30 +783,24 @@ mod tests {
         w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
 
-        // No goods yet → no offspring despite ample energy.
         let before = w.agents.live_count();
         reproduce_all(&mut w);
-        assert_eq!(w.agents.live_count(), before, "no dowry: no offspring");
-
-        // Give both parents a full basket, then it must produce one offspring.
+        assert_eq!(
+            w.agents.live_count(),
+            before + 1,
+            "empty inventory must not block reproduction"
+        );
         for id in [id0, id1] {
-            for g in Good::ALL {
-                w.agents.inventory[id as usize][g.index()] = DOWRY_REQ;
-            }
-        }
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        reproduce_all(&mut w);
-        assert_eq!(w.agents.live_count(), before + 1, "full dowry: one offspring");
-        // Dowry consumed from both parents.
-        for id in [id0, id1] {
-            for g in Good::ALL {
-                assert_eq!(w.agents.inventory[id as usize][g.index()], 0.0, "dowry spent");
-            }
+            assert_eq!(
+                w.agents.inventory[id as usize],
+                [0.0; crate::resource::GOOD_COUNT],
+                "reproduction must not consume goods"
+            );
         }
     }
 
     #[test]
-    fn dowry_gate_is_inert_when_resources_disabled() {
+    fn reproduction_is_unaffected_when_resources_disabled() {
         // With resources off, reproduction ignores inventory entirely (byte-identical path).
         let mut w = World::new(13);
         let pos = find_grass_cell_center(&w);
@@ -844,30 +811,6 @@ mod tests {
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         let before = w.agents.live_count();
         reproduce_all(&mut w);
-        assert_eq!(w.agents.live_count(), before + 1, "flag off: dowry not required");
-    }
-
-    #[test]
-    fn dowry_birth_emits_event() {
-        use crate::codex::EventType;
-        use crate::resource::{Good, DOWRY_REQ};
-        let mut w = World::new(13);
-        w.resources_enabled = true;
-        let pos = find_grass_cell_center(&w);
-        let id0 = w.spawn_agent(pos, fertile_genome());
-        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
-        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
-        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
-        for id in [id0, id1] {
-            for g in Good::ALL {
-                w.agents.inventory[id as usize][g.index()] = DOWRY_REQ;
-            }
-        }
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        reproduce_all(&mut w);
-        assert!(
-            w.codex.events.iter().any(|e| e.event_type == EventType::DowryBirth),
-            "a DowryBirth event was recorded"
-        );
+        assert_eq!(w.agents.live_count(), before + 1, "flag off: reproduction unaffected");
     }
 }

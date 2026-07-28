@@ -121,8 +121,10 @@ pub enum EventType {
     PracticeAdopted = 20,
     /// First bilateral cross-species resource swap in the world (latched once).
     ResourceTraded = 21,
-    /// An offspring was produced by spending a full dowry basket.
-    DowryBirth = 22,
+    /// An agent completed learning an invention by spending its material
+    /// basket (`value` = invention id). Fires per agent per acquisition —
+    /// both for discovery breakthroughs and social-copy completions.
+    MaterialLearning = 22,
     /// A species' population oscillates with a regular period (zero-crossing
     /// analysis over `CYCLE_WINDOW`; `value` = mean period in ticks).
     PopulationCycleDetected = 23,

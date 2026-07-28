@@ -21,27 +21,31 @@ fn trade_scenario_is_deterministic() {
     assert_eq!(run(), run(), "trade scenario must replay identically");
 }
 
-/// The economy actually turns over: cross-species trades and dowry births occur.
+/// The economy actually turns over: cross-species trades occur, and — with
+/// reproduction no longer goods-gated — the population grows past its
+/// founding stock.
 #[test]
-fn trade_scenario_produces_trades_and_dowry_births() {
+fn trade_scenario_produces_trades_and_population_growth() {
     let mut w = Scenario::parse_toml(TRADE).expect("parse").instantiate();
+    let initial = w.agents.live_count();
     let mut saw_trade = false;
-    let mut saw_dowry = false;
     for _ in 0..600 {
         step(&mut w);
         for e in w.codex.events.iter() {
-            match e.event_type {
-                EventType::ResourceTraded => saw_trade = true,
-                EventType::DowryBirth => saw_dowry = true,
-                _ => {}
+            if e.event_type == EventType::ResourceTraded {
+                saw_trade = true;
             }
         }
-        if saw_trade && saw_dowry {
+        if saw_trade && w.agents.live_count() > initial {
             break;
         }
     }
     assert!(saw_trade, "expected at least one cross-species trade");
-    assert!(saw_dowry, "expected at least one dowry-gated birth");
+    assert!(
+        w.agents.live_count() > initial,
+        "expected ungated births to grow the population: {initial} -> {}",
+        w.agents.live_count()
+    );
 }
 
 /// Fraction of alive agents currently standing on THEIR OWN preferred
@@ -79,28 +83,31 @@ fn geographic_trade_scenario_is_deterministic() {
     assert_eq!(run(), run(), "geographic-trade scenario must replay identically");
 }
 
-/// The geographic-trade economy turns over: cross-species trades AND
-/// same-species dowry-gated births both occur.
+/// The geographic-trade economy turns over: cross-species trades occur AND
+/// the population grows past its founding stock (reproduction is no longer
+/// goods-gated; goods fund invention learning instead).
 #[test]
-fn geographic_trade_produces_trades_and_dowry_births() {
+fn geographic_trade_produces_trades_and_population_growth() {
     let mut w = Scenario::parse_toml(GEO).expect("parse").instantiate();
+    let initial = w.agents.live_count();
     let mut saw_trade = false;
-    let mut saw_dowry = false;
     for _ in 0..800 {
         step(&mut w);
         for e in w.codex.events.iter() {
-            match e.event_type {
-                EventType::ResourceTraded => saw_trade = true,
-                EventType::DowryBirth => saw_dowry = true,
-                _ => {}
+            if e.event_type == EventType::ResourceTraded {
+                saw_trade = true;
             }
         }
-        if saw_trade && saw_dowry {
+        if saw_trade && w.agents.live_count() > initial {
             break;
         }
     }
     assert!(saw_trade, "expected at least one cross-species trade");
-    assert!(saw_dowry, "expected at least one dowry-gated birth");
+    assert!(
+        w.agents.live_count() > initial,
+        "expected ungated births to grow the population: {initial} -> {}",
+        w.agents.live_count()
+    );
 }
 
 /// Geographic sorting actually happens: the fraction of agents standing on
