@@ -51,27 +51,54 @@ const APES: Array = [
 	[7, 10, 1, 4, "t"], [9, 10, 2, 4, "t"], [7, 14, 4, 1, "K"]],
 ]
 
-# A bold upright-hominin silhouette for the FIELD: the per-agent body mark that
-# replaces the plain disc. Pure white with an auto 1px dark outline so, once
-# multiplied by each agent's genome colour (exactly like the old disc was), it
-# reads as a little tinted ape with a crisp edge at any zoom.
-const FIELD_SHAPE: Array = [
-	[6, 2, 4, 4],   # head
-	[7, 6, 2, 1],   # neck
-	[4, 6, 8, 5],   # shoulders / torso
-	[3, 7, 2, 4],   # left arm
-	[11, 7, 2, 4],  # right arm
-	[6, 11, 2, 4],  # left leg
-	[9, 11, 2, 4],  # right leg
+# Field figures: one 16x16 pose per cell, zone-coloured per species so each
+# agent renders in its own ape's fur/skin tones instead of a flat genome tint.
+# Zones: "c" coat, "s" skin (face / chest / hands), "a" accent (chest patch).
+# Blocks are [x, y, w, h, zone], drawn back-to-front.
+const SPECIES_COUNT := 5
+const WALK_FRAME_COUNT := 4
+# Gait: 0 neutral (idle), 1 contact-left, 2 passing (whole figure lifted 1px —
+# the walk bob), 3 contact-right. The shader cycles 1→2→3→2 when moving and
+# holds 0 when idle, so the stride reads as step-lift-step-lift.
+const FIELD_POSES: Array = [
+	# 0 neutral stand
+	[[6, 2, 4, 4, "c"], [7, 4, 2, 2, "s"], [7, 6, 2, 1, "c"], [4, 6, 8, 5, "c"],
+	[7, 7, 2, 2, "a"], [3, 7, 2, 4, "c"], [3, 10, 2, 1, "s"], [11, 7, 2, 4, "c"],
+	[11, 10, 2, 1, "s"], [6, 11, 2, 4, "c"], [9, 11, 2, 4, "c"]],
+	# 1 contact left — left leg planted ahead, right trails; arms counter-swing
+	[[6, 2, 4, 4, "c"], [7, 4, 2, 2, "s"], [7, 6, 2, 1, "c"], [4, 6, 8, 5, "c"],
+	[7, 7, 2, 2, "a"], [3, 8, 2, 3, "c"], [3, 10, 2, 1, "s"], [11, 6, 2, 4, "c"],
+	[11, 9, 2, 1, "s"], [4, 11, 2, 4, "c"], [9, 12, 2, 3, "c"]],
+	# 2 passing — legs gathered under the body, figure raised 1px (the bob)
+	[[6, 1, 4, 4, "c"], [7, 3, 2, 2, "s"], [7, 5, 2, 1, "c"], [4, 5, 8, 5, "c"],
+	[7, 6, 2, 2, "a"], [3, 6, 2, 4, "c"], [3, 9, 2, 1, "s"], [11, 6, 2, 4, "c"],
+	[11, 9, 2, 1, "s"], [6, 10, 2, 4, "c"], [9, 10, 2, 4, "c"]],
+	# 3 contact right — mirror of 1
+	[[6, 2, 4, 4, "c"], [7, 4, 2, 2, "s"], [7, 6, 2, 1, "c"], [4, 6, 8, 5, "c"],
+	[7, 7, 2, 2, "a"], [3, 6, 2, 4, "c"], [3, 9, 2, 1, "s"], [11, 8, 2, 3, "c"],
+	[11, 10, 2, 1, "s"], [6, 12, 2, 3, "c"], [10, 11, 2, 4, "c"]],
 ]
 
-static func build_field_mask() -> ImageTexture:
+# Zone colours per species, keyed into PAL — matched to the inspector avatars,
+# lifted a step brighter than the true coats so figures stay readable over
+# dark terrain.
+const FIELD_ZONE_COLORS: Array = [
+	{"c": "X", "s": "m", "a": "B"},  # Chimpanzee — charcoal coat, tan skin
+	{"c": "d", "s": "B", "a": "G"},  # Gorilla — slate coat, silver chest
+	{"c": "o", "s": "T", "a": "O"},  # Orangutan — rust coat, pale skin
+	{"c": "B", "s": "t", "a": "r"},  # Australopith — brown coat, tan skin
+	{"c": "m", "s": "t", "a": "h"},  # Sapiens — tawny clothes, tan skin
+]
+
+# Build one 16x16 cell from `blocks` ([x,y,w,h] white, or [x,y,w,h,key] via
+# PAL), plus an auto 1px dark outline (every empty pixel touching the figure;
+# collected first, then written, so outline pixels don't seed more outline).
+static func _build_cell(blocks: Array) -> Image:
 	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
-	for b in FIELD_SHAPE:
-		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), Color(1, 1, 1, 1))
-	# 1px dark outline: every empty pixel that touches the silhouette. Collected
-	# first, then written, so outline pixels don't seed more outline.
+	for b in blocks:
+		var col := Color(1, 1, 1, 1) if b.size() < 5 else Color(PAL[b[4]])
+		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), col)
 	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	var edges: Array = []
 	for y in 16:
@@ -86,7 +113,31 @@ static func build_field_mask() -> ImageTexture:
 					break
 	for e in edges:
 		img.set_pixel(e.x, e.y, Color(0.34, 0.34, 0.34, 1.0))
-	return ImageTexture.create_from_image(img)
+	return img
+
+# One species' walk cycle, zone colours applied.
+static func _build_pose(pose: Array, zones: Dictionary) -> Image:
+	var blocks: Array = []
+	for b in pose:
+		blocks.append([b[0], b[1], b[2], b[3], zones[b[4]]])
+	return _build_cell(blocks)
+
+# Species `sp`'s poses packed VERTICALLY into one (16 x WALK_FRAME_COUNT*16)
+# strip. One MultiMesh per species samples its own strip. The strip is 16px
+# wide on purpose: wide-thin atlas textures sample garbage on the canvas
+# MultiMesh path (Metal), while 16px rows match the field mask that has
+# always rendered cleanly. Nearest-filtered; the transparent margins keep
+# cells from bleeding. Cells are stored upside-down: the MultiMesh QuadMesh
+# is a 3D mesh whose V axis renders flipped in the 2D canvas, so
+# pre-flipping the art draws figures upright.
+static func build_species_atlas(sp: int) -> ImageTexture:
+	var atlas := Image.create(16, WALK_FRAME_COUNT * 16, false, Image.FORMAT_RGBA8)
+	atlas.fill(Color(0, 0, 0, 0))
+	for fr in WALK_FRAME_COUNT:
+		var cell := _build_pose(FIELD_POSES[fr], FIELD_ZONE_COLORS[sp])
+		cell.flip_y()
+		atlas.blit_rect(cell, Rect2i(0, 0, 16, 16), Vector2i(0, fr * 16))
+	return ImageTexture.create_from_image(atlas)
 
 # Build the ImageTexture for ape `idx`, nearest-filtered when displayed so the
 # 16x16 grid stays crisp when scaled up.
