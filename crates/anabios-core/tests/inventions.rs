@@ -791,7 +791,7 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // new Whittaker terrain changes the invention-race trajectory — on top of
     // E13's livestock_of / domestication_enabled layout. Regenerated from the
     // merged code.
-    &[(0, 0x5df00a4e78a93f1a), (100, 0xddd047fd2a45a150), (300, 0x075c7def80929e49)];
+    &[(0, 0xd4616bec29fbe370), (100, 0x32447c1550a30696), (300, 0xeb70a1c498889417)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

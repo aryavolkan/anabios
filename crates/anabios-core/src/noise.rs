@@ -29,7 +29,7 @@ impl GradientNoise {
         let mut grad = Vec::with_capacity(period * period);
         for _ in 0..period * period {
             let angle = rng.f32_range(0.0, std::f32::consts::TAU);
-            grad.push((angle.cos(), angle.sin()));
+            grad.push((crate::mathf::cosf(angle), crate::mathf::sinf(angle)));
         }
         Self { period, grad }
     }

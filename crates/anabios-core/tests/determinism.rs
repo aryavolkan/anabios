@@ -150,8 +150,9 @@ const GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-07-27 (climate worldgen merged onto E13, FORMAT_VERSION 22):
     // the gradient-noise + Whittaker generator changes every world's terrain — a
     // genuine trajectory change — layered on E13's livestock_of /
-    // domestication_enabled serialized layout. Regenerated from the merged code.
-    &[(0, 0xfb8c60896692b595), (100, 0x668599613735eb6e), (1000, 0xa2e37317e219fbce)];
+    // domestication_enabled serialized layout. The worldgen's sin/cos are routed
+    // through mathf (libm) so these hashes are bit-identical across OSes.
+    &[(0, 0x04fcf186c6e666d2), (100, 0x3f33fa5b69576837), (1000, 0xbb780f9e16cd7349)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

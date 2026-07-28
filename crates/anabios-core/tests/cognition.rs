@@ -85,7 +85,7 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // new Whittaker terrain reshapes the agents' environment — a genuine
     // trajectory change — on top of E13's livestock_of / domestication_enabled
     // layout. Regenerated from the merged code.
-    &[(0, 0x8833a2a1dbf208e9), (100, 0xddc6ea4e5f30db72), (300, 0xa350e5135337ccad)];
+    &[(0, 0x0cd1aa23416e1e7b), (100, 0x370d775f11c96340), (300, 0x0e695dafcec461a3)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

@@ -201,7 +201,7 @@ pub const BAND_HI: f32 = 0.66;
 /// are poles, temperature 0).
 #[inline]
 pub fn latitude_temp(v: f32) -> f32 {
-    0.5 + 0.5 * (std::f32::consts::PI * (2.0 * v - 1.0)).cos()
+    0.5 + 0.5 * crate::mathf::cosf(std::f32::consts::PI * (2.0 * v - 1.0))
 }
 
 /// Latitude moisture band profile: wet equator, dry subtropics (~30 deg), wet
@@ -209,7 +209,7 @@ pub fn latitude_temp(v: f32) -> f32 {
 /// rainforest belt.
 #[inline]
 pub fn latitude_moisture(v: f32) -> f32 {
-    0.5 + 0.5 * (3.0 * std::f32::consts::PI * (2.0 * v - 1.0)).cos()
+    0.5 + 0.5 * crate::mathf::cosf(3.0 * std::f32::consts::PI * (2.0 * v - 1.0))
 }
 
 /// Whittaker classification: elevation gates water/rock, then (temperature,
