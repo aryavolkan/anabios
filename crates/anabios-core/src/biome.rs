@@ -1,9 +1,11 @@
 //! 128×128 biome field with terrain types and plant biomass.
 //!
-//! The terrain is generated deterministically from a seed using a simple
-//! value-noise field with two octaves. Plant biomass starts at the cell's
-//! carrying capacity (a function of terrain type) and is replenished each
-//! tick by logistic regrowth (see Task 6).
+//! Terrain is generated deterministically from a seed by a climate-driven
+//! pipeline: gradient-noise fBm (with domain warping) for elevation, a
+//! latitude-band temperature and moisture, then a Whittaker classification into
+//! nine terrains (see [`classify`]). Plant biomass starts at the cell's carrying
+//! capacity (a function of terrain type) and is replenished each tick by
+//! logistic regrowth.
 
 use serde::{Deserialize, Serialize};
 
@@ -91,6 +93,10 @@ pub enum TerrainType {
     Forest = 2,
     Desert = 3,
     Rock = 4,
+    Savanna = 5,
+    Rainforest = 6,
+    Taiga = 7,
+    Tundra = 8,
 }
 
 impl TerrainType {
@@ -103,6 +109,10 @@ impl TerrainType {
             TerrainType::Forest => 20.0,
             TerrainType::Desert => 3.0,
             TerrainType::Rock => 0.0,
+            TerrainType::Savanna => 8.0,
+            TerrainType::Rainforest => 28.0,
+            TerrainType::Taiga => 12.0,
+            TerrainType::Tundra => 4.0,
         }
     }
 
@@ -114,6 +124,10 @@ impl TerrainType {
             TerrainType::Forest => 0.003,
             TerrainType::Desert => 0.002,
             TerrainType::Rock => 0.0,
+            TerrainType::Savanna => 0.006,
+            TerrainType::Rainforest => 0.004,
+            TerrainType::Taiga => 0.004,
+            TerrainType::Tundra => 0.002,
         }
     }
 }
@@ -123,10 +137,17 @@ impl TerrainType {
 pub struct BiomeCell {
     pub terrain: TerrainType,
     pub plant_biomass: f32,
-    /// Per-cell climate value in `[0,1]` from a dedicated noise field, semi-
-    /// independent of terrain. Static after generation. Read by the biome-
-    /// adaptation feeding bonus when `World.biome_adaptation` is on.
+    /// Per-cell temperature climate value in `[0,1]`: a latitude gradient minus
+    /// an elevation lapse plus a little noise. Static after generation. Read as
+    /// the climate axis by the biome-adaptation feeding bonus and the seasonal-
+    /// regrowth match. (Historically a generic "env" noise field; now holds
+    /// temperature so it lines up with the Whittaker classification.)
     pub env: f32,
+    /// Per-cell moisture in `[0,1]`: a latitude band profile plus fBm. Static
+    /// after generation; combined with `env`/temperature to classify terrain at
+    /// generation time (Whittaker).
+    #[serde(default)]
+    pub moisture: f32,
     /// Industrial pollution in `[0, invention::POLLUTION_CAP]`. Deposited by
     /// Machinery holders (`invention_step`), decays per biome step, and
     /// penalizes logistic regrowth. Always 0.0 unless the invention tree is
@@ -162,50 +183,121 @@ pub struct BiomeField {
     pub cell_size: f32,
 }
 
+/// Fraction of world extent below which a cell is open water.
+pub const SEA_LEVEL: f32 = 0.35;
+/// Elevation above which a cell is barren rock/peak.
+pub const ROCK_LINE: f32 = 0.78;
+/// Temperature drop per unit elevation above sea level.
+pub const TEMP_LAPSE: f32 = 0.55;
+/// Whittaker band cutoffs for temperature and moisture.
+pub const BAND_LO: f32 = 0.33;
+pub const BAND_HI: f32 = 0.66;
+
+/// Latitude temperature: 1 at the equator (v=0.5), 0 at the poles (v=0 or 1).
+/// A raised-cosine (not a triangle) so the tropics/subtropics stay hot
+/// (temp > 0.66 across v in ~0.30..0.70) before falling off to the poles — this
+/// is what lets the dry subtropical band classify as hot Desert rather than
+/// temperate Grass. Continuous and smooth across the torus wrap (both y-edges
+/// are poles, temperature 0).
+#[inline]
+pub fn latitude_temp(v: f32) -> f32 {
+    0.5 + 0.5 * crate::mathf::cosf(std::f32::consts::PI * (2.0 * v - 1.0))
+}
+
+/// Latitude moisture band profile: wet equator, dry subtropics (~30 deg), wet
+/// temperate, dry poles — the driver of subtropical deserts and the equatorial
+/// rainforest belt.
+#[inline]
+pub fn latitude_moisture(v: f32) -> f32 {
+    0.5 + 0.5 * crate::mathf::cosf(3.0 * std::f32::consts::PI * (2.0 * v - 1.0))
+}
+
+/// Whittaker classification: elevation gates water/rock, then (temperature,
+/// moisture) select the land biome. Hard thresholds, no border dithering.
+pub fn classify(elevation: f32, temperature: f32, moisture: f32) -> TerrainType {
+    if elevation < SEA_LEVEL {
+        return TerrainType::Water;
+    }
+    if elevation > ROCK_LINE {
+        return TerrainType::Rock;
+    }
+    let hot = temperature > BAND_HI;
+    let cold = temperature < BAND_LO;
+    let arid = moisture < BAND_LO;
+    let wet = moisture > BAND_HI;
+    if hot {
+        if arid {
+            TerrainType::Desert
+        } else if wet {
+            TerrainType::Rainforest
+        } else {
+            TerrainType::Savanna
+        }
+    } else if cold {
+        if arid {
+            TerrainType::Tundra
+        } else {
+            TerrainType::Taiga
+        }
+    } else if arid {
+        TerrainType::Grass
+    } else {
+        TerrainType::Forest
+    }
+}
+
 impl BiomeField {
     /// Generate a biome field deterministically from a seed, at the given
     /// grid resolution and world extent per axis.
     pub fn generate(seed: u64, res: usize, world_size: f32) -> Self {
         let mut rng = Rng::from_seed(seed);
-        // Hash-based value-noise corner grid, sampled at two octaves (terrain).
-        let coarse = NoiseGrid::new(&mut rng, 8);
-        let fine = NoiseGrid::new(&mut rng, 24);
-        // Dedicated climate field — drawn AFTER the terrain grids so terrain
-        // generation is byte-identical to before. Deliberately LOW frequency:
-        // climate zones must be larger than an agent's lifetime dispersal, or
-        // roaming agents experience the global-mean climate and adapt to the
-        // mean instead of forming a spatial cline. A faint fine octave adds
-        // texture without breaking the large-scale gradient.
-        let climate_coarse = NoiseGrid::new(&mut rng, 3);
-        let climate_fine = NoiseGrid::new(&mut rng, 9);
-        // Nutrient-quality and fertility fields — drawn AFTER the climate grids
-        // so terrain/env generation is byte-identical. Distinct frequencies from
-        // env (3/9) and from each other so the three landscapes are uncorrelated.
-        let nutrient_coarse = NoiseGrid::new(&mut rng, 5);
-        let nutrient_fine = NoiseGrid::new(&mut rng, 13);
-        let fertility_coarse = NoiseGrid::new(&mut rng, 4);
-        let fertility_fine = NoiseGrid::new(&mut rng, 11);
+        // Climate-driven pipeline. Draw order is part of the determinism
+        // contract: reordering these fBm constructions rehashes every world.
+        // Domain-warp fields warp the sampling coordinates so landmasses are
+        // organic rather than grid-aligned; elevation/temperature-noise/moisture
+        // follow; then the nutrient and fertility fields (distinct frequencies
+        // so the landscapes stay uncorrelated).
+        let warp_x = crate::noise::Fbm::new(&mut rng, 3, 4, 2, 0.5);
+        let warp_y = crate::noise::Fbm::new(&mut rng, 3, 4, 2, 0.5);
+        let elevation = crate::noise::Fbm::new(&mut rng, 4, 5, 2, 0.5);
+        let temp_noise = crate::noise::Fbm::new(&mut rng, 5, 3, 2, 0.5);
+        let moisture_noise = crate::noise::Fbm::new(&mut rng, 6, 4, 2, 0.5);
+        let nutrient = crate::noise::Fbm::new(&mut rng, 5, 3, 2, 0.5);
+        let fertility_noise = crate::noise::Fbm::new(&mut rng, 4, 3, 2, 0.5);
 
+        const WARP_AMP: f32 = 0.35;
+        const TEMP_NOISE: f32 = 0.10;
+        // fBm of averaged octaves concentrates near 0.5; a linear contrast about
+        // 0.5 widens the elevation distribution so lowland basins (Water/Desert)
+        // and high peaks (Rock) actually occur, not just mid-elevation terrain.
+        const ELEV_CONTRAST: f32 = 2.1;
         let mut cells = Vec::with_capacity(res * res);
         for row in 0..res {
             for col in 0..res {
                 let u = col as f32 / res as f32;
                 let v = row as f32 / res as f32;
-                let n = 0.65 * coarse.sample(u, v) + 0.35 * fine.sample(u, v);
-                let terrain = elevation_to_terrain(n);
-                let env = (0.85 * climate_coarse.sample(u, v) + 0.15 * climate_fine.sample(u, v))
+                let (wu, wv) = crate::noise::warp(&warp_x, &warp_y, u, v, WARP_AMP);
+                let elev = ((elevation.sample(wu, wv) - 0.5) * ELEV_CONTRAST + 0.5).clamp(0.0, 1.0);
+                // Temperature: hot equator, cold poles, colder at altitude.
+                let temperature = (latitude_temp(v) - TEMP_LAPSE * (elev - SEA_LEVEL).max(0.0)
+                    + TEMP_NOISE * (temp_noise.sample(u, v) - 0.5))
                     .clamp(0.0, 1.0);
-                let nq = (0.8 * nutrient_coarse.sample(u, v) + 0.2 * nutrient_fine.sample(u, v))
+                // Moisture: latitude band profile (wet equator / dry subtropics /
+                // wet temperate) blended with an fBm field sampled on warped
+                // coordinates so it tracks the warped landmasses.
+                let moisture = (0.5 * latitude_moisture(v) + 0.5 * moisture_noise.sample(wu, wv))
                     .clamp(0.0, 1.0);
+                let terrain = classify(elev, temperature, moisture);
+                let nq = nutrient.sample(u, v);
                 let nutrient_quality =
                     NUTRIENT_QUALITY_MIN + (NUTRIENT_QUALITY_MAX - NUTRIENT_QUALITY_MIN) * nq;
-                let fe = (0.8 * fertility_coarse.sample(u, v) + 0.2 * fertility_fine.sample(u, v))
-                    .clamp(0.0, 1.0);
+                let fe = fertility_noise.sample(u, v);
                 let fertility = FERTILITY_MIN + (FERTILITY_MAX - FERTILITY_MIN) * fe;
                 cells.push(BiomeCell {
                     terrain,
                     plant_biomass: terrain.carrying_capacity(),
-                    env,
+                    env: temperature,
+                    moisture,
                     pollution: 0.0,
                     succession: SUCCESSION_CLIMAX,
                     nutrient_quality,
@@ -534,68 +626,98 @@ fn idx_wrap(row: usize, col: usize, res: usize) -> usize {
     (row % res) * res + (col % res)
 }
 
-fn elevation_to_terrain(n: f32) -> TerrainType {
-    if n < 0.30 {
-        TerrainType::Water
-    } else if n < 0.45 {
-        TerrainType::Desert
-    } else if n < 0.65 {
-        TerrainType::Grass
-    } else if n < 0.85 {
-        TerrainType::Forest
-    } else {
-        TerrainType::Rock
-    }
-}
-
-/// A grid of corner samples used for value noise. `cells_per_axis` controls
-/// the frequency; higher = finer detail.
-struct NoiseGrid {
-    cells_per_axis: usize,
-    samples: Vec<f32>,
-}
-
-impl NoiseGrid {
-    // NOTE: constructor renamed from `sample` to `new` because Rust disallows
-    // two items with the same name in one `impl` block (E0592). The method
-    // `sample(u, v)` keeps its planned name.
-    fn new(rng: &mut Rng, cells_per_axis: usize) -> Self {
-        let n = (cells_per_axis + 1) * (cells_per_axis + 1);
-        let mut samples = Vec::with_capacity(n);
-        for _ in 0..n {
-            samples.push(rng.f32_unit());
-        }
-        Self { cells_per_axis, samples }
-    }
-
-    fn corner(&self, cx: usize, cy: usize) -> f32 {
-        let stride = self.cells_per_axis + 1;
-        self.samples[cy * stride + cx]
-    }
-
-    /// Sample at `(u, v)` in `[0, 1)²` using bilinear interpolation.
-    fn sample(&self, u: f32, v: f32) -> f32 {
-        let scaled_x = u * self.cells_per_axis as f32;
-        let scaled_y = v * self.cells_per_axis as f32;
-        let cx = scaled_x.floor() as usize;
-        let cy = scaled_y.floor() as usize;
-        let fx = scaled_x - cx as f32;
-        let fy = scaled_y - cy as f32;
-        let cx2 = (cx + 1).min(self.cells_per_axis);
-        let cy2 = (cy + 1).min(self.cells_per_axis);
-        let a = self.corner(cx, cy);
-        let b = self.corner(cx2, cy);
-        let c = self.corner(cx, cy2);
-        let d = self.corner(cx2, cy2);
-        let ab = a + (b - a) * fx;
-        let cd = c + (d - c) * fx;
-        ab + (cd - ab) * fy
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_terrains_have_productivity_ordering() {
+        use TerrainType::*;
+        assert!(Rainforest.carrying_capacity() > Forest.carrying_capacity());
+        assert!(Forest.carrying_capacity() > Taiga.carrying_capacity());
+        assert!(Taiga.carrying_capacity() > Grass.carrying_capacity());
+        assert!(Grass.carrying_capacity() > Savanna.carrying_capacity());
+        assert!(Savanna.carrying_capacity() > Tundra.carrying_capacity());
+        assert!(Tundra.carrying_capacity() > Desert.carrying_capacity());
+        assert_eq!(Water.carrying_capacity(), 0.0);
+        assert_eq!(Rock.carrying_capacity(), 0.0);
+        // Existing values unchanged.
+        assert_eq!(Forest.carrying_capacity(), 20.0);
+        assert_eq!(Grass.carrying_capacity(), 10.0);
+        assert_eq!(Desert.carrying_capacity(), 3.0);
+        for t in [Savanna, Rainforest, Taiga, Tundra] {
+            assert!(t.regrowth_rate() > 0.0, "{t:?} must regrow");
+        }
+    }
+
+    #[test]
+    fn latitude_temp_peaks_at_equator_and_wraps() {
+        assert!(latitude_temp(0.5) > latitude_temp(0.25));
+        assert!(latitude_temp(0.5) > latitude_temp(0.75));
+        assert!((latitude_temp(0.0) - latitude_temp(1.0)).abs() < 1e-6); // toroidal
+        assert!(latitude_temp(0.0) < 0.05); // poles cold
+    }
+
+    #[test]
+    fn latitude_moisture_is_dry_in_subtropics_wet_at_equator() {
+        let equator = latitude_moisture(0.5);
+        let subtropics = latitude_moisture(0.5 - 1.0 / 6.0); // |2v-1| = 1/3
+        assert!(
+            equator > subtropics,
+            "equator {equator} should be wetter than subtropics {subtropics}"
+        );
+    }
+
+    #[test]
+    fn classify_matches_whittaker_corners() {
+        use TerrainType::*;
+        let mid = 0.6; // land, below rock line
+        assert_eq!(classify(0.1, 0.9, 0.9), Water); // below sea level
+        assert_eq!(classify(0.95, 0.9, 0.9), Rock); // above rock line
+        assert_eq!(classify(mid, 0.9, 0.1), Desert); // hot + arid
+        assert_eq!(classify(mid, 0.9, 0.9), Rainforest); // hot + wet
+        assert_eq!(classify(mid, 0.9, 0.5), Savanna); // hot + moderate
+        assert_eq!(classify(mid, 0.5, 0.1), Grass); // temperate + arid
+        assert_eq!(classify(mid, 0.5, 0.9), Forest); // temperate + wet
+        assert_eq!(classify(mid, 0.1, 0.1), Tundra); // cold + arid
+        assert_eq!(classify(mid, 0.1, 0.9), Taiga); // cold + wet
+    }
+
+    #[test]
+    fn every_world_has_deserts_and_rainforest() {
+        for seed in 0..12 {
+            let b = BiomeField::generate(seed, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+            let has = |t: TerrainType| b.cells.iter().any(|c| c.terrain == t);
+            assert!(has(TerrainType::Desert), "seed {seed} has no desert");
+            assert!(has(TerrainType::Rainforest), "seed {seed} has no rainforest");
+        }
+    }
+
+    #[test]
+    fn all_land_terrains_appear_across_seeds() {
+        use TerrainType::*;
+        let mut seen = std::collections::HashSet::new();
+        for seed in 0..24 {
+            let b = BiomeField::generate(seed, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+            for c in &b.cells {
+                seen.insert(c.terrain as u8);
+            }
+        }
+        for t in [Water, Desert, Savanna, Grass, Forest, Rainforest, Taiga, Tundra] {
+            assert!(seen.contains(&(t as u8)), "{t:?} never generated");
+        }
+    }
+
+    #[test]
+    fn generate_is_deterministic_including_moisture() {
+        let a = BiomeField::generate(42, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+        let b = BiomeField::generate(42, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+        for i in 0..a.cells.len() {
+            assert_eq!(a.cells[i].terrain, b.cells[i].terrain);
+            assert_eq!(a.cells[i].moisture, b.cells[i].moisture);
+            assert_eq!(a.cells[i].env, b.cells[i].env);
+        }
+    }
 
     #[test]
     fn climate_field_is_bounded_and_varies() {
@@ -641,7 +763,7 @@ mod tests {
     #[test]
     fn biome_contains_multiple_terrain_types() {
         let b = BiomeField::generate(7, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
-        let mut seen = [0_usize; 5];
+        let mut seen = [0_usize; 9];
         for cell in &b.cells {
             seen[cell.terrain as usize] += 1;
         }
@@ -799,6 +921,7 @@ mod tests {
             terrain: TerrainType::Grass,
             plant_biomass: biomass,
             env: 0.5,
+            moisture: 0.5,
             pollution: 0.0,
             succession,
             nutrient_quality: 1.0,

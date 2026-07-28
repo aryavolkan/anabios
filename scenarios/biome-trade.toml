@@ -1,8 +1,14 @@
+# UPDATE 2026-07-27 (climate-driven worldgen): under the new Whittaker climate
+# classification the old hub (710, 870) is cold-temperate (Taiga/Tundra, no
+# Desert -> no Salt). The cluster centers were re-scanned on this seed and moved
+# to (1008, 696) — a subtropical hub carrying all four goods' source terrains
+# within radius 70. The historical note below predates the new generator.
+#
 # Biome trade goods: five species co-located in one cluster centered at
-# (710, 870) — found by scanning this seed's biome field for the local
+# (1008, 696) — found by scanning this seed's biome field for the local
 # terrain composition with the best resource-diversity/trade-proximity
 # trade-off. All four land types (and hence all four goods) are reachable
-# within radius 70, with zero water.
+# within radius 70.
 #
 # Co-locating the clusters (same pattern as `predator-prey.toml`, which
 # relies on the same nearest-other-species sensor to land combat within
@@ -46,7 +52,7 @@ max_population = 2000
 [[agents]]
 count = 320
 archetype = "grazer"
-placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 size = 0.4
@@ -54,7 +60,7 @@ size = 0.4
 [[agents]]
 count = 320
 archetype = "grazer"
-placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 size = 0.4
@@ -62,7 +68,7 @@ size = 0.4
 [[agents]]
 count = 320
 archetype = "grazer"
-placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 size = 0.4
@@ -70,7 +76,7 @@ size = 0.4
 [[agents]]
 count = 320
 archetype = "grazer"
-placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 size = 0.4
@@ -78,7 +84,7 @@ size = 0.4
 [[agents]]
 count = 320
 archetype = "grazer"
-placement = { kind = "cluster", center_x = 710.0, center_y = 870.0, radius = 70.0 }
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
 [agents.traits]
 reproduction_threshold = 0.2
 size = 0.4

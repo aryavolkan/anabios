@@ -1,5 +1,5 @@
 name = "disturbance"
-seed = 40723
+seed = 12
 
 # E4 showcase: fire-prone range. Two grafer starter stocks share one grass
 # range while fire/drought/freeze disasters scar the biome on a Poisson

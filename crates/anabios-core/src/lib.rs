@@ -23,6 +23,7 @@ pub mod kin;
 pub mod mathf;
 pub mod metrics;
 pub mod module;
+mod noise;
 pub mod personality;
 pub mod pheromone;
 pub mod practice;
