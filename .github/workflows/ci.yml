@@ -32,8 +32,11 @@ jobs:
         run: cargo doc --workspace --no-deps --document-private-items
       - name: test (lib + unit)
         run: cargo test --workspace --lib
-      - name: test (integration)
-        run: cargo test --workspace --tests
+      # Integration tests are NOT run here. They were a 15-minute debug-profile
+      # simulation run whose every test also runs — in release, parallelized —
+      # in the `emergence` job below (no test is debug-only), so the debug run
+      # was pure redundancy. clippy --all-targets above still compile-checks the
+      # integration binaries on both OSes; the doctests below still run in debug.
       - name: test (doc tests)
         run: cargo test --workspace --doc
       - name: bench compile check
@@ -45,15 +48,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
-      # The integration step in the `rust` job runs in debug, where the emergence
-      # detectors (M11-M15) are `#[cfg_attr(debug_assertions, ignore)]` and skipped.
-      # This runs the integration tests in release so those detectors actually
-      # execute — the behavioural regression gate. (The exploratory #[ignore]
-      # experiment harnesses in gene_culture.rs / dit_boundary.rs are NOT run here:
-      # they are seed-dependent analysis tools, not pass/fail gates.)
-      - name: test (integration, release — runs emergence detectors)
-        run: cargo test --workspace --tests --release
+      # The integration + behavioural gate, in release so the emergence detectors
+      # (M11-M15) — `#[cfg_attr(debug_assertions, ignore)]`, hence skipped in any
+      # debug run — actually execute. Each detector is its own integration binary
+      # doing a long simulation; `cargo test` runs those binaries serially, so
+      # nextest (one shared parallel pool across binaries) is the win here.
+      # (Unconditionally-#[ignore]d experiment harnesses in gene_culture.rs /
+      # dit_boundary.rs stay skipped — seed-dependent analysis tools, not gates.)
+      - name: test (release — runs emergence detectors, parallel)
+        run: cargo nextest run --workspace --release
 
   coverage:
     name: coverage
@@ -64,15 +69,17 @@ jobs:
         with:
           components: llvm-tools-preview
       - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
       # Instrument and run the workspace test suite ONCE; the two gates below are
-      # cheap reports over the same profile data (no recompile, no re-run).
+      # cheap reports over the same profile data (no recompile, no re-run). Run
+      # via nextest so the test binaries execute in parallel rather than serially.
       #
       # Coverage reflects the always-on lib + integration suite. Doctests are not
-      # measured (they need the nightly -Zdoctest-in-workspace path); the emergence
+      # measured (nextest doesn't run them, same as before); the emergence
       # detectors run in debug here, where they are #[ignore]d.
       - name: collect coverage
-        run: cargo llvm-cov --workspace --no-report
+        run: cargo llvm-cov nextest --workspace --no-report
       # Gate 1 — whole-workspace floor. A backstop against total collapse. This
       # number is dragged down by the Godot bindings (anabios-godot) and the CLI
       # binaries (anabios-headless), which can't run under headless unit tests, so
