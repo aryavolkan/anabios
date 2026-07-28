@@ -63,6 +63,14 @@ func _ready() -> void:
 	evolution_panel.name = "EvolutionPanel"
 	evolution_panel.theme = UiTheme.build()
 	$UI.add_child(evolution_panel)
+	# Capture hook: ANABIOS_PIN opens the inspector on a representative agent so
+	# screenshot runs can show the pinned-agent panel (which otherwise needs a
+	# click). Inert in normal play.
+	if OS.has_environment("ANABIOS_PIN"):
+		var w: float = sim.world_size()
+		var pid: int = int(sim.agent_near(Vector2(w * 0.5, w * 0.5), w))
+		if pid >= 0:
+			inspector.pin(pid)
 
 # The world is a torus but rendering is not: a camera near a seam sees agents
 # vanish at the edge. Duplicate every agent layer into the 8 neighboring world
