@@ -27,6 +27,8 @@ const GLYPH_SIZE: float = 1.6
 @onready var streaks: MultiMeshInstance2D = $Streaks
 @onready var trade_routes: MultiMeshInstance2D = $TradeRoutes
 
+var _glyph_clones: Array[MultiMeshInstance2D] = []
+
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
 	var f = FileAccess.open(scenario_path, FileAccess.READ)
@@ -55,8 +57,9 @@ func _ready() -> void:
 	# still carries every [C] overlay (species / dialect / diet / energy).
 	bodies.texture = ApeSprites.build_field_mask()
 	bodies.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	# Hide the per-module glyph pips: the agent reads as one clean hominin figure,
-	# not a cluster of coloured blocks. (Module make-up is still in the inspector.)
+	# Per-module glyph pips are hidden by default: the agent reads as one clean
+	# hominin figure, not a cluster of coloured blocks. [M] toggles them back on
+	# for debugging. (Module make-up is always in the inspector.)
 	module_layers.visible = false
 	# streaks keep the raw quad: a solid line reads as a crisp shot streak.
 	# Combat reads as energy: additive blending makes flashes and shot streaks
@@ -108,8 +111,6 @@ func _make_wrap_clones() -> void:
 	wrap.name = "WrapClones"
 	add_child(wrap)
 	move_child(wrap, module_layers.get_index() + 1)
-	# Module glyphs are hidden — each agent is just the clean hominin figure — so
-	# their layers are not cloned to the wrap tiles.
 	var sources: Array[MultiMeshInstance2D] = [bodies, carcasses, flashes, streaks, trade_routes]
 	for src in sources:
 		for gy in range(-1, 2):
@@ -124,6 +125,19 @@ func _make_wrap_clones() -> void:
 				clone.z_index = src.z_index
 				clone.position = Vector2(gx * world, gy * world)
 				wrap.add_child(clone)
+	# Glyph clones follow the [M] toggle so pips appear at the seams too.
+	for child in module_layers.get_children():
+		for gy in range(-1, 2):
+			for gx in range(-1, 2):
+				if gx == 0 and gy == 0:
+					continue
+				var clone := MultiMeshInstance2D.new()
+				clone.multimesh = (child as MultiMeshInstance2D).multimesh
+				clone.texture = (child as MultiMeshInstance2D).texture
+				clone.position = Vector2(gx * world, gy * world)
+				clone.visible = module_layers.visible
+				wrap.add_child(clone)
+				_glyph_clones.append(clone)
 
 # Give every HUD panel the shared instrument theme, and make the top-left
 # readout legible over any terrain with a dark outline.
@@ -168,7 +182,8 @@ func _refresh_bodies() -> void:
 	mm.visible_instance_count = n
 
 	if n == 0:
-		_clear_module_layers()
+		if module_layers.visible:
+			_clear_module_layers()
 		return
 
 	var positions: PackedVector2Array = sim.alive_positions()
@@ -181,6 +196,10 @@ func _refresh_bodies() -> void:
 		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, positions[i])
 		mm.set_instance_transform_2d(i, t)
 		mm.set_instance_color(i, body_colors[i])
+
+	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
+	if module_layers.visible:
+		_refresh_module_layers()
 
 func _body_colors(n: int) -> PackedColorArray:
 	match overlay.body_mode:
@@ -328,3 +347,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			var world_pos: Vector2 = ($Camera2D as Camera2D).get_global_mouse_position()
 			var hit_id: int = int(sim.agent_near(world_pos, 4.0))
 			inspector.pin(hit_id)
+	elif event is InputEventKey:
+		var k := event as InputEventKey
+		if k.pressed and not k.echo and k.keycode == KEY_M:
+			module_layers.visible = not module_layers.visible
+			for clone in _glyph_clones:
+				clone.visible = module_layers.visible

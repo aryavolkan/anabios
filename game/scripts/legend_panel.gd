@@ -7,11 +7,13 @@ const GROUND_NAMES := ["biome", "phero-0", "phero-1", "phero-2", "phero-3", "env
 const BODY_NAMES := ["species", "dialect", "diet", "energy"]
 
 @onready var overlay = get_node("/root/Main/OverlayManager")
+@onready var module_layers = get_node("/root/Main/ModuleLayers")
 
 var _controls: Label
 var _key_box: VBoxContainer
 var _expanded: bool = true
 var _last_body: int = -1
+var _last_modules: bool = true
 
 func _ready() -> void:
 	# Replace the scene's placeholder Label with our own layout.
@@ -39,17 +41,20 @@ func _process(_delta: float) -> void:
 	var g: int = clampi(overlay.ground_mode, 0, GROUND_NAMES.size() - 1)
 	var b: int = clampi(overlay.body_mode, 0, BODY_NAMES.size() - 1)
 	_controls.text = (
-		"[G] ground: %s\n[C] body: %s\n[Y] co-evolution chart · [T] evolution · [F] reset view\n[R] replay event · [U] run to event · [V] event cam\n[H] hide · WASD/drag pan · wheel zoom · click inspect"
+		"[G] ground: %s\n[C] body: %s\n[M] module pips · [Y] co-evolution chart · [T] evolution · [F] reset view\n[R] replay event · [U] run to event · [V] event cam\n[H] hide · WASD/drag pan · wheel zoom · click inspect"
 	) % [GROUND_NAMES[g], BODY_NAMES[b]]
-	if b != _last_body:
+	var m: bool = module_layers.visible
+	if b != _last_body or m != _last_modules:
 		_last_body = b
+		_last_modules = m
 		_rebuild_key(b)
 
 func _rebuild_key(body_mode: int) -> void:
 	for c in _key_box.get_children():
 		c.queue_free()
-	_key_box.add_child(_header("modules"))
-	_key_box.add_child(_swatch_wrap(Palette.MODULE_COLORS, Palette.MODULE_NAMES))
+	if module_layers.visible:
+		_key_box.add_child(_header("modules"))
+		_key_box.add_child(_swatch_wrap(Palette.MODULE_COLORS, Palette.MODULE_NAMES))
 	_key_box.add_child(_header("links: bright brief = combat · thin lingering = trade"))
 	match body_mode:
 		1:
