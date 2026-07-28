@@ -1007,6 +1007,19 @@ impl Simulation {
         out
     }
 
+    /// Species id per alive agent, same order as `alive_positions`. The field
+    /// renderer picks each agent's ape sprite (atlas column) from this.
+    #[func]
+    fn alive_species_ids(&self) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(w.agents.species_id[id as usize] as i32);
+            }
+        }
+        out
+    }
+
     /// Number of module types (for the GDScript layer loop).
     #[func]
     fn module_type_count(&self) -> i64 {

@@ -28,6 +28,11 @@ const GLYPH_SIZE: float = 1.6
 @onready var streaks: MultiMeshInstance2D = $Streaks
 @onready var trade_routes: MultiMeshInstance2D = $TradeRoutes
 
+# One MultiMesh per ape species ($Bodies is species 0; the rest are created in
+# _ready). Each draws its own small 4-pose atlas — a single wide all-species
+# atlas corrupts on the canvas MultiMesh path (wide-thin textures sample
+# garbage there), and per-species meshes dodge it entirely.
+var _body_mmis: Array[MultiMeshInstance2D] = []
 var _glyph_clones: Array[MultiMeshInstance2D] = []
 
 func _ready() -> void:
@@ -52,22 +57,41 @@ func _ready() -> void:
 	var disc := _disc_texture()
 	carcasses.texture = disc
 	flashes.texture = disc
-	# The agents are the apes of DIT: render each as a genome-tinted 8-bit
-	# hominin instead of a plain disc. The mask is white with a dark outline, so
-	# multiplied by each agent's body colour it becomes a tinted little ape that
-	# still carries every [C] overlay (species / dialect / diet / energy).
-	# Agents are alive: the field_agent shader gives each a per-instance vertex
-	# bounce (idle breath / faster hop when moving) from data written every frame
-	# in _refresh_bodies. Texture + material are set BEFORE _make_wrap_clones() so
-	# the 8 torus wrap clones inherit them; use_custom_data exposes INSTANCE_CUSTOM
-	# to the shader (and is shared by the clones via the same MultiMesh).
-	bodies.texture = ApeSprites.build_field_mask()
-	bodies.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# The agents are the apes of DIT: render each as an 8-bit hominin in its
+	# species' own colours (zone-painted coat / skin / accent) instead of a
+	# plain disc. Each species gets its own MultiMesh + 4-pose walk atlas; the
+	# figure is drawn full-colour, and the [C] overlays (dialect / diet /
+	# energy) multiply on top as a tint when cycling away from the default
+	# species view. Agents animate: the shader reads per-instance data
+	# (phase / moving / facing) written each tick in _refresh_bodies.
+	# Texture + material are set BEFORE _make_wrap_clones() so the 8 torus
+	# wrap clones inherit them; use_custom_data exposes INSTANCE_CUSTOM to
+	# the shader (and is shared by the clones via the same MultiMesh).
 	var body_mat := ShaderMaterial.new()
 	body_mat.shader = FieldAgentShader
-	bodies.material = body_mat
-	# use_custom_data can only be toggled at instance_count 0; the .tres ships with
-	# instances, so clear first, enable, then _refresh_bodies re-grows the buffer.
+	body_mat.set_shader_parameter("frames", ApeSprites.WALK_FRAME_COUNT)
+	_body_mmis.append(bodies)
+	for sp in range(1, ApeSprites.SPECIES_COUNT):
+		var mmi := MultiMeshInstance2D.new()
+		mmi.name = "Bodies%d" % sp
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_2D
+		mm.use_colors = true
+		mm.use_custom_data = true
+		mm.mesh = bodies.multimesh.mesh
+		mmi.multimesh = mm
+		add_child(mmi)
+		move_child(mmi, bodies.get_index() + sp)
+		_body_mmis.append(mmi)
+	for sp in ApeSprites.SPECIES_COUNT:
+		var mmi := _body_mmis[sp]
+		mmi.texture = ApeSprites.build_species_atlas(sp)
+		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		mmi.material = body_mat
+	# use_custom_data can only be toggled at instance_count 0; the scene's
+	# Bodies ships with a pre-grown buffer, so clear first, enable, then
+	# _refresh_bodies re-grows it on the first tick. (The code-created
+	# species meshes start empty and already have it enabled.)
 	bodies.multimesh.instance_count = 0
 	bodies.multimesh.use_custom_data = true
 	# Per-module glyph pips are hidden by default: the agent reads as one clean
@@ -124,7 +148,8 @@ func _make_wrap_clones() -> void:
 	wrap.name = "WrapClones"
 	add_child(wrap)
 	move_child(wrap, module_layers.get_index() + 1)
-	var sources: Array[MultiMeshInstance2D] = [bodies, carcasses, flashes, streaks, trade_routes]
+	var sources: Array[MultiMeshInstance2D] = _body_mmis.duplicate()
+	sources.append_array([carcasses, flashes, streaks, trade_routes])
 	for src in sources:
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
@@ -189,12 +214,9 @@ func _process(_delta: float) -> void:
 
 func _refresh_bodies() -> void:
 	var n: int = int(sim.alive_count())
-	var mm: MultiMesh = bodies.multimesh
-	if n > mm.instance_count:
-		mm.instance_count = n
-	mm.visible_instance_count = n
-
 	if n == 0:
+		for mmi in _body_mmis:
+			mmi.multimesh.visible_instance_count = 0
 		if module_layers.visible:
 			_clear_module_layers()
 		return
@@ -202,24 +224,44 @@ func _refresh_bodies() -> void:
 	var positions: PackedVector2Array = sim.alive_positions()
 	var sizes: PackedFloat32Array = sim.alive_sizes()
 	var rots: PackedFloat32Array = sim.alive_rotations()
+	var sp_ids: PackedInt32Array = sim.alive_species_ids()
 	var body_colors: PackedColorArray = _body_colors(n)
 	var have_rots: bool = rots.size() == n
+	var have_sp: bool = sp_ids.size() == n
+
+	# Bucket alive indices by ape species — one MultiMesh per species.
+	var buckets: Array = []
+	for sp in ApeSprites.SPECIES_COUNT:
+		buckets.append(PackedInt32Array())
 	for i in n:
-		var sz: float = maxf(sizes[i] * BODY_SCALE, BODY_MIN)
-		# Upright: the hominin stands, not spins — heading drives the walk shader
-		# (facing + idle), not the transform rotation.
-		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, positions[i])
-		mm.set_instance_transform_2d(i, t)
-		mm.set_instance_color(i, body_colors[i])
-		# Per-instance animation data for the field_agent shader: a stable phase
-		# from position (survives alive-index reshuffles without popping), a moving
-		# flag (the sim reports heading exactly 0.0 when velocity≈0), and facing
-		# from the heading's x-sign.
-		var rot: float = rots[i] if have_rots else 0.0
-		var moving: float = 1.0 if rot != 0.0 else 0.0
-		var face_left: float = 1.0 if cos(rot) < 0.0 else 0.0
-		var phase: float = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
-		mm.set_instance_custom_data(i, Color(phase, moving, face_left, 0.0))
+		var sp: int = ApeSprites.ape_for_species(sp_ids[i]) if have_sp else 0
+		buckets[sp].append(i)
+
+	for sp in ApeSprites.SPECIES_COUNT:
+		var mm: MultiMesh = _body_mmis[sp].multimesh
+		var idx: PackedInt32Array = buckets[sp]
+		var m: int = idx.size()
+		if m > mm.instance_count:
+			mm.instance_count = m
+		mm.visible_instance_count = m
+		for j in m:
+			var i: int = idx[j]
+			var sz: float = maxf(sizes[i] * BODY_SCALE, BODY_MIN)
+			# Upright: the hominin stands, not spins — heading drives the
+			# walk shader (moving flag + facing), not the transform rotation.
+			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, positions[i])
+			mm.set_instance_transform_2d(j, t)
+			mm.set_instance_color(j, body_colors[i])
+			# Per-instance animation state for the field_agent shader. Phase
+			# is hashed from position (stable enough across alive-index
+			# reshuffles); the sim reports heading exactly 0.0 when
+			# velocity ≈ 0, which doubles as the idle flag; facing is the
+			# heading's x-sign.
+			var rot: float = rots[i] if have_rots else 0.0
+			var moving: float = 1.0 if rot != 0.0 else 0.0
+			var face_left: float = 1.0 if cos(rot) < 0.0 else 0.0
+			var phase: float = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
+			mm.set_instance_custom_data(j, Color(phase, moving, face_left, 0.0))
 
 	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
 	if module_layers.visible:
@@ -250,7 +292,12 @@ func _body_colors(n: int) -> PackedColorArray:
 				out3[i] = Color(0.2, 0.3, 0.8).lerp(Color(1.0, 0.9, 0.3), t)
 			return out3
 		_:
-			return sim.alive_colors()
+			# Species mode: white — the atlas already carries each ape's own
+			# coat/skin colours; the other [C] modes tint over it.
+			var out4 := PackedColorArray()
+			out4.resize(n)
+			out4.fill(Color(1, 1, 1))
+			return out4
 
 # A shaded disc, multiplied by each MultiMesh instance color to turn the flat
 # body quads into rounded, organic marks. A bright core fading to a darker rim
