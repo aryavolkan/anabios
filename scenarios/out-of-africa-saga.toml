@@ -1,0 +1,381 @@
+name = "out-of-africa-saga"
+seed = 318
+
+# OUT OF AFRICA — THE SAGA (EXPERIMENT — documented NEGATIVE result).
+#
+# This was an attempt to make the grand `out-of-africa` world reach the era-3
+# milestones (Writing, Husbandry) and domesticate the herds inside ONE
+# full-scale run, by borrowing `domestication.toml`'s recipe: throttle the
+# population (max_population = 900) so "the tech race, not Malthusian collapse,
+# dominates", boost + co-locate the innovators with a tameable Quarry herd, and
+# keep every subsystem and the grand geography.
+#
+# IT DID NOT WORK. Measured (seed 318, 20k ticks): the throttle STARVED the
+# material economy — MaterialLearning dropped from 213 (base) to 0 and the world
+# discovered NO inventions at all, worse than the base (which at least reaches
+# Fire). Invention discovery is gated on gathering + spending material baskets,
+# which needs population; a naive throttle removes the very economy the climb
+# depends on. See docs/showcase-plan.md §2/§4 for the full analysis.
+#
+# Retained as the honest starting point for "Option C" (tune a focused saga) and
+# as evidence that population throttling is the WRONG lever. This is NOT the
+# showcase scenario — the recommended path is a `starting_inventions` seeding
+# feature (Option A) or a two-act showcase (Option B). Do not treat this file as
+# a working demo.
+#
+# Watch: Migration / CorridorUse / RangeExpansion (the trek);
+# InventionDiscovered up the tech tree incl. Writing (the technology arc);
+# AnimalDomesticated / LivestockHerd (the finale); SexualSelection on the
+# hominid lineages.
+
+max_population = 900
+
+env_period = 400
+climate_drift_rate = 0.00005
+season_period = 2000
+biome_adaptation = true
+living_biome = true
+nutrient_variation = true
+soil_fertility = true
+disasters_enabled = true
+terrain_habitat = true
+resources_enabled = true
+settlement_enabled = true
+inventions_enabled = true
+gene_tech_coupling = true
+cognition_enabled = true
+war_enabled = true
+sexual_dimorphism_enabled = true
+domestication_enabled = true
+
+# ---------------------------------------------------------------------------
+# THE CRADLE — equatorial African hub (150,440). Trimmed from the base so the
+# founding forager stock does not instantly overrun the throttled cap.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 110
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 110.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.12
+
+[[agents]]
+count = 40
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 110.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.87
+
+[[agents]]
+count = 80
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 110.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.62
+
+# ---------------------------------------------------------------------------
+# THE QUARRY (240,430) — obsidian/savanna country. The saga's engine room: a
+# STRONG innovator plurality (efficient, long-lived, high-openness) plus a
+# co-located tameable herd. Once a lineage holds Husbandry, taming fires here.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 60
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 240.0, center_y = 430.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.37
+
+# Innovators: boosted count, energy-efficient (low basal_metabolism), long
+# lived, robustly reproducing (low threshold) high-openness inventors. This is
+# the lineage meant to carry the world to era 3.
+[[agents]]
+count = 90
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 240.0, center_y = 430.0, radius = 65.0 }
+[agents.traits]
+altruism = 0.4
+basal_metabolism = 0.45
+lifespan_bias = 1.0
+openness = 1.0
+reproduction_threshold = 0.2
+sexual_dimorphism = 0.8
+mate_choosiness = 0.6
+
+# Co-located tameable stock at the Quarry — grazers + a herd within wandering
+# range of the innovators, so Husbandry holders can tame juveniles on-camera.
+[[agents]]
+count = 34
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 260.0, center_y = 445.0, radius = 55.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 14
+archetype = "herd"
+placement = { kind = "cluster", center_x = 260.0, center_y = 445.0, radius = 50.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 24
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 0.05
+reproduction_threshold = 0.3
+sexual_dimorphism = 0.8
+mate_choosiness = 0.7
+
+[[agents]]
+count = 32
+archetype = "cultural_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+sexual_dimorphism = 0.6
+mate_choosiness = 0.5
+
+[[agents]]
+count = 10
+archetype = "sentinel"
+placement = { kind = "cluster", center_x = 150.0, center_y = 470.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# MEGAFAUNA BELT (200,620) — the wild savanna kept for the predation/war
+# showcase and a second, wild tameable stock. Trimmed slightly for the cap.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 34
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 200.0, center_y = 620.0, radius = 90.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "herd"
+placement = { kind = "cluster", center_x = 200.0, center_y = 620.0, radius = 70.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 10
+archetype = "culture_prey"
+placement = { kind = "cluster", center_x = 170.0, center_y = 580.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 10
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 200.0, center_y = 620.0, radius = 90.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "spiner"
+placement = { kind = "cluster", center_x = 240.0, center_y = 590.0, radius = 70.0 }
+[agents.traits]
+size = 0.6
+perception_radius = 0.9
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "bruiser"
+placement = { kind = "cluster", center_x = 160.0, center_y = 670.0, radius = 50.0 }
+[agents.traits]
+size = 0.8
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "pack_hunter"
+placement = { kind = "cluster", center_x = 250.0, center_y = 640.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 8
+archetype = "fast_hunter"
+placement = { kind = "cluster", center_x = 300.0, center_y = 450.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+openness = 0.9
+
+[[agents]]
+count = 8
+archetype = "slow_hunter"
+placement = { kind = "cluster", center_x = 220.0, center_y = 610.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# ---------------------------------------------------------------------------
+# SAHEL RELAY (500,680) — the DIT learning-strategy junction under the drift.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 24
+archetype = "innate_forager"
+placement = { kind = "cluster", center_x = 500.0, center_y = 680.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "individual_learner"
+placement = { kind = "cluster", center_x = 470.0, center_y = 650.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "pure_imitator"
+placement = { kind = "cluster", center_x = 530.0, center_y = 650.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "critical_learner"
+placement = { kind = "cluster", center_x = 500.0, center_y = 710.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# RAINFOREST + CAPE — dialect commune, kin-cooperation lineages, markers.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 16
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 250.0, center_y = 530.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "cultural_cooperator"
+placement = { kind = "cluster", center_x = 200.0, center_y = 800.0, radius = 60.0 }
+[agents.traits]
+altruism = 1.0
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "cooperator"
+placement = { kind = "cluster", center_x = 250.0, center_y = 820.0, radius = 50.0 }
+[agents.traits]
+altruism = 0.8
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "marker"
+placement = { kind = "cluster", center_x = 160.0, center_y = 780.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "marker"
+placement = { kind = "cluster", center_x = 950.0, center_y = 440.0, radius = 70.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# EURASIA — cold north held by archaics; the exodus target.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 34
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 250.0, center_y = 150.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+openness = 0.1
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 690.0, center_y = 250.0, radius = 70.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 0.05
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 800.0, center_y = 180.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 18
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 500.0, center_y = 220.0, radius = 60.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 6
+archetype = "bruiser"
+placement = { kind = "cluster", center_x = 450.0, center_y = 200.0, radius = 70.0 }
+[agents.traits]
+size = 0.85
+lifespan_bias = 1.0
+
+# ---------------------------------------------------------------------------
+# Archetype-free baseline stock (species 0), uniform across the climate range.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 40
+placement = { kind = "uniform" }
+[agents.traits]
+lifespan_bias = 0.6
+reproduction_threshold = 0.3
