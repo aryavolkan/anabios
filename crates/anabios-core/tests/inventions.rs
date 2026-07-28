@@ -635,8 +635,144 @@ fn spread_respects_the_iq_gate() {
     );
 }
 
-// --- Maladaptive practices (Phase 3) ----------------------------------------------
+// --- Material learning costs (trade-goods economy) ------------------------------
 
+use anabios_core::resource::Good;
+
+#[test]
+fn materials_permit_checks_the_basket_and_respects_the_flag() {
+    use invention::{consume_materials, materials_permit, STONE_TOOLS};
+    let basket = invention::INVENTIONS[STONE_TOOLS].materials;
+    assert!(basket[Good::Obsidian.index()] > 0.0, "test setup: Stone Tools costs obsidian");
+    // Gate off (resources disabled): always affordable.
+    assert!(materials_permit(&[0.0; 4], STONE_TOOLS, false));
+    // Gate on: must hold every required good.
+    assert!(!materials_permit(&[0.0; 4], STONE_TOOLS, true));
+    let mut inv = [0.0; 4];
+    inv[Good::Obsidian.index()] = basket[Good::Obsidian.index()];
+    assert!(materials_permit(&inv, STONE_TOOLS, true));
+    // Consumption deducts exactly the basket.
+    consume_materials(&mut inv, STONE_TOOLS);
+    assert_eq!(inv[Good::Obsidian.index()], 0.0);
+}
+
+#[test]
+fn discovery_requires_and_consumes_materials() {
+    let seed_pop = || {
+        let mut w = World::new(113);
+        w.inventions_enabled = true;
+        w.resources_enabled = true;
+        let mut ids = Vec::new();
+        for n in 0..8 {
+            let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+            w.agents.modules[id as usize] = comm_kit();
+            w.agents.meme_vector[id as usize][SKILL_CHANNEL] = 1.0;
+            let mut g = w.agents.genome[id as usize];
+            g.set(GenomeSlot::Openness, 1.0);
+            w.agents.genome[id as usize] = g;
+            ids.push(id);
+        }
+        (w, ids)
+    };
+
+    // Empty inventories: maximally inventive communicators never discover —
+    // the material gate filters every candidate out.
+    let (mut poor, poor_ids) = seed_pop();
+    for _ in 0..20_000 {
+        invention::invention_step(&mut poor);
+    }
+    assert!(
+        poor_ids.iter().all(|&id| invention::held_mask(&poor.agents.meme_vector[id as usize]) == 0),
+        "no goods: no discovery"
+    );
+
+    // Stocked with obsidian: Stone Tools is discovered, the discoverer pays
+    // the basket, and a MaterialLearning event records the spend.
+    let (mut rich, rich_ids) = seed_pop();
+    for &id in &rich_ids {
+        rich.agents.inventory[id as usize][Good::Obsidian.index()] =
+            invention::INVENTIONS[invention::STONE_TOOLS].materials[Good::Obsidian.index()];
+    }
+    let mut discovered = None;
+    for _ in 0..20_000 {
+        invention::invention_step(&mut rich);
+        if let Some(&id) = rich_ids.iter().find(|&&id| {
+            invention::has(&rich.agents.meme_vector[id as usize], invention::STONE_TOOLS)
+        }) {
+            discovered = Some(id);
+            break;
+        }
+    }
+    let id = discovered.expect("stocked innovators discover Stone Tools");
+    assert_eq!(
+        rich.agents.inventory[id as usize][Good::Obsidian.index()],
+        0.0,
+        "discovery consumes the material basket"
+    );
+    assert!(
+        rich.codex.events.iter().any(|e| e.event_type == EventType::MaterialLearning
+            && e.value as usize == invention::STONE_TOOLS),
+        "MaterialLearning event recorded for the discovery"
+    );
+}
+
+#[test]
+fn spread_requires_and_consumes_materials_on_adoption() {
+    let build = || {
+        let mut w = World::new(127);
+        w.inventions_enabled = true;
+        w.resources_enabled = true;
+        let holder = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        let receiver = w.spawn_agent(Vec2::new(505.0, 500.0), Genome::neutral());
+        w.agents.modules[holder as usize] = comm_kit();
+        w.agents.modules[receiver as usize] = comm_kit();
+        w.agents.program[holder as usize] = Program::from_slice(&[Node::Idle]);
+        w.agents.program[receiver as usize] = Program::from_slice(&[Node::Idle]);
+        set_held(&mut w, holder, invention::STONE_TOOLS);
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        size_scratch(&mut w);
+        (w, holder, receiver)
+    };
+
+    // No obsidian: the receiver cannot even START copying Stone Tools.
+    let (mut poor, _h, poor_r) = build();
+    for _ in 0..50 {
+        anabios_core::culture::culture_step(&mut poor);
+    }
+    assert_eq!(
+        level_of(&poor, poor_r, invention::STONE_TOOLS),
+        0.0,
+        "no materials: social learning stalls at zero"
+    );
+
+    // Stocked: the copy proceeds, and crossing HELD_THRESHOLD consumes the
+    // basket and records the event.
+    let (mut rich, _h, rich_r) = build();
+    rich.agents.inventory[rich_r as usize][Good::Obsidian.index()] =
+        invention::INVENTIONS[invention::STONE_TOOLS].materials[Good::Obsidian.index()];
+    for _ in 0..500 {
+        anabios_core::culture::culture_step(&mut rich);
+        if invention::has(&rich.agents.meme_vector[rich_r as usize], invention::STONE_TOOLS) {
+            break;
+        }
+    }
+    assert!(
+        invention::has(&rich.agents.meme_vector[rich_r as usize], invention::STONE_TOOLS),
+        "stocked receiver completes adoption"
+    );
+    assert_eq!(
+        rich.agents.inventory[rich_r as usize][Good::Obsidian.index()],
+        0.0,
+        "completing adoption consumes the basket"
+    );
+    assert!(
+        rich.codex.events.iter().any(|e| e.event_type == EventType::MaterialLearning
+            && e.value as usize == invention::STONE_TOOLS),
+        "MaterialLearning event recorded for the social adoption"
+    );
+}
+
+// --- Maladaptive practices (Phase 3) ----------------------------------------------
 #[test]
 fn practice_spreads_socially_and_respects_the_iq_gate() {
     use anabios_core::practice;

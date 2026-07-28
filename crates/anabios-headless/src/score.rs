@@ -62,7 +62,7 @@ pub const ALL_EVENT_NAMES: [&str; 53] = [
     "practice_discovered",
     "practice_adopted",
     "resource_traded",
-    "dowry_birth",
+    "material_learning",
     "pop_cycle",
     "boom_bust",
     "carrying_capacity",
@@ -125,7 +125,7 @@ pub const DEFAULT_CORPUS_NT: [(&str, u64); 53] = [
     ("practice_discovered", 0),
     ("practice_adopted", 0),
     ("resource_traded", 0),
-    ("dowry_birth", 0),
+    ("material_learning", 0),
     ("pop_cycle", 0),             // post-corpus (E3)
     ("boom_bust", 0),             // post-corpus (E3)
     ("carrying_capacity", 0),     // post-corpus (E3)
@@ -182,7 +182,7 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::PracticeDiscovered => "practice_discovered",
         EventType::PracticeAdopted => "practice_adopted",
         EventType::ResourceTraded => "resource_traded",
-        EventType::DowryBirth => "dowry_birth",
+        EventType::MaterialLearning => "material_learning",
         EventType::PopulationCycleDetected => "pop_cycle",
         EventType::BoomAndBust => "boom_bust",
         EventType::CarryingCapacityReached => "carrying_capacity",
@@ -396,7 +396,7 @@ mod tests {
             ("practice_discovered", NOVELTY_BONUS),
             ("practice_adopted", NOVELTY_BONUS),
             ("resource_traded", NOVELTY_BONUS),
-            ("dowry_birth", NOVELTY_BONUS),
+            ("material_learning", NOVELTY_BONUS),
         ];
         let table = ScoreTable::default_table();
         for (name, want) in expected {
@@ -485,7 +485,7 @@ mod tests {
         std::fs::create_dir_all(&novel).unwrap();
         std::fs::write(
             novel.join("seed_00000099.events.jsonl"),
-            "{\"event_type\":\"DowryBirth\",\"tick\":1}\n",
+            "{\"event_type\":\"MaterialLearning\",\"tick\":1}\n",
         )
         .unwrap();
 

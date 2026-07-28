@@ -55,8 +55,8 @@ pub struct AgentBuffers {
     /// tree's adoption levels.
     pub meme_vector: Vec<[f32; crate::program::MEME_CHANNELS]>,
     /// Per-agent trade-good holdings, indexed by `crate::resource::Good::index`.
-    /// Zeroed on spawn; only the resource subsystem (harvest/trade/dowry)
-    /// mutates it, and only when `World::resources_enabled` is on.
+    /// Zeroed on spawn; only the resource subsystem (harvest/trade/material
+    /// learning costs) mutates it, and only when `World::resources_enabled` is on.
     pub inventory: Vec<[f32; crate::resource::GOOD_COUNT]>,
     /// Realized IQ in `[0,1]` — a gene×environment phenotype developed over the
     /// juvenile window by `iq::develop_all` (heritable `CognitivePotential`

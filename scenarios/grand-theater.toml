@@ -14,9 +14,9 @@ seed = 424242
 #     coupling, so adoption selects the genome while the genome gates
 #     discovery — under a climate that never stationarizes.
 #   * Economy: resource goods + terrain-habitat sorting + home-range
-#     settlement anchoring + dowry-gated reproduction (ALL births need the
-#     four-good basket while resources_enabled — the economic constraint is
-#     the world's connective tissue).
+#     settlement anchoring + the material learning economy (trade goods
+#     gate — and are consumed by — invention discovery and adoption; births
+#     are NOT goods-gated — the economy funds culture, not reproduction).
 #   * Conflict: war substrate (SenseHostility in the mutation pool) + three
 #     weapon systems (contact Weapon, ranged Spines, heavy Jaws) + armed
 #     cultural hunters in Metalworking diffusion range of the tech commune.
@@ -33,18 +33,17 @@ seed = 424242
 # DIT arena and frontier colonies (dialect communes, marker territories) are
 # economically marginal outposts running on founder stock.
 #
-# Honest expectations (measured on this seed): with EVERY stressor on, the
-# world is mortal — dowry-gated reproduction can't reach replacement rate
-# once the economy's node density is diluted across a multi-site cast and
-# disasters/drift/seasons add mortality (even pure geographic-trade declines
-# 962→140 by tick 2000 on this build; the combination is multiplicative).
-# What the scenario delivers is DENSITY of interaction: every detector class
-# fires within ~1.5k ticks — markets, settlements, specialization splits,
-# dowry births, wars and alliances, dialects, territories, alarm calls,
-# invention discovery/adoption, practice flare-ups, maladaptation lag,
-# kin networks, succession — while the population burns down 1432 → ~700
-# (1.5k) → ~270 (3k) → ghost world by ~6k. Run 1.5-3k ticks for the full
-# theater; treat which lineage lasts longest as the scoreboard.
+# Honest expectations (measured on this build): with births ungated the
+# world TEEMS — the population rides the 3000 cap and churns (thousands of
+# migrations/speciations/extinctions over 3k ticks; CorridorUse ~90,
+# markets ~96). Every detector class fires: settlements, specialization
+# splits, wars and alliances, dialects, territories, alarm calls, practice
+# flare-ups, maladaptation lag, kin networks, succession — and the economy
+# visibly funds culture: the tech commune climbs the tree (3 discoveries
+# and 3 species-level adoptions by 3k) with 84 MaterialLearning spends as
+# each new holder pays the goods basket for its era-1/2 tech. Run 1.5-3k
+# ticks for the full theater; the scoreboard is which lineage holds the
+# most of the tree while the world churns around the cap.
 
 max_population = 3000
 
@@ -67,7 +66,7 @@ war_enabled = true
 # ---------------------------------------------------------------------------
 # THE CAPITAL — north-seam hub (948,4). The four-goods trade quartet spawns
 # intermixed and must sort onto terrain borders (terrain_habitat), anchor
-# settlements, and feed the dowry economy. Tech communes on both flanks
+# settlements, and stock the material economy. Tech communes on both flanks
 # (across the torus seam) climb the invention tree under gene↔tech coupling.
 # ---------------------------------------------------------------------------
 
