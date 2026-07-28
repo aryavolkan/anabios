@@ -20,6 +20,12 @@ var _redraw_interval := REDRAW_EVERY
 # instead of the empty backdrop. All nine sprites share this node's ImageTexture.
 var _tiles: Array[Sprite2D] = []
 
+# Shared terrain shader: relief shading + living water over the raw biome grid.
+# One ShaderMaterial drives this node and all 8 wrap tiles, so a single uniform
+# write (biome_mode) switches the whole ground between terrain and passthrough.
+const TerrainShader := preload("res://shaders/terrain.gdshader")
+var _terrain_mat: ShaderMaterial
+
 func _ready() -> void:
 	centered = false
 	position = Vector2.ZERO
@@ -27,6 +33,12 @@ func _ready() -> void:
 	# Slightly dim + cool the ground so organisms and overlays read clearly on
 	# top and the terrain harmonizes with the dark instrument HUD.
 	modulate = Color(0.85, 0.88, 0.92)
+	# Linear filtering removes the harshest nearest-neighbour stair-steps before
+	# the shader's relief/softening pass; the shader keeps biomes distinct.
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_terrain_mat = ShaderMaterial.new()
+	_terrain_mat.shader = TerrainShader
+	material = _terrain_mat
 	for gy in range(-1, 2):
 		for gx in range(-1, 2):
 			if gx == 0 and gy == 0:
@@ -34,6 +46,8 @@ func _ready() -> void:
 			var tile := Sprite2D.new()
 			tile.centered = false
 			tile.z_index = -10
+			tile.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+			tile.material = _terrain_mat
 			add_child(tile)
 			_tiles.append(tile)
 	_setup(int(sim.biome_resolution()))
@@ -52,6 +66,10 @@ func _setup(res: int) -> void:
 	texture = _tex
 	var world: float = sim.world_size()
 	scale = Vector2(world / _res, world / _res)
+	# Feed the world extent to the terrain shader so its water shimmer runs in
+	# seamless world coordinates across the 9 wrap tiles.
+	if _terrain_mat != null:
+		_terrain_mat.set_shader_parameter("world_size", world)
 	# Neighbor tiles are children (they inherit the wrap scale), each offset by
 	# whole worlds in biome-pixel units.
 	var i := 0
@@ -84,6 +102,10 @@ func _process(_delta: float) -> void:
 		var ch0: int = overlay.ground_channel()
 		if ch0 >= 0:
 			mode = ch0
+	# Terrain treatment (relief + water) applies only to the biome view; data
+	# overlays (pheromone/optimum/market/succession) pass through faithfully.
+	if _terrain_mat != null:
+		_terrain_mat.set_shader_parameter("biome_mode", 1.0 if mode == -1 else 0.0)
 	# Throttle: rebuild every REDRAW_EVERY frames, but immediately when the ground
 	# selection changed (so [G]/overlay toggles feel instant).
 	_frame += 1

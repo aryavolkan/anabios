@@ -45,6 +45,14 @@ func _ready() -> void:
 	carcasses.texture = disc
 	flashes.texture = disc
 	# streaks keep the raw quad: a solid line reads as a crisp shot streak.
+	# Combat reads as energy: additive blending makes flashes and shot streaks
+	# glow and bloom where they overlap, so a volley or brawl visibly sparks
+	# instead of sitting flat on the terrain. Trade lanes stay normal-blended so
+	# they remain the calm, lingering counterpoint to combat.
+	var add_mat := CanvasItemMaterial.new()
+	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	flashes.material = add_mat
+	streaks.material = add_mat
 	_make_wrap_clones()
 	# Replay & event camera (E2): snapshot ring + R/U/V modes.
 	var replay_manager := preload("res://scripts/replay_manager.gd").new()
@@ -81,6 +89,7 @@ func _make_wrap_clones() -> void:
 				var clone := MultiMeshInstance2D.new()
 				clone.multimesh = src.multimesh
 				clone.texture = src.texture
+				clone.material = src.material  # keep additive glow at the seams
 				clone.z_index = src.z_index
 				clone.position = Vector2(gx * world, gy * world)
 				wrap.add_child(clone)
@@ -170,16 +179,21 @@ func _body_colors(n: int) -> PackedColorArray:
 		_:
 			return sim.alive_colors()
 
-# A soft white disc (alpha falls off to the edge). Multiplied by each MultiMesh
-# instance color, it turns the flat body quads into rounded, organic marks.
+# A shaded disc, multiplied by each MultiMesh instance color to turn the flat
+# body quads into rounded, organic marks. A bright core fading to a darker rim
+# gives each organism a subtle spherical shading (full genome color at the
+# center, deepened toward the edge) so bodies read as little creatures rather
+# than flat dots — and separate cleanly from the terrain at any zoom.
 func _disc_texture(res: int = 32) -> ImageTexture:
 	var img := Image.create(res, res, false, Image.FORMAT_RGBA8)
 	var c := (res - 1) * 0.5
 	for y in res:
 		for x in res:
 			var d := Vector2(x - c, y - c).length() / c          # 0 center .. 1 edge
-			var a := clampf(1.0 - smoothstep(0.75, 1.0, d), 0.0, 1.0)
-			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+			var a := clampf(1.0 - smoothstep(0.78, 1.0, d), 0.0, 1.0)
+			# Spherical shading: bright at the core, deepening toward the rim.
+			var shade := 1.0 - 0.42 * smoothstep(0.0, 0.95, d)
+			img.set_pixel(x, y, Color(shade, shade, shade, a))
 	return ImageTexture.create_from_image(img)
 
 func _refresh_carcasses() -> void:
