@@ -66,7 +66,7 @@ func _rebuild_key(body_mode: int) -> void:
 			_key_box.add_child(_header("body: energy"))
 			_key_box.add_child(_ramp_row(Color(0.2, 0.3, 0.8), Color(1.0, 0.9, 0.3), "low", "high"))
 		_:
-			_key_box.add_child(_header("body: hue = lineage"))
+			_key_box.add_child(_header("body: species — each ape in its own colours"))
 
 func _header(text: String) -> Label:
 	var l := Label.new()
