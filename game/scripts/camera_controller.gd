@@ -25,6 +25,34 @@ func _fit_to_world() -> void:
 	zoom = Vector2(z, z)
 	position = Vector2(world * 0.5, world * 0.5)
 
+# Frame the living cluster (the bounding box of all agents) instead of the empty
+# whole world, so a run opens on the action — with the agents now little
+# hominins, that's where the 8-bit bodies actually read. [F] still resets to the
+# full world for the overview. Called from Main._ready after the scenario loads
+# (the sim has no agents yet at this node's own _ready).
+func fit_to_agents() -> void:
+	var sim = get_node_or_null("/root/Main/Simulation")
+	if sim == null:
+		return
+	var ps: PackedVector2Array = sim.alive_positions()
+	if ps.size() == 0:
+		_fit_to_world()
+		return
+	# Centre on the agent centroid — being count-weighted it lands in the densest
+	# region (e.g. the founding continent), not in empty sea between clusters.
+	var c: Vector2 = Vector2.ZERO
+	for p in ps:
+		c += p
+	c /= float(ps.size())
+	# Frame a slice of the world (not the full extent) so individual hominins are
+	# legible on boot; [F] resets to the whole-world overview.
+	var world: float = float(sim.world_size())
+	var span: float = maxf(world * 0.35, 1.0)
+	var vp: Vector2 = get_viewport_rect().size
+	var z: float = clampf(vp.y / span, ZOOM_MIN, ZOOM_MAX)
+	zoom = Vector2(z, z)
+	position = c
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton

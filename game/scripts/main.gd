@@ -2,6 +2,7 @@ extends Node2D
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
 const Palette = preload("res://scripts/palette.gd")
+const ApeSprites = preload("res://scripts/ape_sprites.gd")
 
 # Number of sim ticks to run per rendered frame. Speeds: 1, 4, 16, 64.
 @export var ticks_per_frame: int = 1
@@ -10,9 +11,10 @@ const Palette = preload("res://scripts/palette.gd")
 const MODULE_COLORS: PackedColorArray = Palette.MODULE_COLORS
 # Bodies are 0.5–3.0 world units across (genome size), which is only a few
 # pixels at default zoom. Scale them up with a floor so even the smallest
-# organism is an easy-to-see mark, not a stray pixel.
-const BODY_SCALE: float = 3.2
-const BODY_MIN: float = 2.6
+# organism is an easy-to-see mark. Slightly larger than the old disc so the
+# hominin silhouette (limbs, head) has room to read when zoomed in.
+const BODY_SCALE: float = 3.8
+const BODY_MIN: float = 3.4
 const GLYPH_SIZE: float = 1.6
 
 @onready var sim = $Simulation
@@ -36,14 +38,24 @@ func _ready() -> void:
 	f.close()
 	if not sim.load_scenario_with_seed(text, GameConfig.seed):
 		push_error("scenario load failed")
+	# Open framed on the living cluster so the agents (now little hominins) read
+	# immediately, instead of as dots in the whole-world view. [F] resets to the
+	# world overview. Screenshot runs that set their own zoom opt out.
+	if not OS.has_environment("ANABIOS_ZOOM"):
+		($Camera2D as Camera2D).fit_to_agents()
 	# Apply UI scale from the menu.
 	var s: float = GameConfig.ui_scale
 	$UI.transform = Transform2D(0.0, Vector2(s, s), 0.0, Vector2.ZERO)
 	_apply_ui_theme()
 	var disc := _disc_texture()
-	bodies.texture = disc
 	carcasses.texture = disc
 	flashes.texture = disc
+	# The agents are the apes of DIT: render each as a genome-tinted 8-bit
+	# hominin instead of a plain disc. The mask is white with a dark outline, so
+	# multiplied by each agent's body colour it becomes a tinted little ape that
+	# still carries every [C] overlay (species / dialect / diet / energy).
+	bodies.texture = ApeSprites.build_field_mask()
+	bodies.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# streaks keep the raw quad: a solid line reads as a crisp shot streak.
 	# Combat reads as energy: additive blending makes flashes and shot streaks
 	# glow and bloom where they overlap, so a volley or brawl visibly sparks
@@ -63,6 +75,22 @@ func _ready() -> void:
 	evolution_panel.name = "EvolutionPanel"
 	evolution_panel.theme = UiTheme.build()
 	$UI.add_child(evolution_panel)
+	# Capture hooks (inert in normal play): ANABIOS_PIN opens the inspector on a
+	# representative agent (a click otherwise); ANABIOS_ZOOM frames the camera on
+	# that agent so screenshot runs can show the field body art up close.
+	if OS.has_environment("ANABIOS_PIN") or OS.has_environment("ANABIOS_ZOOM"):
+		var ps: PackedVector2Array = sim.alive_positions()
+		if ps.size() > 0:
+			var focus: Vector2 = ps[0]
+			if OS.has_environment("ANABIOS_ZOOM"):
+				var cam := $Camera2D as Camera2D
+				var z: float = float(OS.get_environment("ANABIOS_ZOOM"))
+				cam.zoom = Vector2(z, z)
+				cam.position = focus
+			if OS.has_environment("ANABIOS_PIN"):
+				var pid: int = int(sim.agent_near(focus, 5.0))
+				if pid >= 0:
+					inspector.pin(pid)
 
 # The world is a torus but rendering is not: a camera near a seam sees agents
 # vanish at the edge. Duplicate every agent layer into the 8 neighboring world
@@ -90,6 +118,7 @@ func _make_wrap_clones() -> void:
 				clone.multimesh = src.multimesh
 				clone.texture = src.texture
 				clone.material = src.material  # keep additive glow at the seams
+				clone.texture_filter = src.texture_filter  # keep the crisp 8-bit body
 				clone.z_index = src.z_index
 				clone.position = Vector2(gx * world, gy * world)
 				wrap.add_child(clone)
@@ -142,11 +171,12 @@ func _refresh_bodies() -> void:
 
 	var positions: PackedVector2Array = sim.alive_positions()
 	var sizes: PackedFloat32Array = sim.alive_sizes()
-	var rots: PackedFloat32Array = sim.alive_rotations()
 	var body_colors: PackedColorArray = _body_colors(n)
 	for i in n:
 		var sz: float = maxf(sizes[i] * BODY_SCALE, BODY_MIN)
-		var t: Transform2D = Transform2D(rots[i], Vector2(sz, sz), 0.0, positions[i])
+		# Upright: the old disc used the heading rotation invisibly; a hominin
+		# must stand, not spin, so the mark stays vertical (heading is unused).
+		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, positions[i])
 		mm.set_instance_transform_2d(i, t)
 		mm.set_instance_color(i, body_colors[i])
 
