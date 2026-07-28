@@ -9,12 +9,11 @@ const ApeSprites = preload("res://scripts/ape_sprites.gd")
 @export var paused: bool = false
 
 const MODULE_COLORS: PackedColorArray = Palette.MODULE_COLORS
-# Bodies are 0.5–3.0 world units across (genome size), which is only a few
-# pixels at default zoom. Scale them up with a floor so even the smallest
-# organism is an easy-to-see mark. Slightly larger than the old disc so the
-# hominin silhouette (limbs, head) has room to read when zoomed in.
-const BODY_SCALE: float = 3.8
-const BODY_MIN: float = 3.4
+# Bodies are 0.5–3.0 world units across (genome size). Scale them up generously
+# with a floor so the hominin silhouette (head, limbs) reads as a figure at the
+# default cluster-framed zoom — not just when zoomed all the way in.
+const BODY_SCALE: float = 7.0
+const BODY_MIN: float = 6.0
 const GLYPH_SIZE: float = 1.6
 
 @onready var sim = $Simulation
@@ -56,6 +55,9 @@ func _ready() -> void:
 	# still carries every [C] overlay (species / dialect / diet / energy).
 	bodies.texture = ApeSprites.build_field_mask()
 	bodies.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# Hide the per-module glyph pips: the agent reads as one clean hominin figure,
+	# not a cluster of coloured blocks. (Module make-up is still in the inspector.)
+	module_layers.visible = false
 	# streaks keep the raw quad: a solid line reads as a crisp shot streak.
 	# Combat reads as energy: additive blending makes flashes and shot streaks
 	# glow and bloom where they overlap, so a volley or brawl visibly sparks
@@ -106,9 +108,9 @@ func _make_wrap_clones() -> void:
 	wrap.name = "WrapClones"
 	add_child(wrap)
 	move_child(wrap, module_layers.get_index() + 1)
+	# Module glyphs are hidden — each agent is just the clean hominin figure — so
+	# their layers are not cloned to the wrap tiles.
 	var sources: Array[MultiMeshInstance2D] = [bodies, carcasses, flashes, streaks, trade_routes]
-	for child in module_layers.get_children():
-		sources.append(child)
 	for src in sources:
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
@@ -179,8 +181,6 @@ func _refresh_bodies() -> void:
 		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, positions[i])
 		mm.set_instance_transform_2d(i, t)
 		mm.set_instance_color(i, body_colors[i])
-
-	_refresh_module_layers()
 
 func _body_colors(n: int) -> PackedColorArray:
 	match overlay.body_mode:
