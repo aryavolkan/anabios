@@ -125,6 +125,16 @@ pub struct AgentSpec {
     pub traits: TraitOverrides,
     #[serde(default)]
     pub archetype: Option<String>,
+    /// Inventions this spec's agents already HOLD at tick 0, named by the
+    /// snake_case of their display name (e.g. `["stone_tools", "fire",
+    /// "farming"]`). Seeds the corresponding invention meme channels to fully
+    /// adopted so the lineage begins partway up the tech tree — used to let a
+    /// full-scale scenario reach the era-3 milestones (Writing, Husbandry ->
+    /// domestication) without the slow cold-start climb. Only meaningful with
+    /// `inventions_enabled`. Absent (the default) seeds nothing, keeping the
+    /// golden scenarios byte-identical.
+    #[serde(default)]
+    pub starting_inventions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -407,6 +417,18 @@ impl Scenario {
                 }
                 None => (0u32, None),
             };
+            // Resolve any starting inventions to meme channels once per spec.
+            // An unknown name is a scenario-authoring error — fail fast.
+            let seed_channels: Vec<usize> = spec
+                .starting_inventions
+                .iter()
+                .map(|name| {
+                    let inv = crate::invention::id_from_name(name).unwrap_or_else(|| {
+                        panic!("unknown starting invention '{name}' in scenario")
+                    });
+                    crate::invention::channel(inv)
+                })
+                .collect();
             for _ in 0..spec.count {
                 let position = match spec.placement {
                     Placement::Uniform => {
@@ -433,13 +455,17 @@ impl Scenario {
                     archetype_genome(name, &mut g);
                 }
                 spec.traits.apply(&mut g);
-                match &kit {
+                let id = match &kit {
                     Some((modules, program)) => {
-                        w.spawn_seeded(position, g, species_id, modules.clone(), program.clone());
+                        w.spawn_seeded(position, g, species_id, modules.clone(), program.clone())
                     }
-                    None => {
-                        w.spawn_agent(position, g);
-                    }
+                    None => w.spawn_agent(position, g),
+                };
+                // Seed held inventions by setting their meme channels to fully
+                // adopted. No RNG is drawn, so an empty list (the default)
+                // leaves the trajectory byte-identical.
+                for &ch in &seed_channels {
+                    w.agents.meme_vector[id as usize][ch] = 1.0;
                 }
             }
         }
@@ -652,5 +678,37 @@ terrain_affinity = 0.87
         assert!(has(&br_mods, ModuleType::Jaws), "bruiser archetype carries Jaws");
         assert!(has(&br_mods, ModuleType::Armor), "bruiser archetype is armored");
         assert!(has(&br_mods, ModuleType::Reproductive), "bruiser lineage can establish");
+    }
+
+    #[test]
+    fn starting_inventions_seed_named_techs_and_leave_others_unheld() {
+        use crate::invention::{has, FARMING, FIRE, STONE_TOOLS, WRITING};
+        let text = r#"
+name = "t"
+seed = 1
+inventions_enabled = true
+[[agents]]
+count = 1
+archetype = "innovator"
+starting_inventions = ["stone_tools", "fire", "farming"]
+placement = { kind = "cluster", center_x = 100.0, center_y = 100.0, radius = 1.0 }
+"#;
+        let w = Scenario::parse_toml(text).expect("parse").instantiate();
+        let id = w.agents.iter_alive().next().expect("one agent");
+        let meme = &w.agents.meme_vector[id as usize];
+        assert!(has(meme, STONE_TOOLS), "seeded Stone Tools is held at tick 0");
+        assert!(has(meme, FIRE), "seeded Fire is held at tick 0");
+        assert!(has(meme, FARMING), "seeded Farming is held at tick 0");
+        assert!(!has(meme, WRITING), "unseeded Writing is NOT held");
+
+        // Absent field => nothing seeded: the determinism-safe default that
+        // keeps the golden (minimal) scenario byte-identical.
+        let off = Scenario::parse_toml(
+            "name=\"t\"\nseed=1\n[[agents]]\ncount=1\nplacement = { kind = \"uniform\" }\n",
+        )
+        .expect("parse")
+        .instantiate();
+        let oid = off.agents.iter_alive().next().expect("one agent");
+        assert!(!has(&off.agents.meme_vector[oid as usize], STONE_TOOLS));
     }
 }
