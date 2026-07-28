@@ -1,0 +1,367 @@
+name = "grand-theater"
+seed = 424242
+
+# GRAND THEATER: every opt-in subsystem switched on at once, in one shared
+# world, with the cast placed so the subsystems collide instead of running in
+# isolation. One run exercises, in combination:
+#
+#   * Environment: living biome + seasonal regrowth band (season_period) +
+#     secular climate drift (climate_drift_rate) on top of the DIT seasonal
+#     optimum sweep (env_period) + nutrient variation + soil fertility.
+#   * Disturbance: disasters (fire/drought/freeze scars) against the living,
+#     drifting, seasonal biome.
+#   * Gene–culture: cognition (realized IQ) + invention tree + gene↔tech
+#     coupling, so adoption selects the genome while the genome gates
+#     discovery — under a climate that never stationarizes.
+#   * Economy: resource goods + terrain-habitat sorting + home-range
+#     settlement anchoring + dowry-gated reproduction (ALL births need the
+#     four-good basket while resources_enabled — the economic constraint is
+#     the world's connective tissue).
+#   * Conflict: war substrate (SenseHostility in the mutation pool) + three
+#     weapon systems (contact Weapon, ranged Spines, heavy Jaws) + armed
+#     cultural hunters in Metalworking diffusion range of the tech commune.
+#   * Communication: dialect divergence, pheromone territories, alarm-call
+#     prey, kin-cooperation lineages, the four DIT learning strategies.
+#
+# Geography (seed 424242 = the proven geographic-trade terrain, probed):
+# obsidian/rock is the bottleneck good (~0.3% of the map), so only two sites
+# grow all four goods locally: the NORTH-SEAM HUB (948,4 — the tuned
+# geographic-trade junction: grass .41 forest .35 desert .21 rock .03) and
+# the SOUTH JUNCTION (544,760: grass .35 forest .13 desert .40 rock .01).
+# The two persistent settlements sit there; the predator arena at map center
+# is far enough away that the packs hunt the herds, not the marketplace; the
+# DIT arena and frontier colonies (dialect communes, marker territories) are
+# economically marginal outposts running on founder stock.
+#
+# Honest expectations (measured on this seed): with EVERY stressor on, the
+# world is mortal — dowry-gated reproduction can't reach replacement rate
+# once the economy's node density is diluted across a multi-site cast and
+# disasters/drift/seasons add mortality (even pure geographic-trade declines
+# 962→140 by tick 2000 on this build; the combination is multiplicative).
+# What the scenario delivers is DENSITY of interaction: every detector class
+# fires within ~1.5k ticks — markets, settlements, specialization splits,
+# dowry births, wars and alliances, dialects, territories, alarm calls,
+# invention discovery/adoption, practice flare-ups, maladaptation lag,
+# kin networks, succession — while the population burns down 1432 → ~700
+# (1.5k) → ~270 (3k) → ghost world by ~6k. Run 1.5-3k ticks for the full
+# theater; treat which lineage lasts longest as the scoreboard.
+
+max_population = 3000
+
+env_period = 400
+climate_drift_rate = 0.00005
+season_period = 2000
+biome_adaptation = true
+living_biome = true
+nutrient_variation = true
+soil_fertility = true
+disasters_enabled = true
+terrain_habitat = true
+resources_enabled = true
+settlement_enabled = true
+inventions_enabled = true
+gene_tech_coupling = true
+cognition_enabled = true
+war_enabled = true
+
+# ---------------------------------------------------------------------------
+# THE CAPITAL — north-seam hub (948,4). The four-goods trade quartet spawns
+# intermixed and must sort onto terrain borders (terrain_habitat), anchor
+# settlements, and feed the dowry economy. Tech communes on both flanks
+# (across the torus seam) climb the invention tree under gene↔tech coupling.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 312
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.12
+
+[[agents]]
+count = 65
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.37
+
+[[agents]]
+count = 195
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.62
+
+[[agents]]
+count = 390
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 948.0, center_y = 4.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.87
+
+[[agents]]
+count = 36
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 860.0, center_y = 60.0, radius = 60.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 24
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 40.0, center_y = 50.0, radius = 60.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 0.05
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 10
+archetype = "sentinel"
+placement = { kind = "cluster", center_x = 948.0, center_y = 80.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# THE ARENA — map center, far enough south that the packs hunt the herds,
+# not the marketplace. Grazer herds with alarm-calling and asocial prey,
+# contested by stalkers (Weapon), spiners (Spines), bruisers (Jaws+Armor),
+# and a territorial pack (war substrate). No local obsidian — the arena runs
+# on founder stock; its persistence is one of the scenario's open questions.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 48
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 100.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "herd"
+placement = { kind = "cluster", center_x = 620.0, center_y = 440.0, radius = 60.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "culture_prey"
+placement = { kind = "cluster", center_x = 480.0, center_y = 470.0, radius = 40.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "asocial_prey"
+placement = { kind = "cluster", center_x = 560.0, center_y = 560.0, radius = 40.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 10
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 110.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "spiner"
+placement = { kind = "cluster", center_x = 620.0, center_y = 440.0, radius = 80.0 }
+[agents.traits]
+size = 0.6
+perception_radius = 0.9
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "bruiser"
+placement = { kind = "cluster", center_x = 420.0, center_y = 600.0, radius = 60.0 }
+[agents.traits]
+size = 0.8
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "pack_hunter"
+placement = { kind = "cluster", center_x = 640.0, center_y = 540.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Cultural hunters: the fast pack stays on the capital's fringe, in
+# Metalworking diffusion range of the innovator commune (tool-users
+# interaction); the slow pack hunts the arena herds.
+[[agents]]
+count = 8
+archetype = "fast_hunter"
+placement = { kind = "cluster", center_x = 850.0, center_y = 110.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+openness = 0.9
+
+[[agents]]
+count = 8
+archetype = "slow_hunter"
+placement = { kind = "cluster", center_x = 560.0, center_y = 470.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# ---------------------------------------------------------------------------
+# DIT LEARNING ARENA — genetic strategy vs. the three cultural strategies
+# under the drifting seasonal optimum (maladaptation contrast built in).
+# Grass/forest relay site between the capital and the south junction.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 32
+archetype = "innate_forager"
+placement = { kind = "cluster", center_x = 750.0, center_y = 320.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "individual_learner"
+placement = { kind = "cluster", center_x = 700.0, center_y = 280.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "pure_imitator"
+placement = { kind = "cluster", center_x = 800.0, center_y = 280.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "critical_learner"
+placement = { kind = "cluster", center_x = 750.0, center_y = 370.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# SOUTH TOWN — second four-goods junction (544,760). The living-sandbox
+# coevolution pair (culture vs. matched acultural control), skilled foragers,
+# and the two kin-cooperation lineages.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 20
+archetype = "cultural_forager"
+placement = { kind = "cluster", center_x = 544.0, center_y = 760.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 20
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 544.0, center_y = 760.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "skilled_forager"
+placement = { kind = "cluster", center_x = 620.0, center_y = 700.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "cultural_cooperator"
+placement = { kind = "cluster", center_x = 600.0, center_y = 820.0, radius = 50.0 }
+[agents.traits]
+altruism = 1.0
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "cooperator"
+placement = { kind = "cluster", center_x = 480.0, center_y = 820.0, radius = 50.0 }
+[agents.traits]
+altruism = 0.8
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# FRONTIER COLONIES — economically marginal outposts (no local obsidian).
+# Dialect communes at maximal separation; marker territories on the flanks.
+# They run on founder stock and whatever diffuses in — dialects, signaling,
+# and territory formation play out within their lifetimes; long-run survival
+# is the open question the scenario asks.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 16
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 200.0, center_y = 200.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 850.0, center_y = 850.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "marker"
+placement = { kind = "cluster", center_x = 130.0, center_y = 512.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "marker"
+placement = { kind = "cluster", center_x = 890.0, center_y = 512.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# Archetype-free baseline stock (species 0): uniform across the whole map,
+# exercising the no-archetype spawn path and the biome-adaptation gene on a
+# mixed-climate range.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 60
+placement = { kind = "uniform" }
+[agents.traits]
+lifespan_bias = 0.6
+reproduction_threshold = 0.3

@@ -110,10 +110,10 @@ case "$cmd" in
       envs=("ANABIOS_SCENARIO=$env_scn")
       [ -n "$seed" ] && envs+=("ANABIOS_SEED=$seed")
       echo "[view] $env_scn${seed:+ (seed=$seed)} — windowed" >&2
-      env "${envs[@]}" "$godot" --path "$ROOT/game" res://scenes/main.tscn "${rest[@]}"
+      env "${envs[@]}" "$godot" --path "$ROOT/game" res://scenes/main.tscn ${rest[@]+"${rest[@]}"}
     else
       echo "[view] opening scenario picker (no scenario given)" >&2
-      "$godot" --path "$ROOT/game" "${rest[@]}"
+      "$godot" --path "$ROOT/game" ${rest[@]+"${rest[@]}"}
     fi
     ;;
 

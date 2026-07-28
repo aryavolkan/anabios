@@ -26,7 +26,7 @@ func _ready() -> void:
 	z_index = -10
 	# Slightly dim + cool the ground so organisms and overlays read clearly on
 	# top and the terrain harmonizes with the dark instrument HUD.
-	modulate = Color(0.78, 0.82, 0.88)
+	modulate = Color(0.85, 0.88, 0.92)
 	for gy in range(-1, 2):
 		for gx in range(-1, 2):
 			if gx == 0 and gy == 0:

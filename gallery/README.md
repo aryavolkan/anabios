@@ -12,6 +12,23 @@ the other scenarios on the viewer default. Captures run windowed (not
 `--headless`): the harness reads the viewport texture after
 `frame_post_draw`, which never completes on the dummy renderer.
 
+## grand theater (all subsystems at once)
+
+Every opt-in flag on in one world (`grand-theater`, seed 424242): seasonal +
+drifting climate, living biome, disasters, the four-goods dowry economy,
+settlements, cognition + invention tree with gene↔tech coupling, war, and
+the full archetype cast. Terrain palette shows each biome in its own hue
+family (grass/forest greens, sandy desert, blue water, gray rock); biomass
+brightens within the family, succession scars and pollution smudge show
+through on the default ground view.
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| grand-theater-t061-full.png | 61 | Whole 1024-world at spawn: the trade capital on the north-seam four-goods junction (top edge, center-right), the predator arena at map center, frontier colonies scattered. 1,414 alive, 31 species. |
+| grand-theater-t091-capital.png | 91 | Zoom 3.0 on the capital (948,4): the four goods species boiling around the junction, innovator commune on the west flank. 6,712 trades already. |
+| grand-theater-t091-arena.png | 91 | Zoom 3.0 on map center: herds and packs working the grass/desert/lake mosaic. |
+| grand-theater-t1531-evolved.png | 1531 | The burn-down: 476 alive, sp5 at tech era 1 (`stone_tools`), tally reads Settlement 17 · Market 17 · War 4 · KinNetwork 12 · Dialect 3 · Maladaptation 30 — every detector class has fired. |
+
 ## settlements & economy (E8)
 
 Home-range anchoring (agents learn and inherit a home point), a decaying
