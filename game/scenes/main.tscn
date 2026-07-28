@@ -237,7 +237,7 @@ visible = false
 offset_left = 1050.0
 offset_top = 10.0
 offset_right = 1270.0
-offset_bottom = 200.0
+offset_bottom = 246.0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="UI/Inspector"]
 anchors_preset = 15
@@ -255,9 +255,9 @@ theme_override_font_sizes/font_size = 14
 [node name="PopulationPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("10_pop")
 offset_left = 1050.0
-offset_top = 210.0
+offset_top = 256.0
 offset_right = 1270.0
-offset_bottom = 420.0
+offset_bottom = 466.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/PopulationPanel"]
 
@@ -265,9 +265,9 @@ offset_bottom = 420.0
 script = ExtResource("11_dit")
 visible = false
 offset_left = 1050.0
-offset_top = 430.0
+offset_top = 476.0
 offset_right = 1270.0
-offset_bottom = 620.0
+offset_bottom = 666.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/DitPanel"]
 
@@ -275,9 +275,9 @@ offset_bottom = 620.0
 script = ExtResource("14_tech")
 visible = false
 offset_left = 1050.0
-offset_top = 430.0
+offset_top = 476.0
 offset_right = 1270.0
-offset_bottom = 620.0
+offset_bottom = 666.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/TechPanel"]
 

@@ -86,19 +86,23 @@ var _cursor: int = 0
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
 
 func _ready() -> void:
-	# These arrays are indexed by the core EventType discriminant, so they must
-	# stay one-per-variant and in sync with each other. Assert it at boot: a new
-	# EventType added core-side without a name/color here would otherwise render
-	# as "kind N" (or index out of range) with no other warning.
+	# These arrays are indexed by the core EventType discriminant. The name/color
+	# pair is a hard invariant we control, so assert it. The match against the
+	# CORE count is only a nudge to keep them current: a genuine lag (or running
+	# against a stale build) must NOT abort _ready — that used to leave _counts
+	# unsized and spam an out-of-bounds every frame. Warn and carry on; the tally
+	# is sized to the larger of the two so indexing by event type is always safe
+	# and known events still render.
 	assert(CHAPTER_NAMES.size() == CHAPTER_COLORS.size(),
 		"codex name/color arrays out of sync")
-	assert(CHAPTER_NAMES.size() == int(sim.event_type_count()),
-		"codex arrays lag core EventType — add the new variant's name and color")
+	var core_count: int = int(sim.event_type_count())
+	if CHAPTER_NAMES.size() != core_count:
+		push_warning("codex: %d display event types vs %d core EventTypes — add the missing name/color; showing the known ones" % [CHAPTER_NAMES.size(), core_count])
 	# The running tally reads as the panel's title — mark it with the accent.
 	counts_label.add_theme_color_override("font_color", UiTheme.ACCENT)
-	# With 23 event types the single-line tally overflows the panel; wrap it.
+	# With this many event types the single-line tally overflows the panel; wrap.
 	counts_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_counts.resize(CHAPTER_NAMES.size())
+	_counts.resize(maxi(CHAPTER_NAMES.size(), core_count))
 	_counts.fill(0)
 
 func _process(_delta: float) -> void:
