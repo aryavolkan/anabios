@@ -3,6 +3,7 @@ extends Node2D
 const UiTheme = preload("res://scripts/ui_theme.gd")
 const Palette = preload("res://scripts/palette.gd")
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
+const FieldAgentShader = preload("res://shaders/field_agent.gdshader")
 
 # Number of sim ticks to run per rendered frame. Speeds: 1, 4, 16, 64.
 @export var ticks_per_frame: int = 1
@@ -55,8 +56,20 @@ func _ready() -> void:
 	# hominin instead of a plain disc. The mask is white with a dark outline, so
 	# multiplied by each agent's body colour it becomes a tinted little ape that
 	# still carries every [C] overlay (species / dialect / diet / energy).
+	# Agents are alive: the field_agent shader gives each a per-instance vertex
+	# bounce (idle breath / faster hop when moving) from data written every frame
+	# in _refresh_bodies. Texture + material are set BEFORE _make_wrap_clones() so
+	# the 8 torus wrap clones inherit them; use_custom_data exposes INSTANCE_CUSTOM
+	# to the shader (and is shared by the clones via the same MultiMesh).
 	bodies.texture = ApeSprites.build_field_mask()
 	bodies.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var body_mat := ShaderMaterial.new()
+	body_mat.shader = FieldAgentShader
+	bodies.material = body_mat
+	# use_custom_data can only be toggled at instance_count 0; the .tres ships with
+	# instances, so clear first, enable, then _refresh_bodies re-grows the buffer.
+	bodies.multimesh.instance_count = 0
+	bodies.multimesh.use_custom_data = true
 	# Per-module glyph pips are hidden by default: the agent reads as one clean
 	# hominin figure, not a cluster of coloured blocks. [M] toggles them back on
 	# for debugging. (Module make-up is always in the inspector.)
@@ -188,14 +201,25 @@ func _refresh_bodies() -> void:
 
 	var positions: PackedVector2Array = sim.alive_positions()
 	var sizes: PackedFloat32Array = sim.alive_sizes()
+	var rots: PackedFloat32Array = sim.alive_rotations()
 	var body_colors: PackedColorArray = _body_colors(n)
+	var have_rots: bool = rots.size() == n
 	for i in n:
 		var sz: float = maxf(sizes[i] * BODY_SCALE, BODY_MIN)
-		# Upright: the old disc used the heading rotation invisibly; a hominin
-		# must stand, not spin, so the mark stays vertical (heading is unused).
+		# Upright: the hominin stands, not spins — heading drives the walk shader
+		# (facing + idle), not the transform rotation.
 		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, positions[i])
 		mm.set_instance_transform_2d(i, t)
 		mm.set_instance_color(i, body_colors[i])
+		# Per-instance animation data for the field_agent shader: a stable phase
+		# from position (survives alive-index reshuffles without popping), a moving
+		# flag (the sim reports heading exactly 0.0 when velocity≈0), and facing
+		# from the heading's x-sign.
+		var rot: float = rots[i] if have_rots else 0.0
+		var moving: float = 1.0 if rot != 0.0 else 0.0
+		var face_left: float = 1.0 if cos(rot) < 0.0 else 0.0
+		var phase: float = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
+		mm.set_instance_custom_data(i, Color(phase, moving, face_left, 0.0))
 
 	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
 	if module_layers.visible:

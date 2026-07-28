@@ -65,13 +65,14 @@ const FIELD_SHAPE: Array = [
 	[9, 11, 2, 4],  # right leg
 ]
 
-static func build_field_mask() -> ImageTexture:
+# Build one 16x16 cell: a white silhouette from `blocks` + an auto 1px dark
+# outline (every empty pixel touching the silhouette; collected first, then
+# written, so outline pixels don't seed more outline).
+static func _build_cell(blocks: Array) -> Image:
 	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
-	for b in FIELD_SHAPE:
+	for b in blocks:
 		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), Color(1, 1, 1, 1))
-	# 1px dark outline: every empty pixel that touches the silhouette. Collected
-	# first, then written, so outline pixels don't seed more outline.
 	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	var edges: Array = []
 	for y in 16:
@@ -86,7 +87,13 @@ static func build_field_mask() -> ImageTexture:
 					break
 	for e in edges:
 		img.set_pixel(e.x, e.y, Color(0.34, 0.34, 0.34, 1.0))
-	return ImageTexture.create_from_image(img)
+	return img
+
+# The single hominin silhouette (16x16) drawn for every field agent. Motion is
+# added by the field_agent shader (a per-instance vertex bounce), not by frame
+# swapping, so one static cell is all the texture that's needed.
+static func build_field_mask() -> ImageTexture:
+	return ImageTexture.create_from_image(_build_cell(FIELD_SHAPE))
 
 # Build the ImageTexture for ape `idx`, nearest-filtered when displayed so the
 # 16x16 grid stays crisp when scaled up.
