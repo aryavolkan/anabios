@@ -65,6 +65,21 @@ const FIELD_SHAPE: Array = [
 	[9, 11, 2, 4],  # right leg
 ]
 
+# Four-frame walk cycle: neutral, left-lead, neutral, right-lead. Head / neck /
+# torso are fixed; the legs stride and the arms counter-swing so a moving agent
+# reads as walking. Frame 0 is the neutral/idle pose (== FIELD_SHAPE).
+const WALK_FRAME_COUNT := 4
+const WALK_FRAMES: Array = [
+	# 0 neutral
+	[[6, 2, 4, 4], [7, 6, 2, 1], [4, 6, 8, 5], [3, 7, 2, 4], [11, 7, 2, 4], [6, 11, 2, 4], [9, 11, 2, 4]],
+	# 1 left lead — left leg out & forward, right trails; right arm up, left arm back
+	[[6, 2, 4, 4], [7, 6, 2, 1], [4, 6, 8, 5], [3, 8, 2, 3], [11, 6, 2, 4], [4, 11, 2, 4], [9, 12, 2, 3]],
+	# 2 neutral
+	[[6, 2, 4, 4], [7, 6, 2, 1], [4, 6, 8, 5], [3, 7, 2, 4], [11, 7, 2, 4], [6, 11, 2, 4], [9, 11, 2, 4]],
+	# 3 right lead — mirror of 1
+	[[6, 2, 4, 4], [7, 6, 2, 1], [4, 6, 8, 5], [3, 6, 2, 4], [11, 8, 2, 3], [6, 12, 2, 3], [10, 11, 2, 4]],
+]
+
 # Build one 16x16 cell: a white silhouette from `blocks` + an auto 1px dark
 # outline (every empty pixel touching the silhouette; collected first, then
 # written, so outline pixels don't seed more outline).
@@ -89,11 +104,19 @@ static func _build_cell(blocks: Array) -> Image:
 		img.set_pixel(e.x, e.y, Color(0.34, 0.34, 0.34, 1.0))
 	return img
 
-# The single hominin silhouette (16x16) drawn for every field agent. Motion is
-# added by the field_agent shader (a per-instance vertex bounce), not by frame
-# swapping, so one static cell is all the texture that's needed.
+# A single static hominin silhouette (the neutral frame), 16x16.
 static func build_field_mask() -> ImageTexture:
 	return ImageTexture.create_from_image(_build_cell(FIELD_SHAPE))
+
+# The walk cycle packed horizontally into one (WALK_FRAME_COUNT*16 x 16) atlas
+# for the field-agent shader. Nearest-filtered; each cell keeps its own outline,
+# and the transparent left/right margins keep neighbouring cells from bleeding.
+static func build_walk_atlas() -> ImageTexture:
+	var atlas := Image.create(WALK_FRAME_COUNT * 16, 16, false, Image.FORMAT_RGBA8)
+	atlas.fill(Color(0, 0, 0, 0))
+	for fr in WALK_FRAME_COUNT:
+		atlas.blit_rect(_build_cell(WALK_FRAMES[fr]), Rect2i(0, 0, 16, 16), Vector2i(fr * 16, 0))
+	return ImageTexture.create_from_image(atlas)
 
 # Build the ImageTexture for ape `idx`, nearest-filtered when displayed so the
 # 16x16 grid stays crisp when scaled up.
