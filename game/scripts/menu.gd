@@ -33,6 +33,8 @@ const SCENARIOS: Array[Dictionary] = [
 	# Invention tree
 	{ "label": "Inventions — innovators vs traditionalists", "path": "res://../scenarios/inventions.toml", "ground": 0, "body": 1 },
 	{ "label": "Cognitive — IQ, tech & bad ideas", "path": "res://../scenarios/cognitive-coevolution.toml", "ground": 0, "body": 1 },
+	# Grand theater
+	{ "label": "Grand — Out of Africa (every feature on)", "path": "res://../scenarios/out-of-africa.toml", "ground": 0, "body": 0 },
 ]
 
 @onready var scenario_pick: OptionButton = $VBox/ScenarioPick

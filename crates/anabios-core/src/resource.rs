@@ -1,6 +1,8 @@
 //! Biome trade goods: four unique natural resources that spawn in their home
 //! terrain, are harvested and carried by agents, swapped between species, and
-//! spent as a reproduction dowry. Opt-in per scenario via `World::resources_enabled`.
+//! spent as the material cost of learning invention memes (see
+//! `invention::Invention::materials`). Opt-in per scenario via
+//! `World::resources_enabled`.
 
 use serde::{Deserialize, Serialize};
 
@@ -32,15 +34,15 @@ pub const NODE_MAX_TOTAL: usize = 400;
 /// agent population (see `SPAWN_NEAR_RADIUS`) instead of scattered uniformly
 /// across the map: the old inflated value compensated for nodes rarely
 /// landing near the co-located cluster, which density-aware spawning fixes
-/// directly. Turnover testing with near-agent spawning shows 20.0 clears the
-/// trade scenario's dowry-birth bar with margin.
+/// directly. Turnover testing with near-agent spawning shows 20.0 keeps the
+/// trade scenario's goods flowing with margin.
 pub const NODE_START_AMOUNT: f32 = 20.0;
 /// Max distance an agent can harvest a node from (world units).
 pub const HARVEST_RANGE: f32 = 2.0;
 /// Max amount harvested from a node per tick per agent. Lowered from 5.0 now
 /// that nodes spawn near the agent population (see `SPAWN_NEAR_RADIUS`):
 /// agents reach nodes far more often, so a smaller per-tick harvest still
-/// clears the trade scenario's dowry-birth bar.
+/// keeps trade inventories stocked.
 pub const HARVEST_RATE: f32 = 1.0;
 /// Base per-agent carrying capacity (summed across all goods).
 pub const INVENTORY_BASE_CAP: f32 = 12.0;
@@ -55,12 +57,15 @@ pub const INVENTORY_STORAGE_BONUS: f32 = 12.0;
 pub const TRADE_RANGE: f32 = 10.0;
 /// Units of a good moved in one direction per trade event.
 pub const TRADE_UNIT: f32 = 1.0;
-/// Units of EACH good a parent must hold and spend to reproduce — the balanced
-/// basket. Reachable because `pick_swap` (see `interact.rs`) values goods by
-/// their deficit below this target, so agents accumulate toward a full basket
-/// instead of stalling at "equal holdings" (the old strict-`>` / diminishing-
-/// utility rule capped trade-only goods near 1 unit and forced this to 1.0).
-pub const DOWRY_REQ: f32 = 2.0;
+/// Stock level of EACH good an agent trades toward — the balanced working
+/// inventory. Reachable because `pick_swap` (see `interact.rs`) values goods
+/// by their deficit below this target, so agents accumulate toward a full
+/// basket instead of stalling at "equal holdings" (the old strict-`>` /
+/// diminishing-utility rule capped trade-only goods near 1 unit and forced
+/// this to 1.0). The basket is the material reserve drawn down by invention
+/// learning (`invention::Invention::materials` requirements are at or below
+/// this level per good, so a fully-stocked agent can afford any single tech).
+pub const STOCK_TARGET: f32 = 2.0;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,14 +120,14 @@ pub struct Resource {
     pub amount: f32,
 }
 
-/// Trade valuation of good `k`: how far the agent is BELOW the dowry target
-/// `DOWRY_REQ` for that good, clamped at 0. An agent values a good it still
+/// Trade valuation of good `k`: how far the agent is BELOW the stock target
+/// `STOCK_TARGET` for that good, clamped at 0. An agent values a good it still
 /// needs to complete its basket and stops valuing it once that slot is full —
 /// so bilateral trade drives agents to ACCUMULATE a full balanced basket
 /// rather than merely equalize holdings against a neighbor.
 #[inline]
 pub fn want(inventory: &[f32; GOOD_COUNT], k: usize) -> f32 {
-    (DOWRY_REQ - inventory[k]).max(0.0)
+    (STOCK_TARGET - inventory[k]).max(0.0)
 }
 
 /// Total units held across all goods.
@@ -285,15 +290,15 @@ mod tests {
     }
 
     #[test]
-    fn want_is_dowry_deficit() {
+    fn want_is_stock_deficit() {
         let mut inv = [0.0f32; GOOD_COUNT];
-        // Empty slot: want equals the full dowry target.
-        assert!((want(&inv, 0) - DOWRY_REQ).abs() < 1e-6);
+        // Empty slot: want equals the full stock target.
+        assert!((want(&inv, 0) - STOCK_TARGET).abs() < 1e-6);
         // Partially filled: want is the remaining deficit.
-        inv[0] = DOWRY_REQ - 0.5;
+        inv[0] = STOCK_TARGET - 0.5;
         assert!((want(&inv, 0) - 0.5).abs() < 1e-6);
         // Full (or over-full) slot: want is zero (satiated), never negative.
-        inv[0] = DOWRY_REQ + 3.0;
+        inv[0] = STOCK_TARGET + 3.0;
         assert_eq!(want(&inv, 0), 0.0);
     }
 

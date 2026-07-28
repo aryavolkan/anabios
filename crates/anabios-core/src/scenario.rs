@@ -68,7 +68,8 @@ pub struct Scenario {
     #[serde(default)]
     pub soil_fertility: bool,
     /// Opt-in: enable the biome-trade-goods economy (resource nodes spawn,
-    /// agents harvest and trade them, reproduction needs a dowry basket).
+    /// agents harvest and trade them, and invention learning requires — and
+    /// consumes — per-tech material baskets).
     /// `false` (default) leaves the world unchanged.
     #[serde(default)]
     pub resources_enabled: bool,

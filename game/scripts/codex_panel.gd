@@ -5,7 +5,7 @@ const CHAPTER_NAMES: PackedStringArray = [
 	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior",
 	"Predation", "CombatRaid", "ArmsRace", "Territory", "NichePartition",
 	"Dialect", "MemeSweep", "AlarmCall", "Cooperation", "PackHunting", "HerdCohesion",
-	"Discovery", "Adoption", "BadIdea", "BadAdopt", "Trade", "DowryBirth",
+	"Discovery", "Adoption", "BadIdea", "BadAdopt", "Trade", "MaterialLearn",
 	"PopCycle", "BoomBust", "CarryingCap", "TrophicCascade",
 	"RangeExpand", "Segregation", "Corridor", "Succession",
 	"TraitFixed", "RapidAdapt", "Convergent",
@@ -42,7 +42,7 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.95, 0.45, 0.55),  # 19 PracticeDiscovered — rose
 	Color(0.85, 0.3, 0.3),    # 20 PracticeAdopted    — dark red
 	Color(0.95, 0.8, 0.45),   # 21 ResourceTraded     — wheat
-	Color(0.8, 0.95, 0.9),    # 22 DowryBirth         — pale mint
+	Color(0.8, 0.95, 0.9),    # 22 MaterialLearning    — pale mint
 	Color(0.55, 0.75, 1.0),   # 23 PopCycle       — sky blue
 	Color(1.0, 0.6, 0.25),    # 24 BoomBust       — hot orange
 	Color(0.5, 0.9, 0.55),    # 25 CarryingCap    — steady green

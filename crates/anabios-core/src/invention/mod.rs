@@ -15,6 +15,13 @@
 //! The whole mechanism is gated on `World::inventions_enabled`; with the flag
 //! off every invention channel stays 0.0, every multiplier below is exactly
 //! 1.0, and no RNG draws are consumed, so baseline scenarios stay unchanged.
+//!
+//! When `World::resources_enabled` is ALSO on, each invention carries a
+//! material basket (`Invention::materials`): the learner must hold the goods
+//! to make any progress (discovery rolls skip it, social copying stalls) and
+//! pays the basket on completed acquisition, recorded as a codex
+//! `MaterialLearning` event. The economy thereby funds culture, not births —
+//! reproduction never touches trade goods.
 
 use crate::genome::{Genome, GenomeSlot};
 use crate::module::{self, ModuleType};
@@ -78,6 +85,15 @@ pub struct Invention {
     /// Bitmask of invention ids that must be held (level ≥ `HELD_THRESHOLD`)
     /// before this one can be discovered or copied.
     pub prereqs: u32,
+    /// Material basket (units per `resource::Good`, indexed by `Good::index`)
+    /// the learner must HOLD to make any progress on this invention —
+    /// discovery rolls exclude it and social copying skips it while the
+    /// basket is unaffordable — and PAYS on completed acquisition (a
+    /// discovery breakthrough, or a social copy crossing `HELD_THRESHOLD`).
+    /// All-zero = free to learn. Only consulted when
+    /// `World::resources_enabled`; with the flag off every invention is free
+    /// and scenarios without the economy are byte-identical to before.
+    pub materials: [f32; crate::resource::GOOD_COUNT],
     /// One-line upside summary (UI).
     pub buff: &'static str,
     /// One-line downside summary (UI).
@@ -108,6 +124,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "stone_tools",
         era: 1,
         prereqs: 0,
+        // Knapping stone.
+        materials: [0.0, 2.0, 0.0, 0.0],
         buff: "+25% graze bite",
         debuff: "none",
         affinity: None,
@@ -117,6 +135,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "fire",
         era: 1,
         prereqs: bit(STONE_TOOLS),
+        // Fuelwood.
+        materials: [0.0, 0.0, 2.0, 0.0],
         buff: "+40% energy per biomass",
         debuff: "+10% metabolism",
         // Bold experimenters harness fire: its energy buff scales with Openness,
@@ -128,6 +148,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "farming",
         era: 2,
         prereqs: bit(FIRE),
+        // Seed grain.
+        materials: [0.0, 0.0, 0.0, 2.0],
         buff: "+60% graze yield",
         debuff: "crowding stress",
         // Sedentary farming rewards prudent planners: its yield scales with
@@ -139,6 +161,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "metalworking",
         era: 2,
         prereqs: bit(FIRE),
+        // Ore + flux.
+        materials: [1.0, 2.0, 0.0, 0.0],
         buff: "+50% weapon damage",
         debuff: "+10% module upkeep",
         affinity: None,
@@ -148,6 +172,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "writing",
         era: 3,
         prereqs: bit(FARMING),
+        // Writing medium + pigment.
+        materials: [0.0, 0.0, 1.0, 1.0],
         buff: "2x meme + invention spread",
         debuff: "small upkeep",
         // Literacy rewards communicators: the spread buff scales with the
@@ -159,6 +185,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "medicine",
         era: 3,
         prereqs: bit(WRITING),
+        // Herbs + mineral salts.
+        materials: [1.0, 0.0, 0.0, 2.0],
         buff: "+50% lifespan",
         debuff: "small upkeep",
         // Medicine's lifespan buff rewards the cognitive lineage that could
@@ -170,6 +198,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "husbandry",
         era: 3,
         prereqs: bit(FARMING),
+        // Fodder for the penned herd.
+        materials: [0.0, 0.0, 0.0, 2.0],
         buff: "+40% scavenge energy",
         debuff: "+8% metabolism",
         affinity: None,
@@ -179,6 +209,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "machinery",
         era: 4,
         prereqs: bit(METALWORKING) | bit(WRITING),
+        // Worked metal + mineral parts.
+        materials: [2.0, 2.0, 0.0, 0.0],
         buff: "+25% speed & bite",
         debuff: "pollutes local biome",
         affinity: None,
@@ -188,6 +220,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "electricity",
         era: 4,
         prereqs: bit(MACHINERY),
+        // Conductors, magnets, and insulation.
+        materials: [1.0, 1.0, 1.0, 0.0],
         buff: "+30% perception, 1.5x discovery",
         debuff: "upkeep",
         affinity: None,
@@ -197,6 +231,8 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         key: "nuclear_power",
         era: 4,
         prereqs: bit(ELECTRICITY),
+        // The full industrial supply chain: one of everything.
+        materials: [1.0, 1.0, 1.0, 1.0],
         buff: "flat energy income",
         debuff: "1.5x child mutation + upkeep",
         affinity: None,
@@ -292,6 +328,31 @@ pub fn iq_req(k: usize) -> f32 {
 #[inline]
 pub fn iq_permits(iq: f32, k: usize, cognition_enabled: bool) -> bool {
     !cognition_enabled || iq >= iq_req(k)
+}
+
+// --- Material (trade-goods) learning cost ------------------------------------
+
+/// Whether `inventory` covers invention `k`'s material basket. With
+/// `resources_enabled` false the material gate is off (always affordable), so
+/// economy-free scenarios keep their exact behavior; otherwise the learner
+/// must hold every required good before discovery rolls include `k` or social
+/// copying makes progress on it.
+#[inline]
+pub fn materials_permit(
+    inventory: &[f32; crate::resource::GOOD_COUNT],
+    k: usize,
+    resources_enabled: bool,
+) -> bool {
+    !resources_enabled
+        || (0..crate::resource::GOOD_COUNT).all(|g| inventory[g] >= INVENTIONS[k].materials[g])
+}
+
+/// Deduct invention `k`'s material basket from `inventory`. Call only after
+/// `materials_permit` passed, so no slot can go negative.
+pub fn consume_materials(inventory: &mut [f32; crate::resource::GOOD_COUNT], k: usize) {
+    for g in 0..crate::resource::GOOD_COUNT {
+        inventory[g] -= INVENTIONS[k].materials[g];
+    }
 }
 
 // --- Multipliers read by effect sites (identity at mask = 0) ----------------
@@ -505,16 +566,23 @@ pub fn invention_step(world: &mut World) {
             // pick below (its `probs` entry stays 0).
             let cognition = world.cognition_enabled;
             let agent_iq = world.agents.iq[i];
+            // Material gate: with the economy on, a discovery also needs its
+            // trade-goods basket in hand (no-op when resources are disabled).
+            let resources = world.resources_enabled;
             // Gene→tech arm: a lineage rich in a tech's affinity gene discovers
             // that tech faster (identity when coupling is off — the weight is
             // 1.0, so the probability table and its single RNG draw are
             // unchanged). Borrow ends when the closure returns, before the roll.
             let coupling = world.gene_tech_coupling;
             let genome = &world.agents.genome[i];
+            let inventory = world.agents.inventory[i];
             let mut total = 0.0f32;
             let mut probs = [0.0f32; INVENTION_COUNT];
             candidates(mask, |k| {
                 if !iq_permits(agent_iq, k, cognition) {
+                    return;
+                }
+                if !materials_permit(&inventory, k, resources) {
                     return;
                 }
                 let p = (BASE_DISCOVERY * openness * (0.3 + skill) * disc_mult
@@ -544,6 +612,18 @@ pub fn invention_step(world: &mut World) {
                     if picked != usize::MAX {
                         // Breakthrough: the channel jumps straight to full
                         // adoption; neighbours now copy toward it socially.
+                        // The discoverer pays the material basket (economy on).
+                        if resources {
+                            consume_materials(&mut world.agents.inventory[i], picked);
+                            world.codex.push_event(crate::codex::CodexEvent {
+                                event_type: crate::codex::EventType::MaterialLearning,
+                                tick: world.tick,
+                                species_id: world.agents.species_id[i],
+                                value: picked as f32,
+                                loc_x: world.agents.position[i].x,
+                                loc_y: world.agents.position[i].y,
+                            });
+                        }
                         world.agents.meme_vector[i][channel(picked)] = 1.0;
                         mask |= bit(picked);
                     }

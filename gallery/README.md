@@ -15,7 +15,7 @@ the other scenarios on the viewer default. Captures run windowed (not
 ## grand theater (all subsystems at once)
 
 Every opt-in flag on in one world (`grand-theater`, seed 424242): seasonal +
-drifting climate, living biome, disasters, the four-goods dowry economy,
+drifting climate, living biome, disasters, the four-goods material economy (goods fund invention learning),
 settlements, cognition + invention tree with gene↔tech coupling, war, and
 the full archetype cast. Terrain palette shows each biome in its own hue
 family (grass/forest greens, sandy desert, blue water, gray rock); biomass

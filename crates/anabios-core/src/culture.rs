@@ -307,6 +307,10 @@ pub fn culture_step(world: &mut World) {
                 * crate::invention::spread_multiplier_coupled(self_mask, writing_gene, coupling);
             let cognition = world.cognition_enabled;
             let receiver_iq = world.agents.iq[i];
+            // Material gate: with the economy on, the learner must hold the
+            // invention's trade-goods basket to make progress, and pays it
+            // when the copy crosses into functional adoption.
+            let resources = world.resources_enabled;
             for (k, &target) in max_neighbour_inv.iter().enumerate() {
                 if crate::invention::INVENTIONS[k].prereqs & !self_mask != 0 {
                     continue; // missing foundations
@@ -314,14 +318,33 @@ pub fn culture_step(world: &mut World) {
                 if !crate::invention::iq_permits(receiver_iq, k, cognition) {
                     continue; // insufficient IQ to acquire this trait
                 }
+                if !crate::invention::materials_permit(&world.agents.inventory[i], k, resources) {
+                    continue; // can't afford the materials for this trait
+                }
                 let ch = crate::invention::channel(k);
                 let cur = world.agents.meme_vector[i][ch];
                 if target > cur {
                     world.agents.meme_vector[i][ch] = cur + rate * (target - cur);
+                    let new_val = world.agents.meme_vector[i][ch];
+                    // Completed the apprenticeship: crossing into functional
+                    // adoption consumes the material basket.
+                    if resources
+                        && cur < crate::invention::HELD_THRESHOLD
+                        && new_val >= crate::invention::HELD_THRESHOLD
+                    {
+                        crate::invention::consume_materials(&mut world.agents.inventory[i], k);
+                        world.codex.push_event(crate::codex::CodexEvent {
+                            event_type: crate::codex::EventType::MaterialLearning,
+                            tick: world.tick,
+                            species_id: world.agents.species_id[i],
+                            value: k as f32,
+                            loc_x: world.agents.position[i].x,
+                            loc_y: world.agents.position[i].y,
+                        });
+                    }
                     // E9: adopt the teacher's variant when the learned level
                     // lands in its band.
                     let tv = max_neighbour_inv_variant[k];
-                    let new_val = world.agents.meme_vector[i][ch];
                     if tv != 0
                         && world
                             .codex
