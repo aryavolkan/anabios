@@ -1,5 +1,12 @@
 # anabios screenshot gallery
 
+All shots recaptured under the animated field renderer (walk-cycle shader,
+upright hominins) on the same scenario/seed/tick parameters listed below;
+figures now read as standing 8-bit apes instead of static discs. A few
+event tick-stamps in the prose have drifted from current sim behavior on
+scenarios whose balance changed since the text was written (the images are
+the source of truth).
+
 Captured with the `debug_capture.gd` harness (`ANABIOS_SHOT*`), 1280x800.
 All runs are deterministic per scenario seed, so every shot is reproducible
 with the same env vars. Camera close-ups use `ANABIOS_CAM_ZOOM/_CAM_X/_CAM_Y`.
