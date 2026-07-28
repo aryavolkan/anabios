@@ -89,6 +89,8 @@ impl Good {
             TerrainType::Rock => Some(Good::Obsidian),
             TerrainType::Forest => Some(Good::Amber),
             TerrainType::Grass => Some(Good::Spice),
+            TerrainType::Rainforest | TerrainType::Taiga => Some(Good::Amber),
+            TerrainType::Savanna | TerrainType::Tundra => Some(Good::Spice),
             TerrainType::Water => None,
         }
     }
@@ -200,6 +202,15 @@ pub fn resource_step(world: &mut World) {
 mod tests {
     use super::*;
     use crate::biome::TerrainType;
+
+    #[test]
+    fn every_land_terrain_yields_a_good() {
+        use TerrainType::*;
+        for t in [Desert, Rock, Forest, Grass, Savanna, Rainforest, Taiga, Tundra] {
+            assert!(Good::from_terrain(t).is_some(), "{t:?} must map to a good");
+        }
+        assert!(Good::from_terrain(Water).is_none());
+    }
 
     #[test]
     fn resource_step_is_inert_when_disabled() {

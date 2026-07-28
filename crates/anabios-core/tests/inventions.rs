@@ -787,14 +787,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // AgentBuffers.sex + World.sexual_dimorphism_enabled + codex dimorphism
     // latches. Flag off here — zero extra draws, identity factors; pure
     // serialized-layout growth.
-    // Refreshed 2026-07-27 (E13 domestication, FORMAT_VERSION 20→21):
-    // AgentBuffers.livestock_of + World.domestication_enabled + codex herd
-    // latches. Flag off here — husbandry_step early-returns; pure
-    // serialized-layout growth.
-    // Refreshed 2026-07-27 (scratch-staleness fix): dead slots now get clean
-    // sense/decide scratch (see determinism.rs note). Ticks 0/100 unchanged;
-    // tick 300 moved.
-    &[(0, 0x1418e0ad3c849063), (100, 0x2e23ac24927fa848), (300, 0x50787d7402fa1e92)];
+    // Refreshed 2026-07-27 (climate worldgen merged onto E13, FORMAT_VERSION 22):
+    // new Whittaker terrain changes the invention-race trajectory — on top of
+    // E13's livestock_of / domestication_enabled layout. Regenerated from the
+    // merged code.
+    &[(0, 0xd4616bec29fbe370), (100, 0x32447c1550a30696), (300, 0xeb70a1c498889417)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

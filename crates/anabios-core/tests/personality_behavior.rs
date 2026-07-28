@@ -54,8 +54,14 @@ fn mean_energy(w: &anabios_core::world::World) -> f32 {
 }
 
 fn scenario(trait_line: &str) -> String {
+    // Center off the equator: under the climate worldgen the equatorial cell at
+    // (512,512) is abundant Rainforest (carrying capacity 28), where food is so
+    // plentiful that conscientiousness's foraging-efficiency edge is swamped
+    // (it even inverts). (640,256) is a leaner, more food-limited spot where the
+    // trait effects read cleanly — openness still disperses, extraversion still
+    // clusters, conscientiousness still conserves energy.
     format!(
-        "name = \"p\"\nseed = 7\n\n[[agents]]\ncount = 120\nplacement = {{ kind = \"cluster\", center_x = 512.0, center_y = 512.0, radius = 80.0 }}\n[agents.traits]\n{trait_line}\n"
+        "name = \"p\"\nseed = 7\n\n[[agents]]\ncount = 120\nplacement = {{ kind = \"cluster\", center_x = 640.0, center_y = 256.0, radius = 80.0 }}\n[agents.traits]\n{trait_line}\n"
     )
 }
 
