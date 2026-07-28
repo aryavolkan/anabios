@@ -51,6 +51,43 @@ const APES: Array = [
 	[7, 10, 1, 4, "t"], [9, 10, 2, 4, "t"], [7, 14, 4, 1, "K"]],
 ]
 
+# A bold upright-hominin silhouette for the FIELD: the per-agent body mark that
+# replaces the plain disc. Pure white with an auto 1px dark outline so, once
+# multiplied by each agent's genome colour (exactly like the old disc was), it
+# reads as a little tinted ape with a crisp edge at any zoom.
+const FIELD_SHAPE: Array = [
+	[6, 2, 4, 4],   # head
+	[7, 6, 2, 1],   # neck
+	[4, 6, 8, 5],   # shoulders / torso
+	[3, 7, 2, 4],   # left arm
+	[11, 7, 2, 4],  # right arm
+	[6, 11, 2, 4],  # left leg
+	[9, 11, 2, 4],  # right leg
+]
+
+static func build_field_mask() -> ImageTexture:
+	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for b in FIELD_SHAPE:
+		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), Color(1, 1, 1, 1))
+	# 1px dark outline: every empty pixel that touches the silhouette. Collected
+	# first, then written, so outline pixels don't seed more outline.
+	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var edges: Array = []
+	for y in 16:
+		for x in 16:
+			if img.get_pixel(x, y).a > 0.0:
+				continue
+			for d in dirs:
+				var nx: int = x + d.x
+				var ny: int = y + d.y
+				if nx >= 0 and nx < 16 and ny >= 0 and ny < 16 and img.get_pixel(nx, ny).a > 0.5:
+					edges.append(Vector2i(x, y))
+					break
+	for e in edges:
+		img.set_pixel(e.x, e.y, Color(0.34, 0.34, 0.34, 1.0))
+	return ImageTexture.create_from_image(img)
+
 # Build the ImageTexture for ape `idx`, nearest-filtered when displayed so the
 # 16x16 grid stays crisp when scaled up.
 static func build(idx: int) -> ImageTexture:
