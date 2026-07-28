@@ -1,6 +1,7 @@
 extends Control
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
+const MenuBgShader := preload("res://shaders/menu_bg.gdshader")
 
 const SCENARIOS: Array[Dictionary] = [
 	# Foundations
@@ -42,8 +43,33 @@ const SCENARIOS: Array[Dictionary] = [
 
 func _ready() -> void:
 	theme = UiTheme.build()
-	$Background.color = Color(0.04, 0.055, 0.07, 1.0)
-	$VBox/Title.add_theme_color_override("font_color", UiTheme.ACCENT)
+	# Living title-screen background: a procedural "primordial field" (deep teal
+	# depth gradient + drifting luminous cells) that evokes the sim without needing
+	# a Simulation node on the menu. See shaders/menu_bg.gdshader.
+	var bg_mat := ShaderMaterial.new()
+	bg_mat.shader = MenuBgShader
+	$Background.material = bg_mat
+	# Seat the form in a translucent instrument panel (same language as the HUD:
+	# near-black teal, a single accent hairline down the left edge) so the controls
+	# read as one console instead of floating in the void.
+	var form_panel := StyleBoxFlat.new()
+	form_panel.bg_color = Color(0.035, 0.055, 0.065, 0.62)
+	form_panel.set_corner_radius_all(6)
+	form_panel.border_width_left = 2
+	form_panel.border_color = UiTheme.ACCENT
+	form_panel.content_margin_left = 28
+	form_panel.content_margin_right = 28
+	form_panel.content_margin_top = 22
+	form_panel.content_margin_bottom = 22
+	$FormPanel.add_theme_stylebox_override("panel", form_panel)
+	# Title: accent color with a soft accent glow (a zero-offset shadow outline),
+	# so "anabios" reads as lit rather than flat.
+	var title: Label = $VBox/Title
+	title.add_theme_color_override("font_color", UiTheme.ACCENT)
+	title.add_theme_color_override("font_shadow_color", Color(0.30, 0.88, 0.70, 0.35))
+	title.add_theme_constant_override("shadow_offset_x", 0)
+	title.add_theme_constant_override("shadow_offset_y", 0)
+	title.add_theme_constant_override("shadow_outline_size", 11)
 	$VBox/Subtitle.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
 	for s in SCENARIOS:
 		scenario_pick.add_item(s["label"])
