@@ -350,8 +350,8 @@ pub fn materials_permit(
 /// Deduct invention `k`'s material basket from `inventory`. Call only after
 /// `materials_permit` passed, so no slot can go negative.
 pub fn consume_materials(inventory: &mut [f32; crate::resource::GOOD_COUNT], k: usize) {
-    for g in 0..crate::resource::GOOD_COUNT {
-        inventory[g] -= INVENTIONS[k].materials[g];
+    for (slot, cost) in inventory.iter_mut().zip(INVENTIONS[k].materials.iter()) {
+        *slot -= cost;
     }
 }
 
