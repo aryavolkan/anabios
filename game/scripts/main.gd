@@ -38,6 +38,11 @@ func _ready() -> void:
 	f.close()
 	if not sim.load_scenario_with_seed(text, GameConfig.seed):
 		push_error("scenario load failed")
+	# Open framed on the living cluster so the agents (now little hominins) read
+	# immediately, instead of as dots in the whole-world view. [F] resets to the
+	# world overview. Screenshot runs that set their own zoom opt out.
+	if not OS.has_environment("ANABIOS_ZOOM"):
+		($Camera2D as Camera2D).fit_to_agents()
 	# Apply UI scale from the menu.
 	var s: float = GameConfig.ui_scale
 	$UI.transform = Transform2D(0.0, Vector2(s, s), 0.0, Vector2.ZERO)
