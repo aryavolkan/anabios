@@ -5,12 +5,14 @@ seed = 318
 # grand `out-of-africa` world — FULL scale (max_population = 3000), material
 # economy intact, every subsystem on — with TWO showcase changes so the run
 # actually reaches the era-3 milestones and domesticates the herds:
-#   1. The Quarry innovators START holding Stone Tools + Fire + Farming
-#      (starting_inventions), so instead of stalling at Fire (era 1) they begin
-#      at the doorstep of era 3 and can discover Writing and Husbandry.
+#   1. The Quarry innovators START holding Stone Tools + Fire + Farming +
+#      Writing + Husbandry (starting_inventions) — the emergent climb stalls
+#      at Fire (era 1) and era 3 stays IQ-gated, so the two milestone techs
+#      are seeded directly and on display from tick 0 (downstream techs still
+#      emerge on their own from the seeded base).
 #   2. A tameable grazer+herd is co-located WITH the innovators at the Quarry
-#      (240,430), so once a lineage holds Husbandry the taming happens
-#      on-camera (the base scenario's herds are ~190u south, out of range).
+#      (240,430), so the seeded Husbandry holders tame juveniles on-camera
+#      (the base scenario's herds are ~190u south, out of taming range).
 # Throttling the population was tried and BACKFIRED — it starved the material
 # economy to zero inventions; keeping full scale + seeding is the fix. See
 # docs/showcase-plan.md.

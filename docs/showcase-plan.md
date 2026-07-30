@@ -96,7 +96,9 @@ starting_inventions = ["stone_tools", "fire", "farming", "writing", "husbandry"]
 
 - **Engine:** `AgentSpec.starting_inventions: Vec<String>` (default empty) +
   `invention::id_from_name`; `instantiate` seeds the named invention meme
-  channels to fully adopted after spawn. No RNG is drawn.
+  channels to fully adopted after spawn. No RNG is drawn. Unknown names are
+  rejected at `parse_toml` with a `ScenarioError::UnknownInvention` naming the
+  offender, so a typo fails at load instead of deep inside instantiation.
 - **Determinism:** the field is absent from `minimal.toml`, so seeding is a
   no-op there and the golden hashes are **byte-identical** — verified: the full
   `anabios-core` suite (incl. the 123 s determinism/golden test) passes, clippy

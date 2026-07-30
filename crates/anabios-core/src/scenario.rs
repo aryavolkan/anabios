@@ -125,14 +125,14 @@ pub struct AgentSpec {
     pub traits: TraitOverrides,
     #[serde(default)]
     pub archetype: Option<String>,
-    /// Inventions this spec's agents already HOLD at tick 0, named by the
-    /// snake_case of their display name (e.g. `["stone_tools", "fire",
-    /// "farming"]`). Seeds the corresponding invention meme channels to fully
-    /// adopted so the lineage begins partway up the tech tree — used to let a
-    /// full-scale scenario reach the era-3 milestones (Writing, Husbandry ->
-    /// domestication) without the slow cold-start climb. Only meaningful with
-    /// `inventions_enabled`. Absent (the default) seeds nothing, keeping the
-    /// golden scenarios byte-identical.
+    /// Inventions this spec's agents already HOLD at tick 0, named by their
+    /// machine key (e.g. `["stone_tools", "fire", "farming"]`; matching is
+    /// case-insensitive). Seeds the corresponding invention meme channels to
+    /// fully adopted so the lineage begins partway up the tech tree — used to
+    /// let a full-scale scenario reach the era-3 milestones (Writing,
+    /// Husbandry -> domestication) without the slow cold-start climb. Only
+    /// meaningful with `inventions_enabled`. Absent (the default) seeds
+    /// nothing, keeping the golden scenarios byte-identical.
     #[serde(default)]
     pub starting_inventions: Vec<String>,
 }
@@ -342,11 +342,26 @@ fn archetype_genome(name: &str, g: &mut Genome) {
 pub enum ScenarioError {
     #[error("toml parse error: {0}")]
     Toml(#[from] toml::de::Error),
+    #[error(
+        "unknown starting invention '{0}' — expected an invention key such as \
+         \"stone_tools\", \"fire\", \"farming\", \"writing\", or \"husbandry\""
+    )]
+    UnknownInvention(String),
 }
 
 impl Scenario {
     pub fn parse_toml(text: &str) -> Result<Self, ScenarioError> {
-        Ok(toml::from_str(text)?)
+        let scenario: Self = toml::from_str(text)?;
+        // Validate invention names up front so a typo fails at load with a
+        // clear message, rather than panicking deep inside `instantiate`.
+        for spec in &scenario.agents {
+            for name in &spec.starting_inventions {
+                if crate::invention::id_from_name(name).is_none() {
+                    return Err(ScenarioError::UnknownInvention(name.clone()));
+                }
+            }
+        }
+        Ok(scenario)
     }
 
     /// Build a `World` from this scenario. Determinism: world.rng is seeded
@@ -418,7 +433,8 @@ impl Scenario {
                 None => (0u32, None),
             };
             // Resolve any starting inventions to meme channels once per spec.
-            // An unknown name is a scenario-authoring error — fail fast.
+            // `parse_toml` already rejects unknown names; this panic guards
+            // programmatically-built scenarios that bypass parsing.
             let seed_channels: Vec<usize> = spec
                 .starting_inventions
                 .iter()
@@ -710,5 +726,57 @@ placement = { kind = "cluster", center_x = 100.0, center_y = 100.0, radius = 1.0
         .instantiate();
         let oid = off.agents.iter_alive().next().expect("one agent");
         assert!(!has(&off.agents.meme_vector[oid as usize], STONE_TOOLS));
+    }
+
+    #[test]
+    fn parse_toml_rejects_unknown_starting_invention() {
+        let text = r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 1
+starting_inventions = ["stone_tools", "wheel"]
+placement = { kind = "uniform" }
+"#;
+        let err = Scenario::parse_toml(text).expect_err("unknown invention must be rejected");
+        let msg = err.to_string();
+        assert!(msg.contains("wheel"), "error should name the bad invention, got: {msg}");
+    }
+
+    #[test]
+    fn starting_inventions_do_not_perturb_other_agents() {
+        // Seeding spec 0 must not shift the placement/personality RNG streams,
+        // so every agent (seeded or not) lands identically vs. an unseeded run.
+        let base = r#"
+name = "t"
+seed = 7
+inventions_enabled = true
+[[agents]]
+count = 3
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 100.0, center_y = 100.0, radius = 5.0 }
+[[agents]]
+count = 3
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0 }
+"#;
+        let seeded = base.replace(
+            "center_x = 100.0, center_y = 100.0, radius = 5.0 }\n",
+            "center_x = 100.0, center_y = 100.0, radius = 5.0 }\nstarting_inventions = [\"stone_tools\", \"fire\"]\n",
+        );
+        let a = Scenario::parse_toml(base).expect("parse").instantiate();
+        let b = Scenario::parse_toml(&seeded).expect("parse").instantiate();
+        let ids: Vec<u32> = a.agents.iter_alive().collect();
+        assert_eq!(ids, b.agents.iter_alive().collect::<Vec<u32>>());
+        for id in ids {
+            assert_eq!(
+                a.agents.position[id as usize], b.agents.position[id as usize],
+                "agent {id} position unchanged by seeding another spec"
+            );
+            assert_eq!(
+                a.agents.genome[id as usize], b.agents.genome[id as usize],
+                "agent {id} genome unchanged by seeding another spec"
+            );
+        }
     }
 }
