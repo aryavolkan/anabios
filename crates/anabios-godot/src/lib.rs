@@ -417,6 +417,21 @@ impl Simulation {
         out
     }
 
+    /// Return alive-agent ids in the same order as `alive_positions`
+    /// (ascending agent-id order). The viewer uses these to track agent
+    /// identity across ticks for smooth sub-tick motion interpolation and
+    /// follow-camera targets; alive *indices* reshuffle as agents die.
+    #[func]
+    fn alive_ids(&self) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(id as i32);
+            }
+        }
+        out
+    }
+
     /// Return alive-agent colors derived from genome color slots, in the
     /// same order as `alive_positions`.
     #[func]

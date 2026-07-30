@@ -219,8 +219,24 @@ throttle regression documented.
 and the `out-of-africa-saga` showcase scenario; validated it fires Writing +
 21 `AnimalDomesticated` + 6 `LivestockHerd` at full scale (§3/§4).
 
-**Phase 3 — next.** Narration script (minute-by-minute viewer walk-through of
-`out-of-africa-saga` per §5) + capture the chapter gallery per §7.
+**Phase 3 — done.** The showcase director shipped: a scripted cinematic
+recording mode in the Godot viewer (`game/scripts/showcase_director.gd` +
+`showcase_card.gd`) that plays a JSON beat timeline
+(`game/showcase/out-of-africa-saga.json`, the seven chapters of §5) over the
+live saga run — eased camera moves, chapter title cards, lower-thirds,
+letterbox/vignette, event-triggered cuts (`on_event` cuts to the latest
+`Market`/`Domesticated`/`War` wherever they happen), and a follow-cam for the
+herding shot. Agents glide between ticks (sub-tick motion smoothing in
+`main.gd`, identity tracked via the new `alive_ids()` gdext binding).
+Record it:
+
+```
+scripts/emergence.sh record out-of-africa-saga --seed 318
+# → runs/showcase/out-of-africa-saga.mp4 (Godot Movie Maker → ffmpeg)
+```
+
+The narration script *is* the timeline JSON (each chapter's title card +
+lower-third text); edit beats there, not in a separate doc.
 
 **Phase 4 — optional.** One-pager: feature × evidence table combining the
 `run`/`sweep` event counts with the gallery stills.
@@ -230,7 +246,8 @@ and the `out-of-africa-saga` showcase scenario; validated it fires Writing +
 ## Scope boundaries (YAGNI)
 
 - Option A is the only engine change — a bounded, determinism-safe field.
-- No web frontend (none exists); the Godot viewer is the surface.
+- ~~No web frontend~~ → revised: the showcase director (Phase 3) records
+  cinematic MP4s *in* the Godot viewer; a browser surface remains out of scope.
 - Keep the tour to the seven chapters above; don't beat every codex detector.
 - Milestone tech is *seeded* for a reliable showcase; cold-start emergence lives
   in the focused `domestication.toml`, not here.

@@ -35,6 +35,18 @@ const GLYPH_SIZE: float = 1.6
 var _body_mmis: Array[MultiMeshInstance2D] = []
 var _glyph_clones: Array[MultiMeshInstance2D] = []
 
+# Smooth-motion state. Agents teleport once per tick; rendering eases each
+# body toward its latest tick position so movement glides instead of
+# stepping. Identity is tracked by agent id (alive indices reshuffle as
+# agents die): both the previous and current id arrays are ascending, so a
+# two-pointer merge finds each agent's last smoothed position in O(n).
+# A jump larger than SNAP_DIST (torus seam crossing, or many ticks per
+# frame at high speed) snaps straight to the target — time-lapse stays crisp.
+const SMOOTH: float = 0.35
+const SNAP_DIST: float = 4.0
+var _prev_ids: PackedInt32Array = PackedInt32Array()
+var _prev_smooth: PackedVector2Array = PackedVector2Array()
+
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
 	var f = FileAccess.open(scenario_path, FileAccess.READ)
@@ -112,6 +124,13 @@ func _ready() -> void:
 	var replay_manager := preload("res://scripts/replay_manager.gd").new()
 	replay_manager.name = "ReplayManager"
 	add_child(replay_manager)
+	# Showcase director: scripted cinematic timeline for recorded demos.
+	# Locks manual camera input (GameConfig.showcase_active) and drives the
+	# sim speed, camera, overlays, and title cards from a JSON beat list.
+	if OS.has_environment("ANABIOS_SHOWCASE"):
+		var director := preload("res://scripts/showcase_director.gd").new()
+		director.name = "ShowcaseDirector"
+		add_child(director)
 	# Evolution panel (E5): trait drift + phylogeny, toggled with [T].
 	var evolution_panel := preload("res://scripts/evolution_panel.gd").new()
 	evolution_panel.name = "EvolutionPanel"
@@ -191,9 +210,11 @@ func _apply_ui_theme() -> void:
 
 func _notification(what: int) -> void:
 	# Pause when the window loses focus; user resumes manually. Screenshot
-	# runs (ANABIOS_SHOT) opt out: the capture harness needs the sim to keep
-	# stepping even if the capture window reports focus loss.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and not OS.has_environment("ANABIOS_SHOT"):
+	# runs (ANABIOS_SHOT) and showcase recordings (which must keep stepping
+	# hands-free while --write-movie captures) opt out.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT \
+			and not OS.has_environment("ANABIOS_SHOT") \
+			and not GameConfig.showcase_active:
 		paused = true
 
 func _process(_delta: float) -> void:
@@ -222,12 +243,39 @@ func _refresh_bodies() -> void:
 		return
 
 	var positions: PackedVector2Array = sim.alive_positions()
+	var ids: PackedInt32Array = sim.alive_ids()
 	var sizes: PackedFloat32Array = sim.alive_sizes()
 	var rots: PackedFloat32Array = sim.alive_rotations()
 	var sp_ids: PackedInt32Array = sim.alive_species_ids()
 	var body_colors: PackedColorArray = _body_colors(n)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n
+	var have_ids: bool = ids.size() == n
+
+	# Smoothed render positions: merge-join the current ascending id array
+	# against last frame's to find each agent's previous smoothed position,
+	# then ease toward the new tick position. Becomes next frame's prev.
+	var smooth: PackedVector2Array = positions
+	if have_ids:
+		smooth = PackedVector2Array()
+		smooth.resize(n)
+		var p := 0
+		var pn: int = _prev_ids.size()
+		for i in n:
+			var id: int = ids[i]
+			while p < pn and _prev_ids[p] < id:
+				p += 1
+			var target: Vector2 = positions[i]
+			if p < pn and _prev_ids[p] == id:
+				var from: Vector2 = _prev_smooth[p]
+				if from.distance_squared_to(target) <= SNAP_DIST * SNAP_DIST:
+					smooth[i] = from.lerp(target, SMOOTH)
+				else:
+					smooth[i] = target
+			else:
+				smooth[i] = target
+		_prev_ids = ids
+		_prev_smooth = smooth
 
 	# Bucket alive indices by ape species — one MultiMesh per species.
 	var buckets: Array = []
@@ -249,7 +297,7 @@ func _refresh_bodies() -> void:
 			var sz: float = maxf(sizes[i] * BODY_SCALE, BODY_MIN)
 			# Upright: the hominin stands, not spins — heading drives the
 			# walk shader (moving flag + facing), not the transform rotation.
-			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, positions[i])
+			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
 			mm.set_instance_transform_2d(j, t)
 			mm.set_instance_color(j, body_colors[i])
 			# Per-instance animation state for the field_agent shader. Phase

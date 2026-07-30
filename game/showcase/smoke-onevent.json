@@ -1,0 +1,28 @@
+{
+  "beats": [
+    { "do": [
+      { "letterbox": true },
+      { "speed": 16 },
+      { "camera": { "x": 512, "y": 512, "zoom": 1.0, "dur": 0.1 } },
+      { "title": { "chapter": "ON_EVENT + FOLLOW", "subtitle": "trigger semantics check", "dur": 1.5 } }
+    ] },
+    { "on_event": "Speciation", "do": [
+      { "speed": 1 },
+      { "camera": { "at": "event", "zoom": 2.5, "dur": 1.5 } },
+      { "highlight": "event" },
+      { "lower_third": { "text": "on_event fired on latest Speciation", "dur": 3.0 } }
+    ] },
+    { "after": 3.0, "do": [
+      { "clear_highlight": true },
+      { "follow": { "near": [512, 512] } },
+      { "lower_third": { "text": "follow-cam engaged", "dur": 2.5 } }
+    ] },
+    { "after": 3.0, "do": [
+      { "unfollow": true },
+      { "title": { "chapter": "DONE", "subtitle": "", "dur": 1.0 } }
+    ] },
+    { "after": 2.0, "do": [
+      { "end": true }
+    ] }
+  ]
+}
