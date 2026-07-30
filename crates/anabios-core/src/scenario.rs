@@ -338,26 +338,42 @@ fn archetype_genome(name: &str, g: &mut Genome) {
     }
 }
 
+/// Build the fail-fast message for an unknown `starting_inventions` entry,
+/// listing every valid key so the message can't go stale as the tree grows.
+fn unknown_invention_msg(name: &str) -> String {
+    let valid =
+        crate::invention::INVENTIONS.iter().map(|inv| inv.key).collect::<Vec<_>>().join(", ");
+    format!("unknown starting invention '{name}' — valid keys: {valid}")
+}
+
 #[derive(Debug, Error)]
 pub enum ScenarioError {
     #[error("toml parse error: {0}")]
     Toml(#[from] toml::de::Error),
-    #[error(
-        "unknown starting invention '{0}' — expected an invention key such as \
-         \"stone_tools\", \"fire\", \"farming\", \"writing\", or \"husbandry\""
-    )]
+    #[error("{0}")]
     UnknownInvention(String),
+    #[error(
+        "starting_inventions requires `inventions_enabled = true` — without the \
+         invention tree the seeded meme channels are never read"
+    )]
+    InventionsDisabled,
 }
 
 impl Scenario {
     pub fn parse_toml(text: &str) -> Result<Self, ScenarioError> {
         let scenario: Self = toml::from_str(text)?;
-        // Validate invention names up front so a typo fails at load with a
-        // clear message, rather than panicking deep inside `instantiate`.
+        // Validate up front so an authoring mistake fails at load with a clear
+        // message, rather than panicking deep inside `instantiate` (unknown
+        // name) or silently seeding channels nothing reads (tree disabled).
+        if !scenario.inventions_enabled
+            && scenario.agents.iter().any(|s| !s.starting_inventions.is_empty())
+        {
+            return Err(ScenarioError::InventionsDisabled);
+        }
         for spec in &scenario.agents {
             for name in &spec.starting_inventions {
                 if crate::invention::id_from_name(name).is_none() {
-                    return Err(ScenarioError::UnknownInvention(name.clone()));
+                    return Err(ScenarioError::UnknownInvention(unknown_invention_msg(name)));
                 }
             }
         }
@@ -439,9 +455,8 @@ impl Scenario {
                 .starting_inventions
                 .iter()
                 .map(|name| {
-                    let inv = crate::invention::id_from_name(name).unwrap_or_else(|| {
-                        panic!("unknown starting invention '{name}' in scenario")
-                    });
+                    let inv = crate::invention::id_from_name(name)
+                        .unwrap_or_else(|| panic!("{}", unknown_invention_msg(name)));
                     crate::invention::channel(inv)
                 })
                 .collect();
@@ -733,6 +748,7 @@ placement = { kind = "cluster", center_x = 100.0, center_y = 100.0, radius = 1.0
         let text = r#"
 name = "t"
 seed = 1
+inventions_enabled = true
 [[agents]]
 count = 1
 starting_inventions = ["stone_tools", "wheel"]
@@ -741,6 +757,26 @@ placement = { kind = "uniform" }
         let err = Scenario::parse_toml(text).expect_err("unknown invention must be rejected");
         let msg = err.to_string();
         assert!(msg.contains("wheel"), "error should name the bad invention, got: {msg}");
+        assert!(msg.contains("husbandry"), "error should list valid keys, got: {msg}");
+    }
+
+    #[test]
+    fn parse_toml_rejects_starting_inventions_with_tree_disabled() {
+        // Seeding without `inventions_enabled` would silently write meme
+        // channels nothing reads — reject so the author fixes the flag.
+        let text = r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 1
+starting_inventions = ["stone_tools"]
+placement = { kind = "uniform" }
+"#;
+        let err = Scenario::parse_toml(text).expect_err("disabled tree must be rejected");
+        assert!(
+            err.to_string().contains("inventions_enabled"),
+            "error should name the missing flag, got: {err}"
+        );
     }
 
     #[test]
