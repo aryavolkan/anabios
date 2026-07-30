@@ -66,6 +66,11 @@
   .readout .stat .l{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:2px;}
   @media (max-width:760px){.readout{display:none;}}
 
+  .progress{position:fixed;left:84px;right:0;bottom:0;height:3px;z-index:4;background:rgba(233,225,210,0.06);transition:opacity .55s ease;}
+  .progress-fill{height:100%;width:0;background:linear-gradient(90deg,var(--ochre),#e0a15f);box-shadow:0 0 10px rgba(206,124,54,.5);}
+  .progress.paused .progress-fill{background:var(--muted);box-shadow:none;}
+  body.at-hero .progress{opacity:0;}
+
   .scroll{position:relative;z-index:2;}
   .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:0 clamp(24px,8vw,140px) 0 clamp(108px,12vw,220px);}
   .wordmark{font-weight:800;font-size:clamp(52px,12vw,148px);letter-spacing:.14em;text-transform:uppercase;margin:0;line-height:.94;color:var(--bone);}
@@ -98,6 +103,22 @@
   .missing div{max-width:52ch;}
   .missing code{font-family:var(--mono);color:var(--ochre);background:var(--basalt-2);padding:2px 6px;border-radius:3px;}
 
+  @media (max-width:760px){
+    .strata{width:54px;}
+    .strata-band .no{font-size:9px;}
+    .depth-marker{width:54px;}
+    .depth-marker::after{left:60px;}
+    .hud-era{left:64px;right:16px;}
+    .codex{left:64px;width:calc(100% - 80px);}
+    .progress{left:54px;}
+    .hero{padding:0 16px 0 64px;}
+    .wordmark{font-size:clamp(30px,11vw,84px);letter-spacing:.03em;}
+    .hero .kicker{max-width:none;}
+    .chapter{padding:0 20px 16vh 64px;}
+    .chapter .note{max-width:none;}
+    .outro{padding:12vh 24px 14vh 64px;}
+  }
+
   @media (prefers-reduced-motion:reduce){
     .codex-line,.depth-marker,.strata-band{transition:none;}
     .codex-head .dot{animation:none;}
@@ -125,6 +146,7 @@
   <div class="codex-head"><span class="dot"></span> Codex · first emergence</div>
   <div class="codex-feed" id="codex"></div>
 </div>
+<div class="progress" id="progress"><div class="progress-fill" id="progress-fill"></div></div>
 
 <div class="missing" id="missing"><div>
   <h2 style="font-family:var(--serif)">No replay loaded</h2>
@@ -207,7 +229,6 @@
   const NERA = CH.length;
   const TICKS = R.meta.ticks;
   const WSIZE = R.meta.world_size || 1024;
-  const eraWindow = (i) => [Math.floor(i*TICKS/NERA), Math.floor((i+1)*TICKS/NERA)];
 
   // ---- classify a codex event type into a narrative kind ----
   function kindOf(type){
@@ -229,6 +250,42 @@
 
   // events sorted by tick (recorder emits in order, but be safe)
   const EVENTS = R.events.slice().sort((a,b)=>a.t-b.t);
+
+  // ---- era boundaries from the REAL first-emergence ticks ----
+  // Each era begins when its defining phenomenon first fires in this run; if a
+  // signal never occurs we space the boundary evenly, keeping them monotonic.
+  const firstTick = (re) => { for (const e of EVENTS){ if (re.test(e.type)) return e.t; } return null; };
+  const ERA_SIGNAL = [
+    null,                                                                   // Cradle = tick 0
+    /invention_discovered|practice_discovered|material_learning|novel_module/, // Tools & Fire
+    /speciation|specialization_split|range_expansion/,                      // Exodus
+    /settlement|market|resource_traded|territory_formation/,                // Farming & Trade
+    /meme_sweep|cultural_radiation|institutional_ratchet|structured_signaling/, // Writing
+    /(^|_)war($|_)|combat_raid/,                                            // War & Kin
+  ];
+  const BOUNDS = (() => {
+    const minW = Math.max(1, Math.floor(TICKS*0.03));
+    const b = [0];
+    for (let i=1;i<NERA;i++){
+      const lo = b[i-1] + minW;
+      const hi = TICKS - minW*(NERA - i);              // leave room for later eras
+      let v = ERA_SIGNAL[i] ? firstTick(ERA_SIGNAL[i]) : null;
+      if (v == null) v = b[i-1] + (TICKS - b[i-1])/(NERA - i + 1);
+      b.push(Math.round(Math.min(Math.max(v, lo), Math.max(lo, hi))));
+    }
+    b.push(TICKS);
+    return b;
+  })();
+  const eraWindow = (i) => [BOUNDS[i], BOUNDS[i+1]];
+
+  // cumulative technology: distinct invention/practice discoveries up to a tick
+  const INV_TICKS = EVENTS.filter(e=>/invention_discovered|practice_discovered/.test(e.type))
+    .map(e=>e.t).sort((a,b)=>a-b);
+  function inventionsBy(tick){
+    let lo=0, hi=INV_TICKS.length;
+    while(lo<hi){ const m=(lo+hi)>>1; if(INV_TICKS[m]<=tick) lo=m+1; else hi=m; }
+    return lo;
+  }
 
   // ---- canvas ----
   const cv = document.getElementById("world");
@@ -252,6 +309,34 @@
   resize();
   const wx = (x)=> view.ox + x*view.s;
   const wy = (y)=> view.oy + y*view.s;
+
+  // ---- biome map: decode each base64 grid into an offscreen canvas once ----
+  const biomeCanvases = (() => {
+    const B = R.biome;
+    if (!B || !B.grids || !B.grids.length) return [];
+    const res = B.res;
+    return B.grids.map(gr => {
+      const bin = atob(gr.b64);
+      const off = document.createElement("canvas");
+      off.width = res; off.height = res;
+      const octx = off.getContext("2d");
+      const img = octx.createImageData(res, res);
+      for (let i=0, p=0; i<res*res; i++){
+        img.data[p++] = bin.charCodeAt(i*3);
+        img.data[p++] = bin.charCodeAt(i*3+1);
+        img.data[p++] = bin.charCodeAt(i*3+2);
+        img.data[p++] = 255;
+      }
+      octx.putImageData(img, 0, 0);
+      return { t: gr.t, cv: off };
+    });
+  })();
+  function biomeAt(tick){
+    if (!biomeCanvases.length) return null;
+    let g = biomeCanvases[0];
+    for (const c of biomeCanvases){ if (c.t <= tick) g = c; else break; }
+    return g.cv;
+  }
 
   // species colour: stable golden-angle hue, diet nudges toward ember
   const colorCache = new Map();
@@ -303,6 +388,18 @@
   const statSpec = document.getElementById("stat-spec");
   const statTech = document.getElementById("stat-tech");
   const codexEl = document.getElementById("codex");
+  const progressEl = document.getElementById("progress");
+  const progressFill = document.getElementById("progress-fill");
+
+  // spacebar pauses/resumes the playback (the era still shows, frozen)
+  let paused = false;
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && !e.target.closest("a,button,input,textarea")){
+      e.preventDefault();
+      paused = !paused;
+      progressEl.classList.toggle("paused", paused);
+    }
+  });
 
   const bands = STRATA.map((col,i)=>{
     const b=document.createElement("div"); b.className="strata-band"; b.style.background=col;
@@ -311,7 +408,7 @@
   });
 
   // era-local codex state
-  let winEvents=[], evPtr=0, shown=[], techCount=0;
+  let winEvents=[], evPtr=0, shown=[];
   function setEra(i){
     if (i===era && winEvents.length) return;
     era = i;
@@ -320,7 +417,7 @@
     bands.forEach((b,k)=>b.classList.toggle("active", k===i));
     const [t0,t1] = eraWindow(i);
     winEvents = EVENTS.filter(e=>e.t>=t0 && e.t<t1);
-    evPtr = 0; techCount = 0;
+    evPtr = 0;
     shown.forEach(l=>l.remove()); shown=[];
     codexEl.innerHTML="";
     playhead = t0;
@@ -329,7 +426,6 @@
   function esc(s){ return (""+s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
   function emitCodex(e){
     const k = kindOf(e.type);
-    if (k==="fire") techCount++;
     const line=document.createElement("div"); line.className="codex-line";
     line.innerHTML = `<span class="tick">${e.t.toLocaleString()}</span> · `+
       `<span class="k-${k}">${esc(humanize(e.type))}</span> `+
@@ -357,18 +453,32 @@
 
   // ---- draw one interpolated frame at `tick` ----
   function draw(tick){
-    // background: warm cradle -> cool late, by era
-    const cool = era/(NERA-1);
-    const h = 34 - 14*cool;                 // ochre-ish -> slate
-    const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0, `hsl(${h},18%,6%)`);
-    g.addColorStop(0.55, `hsl(${h+6},22%,10%)`);
-    g.addColorStop(1, `hsl(${h},20%,7%)`);
-    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // dark surround so the biome plate reads as a lit map on a table
+    ctx.fillStyle = "#100C09";
+    ctx.fillRect(0,0,W,H);
+
+    const plate = WSIZE*view.s, px0 = wx(0), py0 = wy(0);
+    const bc = biomeAt(tick);
+    if (bc){
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(bc, px0, py0, plate, plate);
+      // faint climate tint: warm in the early eras, cool/slate late
+      const cool = era/(NERA-1);
+      ctx.fillStyle = `hsla(${34-150*cool},${18+22*cool}%,${18-6*cool}%,0.16)`;
+      ctx.fillRect(px0, py0, plate, plate);
+      // vignette to seat the plate into the surround
+      const vg = ctx.createRadialGradient(px0+plate/2, py0+plate/2, plate*0.35, px0+plate/2, py0+plate/2, plate*0.72);
+      vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.45)");
+      ctx.fillStyle=vg; ctx.fillRect(px0, py0, plate, plate);
+    } else {
+      const g = ctx.createLinearGradient(0,0,0,H);
+      g.addColorStop(0,"hsl(30,18%,6%)"); g.addColorStop(1,"hsl(30,20%,8%)");
+      ctx.fillStyle=g; ctx.fillRect(px0, py0, plate, plate);
+    }
 
     // world plate outline
-    ctx.strokeStyle="rgba(233,225,210,0.06)"; ctx.lineWidth=1;
-    ctx.strokeRect(wx(0), wy(0), WSIZE*view.s, WSIZE*view.s);
+    ctx.strokeStyle="rgba(233,225,210,0.10)"; ctx.lineWidth=1;
+    ctx.strokeRect(px0, py0, plate, plate);
 
     // event accents near the playhead (glows tied to real codex events)
     const winA = 90; // ticks around playhead considered "recent"
@@ -427,7 +537,7 @@
     // so the count reads like the true world population.
     smoothStat(statPop, Math.round(pop * strideScale));
     statSpec.textContent = specSet.size;
-    statTech.textContent = techCount;
+    statTech.textContent = inventionsBy(tick);
     marker.setAttribute("data-tick", "tick "+Math.round(tick).toLocaleString());
   }
 
@@ -447,18 +557,19 @@
     if (!last) last = ts;
     const dt = Math.min(0.05,(ts-last)/1000); last = ts;
     const [t0,t1] = eraWindow(era);
-    if (!reduce){
+    if (!reduce && !paused){
       const speed = (t1-t0)/ERA_SECONDS;
       playhead += dt*speed;
       if (playhead >= t1){ // loop within the era, replay its emergence
-        playhead = t0; evPtr = 0; techCount = 0;
+        playhead = t0; evPtr = 0;
         shown.forEach(l=>l.remove()); shown=[]; codexEl.innerHTML="";
       }
-    } else {
+    } else if (reduce){
       playhead = (t0+t1)/2;
     }
     // stream any events the playhead has passed
     while (evPtr < winEvents.length && winEvents[evPtr].t <= playhead){ emitCodex(winEvents[evPtr]); evPtr++; }
+    progressFill.style.width = (Math.min(1,Math.max(0,(playhead-t0)/((t1-t0)||1)))*100).toFixed(1)+"%";
     draw(playhead);
     if (!reduce) requestAnimationFrame(loop);
   }
@@ -472,11 +583,14 @@
 
   onScroll();
   setEra(0);
-  // deep-link: ?era=N scrolls straight to that chapter so a link can open on,
-  // say, the War age. onScroll then aligns the era label, strata, and world.
+  // deep-link: ?era=N opens straight on that age — the world jumps to it
+  // immediately and the page scrolls so the narrative and strata align.
   const q = new URLSearchParams(location.search).get("era");
   if (q !== null){
-    const el = document.getElementById("ch" + Math.max(0, Math.min(NERA-1, +q|0)));
+    const n = Math.max(0, Math.min(NERA-1, +q|0));
+    document.body.classList.remove("at-hero");
+    setEra(n);
+    const el = document.getElementById("ch"+n);
     if (el) requestAnimationFrame(() => el.scrollIntoView());
   }
   if (reduce){ draw(playhead); }

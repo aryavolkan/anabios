@@ -46,6 +46,14 @@ WASM live mode could later reuse the same player.
   units rounded to ints, diet quantised to 0..255. `id` is the agent slot, stable across
   frames so the player can interpolate between samples.
 - `events[]`: `{ t, type, sid, v, x, y }` — flattened codex events, snake_case type names.
+- `biome`: `{ res, grids[] }` — the sim's Whittaker biome field downsampled to `res`²
+  RGB cells, base64-encoded, sampled at `biome_frames` keyframes across the run (the map
+  lushes/pollutes/scars over time). Colour mapping is ported cell-for-cell from the Godot
+  bridge `biome_colors`, so the web plate matches the live viewer's ground.
+
+Per-species genome centroids were tried as the agent palette but collapse to near-neutral
+teal on this scenario (many are padding neutrals), so the player colours agents by a
+stable golden-angle hue per species id (the viewer's "species" colour mode), warmed by diet.
 
 Size control (committed file ≈ 1.7 MB, comparable to a few gallery PNGs):
 - **Stable-stride agent subsampling** (`--max-agents`): keep every stride-th slot. A fixed
@@ -58,9 +66,11 @@ Size control (committed file ≈ 1.7 MB, comparable to a few gallery PNGs):
 
 - **Signature: strata rail** — a geological core-sample down the left edge, one band per
   era, with a depth marker tracking the tick. Deep time, rendered as sediment.
-- **Scroll = descent through eras.** The run is split into six equal tick windows labelled
-  Cradle → Tools & Fire → Exodus → Farming & Trade → Writing → War & Kin. The current era
-  is driven by scroll; its window auto-plays and loops so the world is always alive.
+- **Scroll = descent through eras.** The six era boundaries are derived from the run's real
+  event stream (first invention → Tools & Fire, first speciation → Exodus, first
+  settlement/market → Farming & Trade, first meme-sweep → Writing, first raid → War & Kin),
+  falling back to even spacing when a signal never fires. The current era is driven by
+  scroll; its window auto-plays and loops so the world is always alive. Space pauses.
 - **Codex ticker** streams the real events in each window, colour-coded by narrative kind
   (fire / trade / grow / war / mind) derived from the event type name. On-canvas accents
   (fire glows, war rings) are tied to actual event locations.

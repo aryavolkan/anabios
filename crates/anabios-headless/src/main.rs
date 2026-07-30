@@ -129,6 +129,12 @@ enum Command {
         /// Cap events, keeping each type's first plus a uniform sample (0 = all).
         #[arg(long, default_value_t = 1000)]
         max_events: usize,
+        /// Biome map resolution per axis (downsampled from the sim's grid).
+        #[arg(long, default_value_t = 72)]
+        biome_res: usize,
+        /// Number of biome-map keyframes across the run (0 disables the map).
+        #[arg(long, default_value_t = 8)]
+        biome_frames: usize,
         /// Output path. `.js` wraps `window.ANABIOS_REPLAY=…`; `.json` is raw.
         #[arg(long, default_value = "showcase/replay.js")]
         out: PathBuf,
@@ -164,9 +170,27 @@ fn main() -> Result<()> {
         Command::Demo { scenario, ticks, seed, report_every } => {
             demo::run(scenario, ticks, seed, report_every)
         }
-        Command::Record { scenario, ticks, seed, sample, max_agents, max_events, out } => {
-            record::run(scenario, ticks, seed, sample, max_agents, max_events, out)
-        }
+        Command::Record {
+            scenario,
+            ticks,
+            seed,
+            sample,
+            max_agents,
+            max_events,
+            biome_res,
+            biome_frames,
+            out,
+        } => record::run(
+            scenario,
+            ticks,
+            seed,
+            sample,
+            max_agents,
+            max_events,
+            biome_res,
+            biome_frames,
+            out,
+        ),
         Command::Soak { scenario, ticks, window, seed, out } => {
             soak::run(scenario, ticks, window, seed, out)
         }

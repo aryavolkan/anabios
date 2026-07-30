@@ -3,26 +3,28 @@
 //!
 //! The recorder runs the same `step` loop as every other subcommand, sampling
 //! per-agent draw data every `sample` ticks and draining codex events every
-//! tick. Reading the agent columns is pure and RNG-free, so recording does not
-//! perturb the run — the final `state_hash` matches a plain `run` of the same
-//! scenario/seed/ticks. The per-agent draw logic mirrors the Godot bridge
-//! (`crates/anabios-godot/src/lib.rs`) so the web player shows the same world.
+//! tick. Reading the agent/biome columns is pure and RNG-free, so recording
+//! does not perturb the run — the final `state_hash` matches a plain `run` of
+//! the same scenario/seed/ticks. The per-agent, per-species, and biome draw
+//! logic mirrors the Godot bridge (`crates/anabios-godot/src/lib.rs`) so the
+//! web player shows the same world the live viewer does.
 //!
 //! Output is a single `.js` file assigning `window.ANABIOS_REPLAY = {…}` (so the
 //! player loads it via `<script>` with no fetch/CORS), or raw `.json` when the
-//! `--out` path ends in `.json`. Coordinates are kept in world units and
-//! rounded to integers; diet is quantised to 0..=255. Agent slot ids are
-//! included per frame so the player can interpolate positions between samples.
+//! `--out` path ends in `.json`.
 
 use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::path::PathBuf;
 
+use anabios_core::biome::{BiomeCell, TerrainType, SUCCESSION_BARE, SUCCESSION_PIONEER};
 use anabios_core::codex::CodexEvent;
+use anabios_core::invention::POLLUTION_CAP;
 use anabios_core::module::effective_diet_carnivory;
 use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
+use anabios_core::World;
 use anyhow::{Context, Result};
 use serde::Serialize;
 
@@ -62,6 +64,21 @@ struct Event {
     y: i32,
 }
 
+/// A downsampled biome colour map at one tick, RGB bytes base64-encoded.
+#[derive(Serialize)]
+struct BiomeGrid {
+    t: u64,
+    b64: String,
+}
+
+/// The biome layer: a sequence of colour grids over time (the map lushes,
+/// pollutes, and scars as the run proceeds).
+#[derive(Serialize)]
+struct BiomeSeq {
+    res: usize,
+    grids: Vec<BiomeGrid>,
+}
+
 #[derive(Serialize)]
 struct Meta {
     scenario: String,
@@ -81,10 +98,12 @@ struct Replay {
     meta: Meta,
     /// Known species id → archetype display name (splinters are absent).
     species: BTreeMap<u32, String>,
+    biome: BiomeSeq,
     frames: Vec<Frame>,
     events: Vec<Event>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     scenario_path: PathBuf,
     ticks: u64,
@@ -92,6 +111,8 @@ pub fn run(
     sample: u64,
     max_agents: usize,
     max_events: usize,
+    biome_res: usize,
+    biome_frames: usize,
     out: PathBuf,
 ) -> Result<()> {
     let sample = sample.max(1);
@@ -122,22 +143,32 @@ pub fn run(
     let initial_live = world.agents.live_count() as usize;
     let stride = if max_agents == 0 { 1 } else { initial_live.div_ceil(max_agents).max(1) };
 
+    // Biome grids at an even cadence over the run.
+    let biome_every =
+        if biome_frames == 0 { u64::MAX } else { (ticks / biome_frames as u64).max(1) };
+
     println!(
-        "recording scenario={} seed={} ticks={} sample={} agents≈{}/{} (stride {})",
+        "recording scenario={} seed={} ticks={} sample={} agents≈{}/{} (stride {}) biome={}²×{}",
         scenario.name,
         world.seed,
         ticks,
         sample,
         initial_live / stride,
         initial_live,
-        stride
+        stride,
+        biome_res,
+        biome_frames,
     );
 
     let mut frames: Vec<Frame> = Vec::with_capacity((ticks / sample) as usize + 1);
     let mut events: Vec<Event> = Vec::new();
+    let mut biome_grids: Vec<BiomeGrid> = Vec::new();
 
-    // Frame 0 (initial placement) then one every `sample` ticks.
+    // Frame 0 + biome 0 (initial state), then on cadence.
     capture_frame(&world, stride, &mut frames);
+    if biome_frames > 0 {
+        biome_grids.push(capture_biome(&world, biome_res));
+    }
     for _ in 0..ticks {
         step(&mut world);
         for ev in world.codex.drain_events() {
@@ -145,6 +176,9 @@ pub fn run(
         }
         if world.tick.is_multiple_of(sample) {
             capture_frame(&world, stride, &mut frames);
+        }
+        if biome_frames > 0 && world.tick.is_multiple_of(biome_every) {
+            biome_grids.push(capture_biome(&world, biome_res));
         }
     }
 
@@ -163,6 +197,7 @@ pub fn run(
             state_hash: format!("0x{hash:016x}"),
         },
         species,
+        biome: BiomeSeq { res: biome_res, grids: biome_grids },
         frames,
         events,
     };
@@ -181,9 +216,10 @@ pub fn run(
     f.flush().context("flushing replay")?;
 
     println!(
-        "wrote {} frames, {} events → {} ({} KiB) state_hash={}",
+        "wrote {} frames, {} events, {} biome grids → {} ({} KiB) state_hash={}",
         replay.meta.frame_count,
         replay.meta.event_count,
+        replay.biome.grids.len(),
         out.display(),
         payload.len() / 1024,
         replay.meta.state_hash
@@ -192,7 +228,7 @@ pub fn run(
 }
 
 /// Sample every `stride`-th alive agent's draw data into a new frame.
-fn capture_frame(world: &anabios_core::World, stride: usize, frames: &mut Vec<Frame>) {
+fn capture_frame(world: &World, stride: usize, frames: &mut Vec<Frame>) {
     let cap = world.agents.live_count() as usize / stride + 1;
     let mut id = Vec::with_capacity(cap);
     let mut x = Vec::with_capacity(cap);
@@ -213,6 +249,75 @@ fn capture_frame(world: &anabios_core::World, stride: usize, frames: &mut Vec<Fr
         d.push((carn * 255.0).round() as u8);
     }
     frames.push(Frame { t: world.tick, id, x, y, sp, d });
+}
+
+/// Downsample the biome colour field to `out_res`² RGB cells (block-averaged),
+/// base64-encoded. Colour mapping ported from the Godot bridge `biome_colors`.
+fn capture_biome(world: &World, out_res: usize) -> BiomeGrid {
+    let src_res = world.biome.res;
+    let out_res = out_res.max(1);
+    let mut bytes = Vec::with_capacity(out_res * out_res * 3);
+    for oy in 0..out_res {
+        let y0 = oy * src_res / out_res;
+        let y1 = ((oy + 1) * src_res / out_res).max(y0 + 1).min(src_res);
+        for ox in 0..out_res {
+            let x0 = ox * src_res / out_res;
+            let x1 = ((ox + 1) * src_res / out_res).max(x0 + 1).min(src_res);
+            let (mut r, mut g, mut b, mut n) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
+            for row in y0..y1 {
+                for col in x0..x1 {
+                    let c = biome_cell_color(world.biome.at(col, row));
+                    r += c[0];
+                    g += c[1];
+                    b += c[2];
+                    n += 1.0;
+                }
+            }
+            let inv = if n > 0.0 { 1.0 / n } else { 0.0 };
+            bytes.push((r * inv * 255.0).round().clamp(0.0, 255.0) as u8);
+            bytes.push((g * inv * 255.0).round().clamp(0.0, 255.0) as u8);
+            bytes.push((b * inv * 255.0).round().clamp(0.0, 255.0) as u8);
+        }
+    }
+    BiomeGrid { t: world.tick, b64: base64_encode(&bytes) }
+}
+
+/// Port of the Godot bridge `biome_colors` per-cell mapping, returning linear
+/// 0..1 RGB: terrain base → lushness by biomass → succession → pollution.
+fn biome_cell_color(cell: &BiomeCell) -> [f32; 3] {
+    let base = match cell.terrain {
+        TerrainType::Water => [0.09, 0.19, 0.44],
+        TerrainType::Grass => [0.21, 0.44, 0.19],
+        TerrainType::Forest => [0.07, 0.26, 0.11],
+        TerrainType::Desert => [0.68, 0.58, 0.33],
+        TerrainType::Rock => [0.42, 0.40, 0.45],
+        TerrainType::Savanna => [0.72, 0.66, 0.36],
+        TerrainType::Rainforest => [0.06, 0.34, 0.16],
+        TerrainType::Taiga => [0.16, 0.34, 0.26],
+        TerrainType::Tundra => [0.62, 0.66, 0.62],
+    };
+    let cap = cell.terrain.carrying_capacity();
+    let frac = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };
+    let mut c = match cell.terrain {
+        TerrainType::Grass => lerp3(base, [0.42, 0.80, 0.33], frac * 0.55),
+        TerrainType::Forest => lerp3(base, [0.20, 0.55, 0.24], frac * 0.55),
+        TerrainType::Desert => lerp3(base, [0.86, 0.78, 0.52], frac * 0.45),
+        _ => base,
+    };
+    c = match cell.succession {
+        SUCCESSION_BARE => lerp3(c, [0.36, 0.24, 0.13], 0.65),
+        SUCCESSION_PIONEER => lerp3(c, [0.55, 0.82, 0.30], 0.45),
+        _ => c,
+    };
+    let pol = (cell.pollution / POLLUTION_CAP).clamp(0.0, 1.0);
+    if pol > 0.0 {
+        c = lerp3(c, [0.32, 0.28, 0.24], pol * 0.55);
+    }
+    c
+}
+
+fn lerp3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 }
 
 /// Thin the event stream to at most `max_events`, always keeping the first
@@ -254,5 +359,99 @@ fn flatten_event(ev: &CodexEvent) -> Event {
         v: ev.value,
         x: ev.loc_x.round() as i32,
         y: ev.loc_y.round() as i32,
+    }
+}
+
+/// Minimal standard-alphabet base64 (no padding omitted), dependency-free.
+fn base64_encode(data: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
+        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(A[(n >> 18) as usize & 63] as char);
+        out.push(A[(n >> 12) as usize & 63] as char);
+        out.push(if chunk.len() > 1 { A[(n >> 6) as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 2 { A[n as usize & 63] as char } else { '=' });
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn minimal_world() -> World {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scenarios/predator-prey.toml");
+        let text = std::fs::read_to_string(path).expect("scenario");
+        let mut s = Scenario::parse_toml(&text).expect("parse");
+        s.seed = 7;
+        s.instantiate()
+    }
+
+    /// Capturing frames + biome grids is pure: a run that also captures must end
+    /// with the same state hash as one that only steps and drains.
+    #[test]
+    fn capture_is_side_effect_free() {
+        let mut recorded = minimal_world();
+        let mut plain = recorded.clone();
+        let mut frames = Vec::new();
+        for _ in 0..300 {
+            step(&mut recorded);
+            for _ in recorded.codex.drain_events() {}
+            capture_frame(&recorded, 3, &mut frames);
+            let _ = capture_biome(&recorded, 48);
+
+            step(&mut plain);
+            for _ in plain.codex.drain_events() {}
+        }
+        assert_eq!(state_hash(&recorded), state_hash(&plain));
+    }
+
+    /// Every captured frame has equal-length parallel arrays and in-range values.
+    #[test]
+    fn frames_are_well_formed() {
+        let mut world = minimal_world();
+        let mut frames = Vec::new();
+        capture_frame(&world, 2, &mut frames);
+        for _ in 0..200 {
+            step(&mut world);
+            for _ in world.codex.drain_events() {}
+            capture_frame(&world, 2, &mut frames);
+        }
+        let ws = world.world_size.ceil() as i32;
+        for f in &frames {
+            let n = f.id.len();
+            assert_eq!(f.x.len(), n);
+            assert_eq!(f.y.len(), n);
+            assert_eq!(f.sp.len(), n);
+            assert_eq!(f.d.len(), n);
+            for &x in &f.x {
+                assert!((0..=ws).contains(&x), "x {x} out of 0..={ws}");
+            }
+            for &y in &f.y {
+                assert!((0..=ws).contains(&y), "y {y} out of 0..={ws}");
+            }
+        }
+    }
+
+    /// A biome grid decodes to exactly out_res² RGB triples.
+    #[test]
+    fn biome_grid_has_expected_size() {
+        let world = minimal_world();
+        let g = capture_biome(&world, 40);
+        // base64 of 40*40*3 = 4800 bytes → 6400 chars, no padding needed (4800%3==0).
+        assert_eq!(g.b64.len(), 4800usize.div_ceil(3) * 4);
+    }
+
+    #[test]
+    fn base64_matches_known_vectors() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
     }
 }

@@ -6,6 +6,11 @@ codex streams the "first emergence" events the detectors actually fired.
 
 Everything on screen is a **deterministic replay of the anabios core** — no scripting,
 no hand-authoring. Re-run the same seed and you get the same history, frame for frame.
+The world is the sim's real Whittaker **biome map** (forest, savanna, water, tundra —
+lushing, polluting and scarring over time), the creatures carry their species colours,
+and the era you're in begins at the tick its defining event **actually first fired**.
+
+**Controls:** scroll to move through time · **space** pauses/resumes · `?era=N` deep-links.
 
 ## View it
 
@@ -45,12 +50,15 @@ Useful flags (defaults tuned to keep the committed file ~1.7 MB):
 | `--sample` | 24 | record a frame every N ticks (player interpolates between them) |
 | `--max-agents` | 260 | cap agents per frame via stable-stride subsampling (0 = all) |
 | `--max-events` | 1000 | cap codex events, keeping each type's first + a uniform sample (0 = all) |
+| `--biome-res` | 72 | biome-map resolution per axis (downsampled from the sim's 128² grid) |
+| `--biome-frames` | 8 | biome-map keyframes across the run (0 disables the map) |
 | `--out` | `showcase/replay.js` | `.js` wraps `window.ANABIOS_REPLAY=…`; `.json` writes raw JSON |
 
-Any scenario works. The player reads era boundaries by dividing the run into six equal
-tick windows and labels them Cradle → Tools & Fire → Exodus → Farming & Trade → Writing
-→ War & Kin; species names come from the scenario's archetype specs (dynamically
-speciated splinters show as `species N`).
+Any scenario works. The player derives the six era boundaries from the run's real event
+stream — Tools & Fire starts at the first invention, Exodus at the first speciation,
+Farming & Trade at the first settlement/market, Writing at the first meme-sweep, War & Kin
+at the first raid — falling back to even spacing when a signal never fires. Species names
+come from the scenario's archetype specs (dynamically speciated splinters show as `species N`).
 
 ## How it fits together
 
