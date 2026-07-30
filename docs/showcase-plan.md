@@ -150,11 +150,11 @@ fix.
 
 ---
 
-## 5. The milestone arc (once a delivery option is chosen)
+## 5. The milestone arc
 
-However the milestones are delivered (A or B), the showcase narration is the
-same era-climb story. Each chapter maps to subsystems, screen cues, viewer
-controls, and the codex events that prove it fired.
+With Option A shipped (§3/§4), the showcase narration is the era-climb story
+below. Each chapter maps to subsystems, screen cues, viewer controls, and the
+codex events that prove it fired.
 
 | Chapter | Milestone | Subsystems on show | Watch for | Viewer control | Codex events |
 |---|---|---|---|---|---|
@@ -168,6 +168,11 @@ controls, and the codex events that prove it fired.
 
 **The two ★ chapters — Writing and the Herd — are the payoff**, and §3/§4 show
 how `out-of-africa-saga` delivers them in one run.
+
+Note for the tally: `InventionDiscovered` latches on the *first holder
+anywhere*, so the five seeded techs each fire it at tick 0 — that is the
+seeding, not an emergent breakthrough. Emergent discoveries from the seeded
+base (e.g. Metalworking, §3) fire it later at their real discovery tick.
 
 ---
 
