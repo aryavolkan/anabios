@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>anabios — a living deep-time showcase</title>
+<style>
+  :root {
+    --basalt:#16110D; --basalt-2:#1F1813; --bone:#E9E1D2; --bone-dim:#B7AC98;
+    --muted:#8A7E6C; --ochre:#CE7C36; --glacial:#6E9BB5; --ember:#C0432C; --chloro:#7A9A54;
+    --line:rgba(233,225,210,0.10); --line-2:rgba(233,225,210,0.18);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,"Cascadia Mono",Consolas,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{background:var(--basalt);color:var(--bone);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5;}
+
+  .stage{position:fixed;inset:0;z-index:0;}
+  #world{display:block;width:100%;height:100%;}
+  .scrim{position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:
+      radial-gradient(120% 82% at 50% 42%,transparent 52%,rgba(0,0,0,0.55) 100%),
+      linear-gradient(90deg,rgba(22,17,13,0.82) 0%,rgba(22,17,13,0.30) 26%,transparent 46%),
+      linear-gradient(180deg,rgba(0,0,0,0.55) 0%,transparent 20%,transparent 66%,rgba(0,0,0,0.74) 100%);}
+  /* dims the living world so the hero title dominates; lifts once you descend */
+  .heroveil{position:fixed;inset:0;z-index:1;pointer-events:none;background:var(--basalt);opacity:.12;transition:opacity .7s ease;}
+  body.at-hero .heroveil{opacity:.6;}
+
+  /* strata rail (signature) */
+  .strata{position:fixed;top:0;bottom:0;left:0;width:84px;z-index:3;display:flex;flex-direction:column;
+    border-right:1px solid var(--line);background:linear-gradient(90deg,rgba(0,0,0,0.45),rgba(0,0,0,0.05));pointer-events:none;}
+  .strata-band{flex:1;position:relative;display:flex;align-items:center;justify-content:center;
+    border-bottom:1px solid rgba(0,0,0,0.35);transition:opacity .5s ease;opacity:.4;}
+  .strata-band.active{opacity:1;}
+  .strata-band .no{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:rgba(0,0,0,.55);
+    writing-mode:vertical-rl;transform:rotate(180deg);text-transform:uppercase;font-weight:600;}
+  .strata-band.active .no{color:rgba(0,0,0,.82);}
+  .depth-marker{position:fixed;left:0;width:84px;height:2px;background:var(--bone);
+    box-shadow:0 0 12px rgba(233,225,210,.6);z-index:4;pointer-events:none;transition:top .12s linear,opacity .55s ease;}
+  .depth-marker::after{content:attr(data-tick);position:absolute;left:90px;top:50%;transform:translateY(-50%);
+    font-family:var(--mono);font-size:11px;color:var(--bone-dim);white-space:nowrap;letter-spacing:.04em;}
+
+  .hud{position:fixed;z-index:3;pointer-events:none;transition:opacity .55s ease;}
+  /* the instrument panel appears only after the hero title moment */
+  body.at-hero .hud-era,body.at-hero .readout,body.at-hero .codex,body.at-hero .depth-marker{opacity:0;}
+  .hud-era{top:34px;left:108px;right:24px;}
+  .hud-era .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--ochre);margin:0 0 4px;}
+  .hud-era h2{font-family:var(--serif);font-weight:600;font-size:clamp(22px,3.2vw,40px);margin:0;letter-spacing:-.01em;text-wrap:balance;max-width:14ch;line-height:1.05;}
+
+  .codex{left:108px;bottom:26px;width:min(600px,calc(100% - 132px));}
+  .codex-head{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+  .codex-head .dot{width:6px;height:6px;border-radius:50%;background:var(--ochre);box-shadow:0 0 8px var(--ochre);animation:pulse 2.2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+  .codex-feed{font-family:var(--mono);font-size:12.5px;line-height:1.75;}
+  .codex-line{color:var(--bone-dim);opacity:0;transform:translateY(6px);transition:opacity .4s ease,transform .4s ease;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .codex-line.show{opacity:1;transform:none;}
+  .codex-line .tick{color:var(--muted);}
+  .k-fire{color:var(--ochre);} .k-war{color:var(--ember);} .k-trade{color:var(--glacial);}
+  .k-grow{color:var(--chloro);} .k-mind{color:var(--bone);}
+
+  .readout{top:34px;right:24px;display:flex;gap:20px;text-align:right;}
+  .readout .stat .n{font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums;color:var(--bone);letter-spacing:.02em;}
+  .readout .stat .l{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:2px;}
+  @media (max-width:760px){.readout{display:none;}}
+
+  .scroll{position:relative;z-index:2;}
+  .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:0 clamp(24px,8vw,140px) 0 clamp(108px,12vw,220px);}
+  .wordmark{font-weight:800;font-size:clamp(52px,12vw,148px);letter-spacing:.14em;text-transform:uppercase;margin:0;line-height:.94;color:var(--bone);}
+  .wordmark .glow{color:var(--ochre);text-shadow:0 0 40px rgba(206,124,54,.35);}
+  .hero .kicker{font-family:var(--mono);font-size:clamp(12px,1.4vw,15px);letter-spacing:.06em;color:var(--bone-dim);max-width:42ch;margin:26px 0 0;line-height:1.75;}
+  .hero .kicker b{color:var(--bone);font-weight:600;}
+  .hero .scroll-cue{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin-top:52px;display:inline-flex;align-items:center;gap:10px;}
+  .hero .scroll-cue::before{content:"";width:34px;height:1px;background:var(--ochre);display:inline-block;}
+
+  .chapter{min-height:118vh;display:flex;align-items:flex-end;padding:0 clamp(24px,6vw,90px) 16vh clamp(108px,12vw,220px);}
+  .chapter .note{max-width:44ch;background:linear-gradient(180deg,rgba(22,17,13,0),rgba(22,17,13,.82) 62%);padding:40px 0 0;}
+  .chapter .note p{font-family:var(--serif);font-size:clamp(17px,2vw,22px);line-height:1.55;color:var(--bone);margin:0;text-wrap:pretty;}
+  .chapter .note .lede{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:14px;}
+  .chapter .note em{font-style:italic;color:var(--bone);}
+
+  .outro{position:relative;z-index:2;background:linear-gradient(180deg,transparent,var(--basalt) 22%),var(--basalt);padding:12vh clamp(24px,8vw,140px) 14vh clamp(108px,12vw,220px);}
+  .outro h3{font-family:var(--serif);font-weight:600;font-size:clamp(26px,4vw,44px);margin:0 0 20px;max-width:20ch;letter-spacing:-.01em;text-wrap:balance;}
+  .outro p{color:var(--bone-dim);max-width:56ch;font-size:16px;margin:0 0 30px;}
+  .runbox{display:inline-flex;align-items:center;gap:14px;background:var(--basalt-2);border:1px solid var(--line-2);border-left:2px solid var(--ochre);padding:14px 20px;border-radius:3px;font-family:var(--mono);font-size:13.5px;color:var(--bone);max-width:100%;overflow-x:auto;}
+  .runbox .prompt{color:var(--ochre);}
+  .runbox .cmd{color:var(--bone-dim);white-space:nowrap;}
+  .legend{display:flex;flex-wrap:wrap;gap:22px;margin-top:44px;padding-top:26px;border-top:1px solid var(--line);}
+  .legend .item{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;color:var(--bone-dim);letter-spacing:.02em;}
+  .legend .sw{width:11px;height:11px;border-radius:2px;}
+  .meta-strip{margin-top:40px;font-family:var(--mono);font-size:11.5px;line-height:1.8;color:var(--muted);max-width:64ch;letter-spacing:.01em;}
+  .meta-strip b{color:var(--bone-dim);font-weight:600;}
+
+  .missing{position:fixed;inset:0;z-index:9;display:none;align-items:center;justify-content:center;text-align:center;padding:40px;background:var(--basalt);}
+  .missing.show{display:flex;}
+  .missing div{max-width:52ch;}
+  .missing code{font-family:var(--mono);color:var(--ochre);background:var(--basalt-2);padding:2px 6px;border-radius:3px;}
+
+  @media (prefers-reduced-motion:reduce){
+    .codex-line,.depth-marker,.strata-band{transition:none;}
+    .codex-head .dot{animation:none;}
+  }
+</style>
+</head>
+<body>
+<div class="stage"><canvas id="world"></canvas></div>
+<div class="heroveil"></div>
+<div class="scrim"></div>
+
+<aside class="strata" id="strata" aria-hidden="true"></aside>
+<div class="depth-marker" id="marker" data-tick="tick 0"></div>
+
+<div class="hud hud-era">
+  <p class="eyebrow" id="era-eyebrow">Chapter 00 · Deep Time</p>
+  <h2 id="era-title">The Cradle</h2>
+</div>
+<div class="hud readout">
+  <div class="stat"><div class="n" id="stat-pop">0</div><div class="l">alive</div></div>
+  <div class="stat"><div class="n" id="stat-spec">0</div><div class="l">species</div></div>
+  <div class="stat"><div class="n" id="stat-tech">0</div><div class="l">tech</div></div>
+</div>
+<div class="hud codex">
+  <div class="codex-head"><span class="dot"></span> Codex · first emergence</div>
+  <div class="codex-feed" id="codex"></div>
+</div>
+
+<div class="missing" id="missing"><div>
+  <h2 style="font-family:var(--serif)">No replay loaded</h2>
+  <p style="color:var(--bone-dim)">Generate one from the deterministic core, then reload:</p>
+  <p><code>anabios-headless record --scenario scenarios/out-of-africa-saga.toml --seed 318</code></p>
+</div></div>
+
+<main class="scroll">
+  <section class="hero">
+    <h1 class="wordmark">ANA<span class="glow">BIOS</span></h1>
+    <p class="kicker">No genomes are scripted. No civilization is authored. Give a few hundred
+      hominins <b>hunger, a tiny evolvable mind, and a warming world</b> — then watch fire,
+      migration, farming, writing, and war <b>emerge on their own</b>. Everything below is a
+      real recorded run, played back frame by frame.</p>
+    <span class="scroll-cue">Scroll to descend through deep time</span>
+  </section>
+
+  <section class="chapter" id="ch0" data-chapter="0"><div class="note"><p><span class="lede">Chapter 00 · The Cradle</span>
+    A founding population wakes in the savanna. They forage, cluster, and die young. Everything
+    that follows is already latent in fifty numbers per genome — it just hasn't happened yet.</p></div></section>
+
+  <section class="chapter" id="ch1" data-chapter="1"><div class="note"><p><span class="lede">Chapter 01 · Tools &amp; Fire</span>
+    The first inventions surface — techniques a lineage <em>teaches</em> rather than inherits.
+    Watch the codex log each one the moment it is discovered and then adopted.</p></div></section>
+
+  <section class="chapter" id="ch2" data-chapter="2"><div class="note"><p><span class="lede">Chapter 02 · The Exodus</span>
+    The cradle fills; pressure pushes lineages across the torus. Isolation does the rest —
+    dialects drift and populations split until the detectors fire <em>speciation</em>.</p></div></section>
+
+  <section class="chapter" id="ch3" data-chapter="3"><div class="note"><p><span class="lede">Chapter 03 · Farming &amp; Trade</span>
+    Some settle. Surplus invents the first economy — settlements, markets, and goods carried
+    between distant bands in threads of grain, hide, and stone.</p></div></section>
+
+  <section class="chapter" id="ch4" data-chapter="4"><div class="note"><p><span class="lede">Chapter 04 · Writing</span>
+    Culture stops decaying between generations and begins to <em>accumulate</em>. Meme sweeps
+    and cultural radiation ripple across the map faster than any single life could carry them.</p></div></section>
+
+  <section class="chapter" id="ch5" data-chapter="5"><div class="note"><p><span class="lede">Chapter 05 · War &amp; Kin</span>
+    Scarcity finds the fault lines. Neighbours who share no kin-mark clash at the borders —
+    and behind each front, the tightest kin-bands survive to seed the next age.</p></div></section>
+
+  <div class="outro">
+    <h3 id="outro-title">One seed, one run, every age it lived through.</h3>
+    <p id="outro-body">Everything above is a deterministic replay of the anabios core — no scripting,
+      no hand-authoring. Re-run the same seed and you get the same history, frame for frame.</p>
+    <div class="runbox"><span class="prompt">$</span>
+      <span class="cmd">anabios-headless record --scenario scenarios/out-of-africa-saga.toml --seed 318</span></div>
+    <div class="legend">
+      <div class="item"><span class="sw" style="background:var(--ochre)"></span> tools &amp; inventions</div>
+      <div class="item"><span class="sw" style="background:var(--glacial)"></span> trade, dialect &amp; migration</div>
+      <div class="item"><span class="sw" style="background:var(--chloro)"></span> farming &amp; settlement</div>
+      <div class="item"><span class="sw" style="background:var(--ember)"></span> war &amp; predation</div>
+      <div class="item"><span class="sw" style="background:var(--bone)"></span> speciation &amp; culture</div>
+    </div>
+    <p class="meta-strip" id="meta-strip"></p>
+  </div>
+</main>
+
+<script src="replay.js"></script>
+<script>
+(() => {
+  "use strict";
+  const R = window.ANABIOS_REPLAY;
+  if (!R || !R.frames || !R.frames.length) {
+    document.getElementById("missing").classList.add("show");
+    return;
+  }
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- chapters / eras ----
+  const CH = [
+    {eyebrow:"Chapter 00 · The Cradle",       title:"The Cradle"},
+    {eyebrow:"Chapter 01 · Tools & Fire",     title:"Tools & Fire"},
+    {eyebrow:"Chapter 02 · The Exodus",       title:"The Exodus"},
+    {eyebrow:"Chapter 03 · Farming & Trade",  title:"Farming & Trade"},
+    {eyebrow:"Chapter 04 · Writing",          title:"Writing"},
+    {eyebrow:"Chapter 05 · War & Kin",        title:"War & Kin"},
+  ];
+  const STRATA = ["#8a6a3c","#9a5f30","#6f6a4a","#4f6a5a","#3f5a68","#324a63"];
+  const NERA = CH.length;
+  const TICKS = R.meta.ticks;
+  const WSIZE = R.meta.world_size || 1024;
+  const eraWindow = (i) => [Math.floor(i*TICKS/NERA), Math.floor((i+1)*TICKS/NERA)];
+
+  // ---- classify a codex event type into a narrative kind ----
+  function kindOf(type){
+    const t = type;
+    if (/war|raid|predation|crash|extinction|collapse|maladapt/.test(t)) return "war";
+    if (/invention|practice|material|module|tool|behavior|specializ/.test(t)) return "fire";
+    if (/trade|market|resource|corridor|migration|dialect|signal|alliance|kin|radiation|range/.test(t)) return "trade";
+    if (/settle|territory|herd|domestic|livestock|carrying|cooperat|niche|cohesion/.test(t)) return "grow";
+    return "mind";
+  }
+  const KCOL = {fire:"#CE7C36", trade:"#6E9BB5", grow:"#7A9A54", war:"#C0432C", mind:"#E9E1D2"};
+
+  function humanize(type){ return type.replace(/_/g," "); }
+  function speciesName(sid){
+    if (sid == null) return "—";
+    const n = R.species && R.species[sid];
+    return n ? n.replace(/_/g," ") : "species " + sid;
+  }
+
+  // events sorted by tick (recorder emits in order, but be safe)
+  const EVENTS = R.events.slice().sort((a,b)=>a.t-b.t);
+
+  // ---- canvas ----
+  const cv = document.getElementById("world");
+  const ctx = cv.getContext("2d", {alpha:false});
+  let W=0,H=0,DPR=1, view={s:1,ox:0,oy:0};
+  function resize(){
+    DPR = Math.min(2, window.devicePixelRatio||1);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
+    cv.style.width=W+"px"; cv.style.height=H+"px";
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    // fit the square world into the viewport; on wide screens bias it right so
+    // the scrolling text column on the left stays clear of the agent field.
+    const side = Math.min(W,H)*0.9;
+    view.s = side / WSIZE;
+    const cx = W > 900 ? W*0.60 : W*0.5;
+    view.ox = Math.min(Math.max(cx - side*0.5, 8), Math.max(8, W - side - 8));
+    view.oy = H*0.5 - side*0.5;
+  }
+  window.addEventListener("resize", resize, {passive:true});
+  resize();
+  const wx = (x)=> view.ox + x*view.s;
+  const wy = (y)=> view.oy + y*view.s;
+
+  // species colour: stable golden-angle hue, diet nudges toward ember
+  const colorCache = new Map();
+  function speciesColors(sp, diet){
+    const key = sp*1000 + (diet>>5);
+    let c = colorCache.get(key);
+    if (c) return c;
+    let h = (sp*137.508) % 360;
+    const carn = diet/255;
+    h = h*(1-0.35*carn) + 12*carn;            // carnivores drift warm/red
+    const body = `hsl(${h.toFixed(0)},42%,${(40-8*carn).toFixed(0)}%)`;
+    const head = `hsl(${h.toFixed(0)},38%,${(70-10*carn).toFixed(0)}%)`;
+    c = [body, head];
+    colorCache.set(key, c);
+    return c;
+  }
+
+  // ---- frame lookup + interpolation ----
+  const frames = R.frames;   // sorted by t
+  function frameIndexAt(tick){
+    // binary search: largest i with frames[i].t <= tick
+    let lo=0, hi=frames.length-1, ans=0;
+    while(lo<=hi){ const m=(lo+hi)>>1; if(frames[m].t<=tick){ans=m;lo=m+1;} else hi=m-1; }
+    return ans;
+  }
+  // build id->slot map for a frame (cached)
+  const idMapCache = new Map();
+  function idMap(fi){
+    let m = idMapCache.get(fi);
+    if (m) return m;
+    const f = frames[fi]; m = new Map();
+    for (let k=0;k<f.id.length;k++) m.set(f.id[k], k);
+    idMapCache.set(fi, m);
+    if (idMapCache.size>8) idMapCache.delete(idMapCache.keys().next().value);
+    return m;
+  }
+
+  // ---- playhead / scroll ----
+  let era = 0, playhead = 0;
+  const ERA_SECONDS = 15;      // wall-clock to traverse one era's window
+  let last = 0;
+
+  const chapters = Array.from(document.querySelectorAll(".chapter"));
+  const eyebrowEl = document.getElementById("era-eyebrow");
+  const titleEl = document.getElementById("era-title");
+  const marker = document.getElementById("marker");
+  const strataEl = document.getElementById("strata");
+  const statPop = document.getElementById("stat-pop");
+  const statSpec = document.getElementById("stat-spec");
+  const statTech = document.getElementById("stat-tech");
+  const codexEl = document.getElementById("codex");
+
+  const bands = STRATA.map((col,i)=>{
+    const b=document.createElement("div"); b.className="strata-band"; b.style.background=col;
+    const s=document.createElement("span"); s.className="no"; s.textContent=String(i).padStart(2,"0")+" · "+CH[i].title;
+    b.appendChild(s); strataEl.appendChild(b); return b;
+  });
+
+  // era-local codex state
+  let winEvents=[], evPtr=0, shown=[], techCount=0;
+  function setEra(i){
+    if (i===era && winEvents.length) return;
+    era = i;
+    const c = CH[i];
+    eyebrowEl.textContent = c.eyebrow; titleEl.textContent = c.title;
+    bands.forEach((b,k)=>b.classList.toggle("active", k===i));
+    const [t0,t1] = eraWindow(i);
+    winEvents = EVENTS.filter(e=>e.t>=t0 && e.t<t1);
+    evPtr = 0; techCount = 0;
+    shown.forEach(l=>l.remove()); shown=[];
+    codexEl.innerHTML="";
+    playhead = t0;
+  }
+
+  function esc(s){ return (""+s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+  function emitCodex(e){
+    const k = kindOf(e.type);
+    if (k==="fire") techCount++;
+    const line=document.createElement("div"); line.className="codex-line";
+    line.innerHTML = `<span class="tick">${e.t.toLocaleString()}</span> · `+
+      `<span class="k-${k}">${esc(humanize(e.type))}</span> `+
+      `<span class="tick">— ${esc(speciesName(e.sid))}</span>`;
+    codexEl.appendChild(line); shown.push(line);
+    requestAnimationFrame(()=>line.classList.add("show"));
+    while(shown.length>5){ const o=shown.shift(); o.classList.remove("show"); setTimeout(()=>o.remove(),400); }
+  }
+
+  function onScroll(){
+    const vh = window.innerHeight;
+    document.body.classList.toggle("at-hero", window.scrollY < vh*0.5);
+    let idx = 0;
+    for (let i=0;i<chapters.length;i++){
+      const r = chapters[i].getBoundingClientRect();
+      if (r.top < vh*0.5) idx = i;
+    }
+    setEra(idx);
+    // depth marker tracks whole-page scroll
+    const docH = document.documentElement.scrollHeight - vh;
+    const f = docH>0 ? Math.min(1,Math.max(0,window.scrollY/docH)) : 0;
+    marker.style.top = (f*vh - 1)+"px";
+  }
+  window.addEventListener("scroll", onScroll, {passive:true});
+
+  // ---- draw one interpolated frame at `tick` ----
+  function draw(tick){
+    // background: warm cradle -> cool late, by era
+    const cool = era/(NERA-1);
+    const h = 34 - 14*cool;                 // ochre-ish -> slate
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, `hsl(${h},18%,6%)`);
+    g.addColorStop(0.55, `hsl(${h+6},22%,10%)`);
+    g.addColorStop(1, `hsl(${h},20%,7%)`);
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+    // world plate outline
+    ctx.strokeStyle="rgba(233,225,210,0.06)"; ctx.lineWidth=1;
+    ctx.strokeRect(wx(0), wy(0), WSIZE*view.s, WSIZE*view.s);
+
+    // event accents near the playhead (glows tied to real codex events)
+    const winA = 90; // ticks around playhead considered "recent"
+    for (let i=0;i<winEvents.length;i++){
+      const e = winEvents[i];
+      const dt = tick - e.t;
+      if (dt<0 || dt>winA) continue;
+      const life = 1 - dt/winA;
+      const k = kindOf(e.type);
+      if (!e.x && !e.y) continue;
+      const px=wx(e.x), py=wy(e.y);
+      if (k==="fire"){
+        const rr=(1-life)*26+6;
+        const rg=ctx.createRadialGradient(px,py,0,px,py,rr);
+        rg.addColorStop(0,`rgba(206,124,54,${0.5*life})`); rg.addColorStop(1,"rgba(206,124,54,0)");
+        ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(px,py,rr,0,6.28); ctx.fill();
+      } else if (k==="war"){
+        ctx.strokeStyle=`rgba(192,67,44,${0.8*life})`; ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.arc(px,py,(1-life)*18+3,0,6.28); ctx.stroke();
+      } else {
+        ctx.fillStyle = hexA(KCOL[k], 0.55*life);
+        ctx.beginPath(); ctx.arc(px,py,2.4,0,6.28); ctx.fill();
+      }
+    }
+
+    // agents: interpolate between bracketing frames by id
+    const ai = frameIndexAt(tick);
+    const bi = Math.min(frames.length-1, ai+1);
+    const A = frames[ai], B = frames[bi];
+    const span = (B.t - A.t) || 1;
+    const f = Math.min(1, Math.max(0, (tick - A.t)/span));
+    const bmap = idMap(bi);
+    let pop = 0; const specSet = new Set();
+    for (let k=0;k<A.id.length;k++){
+      const id = A.id[k];
+      let ax=A.x[k], ay=A.y[k];
+      const bk = bmap.get(id);
+      let x=ax, y=ay;
+      if (bk!==undefined){
+        const bx=B.x[bk], by=B.y[bk];
+        // teleport guard: torus wrap or slot reuse -> snap instead of streak
+        if (Math.abs(bx-ax) < WSIZE*0.4 && Math.abs(by-ay) < WSIZE*0.4){
+          x = ax+(bx-ax)*f; y = ay+(by-ay)*f;
+        }
+      }
+      const sp=A.sp[k], d=A.d[k];
+      specSet.add(sp); pop++;
+      const [body,head]=speciesColors(sp,d);
+      const px=wx(x), py=wy(y);
+      const bob = reduce?0:Math.abs(Math.sin((tick*0.25)+id))*1.1;
+      ctx.fillStyle=body; ctx.fillRect(px-1.3, py-2.0-bob, 2.6, 3.2);
+      ctx.fillStyle=head; ctx.fillRect(px-0.9, py-3.1-bob, 1.8, 1.5);
+    }
+
+    // readouts — rescale the shown agents by the recorder's subsampling stride
+    // so the count reads like the true world population.
+    smoothStat(statPop, Math.round(pop * strideScale));
+    statSpec.textContent = specSet.size;
+    statTech.textContent = techCount;
+    marker.setAttribute("data-tick", "tick "+Math.round(tick).toLocaleString());
+  }
+
+  const strideScale = Math.max(1, R.meta.stride || 1);
+
+  function smoothStat(el, target){
+    const cur = parseInt(el.textContent.replace(/\D/g,""))||0;
+    const next = cur + (target-cur)*0.15;
+    el.textContent = Math.round(next).toLocaleString();
+  }
+  function hexA(hex,a){
+    const n=parseInt(hex.slice(1),16);
+    return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+  }
+
+  function loop(ts){
+    if (!last) last = ts;
+    const dt = Math.min(0.05,(ts-last)/1000); last = ts;
+    const [t0,t1] = eraWindow(era);
+    if (!reduce){
+      const speed = (t1-t0)/ERA_SECONDS;
+      playhead += dt*speed;
+      if (playhead >= t1){ // loop within the era, replay its emergence
+        playhead = t0; evPtr = 0; techCount = 0;
+        shown.forEach(l=>l.remove()); shown=[]; codexEl.innerHTML="";
+      }
+    } else {
+      playhead = (t0+t1)/2;
+    }
+    // stream any events the playhead has passed
+    while (evPtr < winEvents.length && winEvents[evPtr].t <= playhead){ emitCodex(winEvents[evPtr]); evPtr++; }
+    draw(playhead);
+    if (!reduce) requestAnimationFrame(loop);
+  }
+
+  // fill closing meta
+  document.getElementById("meta-strip").innerHTML =
+    `<b>This run.</b> scenario <b>${esc(R.meta.scenario)}</b> · seed <b>${R.meta.seed}</b> · `+
+    `${R.meta.ticks.toLocaleString()} ticks · ${R.meta.frame_count} frames · `+
+    `${R.meta.event_count.toLocaleString()} codex events · state hash <b>${esc(R.meta.state_hash)}</b>. `+
+    `Regenerate any scenario with the command above; the hash is the determinism receipt.`;
+
+  onScroll();
+  setEra(0);
+  // deep-link: ?era=N scrolls straight to that chapter so a link can open on,
+  // say, the War age. onScroll then aligns the era label, strata, and world.
+  const q = new URLSearchParams(location.search).get("era");
+  if (q !== null){
+    const el = document.getElementById("ch" + Math.max(0, Math.min(NERA-1, +q|0)));
+    if (el) requestAnimationFrame(() => el.scrollIntoView());
+  }
+  if (reduce){ draw(playhead); }
+  else requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
