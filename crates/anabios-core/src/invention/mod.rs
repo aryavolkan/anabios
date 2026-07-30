@@ -677,6 +677,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn id_from_name_resolves_keys_case_insensitively() {
+        assert_eq!(id_from_name("stone_tools"), Some(STONE_TOOLS));
+        assert_eq!(id_from_name("Husbandry"), Some(HUSBANDRY));
+        assert_eq!(id_from_name("  writing  "), Some(WRITING));
+        assert_eq!(id_from_name("wheel"), None);
+        assert_eq!(id_from_name(""), None);
+    }
+
+    #[test]
     fn affinity_table_is_well_formed() {
         use crate::genome::{Genome, GenomeSlot};
         // Exactly the four coupled inventions carry an affinity; the rest None.
