@@ -108,6 +108,14 @@ pub const fn bit(inv: usize) -> u32 {
     1u32 << inv
 }
 
+/// Resolve a scenario invention name — its machine `key`, e.g. `"stone_tools"`,
+/// `"husbandry"`, `"nuclear_power"` — to its invention id. Case-insensitive;
+/// surrounding whitespace ignored. Returns `None` for an unknown name.
+pub fn id_from_name(name: &str) -> Option<usize> {
+    let want = name.trim().to_ascii_lowercase();
+    INVENTIONS.iter().position(|inv| inv.key == want)
+}
+
 /// The holder's value of invention `inv`'s affinity gene, or `0.5` (the neutral
 /// point → identity in `coupled_held`) when the invention has no affinity.
 #[inline]
@@ -667,6 +675,15 @@ pub fn invention_step(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn id_from_name_resolves_keys_case_insensitively() {
+        assert_eq!(id_from_name("stone_tools"), Some(STONE_TOOLS));
+        assert_eq!(id_from_name("Husbandry"), Some(HUSBANDRY));
+        assert_eq!(id_from_name("  writing  "), Some(WRITING));
+        assert_eq!(id_from_name("wheel"), None);
+        assert_eq!(id_from_name(""), None);
+    }
 
     #[test]
     fn affinity_table_is_well_formed() {

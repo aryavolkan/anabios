@@ -125,6 +125,16 @@ pub struct AgentSpec {
     pub traits: TraitOverrides,
     #[serde(default)]
     pub archetype: Option<String>,
+    /// Inventions this spec's agents already HOLD at tick 0, named by their
+    /// machine key (e.g. `["stone_tools", "fire", "farming"]`; matching is
+    /// case-insensitive). Seeds the corresponding invention meme channels to
+    /// fully adopted so the lineage begins partway up the tech tree — used to
+    /// let a full-scale scenario reach the era-3 milestones (Writing,
+    /// Husbandry -> domestication) without the slow cold-start climb. Only
+    /// meaningful with `inventions_enabled`. Absent (the default) seeds
+    /// nothing, keeping the golden scenarios byte-identical.
+    #[serde(default)]
+    pub starting_inventions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -328,15 +338,46 @@ fn archetype_genome(name: &str, g: &mut Genome) {
     }
 }
 
+/// Build the fail-fast message for an unknown `starting_inventions` entry,
+/// listing every valid key so the message can't go stale as the tree grows.
+fn unknown_invention_msg(name: &str) -> String {
+    let valid =
+        crate::invention::INVENTIONS.iter().map(|inv| inv.key).collect::<Vec<_>>().join(", ");
+    format!("unknown starting invention '{name}' — valid keys: {valid}")
+}
+
 #[derive(Debug, Error)]
 pub enum ScenarioError {
     #[error("toml parse error: {0}")]
     Toml(#[from] toml::de::Error),
+    #[error("{0}")]
+    UnknownInvention(String),
+    #[error(
+        "starting_inventions requires `inventions_enabled = true` — without the \
+         invention tree the seeded meme channels are never read"
+    )]
+    InventionsDisabled,
 }
 
 impl Scenario {
     pub fn parse_toml(text: &str) -> Result<Self, ScenarioError> {
-        Ok(toml::from_str(text)?)
+        let scenario: Self = toml::from_str(text)?;
+        // Validate up front so an authoring mistake fails at load with a clear
+        // message, rather than panicking deep inside `instantiate` (unknown
+        // name) or silently seeding channels nothing reads (tree disabled).
+        if !scenario.inventions_enabled
+            && scenario.agents.iter().any(|s| !s.starting_inventions.is_empty())
+        {
+            return Err(ScenarioError::InventionsDisabled);
+        }
+        for spec in &scenario.agents {
+            for name in &spec.starting_inventions {
+                if crate::invention::id_from_name(name).is_none() {
+                    return Err(ScenarioError::UnknownInvention(unknown_invention_msg(name)));
+                }
+            }
+        }
+        Ok(scenario)
     }
 
     /// Build a `World` from this scenario. Determinism: world.rng is seeded
@@ -407,6 +448,18 @@ impl Scenario {
                 }
                 None => (0u32, None),
             };
+            // Resolve any starting inventions to meme channels once per spec.
+            // `parse_toml` already rejects unknown names; this panic guards
+            // programmatically-built scenarios that bypass parsing.
+            let seed_channels: Vec<usize> = spec
+                .starting_inventions
+                .iter()
+                .map(|name| {
+                    let inv = crate::invention::id_from_name(name)
+                        .unwrap_or_else(|| panic!("{}", unknown_invention_msg(name)));
+                    crate::invention::channel(inv)
+                })
+                .collect();
             for _ in 0..spec.count {
                 let position = match spec.placement {
                     Placement::Uniform => {
@@ -433,13 +486,17 @@ impl Scenario {
                     archetype_genome(name, &mut g);
                 }
                 spec.traits.apply(&mut g);
-                match &kit {
+                let id = match &kit {
                     Some((modules, program)) => {
-                        w.spawn_seeded(position, g, species_id, modules.clone(), program.clone());
+                        w.spawn_seeded(position, g, species_id, modules.clone(), program.clone())
                     }
-                    None => {
-                        w.spawn_agent(position, g);
-                    }
+                    None => w.spawn_agent(position, g),
+                };
+                // Seed held inventions by setting their meme channels to fully
+                // adopted. No RNG is drawn, so an empty list (the default)
+                // leaves the trajectory byte-identical.
+                for &ch in &seed_channels {
+                    w.agents.meme_vector[id as usize][ch] = 1.0;
                 }
             }
         }
@@ -652,5 +709,110 @@ terrain_affinity = 0.87
         assert!(has(&br_mods, ModuleType::Jaws), "bruiser archetype carries Jaws");
         assert!(has(&br_mods, ModuleType::Armor), "bruiser archetype is armored");
         assert!(has(&br_mods, ModuleType::Reproductive), "bruiser lineage can establish");
+    }
+
+    #[test]
+    fn starting_inventions_seed_named_techs_and_leave_others_unheld() {
+        use crate::invention::{has, FARMING, FIRE, STONE_TOOLS, WRITING};
+        let text = r#"
+name = "t"
+seed = 1
+inventions_enabled = true
+[[agents]]
+count = 1
+archetype = "innovator"
+starting_inventions = ["stone_tools", "fire", "farming"]
+placement = { kind = "cluster", center_x = 100.0, center_y = 100.0, radius = 1.0 }
+"#;
+        let w = Scenario::parse_toml(text).expect("parse").instantiate();
+        let id = w.agents.iter_alive().next().expect("one agent");
+        let meme = &w.agents.meme_vector[id as usize];
+        assert!(has(meme, STONE_TOOLS), "seeded Stone Tools is held at tick 0");
+        assert!(has(meme, FIRE), "seeded Fire is held at tick 0");
+        assert!(has(meme, FARMING), "seeded Farming is held at tick 0");
+        assert!(!has(meme, WRITING), "unseeded Writing is NOT held");
+
+        // Absent field => nothing seeded: the determinism-safe default that
+        // keeps the golden (minimal) scenario byte-identical.
+        let off = Scenario::parse_toml(
+            "name=\"t\"\nseed=1\n[[agents]]\ncount=1\nplacement = { kind = \"uniform\" }\n",
+        )
+        .expect("parse")
+        .instantiate();
+        let oid = off.agents.iter_alive().next().expect("one agent");
+        assert!(!has(&off.agents.meme_vector[oid as usize], STONE_TOOLS));
+    }
+
+    #[test]
+    fn parse_toml_rejects_unknown_starting_invention() {
+        let text = r#"
+name = "t"
+seed = 1
+inventions_enabled = true
+[[agents]]
+count = 1
+starting_inventions = ["stone_tools", "wheel"]
+placement = { kind = "uniform" }
+"#;
+        let err = Scenario::parse_toml(text).expect_err("unknown invention must be rejected");
+        let msg = err.to_string();
+        assert!(msg.contains("wheel"), "error should name the bad invention, got: {msg}");
+        assert!(msg.contains("husbandry"), "error should list valid keys, got: {msg}");
+    }
+
+    #[test]
+    fn parse_toml_rejects_starting_inventions_with_tree_disabled() {
+        // Seeding without `inventions_enabled` would silently write meme
+        // channels nothing reads — reject so the author fixes the flag.
+        let text = r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 1
+starting_inventions = ["stone_tools"]
+placement = { kind = "uniform" }
+"#;
+        let err = Scenario::parse_toml(text).expect_err("disabled tree must be rejected");
+        assert!(
+            err.to_string().contains("inventions_enabled"),
+            "error should name the missing flag, got: {err}"
+        );
+    }
+
+    #[test]
+    fn starting_inventions_do_not_perturb_other_agents() {
+        // Seeding spec 0 must not shift the placement/personality RNG streams,
+        // so every agent (seeded or not) lands identically vs. an unseeded run.
+        let base = r#"
+name = "t"
+seed = 7
+inventions_enabled = true
+[[agents]]
+count = 3
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 100.0, center_y = 100.0, radius = 5.0 }
+[[agents]]
+count = 3
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0 }
+"#;
+        let seeded = base.replace(
+            "center_x = 100.0, center_y = 100.0, radius = 5.0 }\n",
+            "center_x = 100.0, center_y = 100.0, radius = 5.0 }\nstarting_inventions = [\"stone_tools\", \"fire\"]\n",
+        );
+        let a = Scenario::parse_toml(base).expect("parse").instantiate();
+        let b = Scenario::parse_toml(&seeded).expect("parse").instantiate();
+        let ids: Vec<u32> = a.agents.iter_alive().collect();
+        assert_eq!(ids, b.agents.iter_alive().collect::<Vec<u32>>());
+        for id in ids {
+            assert_eq!(
+                a.agents.position[id as usize], b.agents.position[id as usize],
+                "agent {id} position unchanged by seeding another spec"
+            );
+            assert_eq!(
+                a.agents.genome[id as usize], b.agents.genome[id as usize],
+                "agent {id} genome unchanged by seeding another spec"
+            );
+        }
     }
 }

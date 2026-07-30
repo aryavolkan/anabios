@@ -1,0 +1,479 @@
+name = "out-of-africa-saga"
+seed = 318
+
+# OUT OF AFRICA — THE SAGA (Option A: starting_inventions). Identical to the
+# grand `out-of-africa` world — FULL scale (max_population = 3000), material
+# economy intact, every subsystem on — with TWO showcase changes so the run
+# actually reaches the era-3 milestones and domesticates the herds:
+#   1. The Quarry innovators START holding Stone Tools + Fire + Farming +
+#      Writing + Husbandry (starting_inventions) — the emergent climb stalls
+#      at Fire (era 1) and era 3 stays IQ-gated, so the two milestone techs
+#      are seeded directly and on display from tick 0 (downstream techs still
+#      emerge on their own from the seeded base).
+#   2. A tameable grazer+herd is co-located WITH the innovators at the Quarry
+#      (240,430), so the seeded Husbandry holders tame juveniles on-camera
+#      (the base scenario's herds are ~190u south, out of taming range).
+# Throttling the population was tried and BACKFIRED — it starved the material
+# economy to zero inventions; keeping full scale + seeding is the fix. See
+# docs/showcase-plan.md.
+#
+# Original grand-theater notes follow.
+#
+# OUT OF AFRICA: a grand-theater-scale world themed on the human dispersal —
+# one tropical founding continent, a mid-map sea with two desert crossings,
+# a temperate northern world held only by archaics, and every opt-in
+# subsystem switched on:
+#
+#   * Grand-theater full stack: living biome + seasonal band (season_period) +
+#     secular drift (climate_drift_rate) + DIT optimum sweep (env_period) +
+#     nutrient variation + soil fertility + disasters + terrain-habitat
+#     sorting + the four-goods material economy (trade goods gate — and are
+#     consumed by — invention LEARNING, not births) + settlement anchoring +
+#     invention tree + gene<->tech coupling + cognition (IQ/practices) +
+#     war substrate.
+#   * PLUS the two flags grand-theater omits: sexual_dimorphism (binary sex,
+#     female mate choice on the hominid lineages) and domestication
+#     (Husbandry holders tame the wild grazer herds into livestock).
+#
+# Geography (seed 318, climate-driven worldgen; probed with
+# examples/africa_scout + site_probe). The latitude engine gives a real
+# Earth-like layout: hot equator at y~=512, poles at both y-edges (the
+# torus seam is the polar route). An ocean belt crosses the map at
+# y = 320-416 — up to ~600 units of unbroken sea in the middle — with
+# exactly two desert crossings: the WEST ISTHMUS at x = 40-64 and the EAST
+# STRAIT at x = 672-704 (both ~55% desert, the Sahara reading). CorridorUse
+# fires when migrations funnel through either.
+#
+#   AFRICA (south of the sea, y > 416): the equatorial continent. The Cradle
+#   hub (150,440) grows ALL FOUR GOODS locally (savanna 34% / rainforest 33%
+#   / rock 16% / desert 9%); the obsidian QUARRY (240,430: rock 45% /
+#   savanna 50%) sits next door. The savanna megafauna belt runs at
+#   (200,620); the mixed Sahel relay (500,680) is the second four-goods
+#   junction; the Cape (200,800) cools into taiga/forest.
+#
+#   EURASIA (north of the sea, y < 320): cold taiga/forest highlands held
+#   only by ARCHAICS — NW taiga foragers (250,150), eastern archaics
+#   (690,250), a NE dialect commune (800,180), taiga herds (500,220) and
+#   cave-bear bruisers. The rich west highlands (90,240: rock 63%) and the
+#   forest/taiga borders are left EMPTY of economic lineages: the first
+#   migrant culture to cross and settle founds the north.
+#
+# The exodus is emergent, not scripted: the seasonal band migrates through
+# the belt, drift never stationarizes, disasters scar the south — and the
+# migrants are pushed and pulled across the crossings by forage, trade
+# goods, and settlement anchors. Watch Migration / CorridorUse /
+# RangeExpansion / SpeciationEvent for the trek, MaterialLearning /
+# InventionDiscovered / AnimalDomesticated for the technology arc, and
+# SexualSelection on the hominid lineages.
+#
+# Honest expectations (measured on this build): with births ungated the
+# world TEEMS and churns — population crests the cap early, then the sea and
+# the stressors hold it ~1.9k at 4k ticks, with thousands of migrations,
+# speciations, and extinctions along the way. Settlements and markets
+# crystallize on both continents by ~400. The exodus fires early and often:
+# CorridorUse lands north of the sea from tick ~1000 through BOTH crossings
+# (west x~80-235, east x~805-950), with 600+ corridor events over 4k ticks.
+# The technology arc is economic: Stone Tools is discovered at the QUARRY at
+# tick 797 and species-adopted 18 ticks later; Fire follows at 2086 — and
+# every one of the 203 adoptions by 4k is paid for in goods
+# (MaterialLearning). Which lineage holds Eurasia longest, and whether the
+# archaics persist or are absorbed, plays out inside the churn. Run 2-4k
+# ticks for the full theater.
+
+max_population = 3000
+
+env_period = 400
+climate_drift_rate = 0.00005
+season_period = 2000
+biome_adaptation = true
+living_biome = true
+nutrient_variation = true
+soil_fertility = true
+disasters_enabled = true
+terrain_habitat = true
+resources_enabled = true
+settlement_enabled = true
+inventions_enabled = true
+gene_tech_coupling = true
+cognition_enabled = true
+war_enabled = true
+sexual_dimorphism_enabled = true
+domestication_enabled = true
+
+# ---------------------------------------------------------------------------
+# THE CRADLE — equatorial African hub (150,440). All four goods grow locally
+# (savanna 34% / rainforest 33% / rock 16% / desert 9%): the trade quartet
+# sorts onto terrain borders (terrain_habitat), anchors settlements, and
+# stocks the material economy. (Note: the spice/amber quarters pull toward
+# Grass/Forest proper — savanna and rainforest feed their GOODS but the
+# habitat pull targets the home terrains, so those quarters work the pockets
+# and borders rather than the broad belts.)
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 220
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 110.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.12
+
+[[agents]]
+count = 70
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 110.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.87
+
+[[agents]]
+count = 150
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 110.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.62
+
+# ---------------------------------------------------------------------------
+# THE QUARRY (240,430) — obsidian/savanna country (rock 45% / savanna 50%)
+# adjacent to the Cradle. The obsidian-affinity (rock-preferring) quarter
+# anchors here, and the INNOVATORS camp with them: with the material economy
+# on, discovery needs the goods in hand, so early tech emerges at the quarry
+# (the Olduvai reading) — Stone Tools -> Fire -> ... -> Husbandry ->
+# livestock, paid for in local obsidian. The traditionalists and cultural
+# foragers stay at the Cradle and adopt only what the trade routes carry to
+# them — diffusion now means BOTH a meme and a material.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 110
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 240.0, center_y = 430.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.37
+
+[[agents]]
+count = 40
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 240.0, center_y = 430.0, radius = 60.0 }
+# Seed the innovators to HOLD the milestone tech from tick 0, so the showcase
+# reliably displays the era-3 achievements — the invention of Writing and
+# Husbandry — instead of stalling at era 1/2 (the emergent era-3 climb is IQ-
+# gated and does not complete in a watchable budget; measured). With Husbandry
+# held and a herd co-located below, taming fires on-camera within the first
+# hundreds of ticks. Downstream techs (Metalworking, Medicine, Machinery...)
+# still emerge on their own from this base.
+starting_inventions = ["stone_tools", "fire", "farming", "writing", "husbandry"]
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 1.0
+reproduction_threshold = 0.3
+sexual_dimorphism = 0.8
+mate_choosiness = 0.6
+
+# Co-located tameable stock AT the Quarry — grazers + a herd within wandering
+# range of the innovators, so Husbandry holders tame juveniles on-camera.
+[[agents]]
+count = 30
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 250.0, center_y = 445.0, radius = 55.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "herd"
+placement = { kind = "cluster", center_x = 250.0, center_y = 445.0, radius = 50.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 32
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 0.05
+reproduction_threshold = 0.3
+sexual_dimorphism = 0.8
+mate_choosiness = 0.7
+
+[[agents]]
+count = 40
+archetype = "cultural_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+sexual_dimorphism = 0.6
+mate_choosiness = 0.5
+
+[[agents]]
+count = 10
+archetype = "sentinel"
+placement = { kind = "cluster", center_x = 150.0, center_y = 470.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# MEGAFAUNA BELT — the east-African savanna (200,620, env 0.85). The wild
+# herds are both prey and the livestock stock: once a hominid lineage
+# reaches Husbandry, its holders tame grazer juveniles into penned herds.
+# Contested by the three weapon systems and a war-substrate pack.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 48
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 200.0, center_y = 620.0, radius = 90.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "herd"
+placement = { kind = "cluster", center_x = 200.0, center_y = 620.0, radius = 70.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "culture_prey"
+placement = { kind = "cluster", center_x = 170.0, center_y = 580.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "asocial_prey"
+placement = { kind = "cluster", center_x = 240.0, center_y = 660.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 10
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 200.0, center_y = 620.0, radius = 90.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "spiner"
+placement = { kind = "cluster", center_x = 240.0, center_y = 590.0, radius = 70.0 }
+[agents.traits]
+size = 0.6
+perception_radius = 0.9
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "bruiser"
+placement = { kind = "cluster", center_x = 160.0, center_y = 670.0, radius = 50.0 }
+[agents.traits]
+size = 0.8
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "pack_hunter"
+placement = { kind = "cluster", center_x = 250.0, center_y = 640.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Cultural hunters: the fast pack camps the quarry's savanna fringe (first
+# to hunt with worked weapons); the slow pack hunts the megafauna belt.
+[[agents]]
+count = 8
+archetype = "fast_hunter"
+placement = { kind = "cluster", center_x = 300.0, center_y = 450.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+openness = 0.9
+
+[[agents]]
+count = 8
+archetype = "slow_hunter"
+placement = { kind = "cluster", center_x = 220.0, center_y = 610.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# ---------------------------------------------------------------------------
+# SAHEL RELAY (500,680) — the second four-goods junction (grass 26% /
+# savanna 25% / rock 23% / desert 17%), straddling the route from the Cradle
+# toward the EAST STRAIT. The four DIT learning strategies play genetic vs.
+# cultural adaptation here under the drifting optimum.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 32
+archetype = "innate_forager"
+placement = { kind = "cluster", center_x = 500.0, center_y = 680.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "individual_learner"
+placement = { kind = "cluster", center_x = 470.0, center_y = 650.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "pure_imitator"
+placement = { kind = "cluster", center_x = 530.0, center_y = 650.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "critical_learner"
+placement = { kind = "cluster", center_x = 500.0, center_y = 710.0, radius = 45.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# RAINFOREST + CAPE — the west-African dialect commune in the rainforest
+# belt (250,530), kin-cooperation lineages and a marker territory cooling
+# off at the taiga/forest Cape (200,800), and an east-African marker on the
+# far savanna (950,440) watching the EAST STRAIT.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 16
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 250.0, center_y = 530.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "cultural_cooperator"
+placement = { kind = "cluster", center_x = 200.0, center_y = 800.0, radius = 60.0 }
+[agents.traits]
+altruism = 1.0
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "cooperator"
+placement = { kind = "cluster", center_x = 250.0, center_y = 820.0, radius = 50.0 }
+[agents.traits]
+altruism = 0.8
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "marker"
+placement = { kind = "cluster", center_x = 160.0, center_y = 780.0, radius = 50.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "marker"
+placement = { kind = "cluster", center_x = 950.0, center_y = 440.0, radius = 70.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# EURASIA — the north is held only by ARCHAICS: economically marginal
+# lineages with no local obsidian and no invention temperaments, plus wild
+# taiga herds and cave-bear bruisers. The west highlands (90,240: rock 63%)
+# and the forest/taiga borders are deliberately left empty of economic
+# lineages — the first migrant culture to cross the isthmus or the strait
+# and settle them founds the north.
+# ---------------------------------------------------------------------------
+
+# NW archaic hunter-gatherers (250,150): cold taiga, pre-economic.
+[[agents]]
+count = 60
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 250.0, center_y = 150.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+openness = 0.1
+reproduction_threshold = 0.3
+
+# Eastern archaics (690,250): conservative, copy only what washes ashore.
+[[agents]]
+count = 20
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 690.0, center_y = 250.0, radius = 70.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 0.05
+reproduction_threshold = 0.3
+
+# NE dialect commune (800,180): the north's own meme pool, at maximal
+# separation from the rainforest commune — dialect divergence is the
+# control experiment for how deep the two continents' cultures drift.
+[[agents]]
+count = 16
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 800.0, center_y = 180.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# Northern megafauna: taiga herds (500,220) + cave bears with the archaics.
+[[agents]]
+count = 24
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 500.0, center_y = 220.0, radius = 60.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 6
+archetype = "bruiser"
+placement = { kind = "cluster", center_x = 450.0, center_y = 200.0, radius = 70.0 }
+[agents.traits]
+size = 0.85
+lifespan_bias = 1.0
+
+# ---------------------------------------------------------------------------
+# Archetype-free baseline stock (species 0): uniform across both continents
+# and the sea, exercising the no-archetype spawn path and the
+# biome-adaptation gene on the full climate range.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 60
+placement = { kind = "uniform" }
+[agents.traits]
+lifespan_bias = 0.6
+reproduction_threshold = 0.3
