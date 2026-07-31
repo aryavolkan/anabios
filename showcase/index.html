@@ -440,7 +440,8 @@
   });
 
   // era-local codex state
-  let winEvents=[], evPtr=0, shown=[];
+  let winEvents=[], evPtr=0;
+  const CODEX_MAX = 5;
   function setEra(i){
     if (i===era) return;   // already the active era — don't reset playback
     era = i;
@@ -450,7 +451,6 @@
     const [t0,t1] = eraWindow(i);
     winEvents = EVENTS.filter(e=>e.t>=t0 && e.t<t1);
     evPtr = 0;
-    shown.forEach(l=>l.remove()); shown=[];
     codexEl.innerHTML="";
     // reduced motion freezes at the era midpoint; the animated build starts at t0.
     playhead = reduce ? (t0+t1)/2 : t0;
@@ -464,9 +464,11 @@
     line.innerHTML = `<span class="tick">${e.t.toLocaleString()}</span> · `+
       `<span class="k-${k}">${esc(humanize(e.type))}</span> `+
       `<span class="tick">— ${esc(speciesName(e.sid))}</span>`;
-    codexEl.appendChild(line); shown.push(line);
+    codexEl.appendChild(line);
     requestAnimationFrame(()=>line.classList.add("show"));
-    while(shown.length>5){ const o=shown.shift(); o.classList.remove("show"); setTimeout(()=>o.remove(),400); }
+    // cap by removing oldest nodes directly — robust even when a burst of
+    // events emits several lines in a single frame.
+    while (codexEl.children.length > CODEX_MAX) codexEl.removeChild(codexEl.firstChild);
   }
 
   function onScroll(){
@@ -598,8 +600,7 @@
       const speed = (t1-t0)/ERA_SECONDS;
       playhead += dt*speed;
       if (playhead >= t1){
-        playhead = t0; evPtr = 0;
-        shown.forEach(l=>l.remove()); shown=[]; codexEl.innerHTML="";
+        playhead = t0; evPtr = 0; codexEl.innerHTML="";
       }
     }
     // stream any events the playhead has passed
