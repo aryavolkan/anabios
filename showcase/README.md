@@ -10,6 +10,10 @@ The world is the sim's real Whittaker **biome map** (forest, savanna, water, tun
 lushing, polluting and scarring over time), the creatures carry their species colours,
 and the era you're in begins at the tick its defining event **actually first fired**.
 
+The biome is drawn as crisp pixel terrain (matching the pixel hominins); the outro carries
+a legend for both the codex event colours and the terrain. Reduced-motion viewers get a
+static, representative frame per era (the animation loop suspends when idle).
+
 **Controls:** scroll to move through time · **space** pauses/resumes · `?era=N` deep-links.
 
 ## View it
@@ -50,8 +54,8 @@ Useful flags (defaults tuned to keep the committed file ~1.7 MB):
 | `--sample` | 24 | record a frame every N ticks (player interpolates between them) |
 | `--max-agents` | 260 | cap agents per frame via stable-stride subsampling (0 = all) |
 | `--max-events` | 1000 | cap codex events, keeping each type's first + a uniform sample (0 = all) |
-| `--biome-res` | 72 | biome-map resolution per axis (downsampled from the sim's 128² grid) |
-| `--biome-frames` | 8 | biome-map keyframes across the run (0 disables the map) |
+| `--biome-res` | 96 | biome-map resolution per axis (downsampled from the sim's 128² grid) |
+| `--biome-frames` | 6 | biome-map keyframes across the run (0 disables the map) |
 | `--out` | `showcase/replay.js` | `.js` wraps `window.ANABIOS_REPLAY=…`; `.json` writes raw JSON |
 
 Any scenario works. The player derives the six era boundaries from the run's real event

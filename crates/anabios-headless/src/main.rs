@@ -130,10 +130,10 @@ enum Command {
         #[arg(long, default_value_t = 1000)]
         max_events: usize,
         /// Biome map resolution per axis (downsampled from the sim's grid).
-        #[arg(long, default_value_t = 72)]
+        #[arg(long, default_value_t = 96)]
         biome_res: usize,
         /// Number of biome-map keyframes across the run (0 disables the map).
-        #[arg(long, default_value_t = 8)]
+        #[arg(long, default_value_t = 6)]
         biome_frames: usize,
         /// Output path. `.js` wraps `window.ANABIOS_REPLAY=…`; `.json` is raw.
         #[arg(long, default_value = "showcase/replay.js")]

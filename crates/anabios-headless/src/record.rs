@@ -454,4 +454,54 @@ mod tests {
         assert_eq!(base64_encode(b"foo"), "Zm9v");
         assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
     }
+
+    fn cell(terrain: TerrainType, biomass: f32, succession: u8, pollution: f32) -> BiomeCell {
+        BiomeCell {
+            terrain,
+            plant_biomass: biomass,
+            env: 0.0,
+            moisture: 0.0,
+            pollution,
+            succession,
+            nutrient_quality: 0.0,
+            fertility: 0.0,
+        }
+    }
+
+    /// The ported colour mapping matches the Godot bridge's fixed base colours
+    /// and moves toward the pollution grey as pollution rises. Locks the port.
+    #[test]
+    fn biome_colour_port_matches_bridge() {
+        // Pristine water: exact base colour, no biomass/succession/pollution terms.
+        assert_eq!(biome_cell_color(&cell(TerrainType::Water, 0.0, 0, 0.0)), [0.09, 0.19, 0.44]);
+        // Rock is a flat base too (no lushness branch).
+        assert_eq!(biome_cell_color(&cell(TerrainType::Rock, 0.0, 0, 0.0)), [0.42, 0.40, 0.45]);
+        // Pollution pulls any cell toward the industrial grey-brown.
+        let clean = biome_cell_color(&cell(TerrainType::Grass, 0.0, 0, 0.0));
+        let dirty = biome_cell_color(&cell(TerrainType::Grass, 0.0, 0, POLLUTION_CAP));
+        let dist = |c: [f32; 3]| (c[0] - 0.32).abs() + (c[1] - 0.28).abs() + (c[2] - 0.24).abs();
+        assert!(dist(dirty) < dist(clean), "pollution should approach the grey");
+        // Every channel stays in gamut.
+        for c in [clean, dirty] {
+            for ch in c {
+                assert!((0.0..=1.0).contains(&ch), "channel {ch} out of gamut");
+            }
+        }
+    }
+
+    /// Thinning keeps every event type's first occurrence, stays within the cap
+    /// (when kinds ≤ cap), and preserves chronological order.
+    #[test]
+    fn thin_events_keeps_firsts_within_cap() {
+        let kinds = ["a", "b", "c"];
+        let events: Vec<Event> = (0..30)
+            .map(|t| Event { t, kind: kinds[t as usize % 3], sid: None, v: 0.0, x: 0, y: 0 })
+            .collect();
+        let out = thin_events(events, 10);
+        assert!(out.len() <= 10, "exceeded cap: {}", out.len());
+        for k in kinds {
+            assert!(out.iter().any(|e| e.kind == k), "dropped first of {k}");
+        }
+        assert!(out.windows(2).all(|w| w[0].t <= w[1].t), "not chronological");
+    }
 }
