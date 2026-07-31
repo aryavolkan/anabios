@@ -42,6 +42,8 @@ var _glyph_clones: Array[MultiMeshInstance2D] = []
 # two-pointer merge finds each agent's last smoothed position in O(n).
 # A jump larger than SNAP_DIST (torus seam crossing, or many ticks per
 # frame at high speed) snaps straight to the target — time-lapse stays crisp.
+# SMOOTH is the per-frame approach at 60 fps; _refresh_bodies scales it by
+# the real frame delta so the glide looks identical at any frame rate.
 const SMOOTH: float = 0.35
 const SNAP_DIST: float = 4.0
 var _prev_ids: PackedInt32Array = PackedInt32Array()
@@ -217,10 +219,10 @@ func _notification(what: int) -> void:
 			and not GameConfig.showcase_active:
 		paused = true
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not paused:
 		sim.step_n(ticks_per_frame)
-	_refresh_bodies()
+	_refresh_bodies(delta)
 	_refresh_carcasses()
 	_refresh_flashes()
 	var world: float = sim.world_size()
@@ -233,7 +235,7 @@ func _process(_delta: float) -> void:
 	var trades: String = "" if total == 0 else " · %d trades" % total
 	hud.text = "tick %d · %d alive · %s%s" % [sim.tick(), sim.alive_count(), rate, trades]
 
-func _refresh_bodies() -> void:
+func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	var n: int = int(sim.alive_count())
 	if n == 0:
 		for mmi in _body_mmis:
@@ -257,6 +259,9 @@ func _refresh_bodies() -> void:
 	# Smoothed render positions: merge-join the current ascending id array
 	# against last frame's to find each agent's previous smoothed position,
 	# then ease toward the new tick position. Becomes next frame's prev.
+	# The approach rate is scaled to the frame delta: at 60 fps this is
+	# exactly SMOOTH per frame, at 30 fps twice that — the same glide.
+	var k: float = 1.0 - pow(1.0 - SMOOTH, delta * 60.0)
 	var smooth: PackedVector2Array = positions
 	if have_ids:
 		smooth = PackedVector2Array()
@@ -271,7 +276,7 @@ func _refresh_bodies() -> void:
 			if p < pn and _prev_ids[p] == id:
 				var from: Vector2 = _prev_smooth[p]
 				if from.distance_squared_to(target) <= SNAP_DIST * SNAP_DIST:
-					smooth[i] = from.lerp(target, SMOOTH)
+					smooth[i] = from.lerp(target, k)
 				else:
 					smooth[i] = target
 			else:

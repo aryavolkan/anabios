@@ -98,7 +98,7 @@ scripts/emergence.sh record out-of-africa-saga --seed 318
 # → runs/showcase/out-of-africa-saga.mp4
 ```
 
-The saga timeline (`game/showcase/out-of-africa-saga.json`) narrates the out-of-africa arc in seven chapters — cradle, tools, exodus, settlement, writing, domestication, war — cutting to the latest `Market`/`Domesticated`/`War` events wherever they fire. Timelines live in `game/showcase/*.json`; pass `--timeline`/`--out` to customize. Needs ffmpeg for the AVI→MP4 conversion.
+The saga timeline (`game/showcase/out-of-africa-saga.json`) narrates the out-of-africa arc in seven chapters — cradle, tools, exodus, settlement, writing, domestication, war — cutting to the latest `Market`/`Domesticated`/`War` events wherever they fire. Timelines live in `game/showcase/*.json`; pass `--timeline`/`--out`/`--max-seconds` to customize (the beat format — triggers, timeouts, actions — is documented at the top of `game/scripts/showcase_director.gd`). Needs ffmpeg for the AVI→MP4 conversion.
 
 ## Verifying emergence replay (headless)
 

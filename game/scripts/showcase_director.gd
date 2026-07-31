@@ -106,7 +106,7 @@ func _arm(beat: Dictionary) -> void:
 		_fire(beat)  # no trigger: run immediately
 
 func _process(delta: float) -> void:
-	_update_follow()
+	_update_follow(delta)
 	if _idx >= _beats.size():
 		return
 	if _timeout >= 0.0:
@@ -248,14 +248,16 @@ func _do(action: Dictionary) -> void:
 
 # Ease the camera onto the followed agent each frame; drop the follow if the
 # agent died (the timeline should cut away with an explicit camera beat).
-func _update_follow() -> void:
+# The approach rate is delta-scaled so the track feels the same at any fps.
+func _update_follow(delta: float) -> void:
 	if _follow_id < 0:
 		return
 	var info: Dictionary = sim.get_agent_info(_follow_id)
 	if not info.get("alive", false):
 		_follow_id = -1
 		return
-	camera.position = camera.position.lerp(info["position"], 0.12)
+	var k: float = 1.0 - pow(1.0 - 0.12, delta * 60.0)
+	camera.position = camera.position.lerp(info["position"], k)
 
 func _clear_highlight() -> void:
 	if _highlight != null and is_instance_valid(_highlight):
