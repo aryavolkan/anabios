@@ -124,10 +124,11 @@ case "$cmd" in
     # showcase director) over the live sim and captures it with Godot's Movie
     # Maker (--write-movie, fixed 60 fps), then converts to MP4 with ffmpeg.
     # Flags: --seed N  --timeline FILE  --out FILE.mp4  --fps N (default 60)
+    #        --max-seconds N  # safety quit if the timeline never reaches "end"
     scn="$(resolve "${1:-}")"; shift || true
     name=$(basename "$scn" .toml)
     seed=""; timeline="$ROOT/game/showcase/$name.json"; fps=60
-    out="$ROOT/runs/showcase/$name.mp4"
+    out="$ROOT/runs/showcase/$name.mp4"; max_seconds=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --seed) seed="${2:-}"; shift 2 || die "--seed needs a value" ;;
@@ -138,6 +139,8 @@ case "$cmd" in
         --out=*) out="${1#--out=}"; shift ;;
         --fps) fps="${2:-}"; shift 2 || die "--fps needs a value" ;;
         --fps=*) fps="${1#--fps=}"; shift ;;
+        --max-seconds) max_seconds="${2:-}"; shift 2 || die "--max-seconds needs a value" ;;
+        --max-seconds=*) max_seconds="${1#--max-seconds=}"; shift ;;
         *) die "unknown record flag '$1'" ;;
       esac
     done
@@ -155,9 +158,11 @@ case "$cmd" in
           "ANABIOS_SHOWCASE=$timeline")
     [ -n "$seed" ] && envs+=("ANABIOS_SEED=$seed")
     # Movie Maker needs a real window (the capture reads rendered frames);
-    # the director quits the app at the timeline's "end" beat.
-    env "${envs[@]}" "$godot" --path "$ROOT/game" \
-      --write-movie "$avi" --fixed-fps "$fps" res://scenes/main.tscn
+    # the director quits the app at the timeline's "end" beat. --quit-after
+    # is the safety valve for a stalled trigger (no event, missing end beat).
+    godot_args=(--write-movie "$avi" --fixed-fps "$fps")
+    [ -n "$max_seconds" ] && godot_args+=(--quit-after "$max_seconds")
+    env "${envs[@]}" "$godot" --path "$ROOT/game" "${godot_args[@]}" res://scenes/main.tscn
     [ -s "$avi" ] || die "movie write failed — $avi is empty (windowed run required)"
     ffmpeg -y -loglevel error -i "$avi" -c:v libx264 -crf 20 -pix_fmt yuv420p -movflags +faststart "$out"
     rm -f "$avi"

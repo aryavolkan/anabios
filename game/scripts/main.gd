@@ -240,6 +240,8 @@ func _refresh_bodies() -> void:
 			mmi.multimesh.visible_instance_count = 0
 		if module_layers.visible:
 			_clear_module_layers()
+		_prev_ids = PackedInt32Array()
+		_prev_smooth = PackedVector2Array()
 		return
 
 	var positions: PackedVector2Array = sim.alive_positions()

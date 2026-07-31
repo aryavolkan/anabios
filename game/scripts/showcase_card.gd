@@ -66,13 +66,15 @@ func _build_lower() -> void:
 	_lower.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_lower.offset_left = 28
 	_lower.offset_top = -96
-	_lower.offset_right = 640
 	_lower.offset_bottom = -52
 	_lower.modulate.a = 0.0
 	_lower.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_lower_label = Label.new()
 	_lower_label.add_theme_font_size_override("font_size", 16)
 	_lower_label.add_theme_color_override("font_color", UiTheme.TEXT)
+	# Wrap long captions instead of overflowing the strip.
+	_lower_label.custom_minimum_size.x = 560
+	_lower_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_lower.add_child(_lower_label)
 	add_child(_lower)
 

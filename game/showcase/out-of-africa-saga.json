@@ -33,7 +33,7 @@
       { "title": { "chapter": "IV. SETTLING DOWN", "subtitle": "farming, settlement, trade", "dur": 3.0 } },
       { "camera": { "x": 512, "y": 512, "zoom": 0.9, "dur": 3.0 } }
     ] },
-    { "on_event": "Market", "do": [
+    { "on_event": "Market", "timeout": 30.0, "do": [
       { "highlight": "event" },
       { "camera": { "at": "event", "zoom": 1.8, "dur": 2.0 } },
       { "lower_third": { "text": "a market crystallizes where the trade routes cross", "dur": 4.0 } }
@@ -52,7 +52,7 @@
       { "camera": { "x": 250, "y": 445, "zoom": 2.2, "dur": 3.0 } },
       { "lower_third": { "text": "at the Quarry, herders live among the wild herds…", "dur": 5.0 } }
     ] },
-    { "on_event": "Domesticated", "do": [
+    { "on_event": "Domesticated", "timeout": 30.0, "do": [
       { "speed": 1 },
       { "camera": { "at": "event", "zoom": 3.0, "dur": 2.5 } },
       { "highlight": "event" },
@@ -67,7 +67,7 @@
       { "title": { "chapter": "VII. BLOOD & KIN", "subtitle": "war and cooperation", "dur": 3.5 } },
       { "camera": { "x": 512, "y": 512, "zoom": 0.8, "dur": 3.0 } }
     ] },
-    { "on_event": "War", "do": [
+    { "on_event": "War", "timeout": 30.0, "do": [
       { "speed": 4 },
       { "camera": { "at": "event", "zoom": 2.2, "dur": 2.0 } },
       { "highlight": "event" },

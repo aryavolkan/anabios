@@ -14,6 +14,8 @@ extends Node
 #                                              #   the whole log; waits if none)
 #     {"after": 4.0, "do": [...]},            # fire N seconds after the prev beat
 #   ]}
+# Any trigger may add "timeout": <seconds> — if the trigger has not fired by
+# then, the beat is SKIPPED (logged) instead of stalling the recording.
 # A beat with no trigger fires immediately after the previous one. Actions:
 #   {"camera": {"x": 240, "y": 430, "zoom": 2.5, "dur": 2.0}}
 #       or {"camera": {"at": "event", "zoom": 2.5}}  # the triggering event's loc
@@ -29,7 +31,6 @@ extends Node
 #   {"follow": {"near": [250, 445]}}  or  {"follow": "event"}  {"unfollow": true}
 #   {"end": true}  # quits (finishes a --write-movie recording)
 
-const UiTheme = preload("res://scripts/ui_theme.gd")
 const ShowcaseCard = preload("res://scripts/showcase_card.gd")
 const ReplayHighlight = preload("res://scripts/replay_highlight.gd")
 const CHAPTER_NAMES: PackedStringArray = preload("res://scripts/codex_panel.gd").CHAPTER_NAMES
@@ -52,6 +53,7 @@ var _wait_tick: int = -1
 var _wait_event: String = ""
 var _wait_recent: String = ""
 var _wait_delay: float = -1.0
+var _timeout: float = -1.0  # seconds left before the trigger is abandoned
 var _event_cursor: int = 0
 var _scan_cursor: int = 0
 var _recent_loc: Vector2 = Vector2.ZERO
@@ -78,6 +80,9 @@ func _ready() -> void:
 		push_error("[showcase] bad timeline (need {\"beats\": [...]}) in " + path)
 		return
 	_beats = (parsed as Dictionary)["beats"]
+	if _beats.is_empty():
+		push_error("[showcase] timeline has no beats: " + path)
+		return
 	GameConfig.showcase_active = true
 	# Clean footage: the interactive controls are noise on a recording.
 	main.get_node("UI/TimeControls").visible = false
@@ -93,6 +98,7 @@ func _arm(beat: Dictionary) -> void:
 	_wait_event = str(beat.get("at_event", ""))
 	_wait_recent = str(beat.get("on_event", ""))
 	_wait_delay = float(beat.get("after", -1.0))
+	_timeout = float(beat.get("timeout", -1.0))
 	if not _wait_recent.is_empty():
 		_scan_cursor = 0
 		_recent_found = false
@@ -103,18 +109,29 @@ func _process(delta: float) -> void:
 	_update_follow()
 	if _idx >= _beats.size():
 		return
+	if _timeout >= 0.0:
+		_timeout -= delta
+		if _timeout <= 0.0:
+			print("[showcase] beat %d/%d TIMED OUT — skipped" % [_idx + 1, _beats.size()])
+			_idx += 1
+			if _idx < _beats.size():
+				_arm(_beats[_idx])
+			return
 	var beat: Dictionary = _beats[_idx]
 	if _wait_tick >= 0 and int(sim.tick()) >= _wait_tick:
 		_fire(beat)
 	elif not _wait_event.is_empty():
 		var count: int = int(sim.codex_event_count())
 		if count > _event_cursor:
+			var found := false
 			for ev in sim.codex_events_since(_event_cursor):
 				if _event_name(ev) == _wait_event:
-					_event_cursor = count
 					_event_loc = ev.get("loc", Vector2.ZERO)
-					_fire(beat)
+					found = true
 					break
+			_event_cursor = count  # scan each new event exactly once
+			if found:
+				_fire(beat)
 	elif not _wait_recent.is_empty():
 		var count: int = int(sim.codex_event_count())
 		if count > _scan_cursor:
@@ -143,6 +160,12 @@ func _fire(beat: Dictionary) -> void:
 	if _idx < _beats.size():
 		_arm(_beats[_idx])
 
+# Event-triggered beats point the camera / highlight / follow at the event's
+# location — but some event types carry no meaningful location (loc == ZERO,
+# the world's corner). Like the replay manager, leave the camera be then.
+func _event_loc_valid() -> bool:
+	return _event_loc != Vector2.ZERO
+
 func _do(action: Dictionary) -> void:
 	for key in action:
 		var v: Variant = action[key]
@@ -153,6 +176,8 @@ func _do(action: Dictionary) -> void:
 				var dur: float = float(v.get("dur", 2.0))
 				var target := Vector2(float(v.get("x", camera.position.x)), float(v.get("y", camera.position.y)))
 				if str(v.get("at", "")) == "event":
+					if not _event_loc_valid():
+						break  # no usable loc: hold the current shot
 					target = _event_loc
 				_cam_tween = create_tween()
 				_cam_tween.set_parallel(true)
@@ -172,21 +197,32 @@ func _do(action: Dictionary) -> void:
 			"lower_third":
 				_card.show_lower(str(v.get("text", "")), float(v.get("dur", 4.5)))
 			"ground":
-				overlay.ground_mode = v if v is int else int(GROUND_MODES.get(str(v), 0))
+				# JSON numbers parse as floats; accept both numbers and names.
+				overlay.ground_mode = int(v) if v is float or v is int \
+					else int(GROUND_MODES.get(str(v), 0))
 			"body":
-				overlay.body_mode = v if v is int else int(BODY_MODES.get(str(v), 0))
+				overlay.body_mode = int(v) if v is float or v is int \
+					else int(BODY_MODES.get(str(v), 0))
 			"panel":
-				var node: Node = main.get_node_or_null("UI/" + str(PANEL_NODES.get(str(v.get("name", "")), "")))
+				var pname: String = str(v.get("name", ""))
+				if not PANEL_NODES.has(pname):
+					push_warning("[showcase] unknown panel " + pname)
+					break
+				var node: Node = main.get_node_or_null("UI/" + str(PANEL_NODES[pname]))
 				if node != null:
 					var vis: bool = bool(v.get("visible", true))
 					node.visible = vis
 					# The chart panels gate their redraw on _shown.
-					if str(v.get("name", "")) in ["evo", "coevo"]:
+					if pname in ["evo", "coevo"]:
 						node.set("_shown", vis)
 			"highlight":
 				_clear_highlight()
+				var at_event: bool = v is String
+				if at_event and not _event_loc_valid():
+					break  # no usable loc: no ring
 				_highlight = ReplayHighlight.new()
-				_highlight.position = _event_loc if v is String else Vector2(float(v.get("x", 0.0)), float(v.get("y", 0.0)))
+				_highlight.position = _event_loc if at_event \
+					else Vector2(float(v.get("x", 0.0)), float(v.get("y", 0.0)))
 				_highlight.z_index = 10
 				main.add_child(_highlight)
 			"clear_highlight":
@@ -197,6 +233,8 @@ func _do(action: Dictionary) -> void:
 				main.get_node("UI/HUD").visible = bool(v)
 			"follow":
 				if v is String:
+					if not _event_loc_valid():
+						break
 					_follow_id = int(sim.agent_near(_event_loc, 100000.0))
 				else:
 					var near: Array = v.get("near", [0.0, 0.0])

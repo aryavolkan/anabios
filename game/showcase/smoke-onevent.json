@@ -6,7 +6,7 @@
       { "camera": { "x": 512, "y": 512, "zoom": 1.0, "dur": 0.1 } },
       { "title": { "chapter": "ON_EVENT + FOLLOW", "subtitle": "trigger semantics check", "dur": 1.5 } }
     ] },
-    { "on_event": "Speciation", "do": [
+    { "on_event": "Speciation", "timeout": 30.0, "do": [
       { "speed": 1 },
       { "camera": { "at": "event", "zoom": 2.5, "dur": 1.5 } },
       { "highlight": "event" },
