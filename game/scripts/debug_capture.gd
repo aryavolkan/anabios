@@ -100,6 +100,12 @@ func _run(path: String, wait_frames: int) -> void:
 					cam.set("position", Vector2(
 						float(OS.get_environment("ANABIOS_CAM_X")),
 						float(OS.get_environment("ANABIOS_CAM_Y"))))
+		# Optionally frame the whole world (the [F] overview) rather than the
+		# default agent-cluster framing — used for the wide overview shots.
+		if OS.has_environment("ANABIOS_CAM_FIT"):
+			var camf := main.get_node_or_null("Camera2D")
+			if camf != null:
+				camf.call("_fit_to_world")
 		# Optionally exercise the E2 event camera (replay is triggered after
 		# the unfreeze below — it needs the snapshot ring warmed first).
 		var rm := main.get_node_or_null("ReplayManager")
