@@ -418,6 +418,7 @@ impl Scenario {
         w.settlement_enabled = self.settlement_enabled;
         w.sexual_dimorphism_enabled = self.sexual_dimorphism_enabled;
         w.domestication_enabled = self.domestication_enabled;
+        w.agents.track_livestock = self.domestication_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
