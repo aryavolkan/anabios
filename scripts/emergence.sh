@@ -209,6 +209,10 @@ case "$cmd" in
         *) rest+=("$1"); shift ;;
       esac
     done
+    # debug_capture.gd does a raw img.save_png(path); absolutize a relative
+    # --out against the caller's cwd (Godot's own cwd may differ once it
+    # launches, same reasoning as the `record` case's --write-movie guard).
+    case "$out" in /*) ;; *) out="$PWD/$out" ;; esac
     mkdir -p "$(dirname "$out")"
 
     envs=("ANABIOS_SCENARIO=$env_scn" "ANABIOS_SHOT=$out")
