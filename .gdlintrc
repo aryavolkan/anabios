@@ -1,0 +1,15 @@
+# gdlint (gdtoolkit) configuration for the Godot viewer.
+#
+# Every substantive rule stays enabled and is a BLOCKING CI gate (see the
+# `godot` job in .github/workflows/ci.yml). Two purely-stylistic rules are
+# disabled deliberately:
+#
+#   class-definitions-order — opinionated member-ordering convention; the
+#     viewer's panels group members by concern instead, and reshuffling 70+
+#     declarations carries risk for no behavioural gain.
+#   max-line-length — gdformat already wraps *code* to 100 columns (enforced by
+#     `gdformat --check`); the only residual over-long lines are un-wrappable
+#     string/comment literals (e.g. the on-screen legend text).
+disable:
+  - class-definitions-order
+  - max-line-length

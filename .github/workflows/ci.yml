@@ -193,18 +193,24 @@ jobs:
               echo "::error::viewer smoke found errors loading $scene"
               rc=1
             fi
+            # Positive check: the gdextension must actually initialize, else a
+            # silently-unloaded extension (e.g. on a scene that doesn't call
+            # into Rust) would pass on absence-of-errors alone.
+            if ! grep -q "Initialize godot-rust" "$log"; then
+              echo "::error::gdextension did not initialize for $scene"
+              rc=1
+            fi
           done
           exit $rc
-      # Advisory GDScript lint/format (gdtoolkit — the clippy/rustfmt analog for
-      # GDScript). The viewer is not yet gdformat-clean (23/24 files) and gdlint
-      # reports style issues, so these REPORT but do not block. Flip
-      # `continue-on-error` to false once a dedicated `gdformat game/scripts/`
-      # pass has landed.
-      - name: gdtoolkit lint (advisory)
-        continue-on-error: true
+      # GDScript lint/format gate (gdtoolkit — the clippy/rustfmt analog for
+      # GDScript). `gdformat --check` enforces formatting/width; `gdlint`
+      # enforces the substantive rules (two stylistic rules are disabled in
+      # .gdlintrc, documented there). Both are blocking: the viewer was brought
+      # gdformat-clean and gdlint-clean in this change.
+      - name: gdtoolkit lint (gdformat + gdlint)
         run: |
           pipx install "gdtoolkit==4.*"
           echo "== gdformat --check =="
-          gdformat --check game/scripts/ || true
+          gdformat --check game/scripts/
           echo "== gdlint =="
-          gdlint game/scripts/ || true
+          gdlint game/scripts/
