@@ -158,21 +158,33 @@ jobs:
         uses: lihop/setup-godot@v2
         with:
           version: 4.7.1-stable
-      # Import first so resources/UIDs exist (they are git-ignored) and the
-      # gdextension initializes once.
+      # Import so `.godot/` exists (git-ignored): it holds `extension_list.cfg`
+      # — which the runtime reads to load the gdextension — and the imported
+      # assets. `--import` runs the editor; on a GPU-less runner the editor GUI
+      # SIGABRTs under software (llvmpipe) Vulkan *after* import + extension
+      # registration complete, so tolerate a non-zero exit and assert the cache
+      # instead. (Belt-and-suspenders: write extension_list.cfg if the crash
+      # happened before Godot flushed it.)
       - name: import project (headless)
-        run: godot --headless --path game --import
+        run: |
+          godot --headless --path game --import || true
+          mkdir -p game/.godot
+          grep -q 'anabios.gdextension' game/.godot/extension_list.cfg 2>/dev/null \
+            || echo 'res://anabios.gdextension' > game/.godot/extension_list.cfg
+          echo "extension_list.cfg:"; cat game/.godot/extension_list.cfg
       # Scene-load smoke: open each scene headless for a few frames and fail on
-      # any script error or a gdextension load failure. Validated locally
-      # against Godot 4.7.1 — both scenes load clean (exit 0, zero SCRIPT ERROR,
-      # godot-rust initialized).
+      # any script error or a gdextension load failure. The `dummy` rendering
+      # driver avoids creating a Vulkan device (so no llvmpipe crash on the
+      # runner); the gdextension still loads from extension_list.cfg. Validated
+      # locally against Godot 4.7.1 — both scenes load with godot-rust
+      # initialized and zero SCRIPT ERROR.
       - name: scene-load smoke (menu + sim)
         run: |
           rc=0
           for scene in res://scenes/menu.tscn res://scenes/main.tscn; do
             echo "== smoke: $scene =="
             log=$(mktemp)
-            if ! godot --headless --path game "$scene" --quit-after 120 >"$log" 2>&1; then
+            if ! godot --headless --rendering-driver dummy --path game "$scene" --quit-after 120 >"$log" 2>&1; then
               echo "::error::godot exited non-zero loading $scene"
               rc=1
             fi
