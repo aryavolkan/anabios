@@ -357,28 +357,51 @@
       return { t: gr.t, cv: off };
     });
   })();
-  function biomeAt(tick){
+  function biomePairAt(tick){
     if (!biomeCanvases.length) return null;
-    let g = biomeCanvases[0];
-    for (const c of biomeCanvases){ if (c.t <= tick) g = c; else break; }
-    return g.cv;
+    let i = 0;
+    while (i < biomeCanvases.length-1 && biomeCanvases[i+1].t <= tick) i++;
+    const A = biomeCanvases[i], B = biomeCanvases[i+1];
+    if (!B) return {a:A.cv, b:null, f:0};
+    return {a:A.cv, b:B.cv, f:Math.min(1, Math.max(0, (tick-A.t)/((B.t-A.t)||1)))};
   }
 
-  // species colour: stable golden-angle hue, diet nudges toward ember
-  const colorCache = new Map();
-  function speciesColors(sp, diet){
-    const key = sp*1000 + (diet>>5);
-    let c = colorCache.get(key);
-    if (c) return c;
-    let h = (sp*137.508) % 360;
-    const carn = diet/255;
-    h = h*(1-0.35*carn) + 12*carn;            // carnivores drift warm/red
-    const body = `hsl(${h.toFixed(0)},42%,${(40-8*carn).toFixed(0)}%)`;
-    const head = `hsl(${h.toFixed(0)},38%,${(70-10*carn).toFixed(0)}%)`;
-    c = [body, head];
-    colorCache.set(key, c);
-    return c;
+  // ---- hominin sprites: port of game/scripts/ape_sprites.gd ----
+  // Same 16x16 zone-painted field poses (neutral + 3 gait), same per-species
+  // zone colours, same sid%5 mapping — so the web player draws the very
+  // figures the Godot viewer draws instead of stacked rectangles.
+  const PAL = {K:"14100f",x:"241f26",X:"3a3340",b:"4a2f1e",B:"7a4c2c",r:"a06a3c",t:"c99a63",T:"e0c090",
+    w:"e7ded0",W:"f6f2e6",g:"5b5b66",G:"7c7c88",d:"3a3a44",s:"b9b9c4",p:"cf8f8f",P:"e6b3b3",n:"b5645f",
+    o:"c06a2e",O:"d98f4a",R:"c23a34",y:"d9a83a",h:"e8e2d0",m:"b98a5a",e:"f4f4f4",k:"0e0d10"};
+  const FIELD_POSES = [
+    [[6,2,4,4,"c"],[7,4,2,2,"s"],[7,6,2,1,"c"],[4,6,8,5,"c"],[7,7,2,2,"a"],[3,7,2,4,"c"],[3,10,2,1,"s"],[11,7,2,4,"c"],[11,10,2,1,"s"],[6,11,2,4,"c"],[9,11,2,4,"c"]],
+    [[6,2,4,4,"c"],[7,4,2,2,"s"],[7,6,2,1,"c"],[4,6,8,5,"c"],[7,7,2,2,"a"],[3,8,2,3,"c"],[3,10,2,1,"s"],[11,6,2,4,"c"],[11,9,2,1,"s"],[4,11,2,4,"c"],[9,12,2,3,"c"]],
+    [[6,1,4,4,"c"],[7,3,2,2,"s"],[7,5,2,1,"c"],[4,5,8,5,"c"],[7,6,2,2,"a"],[3,6,2,4,"c"],[3,9,2,1,"s"],[11,6,2,4,"c"],[11,9,2,1,"s"],[6,10,2,4,"c"],[9,10,2,4,"c"]],
+    [[6,2,4,4,"c"],[7,4,2,2,"s"],[7,6,2,1,"c"],[4,6,8,5,"c"],[7,7,2,2,"a"],[3,6,2,4,"c"],[3,9,2,1,"s"],[11,8,2,3,"c"],[11,10,2,1,"s"],[6,12,2,3,"c"],[10,11,2,4,"c"]],
+  ];
+  const FIELD_ZONE_COLORS = [
+    {c:"X",s:"m",a:"B"}, {c:"d",s:"B",a:"G"}, {c:"o",s:"T",a:"O"}, {c:"B",s:"t",a:"r"}, {c:"m",s:"t",a:"h"},
+  ];
+  function buildPose(sp, pose){
+    const cvs = document.createElement("canvas"); cvs.width = 16; cvs.height = 16;
+    const c = cvs.getContext("2d");
+    for (const b of FIELD_POSES[pose]){ c.fillStyle = "#"+PAL[FIELD_ZONE_COLORS[sp][b[4]]]; c.fillRect(b[0],b[1],b[2],b[3]); }
+    const img = c.getImageData(0,0,16,16), D = img.data;
+    const filled = (x,y)=> x>=0 && x<16 && y>=0 && y<16 && D[(y*16+x)*4+3] > 128;
+    const edges = [];
+    for (let y=0;y<16;y++) for (let x=0;x<16;x++){
+      if (filled(x,y)) continue;
+      if (filled(x+1,y)||filled(x-1,y)||filled(x,y+1)||filled(x,y-1)) edges.push([x,y]);
+    }
+    c.fillStyle = "rgba(87,87,87,1)";
+    for (const [x,y] of edges) c.fillRect(x,y,1,1);
+    return cvs;
   }
+  const POSE_CVS = FIELD_ZONE_COLORS.map((_,sp)=> FIELD_POSES.map((_,pose)=> buildPose(sp,pose)));
+  const apeOf = (sp)=> ((sp % 5) + 5) % 5;
+  const SPRITE_CELL = 6.2;             // screen px per 16px cell side
+  const firstSeen = new Map();         // id -> tick, for the spawn scale-pop
+  const easeOutBack = (t)=> 1 + 2.70158*Math.pow(t-1,3) + 1.70158*Math.pow(t-1,2);
 
   // ---- frame lookup + interpolation ----
   const frames = R.frames;   // sorted by t
@@ -494,10 +517,17 @@
     ctx.fillRect(0,0,W,H);
 
     const plate = WSIZE*view.s, px0 = wx(0), py0 = wy(0);
-    const bc = biomeAt(tick);
-    if (bc){
+    const bp = biomePairAt(tick);
+    if (bp){
       ctx.imageSmoothingEnabled = false;   // crisp pixel terrain, matching the pixel hominins
-      ctx.drawImage(bc, px0, py0, plate, plate);
+      // cross-fade between the bracketing keyframes so climate shifts glide
+      // instead of popping on the keyframe boundary
+      ctx.drawImage(bp.a, px0, py0, plate, plate);
+      if (bp.b && bp.f > 0){
+        ctx.globalAlpha = bp.f;
+        ctx.drawImage(bp.b, px0, py0, plate, plate);
+        ctx.globalAlpha = 1;
+      }
       // faint climate tint: warm in the early eras, cool/slate late
       const cool = era/(NERA-1);
       ctx.fillStyle = `hsla(${34-150*cool},${18+22*cool}%,${18-6*cool}%,0.16)`;
@@ -548,25 +578,45 @@
     const f = Math.min(1, Math.max(0, (tick - A.t)/span));
     const bmap = idMap(bi);
     let pop = 0; const specSet = new Set();
+    if (firstSeen.size > 4096) firstSeen.clear();
     for (let k=0;k<A.id.length;k++){
       const id = A.id[k];
       let ax=A.x[k], ay=A.y[k];
       const bk = bmap.get(id);
-      let x=ax, y=ay;
+      let x=ax, y=ay, moving=false, flip=false;
       if (bk!==undefined){
         const bx=B.x[bk], by=B.y[bk];
         // teleport guard: torus wrap or slot reuse -> snap instead of streak
         if (Math.abs(bx-ax) < WSIZE*0.4 && Math.abs(by-ay) < WSIZE*0.4){
           x = ax+(bx-ax)*f; y = ay+(by-ay)*f;
+          moving = (bx!==ax || by!==ay);
+          flip = bx < ax;
         }
       }
-      const sp=A.sp[k], d=A.d[k];
+      const sp=A.sp[k];
       specSet.add(sp); pop++;
-      const [body,head]=speciesColors(sp,d);
+      if (!firstSeen.has(id)) firstSeen.set(id, tick);
       const px=wx(x), py=wy(y);
-      const bob = reduce?0:Math.abs(Math.sin((tick*0.25)+id))*1.1;
-      ctx.fillStyle=body; ctx.fillRect(px-1.3, py-2.0-bob, 2.6, 3.2);
-      ctx.fillStyle=head; ctx.fillRect(px-0.9, py-3.1-bob, 1.8, 1.5);
+      const bob = (reduce||!moving)?0:Math.abs(Math.sin((tick*0.25)+id))*1.1;
+      // gait: walkers cycle contact->passing->contact->passing, phase-offset
+      // per id so the crowd doesn't march in lockstep; idlers hold neutral
+      let pose = 0;
+      if (moving && !reduce){
+        const s = Math.floor(tick*0.35 + (id % 8)) % 4;
+        pose = 1 + Math.min(s, 4 - s);
+      }
+      // spawn scale-pop over ~12 ticks, anchored at the feet
+      let sc = 1;
+      if (!reduce){
+        const age = tick - firstSeen.get(id);
+        if (age < 12) sc = easeOutBack(Math.max(0, age/12));
+      }
+      const dw = SPRITE_CELL*sc, dh = SPRITE_CELL*sc;
+      ctx.save();
+      ctx.translate(px, py - bob);
+      if (flip) ctx.scale(-1, 1);
+      ctx.drawImage(POSE_CVS[apeOf(sp)][pose], -dw/2, -dh*0.875, dw, dh);
+      ctx.restore();
     }
 
     // readouts — rescale the shown agents by the recorder's subsampling stride
