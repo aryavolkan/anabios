@@ -19,17 +19,18 @@ const MAX_FARMS := 4
 
 var _huts: MultiMeshInstance2D
 var _farms: MultiMeshInstance2D
-var _frame: int = REDRAW_EVERY - 1   # redraw on the very first frame
+var _frame: int = REDRAW_EVERY - 1  # redraw on the very first frame
 # Villages linger: the sim's settlement latch drops the moment anchor cohesion
 # breaks, but a place people built shouldn't vanish overnight — sites stay
 # drawn for LINGER seconds after the sim stops reporting them, fading out.
 const LINGER := 45.0
 const FADE := 10.0
-var _villages: Dictionary = {}   # sid -> {pos, members, born, seen}
-var _sites: Array = []           # last settlement_sites() result
+var _villages: Dictionary = {}  # sid -> {pos, members, born, seen}
+var _sites: Array = []  # last settlement_sites() result
 var _now: float = 0.0
 
 @onready var sim = get_node("/root/Main/Simulation")
+
 
 func _ready() -> void:
 	# Huts draw ABOVE agents (z=1): architecture looms over the crowd instead
@@ -39,6 +40,7 @@ func _ready() -> void:
 	_huts = _make_layer("Huts", _hut_texture(), 1)
 	_farms = _make_layer("Farms", _farm_texture(), -6)
 	_make_wrap_clones()
+
 
 func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2D:
 	var mm := MultiMesh.new()
@@ -53,6 +55,7 @@ func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2
 	mmi.z_index = z
 	add_child(mmi)
 	return mmi
+
 
 # Same 9-way torus tiling as the agent layers, sharing each MultiMesh.
 func _make_wrap_clones() -> void:
@@ -70,6 +73,7 @@ func _make_wrap_clones() -> void:
 				clone.position = Vector2(gx * world, gy * world)
 				add_child(clone)
 
+
 func _process(_delta: float) -> void:
 	_now = Time.get_ticks_msec() / 1000.0
 	_frame += 1
@@ -78,13 +82,16 @@ func _process(_delta: float) -> void:
 	_sites = sim.settlement_sites()
 	_redraw()
 
+
 func random_site_pos() -> Vector2:
 	if _sites.is_empty():
 		return Vector2.ZERO
 	return _sites[randi() % _sites.size()]["pos"]
 
+
 func has_sites() -> bool:
 	return not _sites.is_empty()
+
 
 func _redraw() -> void:
 	# Fold the live sites into the village memory.
@@ -92,7 +99,9 @@ func _redraw() -> void:
 		var sid: int = int(site["species_id"])
 		var v: Dictionary = _villages.get(sid, {})
 		if v.is_empty():
-			_villages[sid] = {"pos": site["pos"], "members": int(site["members"]), "born": _now, "seen": _now}
+			_villages[sid] = {
+				"pos": site["pos"], "members": int(site["members"]), "born": _now, "seen": _now
+			}
 		else:
 			v["pos"] = (v["pos"] as Vector2).lerp(site["pos"], 0.3)
 			v["members"] = int(site["members"])
@@ -135,6 +144,7 @@ func _redraw() -> void:
 	_write(_huts.multimesh, hut_xf, hut_col)
 	_write_farms(farm_xf)
 
+
 func _write(mm: MultiMesh, xfs: Array, cols: Array) -> void:
 	var m := xfs.size()
 	if m > mm.instance_count:
@@ -143,6 +153,7 @@ func _write(mm: MultiMesh, xfs: Array, cols: Array) -> void:
 	for i in m:
 		mm.set_instance_transform_2d(i, xfs[i])
 		mm.set_instance_color(i, cols[i])
+
 
 func _write_farms(xfs: Array) -> void:
 	var mm: MultiMesh = _farms.multimesh
@@ -154,22 +165,36 @@ func _write_farms(xfs: Array) -> void:
 		mm.set_instance_transform_2d(i, xfs[i])
 		mm.set_instance_color(i, Color(1, 1, 1))
 
+
 # 16x16 hut: pale wood walls, pitched thatch roof, dark door, auto-outline.
 func _hut_texture() -> ImageTexture:
 	var blocks: Array = [
-		[6, 2, 4, 1, "B"], [5, 3, 6, 1, "B"], [4, 4, 8, 1, "B"], [3, 5, 10, 1, "B"],
-		[2, 6, 12, 1, "b"], [3, 7, 10, 7, "t"], [7, 9, 3, 5, "K"], [3, 7, 10, 1, "m"],
+		[6, 2, 4, 1, "B"],
+		[5, 3, 6, 1, "B"],
+		[4, 4, 8, 1, "B"],
+		[3, 5, 10, 1, "B"],
+		[2, 6, 12, 1, "b"],
+		[3, 7, 10, 7, "t"],
+		[7, 9, 3, 5, "K"],
+		[3, 7, 10, 1, "m"],
 	]
 	var img: Image = ApeSprites._build_cell(blocks)
 	img.flip_y()
 	return ImageTexture.create_from_image(img)
 
+
 # 16x16 tilled patch: dark furrows on bare earth with a few crop sprouts.
 func _farm_texture() -> ImageTexture:
 	var blocks: Array = [
 		[1, 1, 14, 14, "b"],
-		[2, 3, 12, 1, "K"], [2, 6, 12, 1, "K"], [2, 9, 12, 1, "K"], [2, 12, 12, 1, "K"],
-		[4, 2, 1, 1, "h"], [9, 5, 1, 1, "h"], [12, 8, 1, 1, "h"], [6, 11, 1, 1, "h"],
+		[2, 3, 12, 1, "K"],
+		[2, 6, 12, 1, "K"],
+		[2, 9, 12, 1, "K"],
+		[2, 12, 12, 1, "K"],
+		[4, 2, 1, 1, "h"],
+		[9, 5, 1, 1, "h"],
+		[12, 8, 1, 1, "h"],
+		[6, 11, 1, 1, "h"],
 	]
 	var img: Image = ApeSprites._build_cell(blocks)
 	img.flip_y()

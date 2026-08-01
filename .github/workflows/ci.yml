@@ -136,3 +136,81 @@ jobs:
           echo "a=$a"
           echo "b=$b"
           [ "$a" = "$b" ] || (echo "non-deterministic output" && exit 1)
+
+  godot:
+    name: godot viewer (headless smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The Godot viewer is a gdextension backed by the `anabios-godot` crate.
+      # Nothing else in CI actually builds or loads it — clippy only
+      # compile-checks the crate and the coverage job excludes it — so a broken
+      # gdext binding or a scene/script regression ships undetected today. Build
+      # the cdylib the `.gdextension` loads (its linux entry points at
+      # target/debug/libanabios_godot.so), then load the scenes headless.
+      - name: build gdext cdylib
+        run: cargo build -p anabios-godot
+      # Headless `godot` binary on PATH. Keep the version aligned with the
+      # viewer's target engine (game/project.godot / compatibility_minimum).
+      - name: install Godot
+        uses: lihop/setup-godot@v2
+        with:
+          version: 4.7.1-stable
+      # Import so `.godot/` exists (git-ignored): it holds `extension_list.cfg`
+      # — which the runtime reads to load the gdextension — and the imported
+      # assets. `--import` runs the editor; on a GPU-less runner the editor GUI
+      # SIGABRTs under software (llvmpipe) Vulkan *after* import + extension
+      # registration complete, so tolerate a non-zero exit and assert the cache
+      # instead. (Belt-and-suspenders: write extension_list.cfg if the crash
+      # happened before Godot flushed it.)
+      - name: import project (headless)
+        run: |
+          godot --headless --path game --import || true
+          mkdir -p game/.godot
+          grep -q 'anabios.gdextension' game/.godot/extension_list.cfg 2>/dev/null \
+            || echo 'res://anabios.gdextension' > game/.godot/extension_list.cfg
+          echo "extension_list.cfg:"; cat game/.godot/extension_list.cfg
+      # Scene-load smoke: open each scene headless for a few frames and fail on
+      # any script error or a gdextension load failure. The `dummy` rendering
+      # driver avoids creating a Vulkan device (so no llvmpipe crash on the
+      # runner); the gdextension still loads from extension_list.cfg. Validated
+      # locally against Godot 4.7.1 — both scenes load with godot-rust
+      # initialized and zero SCRIPT ERROR.
+      - name: scene-load smoke (menu + sim)
+        run: |
+          rc=0
+          for scene in res://scenes/menu.tscn res://scenes/main.tscn; do
+            echo "== smoke: $scene =="
+            log=$(mktemp)
+            if ! godot --headless --rendering-driver dummy --path game "$scene" --quit-after 120 >"$log" 2>&1; then
+              echo "::error::godot exited non-zero loading $scene"
+              rc=1
+            fi
+            cat "$log"
+            if grep -qE "SCRIPT ERROR|Can't open dynamic library|Failed to load GDExtension|Cannot open library" "$log"; then
+              echo "::error::viewer smoke found errors loading $scene"
+              rc=1
+            fi
+            # Positive check: the gdextension must actually initialize, else a
+            # silently-unloaded extension (e.g. on a scene that doesn't call
+            # into Rust) would pass on absence-of-errors alone.
+            if ! grep -q "Initialize godot-rust" "$log"; then
+              echo "::error::gdextension did not initialize for $scene"
+              rc=1
+            fi
+          done
+          exit $rc
+      # GDScript lint/format gate (gdtoolkit — the clippy/rustfmt analog for
+      # GDScript). `gdformat --check` enforces formatting/width; `gdlint`
+      # enforces the substantive rules (two stylistic rules are disabled in
+      # .gdlintrc, documented there). Both are blocking: the viewer was brought
+      # gdformat-clean and gdlint-clean in this change.
+      - name: gdtoolkit lint (gdformat + gdlint)
+        run: |
+          pipx install "gdtoolkit==4.*"
+          echo "== gdformat --check =="
+          gdformat --check game/scripts/
+          echo "== gdlint =="
+          gdlint game/scripts/

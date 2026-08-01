@@ -23,11 +23,13 @@ var _title_tween: Tween = null
 var _lower_tween: Tween = null
 var _bar_tween: Tween = null
 
+
 func _ready() -> void:
 	layer = 10
 	_build_title()
 	_build_lower()
 	_build_letterbox()
+
 
 func _build_title() -> void:
 	_title_box = CenterContainer.new()
@@ -60,6 +62,7 @@ func _build_title() -> void:
 	_title_box.add_child(vbox)
 	add_child(_title_box)
 
+
 func _build_lower() -> void:
 	_lower = PanelContainer.new()
 	_lower.theme = UiTheme.build()
@@ -77,6 +80,7 @@ func _build_lower() -> void:
 	_lower_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_lower.add_child(_lower_label)
 	add_child(_lower)
+
 
 func _build_letterbox() -> void:
 	_bar_top = ColorRect.new()
@@ -99,6 +103,7 @@ func _build_letterbox() -> void:
 	_vignette.modulate.a = 0.0
 	add_child(_vignette)
 
+
 # Big centered chapter card: fade in, hold, fade out.
 func show_title(chapter: String, subtitle: String, dur: float = 3.2) -> void:
 	_title_label.text = chapter
@@ -111,6 +116,7 @@ func show_title(chapter: String, subtitle: String, dur: float = 3.2) -> void:
 	_title_tween.tween_interval(dur)
 	_title_tween.tween_property(_title_box, "modulate:a", 0.0, TITLE_FADE)
 
+
 # Bottom-left caption strip (event name, tick, short narration).
 func show_lower(text: String, dur: float = 4.5) -> void:
 	_lower_label.text = text
@@ -120,6 +126,7 @@ func show_lower(text: String, dur: float = 4.5) -> void:
 	_lower_tween.tween_property(_lower, "modulate:a", 1.0, 0.35)
 	_lower_tween.tween_interval(dur)
 	_lower_tween.tween_property(_lower, "modulate:a", 0.0, 0.5)
+
 
 # Cinematic bars + vignette, animated in/out.
 func set_letterbox(on: bool) -> void:
@@ -132,6 +139,7 @@ func set_letterbox(on: bool) -> void:
 	_bar_tween.tween_property(_bar_top, "offset_bottom", h if on else 0.0, 0.9)
 	_bar_tween.tween_property(_bar_bottom, "offset_top", -h if on else 0.0, 0.9)
 	_bar_tween.tween_property(_vignette, "modulate:a", 1.0 if on else 0.0, 0.9)
+
 
 # Soft dark-edge vignette, brighter center (procedural, no asset ships).
 func _vignette_texture(res: int) -> ImageTexture:
