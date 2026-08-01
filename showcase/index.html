@@ -382,10 +382,10 @@
   const FIELD_ZONE_COLORS = [
     {c:"X",s:"m",a:"B"}, {c:"d",s:"B",a:"G"}, {c:"o",s:"T",a:"O"}, {c:"B",s:"t",a:"r"}, {c:"m",s:"t",a:"h"},
   ];
-  function buildPose(sp, pose){
+  function buildCell(blocks, resolve){
     const cvs = document.createElement("canvas"); cvs.width = 16; cvs.height = 16;
     const c = cvs.getContext("2d");
-    for (const b of FIELD_POSES[pose]){ c.fillStyle = "#"+PAL[FIELD_ZONE_COLORS[sp][b[4]]]; c.fillRect(b[0],b[1],b[2],b[3]); }
+    for (const b of blocks){ c.fillStyle = "#"+PAL[resolve ? resolve(b[4]) : b[4]]; c.fillRect(b[0],b[1],b[2],b[3]); }
     const img = c.getImageData(0,0,16,16), D = img.data;
     const filled = (x,y)=> x>=0 && x<16 && y>=0 && y<16 && D[(y*16+x)*4+3] > 128;
     const edges = [];
@@ -397,11 +397,55 @@
     for (const [x,y] of edges) c.fillRect(x,y,1,1);
     return cvs;
   }
+  const buildPose = (sp, pose)=> buildCell(FIELD_POSES[pose], z => FIELD_ZONE_COLORS[sp][z]);
   const POSE_CVS = FIELD_ZONE_COLORS.map((_,sp)=> FIELD_POSES.map((_,pose)=> buildPose(sp,pose)));
   const apeOf = (sp)=> ((sp % 5) + 5) % 5;
   const SPRITE_CELL = 6.2;             // screen px per 16px cell side
   const firstSeen = new Map();         // id -> tick, for the spawn scale-pop
   const easeOutBack = (t)=> 1 + 2.70158*Math.pow(t-1,3) + 1.70158*Math.pow(t-1,2);
+
+  // ---- settlement villages: port of game/scripts/settlement_layer.gd ----
+  // The recorder emits settlement sites (codex latch: anchor centroid +
+  // member count per settled species) index-aligned with frames. Villages
+  // linger VILLAGE_LINGER ticks after the latch drops, fading out — same
+  // convention as the Godot viewer.
+  const HUT_BLOCKS = [[6,2,4,1,"B"],[5,3,6,1,"B"],[4,4,8,1,"B"],[3,5,10,1,"B"],
+    [2,6,12,1,"b"],[3,7,10,7,"t"],[7,9,3,5,"K"],[3,7,10,1,"m"]];
+  const FARM_BLOCKS = [[1,1,14,14,"b"],[2,3,12,1,"K"],[2,6,12,1,"K"],[2,9,12,1,"K"],[2,12,12,1,"K"],
+    [4,2,1,1,"h"],[9,5,1,1,"h"],[12,8,1,1,"h"],[6,11,1,1,"h"]];
+  const FARM_CV = buildCell(FARM_BLOCKS);
+  function tintCanvas(base, hex, amt){
+    const cvs = document.createElement("canvas"); cvs.width = 16; cvs.height = 16;
+    const c = cvs.getContext("2d");
+    c.drawImage(base, 0, 0);
+    c.globalCompositeOperation = "source-atop";
+    c.globalAlpha = amt;
+    c.fillStyle = "#"+hex;
+    c.fillRect(0, 0, 16, 16);
+    return cvs;
+  }
+  const HUT_CVS = FIELD_ZONE_COLORS.map(z => tintCanvas(buildCell(HUT_BLOCKS), PAL[z.c], 0.18));
+  const villages = new Map();   // sid -> {x, y, n, born, seen}
+  const VILLAGE_LINGER = 300, VILLAGE_FADE = 100, VILLAGE_GROW = 30;
+  function villagesAt(tick, sf){
+    if (sf){
+      for (let k=0;k<sf.sid.length;k++){
+        const sid = sf.sid[k];
+        const v = villages.get(sid) || {born: tick};
+        v.x = sf.x[k]; v.y = sf.y[k]; v.n = sf.n[k]; v.seen = tick;
+        villages.set(sid, v);
+      }
+    }
+    const out = [];
+    for (const [sid, v] of villages){
+      const stale = tick - v.seen;
+      if (stale > VILLAGE_LINGER){ villages.delete(sid); continue; }
+      const fade = Math.min(1, (VILLAGE_LINGER - stale) / VILLAGE_FADE);
+      const grow = Math.min(1, Math.max(0, (tick - v.born) / VILLAGE_GROW));
+      out.push([sid, v, fade, 1 - Math.pow(1 - grow, 3)]);
+    }
+    return out;
+  }
 
   // ---- frame lookup + interpolation ----
   const frames = R.frames;   // sorted by t
@@ -613,6 +657,24 @@
     const span = (B.t - A.t) || 1;
     const f = Math.min(1, Math.max(0, (tick - A.t)/span));
     const bmap = idMap(bi);
+    // settlement villages (sites are index-aligned with frames): tilled farms
+    // sit on the ground beneath the crowd, huts rise above it after
+    const vils = villagesAt(tick, R.sites && R.sites[ai]);
+    for (const [sid, v, fade, ease] of vils){
+      if (v.n < 24) continue;
+      const farms = Math.min(1 + Math.floor(v.n/16), 4);
+      for (let i=0;i<farms;i++){
+        const ang = sid*1.7 + i*(Math.PI*2/farms);
+        const fs = 11*view.s*ease;
+        ctx.save();
+        ctx.globalAlpha = fade;
+        ctx.translate(wx(v.x + Math.cos(ang)*(24 + (i%2)*9)), wy(v.y + Math.sin(ang)*(24 + (i%2)*9)));
+        ctx.rotate(ang*0.5);
+        ctx.drawImage(FARM_CV, -fs/2, -fs/2, fs, fs);
+        ctx.restore();
+      }
+    }
+    ctx.globalAlpha = 1;
     let pop = 0; const specSet = new Set();
     if (firstSeen.size > 4096) firstSeen.clear();
     for (let k=0;k<A.id.length;k++){
@@ -654,6 +716,19 @@
       ctx.drawImage(POSE_CVS[apeOf(sp)][pose], -dw/2, -dh*0.875, dw, dh);
       ctx.restore();
     }
+
+    // huts above the crowd: oversized thatched houses on a golden-angle ring
+    for (const [sid, v, fade, ease] of vils){
+      const huts = Math.max(1, Math.min(Math.floor(v.n/8), 6));
+      for (let i=0;i<huts;i++){
+        const ang = sid*2.39996 + i*2.39996;
+        const r = 8 + (i%3)*4.5;
+        const hs = 16*view.s*ease;
+        ctx.globalAlpha = fade;
+        ctx.drawImage(HUT_CVS[apeOf(sid)], wx(v.x + Math.cos(ang)*r) - hs/2, wy(v.y + Math.sin(ang)*r) - hs/2, hs, hs);
+      }
+    }
+    ctx.globalAlpha = 1;
 
     // readouts — rescale the shown agents by the recorder's subsampling stride
     // so the count reads like the true world population.
