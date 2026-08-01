@@ -11,8 +11,11 @@ lushing, polluting and scarring over time), the creatures carry their species co
 and the era you're in begins at the tick its defining event **actually first fired**.
 
 The biome is drawn as crisp pixel terrain (matching the pixel hominins); the outro carries
-a legend for both the codex event colours and the terrain. Reduced-motion viewers get a
-static, representative frame per era (the animation loop suspends when idle).
+a legend for both the codex event colours and the terrain. Settlement sites recorded from the
+codex latch appear as hut villages (with tilled farms around the large ones) that linger and
+fade after the sim stops reporting them — the same convention as the Godot viewer.
+Reduced-motion viewers get a static, representative frame per era (the animation loop suspends
+when idle).
 
 **Controls:** scroll to move through time · **space** pauses/resumes · `?era=N` deep-links.
 

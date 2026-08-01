@@ -47,6 +47,19 @@ struct Frame {
     d: Vec<u8>,
 }
 
+/// Settlement sites at one tick: parallel arrays per settled species — the
+/// codex latch's species, their anchor centroids, and anchored member counts.
+/// Captured on the same cadence as `frames` (aligned by index) so the web
+/// player can draw the same hut villages the Godot viewer does.
+#[derive(Serialize)]
+struct SitesFrame {
+    t: u64,
+    sid: Vec<u32>,
+    x: Vec<i32>,
+    y: Vec<i32>,
+    n: Vec<u32>,
+}
+
 /// One codex event, flattened for the player's ticker.
 #[derive(Serialize)]
 struct Event {
@@ -100,6 +113,8 @@ struct Replay {
     species: BTreeMap<u32, String>,
     biome: BiomeSeq,
     frames: Vec<Frame>,
+    /// Settlement sites, index-aligned with `frames`.
+    sites: Vec<SitesFrame>,
     events: Vec<Event>,
 }
 
@@ -161,11 +176,13 @@ pub fn run(
     );
 
     let mut frames: Vec<Frame> = Vec::with_capacity((ticks / sample) as usize + 1);
+    let mut sites: Vec<SitesFrame> = Vec::with_capacity((ticks / sample) as usize + 1);
     let mut events: Vec<Event> = Vec::new();
     let mut biome_grids: Vec<BiomeGrid> = Vec::new();
 
     // Frame 0 + biome 0 (initial state), then on cadence.
     capture_frame(&world, stride, &mut frames);
+    capture_sites(&world, &mut sites);
     if biome_frames > 0 {
         biome_grids.push(capture_biome(&world, biome_res));
     }
@@ -176,6 +193,7 @@ pub fn run(
         }
         if world.tick.is_multiple_of(sample) {
             capture_frame(&world, stride, &mut frames);
+            capture_sites(&world, &mut sites);
         }
         if biome_frames > 0 && world.tick.is_multiple_of(biome_every) {
             biome_grids.push(capture_biome(&world, biome_res));
@@ -199,6 +217,7 @@ pub fn run(
         species,
         biome: BiomeSeq { res: biome_res, grids: biome_grids },
         frames,
+        sites,
         events,
     };
 
@@ -249,6 +268,39 @@ fn capture_frame(world: &World, stride: usize, frames: &mut Vec<Frame>) {
         d.push((carn * 255.0).round() as u8);
     }
     frames.push(Frame { t: world.tick, id, x, y, sp, d });
+}
+
+/// Snapshot the codex settlement latch: for each species with a formed
+/// settlement, the centroid of its alive members' learned home anchors and
+/// the anchored member count. Pure read — mirrors `settlement_sites` in the
+/// Godot bridge (`crates/anabios-godot/src/lib.rs`).
+fn capture_sites(world: &World, out: &mut Vec<SitesFrame>) {
+    let mut f =
+        SitesFrame { t: world.tick, sid: Vec::new(), x: Vec::new(), y: Vec::new(), n: Vec::new() };
+    if !world.codex.settlement_active.is_empty() {
+        let mut acc: BTreeMap<u32, (f64, f64, u32)> = BTreeMap::new();
+        for aid in world.agents.iter_alive() {
+            let sid = world.agents.species_id[aid as usize];
+            if !world.codex.settlement_active.contains(&sid) {
+                continue;
+            }
+            let a = world.agents.anchor[aid as usize];
+            let e = acc.entry(sid).or_insert((0.0, 0.0, 0));
+            e.0 += a.x as f64;
+            e.1 += a.y as f64;
+            e.2 += 1;
+        }
+        for (sid, (sx, sy, n)) in acc {
+            if n == 0 {
+                continue;
+            }
+            f.sid.push(sid);
+            f.x.push((sx / n as f64).round() as i32);
+            f.y.push((sy / n as f64).round() as i32);
+            f.n.push(n);
+        }
+    }
+    out.push(f);
 }
 
 /// Downsample the biome colour field to `out_res`² RGB cells (block-averaged),
@@ -391,17 +443,19 @@ mod tests {
         s.instantiate()
     }
 
-    /// Capturing frames + biome grids is pure: a run that also captures must end
-    /// with the same state hash as one that only steps and drains.
+    /// Capturing frames + biome grids + sites is pure: a run that also captures
+    /// must end with the same state hash as one that only steps and drains.
     #[test]
     fn capture_is_side_effect_free() {
         let mut recorded = minimal_world();
         let mut plain = recorded.clone();
         let mut frames = Vec::new();
+        let mut sites = Vec::new();
         for _ in 0..300 {
             step(&mut recorded);
             for _ in recorded.codex.drain_events() {}
             capture_frame(&recorded, 3, &mut frames);
+            capture_sites(&recorded, &mut sites);
             let _ = capture_biome(&recorded, 48);
 
             step(&mut plain);
