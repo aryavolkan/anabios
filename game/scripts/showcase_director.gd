@@ -27,6 +27,7 @@ extends Node
 #   {"panel": {"name": "tech", "visible": true}}
 #   {"highlight": {"x": 250, "y": 445}}  or  {"highlight": "event"}
 #   {"clear_highlight": true}
+#   {"punch": {"zoom": 1.3, "dur": 0.6}}  # quick zoom pulse + shake accent
 #   {"letterbox": true}  {"hud": false}
 #   {"follow": {"near": [250, 445]}}  or  {"follow": "event"}  {"unfollow": true}
 #   {"end": true}  # quits (finishes a --write-movie recording)
@@ -227,6 +228,23 @@ func _do(action: Dictionary) -> void:
 				main.add_child(_highlight)
 			"clear_highlight":
 				_clear_highlight()
+			"punch":
+				# Zoom pulse: snap in with a slight overshoot, settle back. The
+				# base zoom is captured at fire time, so it composes with any
+				# camera beat already in flight (the tween is killed, not the shot).
+				var z: float = float(v.get("zoom", 1.3))
+				var dur: float = float(v.get("dur", 0.6))
+				var base := camera.zoom
+				if _cam_tween != null:
+					_cam_tween.kill()
+				_cam_tween = create_tween()
+				_cam_tween.set_trans(Tween.TRANS_BACK)
+				_cam_tween.tween_property(camera, "zoom", base * z, dur * 0.35) \
+					.set_ease(Tween.EASE_OUT)
+				_cam_tween.set_trans(Tween.TRANS_SINE)
+				_cam_tween.tween_property(camera, "zoom", base, dur * 0.65) \
+					.set_ease(Tween.EASE_IN_OUT).set_delay(dur * 0.35)
+				camera.add_trauma(0.2)
 			"letterbox":
 				_card.set_letterbox(bool(v))
 			"hud":

@@ -57,6 +57,13 @@ const APES: Array = [
 # Blocks are [x, y, w, h, zone], drawn back-to-front.
 const SPECIES_COUNT := 5
 const WALK_FRAME_COUNT := 4
+# The atlas stacks WALK_FRAME_COUNT gait poses, then one still per action
+# (eat / fight / trade) that main.gd derives from combat, trade and energy
+# signals; the shader switches to those rows when INSTANCE_CUSTOM.a != 0.
+const POSE_COUNT := 7
+const POSE_EAT := 4
+const POSE_FIGHT := 5
+const POSE_TRADE := 6
 # Gait: 0 neutral (idle), 1 contact-left, 2 passing (whole figure lifted 1px —
 # the walk bob), 3 contact-right. The shader cycles 1→2→3→2 when moving and
 # holds 0 when idle, so the stride reads as step-lift-step-lift.
@@ -77,6 +84,18 @@ const FIELD_POSES: Array = [
 	[[6, 2, 4, 4, "c"], [7, 4, 2, 2, "s"], [7, 6, 2, 1, "c"], [4, 6, 8, 5, "c"],
 	[7, 7, 2, 2, "a"], [3, 6, 2, 4, "c"], [3, 9, 2, 1, "s"], [11, 8, 2, 3, "c"],
 	[11, 10, 2, 1, "s"], [6, 12, 2, 3, "c"], [10, 11, 2, 4, "c"]],
+	# 4 eat — crouched low, head and reaching hand down at the food
+	[[7, 6, 4, 4, "c"], [8, 8, 2, 2, "s"], [8, 10, 2, 1, "c"], [4, 8, 8, 5, "c"],
+	[7, 9, 2, 2, "a"], [3, 9, 2, 3, "c"], [3, 11, 2, 1, "s"], [11, 10, 2, 3, "c"],
+	[11, 12, 2, 1, "s"], [6, 13, 2, 2, "c"], [9, 13, 2, 2, "c"]],
+	# 5 fight — lunging, arm raised high to strike, back leg braced
+	[[6, 1, 4, 4, "c"], [7, 3, 2, 2, "s"], [7, 5, 2, 1, "c"], [4, 5, 8, 5, "c"],
+	[7, 6, 2, 2, "a"], [10, 2, 2, 4, "c"], [10, 1, 2, 1, "s"], [3, 6, 2, 4, "c"],
+	[3, 9, 2, 1, "s"], [3, 11, 3, 4, "c"], [8, 11, 2, 4, "c"], [11, 13, 3, 2, "c"]],
+	# 6 trade — upright, one arm extended forward offering the good
+	[[6, 2, 4, 4, "c"], [7, 4, 2, 2, "s"], [7, 6, 2, 1, "c"], [4, 6, 8, 5, "c"],
+	[7, 7, 2, 2, "a"], [3, 7, 2, 4, "c"], [3, 10, 2, 1, "s"], [11, 6, 4, 2, "c"],
+	[14, 6, 1, 1, "s"], [6, 11, 2, 4, "c"], [9, 11, 2, 4, "c"]],
 ]
 
 # Zone colours per species, keyed into PAL — matched to the inspector avatars,
@@ -122,8 +141,9 @@ static func _build_pose(pose: Array, zones: Dictionary) -> Image:
 		blocks.append([b[0], b[1], b[2], b[3], zones[b[4]]])
 	return _build_cell(blocks)
 
-# Species `sp`'s poses packed VERTICALLY into one (16 x WALK_FRAME_COUNT*16)
-# strip. One MultiMesh per species samples its own strip. The strip is 16px
+# One species' poses packed VERTICALLY into one (16 x POSE_COUNT*16) strip:
+# the 4 gait poses first, then the eat/fight/trade stills. One MultiMesh per
+# species samples its own strip. The strip is 16px
 # wide on purpose: wide-thin atlas textures sample garbage on the canvas
 # MultiMesh path (Metal), while 16px rows match the field mask that has
 # always rendered cleanly. Nearest-filtered; the transparent margins keep
@@ -131,9 +151,9 @@ static func _build_pose(pose: Array, zones: Dictionary) -> Image:
 # is a 3D mesh whose V axis renders flipped in the 2D canvas, so
 # pre-flipping the art draws figures upright.
 static func build_species_atlas(sp: int) -> ImageTexture:
-	var atlas := Image.create(16, WALK_FRAME_COUNT * 16, false, Image.FORMAT_RGBA8)
+	var atlas := Image.create(16, POSE_COUNT * 16, false, Image.FORMAT_RGBA8)
 	atlas.fill(Color(0, 0, 0, 0))
-	for fr in WALK_FRAME_COUNT:
+	for fr in POSE_COUNT:
 		var cell := _build_pose(FIELD_POSES[fr], FIELD_ZONE_COLORS[sp])
 		cell.flip_y()
 		atlas.blit_rect(cell, Rect2i(0, 0, 16, 16), Vector2i(0, fr * 16))
