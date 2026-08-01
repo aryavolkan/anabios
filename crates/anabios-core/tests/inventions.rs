@@ -261,6 +261,7 @@ fn metalworking_raises_combat_damage() {
             &w.codex.hostility,
             &mut w.sensors,
             w.world_size,
+            false,
         );
         w.actions[attacker as usize].fire_intent = 1.0;
         let before = w.agents.energy[target as usize];
@@ -327,7 +328,7 @@ fn fire_holder_pays_extra_metabolism() {
         }
         let desired = vec![Vec2::ZERO; w.agents.capacity()];
         let before = w.agents.energy[id as usize];
-        anabios_core::integrate::integrate_all(&mut w.agents, &desired, w.world_size, false);
+        anabios_core::integrate::integrate_all(&mut w.agents, &desired, w.world_size, false, false);
         before - w.agents.energy[id as usize]
     };
     let plain = drain_with(None);
@@ -635,6 +636,134 @@ fn spread_respects_the_iq_gate() {
     );
 }
 
+// --- Genetic prerequisites (gene_requirements) --------------------------------
+
+#[test]
+fn discovery_is_blocked_below_the_gene_gate() {
+    // Era-2 candidates after Fire are Farming (Conscientiousness ≥ 0.35) and
+    // Metalworking (Territoriality ≥ 0.40). A lineage that is maximally
+    // territorial but minimally conscientious clears only the Metalworking
+    // gate — so with the flag on it can invent metal but never agriculture,
+    // no matter how open or skilled it is.
+    let mut w = World::new(107);
+    w.inventions_enabled = true;
+    w.gene_requirements = true;
+    let mut ids = Vec::new();
+    for n in 0..8 {
+        let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+        w.agents.modules[id as usize] = comm_kit();
+        w.agents.meme_vector[id as usize][SKILL_CHANNEL] = 1.0;
+        let mut g = w.agents.genome[id as usize];
+        g.set(GenomeSlot::Openness, 1.0);
+        g.set(GenomeSlot::Conscientiousness, 0.0);
+        g.set(GenomeSlot::Territoriality, 1.0);
+        w.agents.genome[id as usize] = g;
+        set_held(&mut w, id, invention::STONE_TOOLS);
+        set_held(&mut w, id, invention::FIRE);
+        ids.push(id);
+    }
+    for _ in 0..20_000 {
+        invention::invention_step(&mut w);
+    }
+    assert!(
+        ids.iter().any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::METALWORKING)),
+        "the cleared gate (Territoriality) must permit Metalworking"
+    );
+    assert!(
+        ids.iter().all(|&id| !invention::has(&w.agents.meme_vector[id as usize], invention::FARMING)),
+        "Conscientiousness below the gate must block Farming forever"
+    );
+    // Lift the genetic block: Farming becomes discoverable.
+    for &id in &ids {
+        let mut g = w.agents.genome[id as usize];
+        g.set(GenomeSlot::Conscientiousness, 1.0);
+        w.agents.genome[id as usize] = g;
+    }
+    let mut farmed = false;
+    for _ in 0..20_000 {
+        invention::invention_step(&mut w);
+        if ids.iter().any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::FARMING))
+        {
+            farmed = true;
+            break;
+        }
+    }
+    assert!(farmed, "once the genome clears the gate, Farming is discoverable");
+}
+
+#[test]
+fn discovery_gene_gate_is_identity_when_flag_off() {
+    // Same short-of-the-gate lineage, flag off: the gate is inert, so Farming
+    // is discovered (eventually) despite Conscientiousness 0.
+    let mut w = World::new(107);
+    w.inventions_enabled = true;
+    let mut ids = Vec::new();
+    for n in 0..8 {
+        let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+        w.agents.modules[id as usize] = comm_kit();
+        w.agents.meme_vector[id as usize][SKILL_CHANNEL] = 1.0;
+        let mut g = w.agents.genome[id as usize];
+        g.set(GenomeSlot::Openness, 1.0);
+        g.set(GenomeSlot::Conscientiousness, 0.0);
+        w.agents.genome[id as usize] = g;
+        set_held(&mut w, id, invention::STONE_TOOLS);
+        set_held(&mut w, id, invention::FIRE);
+        ids.push(id);
+    }
+    let mut farmed = false;
+    for _ in 0..20_000 {
+        invention::invention_step(&mut w);
+        if ids.iter().any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::FARMING))
+        {
+            farmed = true;
+            break;
+        }
+    }
+    assert!(farmed, "with the flag off the gene gate must not block discovery");
+}
+
+#[test]
+fn spread_respects_the_gene_gate() {
+    let mut w = World::new(109);
+    w.inventions_enabled = true;
+    w.gene_requirements = true;
+    let holder = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    let receiver = w.spawn_agent(Vec2::new(505.0, 500.0), Genome::neutral());
+    w.agents.modules[holder as usize] = comm_kit();
+    w.agents.modules[receiver as usize] = comm_kit();
+    w.agents.program[holder as usize] = Program::from_slice(&[Node::Idle]);
+    w.agents.program[receiver as usize] = Program::from_slice(&[Node::Idle]);
+    // Teacher holds Farming; receiver holds its prereq chain.
+    set_held(&mut w, holder, invention::STONE_TOOLS);
+    set_held(&mut w, holder, invention::FIRE);
+    set_held(&mut w, holder, invention::FARMING);
+    set_held(&mut w, receiver, invention::STONE_TOOLS);
+    set_held(&mut w, receiver, invention::FIRE);
+    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+    size_scratch(&mut w);
+
+    // Receiver genome below Farming's Conscientiousness gate: cannot copy it.
+    let mut g = w.agents.genome[receiver as usize];
+    g.set(GenomeSlot::Conscientiousness, 0.0);
+    w.agents.genome[receiver as usize] = g;
+    anabios_core::culture::culture_step(&mut w);
+    assert_eq!(
+        level_of(&w, receiver, invention::FARMING),
+        0.0,
+        "genome below the gate blocks social acquisition"
+    );
+
+    // Raise the gene above the threshold: now it copies at the spread rate.
+    let mut g = w.agents.genome[receiver as usize];
+    g.set(GenomeSlot::Conscientiousness, 1.0);
+    w.agents.genome[receiver as usize] = g;
+    anabios_core::culture::culture_step(&mut w);
+    assert!(
+        level_of(&w, receiver, invention::FARMING) > 0.0,
+        "clearing the gene gate permits social acquisition"
+    );
+}
+
 // --- Material learning costs (trade-goods economy) ------------------------------
 
 use anabios_core::resource::Good;
@@ -927,7 +1056,13 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // new Whittaker terrain changes the invention-race trajectory — on top of
     // E13's livestock_of / domestication_enabled layout. Regenerated from the
     // merged code.
-    &[(0, 0xd4616bec29fbe370), (100, 0x32447c1550a30696), (300, 0xeb70a1c498889417)];
+    // Refreshed 2026-07-31 (invention requirements + full affinities,
+    // FORMAT_VERSION 22→23): World.gene_requirements added (off here ⇒ gate
+    // inert); all 10 inventions now carry GeneAffinity with coupled buff sites,
+    // but coupling is off in this scenario so every multiplier is identity;
+    // material baskets grew richer but resources_enabled is off so they are
+    // never consulted — trajectory byte-identical, only the layout grew.
+    &[(0, 0xd981ff10d58aa3ce), (100, 0x4a9a610ccdc046b0), (300, 0x1d5d39a800141ccf)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

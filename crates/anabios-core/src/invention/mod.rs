@@ -71,6 +71,19 @@ pub struct GeneAffinity {
     pub coeff: f32,
 }
 
+/// Hard genetic prerequisite: the learner's value at `slot` must be ≥ `min`
+/// to acquire the invention — discovery rolls exclude it and social copying
+/// skips it while the genome falls short (the same hard-ceiling shape as the
+/// IQ gate, but heritable: culture now waits on the genome, not just the
+/// phenotype). Only consulted when `World::gene_requirements` is true.
+#[derive(Clone, Copy)]
+pub struct GeneReq {
+    /// The genome slot that gates acquisition.
+    pub slot: GenomeSlot,
+    /// Minimum slot value in `[0,1]`.
+    pub min: f32,
+}
+
 /// Static per-invention metadata. Effect magnitudes live in the constants
 /// below (kept separate so the table stays display-friendly for the headless
 /// demo and the Godot inspector).
@@ -101,6 +114,9 @@ pub struct Invention {
     /// Optional genome-slot coupling (gene↔tech coevolution). `None` = the
     /// buff is genome-independent (behaves as if coupling were off).
     pub affinity: Option<GeneAffinity>,
+    /// Optional hard genetic prerequisite (min slot value to acquire). `None`
+    /// = no genetic gate. Only consulted when `World::gene_requirements`.
+    pub gene_req: Option<GeneReq>,
 }
 
 #[inline]
@@ -136,114 +152,140 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         materials: [0.0, 2.0, 0.0, 0.0],
         buff: "+25% graze bite",
         debuff: "none",
-        affinity: None,
+        // Knapping is learned-by-doing: the bite buff scales with
+        // IndividualLearning, tying the first technology to the DIT
+        // individual-learning arm.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::IndividualLearning, coeff: 0.8 }),
+        // Era-1 tech is nearly free to learn — no genetic gate.
+        gene_req: None,
     },
     Invention {
         name: "Fire",
         key: "fire",
         era: 1,
         prereqs: bit(STONE_TOOLS),
-        // Fuelwood.
-        materials: [0.0, 0.0, 2.0, 0.0],
+        // Hearth stones + fuelwood.
+        materials: [1.0, 0.0, 2.0, 0.0],
         buff: "+40% energy per biomass",
         debuff: "+10% metabolism",
         // Bold experimenters harness fire: its energy buff scales with Openness,
         // which also drives discovery — a clean innovation feedback loop.
         affinity: Some(GeneAffinity { slot: GenomeSlot::Openness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Openness, min: 0.30 }),
     },
     Invention {
         name: "Farming",
         key: "farming",
         era: 2,
         prereqs: bit(FIRE),
-        // Seed grain.
-        materials: [0.0, 0.0, 0.0, 2.0],
+        // Seed grain + preservation salt.
+        materials: [1.0, 0.0, 0.0, 2.0],
         buff: "+60% graze yield",
         debuff: "crowding stress",
         // Sedentary farming rewards prudent planners: its yield scales with
         // Conscientiousness.
         affinity: Some(GeneAffinity { slot: GenomeSlot::Conscientiousness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Conscientiousness, min: 0.35 }),
     },
     Invention {
         name: "Metalworking",
         key: "metalworking",
         era: 2,
         prereqs: bit(FIRE),
-        // Ore + flux.
-        materials: [1.0, 2.0, 0.0, 0.0],
+        // Ore + flux + forge fuel.
+        materials: [1.0, 2.0, 1.0, 0.0],
         buff: "+50% weapon damage",
         debuff: "+10% module upkeep",
-        affinity: None,
+        // Better weapons pay off most for lineages that hold and defend ground:
+        // the damage buff scales with Territoriality (wiring the previously
+        // inert slot into the coevolution loop).
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Territoriality, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Territoriality, min: 0.40 }),
     },
     Invention {
         name: "Writing",
         key: "writing",
         era: 3,
         prereqs: bit(FARMING),
-        // Writing medium + pigment.
-        materials: [0.0, 0.0, 1.0, 1.0],
+        // Writing medium + pigment + binder.
+        materials: [0.0, 0.0, 2.0, 1.0],
         buff: "2x meme + invention spread",
         debuff: "small upkeep",
         // Literacy rewards communicators: the spread buff scales with the
         // (previously inert) CommunicationStrength slot.
         affinity: Some(GeneAffinity { slot: GenomeSlot::CommunicationStrength, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::CommunicationStrength, min: 0.45 }),
     },
     Invention {
         name: "Medicine",
         key: "medicine",
         era: 3,
         prereqs: bit(WRITING),
-        // Herbs + mineral salts.
-        materials: [1.0, 0.0, 0.0, 2.0],
+        // Mineral salts + herbs + resin.
+        materials: [2.0, 0.0, 1.0, 2.0],
         buff: "+50% lifespan",
         debuff: "small upkeep",
         // Medicine's lifespan buff rewards the cognitive lineage that could
         // reach era-3 tech: scales with CognitivePotential.
         affinity: Some(GeneAffinity { slot: GenomeSlot::CognitivePotential, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::CognitivePotential, min: 0.50 }),
     },
     Invention {
         name: "Husbandry",
         key: "husbandry",
         era: 3,
         prereqs: bit(FARMING),
-        // Fodder for the penned herd.
-        materials: [0.0, 0.0, 0.0, 2.0],
+        // Fodder + salt licks for the penned herd.
+        materials: [2.0, 0.0, 0.0, 2.0],
         buff: "+40% scavenge energy",
         debuff: "+8% metabolism",
-        affinity: None,
+        // Livestock tolerate only patient keepers: the scavenge buff scales
+        // with Agreeableness.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Agreeableness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Agreeableness, min: 0.40 }),
     },
     Invention {
         name: "Machinery",
         key: "machinery",
         era: 4,
         prereqs: bit(METALWORKING) | bit(WRITING),
-        // Worked metal + mineral parts.
-        materials: [2.0, 2.0, 0.0, 0.0],
+        // Worked metal + mineral parts + lubricant.
+        materials: [2.0, 2.0, 1.0, 0.0],
         buff: "+25% speed & bite",
         debuff: "pollutes local biome",
-        affinity: None,
+        // Machines reward routine exploiters over restless explorers: the
+        // speed/bite buff scales with ExploreVsExploit (wiring the previously
+        // inert slot).
+        affinity: Some(GeneAffinity { slot: GenomeSlot::ExploreVsExploit, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::CognitivePotential, min: 0.45 }),
     },
     Invention {
         name: "Electricity",
         key: "electricity",
         era: 4,
         prereqs: bit(MACHINERY),
-        // Conductors, magnets, and insulation.
-        materials: [1.0, 1.0, 1.0, 0.0],
+        // Conductors + magnets + insulation.
+        materials: [1.0, 2.0, 2.0, 0.0],
         buff: "+30% perception, 1.5x discovery",
         debuff: "upkeep",
-        affinity: None,
+        // Electrification is a leap of abstraction: its perception buff scales
+        // with Openness (the TG1 roadmap's proposed pairing).
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Openness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Openness, min: 0.55 }),
     },
     Invention {
         name: "Nuclear Power",
         key: "nuclear_power",
         era: 4,
         prereqs: bit(ELECTRICITY),
-        // The full industrial supply chain: one of everything.
-        materials: [1.0, 1.0, 1.0, 1.0],
+        // The full industrial supply chain: a heavy draw on everything.
+        materials: [2.0, 1.0, 1.0, 2.0],
         buff: "flat energy income",
         debuff: "1.5x child mutation + upkeep",
-        affinity: None,
+        // Living with mutagenic power selects lineages tuned for it: the
+        // energy income scales with MutationRate.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::MutationRate, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::CognitivePotential, min: 0.65 }),
     },
 ];
 
@@ -338,6 +380,19 @@ pub fn iq_permits(iq: f32, k: usize, cognition_enabled: bool) -> bool {
     !cognition_enabled || iq >= iq_req(k)
 }
 
+/// Whether `genome` clears invention `k`'s hard genetic prerequisite
+/// (`Invention::gene_req`). With `gene_requirements` false the gate is off
+/// (always permitted), so baseline scenarios keep their exact behavior;
+/// otherwise the learner needs `genome[slot] >= min` to discover OR copy the
+/// invention — culture waits on the genome.
+#[inline]
+pub fn gene_permits(genome: &Genome, k: usize, gene_requirements: bool) -> bool {
+    match (gene_requirements, INVENTIONS[k].gene_req) {
+        (true, Some(req)) => genome.get(req.slot) >= req.min,
+        _ => true,
+    }
+}
+
 // --- Material (trade-goods) learning cost ------------------------------------
 
 /// Whether `inventory` covers invention `k`'s material basket. With
@@ -393,35 +448,49 @@ pub fn coupled_held(mask: u32, inv: usize, gene: f32, coupling: bool) -> f32 {
     }
 }
 
-/// Graze-bite multiplier (Stone Tools, Farming, Machinery) — `interact::feed_pass`.
-/// `farming_gene` scales only the Farming term when `coupling` is on.
+/// `coupled_held` reading the affinity gene straight from `genome` — the form
+/// effect sites use, so one argument list serves every invention.
 #[inline]
-pub fn graze_multiplier_coupled(mask: u32, farming_gene: f32, coupling: bool) -> f32 {
-    1.0 + STONE_TOOLS_BITE * held_f32(mask, STONE_TOOLS)
-        + FARMING_BITE * coupled_held(mask, FARMING, farming_gene, coupling)
-        + MACHINERY_BITE * held_f32(mask, MACHINERY)
+pub fn coupled_held_genome(mask: u32, inv: usize, genome: &Genome, coupling: bool) -> f32 {
+    coupled_held(mask, inv, affinity_gene(genome, inv), coupling)
+}
+
+/// Graze-bite multiplier (Stone Tools, Farming, Machinery) — `interact::feed_pass`.
+/// With `coupling` on, each term scales with its invention's affinity gene.
+#[inline]
+pub fn graze_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
+    1.0 + STONE_TOOLS_BITE * coupled_held_genome(mask, STONE_TOOLS, genome, coupling)
+        + FARMING_BITE * coupled_held_genome(mask, FARMING, genome, coupling)
+        + MACHINERY_BITE * coupled_held_genome(mask, MACHINERY, genome, coupling)
 }
 
 /// Graze-bite multiplier with coupling off (genome-independent, as before).
 #[inline]
 pub fn graze_multiplier(mask: u32) -> f32 {
-    graze_multiplier_coupled(mask, 0.5, false)
+    1.0 + STONE_TOOLS_BITE * held_f32(mask, STONE_TOOLS)
+        + FARMING_BITE * held_f32(mask, FARMING)
+        + MACHINERY_BITE * held_f32(mask, MACHINERY)
 }
 
 /// Energy-per-biomass multiplier (Fire) — `interact::feed_pass` payout.
-/// `fire_gene` scales the Fire term when `coupling` is on.
 #[inline]
-pub fn food_energy_multiplier_coupled(mask: u32, fire_gene: f32, coupling: bool) -> f32 {
-    1.0 + FIRE_ENERGY * coupled_held(mask, FIRE, fire_gene, coupling)
+pub fn food_energy_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
+    1.0 + FIRE_ENERGY * coupled_held_genome(mask, FIRE, genome, coupling)
 }
 
 /// Energy-per-biomass multiplier with coupling off.
 #[inline]
 pub fn food_energy_multiplier(mask: u32) -> f32 {
-    food_energy_multiplier_coupled(mask, 0.5, false)
+    1.0 + FIRE_ENERGY * held_f32(mask, FIRE)
 }
 
 /// Weapon-damage multiplier (Metalworking) — `interact::combat_pass`.
+#[inline]
+pub fn weapon_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
+    1.0 + METALWORKING_DAMAGE * coupled_held_genome(mask, METALWORKING, genome, coupling)
+}
+
+/// Weapon-damage multiplier with coupling off.
 #[inline]
 pub fn weapon_multiplier(mask: u32) -> f32 {
     1.0 + METALWORKING_DAMAGE * held_f32(mask, METALWORKING)
@@ -429,11 +498,23 @@ pub fn weapon_multiplier(mask: u32) -> f32 {
 
 /// Scavenge-energy multiplier (Husbandry) — `interact::scavenge_pass` payout.
 #[inline]
+pub fn scavenge_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
+    1.0 + HUSBANDRY_SCAVENGE * coupled_held_genome(mask, HUSBANDRY, genome, coupling)
+}
+
+/// Scavenge-energy multiplier with coupling off.
+#[inline]
 pub fn scavenge_multiplier(mask: u32) -> f32 {
     1.0 + HUSBANDRY_SCAVENGE * held_f32(mask, HUSBANDRY)
 }
 
 /// Locomotor speed multiplier (Machinery) — `integrate::integrate_all`.
+#[inline]
+pub fn speed_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
+    1.0 + MACHINERY_SPEED * coupled_held_genome(mask, MACHINERY, genome, coupling)
+}
+
+/// Locomotor speed multiplier with coupling off.
 #[inline]
 pub fn speed_multiplier(mask: u32) -> f32 {
     1.0 + MACHINERY_SPEED * held_f32(mask, MACHINERY)
@@ -451,17 +532,16 @@ pub fn module_upkeep_multiplier(mask: u32) -> f32 {
     1.0 + METALWORKING_UPKEEP * held_f32(mask, METALWORKING)
 }
 
-/// Lifespan multiplier (Medicine) — `age::age_and_starve`. `medicine_gene`
-/// scales the Medicine term when `coupling` is on.
+/// Lifespan multiplier (Medicine) — `age::age_and_starve`.
 #[inline]
-pub fn lifespan_multiplier_coupled(mask: u32, medicine_gene: f32, coupling: bool) -> f32 {
-    1.0 + MEDICINE_LIFESPAN * coupled_held(mask, MEDICINE, medicine_gene, coupling)
+pub fn lifespan_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
+    1.0 + MEDICINE_LIFESPAN * coupled_held_genome(mask, MEDICINE, genome, coupling)
 }
 
 /// Lifespan multiplier with coupling off.
 #[inline]
 pub fn lifespan_multiplier(mask: u32) -> f32 {
-    lifespan_multiplier_coupled(mask, 0.5, false)
+    1.0 + MEDICINE_LIFESPAN * held_f32(mask, MEDICINE)
 }
 
 /// Child mutation-sigma multiplier (Nuclear Power, either parent) —
@@ -477,20 +557,27 @@ pub fn mutation_multiplier(parent_a: u32, parent_b: u32) -> f32 {
 
 /// Perception-radius multiplier (Electricity) — `sense::sense_one`.
 #[inline]
+pub fn perception_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
+    1.0 + ELECTRICITY_PERCEPTION * coupled_held_genome(mask, ELECTRICITY, genome, coupling)
+}
+
+/// Perception-radius multiplier with coupling off.
+#[inline]
 pub fn perception_multiplier(mask: u32) -> f32 {
     1.0 + ELECTRICITY_PERCEPTION * held_f32(mask, ELECTRICITY)
 }
 
 /// Meme-copy / invention-spread multiplier (Writing) — `culture::culture_step`.
-/// `writing_gene` scales the literacy bonus above `1.0` when `coupling` is on.
+/// With `coupling` on, the literacy bonus above `1.0` scales with the holder's
+/// CommunicationStrength gene.
 #[inline]
-pub fn spread_multiplier_coupled(mask: u32, writing_gene: f32, coupling: bool) -> f32 {
+pub fn spread_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
     if mask & bit(WRITING) == 0 {
         return 1.0;
     }
     let bonus = WRITING_SPREAD_MULT - 1.0;
     let scale = match (coupling, INVENTIONS[WRITING].affinity) {
-        (true, Some(a)) => 1.0 + a.coeff * (writing_gene - 0.5),
+        (true, Some(a)) => 1.0 + a.coeff * (genome.get(a.slot) - 0.5),
         _ => 1.0,
     };
     1.0 + bonus * scale
@@ -499,7 +586,10 @@ pub fn spread_multiplier_coupled(mask: u32, writing_gene: f32, coupling: bool) -
 /// Meme-copy / invention-spread multiplier with coupling off.
 #[inline]
 pub fn spread_multiplier(mask: u32) -> f32 {
-    spread_multiplier_coupled(mask, 0.5, false)
+    if mask & bit(WRITING) == 0 {
+        return 1.0;
+    }
+    WRITING_SPREAD_MULT
 }
 
 /// Multiplier on invention `inv`'s per-tick discovery probability from the
@@ -534,6 +624,18 @@ pub fn flat_upkeep(mask: u32) -> f32 {
     cost += ELECTRICITY_UPKEEP * held_f32(mask, ELECTRICITY);
     cost += NUCLEAR_UPKEEP * held_f32(mask, NUCLEAR_POWER);
     cost - NUCLEAR_INCOME * held_f32(mask, NUCLEAR_POWER)
+}
+
+/// `flat_upkeep` with the Nuclear income term scaled by the holder's
+/// MutationRate affinity gene when `coupling` is on (the tech→gene arm for
+/// Nuclear Power). Bit-identical to `flat_upkeep` with coupling off.
+pub fn flat_upkeep_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
+    let mut cost = 0.0;
+    cost += WRITING_UPKEEP * held_f32(mask, WRITING);
+    cost += MEDICINE_UPKEEP * held_f32(mask, MEDICINE);
+    cost += ELECTRICITY_UPKEEP * held_f32(mask, ELECTRICITY);
+    cost += NUCLEAR_UPKEEP * held_f32(mask, NUCLEAR_POWER);
+    cost - NUCLEAR_INCOME * coupled_held_genome(mask, NUCLEAR_POWER, genome, coupling)
 }
 
 /// Per-tick energy drain from Farming crowding stress, given this tick's
@@ -582,6 +684,11 @@ pub fn invention_step(world: &mut World) {
             // 1.0, so the probability table and its single RNG draw are
             // unchanged). Borrow ends when the closure returns, before the roll.
             let coupling = world.gene_tech_coupling;
+            // Genetic prerequisite gate: with gene_requirements on, a lineage
+            // whose genome falls short of an invention's GeneReq can neither
+            // discover it here nor copy it socially (culture.rs) — identity
+            // when the flag is off.
+            let gene_reqs = world.gene_requirements;
             let genome = &world.agents.genome[i];
             let inventory = world.agents.inventory[i];
             let mut total = 0.0f32;
@@ -591,6 +698,9 @@ pub fn invention_step(world: &mut World) {
                     return;
                 }
                 if !materials_permit(&inventory, k, resources) {
+                    return;
+                }
+                if !gene_permits(genome, k, gene_reqs) {
                     return;
                 }
                 let p = (BASE_DISCOVERY * openness * (0.3 + skill) * disc_mult
@@ -643,7 +753,8 @@ pub fn invention_step(world: &mut World) {
             continue;
         }
         // --- Per-holder per-tick effects. ---
-        world.agents.energy[i] -= flat_upkeep(mask);
+        world.agents.energy[i] -=
+            flat_upkeep_coupled(mask, &world.agents.genome[i], world.gene_tech_coupling);
         // Per-agent sensor bounds check: `invention_step` (stage 6c) runs before
         // the second `resize_scratch`, so on a tick where reproduce grew capacity
         // the sensors buffer is still sized to the top-of-tick population. Guard
@@ -688,17 +799,31 @@ mod tests {
     #[test]
     fn affinity_table_is_well_formed() {
         use crate::genome::{Genome, GenomeSlot};
-        // Exactly the four coupled inventions carry an affinity; the rest None.
-        assert!(INVENTIONS[FIRE].affinity.is_some());
-        assert!(INVENTIONS[FARMING].affinity.is_some());
-        assert!(INVENTIONS[MEDICINE].affinity.is_some());
-        assert!(INVENTIONS[WRITING].affinity.is_some());
-        assert!(INVENTIONS[STONE_TOOLS].affinity.is_none());
-        assert!(INVENTIONS[METALWORKING].affinity.is_none());
-        assert!(INVENTIONS[HUSBANDRY].affinity.is_none());
-        assert!(INVENTIONS[MACHINERY].affinity.is_none());
-        assert!(INVENTIONS[ELECTRICITY].affinity.is_none());
-        assert!(INVENTIONS[NUCLEAR_POWER].affinity.is_none());
+        // Every invention carries an affinity — the full tree feeds the
+        // coevolution loop. Spot-check the pairings.
+        for inv in INVENTIONS.iter() {
+            assert!(inv.affinity.is_some(), "{} has no affinity", inv.name);
+        }
+        assert_eq!(
+            INVENTIONS[FIRE].affinity.unwrap().slot as usize,
+            GenomeSlot::Openness as usize
+        );
+        assert_eq!(
+            INVENTIONS[FARMING].affinity.unwrap().slot as usize,
+            GenomeSlot::Conscientiousness as usize
+        );
+        assert_eq!(
+            INVENTIONS[MEDICINE].affinity.unwrap().slot as usize,
+            GenomeSlot::CognitivePotential as usize
+        );
+        assert_eq!(
+            INVENTIONS[WRITING].affinity.unwrap().slot as usize,
+            GenomeSlot::CommunicationStrength as usize
+        );
+        assert_eq!(
+            INVENTIONS[STONE_TOOLS].affinity.unwrap().slot as usize,
+            GenomeSlot::IndividualLearning as usize
+        );
         // Coeffs keep the buff strictly positive across gene ∈ [0,1]:
         // 1 + coeff*(gene-0.5) > 0  <=>  |coeff| < 2.
         for inv in INVENTIONS.iter() {
@@ -706,42 +831,125 @@ mod tests {
                 assert!(a.coeff.abs() < 2.0, "{} coeff too large", inv.name);
             }
         }
-        // affinity_gene returns the slot value for coupled inventions, 0.5 else.
+        // affinity_gene returns the slot value for the invention's affinity.
         let mut g = Genome::neutral();
         g.set(GenomeSlot::Openness, 0.9);
+        g.set(GenomeSlot::IndividualLearning, 0.2);
         assert!((affinity_gene(&g, FIRE) - 0.9).abs() < 1e-6);
-        assert_eq!(affinity_gene(&g, STONE_TOOLS), 0.5);
+        assert!((affinity_gene(&g, STONE_TOOLS) - 0.2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn gene_req_table_is_well_formed() {
+        use crate::genome::{Genome, GenomeSlot};
+        // Era-1 entry tech is genetically free; every gate sits inside (0,1).
+        assert!(INVENTIONS[STONE_TOOLS].gene_req.is_none());
+        for inv in INVENTIONS.iter() {
+            if let Some(req) = inv.gene_req {
+                assert!(req.min > 0.0 && req.min < 1.0, "{} gate out of range", inv.name);
+            }
+        }
+        // Gates rise with era (max gate per era is non-decreasing).
+        let mut prev = 0.0f32;
+        for era in 1..=4u8 {
+            let max_gate = INVENTIONS
+                .iter()
+                .filter(|inv| inv.era == era)
+                .filter_map(|inv| inv.gene_req)
+                .map(|req| req.min)
+                .fold(0.0f32, f32::max);
+            assert!(max_gate >= prev, "era {era} gates regressed");
+            prev = max_gate;
+        }
+        // gene_permits: identity when the flag is off, threshold when on.
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::Openness, 0.9);
+        assert!(gene_permits(&g, FIRE, false));
+        assert!(gene_permits(&g, FIRE, true));
+        g.set(GenomeSlot::Openness, 0.1);
+        assert!(gene_permits(&g, FIRE, false), "flag off = always permitted");
+        assert!(!gene_permits(&g, FIRE, true), "below the gate: blocked");
+        // Gate-free inventions are always permitted.
+        assert!(gene_permits(&g, STONE_TOOLS, true));
+        // Exact threshold passes (>= semantics).
+        let req = INVENTIONS[FIRE].gene_req.unwrap();
+        g.set(req.slot, req.min);
+        assert!(gene_permits(&g, FIRE, true));
     }
 
     #[test]
     fn coupling_is_identity_when_off_and_monotonic_when_on() {
+        use crate::genome::{Genome, GenomeSlot};
         let farm = bit(FARMING);
+        let neutral = Genome::neutral();
+        let mut lo = Genome::neutral();
+        lo.set(GenomeSlot::Conscientiousness, 0.0);
+        let mut hi = Genome::neutral();
+        hi.set(GenomeSlot::Conscientiousness, 1.0);
         // OFF: coupled == base, regardless of gene.
-        assert_eq!(graze_multiplier_coupled(farm, 0.0, false), graze_multiplier(farm));
-        assert_eq!(graze_multiplier_coupled(farm, 1.0, false), graze_multiplier(farm));
+        assert_eq!(graze_multiplier_coupled(farm, &lo, false), graze_multiplier(farm));
+        assert_eq!(graze_multiplier_coupled(farm, &hi, false), graze_multiplier(farm));
         // ON, gene = 0.5: neutral, equals base.
-        assert!((graze_multiplier_coupled(farm, 0.5, true) - graze_multiplier(farm)).abs() < 1e-6);
+        assert!((graze_multiplier_coupled(farm, &neutral, true) - graze_multiplier(farm)).abs() < 1e-6);
         // ON: strictly increasing in the gene; the Farming term is what moves.
-        let lo = graze_multiplier_coupled(farm, 0.0, true);
-        let hi = graze_multiplier_coupled(farm, 1.0, true);
-        assert!(hi > graze_multiplier(farm) && graze_multiplier(farm) > lo);
-        assert!(lo > 0.0, "buff must stay positive");
+        let lo_m = graze_multiplier_coupled(farm, &lo, true);
+        let hi_m = graze_multiplier_coupled(farm, &hi, true);
+        assert!(hi_m > graze_multiplier(farm) && graze_multiplier(farm) > lo_m);
+        assert!(lo_m > 0.0, "buff must stay positive");
         // Unheld invention: gene has no effect (coupled_held returns 0).
-        assert_eq!(graze_multiplier_coupled(0, 1.0, true), graze_multiplier(0));
+        assert_eq!(graze_multiplier_coupled(0, &hi, true), graze_multiplier(0));
+        // Stone Tools and Machinery terms couple too (IndividualLearning /
+        // ExploreVsExploit): a neutral genome is identity, a raised slot lifts
+        // the buff.
+        let st = bit(STONE_TOOLS);
+        let mut learner = Genome::neutral();
+        learner.set(GenomeSlot::IndividualLearning, 1.0);
+        assert!((graze_multiplier_coupled(st, &neutral, true) - graze_multiplier(st)).abs() < 1e-6);
+        assert!(graze_multiplier_coupled(st, &learner, true) > graze_multiplier(st));
+        let mach = bit(MACHINERY);
+        let mut exploiter = Genome::neutral();
+        exploiter.set(GenomeSlot::ExploreVsExploit, 1.0);
+        assert!(graze_multiplier_coupled(mach, &exploiter, true) > graze_multiplier(mach));
+        assert!(speed_multiplier_coupled(mach, &exploiter, true) > speed_multiplier(mach));
+        assert_eq!(speed_multiplier_coupled(mach, &exploiter, false), speed_multiplier(mach));
+        // Metalworking weapon + Husbandry scavenge + Electricity perception
+        // couple through their affinity slots.
+        let mw = bit(METALWORKING);
+        let mut territorial = Genome::neutral();
+        territorial.set(GenomeSlot::Territoriality, 1.0);
+        assert!(weapon_multiplier_coupled(mw, &territorial, true) > weapon_multiplier(mw));
+        assert_eq!(weapon_multiplier_coupled(mw, &territorial, false), weapon_multiplier(mw));
+        let hus = bit(HUSBANDRY);
+        let mut agreeable = Genome::neutral();
+        agreeable.set(GenomeSlot::Agreeableness, 1.0);
+        assert!(scavenge_multiplier_coupled(hus, &agreeable, true) > scavenge_multiplier(hus));
+        let elec = bit(ELECTRICITY);
+        let mut open = Genome::neutral();
+        open.set(GenomeSlot::Openness, 1.0);
+        assert!(perception_multiplier_coupled(elec, &open, true) > perception_multiplier(elec));
         // Writing spread scales the same way.
         let w = bit(WRITING);
-        assert_eq!(spread_multiplier_coupled(w, 0.5, true), spread_multiplier(w));
-        assert!(spread_multiplier_coupled(w, 1.0, true) > spread_multiplier(w));
-        assert_eq!(spread_multiplier_coupled(w, 0.0, false), spread_multiplier(w));
+        let mut comms = Genome::neutral();
+        comms.set(GenomeSlot::CommunicationStrength, 1.0);
+        assert_eq!(spread_multiplier_coupled(w, &neutral, true), spread_multiplier(w));
+        assert!(spread_multiplier_coupled(w, &comms, true) > spread_multiplier(w));
+        assert_eq!(spread_multiplier_coupled(w, &comms, false), spread_multiplier(w));
         // Fire energy + Medicine lifespan coupled variants are identity when off.
         assert_eq!(
-            food_energy_multiplier_coupled(bit(FIRE), 1.0, false),
+            food_energy_multiplier_coupled(bit(FIRE), &open, false),
             food_energy_multiplier(bit(FIRE))
         );
         assert_eq!(
-            lifespan_multiplier_coupled(bit(MEDICINE), 1.0, false),
+            lifespan_multiplier_coupled(bit(MEDICINE), &open, false),
             lifespan_multiplier(bit(MEDICINE))
         );
+        // Nuclear income couples through MutationRate.
+        let nuke = bit(NUCLEAR_POWER);
+        let mut mutator = Genome::neutral();
+        mutator.set(GenomeSlot::MutationRate, 1.0);
+        assert!(flat_upkeep_coupled(nuke, &mutator, true) < flat_upkeep(nuke));
+        assert_eq!(flat_upkeep_coupled(nuke, &mutator, false), flat_upkeep(nuke));
+        assert!((flat_upkeep_coupled(nuke, &neutral, true) - flat_upkeep(nuke)).abs() < 1e-6);
     }
 
     #[test]
@@ -751,16 +959,57 @@ mod tests {
         g.set(GenomeSlot::Openness, 1.0);
         // OFF -> 1.0 always.
         assert_eq!(discovery_affinity_weight(&g, FIRE, false), 1.0);
-        // ON, coupled invention: > 1.0 for a high affinity gene.
+        // ON, high affinity gene: > 1.0.
         assert!(discovery_affinity_weight(&g, FIRE, true) > 1.0);
-        // ON, uncoupled invention: exactly 1.0.
-        assert_eq!(discovery_affinity_weight(&g, STONE_TOOLS, true), 1.0);
-        // Neutral gene -> 1.0 (keeps near-identity so tuning stays legible).
-        assert_eq!(discovery_affinity_weight(&Genome::neutral(), FIRE, true), 1.0);
+        // Neutral gene -> 1.0 (keeps near-identity so tuning stays legible),
+        // for every invention in the tree.
+        for k in 0..INVENTION_COUNT {
+            assert_eq!(discovery_affinity_weight(&Genome::neutral(), k, true), 1.0);
+        }
         // Low gene damps discovery below 1.0.
         let mut lo = Genome::neutral();
         lo.set(GenomeSlot::Openness, 0.0);
         assert!(discovery_affinity_weight(&lo, FIRE, true) < 1.0);
+        // Each invention reads its OWN affinity slot (Stone Tools ↔
+        // IndividualLearning here), not the global Openness.
+        let mut learner = Genome::neutral();
+        learner.set(GenomeSlot::IndividualLearning, 1.0);
+        assert!(discovery_affinity_weight(&learner, STONE_TOOLS, true) > 1.0);
+        assert_eq!(discovery_affinity_weight(&learner, STONE_TOOLS, false), 1.0);
+    }
+
+    #[test]
+    fn material_baskets_fit_the_economy() {
+        // Per-good costs stay at/below the trade stock target (so a fully
+        // stocked agent can afford any single tech), and the whole basket
+        // fits inside base carrying capacity.
+        for inv in INVENTIONS.iter() {
+            let total: f32 = inv.materials.iter().sum();
+            for &cost in inv.materials.iter() {
+                assert!(
+                    cost <= crate::resource::STOCK_TARGET + 1e-6,
+                    "{} per-good cost {cost} exceeds STOCK_TARGET",
+                    inv.name
+                );
+            }
+            assert!(
+                total <= crate::resource::INVENTORY_BASE_CAP + 1e-6,
+                "{} basket total {total} exceeds base carrying capacity",
+                inv.name
+            );
+        }
+        // Era-scaled: baskets grow (non-strictly) with era on average.
+        for era in 1..4u8 {
+            let avg = |e: u8| {
+                let v: Vec<f32> = INVENTIONS
+                    .iter()
+                    .filter(|inv| inv.era == e)
+                    .map(|inv| inv.materials.iter().sum())
+                    .collect();
+                v.iter().sum::<f32>() / v.len() as f32
+            };
+            assert!(avg(era + 1) >= avg(era), "era {era} baskets got richer later");
+        }
     }
 
     #[test]

@@ -595,7 +595,9 @@ impl Simulation {
 
     /// The full invention tree metadata (static): one Dictionary per
     /// invention — `{ key, name, era, prereqs: PackedStringArray of keys,
-    /// buff, debuff }`. Lets GDScript render the tree without duplicating it.
+    /// buff, debuff, materials: PackedFloat32Array (per trade good),
+    /// affinity: {slot, coeff} or {}, gene_req: {slot, min} or {} }`.
+    /// Lets GDScript render the tree without duplicating it.
     #[func]
     fn invention_catalog(&self) -> Array<VarDictionary> {
         let mut out = Array::<VarDictionary>::new();
@@ -611,9 +613,128 @@ impl Simulation {
             d.set("prereqs", &prereqs);
             d.set("buff", inv.buff);
             d.set("debuff", inv.debuff);
+            let mut materials = PackedFloat32Array::new();
+            for &cost in inv.materials.iter() {
+                materials.push(cost);
+            }
+            d.set("materials", &materials);
+            let mut affinity = VarDictionary::new();
+            if let Some(a) = inv.affinity {
+                affinity.set("slot", anabios_core::genome::SLOT_NAMES[a.slot.idx()]);
+                affinity.set("coeff", a.coeff);
+            }
+            d.set("affinity", &affinity);
+            let mut gene_req = VarDictionary::new();
+            if let Some(req) = inv.gene_req {
+                gene_req.set("slot", anabios_core::genome::SLOT_NAMES[req.slot.idx()]);
+                gene_req.set("min", req.min);
+            }
+            d.set("gene_req", &gene_req);
             out.push(&d);
         }
         out
+    }
+
+    /// All 50 genome-slot display names, indexed by slot number (static).
+    #[func]
+    fn genome_slot_catalog(&self) -> PackedStringArray {
+        let mut out = PackedStringArray::new();
+        for name in anabios_core::genome::SLOT_NAMES.iter() {
+            out.push(*name);
+        }
+        out
+    }
+
+    /// All meme-channel display names, indexed by channel (static): the base
+    /// culture channels, then the invention tree, then the practices.
+    #[func]
+    fn meme_channel_catalog(&self) -> PackedStringArray {
+        const BASE: [&str; anabios_core::invention::INVENTION_CHANNEL_BASE] = [
+            "alarm", "dialect", "cooperation", "hunt", "meme_4", "skill", "technique", "meme_7",
+        ];
+        let mut out = PackedStringArray::new();
+        for name in BASE.iter() {
+            out.push(*name);
+        }
+        for inv in anabios_core::invention::INVENTIONS.iter() {
+            out.push(inv.key);
+        }
+        for p in anabios_core::practice::PRACTICES.iter() {
+            out.push(p.key);
+        }
+        out
+    }
+
+    /// Live dual-inheritance snapshot for the helix panel (view-only):
+    /// `{ gene_means: PackedFloat32Array(50) — population mean per genome
+    /// slot, meme_means: PackedFloat32Array(20) — population mean per meme
+    /// channel, affinity_diff: PackedFloat32Array(10) — per-invention
+    /// holder−nonholder affinity-gene mean (0 when no holders or the tree is
+    /// inactive) }`. Computed on demand; never mutates the world.
+    #[func]
+    fn helix_snapshot(&self) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        let mut gene_means = PackedFloat32Array::new();
+        let mut meme_means = PackedFloat32Array::new();
+        let mut affinity_diff = PackedFloat32Array::new();
+        let Some(w) = self.inner.as_ref() else {
+            d.set("gene_means", &gene_means);
+            d.set("meme_means", &meme_means);
+            d.set("affinity_diff", &affinity_diff);
+            return d;
+        };
+        use anabios_core::genome::GENOME_LEN;
+        use anabios_core::invention::{bit, held_mask, INVENTIONS, INVENTION_COUNT};
+        use anabios_core::program::MEME_CHANNELS;
+        let mut gene_sum = [0.0f32; GENOME_LEN];
+        let mut meme_sum = [0.0f32; MEME_CHANNELS];
+        let mut hold_sum = [0.0f32; INVENTION_COUNT];
+        let mut hold_n = [0.0f32; INVENTION_COUNT];
+        let mut non_sum = [0.0f32; INVENTION_COUNT];
+        let mut non_n = [0.0f32; INVENTION_COUNT];
+        let mut n = 0.0f32;
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            n += 1.0;
+            let g = &w.agents.genome[i];
+            for (slot, sum) in gene_sum.iter_mut().enumerate() {
+                *sum += g.raw(slot);
+            }
+            let m = &w.agents.meme_vector[i];
+            for ch in 0..MEME_CHANNELS {
+                meme_sum[ch] += m[ch];
+            }
+            let mask = held_mask(m);
+            for (k, inv) in INVENTIONS.iter().enumerate() {
+                let Some(a) = inv.affinity else { continue };
+                if mask & bit(k) != 0 {
+                    hold_sum[k] += g.get(a.slot);
+                    hold_n[k] += 1.0;
+                } else {
+                    non_sum[k] += g.get(a.slot);
+                    non_n[k] += 1.0;
+                }
+            }
+        }
+        let mean = |sum: f32, n: f32| if n > 0.0 { sum / n } else { 0.0 };
+        for s in gene_sum.iter() {
+            gene_means.push(mean(*s, n));
+        }
+        for s in meme_sum.iter() {
+            meme_means.push(mean(*s, n));
+        }
+        for k in 0..INVENTION_COUNT {
+            let holder = mean(hold_sum[k], hold_n[k]);
+            let nonholder = mean(non_sum[k], non_n[k]);
+            // Zero (not a spurious sign) while either side of the comparison
+            // is empty.
+            let diff = if hold_n[k] > 0.0 && non_n[k] > 0.0 { holder - nonholder } else { 0.0 };
+            affinity_diff.push(diff);
+        }
+        d.set("gene_means", &gene_means);
+        d.set("meme_means", &meme_means);
+        d.set("affinity_diff", &affinity_diff);
+        d
     }
 
     /// Total codex events recorded so far.

@@ -141,6 +141,62 @@ impl GenomeSlot {
     }
 }
 
+/// Display names indexed by slot number (`GenomeSlot as usize`), for UI
+/// catalogs (the Godot bridge's helix/inspector panels). Reserved slots are
+/// `"reserved_<n>"`. Alignment with the enum is locked by a unit test.
+pub const SLOT_NAMES: [&str; GENOME_LEN] = [
+    "Size",
+    "ColorHue",
+    "ColorSat",
+    "ColorVal",
+    "LifespanBias",
+    "BasalMetabolism",
+    "MutationRate",
+    "ImmuneStrength",
+    "reserved_8",
+    "reserved_9",
+    "Agreeableness",
+    "Neuroticism",
+    "Openness",
+    "Extraversion",
+    "KinPreference",
+    "Territoriality",
+    "CognitivePotential",
+    "reserved_17",
+    "reserved_18",
+    "reserved_19",
+    "ExploreVsExploit",
+    "Conscientiousness",
+    "AmbushPreference",
+    "CommunicationStrength",
+    "Altruism",
+    "SpeedMax",
+    "PerceptionRadius",
+    "DietCarnivory",
+    "IndividualLearning",
+    "SocialLearning",
+    "ReproductionThreshold",
+    "OffspringInvestment",
+    "MateChoosiness",
+    "SexualDimorphism",
+    "reserved_34",
+    "reserved_35",
+    "reserved_36",
+    "reserved_37",
+    "reserved_38",
+    "reserved_39",
+    "InnateTechnique",
+    "EnvAffinity",
+    "TerrainAffinity",
+    "reserved_43",
+    "reserved_44",
+    "reserved_45",
+    "reserved_46",
+    "reserved_47",
+    "reserved_48",
+    "reserved_49",
+];
+
 /// Fixed-size 50-float genome.
 ///
 /// All values are kept in `[0, 1]`; constructors and mutation respect this.
@@ -382,6 +438,31 @@ impl Genome {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slot_names_align_with_the_enum() {
+        assert_eq!(SLOT_NAMES[GenomeSlot::Size.idx()], "Size");
+        assert_eq!(SLOT_NAMES[GenomeSlot::MutationRate.idx()], "MutationRate");
+        assert_eq!(SLOT_NAMES[GenomeSlot::Agreeableness.idx()], "Agreeableness");
+        assert_eq!(SLOT_NAMES[GenomeSlot::Openness.idx()], "Openness");
+        assert_eq!(SLOT_NAMES[GenomeSlot::Territoriality.idx()], "Territoriality");
+        assert_eq!(SLOT_NAMES[GenomeSlot::CognitivePotential.idx()], "CognitivePotential");
+        assert_eq!(SLOT_NAMES[GenomeSlot::ExploreVsExploit.idx()], "ExploreVsExploit");
+        assert_eq!(SLOT_NAMES[GenomeSlot::Conscientiousness.idx()], "Conscientiousness");
+        assert_eq!(
+            SLOT_NAMES[GenomeSlot::CommunicationStrength.idx()],
+            "CommunicationStrength"
+        );
+        assert_eq!(SLOT_NAMES[GenomeSlot::IndividualLearning.idx()], "IndividualLearning");
+        assert_eq!(SLOT_NAMES[GenomeSlot::SocialLearning.idx()], "SocialLearning");
+        assert_eq!(SLOT_NAMES[GenomeSlot::InnateTechnique.idx()], "InnateTechnique");
+        assert_eq!(SLOT_NAMES[GenomeSlot::EnvAffinity.idx()], "EnvAffinity");
+        assert_eq!(SLOT_NAMES[GenomeSlot::TerrainAffinity.idx()], "TerrainAffinity");
+        assert_eq!(SLOT_NAMES[GenomeSlot::SexualDimorphism.idx()], "SexualDimorphism");
+        // Reserved slots stay visibly reserved.
+        assert!(SLOT_NAMES[8].starts_with("reserved_"));
+        assert!(SLOT_NAMES[49].starts_with("reserved_"));
+    }
 
     #[test]
     fn neutral_genome_is_all_half() {

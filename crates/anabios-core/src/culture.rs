@@ -249,10 +249,12 @@ pub fn culture_step(world: &mut World) {
         // scales with the holder's gene when gene_tech_coupling is on (identity
         // otherwise). Computed once for both spread sites in this iteration.
         let coupling = world.gene_tech_coupling;
-        let writing_gene =
-            crate::invention::affinity_gene(&world.agents.genome[i], crate::invention::WRITING);
         let meme_copy_rate = MEME_COPY_RATE
-            * crate::invention::spread_multiplier_coupled(self_mask, writing_gene, coupling);
+            * crate::invention::spread_multiplier_coupled(
+                self_mask,
+                &world.agents.genome[i],
+                coupling,
+            );
         for ch in 0..MEME_CHANNELS {
             // The skill and technique channels carry cumulative learned values
             // transmitted by their own social-learning rules below — they must NOT
@@ -304,13 +306,20 @@ pub fn culture_step(world: &mut World) {
         // held mask, so the tree can't be skipped socially either.
         if world.inventions_enabled {
             let rate = crate::invention::INVENTION_SPREAD_RATE
-                * crate::invention::spread_multiplier_coupled(self_mask, writing_gene, coupling);
+                * crate::invention::spread_multiplier_coupled(
+                    self_mask,
+                    &world.agents.genome[i],
+                    coupling,
+                );
             let cognition = world.cognition_enabled;
             let receiver_iq = world.agents.iq[i];
             // Material gate: with the economy on, the learner must hold the
             // invention's trade-goods basket to make progress, and pays it
             // when the copy crosses into functional adoption.
             let resources = world.resources_enabled;
+            // Genetic prerequisite gate: with gene_requirements on, a genome
+            // short of the invention's GeneReq stalls the apprenticeship too.
+            let gene_reqs = world.gene_requirements;
             for (k, &target) in max_neighbour_inv.iter().enumerate() {
                 if crate::invention::INVENTIONS[k].prereqs & !self_mask != 0 {
                     continue; // missing foundations
@@ -320,6 +329,9 @@ pub fn culture_step(world: &mut World) {
                 }
                 if !crate::invention::materials_permit(&world.agents.inventory[i], k, resources) {
                     continue; // can't afford the materials for this trait
+                }
+                if !crate::invention::gene_permits(&world.agents.genome[i], k, gene_reqs) {
+                    continue; // genome falls short of this trait's prerequisite
                 }
                 let ch = crate::invention::channel(k);
                 let cur = world.agents.meme_vector[i][ch];

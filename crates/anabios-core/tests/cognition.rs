@@ -85,7 +85,12 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // new Whittaker terrain reshapes the agents' environment — a genuine
     // trajectory change — on top of E13's livestock_of / domestication_enabled
     // layout. Regenerated from the merged code.
-    &[(0, 0x0cd1aa23416e1e7b), (100, 0x370d775f11c96340), (300, 0x0e695dafcec461a3)];
+    // Refreshed 2026-07-31 (invention requirements + full affinities,
+    // FORMAT_VERSION 22→23): World.gene_requirements added (off here); all
+    // inventions carry affinities and every buff site has a coupled variant,
+    // but gene_tech_coupling is off in this scenario so behavior is
+    // byte-identical — pure serialized-layout growth.
+    &[(0, 0x9dac7f3521effced), (100, 0x924cbfc640005e88), (300, 0x73c4b5dd69c38ba7)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

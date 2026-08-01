@@ -76,6 +76,12 @@ func _run(path: String, wait_frames: int) -> void:
 			if evo != null:
 				evo.set("_shown", true)
 				evo.visible = true
+		# Optionally reveal the [X] dual-inheritance helix for the capture.
+		if OS.has_environment("ANABIOS_HELIX"):
+			var helix := main.get_node_or_null("UI/HelixPanel")
+			if helix != null:
+				helix.set("_shown", true)
+				helix.visible = true
 		# Optionally pin an agent so the inspector panel is visible.
 		if OS.has_environment("ANABIOS_INSPECT"):
 			var sim2 := main.get_node_or_null("Simulation")

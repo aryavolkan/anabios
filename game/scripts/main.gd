@@ -138,6 +138,10 @@ func _ready() -> void:
 	evolution_panel.name = "EvolutionPanel"
 	evolution_panel.theme = UiTheme.build()
 	$UI.add_child(evolution_panel)
+	# Dual-inheritance helix: genome × meme strands + coupling rungs, [X].
+	var helix_panel := preload("res://scripts/helix_panel.gd").new()
+	helix_panel.name = "HelixPanel"
+	$UI.add_child(helix_panel)
 	# Capture hooks (inert in normal play): ANABIOS_PIN opens the inspector on a
 	# representative agent (a click otherwise); ANABIOS_ZOOM frames the camera on
 	# that agent so screenshot runs can show the field body art up close.

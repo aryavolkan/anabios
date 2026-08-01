@@ -8,14 +8,17 @@ gene_tech_coupling = true
 max_population = 400
 
 # TG1 gene↔tech coevolution demo. Same substrate as cognitive-coevolution, but
-# holding an invention now scales its buff by a coupled genome slot (Fire↔
+# every invention's buff scales with a coupled genome slot (Fire/Electricity↔
 # Openness, Farming↔Conscientiousness, Medicine↔CognitivePotential, Writing↔
-# CommunicationStrength) AND discovery is reweighted by that gene. So adoption
-# exerts directional selection on the genome (the tech→gene arm) while the gene
+# CommunicationStrength, Stone Tools↔IndividualLearning, Metalworking↔
+# Territoriality, Husbandry↔Agreeableness, Machinery↔ExploreVsExploit, Nuclear↔
+# MutationRate) AND discovery is reweighted by that gene. So adoption exerts
+# directional selection on the genome (the tech→gene arm) while the gene
 # distribution enables discovery (the gene→tech arm). Watch the coevolution
 # panel's affinity-selection series: a coupled gene's holder-mean should climb
 # above its non-holder mean once the invention adopts, and relax back if the
-# meme collapses (hysteresis).
+# meme collapses (hysteresis). The [X] helix panel shows the same couplings as
+# rungs between the genome and meme strands.
 
 # Innovators: high Openness → strong discovery of BOTH tech and practices; their
 # realized IQ decides which they can actually keep.

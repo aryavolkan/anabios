@@ -1,0 +1,50 @@
+name = "gene-requirements"
+seed = 0
+inventions_enabled = true
+cognition_enabled = true
+gene_tech_coupling = true
+gene_requirements = true
+resources_enabled = true
+# Keep the world below carrying-capacity saturation so gene↔tech coevolution —
+# not Malthusian collapse — drives the dynamics.
+max_population = 400
+
+# Full dual-inheritance demo: every invention carries BOTH a soft affinity
+# (its buff scales with a coupled genome slot, so adoption selects the genome)
+# AND a hard genetic prerequisite (culture waits on the genome: a lineage
+# whose slot value falls short can neither discover nor copy the tech), plus
+# richer era-scaled material baskets (the economy funds the climb). Watch the
+# [X] dual-inheritance helix: solid rungs are affinities (green when holders
+# carry more of the gene), dashed rungs are the hard prerequisites.
+
+# Innovators: high Openness → strong discovery of BOTH tech and practices; their
+# genome decides which gates they clear.
+[[agents]]
+count = 30
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 340.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Traditionalists: low Openness → weak discovery, strong social copying. The
+# gene gate decides which of their neighbours' tech they may apprentice into.
+[[agents]]
+count = 30
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 684.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Acultural control: no Communicator — the pre-culture baseline.
+[[agents]]
+count = 20
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 300.0, radius = 70.0 }
+[agents.traits]
+altruism = 0.0
+basal_metabolism = 0.6
+lifespan_bias = 1.0

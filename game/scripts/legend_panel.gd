@@ -41,7 +41,7 @@ func _process(_delta: float) -> void:
 	var g: int = clampi(overlay.ground_mode, 0, GROUND_NAMES.size() - 1)
 	var b: int = clampi(overlay.body_mode, 0, BODY_NAMES.size() - 1)
 	_controls.text = (
-		"[G] ground: %s\n[C] body: %s\n[M] module pips · [Y] co-evolution chart · [T] evolution · [F] reset view\n[R] replay event · [U] run to event · [V] event cam\n[H] hide · WASD/drag pan · wheel zoom · click inspect"
+		"[G] ground: %s\n[C] body: %s\n[M] module pips · [Y] co-evolution chart · [T] evolution · [X] DIT helix · [F] reset view\n[R] replay event · [U] run to event · [V] event cam\n[H] hide · WASD/drag pan · wheel zoom · click inspect"
 	) % [GROUND_NAMES[g], BODY_NAMES[b]]
 	var m: bool = module_layers.visible
 	if b != _last_body or m != _last_modules:

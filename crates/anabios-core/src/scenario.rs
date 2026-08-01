@@ -38,6 +38,11 @@ pub struct Scenario {
     /// versa. `false` (default) is bit-identical to no coupling.
     #[serde(default)]
     pub gene_tech_coupling: bool,
+    /// Opt-in: enforce each invention's hard genetic prerequisite
+    /// (`invention::GeneReq`) on discovery and social copying.
+    /// `false` (default) is bit-identical to no gate.
+    #[serde(default)]
+    pub gene_requirements: bool,
     /// Opt-in: enable the cognitive layer (per-agent realized IQ from the
     /// `CognitivePotential` gene + juvenile enrichment, with a metabolic cost).
     /// `false` (default) leaves metabolism and culture unchanged.
@@ -398,6 +403,7 @@ impl Scenario {
         w.terrain_habitat = self.terrain_habitat;
         w.inventions_enabled = self.inventions_enabled;
         w.gene_tech_coupling = self.gene_tech_coupling;
+        w.gene_requirements = self.gene_requirements;
         w.cognition_enabled = self.cognition_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
@@ -556,6 +562,35 @@ count = 5
         let s1 = Scenario::parse_toml(coupled).expect("parse");
         assert!(s1.gene_tech_coupling);
         assert!(s1.instantiate().gene_tech_coupling);
+    }
+
+    #[test]
+    fn gene_requirements_defaults_off_and_scenario_applies() {
+        // Omitting the field leaves it off (serde default) for baseline identity.
+        let base = r#"
+name = "base"
+seed = 1
+
+[[agents]]
+count = 5
+[agents.traits]
+"#;
+        let s0 = Scenario::parse_toml(base).expect("parse");
+        assert!(!s0.gene_requirements);
+        assert!(!s0.instantiate().gene_requirements);
+        // Setting it propagates into the instantiated world.
+        let gated = r#"
+name = "gated"
+seed = 1
+gene_requirements = true
+
+[[agents]]
+count = 5
+[agents.traits]
+"#;
+        let s1 = Scenario::parse_toml(gated).expect("parse");
+        assert!(s1.gene_requirements);
+        assert!(s1.instantiate().gene_requirements);
     }
 
     #[test]

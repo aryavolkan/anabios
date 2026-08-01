@@ -113,7 +113,7 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         let coupling = world.gene_tech_coupling;
         desired_bite *= crate::invention::graze_multiplier_coupled(
             inv_mask,
-            crate::invention::affinity_gene(&world.agents.genome[i], crate::invention::FARMING),
+            &world.agents.genome[i],
             coupling,
         );
         // Individual technique learning (env mode): an ONGOING cognitive process
@@ -147,10 +147,7 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
                 * FOOD_ENERGY_PER_BIOMASS
                 * crate::invention::food_energy_multiplier_coupled(
                     inv_mask,
-                    crate::invention::affinity_gene(
-                        &world.agents.genome[i],
-                        crate::invention::FIRE,
-                    ),
+                    &world.agents.genome[i],
                     coupling,
                 )
                 * quality_mult;
@@ -194,9 +191,11 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
             continue;
         }
         // Metalworking buff: better weapons deal more damage.
-        let inv_weapon_mult = crate::invention::weapon_multiplier(crate::invention::held_mask(
-            &world.agents.meme_vector[i],
-        ));
+        let inv_weapon_mult = crate::invention::weapon_multiplier_coupled(
+            crate::invention::held_mask(&world.agents.meme_vector[i]),
+            &world.agents.genome[i],
+            world.gene_tech_coupling,
+        );
         // E12: males of dimorphic species hit harder (identity when the flag
         // is off).
         let dimorph_mult = crate::dimorphism::damage_factor(
@@ -324,9 +323,11 @@ fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
                 world.carcasses[ci].flesh -= taken;
                 world.agents.energy[i] += taken
                     * FLESH_ENERGY_PER_UNIT
-                    * crate::invention::scavenge_multiplier(crate::invention::held_mask(
-                        &world.agents.meme_vector[i],
-                    ));
+                    * crate::invention::scavenge_multiplier_coupled(
+                        crate::invention::held_mask(&world.agents.meme_vector[i]),
+                        &world.agents.genome[i],
+                        world.gene_tech_coupling,
+                    );
             }
         }
     }
@@ -606,6 +607,7 @@ mod tests {
             &w.codex.hostility,
             &mut w.sensors,
             w.world_size,
+            false,
         );
 
         let total_salt_before: f32 =
@@ -653,6 +655,7 @@ mod tests {
             &w.codex.hostility,
             &mut w.sensors,
             w.world_size,
+            false,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         trade_pass(&mut w, &alive);
@@ -685,6 +688,7 @@ mod tests {
             &w.codex.hostility,
             &mut w.sensors,
             w.world_size,
+            false,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         trade_pass(&mut w, &alive);
