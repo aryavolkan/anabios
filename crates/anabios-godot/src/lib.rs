@@ -1174,6 +1174,46 @@ impl Simulation {
         out
     }
 
+    /// Active settlement sites: one dict per species with a formed settlement
+    /// (the codex `settlement_active` latch) — the centroid of its alive
+    /// members' learned home anchors plus the anchored member count. The
+    /// viewer draws the hut clusters at these points; count drives hut count.
+    /// Read-only view over `agents.anchor` + the codex latch.
+    #[func]
+    fn settlement_sites(&self) -> Array<VarDictionary> {
+        let mut out = Array::new();
+        let Some(w) = self.inner.as_ref() else {
+            return out;
+        };
+        if w.codex.settlement_active.is_empty() {
+            return out;
+        }
+        let mut acc: std::collections::BTreeMap<u32, (f64, f64, u32)> =
+            std::collections::BTreeMap::new();
+        for id in w.agents.iter_alive() {
+            let sid = w.agents.species_id[id as usize];
+            if !w.codex.settlement_active.contains(&sid) {
+                continue;
+            }
+            let a = w.agents.anchor[id as usize];
+            let e = acc.entry(sid).or_insert((0.0, 0.0, 0));
+            e.0 += a.x as f64;
+            e.1 += a.y as f64;
+            e.2 += 1;
+        }
+        for (sid, (sx, sy, n)) in acc {
+            if n == 0 {
+                continue;
+            }
+            let mut d = VarDictionary::new();
+            d.set("species_id", sid as i64);
+            d.set("pos", Vector2::new((sx / n as f64) as f32, (sy / n as f64) as f32));
+            d.set("members", n as i64);
+            out.push(&d);
+        }
+        out
+    }
+
     /// Number of module types (for the GDScript layer loop).
     #[func]
     fn module_type_count(&self) -> i64 {

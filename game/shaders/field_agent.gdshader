@@ -7,13 +7,13 @@ shader_type canvas_item;
 //   r = phase (0..1, derived from position so alive-index reshuffles don't pop)
 //   g = moving (1 walking, 0 idle)
 //   b = face_left (1 mirrors the sprite horizontally)
-//   a = action / 3 (0 none, 1 eat, 2 fight, 3 trade — from sim signals)
+//   a = action / 4 (0 none, 1 eat, 2 fight, 3 trade, 4 flee — sim signals)
 // Moving agents cycle contact -> passing -> counter-contact -> passing (a
 // step-lift-step gait with the bob baked into the passing pose); idle agents
 // hold the neutral pose and get a gentle procedural bob, so even a settled
 // cluster breathes. An acting agent holds its action still instead.
 
-uniform int frames = 7;
+uniform int frames = 8;
 // Walk cadence (frames/sec) and idle bob (Hz, amplitude in sprite heights).
 uniform float walk_fps = 5.0;
 uniform float bob_hz = 1.4;
@@ -43,10 +43,10 @@ void vertex() {
 
 void fragment() {
 	float u = mix(UV.x, 1.0 - UV.x, anim.b);
-	float act = anim.a * 3.0;
+	float act = anim.a * 4.0;
 	float fr;
 	if (act > 0.5) {
-		// Action stills live below the gait rows: 4 eat, 5 fight, 6 trade.
+		// Action stills live below the gait rows: 4 eat, 5 fight, 6 trade, 7 flee.
 		fr = 3.0 + act;
 	} else {
 		// Gait: s steps through 0..3 at walk_fps (phase-offset so a crowd

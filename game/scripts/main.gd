@@ -68,6 +68,11 @@ var _weather_t: float = 999.0
 var _dust: Array[GPUParticles2D] = []
 var _dust_idx: int = 0
 var _moving_sample: PackedVector2Array = PackedVector2Array()
+var _tracks_mmi: MultiMeshInstance2D = null
+var _tracks: Array = []  # entries: [pos: Vector2, ttl: float]
+var _climate: CanvasModulate = null
+var _settlement_layer: Node2D = null
+var _ember_ambient_t: float = 0.0
 var _fight_pts: PackedVector2Array = PackedVector2Array()
 var _trade_pts: PackedVector2Array = PackedVector2Array()
 var _event_cursor: int = 0
@@ -171,6 +176,29 @@ func _ready() -> void:
 	_make_dust_pool()
 	_make_fire_light_pool()
 	_make_weather()
+	# Footstep tracks: walkers leave a short-lived dotted trail behind them.
+	var tmm := MultiMesh.new()
+	tmm.transform_format = MultiMesh.TRANSFORM_2D
+	tmm.use_colors = true
+	tmm.mesh = bodies.multimesh.mesh
+	_tracks_mmi = MultiMeshInstance2D.new()
+	_tracks_mmi.name = "Tracks"
+	_tracks_mmi.multimesh = tmm
+	_tracks_mmi.texture = disc
+	_tracks_mmi.z_index = -1
+	add_child(_tracks_mmi)
+	move_child(_tracks_mmi, carcasses.get_index())
+	# Global climate grade: a subtle warm/cool wash tracking the sim's
+	# environmental optimum (affects the world canvas, not the UI layer).
+	_climate = CanvasModulate.new()
+	_climate.name = "Climate"
+	add_child(_climate)
+	move_child(_climate, 0)
+	# Settlement layer: hut clusters + farms at the codex settlement sites.
+	_settlement_layer = preload("res://scripts/settlement_layer.gd").new()
+	_settlement_layer.name = "SettlementLayer"
+	add_child(_settlement_layer)
+	move_child(_settlement_layer, module_layers.get_index())
 	_make_wrap_clones()
 	# Replay & event camera (E2): snapshot ring + R/U/V modes.
 	var replay_manager := preload("res://scripts/replay_manager.gd").new()
@@ -413,6 +441,14 @@ func _update_weather(delta: float) -> void:
 	if _weather_t < 0.5 or _snow == null:
 		return
 	_weather_t = 0.0
+	# Climate grade: the sim's global optimum washes the world subtly warm
+	# (hothouse) or cool (ice age); -1 means the environment system is off.
+	var opt: float = sim.env_optimum()
+	if _climate != null:
+		var target := Color(1, 1, 1)
+		if opt >= 0.0:
+			target = Color(0.94, 0.97, 1.05).lerp(Color(1.05, 1.0, 0.92), clampf(opt, 0.0, 1.0))
+		_climate.color = _climate.color.lerp(target, 0.25)
 	var res := int(sim.biome_resolution())
 	var colors: PackedColorArray = sim.biome_colors()
 	var world: float = sim.world_size()
@@ -421,7 +457,38 @@ func _update_weather(delta: float) -> void:
 	var cx := clampi(int(fposmod(cam.position.x, world) / world * res), 0, res - 1)
 	var cy := clampi(int(fposmod(cam.position.y, world) / world * res), 0, res - 1)
 	var c: Color = colors[cy * res + cx]
-	_snow.emitting = c.r > 0.5 and c.g > 0.55 and c.b > 0.5 and absf(c.r - c.b) < 0.08
+	var tundra := c.r > 0.5 and c.g > 0.55 and c.b > 0.5 and absf(c.r - c.b) < 0.08
+	# Tundra always snows; a deep global cold snap snows everywhere.
+	_snow.emitting = tundra or (opt >= 0.0 and opt < 0.2)
+
+# Footsteps: each walker sampled this frame drops a small fading track mark,
+# so migration paths and foraging loops read as trampled trails at close zoom.
+const TRACK_TTL: float = 1.4
+const TRACK_CAP: int = 256
+func _update_tracks(delta: float) -> void:
+	if _tracks_mmi == null:
+		return
+	if not paused:
+		for pos in _moving_sample:
+			if _tracks.size() >= TRACK_CAP:
+				_tracks.pop_front()
+			_tracks.append([pos, TRACK_TTL])
+	var write := 0
+	for t in _tracks:
+		t[1] -= delta
+		if t[1] > 0.0:
+			_tracks[write] = t
+			write += 1
+	_tracks.resize(write)
+	var mm: MultiMesh = _tracks_mmi.multimesh
+	var m := _tracks.size()
+	if m > mm.instance_count:
+		mm.instance_count = m
+	mm.visible_instance_count = m
+	for i in m:
+		var a: float = 0.20 * float(_tracks[i][1]) / TRACK_TTL
+		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(1.6, 1.6), 0.0, _tracks[i][0]))
+		mm.set_instance_color(i, Color(0.22, 0.18, 0.13, a))
 
 # Codex-driven effects: fire-kind events light up and throw embers; war-kind
 # events kick the camera. The cursor mirrors codex_panel's so a reload resets.
@@ -461,7 +528,7 @@ func _make_wrap_clones() -> void:
 	move_child(wrap, module_layers.get_index() + 1)
 	var sources: Array[MultiMeshInstance2D] = _body_mmis.duplicate()
 	sources.append_array(_death_mmis)
-	sources.append_array([carcasses, flashes, streaks, trade_routes])
+	sources.append_array([carcasses, flashes, streaks, trade_routes, _tracks_mmi])
 	for src in sources:
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
@@ -536,6 +603,13 @@ func _process(delta: float) -> void:
 	_update_fire_lights(delta)
 	_update_weather(delta)
 	_update_dust()
+	_update_tracks(delta)
+	# Hearth smoke: settled sites breathe an occasional ember wisp.
+	_ember_ambient_t += delta
+	if _ember_ambient_t > 1.6:
+		_ember_ambient_t = 0.0
+		if _settlement_layer != null and _settlement_layer.has_sites():
+			_spawn_embers(_settlement_layer.random_site_pos())
 	var rate: String = "paused" if paused else ("%d×" % ticks_per_frame)
 	var total: int = int(sim.total_trades())
 	var trades: String = "" if total == 0 else " · %d trades" % total
@@ -669,13 +743,14 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				_moving_sample.append(smooth[i])
 			var face_left: float = 1.0 if cos(rot) < 0.0 else 0.0
 			var phase: float = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
-			# Action pose from sim signals: near a combat streak's attacker end
-			# -> fight; near a trade route's trader end -> trade; idle with
-			# rising energy -> eat. Priority fight > trade > eat.
+			# Action pose from sim signals: near a combat streak's attacker
+			# end -> fight if standing to strike, flee if running; near a
+			# trade route's trader end -> trade; idle with rising energy ->
+			# eat. Priority fight/flee > trade > eat.
 			var act := 0.0
 			for fp in _fight_pts:
 				if smooth[i].distance_squared_to(fp) < 36.0:
-					act = 2.0
+					act = 2.0 if moving == 0.0 else 4.0
 					break
 			if act == 0.0:
 				for tp in _trade_pts:
@@ -687,7 +762,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				if pi >= 0 and pi < _prev_energy.size() \
 						and energies[i] > _prev_energy[pi] + 0.02:
 					act = 1.0
-			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / 3.0))
+			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / 4.0))
 
 	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
 	if module_layers.visible:

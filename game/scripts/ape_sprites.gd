@@ -58,12 +58,13 @@ const APES: Array = [
 const SPECIES_COUNT := 5
 const WALK_FRAME_COUNT := 4
 # The atlas stacks WALK_FRAME_COUNT gait poses, then one still per action
-# (eat / fight / trade) that main.gd derives from combat, trade and energy
-# signals; the shader switches to those rows when INSTANCE_CUSTOM.a != 0.
-const POSE_COUNT := 7
+# (eat / fight / trade / flee) that main.gd derives from combat, trade and
+# energy signals; the shader switches to those rows when INSTANCE_CUSTOM.a != 0.
+const POSE_COUNT := 8
 const POSE_EAT := 4
 const POSE_FIGHT := 5
 const POSE_TRADE := 6
+const POSE_FLEE := 7
 # Gait: 0 neutral (idle), 1 contact-left, 2 passing (whole figure lifted 1px —
 # the walk bob), 3 contact-right. The shader cycles 1→2→3→2 when moving and
 # holds 0 when idle, so the stride reads as step-lift-step-lift.
@@ -96,6 +97,10 @@ const FIELD_POSES: Array = [
 	[[6, 2, 4, 4, "c"], [7, 4, 2, 2, "s"], [7, 6, 2, 1, "c"], [4, 6, 8, 5, "c"],
 	[7, 7, 2, 2, "a"], [3, 7, 2, 4, "c"], [3, 10, 2, 1, "s"], [11, 6, 4, 2, "c"],
 	[14, 6, 1, 1, "s"], [6, 11, 2, 4, "c"], [9, 11, 2, 4, "c"]],
+	# 7 flee — leaning into a panicked run, both arms flung up
+	[[8, 2, 4, 4, "c"], [9, 4, 2, 2, "s"], [8, 6, 2, 1, "c"], [5, 6, 8, 5, "c"],
+	[8, 7, 2, 2, "a"], [3, 4, 2, 4, "c"], [3, 3, 2, 1, "s"], [12, 5, 2, 4, "c"],
+	[12, 4, 2, 1, "s"], [4, 11, 3, 4, "c"], [9, 12, 3, 3, "c"]],
 ]
 
 # Zone colours per species, keyed into PAL — matched to the inspector avatars,
