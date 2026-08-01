@@ -9,7 +9,7 @@ var _res: int = 0
 
 const REDRAW_EVERY := 6
 var _frame: int = 0
-var _last_mode: int = -999   # last (channel, or -1 biome, or -2 optimum) drawn
+var _last_mode: int = -999  # last (channel, or -1 biome, or -2 optimum) drawn
 # Rebuild interval, scaled up for big biomes: the per-pixel GDScript rebuild is
 # O(res²) (262k px at res=512), and the biome changes slowly, so large worlds
 # redraw less often. Default res (128) keeps the original 6-frame cadence.
@@ -25,6 +25,7 @@ var _tiles: Array[Sprite2D] = []
 # write (biome_mode) switches the whole ground between terrain and passthrough.
 const TerrainShader := preload("res://shaders/terrain.gdshader")
 var _terrain_mat: ShaderMaterial
+
 
 func _ready() -> void:
 	centered = false
@@ -51,6 +52,7 @@ func _ready() -> void:
 			add_child(tile)
 			_tiles.append(tile)
 	_setup(int(sim.biome_resolution()))
+
 
 # (Re)build the texture at `res`. Needed because the scenario loads AFTER this
 # child node's _ready (children ready before the Main parent), so at _ready the
@@ -83,6 +85,7 @@ func _setup(res: int) -> void:
 			tile.position = Vector2(gx * _res, gy * _res)
 	_redraw_interval = REDRAW_EVERY * maxi(1, _res / 128)
 	_last_mode = -999  # force an immediate redraw
+
 
 func _process(_delta: float) -> void:
 	var res: int = int(sim.biome_resolution())
@@ -121,7 +124,11 @@ func _process(_delta: float) -> void:
 	elif mode == -2:
 		# Flat tint whose hue encodes the current global optimum in [0,1].
 		var opt: float = sim.env_optimum()
-		var c: Color = Color.from_hsv(clampf(opt, 0.0, 1.0) * 0.8, 0.7, 0.5) if opt >= 0.0 else Color(0.1, 0.1, 0.12)
+		var c: Color = (
+			Color.from_hsv(clampf(opt, 0.0, 1.0) * 0.8, 0.7, 0.5)
+			if opt >= 0.0
+			else Color(0.1, 0.1, 0.12)
+		)
 		colors = PackedColorArray()
 		colors.resize(_res * _res)
 		colors.fill(c)
