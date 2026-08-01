@@ -37,14 +37,26 @@ const ReplayHighlight = preload("res://scripts/replay_highlight.gd")
 const CHAPTER_NAMES: PackedStringArray = preload("res://scripts/codex_panel.gd").CHAPTER_NAMES
 
 const GROUND_MODES := {
-	"biome": 0, "pheromone0": 1, "pheromone1": 2, "pheromone2": 3, "pheromone3": 4,
-	"env": 5, "succession": 6, "markets": 7,
+	"biome": 0,
+	"pheromone0": 1,
+	"pheromone1": 2,
+	"pheromone2": 3,
+	"pheromone3": 4,
+	"env": 5,
+	"succession": 6,
+	"markets": 7,
 }
 const BODY_MODES := {"species": 0, "dialect": 1, "diet": 2, "energy": 3}
 const PANEL_NODES := {
-	"evo": "EvolutionPanel", "coevo": "CoevolutionPanel", "tech": "TechPanel",
-	"inspector": "Inspector", "legend": "LegendPanel", "codex": "CodexPanel",
-	"population": "PopulationPanel", "dit": "DitPanel", "helix": "HelixPanel",
+	"evo": "EvolutionPanel",
+	"coevo": "CoevolutionPanel",
+	"tech": "TechPanel",
+	"inspector": "Inspector",
+	"legend": "LegendPanel",
+	"codex": "CodexPanel",
+	"population": "PopulationPanel",
+	"dit": "DitPanel",
+	"helix": "HelixPanel",
 }
 
 var _beats: Array = []
@@ -70,6 +82,7 @@ var _card: CanvasLayer = null
 @onready var camera: Camera2D = main.get_node("Camera2D")
 @onready var overlay: Node = main.get_node("OverlayManager")
 
+
 func _ready() -> void:
 	var path: String = OS.get_environment("ANABIOS_SHOWCASE")
 	var text: String = FileAccess.get_file_as_string(path)
@@ -78,7 +91,7 @@ func _ready() -> void:
 		return
 	var parsed: Variant = JSON.parse_string(text)
 	if not (parsed is Dictionary) or not (parsed as Dictionary).get("beats") is Array:
-		push_error("[showcase] bad timeline (need {\"beats\": [...]}) in " + path)
+		push_error('[showcase] bad timeline (need {"beats": [...]}) in ' + path)
 		return
 	_beats = (parsed as Dictionary)["beats"]
 	if _beats.is_empty():
@@ -93,6 +106,7 @@ func _ready() -> void:
 	_arm(_beats[0])
 	print("[showcase] playing %s (%d beats)" % [path, _beats.size()])
 
+
 func _arm(beat: Dictionary) -> void:
 	_event_cursor = int(sim.codex_event_count())
 	_wait_tick = int(beat.get("at_tick", -1))
@@ -105,6 +119,7 @@ func _arm(beat: Dictionary) -> void:
 		_recent_found = false
 	if _wait_tick < 0 and _wait_event.is_empty() and _wait_recent.is_empty() and _wait_delay < 0.0:
 		_fire(beat)  # no trigger: run immediately
+
 
 func _process(delta: float) -> void:
 	_update_follow(delta)
@@ -149,9 +164,11 @@ func _process(delta: float) -> void:
 		if _wait_delay <= 0.0:
 			_fire(beat)
 
+
 func _event_name(ev: Dictionary) -> String:
 	var t: int = int(ev.get("type", -1))
 	return CHAPTER_NAMES[t] if t >= 0 and t < CHAPTER_NAMES.size() else ""
+
 
 func _fire(beat: Dictionary) -> void:
 	print("[showcase] beat %d/%d @ tick %d" % [_idx + 1, _beats.size(), int(sim.tick())])
@@ -161,11 +178,13 @@ func _fire(beat: Dictionary) -> void:
 	if _idx < _beats.size():
 		_arm(_beats[_idx])
 
+
 # Event-triggered beats point the camera / highlight / follow at the event's
 # location — but some event types carry no meaningful location (loc == ZERO,
 # the world's corner). Like the replay manager, leave the camera be then.
 func _event_loc_valid() -> bool:
 	return _event_loc != Vector2.ZERO
+
 
 func _do(action: Dictionary) -> void:
 	for key in action:
@@ -175,7 +194,9 @@ func _do(action: Dictionary) -> void:
 				if _cam_tween != null:
 					_cam_tween.kill()
 				var dur: float = float(v.get("dur", 2.0))
-				var target := Vector2(float(v.get("x", camera.position.x)), float(v.get("y", camera.position.y)))
+				var target := Vector2(
+					float(v.get("x", camera.position.x)), float(v.get("y", camera.position.y))
+				)
 				if str(v.get("at", "")) == "event":
 					if not _event_loc_valid():
 						break  # no usable loc: hold the current shot
@@ -193,17 +214,20 @@ func _do(action: Dictionary) -> void:
 			"pause":
 				main.paused = bool(v)
 			"title":
-				_card.show_title(str(v.get("chapter", "")), str(v.get("subtitle", "")),
-					float(v.get("dur", 3.2)))
+				_card.show_title(
+					str(v.get("chapter", "")), str(v.get("subtitle", "")), float(v.get("dur", 3.2))
+				)
 			"lower_third":
 				_card.show_lower(str(v.get("text", "")), float(v.get("dur", 4.5)))
 			"ground":
 				# JSON numbers parse as floats; accept both numbers and names.
-				overlay.ground_mode = int(v) if v is float or v is int \
-					else int(GROUND_MODES.get(str(v), 0))
+				overlay.ground_mode = (
+					int(v) if v is float or v is int else int(GROUND_MODES.get(str(v), 0))
+				)
 			"body":
-				overlay.body_mode = int(v) if v is float or v is int \
-					else int(BODY_MODES.get(str(v), 0))
+				overlay.body_mode = (
+					int(v) if v is float or v is int else int(BODY_MODES.get(str(v), 0))
+				)
 			"panel":
 				var pname: String = str(v.get("name", ""))
 				if not PANEL_NODES.has(pname):
@@ -222,8 +246,11 @@ func _do(action: Dictionary) -> void:
 				if at_event and not _event_loc_valid():
 					break  # no usable loc: no ring
 				_highlight = ReplayHighlight.new()
-				_highlight.position = _event_loc if at_event \
+				_highlight.position = (
+					_event_loc
+					if at_event
 					else Vector2(float(v.get("x", 0.0)), float(v.get("y", 0.0)))
+				)
 				_highlight.z_index = 10
 				main.add_child(_highlight)
 			"clear_highlight":
@@ -239,11 +266,16 @@ func _do(action: Dictionary) -> void:
 					_cam_tween.kill()
 				_cam_tween = create_tween()
 				_cam_tween.set_trans(Tween.TRANS_BACK)
-				_cam_tween.tween_property(camera, "zoom", base * z, dur * 0.35) \
-					.set_ease(Tween.EASE_OUT)
+				_cam_tween.tween_property(camera, "zoom", base * z, dur * 0.35).set_ease(
+					Tween.EASE_OUT
+				)
 				_cam_tween.set_trans(Tween.TRANS_SINE)
-				_cam_tween.tween_property(camera, "zoom", base, dur * 0.65) \
-					.set_ease(Tween.EASE_IN_OUT).set_delay(dur * 0.35)
+				(
+					_cam_tween
+					. tween_property(camera, "zoom", base, dur * 0.65)
+					. set_ease(Tween.EASE_IN_OUT)
+					. set_delay(dur * 0.35)
+				)
 				camera.add_trauma(0.2)
 			"letterbox":
 				_card.set_letterbox(bool(v))
@@ -256,13 +288,16 @@ func _do(action: Dictionary) -> void:
 					_follow_id = int(sim.agent_near(_event_loc, 100000.0))
 				else:
 					var near: Array = v.get("near", [0.0, 0.0])
-					_follow_id = int(sim.agent_near(Vector2(float(near[0]), float(near[1])), 100000.0))
+					_follow_id = int(
+						sim.agent_near(Vector2(float(near[0]), float(near[1])), 100000.0)
+					)
 			"unfollow":
 				_follow_id = -1
 			"end":
 				get_tree().quit()
 			_:
 				push_warning("[showcase] unknown action " + key)
+
 
 # Ease the camera onto the followed agent each frame; drop the follow if the
 # agent died (the timeline should cut away with an explicit camera beat).
@@ -276,6 +311,7 @@ func _update_follow(delta: float) -> void:
 		return
 	var k: float = 1.0 - pow(1.0 - 0.12, delta * 60.0)
 	camera.position = camera.position.lerp(info["position"], k)
+
 
 func _clear_highlight() -> void:
 	if _highlight != null and is_instance_valid(_highlight):

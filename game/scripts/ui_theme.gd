@@ -14,6 +14,7 @@ const ACCENT_DIM := Color(0.30, 0.88, 0.70, 0.28)
 const TEXT := Color(0.86, 0.92, 0.93)
 const TEXT_DIM := Color(0.56, 0.67, 0.69)
 
+
 static func build() -> Theme:
 	var theme := Theme.new()
 
@@ -75,6 +76,7 @@ static func build() -> Theme:
 	theme.set_font_size("font_size", "PopupMenu", 13)
 
 	return theme
+
 
 static func _button_box(bg: Color, border: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()

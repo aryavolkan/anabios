@@ -23,6 +23,7 @@ var _chart: Control
 var _phylo: Label
 var _title: Label
 
+
 func _ready() -> void:
 	visible = false
 	var vb := VBoxContainer.new()
@@ -51,10 +52,12 @@ func _ready() -> void:
 	position.y = 40
 	position.x = 12
 
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_T:
 		_shown = not _shown
 		visible = _shown
+
 
 func _process(_delta: float) -> void:
 	if not _shown:
@@ -82,6 +85,7 @@ func _process(_delta: float) -> void:
 	if sorted.size() > PHYLO_MAX:
 		lines.append("+%d more species" % (sorted.size() - PHYLO_MAX))
 	_phylo.text = "\n".join(lines)
+
 
 func _draw_chart() -> void:
 	var sid: int = int(_chart.get_meta("sid", -1))

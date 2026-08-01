@@ -3,7 +3,9 @@ extends PanelContainer
 const UiTheme = preload("res://scripts/ui_theme.gd")
 const Palette = preload("res://scripts/palette.gd")
 
-const GROUND_NAMES := ["biome", "phero-0", "phero-1", "phero-2", "phero-3", "env-optimum", "succession", "markets"]
+const GROUND_NAMES := [
+	"biome", "phero-0", "phero-1", "phero-2", "phero-3", "env-optimum", "succession", "markets"
+]
 const BODY_NAMES := ["species", "dialect", "diet", "energy"]
 
 @onready var overlay = get_node("/root/Main/OverlayManager")
@@ -14,6 +16,7 @@ var _key_box: VBoxContainer
 var _expanded: bool = true
 var _last_body: int = -1
 var _last_modules: bool = true
+
 
 func _ready() -> void:
 	# Replace the scene's placeholder Label with our own layout.
@@ -29,10 +32,12 @@ func _ready() -> void:
 	_key_box.add_theme_constant_override("separation", 3)
 	vb.add_child(_key_box)
 
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
 		_expanded = not _expanded
 		_key_box.visible = _expanded
+
 
 func _process(_delta: float) -> void:
 	if not _expanded:
@@ -41,13 +46,15 @@ func _process(_delta: float) -> void:
 	var g: int = clampi(overlay.ground_mode, 0, GROUND_NAMES.size() - 1)
 	var b: int = clampi(overlay.body_mode, 0, BODY_NAMES.size() - 1)
 	_controls.text = (
-		"[G] ground: %s\n[C] body: %s\n[M] module pips · [Y] co-evolution chart · [T] evolution · [X] DIT helix · [F] reset view\n[R] replay event · [U] run to event · [V] event cam\n[H] hide · WASD/drag pan · wheel zoom · click inspect"
-	) % [GROUND_NAMES[g], BODY_NAMES[b]]
+		("[G] ground: %s\n[C] body: %s\n[M] module pips · [Y] co-evolution chart · [T] evolution · [X] DIT helix · [F] reset view\n[R] replay event · [U] run to event · [V] event cam\n[H] hide · WASD/drag pan · wheel zoom · click inspect")
+		% [GROUND_NAMES[g], BODY_NAMES[b]]
+	)
 	var m: bool = module_layers.visible
 	if b != _last_body or m != _last_modules:
 		_last_body = b
 		_last_modules = m
 		_rebuild_key(b)
+
 
 func _rebuild_key(body_mode: int) -> void:
 	for c in _key_box.get_children():
@@ -61,12 +68,15 @@ func _rebuild_key(body_mode: int) -> void:
 			_key_box.add_child(_header("body: hue = dialect"))
 		2:
 			_key_box.add_child(_header("body: diet"))
-			_key_box.add_child(_ramp_row(Color(0.3, 0.9, 0.4), Color(1.0, 0.3, 0.3), "herbivore", "carnivore"))
+			_key_box.add_child(
+				_ramp_row(Color(0.3, 0.9, 0.4), Color(1.0, 0.3, 0.3), "herbivore", "carnivore")
+			)
 		3:
 			_key_box.add_child(_header("body: energy"))
 			_key_box.add_child(_ramp_row(Color(0.2, 0.3, 0.8), Color(1.0, 0.9, 0.3), "low", "high"))
 		_:
 			_key_box.add_child(_header("body: species — each ape in its own colours"))
+
 
 func _header(text: String) -> Label:
 	var l := Label.new()
@@ -75,11 +85,13 @@ func _header(text: String) -> Label:
 	l.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
 	return l
 
+
 func _chip(col: Color) -> ColorRect:
 	var r := ColorRect.new()
 	r.color = col
 	r.custom_minimum_size = Vector2(12, 12)
 	return r
+
 
 func _swatch_wrap(colors: PackedColorArray, names: PackedStringArray) -> HFlowContainer:
 	var flow := HFlowContainer.new()
@@ -91,6 +103,7 @@ func _swatch_wrap(colors: PackedColorArray, names: PackedStringArray) -> HFlowCo
 			chip.tooltip_text = names[i]
 		flow.add_child(chip)
 	return flow
+
 
 func _ramp_row(a: Color, b: Color, left: String, right: String) -> HBoxContainer:
 	var row := HBoxContainer.new()

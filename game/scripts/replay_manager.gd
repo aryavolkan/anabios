@@ -19,12 +19,12 @@ const EVENT_CAM_DWELL: float = 15.0
 const EVENT_CAM_ZOOM: float = 2.0
 const EVENT_CAM_RECENT: int = 20
 
-var _ring: Array = []          # [{tick: int, bytes: PackedByteArray}]
+var _ring: Array = []  # [{tick: int, bytes: PackedByteArray}]
 var _last_ring_tick: int = -RING_EVERY
 
 var _replaying: bool = false
 var _replay_arrived: bool = false
-var _replay_target: int = -1   # event tick; pause at world tick == target + 1
+var _replay_target: int = -1  # event tick; pause at world tick == target + 1
 var _replay_loc: Vector2 = Vector2.ZERO
 var _live_backup: Dictionary = {}
 
@@ -47,6 +47,7 @@ var _banner: Label = null
 @onready var sim: Node = main.get_node("Simulation")
 @onready var camera: Camera2D = main.get_node("Camera2D")
 
+
 func _process(delta: float) -> void:
 	_capture_ring()
 	if _replaying:
@@ -67,14 +68,19 @@ func _process(delta: float) -> void:
 		if int(sim.codex_event_count()) > _until_count:
 			_stop_until(true)
 	elif _cam_active:
-		if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_A) \
-				or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_D):
+		if (
+			Input.is_key_pressed(KEY_W)
+			or Input.is_key_pressed(KEY_A)
+			or Input.is_key_pressed(KEY_S)
+			or Input.is_key_pressed(KEY_D)
+		):
 			stop_event_cam()
 		else:
 			_cam_timer -= delta
 			if _cam_timer <= 0.0:
 				_cam_index = (_cam_index + 1) % _cam_events.size()
 				_go_to_cam_event()
+
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
@@ -103,7 +109,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			elif _cam_active:
 				stop_event_cam()
 
+
 # --- snapshot ring ---------------------------------------------------------
+
 
 func _capture_ring() -> void:
 	if _replaying:
@@ -119,12 +127,17 @@ func _capture_ring() -> void:
 		_ring.pop_front()
 	_last_ring_tick = t
 
+
 func _nearest_snapshot(tick: int) -> Dictionary:
 	var best: Dictionary = {}
 	for entry in _ring:
-		if int(entry["tick"]) <= tick and (best.is_empty() or int(entry["tick"]) > int(best["tick"])):
+		if (
+			int(entry["tick"]) <= tick
+			and (best.is_empty() or int(entry["tick"]) > int(best["tick"]))
+		):
 			best = entry
 	return best
+
 
 func _latest_event() -> Dictionary:
 	var count: int = int(sim.codex_event_count())
@@ -135,7 +148,9 @@ func _latest_event() -> Dictionary:
 		return {}
 	return events[events.size() - 1]
 
+
 # --- [R] replay ------------------------------------------------------------
+
 
 func start_replay() -> void:
 	if _until_active:
@@ -148,7 +163,9 @@ func start_replay() -> void:
 		return
 	var snap: Dictionary = _nearest_snapshot(int(ev["tick"]))
 	if snap.is_empty():
-		_flash_banner("event older than the snapshot ring (%d ticks)" % (RING_EVERY * RING_CAP), 2.5)
+		_flash_banner(
+			"event older than the snapshot ring (%d ticks)" % (RING_EVERY * RING_CAP), 2.5
+		)
 		return
 	_live_backup = {
 		"bytes": sim.snapshot_bytes(),
@@ -169,6 +186,7 @@ func start_replay() -> void:
 	_replay_loc = ev["loc"]
 	_set_banner("REPLAY t=%d %s — rewinding…" % [_replay_target, _event_name(ev)], true)
 
+
 func _arrive_replay() -> void:
 	main.paused = true
 	# Events without a meaningful location (loc == ZERO) leave the camera be.
@@ -177,6 +195,7 @@ func _arrive_replay() -> void:
 		camera.zoom = Vector2(1.5, 1.5)
 		_spawn_highlight(_replay_loc)
 	_set_banner("REPLAY t=%d · [R]/Esc resume live" % _replay_target, true)
+
 
 func stop_replay() -> void:
 	_replaying = false
@@ -192,7 +211,9 @@ func stop_replay() -> void:
 		camera.zoom = _live_backup["cam_zoom"]
 		_live_backup = {}
 
+
 # --- [U] run until next event -----------------------------------------------
+
 
 func start_until() -> void:
 	if _replaying or _cam_active:
@@ -204,6 +225,7 @@ func start_until() -> void:
 	_until_active = true
 	_set_banner("RUNNING until next event · [U]/Esc cancel", true)
 
+
 func _stop_until(arrived: bool) -> void:
 	_until_active = false
 	main.ticks_per_frame = _until_speed
@@ -212,11 +234,15 @@ func _stop_until(arrived: bool) -> void:
 		var ev: Dictionary = _latest_event()
 		if not ev.is_empty() and ev["loc"] != Vector2.ZERO:
 			camera.position = ev["loc"]
-		_set_banner("event t=%d %s · resume when ready" % [int(ev.get("tick", 0)), _event_name(ev)], true)
+		_set_banner(
+			"event t=%d %s · resume when ready" % [int(ev.get("tick", 0)), _event_name(ev)], true
+		)
 	else:
 		_clear_banner()
 
+
 # --- [V] event camera --------------------------------------------------------
+
 
 func start_event_cam() -> void:
 	if _replaying or _until_active:
@@ -236,6 +262,7 @@ func start_event_cam() -> void:
 	_set_banner("EVENT CAM · [V]/Esc exit", true)
 	_go_to_cam_event()
 
+
 func _go_to_cam_event() -> void:
 	var ev: Dictionary = _cam_events[_cam_index]
 	_cam_timer = EVENT_CAM_DWELL
@@ -244,8 +271,13 @@ func _go_to_cam_event() -> void:
 	_cam_tween = create_tween()
 	_cam_tween.set_parallel(true)
 	_cam_tween.tween_property(camera, "position", ev["loc"], 1.2).set_trans(Tween.TRANS_SINE)
-	_cam_tween.tween_property(camera, "zoom", Vector2(EVENT_CAM_ZOOM, EVENT_CAM_ZOOM), 1.2).set_trans(Tween.TRANS_SINE)
+	(
+		_cam_tween
+		. tween_property(camera, "zoom", Vector2(EVENT_CAM_ZOOM, EVENT_CAM_ZOOM), 1.2)
+		. set_trans(Tween.TRANS_SINE)
+	)
 	_set_banner("EVENT CAM t=%d %s · [V]/Esc exit" % [int(ev["tick"]), _event_name(ev)], true)
+
 
 func stop_event_cam() -> void:
 	_cam_active = false
@@ -257,12 +289,15 @@ func stop_event_cam() -> void:
 	camera.zoom = _cam_saved_zoom
 	_clear_banner()
 
+
 # --- chrome ------------------------------------------------------------------
+
 
 func _event_name(ev: Dictionary) -> String:
 	var names: PackedStringArray = preload("res://scripts/codex_panel.gd").CHAPTER_NAMES
 	var t: int = int(ev.get("type", -1))
 	return names[t] if t >= 0 and t < names.size() else "event"
+
 
 func _set_banner(text: String, _pin: bool) -> void:
 	_clear_banner()
@@ -276,19 +311,24 @@ func _set_banner(text: String, _pin: bool) -> void:
 	_banner.position.y = 12
 	main.get_node("UI").add_child(_banner)
 
+
 func _flash_banner(text: String, seconds: float) -> void:
 	_set_banner(text, false)
 	var b: Label = _banner
-	get_tree().create_timer(seconds).timeout.connect(func() -> void:
-		if is_instance_valid(b):
-			b.queue_free()
-		if _banner == b:
-			_banner = null)
+	get_tree().create_timer(seconds).timeout.connect(
+		func() -> void:
+			if is_instance_valid(b):
+				b.queue_free()
+			if _banner == b:
+				_banner = null
+	)
+
 
 func _clear_banner() -> void:
 	if _banner != null and is_instance_valid(_banner):
 		_banner.queue_free()
 	_banner = null
+
 
 func _spawn_highlight(loc: Vector2) -> void:
 	_clear_highlight()
@@ -296,6 +336,7 @@ func _spawn_highlight(loc: Vector2) -> void:
 	_highlight.position = loc
 	_highlight.z_index = 10
 	main.add_child(_highlight)
+
 
 func _clear_highlight() -> void:
 	if _highlight != null and is_instance_valid(_highlight):
