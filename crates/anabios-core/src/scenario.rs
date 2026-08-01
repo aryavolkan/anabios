@@ -38,6 +38,11 @@ pub struct Scenario {
     /// versa. `false` (default) is bit-identical to no coupling.
     #[serde(default)]
     pub gene_tech_coupling: bool,
+    /// Opt-in: enforce each invention's hard genetic prerequisite
+    /// (`invention::GeneReq`) on discovery and social copying.
+    /// `false` (default) is bit-identical to no gate.
+    #[serde(default)]
+    pub gene_requirements: bool,
     /// Opt-in: enable the cognitive layer (per-agent realized IQ from the
     /// `CognitivePotential` gene + juvenile enrichment, with a metabolic cost).
     /// `false` (default) leaves metabolism and culture unchanged.
@@ -357,6 +362,12 @@ pub enum ScenarioError {
          invention tree the seeded meme channels are never read"
     )]
     InventionsDisabled,
+    #[error(
+        "hash_res must be >= 3 (got {0}): the spatial-hash neighbour query walks a \
+         3-cell ring, which aliases onto the same cells at a lower resolution and \
+         double-counts neighbours"
+    )]
+    InvalidHashRes(usize),
 }
 
 impl Scenario {
@@ -375,6 +386,11 @@ impl Scenario {
                 if crate::invention::id_from_name(name).is_none() {
                     return Err(ScenarioError::UnknownInvention(unknown_invention_msg(name)));
                 }
+            }
+        }
+        if let Some(hr) = scenario.hash_res {
+            if hr < 3 {
+                return Err(ScenarioError::InvalidHashRes(hr));
             }
         }
         Ok(scenario)
@@ -398,6 +414,7 @@ impl Scenario {
         w.terrain_habitat = self.terrain_habitat;
         w.inventions_enabled = self.inventions_enabled;
         w.gene_tech_coupling = self.gene_tech_coupling;
+        w.gene_requirements = self.gene_requirements;
         w.cognition_enabled = self.cognition_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
@@ -412,6 +429,7 @@ impl Scenario {
         w.settlement_enabled = self.settlement_enabled;
         w.sexual_dimorphism_enabled = self.sexual_dimorphism_enabled;
         w.domestication_enabled = self.domestication_enabled;
+        w.agents.track_livestock = self.domestication_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
@@ -556,6 +574,35 @@ count = 5
         let s1 = Scenario::parse_toml(coupled).expect("parse");
         assert!(s1.gene_tech_coupling);
         assert!(s1.instantiate().gene_tech_coupling);
+    }
+
+    #[test]
+    fn gene_requirements_defaults_off_and_scenario_applies() {
+        // Omitting the field leaves it off (serde default) for baseline identity.
+        let base = r#"
+name = "base"
+seed = 1
+
+[[agents]]
+count = 5
+[agents.traits]
+"#;
+        let s0 = Scenario::parse_toml(base).expect("parse");
+        assert!(!s0.gene_requirements);
+        assert!(!s0.instantiate().gene_requirements);
+        // Setting it propagates into the instantiated world.
+        let gated = r#"
+name = "gated"
+seed = 1
+gene_requirements = true
+
+[[agents]]
+count = 5
+[agents.traits]
+"#;
+        let s1 = Scenario::parse_toml(gated).expect("parse");
+        assert!(s1.gene_requirements);
+        assert!(s1.instantiate().gene_requirements);
     }
 
     #[test]
@@ -777,6 +824,19 @@ placement = { kind = "uniform" }
             err.to_string().contains("inventions_enabled"),
             "error should name the missing flag, got: {err}"
         );
+    }
+
+    #[test]
+    fn parse_toml_rejects_hash_res_below_three() {
+        // hash_res < 3 makes the spatial-hash ring alias and double-count
+        // neighbours; reject at load rather than silently mis-simulate in release.
+        for bad in [0usize, 1, 2] {
+            let text = format!("name = \"t\"\nseed = 1\nhash_res = {bad}\n");
+            let err = Scenario::parse_toml(&text).expect_err("hash_res < 3 must be rejected");
+            assert!(err.to_string().contains("hash_res"), "error should name hash_res, got: {err}");
+        }
+        // 3 and up are accepted.
+        assert!(Scenario::parse_toml("name = \"t\"\nseed = 1\nhash_res = 3\n").is_ok());
     }
 
     #[test]

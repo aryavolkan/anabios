@@ -126,6 +126,7 @@ pub fn perception_radius(
 /// Each agent's register is a pure function of the (immutable) world inputs,
 /// so the loop runs in parallel over rayon with index-disjoint writes —
 /// results are bit-identical to the serial ascending-id loop.
+#[allow(clippy::too_many_arguments)]
 pub fn sense_all(
     agents: &AgentBuffers,
     biome: &BiomeField,
@@ -134,6 +135,7 @@ pub fn sense_all(
     hostility: &std::collections::BTreeMap<(u32, u32), crate::codex::HostilityRecord>,
     registers: &mut [SensorRegister],
     world_size: f32,
+    gene_tech_coupling: bool,
 ) {
     use rayon::prelude::*;
     debug_assert!(registers.len() >= agents.capacity());
@@ -153,7 +155,15 @@ pub fn sense_all(
             return;
         }
         *reg = sense_one(
-            i as u32, agents, biome, pheromones, spatial, hostility, max_radius, world_size,
+            i as u32,
+            agents,
+            biome,
+            pheromones,
+            spatial,
+            hostility,
+            max_radius,
+            world_size,
+            gene_tech_coupling,
         );
     });
 }
@@ -169,15 +179,18 @@ fn sense_one(
     hostility: &std::collections::BTreeMap<(u32, u32), crate::codex::HostilityRecord>,
     max_radius: f32,
     world_size: f32,
+    gene_tech_coupling: bool,
 ) -> SensorRegister {
     let i = id as usize;
     let pos = agents.position[i];
     let genome = &agents.genome[i];
     // Electricity buff: powered sensors extend perception (identity at mask 0).
     let radius = perception_radius(&agents.modules[i], genome, max_radius)
-        * crate::invention::perception_multiplier(crate::invention::held_mask(
-            &agents.meme_vector[i],
-        ));
+        * crate::invention::perception_multiplier_coupled(
+            crate::invention::held_mask(&agents.meme_vector[i]),
+            genome,
+            gene_tech_coupling,
+        );
     let radius = radius.min(max_radius);
     if radius <= 0.0 {
         return SensorRegister::default();
@@ -381,6 +394,7 @@ mod tests {
             &w.codex.hostility,
             &mut regs,
             w.world_size,
+            false,
         );
         assert!(regs[0].local_plant_biomass > 0.0);
     }
@@ -402,6 +416,7 @@ mod tests {
             &w.codex.hostility,
             &mut regs,
             w.world_size,
+            false,
         );
         assert!(regs[0].has_neighbor);
         assert!((regs[0].nearest_neighbor_dist - 4.0).abs() < 1e-3);
@@ -425,6 +440,7 @@ mod tests {
             &w.codex.hostility,
             &mut regs,
             w.world_size,
+            false,
         );
         assert_eq!(regs[id as usize].local_plant_biomass, 0.0);
         assert!(!regs[id as usize].has_neighbor);
@@ -448,6 +464,7 @@ mod tests {
             &w.codex.hostility,
             &mut regs,
             w.world_size,
+            false,
         );
         assert!(regs[a as usize].crowding > 0, "neighbour seen while both alive");
 
@@ -461,6 +478,7 @@ mod tests {
             &w.codex.hostility,
             &mut regs,
             w.world_size,
+            false,
         );
         assert_eq!(
             format!("{:?}", regs[a as usize]),
@@ -484,6 +502,7 @@ mod tests {
             &w.codex.hostility,
             &mut regs,
             w.world_size,
+            false,
         );
         assert!(!regs[0].has_neighbor);
         assert_eq!(regs[0].nearest_neighbor_dist, f32::INFINITY);
@@ -511,6 +530,7 @@ mod tests {
             &w.codex.hostility,
             &mut regs,
             w.world_size,
+            false,
         );
         let r = regs[me as usize];
         assert_eq!(r.nearest_same_id, kin);
@@ -544,6 +564,7 @@ mod tests {
             &w.codex.hostility,
             &mut regs,
             w.world_size,
+            false,
         );
         let r = regs[me as usize];
         assert!(
@@ -574,6 +595,7 @@ mod tests {
             &w.codex.hostility,
             &mut regs,
             w.world_size,
+            false,
         );
         assert_eq!(regs[me as usize].crowding, 2);
     }

@@ -116,16 +116,20 @@ pub fn reproduce_all(world: &mut World) {
         // Spawn at midpoint of parents on the torus (account for wrap).
         let child_pos = midpoint_torus(a_pos, b_pos, world.world_size);
 
-        let a_modules = world.agents.modules[i].clone();
-        let b_modules = world.agents.modules[j].clone();
-        let child_modules =
-            crate::module::crossover_and_mutate(&a_modules, &b_modules, &mut world.rng);
+        // `crossover_and_mutate` only reads the parents, so borrow their module
+        // lists / programs in place instead of cloning them: `world.agents.*` and
+        // `world.rng` are disjoint fields, so the shared reads coexist with the
+        // `&mut rng`. Removes up to four heap allocations per birth; RNG order and
+        // inputs are unchanged, so the result is bit-identical.
+        let child_modules = crate::module::crossover_and_mutate(
+            &world.agents.modules[i],
+            &world.agents.modules[j],
+            &mut world.rng,
+        );
 
-        let a_program = world.agents.program[i].clone();
-        let b_program = world.agents.program[j].clone();
         let child_program = crate::program::crossover_and_mutate(
-            &a_program,
-            &b_program,
+            &world.agents.program[i],
+            &world.agents.program[j],
             &mut world.rng,
             world.war_enabled,
             world.settlement_enabled,
@@ -157,6 +161,8 @@ pub fn reproduce_all(world: &mut World) {
                 && world.agents.is_alive(pa)
             {
                 world.agents.livestock_of[child_id as usize] = pa;
+                // Arm the kill-time release (see domestication::husbandry_step).
+                world.agents.track_livestock = true;
             }
         }
 
