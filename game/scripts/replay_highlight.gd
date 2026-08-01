@@ -4,9 +4,11 @@ extends Node2D
 
 var _phase: float = 0.0
 
+
 func _process(delta: float) -> void:
 	_phase += delta
 	queue_redraw()
+
 
 func _draw() -> void:
 	var pulse: float = 0.5 + 0.5 * sin(_phase * 4.0)

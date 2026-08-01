@@ -11,6 +11,7 @@ const MAX_ROWS := 7
 @onready var list: VBoxContainer = $VBox
 var _frame: int = 0
 
+
 func _process(_delta: float) -> void:
 	_frame += 1
 	if _frame % REFRESH_EVERY != 0:
@@ -33,11 +34,15 @@ func _process(_delta: float) -> void:
 		var row := children[i + 1] as Label
 		# Reset color in case this label was previously the dimmed overflow row.
 		row.add_theme_color_override("font_color", UiTheme.TEXT)
-		row.text = "sp %d   n=%d   E=%.0f" % [int(s["species_id"]), int(s["count"]), float(s["mean_energy"])]
+		row.text = (
+			"sp %d   n=%d   E=%.0f"
+			% [int(s["species_id"]), int(s["count"]), float(s["mean_energy"])]
+		)
 	if overflow > 0:
 		var more := children[shown + 1] as Label
 		more.text = "+%d more species" % overflow
 		more.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
+
 
 func _sync_label_count(want: int) -> void:
 	var have: int = list.get_child_count()

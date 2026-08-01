@@ -17,9 +17,11 @@ var _pan_vel: Vector2 = Vector2.ZERO
 var _trauma: float = 0.0
 var _shake_t: float = 0.0
 
+
 func _ready() -> void:
 	_fit_to_world()
 	_target_zoom = zoom.x
+
 
 # Frame the whole world: fill the viewport (larger ratio wins, so there are no
 # empty gutters) and center on the world's midpoint.
@@ -36,6 +38,7 @@ func _fit_to_world() -> void:
 	zoom = Vector2(z, z)
 	_target_zoom = z
 	position = Vector2(world * 0.5, world * 0.5)
+
 
 # Frame the living cluster (the bounding box of all agents) instead of the empty
 # whole world, so a run opens on the action — with the agents now little
@@ -66,12 +69,14 @@ func fit_to_agents() -> void:
 	_target_zoom = z
 	position = c
 
+
 # Combat and other high-energy events feed trauma here; _process decays it and
 # turns the remainder into a screen-space shake via `offset`, so the camera's
 # position/zoom (and anything scripting them, like the showcase director) are
 # never disturbed.
 func add_trauma(amount: float) -> void:
 	_trauma = clampf(_trauma + amount, 0.0, TRAUMA_MAX)
+
 
 func _input(event: InputEvent) -> void:
 	if GameConfig.showcase_active:
@@ -101,6 +106,7 @@ func _input(event: InputEvent) -> void:
 		position -= mm.relative / zoom.x
 		_pan_vel = -mm.relative / zoom.x * 60.0
 
+
 # Discrete key toggles go through _unhandled_key_input (matches overlay_manager
 # [G]/[C] and legend [H]), so a focused text field could consume them first.
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -109,13 +115,18 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
 		_fit_to_world()
 
+
 func _process(delta: float) -> void:
 	if not GameConfig.showcase_active:
 		var v := Vector2.ZERO
-		if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):    v.y -= 1
-		if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):  v.y += 1
-		if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):  v.x -= 1
-		if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT): v.x += 1
+		if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+			v.y -= 1
+		if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+			v.y += 1
+		if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+			v.x -= 1
+		if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+			v.x += 1
 		if v != Vector2.ZERO:
 			position += v.normalized() * (PAN_SPEED_KEYS * delta) / zoom.x
 			_pan_vel = Vector2.ZERO
@@ -143,8 +154,12 @@ func _process(delta: float) -> void:
 		_trauma = maxf(0.0, _trauma - TRAUMA_DECAY * delta)
 		_shake_t += delta * 28.0
 		var mag := SHAKE_MAX * _trauma * _trauma
-		offset = Vector2(
-			sin(_shake_t * 1.3) * 0.6 + sin(_shake_t * 3.7) * 0.4,
-			cos(_shake_t * 1.7) * 0.6 + cos(_shake_t * 4.3) * 0.4) * mag
+		offset = (
+			Vector2(
+				sin(_shake_t * 1.3) * 0.6 + sin(_shake_t * 3.7) * 0.4,
+				cos(_shake_t * 1.7) * 0.6 + cos(_shake_t * 4.3) * 0.4
+			)
+			* mag
+		)
 	elif offset != Vector2.ZERO:
 		offset = Vector2.ZERO

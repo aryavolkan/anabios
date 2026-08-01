@@ -2,77 +2,116 @@ extends PanelContainer
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
 const CHAPTER_NAMES: PackedStringArray = [
-	"Extinction", "PopCrash", "Speciation", "Migration", "NovelModule", "NovelBehavior",
-	"Predation", "CombatRaid", "ArmsRace", "Territory", "NichePartition",
-	"Dialect", "MemeSweep", "AlarmCall", "Cooperation", "PackHunting", "HerdCohesion",
-	"Discovery", "Adoption", "BadIdea", "BadAdopt", "Trade", "MaterialLearn",
-	"PopCycle", "BoomBust", "CarryingCap", "TrophicCascade",
-	"RangeExpand", "Segregation", "Corridor", "Succession",
-	"TraitFixed", "RapidAdapt", "Convergent",
-	"Ambush", "ToolUse", "Flight", "Signaling",
-	"War", "WarEnded", "Alliance", "KinNetwork",
-	"Settlement", "Market", "Specialists",
-	"Tradition", "Radiation", "Ratchet",
+	"Extinction",
+	"PopCrash",
+	"Speciation",
+	"Migration",
+	"NovelModule",
+	"NovelBehavior",
+	"Predation",
+	"CombatRaid",
+	"ArmsRace",
+	"Territory",
+	"NichePartition",
+	"Dialect",
+	"MemeSweep",
+	"AlarmCall",
+	"Cooperation",
+	"PackHunting",
+	"HerdCohesion",
+	"Discovery",
+	"Adoption",
+	"BadIdea",
+	"BadAdopt",
+	"Trade",
+	"MaterialLearn",
+	"PopCycle",
+	"BoomBust",
+	"CarryingCap",
+	"TrophicCascade",
+	"RangeExpand",
+	"Segregation",
+	"Corridor",
+	"Succession",
+	"TraitFixed",
+	"RapidAdapt",
+	"Convergent",
+	"Ambush",
+	"ToolUse",
+	"Flight",
+	"Signaling",
+	"War",
+	"WarEnded",
+	"Alliance",
+	"KinNetwork",
+	"Settlement",
+	"Market",
+	"Specialists",
+	"Tradition",
+	"Radiation",
+	"Ratchet",
 	"Maladaptation",
-	"SexSelect", "SexRatio",
-	"Domesticated", "LivestockHerd"
+	"SexSelect",
+	"SexRatio",
+	"Domesticated",
+	"LivestockHerd"
 ]
 # One color per event type so the timeline is scannable at a glance (matches
 # the co-evolution chart's marker hues where they overlap).
 const CHAPTER_COLORS: PackedColorArray = [
-	Color(1.0, 0.42, 0.42),   # 0 Extinction  — red
-	Color(1.0, 0.62, 0.35),   # 1 PopCrash    — orange
-	Color(0.55, 0.85, 1.0),   # 2 Speciation  — cyan
-	Color(0.65, 0.75, 1.0),   # 3 Migration   — blue
-	Color(1.0, 0.85, 0.4),    # 4 NovelModule — amber
-	Color(0.55, 0.95, 0.6),   # 5 NovelBehavior — green
-	Color(1.0, 0.5, 0.5),     # 6 Predation   — salmon
-	Color(1.0, 0.55, 0.3),    # 7 CombatRaid  — deep orange
-	Color(1.0, 0.5, 0.85),    # 8 ArmsRace    — magenta
-	Color(0.45, 0.9, 0.85),   # 9 Territory   — teal
-	Color(0.7, 0.95, 0.5),    # 10 NichePartition — lime
-	Color(1.0, 0.7, 0.35),    # 11 Dialect    — light orange
-	Color(1.0, 0.9, 0.4),     # 12 MemeSweep  — yellow
-	Color(1.0, 0.6, 0.75),    # 13 AlarmCall  — pink
-	Color(0.6, 1.0, 0.7),     # 14 Cooperation — mint
-	Color(0.85, 0.7, 0.5),    # 15 PackHunting — tan
-	Color(0.6, 0.8, 1.0),     # 16 HerdCohesion — sky
-	Color(1.0, 0.9, 0.35),    # 17 Discovery  — gold
-	Color(0.55, 0.95, 1.0),   # 18 Adoption   — light sky
+	Color(1.0, 0.42, 0.42),  # 0 Extinction  — red
+	Color(1.0, 0.62, 0.35),  # 1 PopCrash    — orange
+	Color(0.55, 0.85, 1.0),  # 2 Speciation  — cyan
+	Color(0.65, 0.75, 1.0),  # 3 Migration   — blue
+	Color(1.0, 0.85, 0.4),  # 4 NovelModule — amber
+	Color(0.55, 0.95, 0.6),  # 5 NovelBehavior — green
+	Color(1.0, 0.5, 0.5),  # 6 Predation   — salmon
+	Color(1.0, 0.55, 0.3),  # 7 CombatRaid  — deep orange
+	Color(1.0, 0.5, 0.85),  # 8 ArmsRace    — magenta
+	Color(0.45, 0.9, 0.85),  # 9 Territory   — teal
+	Color(0.7, 0.95, 0.5),  # 10 NichePartition — lime
+	Color(1.0, 0.7, 0.35),  # 11 Dialect    — light orange
+	Color(1.0, 0.9, 0.4),  # 12 MemeSweep  — yellow
+	Color(1.0, 0.6, 0.75),  # 13 AlarmCall  — pink
+	Color(0.6, 1.0, 0.7),  # 14 Cooperation — mint
+	Color(0.85, 0.7, 0.5),  # 15 PackHunting — tan
+	Color(0.6, 0.8, 1.0),  # 16 HerdCohesion — sky
+	Color(1.0, 0.9, 0.35),  # 17 Discovery  — gold
+	Color(0.55, 0.95, 1.0),  # 18 Adoption   — light sky
 	Color(0.95, 0.45, 0.55),  # 19 PracticeDiscovered — rose
-	Color(0.85, 0.3, 0.3),    # 20 PracticeAdopted    — dark red
-	Color(0.95, 0.8, 0.45),   # 21 ResourceTraded     — wheat
-	Color(0.8, 0.95, 0.9),    # 22 MaterialLearning    — pale mint
-	Color(0.55, 0.75, 1.0),   # 23 PopCycle       — sky blue
-	Color(1.0, 0.6, 0.25),    # 24 BoomBust       — hot orange
-	Color(0.5, 0.9, 0.55),    # 25 CarryingCap    — steady green
-	Color(0.75, 0.55, 1.0),   # 26 TrophicCascade — violet
-	Color(0.45, 0.85, 0.5),   # 27 RangeExpand    — spring green
-	Color(0.95, 0.75, 0.4),   # 28 Segregation    — sand
-	Color(0.6, 0.7, 0.95),    # 29 Corridor       — periwinkle
-	Color(0.55, 0.9, 0.75),   # 30 Succession     — new growth
-	Color(0.85, 0.85, 0.5),   # 31 TraitFixed     — olive
-	Color(1.0, 0.55, 0.45),   # 32 RapidAdapt     — vermillion
-	Color(0.5, 0.8, 0.9),     # 33 Convergent     — steel blue
-	Color(0.9, 0.5, 0.4),     # 34 Ambush        — ember
-	Color(0.8, 0.8, 0.65),    # 35 ToolUse       — bone
-	Color(0.55, 0.9, 1.0),    # 36 Flight        — sky
-	Color(0.95, 0.85, 0.5),   # 37 Signaling     — beacon
-	Color(1.0, 0.35, 0.3),    # 38 War           — blood red
-	Color(0.7, 0.7, 0.75),    # 39 WarEnded      — ash
-	Color(0.55, 0.95, 0.8),   # 40 Alliance      — pact teal
-	Color(0.9, 0.8, 0.55),    # 41 KinNetwork    — family gold
-	Color(0.85, 0.65, 0.4),   # 42 Settlement    — hearth
-	Color(1.0, 0.8, 0.3),     # 43 Market        — amber market
+	Color(0.85, 0.3, 0.3),  # 20 PracticeAdopted    — dark red
+	Color(0.95, 0.8, 0.45),  # 21 ResourceTraded     — wheat
+	Color(0.8, 0.95, 0.9),  # 22 MaterialLearning    — pale mint
+	Color(0.55, 0.75, 1.0),  # 23 PopCycle       — sky blue
+	Color(1.0, 0.6, 0.25),  # 24 BoomBust       — hot orange
+	Color(0.5, 0.9, 0.55),  # 25 CarryingCap    — steady green
+	Color(0.75, 0.55, 1.0),  # 26 TrophicCascade — violet
+	Color(0.45, 0.85, 0.5),  # 27 RangeExpand    — spring green
+	Color(0.95, 0.75, 0.4),  # 28 Segregation    — sand
+	Color(0.6, 0.7, 0.95),  # 29 Corridor       — periwinkle
+	Color(0.55, 0.9, 0.75),  # 30 Succession     — new growth
+	Color(0.85, 0.85, 0.5),  # 31 TraitFixed     — olive
+	Color(1.0, 0.55, 0.45),  # 32 RapidAdapt     — vermillion
+	Color(0.5, 0.8, 0.9),  # 33 Convergent     — steel blue
+	Color(0.9, 0.5, 0.4),  # 34 Ambush        — ember
+	Color(0.8, 0.8, 0.65),  # 35 ToolUse       — bone
+	Color(0.55, 0.9, 1.0),  # 36 Flight        — sky
+	Color(0.95, 0.85, 0.5),  # 37 Signaling     — beacon
+	Color(1.0, 0.35, 0.3),  # 38 War           — blood red
+	Color(0.7, 0.7, 0.75),  # 39 WarEnded      — ash
+	Color(0.55, 0.95, 0.8),  # 40 Alliance      — pact teal
+	Color(0.9, 0.8, 0.55),  # 41 KinNetwork    — family gold
+	Color(0.85, 0.65, 0.4),  # 42 Settlement    — hearth
+	Color(1.0, 0.8, 0.3),  # 43 Market        — amber market
 	Color(0.65, 0.85, 0.95),  # 44 SpecializationSplit — craftsman blue
-	Color(0.9, 0.75, 0.5),    # 45 Tradition      — parchment
-	Color(0.7, 0.6, 1.0),     # 46 Radiation      — violet bloom
-	Color(0.5, 0.85, 0.7),    # 47 Ratchet        — institutional green
-	Color(0.8, 0.45, 0.35),   # 48 Maladaptation  — stranded rust
-	Color(1.0, 0.55, 0.75),   # 49 SexualSelection — display pink
-	Color(0.65, 0.55, 0.9),   # 50 SexRatioCollapse — faint violet
-	Color(0.85, 0.7, 0.45),   # 51 AnimalDomesticated — leather tan
-	Color(0.6, 0.85, 0.55),   # 52 LivestockHerd     — pasture green
+	Color(0.9, 0.75, 0.5),  # 45 Tradition      — parchment
+	Color(0.7, 0.6, 1.0),  # 46 Radiation      — violet bloom
+	Color(0.5, 0.85, 0.7),  # 47 Ratchet        — institutional green
+	Color(0.8, 0.45, 0.35),  # 48 Maladaptation  — stranded rust
+	Color(1.0, 0.55, 0.75),  # 49 SexualSelection — display pink
+	Color(0.65, 0.55, 0.9),  # 50 SexRatioCollapse — faint violet
+	Color(0.85, 0.7, 0.45),  # 51 AnimalDomesticated — leather tan
+	Color(0.6, 0.85, 0.55),  # 52 LivestockHerd     — pasture green
 ]
 const MAX_RECENT: int = 30
 
@@ -85,6 +124,7 @@ var _cursor: int = 0
 @onready var counts_label: Label = $VBox/Counts
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
 
+
 func _ready() -> void:
 	# These arrays are indexed by the core EventType discriminant. The name/color
 	# pair is a hard invariant we control, so assert it. The match against the
@@ -93,17 +133,22 @@ func _ready() -> void:
 	# unsized and spam an out-of-bounds every frame. Warn and carry on; the tally
 	# is sized to the larger of the two so indexing by event type is always safe
 	# and known events still render.
-	assert(CHAPTER_NAMES.size() == CHAPTER_COLORS.size(),
-		"codex name/color arrays out of sync")
+	assert(CHAPTER_NAMES.size() == CHAPTER_COLORS.size(), "codex name/color arrays out of sync")
 	var core_count: int = int(sim.event_type_count())
 	if CHAPTER_NAMES.size() != core_count:
-		push_warning("codex: %d display event types vs %d core EventTypes — add the missing name/color; showing the known ones" % [CHAPTER_NAMES.size(), core_count])
+		push_warning(
+			(
+				"codex: %d display event types vs %d core EventTypes — add the missing name/color; showing the known ones"
+				% [CHAPTER_NAMES.size(), core_count]
+			)
+		)
 	# The running tally reads as the panel's title — mark it with the accent.
 	counts_label.add_theme_color_override("font_color", UiTheme.ACCENT)
 	# With this many event types the single-line tally overflows the panel; wrap.
 	counts_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_counts.resize(maxi(CHAPTER_NAMES.size(), core_count))
 	_counts.fill(0)
+
 
 func _process(_delta: float) -> void:
 	# Event log is cleared on scenario (re)load; a shrink below our cursor means
@@ -124,6 +169,7 @@ func _process(_delta: float) -> void:
 		while _recent.size() > MAX_RECENT:
 			_recent.pop_front()
 	_render()
+
 
 func _render() -> void:
 	# Show only event types that have actually occurred — most of the 23 are
@@ -150,6 +196,7 @@ func _render() -> void:
 		var loc: Vector2 = ev["loc"]
 		btn.pressed.connect(_jump_to.bind(loc))
 		recent_list.add_child(btn)
+
 
 func _jump_to(loc: Vector2) -> void:
 	if loc != Vector2.ZERO:
