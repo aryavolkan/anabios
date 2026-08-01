@@ -804,10 +804,7 @@ mod tests {
         for inv in INVENTIONS.iter() {
             assert!(inv.affinity.is_some(), "{} has no affinity", inv.name);
         }
-        assert_eq!(
-            INVENTIONS[FIRE].affinity.unwrap().slot as usize,
-            GenomeSlot::Openness as usize
-        );
+        assert_eq!(INVENTIONS[FIRE].affinity.unwrap().slot as usize, GenomeSlot::Openness as usize);
         assert_eq!(
             INVENTIONS[FARMING].affinity.unwrap().slot as usize,
             GenomeSlot::Conscientiousness as usize
@@ -890,7 +887,9 @@ mod tests {
         assert_eq!(graze_multiplier_coupled(farm, &lo, false), graze_multiplier(farm));
         assert_eq!(graze_multiplier_coupled(farm, &hi, false), graze_multiplier(farm));
         // ON, gene = 0.5: neutral, equals base.
-        assert!((graze_multiplier_coupled(farm, &neutral, true) - graze_multiplier(farm)).abs() < 1e-6);
+        assert!(
+            (graze_multiplier_coupled(farm, &neutral, true) - graze_multiplier(farm)).abs() < 1e-6
+        );
         // ON: strictly increasing in the gene; the Farming term is what moves.
         let lo_m = graze_multiplier_coupled(farm, &lo, true);
         let hi_m = graze_multiplier_coupled(farm, &hi, true);

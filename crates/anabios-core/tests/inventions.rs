@@ -666,11 +666,13 @@ fn discovery_is_blocked_below_the_gene_gate() {
         invention::invention_step(&mut w);
     }
     assert!(
-        ids.iter().any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::METALWORKING)),
+        ids.iter()
+            .any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::METALWORKING)),
         "the cleared gate (Territoriality) must permit Metalworking"
     );
     assert!(
-        ids.iter().all(|&id| !invention::has(&w.agents.meme_vector[id as usize], invention::FARMING)),
+        ids.iter()
+            .all(|&id| !invention::has(&w.agents.meme_vector[id as usize], invention::FARMING)),
         "Conscientiousness below the gate must block Farming forever"
     );
     // Lift the genetic block: Farming becomes discoverable.
@@ -682,7 +684,9 @@ fn discovery_is_blocked_below_the_gene_gate() {
     let mut farmed = false;
     for _ in 0..20_000 {
         invention::invention_step(&mut w);
-        if ids.iter().any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::FARMING))
+        if ids
+            .iter()
+            .any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::FARMING))
         {
             farmed = true;
             break;
@@ -713,7 +717,9 @@ fn discovery_gene_gate_is_identity_when_flag_off() {
     let mut farmed = false;
     for _ in 0..20_000 {
         invention::invention_step(&mut w);
-        if ids.iter().any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::FARMING))
+        if ids
+            .iter()
+            .any(|&id| invention::has(&w.agents.meme_vector[id as usize], invention::FARMING))
         {
             farmed = true;
             break;

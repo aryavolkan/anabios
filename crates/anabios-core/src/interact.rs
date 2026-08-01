@@ -111,11 +111,8 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         // the agent holds nothing (flag-off masks are always 0).
         let inv_mask = crate::invention::held_mask(&world.agents.meme_vector[i]);
         let coupling = world.gene_tech_coupling;
-        desired_bite *= crate::invention::graze_multiplier_coupled(
-            inv_mask,
-            &world.agents.genome[i],
-            coupling,
-        );
+        desired_bite *=
+            crate::invention::graze_multiplier_coupled(inv_mask, &world.agents.genome[i], coupling);
         // Individual technique learning (env mode): an ONGOING cognitive process
         // that runs each foraging tick, decoupled from whether this tick's bite
         // landed — so a learner's technique tracks the shifting optimum reliably,

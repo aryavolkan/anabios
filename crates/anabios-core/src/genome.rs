@@ -449,10 +449,7 @@ mod tests {
         assert_eq!(SLOT_NAMES[GenomeSlot::CognitivePotential.idx()], "CognitivePotential");
         assert_eq!(SLOT_NAMES[GenomeSlot::ExploreVsExploit.idx()], "ExploreVsExploit");
         assert_eq!(SLOT_NAMES[GenomeSlot::Conscientiousness.idx()], "Conscientiousness");
-        assert_eq!(
-            SLOT_NAMES[GenomeSlot::CommunicationStrength.idx()],
-            "CommunicationStrength"
-        );
+        assert_eq!(SLOT_NAMES[GenomeSlot::CommunicationStrength.idx()], "CommunicationStrength");
         assert_eq!(SLOT_NAMES[GenomeSlot::IndividualLearning.idx()], "IndividualLearning");
         assert_eq!(SLOT_NAMES[GenomeSlot::SocialLearning.idx()], "SocialLearning");
         assert_eq!(SLOT_NAMES[GenomeSlot::InnateTechnique.idx()], "InnateTechnique");

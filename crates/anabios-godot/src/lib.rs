@@ -649,9 +649,8 @@ impl Simulation {
     /// culture channels, then the invention tree, then the practices.
     #[func]
     fn meme_channel_catalog(&self) -> PackedStringArray {
-        const BASE: [&str; anabios_core::invention::INVENTION_CHANNEL_BASE] = [
-            "alarm", "dialect", "cooperation", "hunt", "meme_4", "skill", "technique", "meme_7",
-        ];
+        const BASE: [&str; anabios_core::invention::INVENTION_CHANNEL_BASE] =
+            ["alarm", "dialect", "cooperation", "hunt", "meme_4", "skill", "technique", "meme_7"];
         let mut out = PackedStringArray::new();
         for name in BASE.iter() {
             out.push(*name);
