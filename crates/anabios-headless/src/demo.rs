@@ -131,10 +131,23 @@ pub fn run(scenario_path: PathBuf, ticks: u64, seed: Option<u64>, report_every: 
             invention::for_each_set_bit(inv.prereqs, |p| names.push(INVENTIONS[p].key));
             names.join("+")
         };
+        let gene = match inv.gene_req {
+            Some(req) => format!("gene: {:?}>{:.2}", req.slot, req.min),
+            None => "gene: —".to_string(),
+        };
+        let goods: Vec<String> = inv
+            .materials
+            .iter()
+            .enumerate()
+            .filter(|(_, &c)| c > 0.0)
+            .map(|(g, &c)| format!("{}×{:.0}", ["salt", "obsidian", "amber", "spice"][g], c))
+            .collect();
+        let basket = if goods.is_empty() { "—".to_string() } else { goods.join("+") };
         println!(
             "  [era {}] {:<14} needs {:<22} buff: {:<28} debuff: {}",
             inv.era, inv.key, prereq, inv.buff, inv.debuff
         );
+        println!("       {:<22} materials: {}", gene, basket);
     }
     println!();
 

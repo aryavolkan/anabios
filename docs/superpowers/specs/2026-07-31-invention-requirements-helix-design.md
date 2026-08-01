@@ -128,13 +128,23 @@ Registered in `main.gd`, documented in the `[H]` legend, and capturable via
   `discovery_gene_gate_is_identity_when_flag_off`,
   `spread_respects_the_gene_gate`.
 - Golden suites regenerated (layout-only moves); `cargo test --workspace`
-  green; screenshot capture of the helix over `tech-gene-coupling.toml`
-  (tick ~4000) shows live strands and a negative-differential rung on
-  Fire↔Openness.
+  green; screenshot captures in `gallery/` (`coupling-t4001-helix.png`,
+  `coupling-t4001-coevo-selection.png`) show live strands, a negative-
+  differential rung on Fire↔Openness, and the era-split adoption charts with
+  the ±1 selection panel.
+- Viewer integration: `[Y]` panel wires all 10 inventions + a `pm1`
+  gene↔tech-selection chart; inspector shows per-agent gene-gated techs;
+  showcase director accepts `{"panel": {"name": "helix"}}`; the scenario
+  menu lists both TG scenarios; the headless `demo` prints each invention's
+  gene gate + material basket.
 
 ## 5. Open follow-ups
 
-- TG3/TG4 remain: the helix is a state snapshot, not a time series — the
-  lead–lag view (which strand moved first) is still unbuilt.
+- TG4 remains: the helix is a state snapshot and the `[Y]` panel now charts
+  adoption (all 10, era-split) plus the selection differential — but the
+  lead–lag view (which strand moved *first*) is still unbuilt.
+- The interactive tech-tree DAG (TG3) is still a flat species table; the
+  extended `invention_catalog` (materials/affinity/gene_req) is the data
+  source a DAG view would consume.
 - Meme channels are unclamped by design (inherit jitter can push them just
   outside [0,1]); the panel shows raw values and clamps only the node fill.

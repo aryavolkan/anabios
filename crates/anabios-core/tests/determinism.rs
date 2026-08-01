@@ -161,6 +161,55 @@ const GOLDEN: &[(u64, u64)] =
     // resources_enabled is off here so they are never consulted.
     &[(0, 0x21ab4d62eb377544), (100, 0x9fc0f679f252e6d3), (1000, 0x60a3c8887f27808f)];
 
+/// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
+/// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
+/// the serial ascending-id loop." That equivalence is the load-bearing
+/// assumption of the whole determinism gate, yet the golden-hash test only ever
+/// runs single-threaded — it would not catch a hidden cross-thread ordering or
+/// shared-state race, only a *consistent* drift.
+///
+/// Here we step identical worlds under different rayon pool sizes (1 vs 2 vs 8
+/// threads). Wrapping `step` in `pool.install(..)` routes every internal
+/// `par_iter` onto that pool, so if any parallel stage's result depended on
+/// thread count or execution order the state hashes would diverge.
+#[test]
+fn parallel_matches_serial_across_thread_counts() {
+    // A feature-on scenario exercises more parallel paths (sense reads the
+    // gene-tech-coupling arm; cognition drives the `iq` stage) than minimal.
+    for scenario_src in [
+        include_str!("../../../scenarios/minimal.toml"),
+        include_str!("../../../scenarios/tech-gene-coupling.toml"),
+    ] {
+        let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
+        const TICKS: u64 = 300;
+
+        let hash_with_threads = |n: usize| -> u64 {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(n)
+                .build()
+                .expect("build rayon pool");
+            let mut world = scenario.instantiate();
+            pool.install(|| {
+                for _ in 0..TICKS {
+                    step(&mut world);
+                }
+            });
+            state_hash(&world)
+        };
+
+        let serial = hash_with_threads(1);
+        for n in [2usize, 8] {
+            assert_eq!(
+                serial,
+                hash_with_threads(n),
+                "scenario {:?}: state diverged between 1 and {n} threads after {TICKS} ticks \
+                 — a parallel stage depends on thread count or execution order",
+                scenario.name,
+            );
+        }
+    }
+}
+
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
     let scenario = Scenario::parse_toml(SCENARIO).expect("parse minimal scenario");

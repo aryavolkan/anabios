@@ -108,4 +108,8 @@ func _process(_delta: float) -> void:
 	var held: Array = info.get("inventions", [])
 	if not held.is_empty():
 		lines.append("tech era %d: %s" % [int(info["tech_era"]), ", ".join(held)])
+	if info.get("gene_requirements", false):
+		var gated: Array = info.get("gated_inventions", [])
+		if not gated.is_empty():
+			lines.append("gene-gated: %s" % ", ".join(gated))
 	label.text = "\n".join(lines)
