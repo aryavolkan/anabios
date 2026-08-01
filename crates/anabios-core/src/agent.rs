@@ -85,8 +85,10 @@ pub struct AgentBuffers {
     pub sex: BitVec,
     /// Livestock ownership (E13): the owning herder's agent id, or
     /// `AGENT_NULL` when wild. Set by `domestication::husbandry_step` (taming)
-    /// and at birth (born-domesticated); cleared by the orphan sweep when the
-    /// owner dies. Read only when `World::domestication_enabled`.
+    /// and at birth (born-domesticated); cleared eagerly in `kill` when the
+    /// owner dies (so a recycled owner slot can't silently inherit the herd),
+    /// with the husbandry orphan sweep as a backstop. Read only when
+    /// `World::domestication_enabled`.
     pub livestock_of: Vec<AgentId>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
@@ -95,6 +97,14 @@ pub struct AgentBuffers {
     /// `#[serde(skip)]` — never part of the deterministic state hash.
     #[serde(skip)]
     pub scratch_ids: Vec<u32>,
+    /// Whether livestock ownership is active (mirrors `World::domestication_enabled`).
+    /// Gates the O(n) owner-referrer clear in `kill`, so worlds with the feature
+    /// off pay nothing. `#[serde(skip)]` and re-derived from the (serialized)
+    /// `domestication_enabled` flag at scenario instantiation and snapshot load,
+    /// so it is not an independent piece of state that could drift across a
+    /// save→load round-trip.
+    #[serde(skip)]
+    pub track_livestock: bool,
 }
 
 impl AgentBuffers {
@@ -193,6 +203,15 @@ impl AgentBuffers {
     }
 
     /// Kill the agent. Energy is zeroed and the slot is added to the free list.
+    ///
+    /// When livestock ownership is active, any animal that named this agent as
+    /// its owner is released to the wild here. This must happen at the moment of
+    /// death: the freed slot can be recycled by `spawn` (LIFO free list) before
+    /// the husbandry orphan sweep next runs, and a recycled slot reads as alive
+    /// again — so a purely "is the owner still alive?" sweep would silently
+    /// rebind the herd to whatever unrelated agent inherited the slot. Clearing
+    /// eagerly is order-independent and closes that window. Gated on
+    /// `track_livestock` so the O(n) scan never runs when the feature is off.
     pub fn kill(&mut self, id: AgentId) {
         let i = id as usize;
         if i >= self.alive.len() || !self.alive[i] {
@@ -202,6 +221,14 @@ impl AgentBuffers {
         self.energy[i] = 0.0;
         self.free_list.push(id);
         self.live_count -= 1;
+
+        if self.track_livestock {
+            for owner in self.livestock_of.iter_mut() {
+                if *owner == id {
+                    *owner = AGENT_NULL;
+                }
+            }
+        }
     }
 
     /// Iterate live agent ids. Order is by raw index (ascending), which is

@@ -128,6 +128,9 @@ pub fn load_from_bytes(bytes: &[u8]) -> Result<World, SnapshotError> {
     }
     let mut world: World = bincode::deserialize(&env.payload)?;
     world.pheromones.refresh_nonzero();
+    // Re-derive the (serde-skipped) livestock gate from the persisted flag so a
+    // reloaded domestication world clears orphaned owners exactly like the live one.
+    world.agents.track_livestock = world.domestication_enabled;
     Ok(world)
 }
 

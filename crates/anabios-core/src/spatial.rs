@@ -44,6 +44,13 @@ impl UniformSpatialHash {
     /// Build a hash sized for a `world_size`-extent torus divided into
     /// `hash_res × hash_res` cells.
     pub fn with_dims(world_size: f32, hash_res: usize) -> Self {
+        // `query` visits the one-cell ring via offsets `[res-1, 0, 1]`. Those are
+        // distinct mod `res` only when `res >= 3`; below that a neighbour would be
+        // visited twice (double-counting crowding / feeding / combat), so guard it.
+        debug_assert!(
+            hash_res >= 3,
+            "hash_res must be >= 3 for the query ring to visit each cell once (got {hash_res})"
+        );
         let total_cells = hash_res * hash_res;
         Self {
             bucket_offsets: vec![0; total_cells],
