@@ -161,6 +161,8 @@ pub fn reproduce_all(world: &mut World) {
                 && world.agents.is_alive(pa)
             {
                 world.agents.livestock_of[child_id as usize] = pa;
+                // Arm the kill-time release (see domestication::husbandry_step).
+                world.agents.track_livestock = true;
             }
         }
 

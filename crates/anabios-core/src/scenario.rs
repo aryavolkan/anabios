@@ -369,6 +369,12 @@ pub enum ScenarioError {
          invention tree the seeded meme channels are never read"
     )]
     InventionsDisabled,
+    #[error(
+        "hash_res must be >= 3 (got {0}): the spatial-hash neighbour query walks a \
+         3-cell ring, which aliases onto the same cells at a lower resolution and \
+         double-counts neighbours"
+    )]
+    InvalidHashRes(usize),
 }
 
 impl Scenario {
@@ -387,6 +393,11 @@ impl Scenario {
                 if crate::invention::id_from_name(name).is_none() {
                     return Err(ScenarioError::UnknownInvention(unknown_invention_msg(name)));
                 }
+            }
+        }
+        if let Some(hr) = scenario.hash_res {
+            if hr < 3 {
+                return Err(ScenarioError::InvalidHashRes(hr));
             }
         }
         Ok(scenario)
@@ -848,6 +859,19 @@ sixe = 0.5
 "#;
         let err = Scenario::parse_toml(text).expect_err("typo'd trait must be rejected");
         assert!(err.to_string().contains("sixe"), "error should name the unknown key, got: {err}");
+    }
+
+    #[test]
+    fn parse_toml_rejects_hash_res_below_three() {
+        // hash_res < 3 makes the spatial-hash ring alias and double-count
+        // neighbours; reject at load rather than silently mis-simulate in release.
+        for bad in [0usize, 1, 2] {
+            let text = format!("name = \"t\"\nseed = 1\nhash_res = {bad}\n");
+            let err = Scenario::parse_toml(&text).expect_err("hash_res < 3 must be rejected");
+            assert!(err.to_string().contains("hash_res"), "error should name hash_res, got: {err}");
+        }
+        // 3 and up are accepted.
+        assert!(Scenario::parse_toml("name = \"t\"\nseed = 1\nhash_res = 3\n").is_ok());
     }
 
     #[test]

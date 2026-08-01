@@ -144,6 +144,10 @@ pub fn husbandry_step(world: &mut World) {
             continue;
         }
         world.agents.livestock_of[candidate as usize] = id;
+        // Keep the invariant "a binding exists ⇒ the kill-time release is armed"
+        // local to the write, so worlds built outside `instantiate`/load still
+        // release orphaned herds. Only reachable with the feature on.
+        world.agents.track_livestock = true;
         herd_counts.insert(id, herd_counts.get(&id).copied().unwrap_or(0) + 1);
         // First tame of this livestock species anywhere → codex event.
         let livestock_species = world.agents.species_id[candidate as usize];

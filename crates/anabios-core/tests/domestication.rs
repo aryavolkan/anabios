@@ -5,6 +5,8 @@
 
 use anabios_core::agent::AGENT_NULL;
 use anabios_core::codex::EventType;
+use anabios_core::genome::Genome;
+use anabios_core::prelude_test::Vec2;
 use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
 use anabios_core::tick::step;
@@ -148,4 +150,36 @@ fn domestication_emerges_across_seeds() {
     assert!(husbandry_adopted >= 3, "Husbandry discovered in ≥3/8 seeds: {husbandry_adopted}");
     assert!(tamed >= 2, "AnimalDomesticated in ≥2/8 seeds: {tamed}");
     eprintln!("livestock present at horizon in {herd_at_end}/{SEEDS} seeds");
+}
+
+/// Regression: a herder's herd is released at the moment the herder dies, before
+/// the freed slot can be recycled by a birth. The bug was that `livestock_of`
+/// was only cleared by the husbandry orphan sweep (stage 6e), which runs *after*
+/// reproduce (stage 6); a newborn reusing the dead herder's slot then read as
+/// "alive", so the sweep kept the stale binding and the whole herd silently
+/// rebound to the unrelated newborn. `kill` now releases referrers eagerly.
+#[test]
+fn dead_owner_releases_herd_before_slot_reuse() {
+    let mut w = Scenario::parse_toml(SCENARIO).expect("parse domestication").instantiate();
+    let herder =
+        w.agents.iter_alive().find(|&id| w.agents.species_id[id as usize] != 0).expect("a herder");
+    let animal =
+        w.agents.iter_alive().find(|&id| w.agents.species_id[id as usize] == 0).expect("an animal");
+    w.agents.livestock_of[animal as usize] = herder;
+
+    // Owner dies: the binding must be gone immediately, before any slot reuse.
+    w.agents.kill(herder);
+    assert_eq!(
+        w.agents.livestock_of[animal as usize], AGENT_NULL,
+        "the herd must be released the instant its owner dies"
+    );
+
+    // Recycle the dead herder's slot with an unrelated newborn (LIFO free list).
+    let newborn = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    assert_eq!(newborn, herder, "the newborn should reuse the dead herder's slot");
+    assert_ne!(
+        w.agents.livestock_of[animal as usize], newborn,
+        "a recycled owner slot must not inherit the dead herder's herd"
+    );
+    assert_eq!(w.agents.livestock_of[animal as usize], AGENT_NULL);
 }
