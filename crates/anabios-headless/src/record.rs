@@ -45,6 +45,13 @@ struct Frame {
     sp: Vec<u32>,
     /// Diet carnivory quantised to 0 (herbivore) ..= 255 (carnivore).
     d: Vec<u8>,
+    /// Combat streaks this tick, flattened [x1,y1,x2,y2, ...] (attacker→target).
+    /// Absent when no combat happened at the sampled tick.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    st: Vec<i32>,
+    /// Trade routes this tick, flattened [x1,y1,x2,y2, ...] (trader→partner).
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    tr: Vec<i32>,
 }
 
 /// Settlement sites at one tick: parallel arrays per settled species — the
@@ -246,7 +253,10 @@ pub fn run(
     Ok(())
 }
 
-/// Sample every `stride`-th alive agent's draw data into a new frame.
+/// Sample every `stride`-th alive agent's draw data into a new frame, plus
+/// this tick's combat streaks and trade routes (scratch buffers, read-only)
+/// so the web player can draw volleys, lanes, and action poses like the
+/// Godot viewer does.
 fn capture_frame(world: &World, stride: usize, frames: &mut Vec<Frame>) {
     let cap = world.agents.live_count() as usize / stride + 1;
     let mut id = Vec::with_capacity(cap);
@@ -267,7 +277,21 @@ fn capture_frame(world: &World, stride: usize, frames: &mut Vec<Frame>) {
         let carn = effective_diet_carnivory(&world.agents.modules[i]).clamp(0.0, 1.0);
         d.push((carn * 255.0).round() as u8);
     }
-    frames.push(Frame { t: world.tick, id, x, y, sp, d });
+    let mut st = Vec::with_capacity(world.combat_streaks.len() * 4);
+    for (from, to, _) in &world.combat_streaks {
+        st.push(from.x.round() as i32);
+        st.push(from.y.round() as i32);
+        st.push(to.x.round() as i32);
+        st.push(to.y.round() as i32);
+    }
+    let mut tr = Vec::with_capacity(world.trade_routes.len() * 4);
+    for (from, to, _) in &world.trade_routes {
+        tr.push(from.x.round() as i32);
+        tr.push(from.y.round() as i32);
+        tr.push(to.x.round() as i32);
+        tr.push(to.y.round() as i32);
+    }
+    frames.push(Frame { t: world.tick, id, x, y, sp, d, st, tr });
 }
 
 /// Snapshot the codex settlement latch: for each species with a formed

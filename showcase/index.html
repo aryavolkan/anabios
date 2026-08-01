@@ -380,6 +380,14 @@
     [[6,2,4,4,"c"],[7,4,2,2,"s"],[7,6,2,1,"c"],[4,6,8,5,"c"],[7,7,2,2,"a"],[3,8,2,3,"c"],[3,10,2,1,"s"],[11,6,2,4,"c"],[11,9,2,1,"s"],[4,11,2,4,"c"],[9,12,2,3,"c"]],
     [[6,1,4,4,"c"],[7,3,2,2,"s"],[7,5,2,1,"c"],[4,5,8,5,"c"],[7,6,2,2,"a"],[3,6,2,4,"c"],[3,9,2,1,"s"],[11,6,2,4,"c"],[11,9,2,1,"s"],[6,10,2,4,"c"],[9,10,2,4,"c"]],
     [[6,2,4,4,"c"],[7,4,2,2,"s"],[7,6,2,1,"c"],[4,6,8,5,"c"],[7,7,2,2,"a"],[3,6,2,4,"c"],[3,9,2,1,"s"],[11,8,2,3,"c"],[11,10,2,1,"s"],[6,12,2,3,"c"],[10,11,2,4,"c"]],
+    // 4 eat — crouched low, head and reaching hand down at the food
+    [[7,6,4,4,"c"],[8,8,2,2,"s"],[8,10,2,1,"c"],[4,8,8,5,"c"],[7,9,2,2,"a"],[3,9,2,3,"c"],[3,11,2,1,"s"],[11,10,2,3,"c"],[11,12,2,1,"s"],[6,13,2,2,"c"],[9,13,2,2,"c"]],
+    // 5 fight — lunging, arm raised high to strike, back leg braced
+    [[6,1,4,4,"c"],[7,3,2,2,"s"],[7,5,2,1,"c"],[4,5,8,5,"c"],[7,6,2,2,"a"],[10,2,2,4,"c"],[10,1,2,1,"s"],[3,6,2,4,"c"],[3,9,2,1,"s"],[3,11,3,4,"c"],[8,11,2,4,"c"],[11,13,3,2,"c"]],
+    // 6 trade — upright, one arm extended forward offering the good
+    [[6,2,4,4,"c"],[7,4,2,2,"s"],[7,6,2,1,"c"],[4,6,8,5,"c"],[7,7,2,2,"a"],[3,7,2,4,"c"],[3,10,2,1,"s"],[11,6,4,2,"c"],[14,6,1,1,"s"],[6,11,2,4,"c"],[9,11,2,4,"c"]],
+    // 7 flee — leaning into a panicked run, both arms flung up
+    [[8,2,4,4,"c"],[9,4,2,2,"s"],[8,6,2,1,"c"],[5,6,8,5,"c"],[8,7,2,2,"a"],[3,4,2,4,"c"],[3,3,2,1,"s"],[12,5,2,4,"c"],[12,4,2,1,"s"],[4,11,3,4,"c"],[9,12,3,3,"c"]],
   ];
   const FIELD_ZONE_COLORS = [
     {c:"X",s:"m",a:"B"}, {c:"d",s:"B",a:"G"}, {c:"o",s:"T",a:"O"}, {c:"B",s:"t",a:"r"}, {c:"m",s:"t",a:"h"},
@@ -687,6 +695,28 @@
       }
     }
     ctx.globalAlpha = 1;
+
+    // combat streaks (additive) and trade lanes from the sampled frame —
+    // per-tick sim events, fading over the interpolation interval
+    if (!reduce){
+      const drawSegs = (arr, color, width, alpha)=>{
+        if (!arr || !arr.length) return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.globalAlpha = alpha*(1-f);
+        ctx.beginPath();
+        for (let i=0;i+3<arr.length;i+=4){
+          ctx.moveTo(wx(arr[i]), wy(arr[i+1]));
+          ctx.lineTo(wx(arr[i+2]), wy(arr[i+3]));
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      };
+      ctx.globalCompositeOperation = "lighter";
+      drawSegs(A.st, "#e8964a", 1.2, 0.8);
+      ctx.globalCompositeOperation = "source-over";
+      drawSegs(A.tr, "#6E9BB5", 0.8, 0.5);
+    }
     let pop = 0; const specSet = new Set();
     if (firstSeen.size > 4096) firstSeen.clear();
     for (let k=0;k<A.id.length;k++){
@@ -724,6 +754,21 @@
       if (moving && !reduce){
         const s = Math.floor(tick*0.35 + (id % 8)) % 4;
         pose = 1 + Math.min(s, 4 - s);
+      }
+      // action poses from this frame's combat/trade hotspots: standers at a
+      // streak's attacker end fight, movers flee, traders hold the offer pose
+      // (mirrors the Godot heuristics; rows 5/7/6 in the pose atlas)
+      if (!reduce){
+        let act = 0;
+        if (A.st) for (let i=0;i+3<A.st.length;i+=4){
+          const dx=x-A.st[i], dy=y-A.st[i+1];
+          if (dx*dx+dy*dy < 36){ act = moving ? 4 : 2; break; }
+        }
+        if (!act && A.tr) for (let i=0;i+3<A.tr.length;i+=4){
+          const dx=x-A.tr[i], dy=y-A.tr[i+1];
+          if (dx*dx+dy*dy < 36){ act = 3; break; }
+        }
+        if (act) pose = 3 + act;
       }
       // spawn scale-pop over ~12 ticks, anchored at the feet
       let sc = 1;
