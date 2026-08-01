@@ -8,3 +8,6 @@ var ui_scale: float = 1.0
 # 0 = BIOME (ground) / SPECIES (body).
 var default_ground: int = 0
 var default_body: int = 0
+# Set by the showcase director (ANABIOS_SHOWCASE): locks manual camera/time
+# input and focus-loss pausing so a recording runs hands-free.
+var showcase_active: bool = false

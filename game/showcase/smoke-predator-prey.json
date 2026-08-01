@@ -1,0 +1,24 @@
+{
+  "beats": [
+    { "do": [
+      { "letterbox": true },
+      { "speed": 16 },
+      { "camera": { "x": 512, "y": 512, "zoom": 1.0, "dur": 0.1 } },
+      { "title": { "chapter": "SMOKE TEST", "subtitle": "director pipeline check", "dur": 1.5 } }
+    ] },
+    { "at_event": "Predation", "timeout": 30.0, "do": [
+      { "speed": 1 },
+      { "camera": { "at": "event", "zoom": 2.5, "dur": 1.5 } },
+      { "highlight": "event" },
+      { "lower_third": { "text": "Predation — event cut works", "dur": 3.0 } }
+    ] },
+    { "after": 4.0, "do": [
+      { "clear_highlight": true },
+      { "letterbox": false },
+      { "title": { "chapter": "DONE", "subtitle": "", "dur": 1.5 } }
+    ] },
+    { "after": 2.5, "do": [
+      { "end": true }
+    ] }
+  ]
+}

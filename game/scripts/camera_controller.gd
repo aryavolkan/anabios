@@ -54,6 +54,8 @@ func fit_to_agents() -> void:
 	position = c
 
 func _input(event: InputEvent) -> void:
+	if GameConfig.showcase_active:
+		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
@@ -69,10 +71,14 @@ func _input(event: InputEvent) -> void:
 # Discrete key toggles go through _unhandled_key_input (matches overlay_manager
 # [G]/[C] and legend [H]), so a focused text field could consume them first.
 func _unhandled_key_input(event: InputEvent) -> void:
+	if GameConfig.showcase_active:
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F:
 		_fit_to_world()
 
 func _process(delta: float) -> void:
+	if GameConfig.showcase_active:
+		return
 	var v := Vector2.ZERO
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):    v.y -= 1
 	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):  v.y += 1

@@ -87,7 +87,18 @@ cargo build --release --bin anabios-headless
    - Bottom-left buttons: pause + speed (1× / 4× / 16× / 64×)
    - Left-click an agent (within 4 world units) to pin its stats in the inspector panel
    - Scrolling list at bottom-right shows codex events as they fire
-   - **R**: replay the latest codex event (rewind to a snapshot, fast-forward, pause at the moment; R/Esc resumes live) · **U**: run at max speed until the next event fires · **V**: event camera — auto-cut tour of recent event locations
+    - **R**: replay the latest codex event (rewind to a snapshot, fast-forward, pause at the moment; R/Esc resumes live) · **U**: run at max speed until the next event fires · **V**: event camera — auto-cut tour of recent event locations
+
+## Recording a showcase video
+
+The viewer has a cinematic **showcase director**: a JSON beat timeline (camera moves, chapter title cards, event-triggered cuts, overlay switches) played over the live sim and captured with Godot's Movie Maker:
+
+```bash
+scripts/emergence.sh record out-of-africa-saga --seed 318
+# → runs/showcase/out-of-africa-saga.mp4
+```
+
+The saga timeline (`game/showcase/out-of-africa-saga.json`) narrates the out-of-africa arc in seven chapters — cradle, tools, exodus, settlement, writing, domestication, war — cutting to the latest `Market`/`Domesticated`/`War` events wherever they fire. Timelines live in `game/showcase/*.json`; pass `--timeline`/`--out`/`--max-seconds` to customize (the beat format — triggers, timeouts, actions — is documented at the top of `game/scripts/showcase_director.gd`). Needs ffmpeg for the AVI→MP4 conversion.
 
 ## Verifying emergence replay (headless)
 

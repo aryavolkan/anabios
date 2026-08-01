@@ -1,0 +1,86 @@
+{
+  "beats": [
+    { "do": [
+      { "letterbox": true },
+      { "hud": false },
+      { "speed": 1 },
+      { "ground": "biome" },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.55, "dur": 0.1 } },
+      { "title": { "chapter": "ANABIOS", "subtitle": "life arising — an evolutionary sandbox", "dur": 3.0 } }
+    ] },
+    { "after": 4.5, "do": [
+      { "hud": true },
+      { "title": { "chapter": "I. THE CRADLE", "subtitle": "a world is born", "dur": 3.0 } },
+      { "camera": { "x": 150, "y": 440, "zoom": 1.1, "dur": 4.0 } },
+      { "lower_third": { "text": "climate bands, living biomes, one founding population", "dur": 5.0 } }
+    ] },
+    { "after": 7.0, "do": [
+      { "title": { "chapter": "II. FIRST STEPS", "subtitle": "tools & fire", "dur": 3.0 } },
+      { "camera": { "x": 240, "y": 430, "zoom": 2.6, "dur": 3.0 } },
+      { "speed": 4 },
+      { "panel": { "name": "tech", "visible": true } },
+      { "lower_third": { "text": "the Quarry innovators carry stone tools and fire from tick 0", "dur": 6.0 } }
+    ] },
+    { "after": 9.0, "do": [
+      { "title": { "chapter": "III. THE EXODUS", "subtitle": "out of Africa", "dur": 3.0 } },
+      { "camera": { "x": 512, "y": 460, "zoom": 0.7, "dur": 4.0 } },
+      { "speed": 64 },
+      { "lower_third": { "text": "thousands stream through the desert crossings", "dur": 6.0 } }
+    ] },
+    { "after": 12.0, "do": [
+      { "speed": 16 },
+      { "ground": "markets" },
+      { "title": { "chapter": "IV. SETTLING DOWN", "subtitle": "farming, settlement, trade", "dur": 3.0 } },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.9, "dur": 3.0 } }
+    ] },
+    { "on_event": "Market", "timeout": 30.0, "do": [
+      { "highlight": "event" },
+      { "camera": { "at": "event", "zoom": 1.8, "dur": 2.0 } },
+      { "lower_third": { "text": "a market crystallizes where the trade routes cross", "dur": 4.0 } }
+    ] },
+    { "after": 6.0, "do": [
+      { "clear_highlight": true },
+      { "ground": "biome" },
+      { "body": "dialect" },
+      { "title": { "chapter": "V. THE WORD", "subtitle": "the invention of writing", "dur": 3.5 } },
+      { "lower_third": { "text": "writing held from tick 0 — dialects bloom as cultures diverge", "dur": 6.0 } }
+    ] },
+    { "after": 8.0, "do": [
+      { "body": "species" },
+      { "speed": 64 },
+      { "title": { "chapter": "VI. THE HERD", "subtitle": "the domestication of animals", "dur": 3.5 } },
+      { "camera": { "x": 250, "y": 445, "zoom": 2.2, "dur": 3.0 } },
+      { "lower_third": { "text": "at the Quarry, herders live among the wild herds…", "dur": 5.0 } }
+    ] },
+    { "on_event": "Domesticated", "timeout": 30.0, "do": [
+      { "speed": 1 },
+      { "camera": { "at": "event", "zoom": 3.0, "dur": 2.5 } },
+      { "highlight": "event" },
+      { "follow": "event" },
+      { "lower_third": { "text": "AnimalDomesticated — a wild juvenile joins the herd", "dur": 6.0 } }
+    ] },
+    { "after": 8.0, "do": [
+      { "unfollow": true },
+      { "clear_highlight": true },
+      { "panel": { "name": "tech", "visible": false } },
+      { "speed": 64 },
+      { "title": { "chapter": "VII. BLOOD & KIN", "subtitle": "war and cooperation", "dur": 3.5 } },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.8, "dur": 3.0 } }
+    ] },
+    { "on_event": "War", "timeout": 30.0, "do": [
+      { "speed": 4 },
+      { "camera": { "at": "event", "zoom": 2.2, "dur": 2.0 } },
+      { "highlight": "event" },
+      { "lower_third": { "text": "WarOrRaid — kin factions clash over the range", "dur": 5.0 } }
+    ] },
+    { "after": 8.0, "do": [
+      { "clear_highlight": true },
+      { "speed": 1 },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.55, "dur": 6.0 } },
+      { "title": { "chapter": "ANABIOS", "subtitle": "every behavior emergent · every seed a new world", "dur": 4.0 } }
+    ] },
+    { "after": 6.0, "do": [
+      { "end": true }
+    ] }
+  ]
+}
