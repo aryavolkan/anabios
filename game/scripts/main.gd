@@ -57,6 +57,7 @@ var _death_mmis: Array[MultiMeshInstance2D] = []
 var _death_effects: Array = []
 var _birth_times: Dictionary = {}
 
+
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
 	var f = FileAccess.open(scenario_path, FileAccess.READ)
@@ -184,6 +185,7 @@ func _ready() -> void:
 				if pid >= 0:
 					inspector.pin(pid)
 
+
 # The world is a torus but rendering is not: a camera near a seam sees agents
 # vanish at the edge. Duplicate every agent layer into the 8 neighboring world
 # offsets; each clone shares its source's MultiMesh and texture, so per-frame
@@ -228,6 +230,7 @@ func _make_wrap_clones() -> void:
 				wrap.add_child(clone)
 				_glyph_clones.append(clone)
 
+
 # Give every HUD panel the shared instrument theme, and make the top-left
 # readout legible over any terrain with a dark outline.
 func _apply_ui_theme() -> void:
@@ -240,14 +243,18 @@ func _apply_ui_theme() -> void:
 	hud.add_theme_constant_override("outline_size", 5)
 	hud.add_theme_font_size_override("font_size", 17)
 
+
 func _notification(what: int) -> void:
 	# Pause when the window loses focus; user resumes manually. Screenshot
 	# runs (ANABIOS_SHOT) and showcase recordings (which must keep stepping
 	# hands-free while --write-movie captures) opt out.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT \
-			and not OS.has_environment("ANABIOS_SHOT") \
-			and not GameConfig.showcase_active:
+	if (
+		what == NOTIFICATION_APPLICATION_FOCUS_OUT
+		and not OS.has_environment("ANABIOS_SHOT")
+		and not GameConfig.showcase_active
+	):
 		paused = true
+
 
 func _process(delta: float) -> void:
 	if not paused:
@@ -259,14 +266,31 @@ func _process(delta: float) -> void:
 	if flash_count > 0:
 		($Camera2D as Camera2D).add_trauma(minf(0.03, 0.0025 * flash_count))
 	var world: float = sim.world_size()
-	_update_segment_trail(_streak_trail, streaks.multimesh,
-		sim.combat_streaks(), sim.combat_streak_colors(), STREAK_TTL, 1.0, 0.85, world)
-	_update_segment_trail(_trade_trail, trade_routes.multimesh,
-		sim.trade_routes(), sim.trade_route_colors(), TRADE_TTL, 0.5, 0.6, world)
+	_update_segment_trail(
+		_streak_trail,
+		streaks.multimesh,
+		sim.combat_streaks(),
+		sim.combat_streak_colors(),
+		STREAK_TTL,
+		1.0,
+		0.85,
+		world
+	)
+	_update_segment_trail(
+		_trade_trail,
+		trade_routes.multimesh,
+		sim.trade_routes(),
+		sim.trade_route_colors(),
+		TRADE_TTL,
+		0.5,
+		0.6,
+		world
+	)
 	var rate: String = "paused" if paused else ("%d×" % ticks_per_frame)
 	var total: int = int(sim.total_trades())
 	var trades: String = "" if total == 0 else " · %d trades" % total
 	hud.text = "tick %d · %d alive · %s%s" % [sim.tick(), sim.alive_count(), rate, trades]
+
 
 func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	var n: int = int(sim.alive_count())
@@ -381,6 +405,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	if module_layers.visible:
 		_refresh_module_layers()
 
+
 # An id present last frame but gone now died (or left the alive list). Record a
 # fallen-figure ghost at its last smoothed position, in its species and size,
 # and forget its birth timestamp so a recycled id would pop in fresh.
@@ -395,6 +420,7 @@ func _on_agent_death(id: int, prev_idx: int) -> void:
 	if prev_idx < _prev_sizes.size():
 		sz = maxf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN)
 	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz])
+
 
 # Age and draw the ghosts: fallen figures that fade out quadratically over
 # DEATH_TTL seconds while the sim's own carcass disc persists beneath them.
@@ -426,10 +452,12 @@ func _refresh_death_effects(delta: float) -> void:
 			mm.set_instance_transform_2d(j, Transform2D(0.0, Vector2(e[3], e[3]), 0.0, e[0]))
 			mm.set_instance_color(j, Color(1, 1, 1, 0.85 * life * life))
 
+
 func _ease_out_back(t: float) -> float:
-	const c1 := 1.70158
-	const c3 := c1 + 1.0
-	return 1.0 + c3 * pow(t - 1.0, 3) + c1 * pow(t - 1.0, 2)
+	const C1 := 1.70158
+	const C3 := C1 + 1.0
+	return 1.0 + C3 * pow(t - 1.0, 3) + C1 * pow(t - 1.0, 2)
+
 
 func _body_colors(n: int) -> PackedColorArray:
 	match overlay.body_mode:
@@ -463,6 +491,7 @@ func _body_colors(n: int) -> PackedColorArray:
 			out4.fill(Color(1, 1, 1))
 			return out4
 
+
 # A shaded disc, multiplied by each MultiMesh instance color to turn the flat
 # body quads into rounded, organic marks. A bright core fading to a darker rim
 # gives each organism a subtle spherical shading (full genome color at the
@@ -473,12 +502,13 @@ func _disc_texture(res: int = 32) -> ImageTexture:
 	var c := (res - 1) * 0.5
 	for y in res:
 		for x in res:
-			var d := Vector2(x - c, y - c).length() / c          # 0 center .. 1 edge
+			var d := Vector2(x - c, y - c).length() / c  # 0 center .. 1 edge
 			var a := clampf(1.0 - smoothstep(0.78, 1.0, d), 0.0, 1.0)
 			# Spherical shading: bright at the core, deepening toward the rim.
 			var shade := 1.0 - 0.42 * smoothstep(0.0, 0.95, d)
 			img.set_pixel(x, y, Color(shade, shade, shade, a))
 	return ImageTexture.create_from_image(img)
+
 
 func _refresh_carcasses() -> void:
 	var data: Array = sim.carcass_data()
@@ -494,6 +524,7 @@ func _refresh_carcasses() -> void:
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(f, f), 0.0, pos))
 		mm.set_instance_color(i, Color(0.77, 0.80, 0.86, 0.55))
 
+
 func _refresh_flashes() -> int:
 	var pts: PackedVector2Array = sim.combat_flashes()
 	var mm: MultiMesh = flashes.multimesh
@@ -506,6 +537,7 @@ func _refresh_flashes() -> int:
 		mm.set_instance_color(i, Color(1.0, 0.92, 0.45, 0.95))
 	return m
 
+
 # Segment trails: world-space links kept on screen for a few ticks as fading
 # tracers. Combat streaks (attacker→target) are wide, bright, and brief so
 # ranged (Spines) volleys read as volleys; trade routes (trader→partner) are
@@ -513,15 +545,25 @@ func _refresh_flashes() -> int:
 # accumulate into visible lanes. Both tint to the initiator's genome hue.
 const STREAK_TTL: int = 8
 const TRADE_TTL: int = 24
-var _streak_trail: Array = [] # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
+var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
 var _trade_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
+
 
 # Append this tick's segments to the trail, age it, then draw each survivor
 # as a tinted quad stretched from→to. Segments are unwrapped with the
 # shortest-path torus delta: a hop across the seam (|delta| near world size)
 # is really a short step the other way, and drawing it with the wrapped delta
 # lets the wrap clones render its continuation past the world edge.
-func _update_segment_trail(trail: Array, mm: MultiMesh, segs: PackedVector2Array, cols: PackedColorArray, ttl: int, width: float, max_alpha: float, world: float) -> void:
+func _update_segment_trail(
+	trail: Array,
+	mm: MultiMesh,
+	segs: PackedVector2Array,
+	cols: PackedColorArray,
+	ttl: int,
+	width: float,
+	max_alpha: float,
+	world: float
+) -> void:
 	for i in segs.size() / 2:
 		trail.append([segs[2 * i], segs[2 * i + 1], ttl, cols[i]])
 	# Perf: cap the trail at the multimesh budget, dropping the oldest first.
@@ -556,6 +598,7 @@ func _update_segment_trail(trail: Array, mm: MultiMesh, segs: PackedVector2Array
 		c.a = max_alpha * float(trail[i][2]) / float(ttl)
 		mm.set_instance_color(i, c)
 
+
 func _refresh_module_layers() -> void:
 	var all: Array = sim.module_glyphs_all()
 	var type_count: int = all.size()
@@ -569,12 +612,16 @@ func _refresh_module_layers() -> void:
 		mm.visible_instance_count = m
 		var col: Color = MODULE_COLORS[t]
 		for i in m:
-			mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(GLYPH_SIZE, GLYPH_SIZE), 0.0, glyphs[i]))
+			mm.set_instance_transform_2d(
+				i, Transform2D(0.0, Vector2(GLYPH_SIZE, GLYPH_SIZE), 0.0, glyphs[i])
+			)
 			mm.set_instance_color(i, col)
+
 
 func _clear_module_layers() -> void:
 	for child in module_layers.get_children():
 		(child as MultiMeshInstance2D).multimesh.visible_instance_count = 0
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:

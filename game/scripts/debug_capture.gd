@@ -5,6 +5,7 @@ extends Node
 #   ANABIOS_SHOT        -> output path (also the on/off switch)
 #   ANABIOS_SHOT_FRAMES -> frames to wait before capture (default 180)
 
+
 func _ready() -> void:
 	# GameConfig overrides apply to ANY direct boot of main.tscn — the CLI
 	# `emergence.sh view` command and the screenshot harness both bypass the
@@ -18,7 +19,9 @@ func _ready() -> void:
 	# which never completes on the headless dummy renderer — without this guard
 	# the run hangs forever instead of producing a shot.
 	if DisplayServer.get_name() == "headless":
-		push_error("[capture] ANABIOS_SHOT requires a windowed run; --headless cannot read back the viewport")
+		push_error(
+			"[capture] ANABIOS_SHOT requires a windowed run; --headless cannot read back the viewport"
+		)
 		get_tree().quit(1)
 		return
 	var path := OS.get_environment("ANABIOS_SHOT")
@@ -31,6 +34,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().paused = true
 	_run(path, wait_frames)
+
 
 # Apply env-var overrides onto GameConfig before the main scene reads it.
 # Shared by the windowed `view` launch and the screenshot harness.
@@ -48,6 +52,7 @@ func _apply_config_overrides() -> void:
 		GameConfig.default_ground = int(OS.get_environment("ANABIOS_GROUND"))
 	if OS.has_environment("ANABIOS_BODY"):
 		GameConfig.default_body = int(OS.get_environment("ANABIOS_BODY"))
+
 
 func _run(path: String, wait_frames: int) -> void:
 	# Let the scene build (tree is paused: nodes process no ticks, but node
@@ -91,7 +96,8 @@ func _run(path: String, wait_frames: int) -> void:
 				if OS.has_environment("ANABIOS_INSPECT_X"):
 					pin_pos = Vector2(
 						float(OS.get_environment("ANABIOS_INSPECT_X")),
-						float(OS.get_environment("ANABIOS_INSPECT_Y")))
+						float(OS.get_environment("ANABIOS_INSPECT_Y"))
+					)
 				var id: int = int(sim2.call("agent_near", pin_pos, 400.0))
 				if id >= 0:
 					insp.call("pin", id)
@@ -103,9 +109,13 @@ func _run(path: String, wait_frames: int) -> void:
 				var z := float(OS.get_environment("ANABIOS_CAM_ZOOM"))
 				cam.set("zoom", Vector2(z, z))
 				if OS.has_environment("ANABIOS_CAM_X"):
-					cam.set("position", Vector2(
-						float(OS.get_environment("ANABIOS_CAM_X")),
-						float(OS.get_environment("ANABIOS_CAM_Y"))))
+					cam.set(
+						"position",
+						Vector2(
+							float(OS.get_environment("ANABIOS_CAM_X")),
+							float(OS.get_environment("ANABIOS_CAM_Y"))
+						)
+					)
 		# Optionally frame the whole world (the [F] overview) rather than the
 		# default agent-cluster framing — used for the wide overview shots.
 		if OS.has_environment("ANABIOS_CAM_FIT"):

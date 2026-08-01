@@ -107,8 +107,13 @@ pub fn step(world: &mut World) {
         crate::species::species_step(world);
     }
 
-    // Stage 9: codex detectors (extinction, population crash, etc.).
-    crate::codex::observe_all(world);
+    // Stage 9: codex detectors (extinction, population crash, etc.). Runs every
+    // tick by default; `codex_interval > 1` samples it every N ticks instead
+    // (opt-in throughput lever for large sweeps). `<= 1` keeps the every-tick
+    // path — and avoids `is_multiple_of(0)` — so the default is bit-identical.
+    if world.codex_interval <= 1 || world.tick.is_multiple_of(world.codex_interval) {
+        crate::codex::observe_all(world);
+    }
 
     // Stage 10: periodic biome regrowth (+ recolonization in a living biome).
     if world.tick.is_multiple_of(BIOME_STEP_INTERVAL) {
