@@ -46,8 +46,16 @@ var _glyph_clones: Array[MultiMeshInstance2D] = []
 # the real frame delta so the glide looks identical at any frame rate.
 const SMOOTH: float = 0.35
 const SNAP_DIST: float = 4.0
+const DEATH_TTL: float = 1.4
+const DEATH_CAP: int = 512
+const BIRTH_POP: float = 0.3
 var _prev_ids: PackedInt32Array = PackedInt32Array()
 var _prev_smooth: PackedVector2Array = PackedVector2Array()
+var _prev_sizes: PackedFloat32Array = PackedFloat32Array()
+var _prev_sp: PackedInt32Array = PackedInt32Array()
+var _death_mmis: Array[MultiMeshInstance2D] = []
+var _death_effects: Array = []
+var _birth_times: Dictionary = {}
 
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
@@ -121,6 +129,23 @@ func _ready() -> void:
 	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	flashes.material = add_mat
 	streaks.material = add_mat
+	# Death ghosts: one MultiMesh per species drawing the fallen pose, fed by
+	# ids that vanish from the alive list in _refresh_bodies. They sit above
+	# the carcass discs (z -5) but below living bodies.
+	for sp in ApeSprites.SPECIES_COUNT:
+		var dmm := MultiMesh.new()
+		dmm.transform_format = MultiMesh.TRANSFORM_2D
+		dmm.use_colors = true
+		dmm.mesh = bodies.multimesh.mesh
+		var dmi := MultiMeshInstance2D.new()
+		dmi.name = "Deaths%d" % sp
+		dmi.multimesh = dmm
+		dmi.texture = ApeSprites.build_fallen_texture(sp)
+		dmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		dmi.z_index = -4
+		add_child(dmi)
+		move_child(dmi, carcasses.get_index() + 1 + sp)
+		_death_mmis.append(dmi)
 	_make_wrap_clones()
 	# Replay & event camera (E2): snapshot ring + R/U/V modes.
 	var replay_manager := preload("res://scripts/replay_manager.gd").new()
@@ -174,6 +199,7 @@ func _make_wrap_clones() -> void:
 	add_child(wrap)
 	move_child(wrap, module_layers.get_index() + 1)
 	var sources: Array[MultiMeshInstance2D] = _body_mmis.duplicate()
+	sources.append_array(_death_mmis)
 	sources.append_array([carcasses, flashes, streaks, trade_routes])
 	for src in sources:
 		for gy in range(-1, 2):
@@ -228,7 +254,10 @@ func _process(delta: float) -> void:
 		sim.step_n(ticks_per_frame)
 	_refresh_bodies(delta)
 	_refresh_carcasses()
-	_refresh_flashes()
+	_refresh_death_effects(delta)
+	var flash_count := _refresh_flashes()
+	if flash_count > 0:
+		($Camera2D as Camera2D).add_trauma(minf(0.03, 0.0025 * flash_count))
 	var world: float = sim.world_size()
 	_update_segment_trail(_streak_trail, streaks.multimesh,
 		sim.combat_streaks(), sim.combat_streak_colors(), STREAK_TTL, 1.0, 0.85, world)
@@ -248,6 +277,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			_clear_module_layers()
 		_prev_ids = PackedInt32Array()
 		_prev_smooth = PackedVector2Array()
+		_prev_sizes = PackedFloat32Array()
+		_prev_sp = PackedInt32Array()
 		return
 
 	var positions: PackedVector2Array = sim.alive_positions()
@@ -266,6 +297,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	# The approach rate is scaled to the frame delta: at 60 fps this is
 	# exactly SMOOTH per frame, at 30 fps twice that — the same glide.
 	var k: float = 1.0 - pow(1.0 - SMOOTH, delta * 60.0)
+	var now: float = Time.get_ticks_msec() / 1000.0
 	var smooth: PackedVector2Array = positions
 	if have_ids:
 		smooth = PackedVector2Array()
@@ -275,6 +307,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		for i in n:
 			var id: int = ids[i]
 			while p < pn and _prev_ids[p] < id:
+				_on_agent_death(_prev_ids[p], p)
 				p += 1
 			var target: Vector2 = positions[i]
 			if p < pn and _prev_ids[p] == id:
@@ -285,8 +318,24 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 					smooth[i] = target
 			else:
 				smooth[i] = target
+				if not _birth_times.has(id):
+					_birth_times[id] = now
+		while p < pn:
+			_on_agent_death(_prev_ids[p], p)
+			p += 1
 		_prev_ids = ids
 		_prev_smooth = smooth
+		_prev_sizes = sizes
+		_prev_sp = sp_ids
+
+	# Zoom-compensated floor: as the camera pulls out, the minimum body size
+	# grows so hominin figures stay legible at the world overview instead of
+	# dissolving into dots.
+	var zoom_boost := 1.0
+	var cam := get_node_or_null("Camera2D") as Camera2D
+	if cam != null:
+		zoom_boost = clampf(1.2 / cam.zoom.x, 1.0, 3.0)
+	var min_body := BODY_MIN * zoom_boost
 
 	# Bucket alive indices by ape species — one MultiMesh per species.
 	var buckets: Array = []
@@ -305,7 +354,13 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		mm.visible_instance_count = m
 		for j in m:
 			var i: int = idx[j]
-			var sz: float = maxf(sizes[i] * BODY_SCALE, BODY_MIN)
+			var sz: float = maxf(sizes[i] * BODY_SCALE, min_body)
+			# New agents pop in with a quick overshoot instead of blinking into
+			# existence; after BIRTH_POP seconds the scale is exactly 1.
+			if have_ids:
+				var age: float = now - float(_birth_times.get(ids[i], now - 1.0))
+				if age < BIRTH_POP:
+					sz *= _ease_out_back(age / BIRTH_POP)
 			# Upright: the hominin stands, not spins — heading drives the
 			# walk shader (moving flag + facing), not the transform rotation.
 			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
@@ -325,6 +380,56 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
 	if module_layers.visible:
 		_refresh_module_layers()
+
+# An id present last frame but gone now died (or left the alive list). Record a
+# fallen-figure ghost at its last smoothed position, in its species and size,
+# and forget its birth timestamp so a recycled id would pop in fresh.
+func _on_agent_death(id: int, prev_idx: int) -> void:
+	_birth_times.erase(id)
+	if _death_effects.size() >= DEATH_CAP:
+		_death_effects.pop_front()
+	var sp := 0
+	var sz := BODY_MIN
+	if prev_idx < _prev_sp.size():
+		sp = ApeSprites.ape_for_species(_prev_sp[prev_idx])
+	if prev_idx < _prev_sizes.size():
+		sz = maxf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN)
+	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz])
+
+# Age and draw the ghosts: fallen figures that fade out quadratically over
+# DEATH_TTL seconds while the sim's own carcass disc persists beneath them.
+func _refresh_death_effects(delta: float) -> void:
+	if _death_mmis.is_empty():
+		return
+	var write := 0
+	for e in _death_effects:
+		e[1] += delta
+		if e[1] < DEATH_TTL:
+			_death_effects[write] = e
+			write += 1
+	_death_effects.resize(write)
+	var buckets: Array = []
+	for sp in ApeSprites.SPECIES_COUNT:
+		buckets.append(PackedInt32Array())
+	for i in _death_effects.size():
+		buckets[_death_effects[i][2]].append(i)
+	for sp in ApeSprites.SPECIES_COUNT:
+		var mm: MultiMesh = _death_mmis[sp].multimesh
+		var idx: PackedInt32Array = buckets[sp]
+		var m := idx.size()
+		if m > mm.instance_count:
+			mm.instance_count = m
+		mm.visible_instance_count = m
+		for j in m:
+			var e: Array = _death_effects[idx[j]]
+			var life: float = 1.0 - float(e[1]) / DEATH_TTL
+			mm.set_instance_transform_2d(j, Transform2D(0.0, Vector2(e[3], e[3]), 0.0, e[0]))
+			mm.set_instance_color(j, Color(1, 1, 1, 0.85 * life * life))
+
+func _ease_out_back(t: float) -> float:
+	const c1 := 1.70158
+	const c3 := c1 + 1.0
+	return 1.0 + c3 * pow(t - 1.0, 3) + c1 * pow(t - 1.0, 2)
 
 func _body_colors(n: int) -> PackedColorArray:
 	match overlay.body_mode:
@@ -389,7 +494,7 @@ func _refresh_carcasses() -> void:
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(f, f), 0.0, pos))
 		mm.set_instance_color(i, Color(0.77, 0.80, 0.86, 0.55))
 
-func _refresh_flashes() -> void:
+func _refresh_flashes() -> int:
 	var pts: PackedVector2Array = sim.combat_flashes()
 	var mm: MultiMesh = flashes.multimesh
 	var m: int = pts.size()
@@ -399,6 +504,7 @@ func _refresh_flashes() -> void:
 	for i in m:
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(6.0, 6.0), 0.0, pts[i]))
 		mm.set_instance_color(i, Color(1.0, 0.92, 0.45, 0.95))
+	return m
 
 # Segment trails: world-space links kept on screen for a few ticks as fading
 # tracers. Combat streaks (attacker→target) are wide, bright, and brief so

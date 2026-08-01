@@ -139,6 +139,17 @@ static func build_species_atlas(sp: int) -> ImageTexture:
 		atlas.blit_rect(cell, Rect2i(0, 0, 16, 16), Vector2i(0, fr * 16))
 	return ImageTexture.create_from_image(atlas)
 
+# Fallen figure for the death ghosts in main.gd: the neutral pose rotated 90°
+# CW inside its 16x16 cell (rect [x,y,w,h] -> [15-(y+h), x, h, w]), zone-painted
+# per species and pre-flipped like the walk atlas for the shared QuadMesh.
+static func build_fallen_texture(sp: int) -> ImageTexture:
+	var blocks: Array = []
+	for b in FIELD_POSES[0]:
+		blocks.append([15 - (b[1] + b[3]), b[0], b[3], b[2], b[4]])
+	var cell := _build_pose(blocks, FIELD_ZONE_COLORS[sp])
+	cell.flip_y()
+	return ImageTexture.create_from_image(cell)
+
 # Build the ImageTexture for ape `idx`, nearest-filtered when displayed so the
 # 16x16 grid stays crisp when scaled up.
 static func build(idx: int) -> ImageTexture:
