@@ -1,23 +1,21 @@
 # anabios screenshot gallery
 
-All shots recaptured under the animated field renderer (walk-cycle shader,
-upright hominins) on the same scenario/seed/tick parameters listed below;
-figures now read as standing 8-bit apes instead of static discs. A few
-event tick-stamps in the prose have drifted from current sim behavior on
-scenarios whose balance changed since the text was written (the images are
-the source of truth).
+Recaptured 2026-07-31 from the current Godot viewer via the `debug_capture.gd`
+harness (`ANABIOS_SHOT*`), 1280x800. Every run is deterministic per scenario
+seed, so each shot reproduces from the env vars below; the population/tally
+figures reflect the **current** sim and have drifted from the prose — the images
+are the source of truth. Wide overview shots use the `ANABIOS_CAM_FIT` whole-world
+([F]) framing; close-ups use `ANABIOS_CAM_ZOOM/_CAM_X/_CAM_Y`. HUD tick =
+`ANABIOS_SHOT_TICKS + ANABIOS_SHOT_FRAMES + 1`. `ANABIOS_SEED` overrides the
+viewer default 12345; grand-theater/settlement/geographic-trade use the tuned
+hub seed 424242, and the E-series use their scenario seeds. Captures run windowed
+(not `--headless`): the harness reads the viewport after `frame_post_draw`.
 
-Captured with the `debug_capture.gd` harness (`ANABIOS_SHOT*`), 1280x800.
-All runs are deterministic per scenario seed, so every shot is reproducible
-with the same env vars. Camera close-ups use `ANABIOS_CAM_ZOOM/_CAM_X/_CAM_Y`.
-The harness freezes the sim while the scene builds, so a capture lands on
-exactly `ANABIOS_SHOT_TICKS + ANABIOS_SHOT_FRAMES (+1)` ticks — the Tick
-column below is the actual HUD tick in each shot. `ANABIOS_SEED` overrides
-the viewer's default seed (12345); geographic-trade is shot on its tuned
-scenario seed 424242 (its four-way terrain junction hub is seed-specific),
-the other scenarios on the viewer default. Captures run windowed (not
-`--headless`): the harness reads the viewport texture after
-`frame_post_draw`, which never completes on the dummy renderer.
+Five heavy scenarios that explode to ~10k agents / hundreds of species —
+`e3-population-dynamics`, `trophic-t1661-boom`, `predprey-t2500-evolved`,
+`sandbox-large-t1200`, `e6-named-behaviors` — are too slow to re-step
+synchronously in the harness (`step_n` over a 6,000-species speciation pass runs
+for many minutes), so they keep their prior stills; the other 37 are fresh.
 
 ## grand theater (all subsystems at once)
 
