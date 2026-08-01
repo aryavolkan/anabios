@@ -184,10 +184,8 @@ fn parallel_matches_serial_across_thread_counts() {
         const TICKS: u64 = 300;
 
         let hash_with_threads = |n: usize| -> u64 {
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(n)
-                .build()
-                .expect("build rayon pool");
+            let pool =
+                rayon::ThreadPoolBuilder::new().num_threads(n).build().expect("build rayon pool");
             let mut world = scenario.instantiate();
             pool.install(|| {
                 for _ in 0..TICKS {
