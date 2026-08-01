@@ -29,6 +29,7 @@ pub fn step(world: &mut World) {
         &world.codex.hostility,
         &mut world.sensors,
         world.world_size,
+        world.gene_tech_coupling,
     );
 
     // Stage 3: decide.
@@ -40,6 +41,7 @@ pub fn step(world: &mut World) {
         &world.desired_direction[..cap],
         world.world_size,
         world.sexual_dimorphism_enabled,
+        world.gene_tech_coupling,
     );
 
     // Stage 4b: E6 ambush instrumentation — consecutive still ticks per

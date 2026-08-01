@@ -76,6 +76,13 @@ pub struct World {
     /// when false. Defaulted so old snapshots without this field deserialize.
     #[serde(default)]
     pub gene_tech_coupling: bool,
+    /// When true, each invention's hard genetic prerequisite
+    /// (`invention::GeneReq`) gates acquisition: discovery rolls exclude the
+    /// invention and social copying stalls while the learner's genome falls
+    /// short of the required slot value. Off by default; opt-in per scenario.
+    /// Bit-identity when false. Defaulted so old snapshots deserialize.
+    #[serde(default)]
+    pub gene_requirements: bool,
     /// When true, the cognitive layer is active: each agent develops a realized
     /// IQ (heritable `CognitivePotential` × juvenile nutrition/social enrichment,
     /// `iq.rs`) that costs basal metabolism and (Phase 2+) gates meme
@@ -304,6 +311,7 @@ impl World {
             terrain_habitat: false,
             inventions_enabled: false,
             gene_tech_coupling: false,
+            gene_requirements: false,
             cognition_enabled: false,
             living_biome: false,
             season_period: 0,

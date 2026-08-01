@@ -96,7 +96,10 @@ use crate::world::World;
 ///     `generate` replaced by the gradient-noise + Whittaker pipeline. This
 ///     changes every world's terrain, so ALL golden hashes are regenerated
 ///     (a genuine trajectory change, not a byte-identical layout growth).
-pub const FORMAT_VERSION: u32 = 22;
+/// v23: hard genetic invention prerequisites — World.gene_requirements flag
+///     (gates `invention::GeneReq` on discovery + social copy). Off in every
+///     golden scenario ⇒ byte-identical behavior; only the layout grew.
+pub const FORMAT_VERSION: u32 = 23;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

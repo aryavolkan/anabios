@@ -23,11 +23,14 @@ pub const SPEED_MAX_CAP: f32 = 4.0;
 /// effective Locomotor speed. Agents without a Locomotor still pay basal
 /// metabolism but do not move. `dimorphism_enabled` (E12) switches on the
 /// sex-linked basal-metabolism factor; pass `false` for exact identity.
+/// `gene_tech_coupling` (TG1) scales the Machinery speed buff by the holder's
+/// affinity gene; pass `false` for exact identity.
 pub fn integrate_all(
     agents: &mut AgentBuffers,
     desired_direction: &[Vec2],
     world_size: f32,
     dimorphism_enabled: bool,
+    gene_tech_coupling: bool,
 ) {
     use rayon::prelude::*;
     let cap = agents.capacity();
@@ -83,8 +86,11 @@ pub fn integrate_all(
             // Openness scales effective speed (identity at neutral personality).
             let speed_factor = crate::personality::personality_speed_factor(&genome[i]);
             // Machinery buff: powered locomotion.
-            let inv_speed =
-                crate::invention::speed_multiplier(crate::invention::held_mask(&meme_vector[i]));
+            let inv_speed = crate::invention::speed_multiplier_coupled(
+                crate::invention::held_mask(&meme_vector[i]),
+                &genome[i],
+                gene_tech_coupling,
+            );
             let v = direction * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed);
             *vel = v;
 
@@ -127,7 +133,7 @@ mod tests {
         // Move 3 ticks worth in one call by scaling the direction? No — direction
         // must be unit. Instead place agent close enough that one 4-unit step wraps.
         // WORLD_SIZE - 1.0 + 4.0 = WORLD_SIZE + 3.0 → wraps to 3.0.
-        integrate_all(&mut w.agents, &desired, w.world_size, false);
+        integrate_all(&mut w.agents, &desired, w.world_size, false, false);
         let p = w.agents.position[id as usize];
         assert!(p.x >= 0.0 && p.x < WORLD_SIZE);
         assert!((p.x - 3.0).abs() < 1e-3, "expected wrap-around to ~3.0, got {}", p.x);
@@ -145,7 +151,7 @@ mod tests {
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
         let before = w.agents.energy[id as usize];
-        integrate_all(&mut w.agents, &desired, w.world_size, false);
+        integrate_all(&mut w.agents, &desired, w.world_size, false, false);
         let after = w.agents.energy[id as usize];
         assert!(after < before);
         // Speed is now SPEED_MAX_CAP * 1.0 = 4.0 units per tick.
@@ -172,7 +178,7 @@ mod tests {
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
         let pos_before = w.agents.position[id as usize];
-        integrate_all(&mut w.agents, &desired, w.world_size, false);
+        integrate_all(&mut w.agents, &desired, w.world_size, false, false);
         let pos_after = w.agents.position[id as usize];
         assert_eq!(pos_before, pos_after, "no Locomotor → no motion");
     }
@@ -187,7 +193,7 @@ mod tests {
             w.agents.sex.set(id as usize, male);
             let desired = vec![Vec2::ZERO; w.agents.capacity()];
             let before = w.agents.energy[id as usize];
-            integrate_all(&mut w.agents, &desired, w.world_size, enabled);
+            integrate_all(&mut w.agents, &desired, w.world_size, enabled, false);
             before - w.agents.energy[id as usize]
         };
         let plain = drain(false, false);
@@ -211,7 +217,7 @@ mod tests {
 
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
-        integrate_all(&mut w.agents, &desired, w.world_size, false);
+        integrate_all(&mut w.agents, &desired, w.world_size, false, false);
         let new_pos = w.agents.position[id as usize];
         // Moved roughly SPEED_MAX_CAP × 1.0 = 4.0 in +x.
         assert!((new_pos.x - 504.0).abs() < 0.1);

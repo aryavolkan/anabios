@@ -81,6 +81,7 @@ fn bench_stages(c: &mut Criterion) {
                     &sw.codex.hostility,
                     &mut sensors,
                     sw.world_size,
+                    sw.gene_tech_coupling,
                 )
             });
             sw.sensors = sensors;

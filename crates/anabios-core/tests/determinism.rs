@@ -152,7 +152,14 @@ const GOLDEN: &[(u64, u64)] =
     // genuine trajectory change — layered on E13's livestock_of /
     // domestication_enabled serialized layout. The worldgen's sin/cos are routed
     // through mathf (libm) so these hashes are bit-identical across OSes.
-    &[(0, 0x04fcf186c6e666d2), (100, 0x3f33fa5b69576837), (1000, 0xbb780f9e16cd7349)];
+    // Refreshed 2026-07-31 (invention requirements + full affinities,
+    // FORMAT_VERSION 22→23): World.gene_requirements added (flag off here ⇒ the
+    // gene gate is inert); every invention gained a GeneAffinity and the coupled
+    // multipliers now read the genome at all buff sites, but coupling is off in
+    // minimal so every term is exactly held_f32 — trajectory byte-identical,
+    // only the serialized layout grew. Material baskets also grew richer, but
+    // resources_enabled is off here so they are never consulted.
+    &[(0, 0x21ab4d62eb377544), (100, 0x9fc0f679f252e6d3), (1000, 0x60a3c8887f27808f)];
 
 #[test]
 fn minimal_scenario_matches_golden_hashes() {

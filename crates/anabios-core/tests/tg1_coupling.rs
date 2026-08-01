@@ -3,7 +3,7 @@
 // when it's off. Exercises the public coupled-multiplier path (Farming↔
 // Conscientiousness as the exemplar).
 use anabios_core::genome::{Genome, GenomeSlot};
-use anabios_core::invention::{self, affinity_gene, bit, FARMING};
+use anabios_core::invention::{self, bit, FARMING};
 
 #[test]
 fn coupling_creates_a_buff_differential_only_when_on() {
@@ -14,12 +14,12 @@ fn coupling_creates_a_buff_differential_only_when_on() {
     lo.set(GenomeSlot::Conscientiousness, 0.0);
 
     // OFF: no differential.
-    let off_hi = invention::graze_multiplier_coupled(mask, affinity_gene(&hi, FARMING), false);
-    let off_lo = invention::graze_multiplier_coupled(mask, affinity_gene(&lo, FARMING), false);
+    let off_hi = invention::graze_multiplier_coupled(mask, &hi, false);
+    let off_lo = invention::graze_multiplier_coupled(mask, &lo, false);
     assert_eq!(off_hi, off_lo);
 
     // ON: the high-gene holder gets the larger buff.
-    let on_hi = invention::graze_multiplier_coupled(mask, affinity_gene(&hi, FARMING), true);
-    let on_lo = invention::graze_multiplier_coupled(mask, affinity_gene(&lo, FARMING), true);
+    let on_hi = invention::graze_multiplier_coupled(mask, &hi, true);
+    let on_lo = invention::graze_multiplier_coupled(mask, &lo, true);
     assert!(on_hi > on_lo, "coupling must create a selection differential");
 }

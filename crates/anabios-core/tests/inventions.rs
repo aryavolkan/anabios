@@ -261,6 +261,7 @@ fn metalworking_raises_combat_damage() {
             &w.codex.hostility,
             &mut w.sensors,
             w.world_size,
+            false,
         );
         w.actions[attacker as usize].fire_intent = 1.0;
         let before = w.agents.energy[target as usize];
@@ -327,7 +328,7 @@ fn fire_holder_pays_extra_metabolism() {
         }
         let desired = vec![Vec2::ZERO; w.agents.capacity()];
         let before = w.agents.energy[id as usize];
-        anabios_core::integrate::integrate_all(&mut w.agents, &desired, w.world_size, false);
+        anabios_core::integrate::integrate_all(&mut w.agents, &desired, w.world_size, false, false);
         before - w.agents.energy[id as usize]
     };
     let plain = drain_with(None);
@@ -927,7 +928,13 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // new Whittaker terrain changes the invention-race trajectory — on top of
     // E13's livestock_of / domestication_enabled layout. Regenerated from the
     // merged code.
-    &[(0, 0xd4616bec29fbe370), (100, 0x32447c1550a30696), (300, 0xeb70a1c498889417)];
+    // Refreshed 2026-07-31 (invention requirements + full affinities,
+    // FORMAT_VERSION 22→23): World.gene_requirements added (off here ⇒ gate
+    // inert); all 10 inventions now carry GeneAffinity with coupled buff sites,
+    // but coupling is off in this scenario so every multiplier is identity;
+    // material baskets grew richer but resources_enabled is off so they are
+    // never consulted — trajectory byte-identical, only the layout grew.
+    &[(0, 0xd981ff10d58aa3ce), (100, 0x4a9a610ccdc046b0), (300, 0x1d5d39a800141ccf)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
