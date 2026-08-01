@@ -136,3 +136,63 @@ jobs:
           echo "a=$a"
           echo "b=$b"
           [ "$a" = "$b" ] || (echo "non-deterministic output" && exit 1)
+
+  godot:
+    name: godot viewer (headless smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The Godot viewer is a gdextension backed by the `anabios-godot` crate.
+      # Nothing else in CI actually builds or loads it — clippy only
+      # compile-checks the crate and the coverage job excludes it — so a broken
+      # gdext binding or a scene/script regression ships undetected today. Build
+      # the cdylib the `.gdextension` loads (its linux entry points at
+      # target/debug/libanabios_godot.so), then load the scenes headless.
+      - name: build gdext cdylib
+        run: cargo build -p anabios-godot
+      # Headless `godot` binary on PATH. Keep the version aligned with the
+      # viewer's target engine (game/project.godot / compatibility_minimum).
+      - name: install Godot
+        uses: lihop/setup-godot@v2
+        with:
+          version: 4.7.1-stable
+      # Import first so resources/UIDs exist (they are git-ignored) and the
+      # gdextension initializes once.
+      - name: import project (headless)
+        run: godot --headless --path game --import
+      # Scene-load smoke: open each scene headless for a few frames and fail on
+      # any script error or a gdextension load failure. Validated locally
+      # against Godot 4.7.1 — both scenes load clean (exit 0, zero SCRIPT ERROR,
+      # godot-rust initialized).
+      - name: scene-load smoke (menu + sim)
+        run: |
+          rc=0
+          for scene in res://scenes/menu.tscn res://scenes/main.tscn; do
+            echo "== smoke: $scene =="
+            log=$(mktemp)
+            if ! godot --headless --path game "$scene" --quit-after 120 >"$log" 2>&1; then
+              echo "::error::godot exited non-zero loading $scene"
+              rc=1
+            fi
+            cat "$log"
+            if grep -qE "SCRIPT ERROR|Can't open dynamic library|Failed to load GDExtension|Cannot open library" "$log"; then
+              echo "::error::viewer smoke found errors loading $scene"
+              rc=1
+            fi
+          done
+          exit $rc
+      # Advisory GDScript lint/format (gdtoolkit — the clippy/rustfmt analog for
+      # GDScript). The viewer is not yet gdformat-clean (23/24 files) and gdlint
+      # reports style issues, so these REPORT but do not block. Flip
+      # `continue-on-error` to false once a dedicated `gdformat game/scripts/`
+      # pass has landed.
+      - name: gdtoolkit lint (advisory)
+        continue-on-error: true
+        run: |
+          pipx install "gdtoolkit==4.*"
+          echo "== gdformat --check =="
+          gdformat --check game/scripts/ || true
+          echo "== gdlint =="
+          gdlint game/scripts/ || true
