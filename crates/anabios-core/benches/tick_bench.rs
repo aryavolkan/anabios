@@ -53,6 +53,39 @@ fn bench_tick(c: &mut Criterion) {
             );
         });
     }
+    // Codex-cadence lever, measured cleanly: one step from the *same warmed*
+    // world (scratch already allocated, tick == 5, an odd tick), differing only
+    // in whether the codex observes this tick. The delta between the two is the
+    // codex's per-tick cost — i.e. what `codex_interval > 1` skips on the
+    // (N-1)/N of ticks that don't observe.
+    {
+        let mut warmed = build_population(10_000, 1);
+        warm(&mut warmed, 5); // tick == 5 afterwards; scratch is sized
+        let mut observe = warmed.clone();
+        observe.codex_interval = 1; // every tick → this step observes
+        group.bench_function("step_with_codex/10000", |b| {
+            b.iter_batched(
+                || observe.clone(),
+                |mut w| {
+                    step(&mut w);
+                    w
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
+        let mut skip = warmed.clone();
+        skip.codex_interval = 2; // tick 5 is odd → this step skips the codex
+        group.bench_function("step_skip_codex/10000", |b| {
+            b.iter_batched(
+                || skip.clone(),
+                |mut w| {
+                    step(&mut w);
+                    w
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
+    }
     group.finish();
 }
 

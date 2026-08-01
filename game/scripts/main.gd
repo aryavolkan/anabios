@@ -57,16 +57,9 @@ var _death_mmis: Array[MultiMeshInstance2D] = []
 var _death_effects: Array = []
 var _birth_times: Dictionary = {}
 
-# Tier 2 effects: event-driven embers and firelight, ambient weather, bloom.
-var _embers: Array[GPUParticles2D] = []
-var _ember_idx: int = 0
-var _fire_lights: Array = []  # entries: [light: PointLight2D, t: float]
-var _fire_light_idx: int = 0
-var _motes: GPUParticles2D = null
-var _snow: GPUParticles2D = null
-var _weather_t: float = 999.0
-var _dust: Array[GPUParticles2D] = []
-var _dust_idx: int = 0
+# Tier 2 effects (embers, firelight, ambient weather, bloom, codex-event
+# watcher) live in viewer_effects.gd, created as a child in _ready.
+var _effects: Node2D = null
 var _moving_sample: PackedVector2Array = PackedVector2Array()
 var _tracks_mmi: MultiMeshInstance2D = null
 var _tracks: Array = []  # entries: [pos: Vector2, ttl: float]
@@ -75,9 +68,9 @@ var _settlement_layer: Node2D = null
 var _ember_ambient_t: float = 0.0
 var _fight_pts: PackedVector2Array = PackedVector2Array()
 var _trade_pts: PackedVector2Array = PackedVector2Array()
-var _event_cursor: int = 0
 var _prev_energy: PackedFloat32Array = PackedFloat32Array()
 var _match_prev: PackedInt32Array = PackedInt32Array()
+
 
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
@@ -171,11 +164,6 @@ func _ready() -> void:
 		add_child(dmi)
 		move_child(dmi, carcasses.get_index() + 1 + sp)
 		_death_mmis.append(dmi)
-	_make_bloom()
-	_make_ember_pool()
-	_make_dust_pool()
-	_make_fire_light_pool()
-	_make_weather()
 	# Footstep tracks: walkers leave a short-lived dotted trail behind them.
 	var tmm := MultiMesh.new()
 	tmm.transform_format = MultiMesh.TRANSFORM_2D
@@ -194,6 +182,12 @@ func _ready() -> void:
 	_climate.name = "Climate"
 	add_child(_climate)
 	move_child(_climate, 0)
+	# Particle / lighting / weather effects subsystem (split from this file).
+	# Created after _climate so it can drive the global climate grade.
+	_effects = preload("res://scripts/viewer_effects.gd").new()
+	_effects.name = "ViewerEffects"
+	add_child(_effects)
+	_effects.setup(sim, $Camera2D as Camera2D, _climate, _disc_texture(8))
 	# Settlement layer: hut clusters + farms at the codex settlement sites.
 	_settlement_layer = preload("res://scripts/settlement_layer.gd").new()
 	_settlement_layer.name = "SettlementLayer"
@@ -237,234 +231,13 @@ func _ready() -> void:
 				if pid >= 0:
 					inspector.pin(pid)
 
-# Screen glow so the additive combat layers (flashes, streaks) bloom where
-# they overlap; the threshold sits above the terrain/UI so only overbright
-# additive stacks and event lights halo.
-func _make_bloom() -> void:
-	var env := Environment.new()
-	env.glow_enabled = true
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
-	env.glow_intensity = 0.4
-	env.glow_strength = 1.0
-	env.glow_bloom = 0.05
-	env.glow_hdr_threshold = 0.9
-	var we := WorldEnvironment.new()
-	we.name = "BloomEnv"
-	we.environment = env
-	add_child(we)
-
-# Pooled one-shot ember bursts for "fire-kind" codex events (discoveries,
-# tools, settlements, markets): a spray of rising orange motes that fades as
-# it cools. Round-robin so a burst never cuts an earlier one short.
-func _make_ember_pool() -> void:
-	for i in 6:
-		var p := GPUParticles2D.new()
-		p.name = "Embers%d" % i
-		p.amount = 22
-		p.lifetime = 1.3
-		p.one_shot = true
-		p.explosiveness = 0.85
-		p.z_index = 6
-		p.visibility_rect = Rect2(-200, -200, 400, 400)
-		p.texture = _disc_texture(8)
-		var m := ParticleProcessMaterial.new()
-		m.direction = Vector3(0, -1, 0)
-		m.spread = 38.0
-		m.initial_velocity_min = 16.0
-		m.initial_velocity_max = 40.0
-		m.gravity = Vector3(0, -16, 0)
-		m.damping_min = 5.0
-		m.damping_max = 12.0
-		m.scale_min = 0.7
-		m.scale_max = 1.5
-		var grad := Gradient.new()
-		grad.set_color(0, Color(1.0, 0.72, 0.30))
-		grad.set_color(1, Color(1.0, 0.30, 0.08, 0.0))
-		var gt := GradientTexture1D.new()
-		gt.gradient = grad
-		m.color_ramp = gt
-		p.process_material = m
-		var add := CanvasItemMaterial.new()
-		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-		p.material = add
-		add_child(p)
-		_embers.append(p)
-
-func _spawn_embers(pos: Vector2) -> void:
-	if _embers.is_empty():
-		return
-	var p := _embers[_ember_idx]
-	_ember_idx = (_ember_idx + 1) % _embers.size()
-	p.position = pos
-	p.restart()
-
-# Pooled dust puffs: at close zoom, walkers kick up a faint tan cloud so
-# movement has a sense of ground contact. Normal-blended (dust occludes,
-# it doesn't glow) and drab next to the embers on purpose.
-func _make_dust_pool() -> void:
-	for i in 3:
-		var p := GPUParticles2D.new()
-		p.name = "Dust%d" % i
-		p.amount = 8
-		p.lifetime = 0.7
-		p.one_shot = true
-		p.explosiveness = 0.7
-		p.z_index = 6
-		p.visibility_rect = Rect2(-100, -100, 200, 200)
-		p.texture = _disc_texture(8)
-		var m := ParticleProcessMaterial.new()
-		m.direction = Vector3(0, -1, 0)
-		m.spread = 160.0
-		m.initial_velocity_min = 5.0
-		m.initial_velocity_max = 13.0
-		m.gravity = Vector3(0, 9, 0)
-		m.damping_min = 8.0
-		m.damping_max = 16.0
-		m.scale_min = 1.2
-		m.scale_max = 2.2
-		var grad := Gradient.new()
-		grad.set_color(0, Color(0.72, 0.66, 0.52, 0.30))
-		grad.set_color(1, Color(0.72, 0.66, 0.52, 0.0))
-		var gt := GradientTexture1D.new()
-		gt.gradient = grad
-		m.color_ramp = gt
-		p.process_material = m
-		add_child(p)
-		_dust.append(p)
-
-func _update_dust() -> void:
-	if _dust.is_empty() or _moving_sample.is_empty() or paused:
-		return
-	if ($Camera2D as Camera2D).zoom.x < 2.5:
-		return
-	var p := _dust[_dust_idx]
-	_dust_idx = (_dust_idx + 1) % _dust.size()
-	p.position = _moving_sample[randi() % _moving_sample.size()] + Vector2(0, 2.0)
-	p.restart()
-
-# Pooled flickering fire lights: a warm PointLight2D (additive, so it can only
-# brighten) that breathes for a few seconds where a fire-kind event fired.
-const FIRE_LIGHT_TTL: float = 4.0
-func _make_fire_light_pool() -> void:
-	var tex := _radial_texture(64)
-	for i in 6:
-		var l := PointLight2D.new()
-		l.name = "FireLight%d" % i
-		l.texture = tex
-		l.texture_scale = 4.0
-		l.color = Color(1.0, 0.58, 0.22)
-		l.blend_mode = Light2D.BLEND_MODE_ADD
-		l.energy = 0.0
-		l.enabled = false
-		add_child(l)
-		_fire_lights.append([l, FIRE_LIGHT_TTL])
-
-func _spawn_fire_light(pos: Vector2) -> void:
-	if _fire_lights.is_empty():
-		return
-	var e: Array = _fire_lights[_fire_light_idx]
-	_fire_light_idx = (_fire_light_idx + 1) % _fire_lights.size()
-	(e[0] as PointLight2D).position = pos
-	(e[0] as PointLight2D).enabled = true
-	e[1] = 0.0
-
-func _update_fire_lights(delta: float) -> void:
-	for e in _fire_lights:
-		var l := e[0] as PointLight2D
-		if not l.enabled:
-			continue
-		e[1] += delta
-		var t: float = e[1]
-		if t >= FIRE_LIGHT_TTL:
-			l.enabled = false
-			l.energy = 0.0
-			continue
-		var fade := 1.0 - t / FIRE_LIGHT_TTL
-		l.energy = (0.85 + 0.3 * sin(t * 23.0) * sin(t * 7.3)) * fade
-
-# Radial falloff texture for the fire lights (bright core, soft edge).
-func _radial_texture(res: int) -> ImageTexture:
-	var img := Image.create(res, res, false, Image.FORMAT_RGBA8)
-	var c := (res - 1) * 0.5
-	for y in res:
-		for x in res:
-			var d := Vector2(x - c, y - c).length() / c
-			var a := clampf(1.0 - d * d, 0.0, 1.0)
-			img.set_pixel(x, y, Color(a, a, a, 1.0))
-	return ImageTexture.create_from_image(img)
-
-# Ambient weather: faint drifting motes everywhere (depth cue), snow when the
-# camera sits over tundra. Both are children of the camera so the emitter
-# follows the view; the emission box is resized to the visible world rect.
-func _make_weather() -> void:
-	var cam := $Camera2D as Camera2D
-	_motes = _make_ambient_particles("Motes", 70, Color(1.0, 0.95, 0.8, 0.10),
-		Vector3(6, 1, 0), 7.0)
-	cam.add_child(_motes)
-	_snow = _make_ambient_particles("Snow", 160, Color(0.95, 0.97, 1.0, 0.55),
-		Vector3(2, 14, 0), 5.0)
-	_snow.emitting = false
-	cam.add_child(_snow)
-
-func _make_ambient_particles(pname: String, amount: int, col: Color, vel: Vector3, lifetime: float) -> GPUParticles2D:
-	var p := GPUParticles2D.new()
-	p.name = pname
-	p.amount = amount
-	p.lifetime = lifetime
-	p.z_index = 7
-	p.visibility_rect = Rect2(-4000, -4000, 8000, 8000)
-	p.texture = _disc_texture(8)
-	var m := ParticleProcessMaterial.new()
-	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	m.emission_box_extents = Vector3(600, 400, 1)
-	m.direction = Vector3(vel.x, vel.y, 0).normalized()
-	m.spread = 180.0
-	m.initial_velocity_min = vel.length() * 0.5
-	m.initial_velocity_max = vel.length() * 1.5
-	m.gravity = Vector3.ZERO
-	m.scale_min = 0.5
-	m.scale_max = 1.1
-	m.color = col
-	p.process_material = m
-	return p
-
-# Keep the camera-child emitters covering the visible world rect, and poll the
-# biome under the camera to toggle snow over tundra (base colour 0.62/0.66/0.62
-# — the only pale, low-chroma land terrain; desert/savanna fail the b test).
-func _update_weather(delta: float) -> void:
-	var cam := $Camera2D as Camera2D
-	var vp: Vector2 = get_viewport_rect().size / cam.zoom.x * 0.55
-	for p in [_motes, _snow]:
-		if p != null:
-			(p.process_material as ParticleProcessMaterial).emission_box_extents = Vector3(vp.x, vp.y, 1)
-	_weather_t += delta
-	if _weather_t < 0.5 or _snow == null:
-		return
-	_weather_t = 0.0
-	# Climate grade: the sim's global optimum washes the world subtly warm
-	# (hothouse) or cool (ice age); -1 means the environment system is off.
-	var opt: float = sim.env_optimum()
-	if _climate != null:
-		var target := Color(1, 1, 1)
-		if opt >= 0.0:
-			target = Color(0.94, 0.97, 1.05).lerp(Color(1.05, 1.0, 0.92), clampf(opt, 0.0, 1.0))
-		_climate.color = _climate.color.lerp(target, 0.25)
-	var res := int(sim.biome_resolution())
-	var colors: PackedColorArray = sim.biome_colors()
-	var world: float = sim.world_size()
-	if res <= 0 or colors.size() != res * res or world <= 0.0:
-		return
-	var cx := clampi(int(fposmod(cam.position.x, world) / world * res), 0, res - 1)
-	var cy := clampi(int(fposmod(cam.position.y, world) / world * res), 0, res - 1)
-	var c: Color = colors[cy * res + cx]
-	var tundra := c.r > 0.5 and c.g > 0.55 and c.b > 0.5 and absf(c.r - c.b) < 0.08
-	# Tundra always snows; a deep global cold snap snows everywhere.
-	_snow.emitting = tundra or (opt >= 0.0 and opt < 0.2)
 
 # Footsteps: each walker sampled this frame drops a small fading track mark,
 # so migration paths and foraging loops read as trampled trails at close zoom.
 const TRACK_TTL: float = 1.4
 const TRACK_CAP: int = 256
+
+
 func _update_tracks(delta: float) -> void:
 	if _tracks_mmi == null:
 		return
@@ -490,27 +263,6 @@ func _update_tracks(delta: float) -> void:
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(1.6, 1.6), 0.0, _tracks[i][0]))
 		mm.set_instance_color(i, Color(0.22, 0.18, 0.13, a))
 
-# Codex-driven effects: fire-kind events light up and throw embers; war-kind
-# events kick the camera. The cursor mirrors codex_panel's so a reload resets.
-func _watch_events() -> void:
-	var count: int = int(sim.codex_event_count())
-	if count < _event_cursor:
-		_event_cursor = 0
-	if count == _event_cursor:
-		return
-	for ev in sim.codex_events_since(_event_cursor).slice(-10):
-		# (slice caps effects at the batch tail: a flood from scenario load or
-		# a tick jump is history, not news — don't light up ancient events.)
-		var t: int = int(ev["type"])
-		var loc: Vector2 = ev.get("loc", Vector2.ZERO)
-		match t:
-			4, 17, 35, 42, 43:   # NovelModule, Discovery, ToolUse, Settlement, Market
-				if loc != Vector2.ZERO:
-					_spawn_embers(loc)
-					_spawn_fire_light(loc)
-			7, 38:               # CombatRaid, War
-				($Camera2D as Camera2D).add_trauma(0.25)
-	_event_cursor = count
 
 # The world is a torus but rendering is not: a camera near a seam sees agents
 # vanish at the edge. Duplicate every agent layer into the 8 neighboring world
@@ -556,6 +308,7 @@ func _make_wrap_clones() -> void:
 				wrap.add_child(clone)
 				_glyph_clones.append(clone)
 
+
 # Give every HUD panel the shared instrument theme, and make the top-left
 # readout legible over any terrain with a dark outline.
 func _apply_ui_theme() -> void:
@@ -568,14 +321,18 @@ func _apply_ui_theme() -> void:
 	hud.add_theme_constant_override("outline_size", 5)
 	hud.add_theme_font_size_override("font_size", 17)
 
+
 func _notification(what: int) -> void:
 	# Pause when the window loses focus; user resumes manually. Screenshot
 	# runs (ANABIOS_SHOT) and showcase recordings (which must keep stepping
 	# hands-free while --write-movie captures) opt out.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT \
-			and not OS.has_environment("ANABIOS_SHOT") \
-			and not GameConfig.showcase_active:
+	if (
+		what == NOTIFICATION_APPLICATION_FOCUS_OUT
+		and not OS.has_environment("ANABIOS_SHOT")
+		and not GameConfig.showcase_active
+	):
 		paused = true
+
 
 func _process(delta: float) -> void:
 	if not paused:
@@ -595,25 +352,25 @@ func _process(delta: float) -> void:
 	if flash_count > 0:
 		($Camera2D as Camera2D).add_trauma(minf(0.03, 0.0025 * flash_count))
 	var world: float = sim.world_size()
-	_update_segment_trail(_streak_trail, streaks.multimesh,
-		streak_segs, streak_cols, STREAK_TTL, 1.0, 0.85, world)
-	_update_segment_trail(_trade_trail, trade_routes.multimesh,
-		trade_segs, trade_cols, TRADE_TTL, 0.5, 0.6, world)
-	_watch_events()
-	_update_fire_lights(delta)
-	_update_weather(delta)
-	_update_dust()
+	_update_segment_trail(
+		_streak_trail, streaks.multimesh, streak_segs, streak_cols, STREAK_TTL, 1.0, 0.85, world
+	)
+	_update_segment_trail(
+		_trade_trail, trade_routes.multimesh, trade_segs, trade_cols, TRADE_TTL, 0.5, 0.6, world
+	)
+	_effects.update(delta, _moving_sample, paused)
 	_update_tracks(delta)
 	# Hearth smoke: settled sites breathe an occasional ember wisp.
 	_ember_ambient_t += delta
 	if _ember_ambient_t > 1.6:
 		_ember_ambient_t = 0.0
 		if _settlement_layer != null and _settlement_layer.has_sites():
-			_spawn_embers(_settlement_layer.random_site_pos())
+			_effects.spawn_embers(_settlement_layer.random_site_pos())
 	var rate: String = "paused" if paused else ("%d×" % ticks_per_frame)
 	var total: int = int(sim.total_trades())
 	var trades: String = "" if total == 0 else " · %d trades" % total
 	hud.text = "tick %d · %d alive · %s%s" % [sim.tick(), sim.alive_count(), rate, trades]
+
 
 # Attacker/trader endpoints of this tick's segments (every second vector), so
 # the body pass can flag nearby agents with the fight/trade action poses.
@@ -623,6 +380,7 @@ func _hotspots(segs: PackedVector2Array, cap: int) -> PackedVector2Array:
 	for i in m:
 		out.append(segs[2 * i])
 	return out
+
 
 func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	var n: int = int(sim.alive_count())
@@ -759,14 +517,14 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 						break
 			if act == 0.0 and moving == 0.0 and have_en:
 				var pi: int = _match_prev[i] if i < _match_prev.size() else -1
-				if pi >= 0 and pi < _prev_energy.size() \
-						and energies[i] > _prev_energy[pi] + 0.02:
+				if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
 					act = 1.0
 			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / 4.0))
 
 	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
 	if module_layers.visible:
 		_refresh_module_layers()
+
 
 # An id present last frame but gone now died (or left the alive list). Record a
 # fallen-figure ghost at its last smoothed position, in its species and size,
@@ -782,6 +540,7 @@ func _on_agent_death(id: int, prev_idx: int) -> void:
 	if prev_idx < _prev_sizes.size():
 		sz = maxf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN)
 	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz])
+
 
 # Age and draw the ghosts: fallen figures that fade out quadratically over
 # DEATH_TTL seconds while the sim's own carcass disc persists beneath them.
@@ -813,10 +572,12 @@ func _refresh_death_effects(delta: float) -> void:
 			mm.set_instance_transform_2d(j, Transform2D(0.0, Vector2(e[3], e[3]), 0.0, e[0]))
 			mm.set_instance_color(j, Color(1, 1, 1, 0.85 * life * life))
 
+
 func _ease_out_back(t: float) -> float:
-	const c1 := 1.70158
-	const c3 := c1 + 1.0
-	return 1.0 + c3 * pow(t - 1.0, 3) + c1 * pow(t - 1.0, 2)
+	const C1 := 1.70158
+	const C3 := C1 + 1.0
+	return 1.0 + C3 * pow(t - 1.0, 3) + C1 * pow(t - 1.0, 2)
+
 
 func _body_colors(n: int) -> PackedColorArray:
 	match overlay.body_mode:
@@ -850,6 +611,7 @@ func _body_colors(n: int) -> PackedColorArray:
 			out4.fill(Color(1, 1, 1))
 			return out4
 
+
 # A shaded disc, multiplied by each MultiMesh instance color to turn the flat
 # body quads into rounded, organic marks. A bright core fading to a darker rim
 # gives each organism a subtle spherical shading (full genome color at the
@@ -860,12 +622,13 @@ func _disc_texture(res: int = 32) -> ImageTexture:
 	var c := (res - 1) * 0.5
 	for y in res:
 		for x in res:
-			var d := Vector2(x - c, y - c).length() / c          # 0 center .. 1 edge
+			var d := Vector2(x - c, y - c).length() / c  # 0 center .. 1 edge
 			var a := clampf(1.0 - smoothstep(0.78, 1.0, d), 0.0, 1.0)
 			# Spherical shading: bright at the core, deepening toward the rim.
 			var shade := 1.0 - 0.42 * smoothstep(0.0, 0.95, d)
 			img.set_pixel(x, y, Color(shade, shade, shade, a))
 	return ImageTexture.create_from_image(img)
+
 
 func _refresh_carcasses() -> void:
 	var data: Array = sim.carcass_data()
@@ -881,6 +644,7 @@ func _refresh_carcasses() -> void:
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(f, f), 0.0, pos))
 		mm.set_instance_color(i, Color(0.77, 0.80, 0.86, 0.55))
 
+
 func _refresh_flashes() -> int:
 	var pts: PackedVector2Array = sim.combat_flashes()
 	var mm: MultiMesh = flashes.multimesh
@@ -893,6 +657,7 @@ func _refresh_flashes() -> int:
 		mm.set_instance_color(i, Color(1.0, 0.92, 0.45, 0.95))
 	return m
 
+
 # Segment trails: world-space links kept on screen for a few ticks as fading
 # tracers. Combat streaks (attacker→target) are wide, bright, and brief so
 # ranged (Spines) volleys read as volleys; trade routes (trader→partner) are
@@ -900,15 +665,25 @@ func _refresh_flashes() -> int:
 # accumulate into visible lanes. Both tint to the initiator's genome hue.
 const STREAK_TTL: int = 8
 const TRADE_TTL: int = 24
-var _streak_trail: Array = [] # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
+var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
 var _trade_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
+
 
 # Append this tick's segments to the trail, age it, then draw each survivor
 # as a tinted quad stretched from→to. Segments are unwrapped with the
 # shortest-path torus delta: a hop across the seam (|delta| near world size)
 # is really a short step the other way, and drawing it with the wrapped delta
 # lets the wrap clones render its continuation past the world edge.
-func _update_segment_trail(trail: Array, mm: MultiMesh, segs: PackedVector2Array, cols: PackedColorArray, ttl: int, width: float, max_alpha: float, world: float) -> void:
+func _update_segment_trail(
+	trail: Array,
+	mm: MultiMesh,
+	segs: PackedVector2Array,
+	cols: PackedColorArray,
+	ttl: int,
+	width: float,
+	max_alpha: float,
+	world: float
+) -> void:
 	for i in segs.size() / 2:
 		trail.append([segs[2 * i], segs[2 * i + 1], ttl, cols[i]])
 	# Perf: cap the trail at the multimesh budget, dropping the oldest first.
@@ -943,6 +718,7 @@ func _update_segment_trail(trail: Array, mm: MultiMesh, segs: PackedVector2Array
 		c.a = max_alpha * float(trail[i][2]) / float(ttl)
 		mm.set_instance_color(i, c)
 
+
 func _refresh_module_layers() -> void:
 	var all: Array = sim.module_glyphs_all()
 	var type_count: int = all.size()
@@ -956,12 +732,16 @@ func _refresh_module_layers() -> void:
 		mm.visible_instance_count = m
 		var col: Color = MODULE_COLORS[t]
 		for i in m:
-			mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(GLYPH_SIZE, GLYPH_SIZE), 0.0, glyphs[i]))
+			mm.set_instance_transform_2d(
+				i, Transform2D(0.0, Vector2(GLYPH_SIZE, GLYPH_SIZE), 0.0, glyphs[i])
+			)
 			mm.set_instance_color(i, col)
+
 
 func _clear_module_layers() -> void:
 	for child in module_layers.get_children():
 		(child as MultiMeshInstance2D).multimesh.visible_instance_count = 0
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:

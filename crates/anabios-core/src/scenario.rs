@@ -122,6 +122,14 @@ pub struct Scenario {
     pub biome_res: Option<usize>,
     #[serde(default)]
     pub hash_res: Option<usize>,
+    /// Opt-in codex-observer cadence (`World::codex_interval`). Absent/`1` =
+    /// run the emergence detectors every tick (the default; bit-identical).
+    /// `N > 1` runs them every N ticks, a throughput lever for long headless
+    /// sweeps that care about aggregate outcomes more than per-tick emergence
+    /// timing. See `World::codex_interval` for the behavioural caveat under
+    /// `war_enabled`.
+    #[serde(default)]
+    pub codex_interval: Option<u64>,
 }
 
 /// A request for `count` agents distributed via the given placement, each
@@ -443,6 +451,9 @@ impl Scenario {
         }
         if let Some(cap) = self.max_population {
             w.max_population = cap;
+        }
+        if let Some(interval) = self.codex_interval {
+            w.codex_interval = interval;
         }
         // Personality is sampled from a DEDICATED rng substream (seeded from the
         // world seed) so it never perturbs `world.rng` — the physics/placement/
@@ -831,6 +842,38 @@ placement = { kind = "uniform" }
             err.to_string().contains("inventions_enabled"),
             "error should name the missing flag, got: {err}"
         );
+    }
+
+    #[test]
+    fn codex_interval_wires_into_world_and_is_observer_only_with_war_off() {
+        use crate::snapshot::state_hash;
+        use crate::tick::step;
+        // Absent => every tick (World default 1).
+        let base = "name=\"t\"\nseed=5\n[[agents]]\ncount=40\nplacement={kind=\"uniform\"}\n";
+        let mut w1 = Scenario::parse_toml(base).expect("parse").instantiate();
+        assert_eq!(w1.codex_interval, 1, "absent codex_interval => every tick");
+        // Set a coarse cadence.
+        let cadenced = format!("codex_interval=7\n{base}");
+        let mut w7 = Scenario::parse_toml(&cadenced).expect("parse").instantiate();
+        assert_eq!(w7.codex_interval, 7);
+        for _ in 0..200 {
+            step(&mut w1);
+            step(&mut w7);
+        }
+        // War is off here, so the codex is a pure observer: cadencing it must
+        // leave every agent trajectory identical (nothing feeds the codex back
+        // into the sim when `war_enabled` is false).
+        let ids: Vec<u32> = w1.agents.iter_alive().collect();
+        assert_eq!(ids, w7.agents.iter_alive().collect::<Vec<u32>>(), "alive set diverged");
+        for id in &ids {
+            assert_eq!(
+                w1.agents.position[*id as usize], w7.agents.position[*id as usize],
+                "agent {id} trajectory changed by codex cadence (war off)"
+            );
+        }
+        // …but the recorded codex genuinely differs (fewer observations), so the
+        // whole-world hashes differ — proving the knob actually skips work.
+        assert_ne!(state_hash(&w1), state_hash(&w7), "cadence should change the codex log");
     }
 
     #[test]
