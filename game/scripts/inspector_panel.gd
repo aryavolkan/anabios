@@ -19,6 +19,7 @@ var _hue: ColorRect
 var _ident: Label
 var _ape_tex: Array = []
 
+
 func _ready() -> void:
 	# Long lines (the module list) were clipping off the panel's right edge;
 	# wrap them within the panel width instead.
@@ -27,6 +28,7 @@ func _ready() -> void:
 	# slot instead of growing down into the species panel below it.
 	label.add_theme_font_size_override("font_size", 12)
 	_build_header()
+
 
 # A header row above the detail: [lineage-hue chip][ape sprite][name + ids].
 func _build_header() -> void:
@@ -60,9 +62,11 @@ func _build_header() -> void:
 	vb.add_child(header)
 	vb.move_child(header, 0)
 
+
 func pin(id: int) -> void:
 	pinned_id = id
 	visible = id >= 0
+
 
 func _process(_delta: float) -> void:
 	if pinned_id < 0:
@@ -78,9 +82,9 @@ func _process(_delta: float) -> void:
 	var ape: int = ApeSprites.ape_for_species(sp)
 	_avatar.texture = _ape_tex[ape]
 	_hue.color = Color.from_hsv(fmod(float(sp) * 0.61803, 1.0), 0.5, 0.95)
-	_ident.text = "%s\nsp %d · lin %d · id %d" % [
-		ApeSprites.NAMES[ape], sp, info["lineage_id"], pinned_id
-	]
+	_ident.text = (
+		"%s\nsp %d · lin %d · id %d" % [ApeSprites.NAMES[ape], sp, info["lineage_id"], pinned_id]
+	)
 	# Cap the module list so a module-heavy agent's wrapped names don't grow the
 	# panel down into the species panel below (the total count is on the line
 	# above). The full count is "module_count".
@@ -89,18 +93,26 @@ func _process(_delta: float) -> void:
 	if mods.size() <= MAX_MODULE_NAMES:
 		mod_str = ", ".join(mods)
 	else:
-		mod_str = ", ".join(mods.slice(0, MAX_MODULE_NAMES)) + " +%d" % (mods.size() - MAX_MODULE_NAMES)
+		mod_str = (
+			", ".join(mods.slice(0, MAX_MODULE_NAMES)) + " +%d" % (mods.size() - MAX_MODULE_NAMES)
+		)
 	var lines: PackedStringArray = [
 		"energy %.1f   age %d" % [info["energy"], info["age"]],
 		"program %d   modules %d" % [info["program_len"], info["module_count"]],
 		"diet %.2f (0=herb 1=carn)" % info["diet_carnivory"],
-		"skill %.2f   technique %.2f   IQ %.2f" % [info["skill"], info["technique"], info.get("iq", 0.0)],
+		(
+			"skill %.2f   technique %.2f   IQ %.2f"
+			% [info["skill"], info["technique"], info.get("iq", 0.0)]
+		),
 		"learn: indiv=%s social=%s" % [str(info["indiv_learn"]), str(info["social_learn"])],
 		"modules: %s" % mod_str,
 	]
 	if info.get("dimorphism_enabled", false):
 		lines.append(
-			"sex %s   dimorphism %.2f" % ["male" if info["sex_male"] else "female", info["dimorphism"]]
+			(
+				"sex %s   dimorphism %.2f"
+				% ["male" if info["sex_male"] else "female", info["dimorphism"]]
+			)
 		)
 	if info.get("domestication_enabled", false):
 		var owner: int = info["livestock_of"]
