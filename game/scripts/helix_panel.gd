@@ -18,7 +18,7 @@ const INVENTION_CHANNEL_BASE := 8
 
 const TOP := 64.0
 const BOTTOM_PAD := 46.0
-const TWIST_TURNS := 1.6            # sine turns across the panel height
+const TWIST_TURNS := 1.6  # sine turns across the panel height
 const REFRESH_EVERY := 5
 
 const GENE_COLOR := Color(0.35, 0.75, 1.0)
@@ -39,6 +39,7 @@ var _edges: Array[Dictionary] = []
 var _slot_names: PackedStringArray = []
 var _channel_names: PackedStringArray = []
 
+
 func _ready() -> void:
 	visible = false
 	_font = ThemeDB.fallback_font
@@ -51,28 +52,40 @@ func _ready() -> void:
 		var inv: Dictionary = inv_cat[k]
 		var aff: Dictionary = inv["affinity"]
 		if not aff.is_empty():
-			_edges.append({
-				"gene_slot": _slot_index_of(String(aff["slot"])),
-				"kind": "affinity",
-				"inv": k,
-			})
+			(
+				_edges
+				. append(
+					{
+						"gene_slot": _slot_index_of(String(aff["slot"])),
+						"kind": "affinity",
+						"inv": k,
+					}
+				)
+			)
 		var req: Dictionary = inv["gene_req"]
 		if not req.is_empty():
-			_edges.append({
-				"gene_slot": _slot_index_of(String(req["slot"])),
-				"kind": "req",
-				"inv": k,
-			})
+			(
+				_edges
+				. append(
+					{
+						"gene_slot": _slot_index_of(String(req["slot"])),
+						"kind": "req",
+						"inv": k,
+					}
+				)
+			)
 	# DIT learning arms: the innate strategy and both learning propensities all
 	# couple the genome to the culturally-transmitted technique channel.
 	for slot in [40, 28, 29]:
 		_edges.append({"gene_slot": slot, "kind": "dit", "inv": -1})
+
 
 func _slot_index_of(slot_name: String) -> int:
 	for i in range(_slot_names.size()):
 		if _slot_names[i] == slot_name:
 			return i
 	return -1
+
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_X:
@@ -82,11 +95,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_snap = sim.helix_snapshot()
 			queue_redraw()
 
+
 func _process(_delta: float) -> void:
 	_frame += 1
 	if _shown and _frame % REFRESH_EVERY == 0:
 		_snap = sim.helix_snapshot()
 		queue_redraw()
+
 
 # Strand point for a node at parameter t in [0,1]. side -1 = gene (left),
 # +1 = meme (right).
@@ -97,16 +112,33 @@ func _strand_point(t: float, side: float) -> Vector2:
 	var phase: float = t * TWIST_TURNS * TAU
 	return Vector2(cx + side * amp * sin(phase), TOP + t * h)
 
+
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.035, 0.05, 0.065, 0.985))
-	draw_string(_font, Vector2(12, 22), "DUAL INHERITANCE — genome × memome",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.85, 0.9, 1.0))
+	draw_string(
+		_font,
+		Vector2(12, 22),
+		"DUAL INHERITANCE — genome × memome",
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		14,
+		Color(0.85, 0.9, 1.0)
+	)
 	draw_string(_font, Vector2(12, 40), "genes", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, GENE_COLOR)
-	draw_string(_font, Vector2(size.x - 66, 40), "memes", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, MEME_COLOR)
+	draw_string(
+		_font, Vector2(size.x - 66, 40), "memes", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, MEME_COLOR
+	)
 	var gene_means: PackedFloat32Array = _snap.get("gene_means", PackedFloat32Array())
 	if gene_means.is_empty():
-		draw_string(_font, Vector2(12, 66), "waiting for a running world…",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)
+		draw_string(
+			_font,
+			Vector2(12, 66),
+			"waiting for a running world…",
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			12,
+			Color.WHITE
+		)
 		return
 	var meme_means: PackedFloat32Array = _snap["meme_means"]
 	var affinity_diff: PackedFloat32Array = _snap["affinity_diff"]
@@ -126,7 +158,9 @@ func _draw() -> void:
 		gene_pos[GENE_SLOTS[i]] = _strand_point((float(i) + 0.5) / float(GENE_SLOTS.size()), -1.0)
 	var meme_pos := {}
 	for j in range(MEME_CHANNELS_LIST.size()):
-		meme_pos[MEME_CHANNELS_LIST[j]] = _strand_point((float(j) + 0.5) / float(MEME_CHANNELS_LIST.size()), 1.0)
+		meme_pos[MEME_CHANNELS_LIST[j]] = _strand_point(
+			(float(j) + 0.5) / float(MEME_CHANNELS_LIST.size()), 1.0
+		)
 
 	# Rungs (under the nodes).
 	for e in _edges:
@@ -163,31 +197,81 @@ func _draw() -> void:
 		var p: Vector2 = gene_pos[slot]
 		var v: float = gene_means[slot]
 		var r: float = 3.0 + 7.0 * clampf(v, 0.0, 1.0)
-		draw_circle(p, r, Color(GENE_COLOR.r, GENE_COLOR.g, GENE_COLOR.b, 0.35 + 0.55 * clampf(v, 0.0, 1.0)))
+		draw_circle(
+			p, r, Color(GENE_COLOR.r, GENE_COLOR.g, GENE_COLOR.b, 0.35 + 0.55 * clampf(v, 0.0, 1.0))
+		)
 		draw_arc(p, r, 0.0, TAU, 24, GENE_COLOR, 1.0, true)
 		var lp := Vector2(12.0, p.y + 4.0)
-		draw_line(Vector2(160.0, p.y), p, Color(GENE_COLOR.r, GENE_COLOR.g, GENE_COLOR.b, 0.15), 1.0)
-		draw_string(_font, lp, "%s %.2f" % [_slot_names[slot], v],
-			HORIZONTAL_ALIGNMENT_LEFT, 148, 9, Color(0.7, 0.85, 1.0))
+		draw_line(
+			Vector2(160.0, p.y), p, Color(GENE_COLOR.r, GENE_COLOR.g, GENE_COLOR.b, 0.15), 1.0
+		)
+		draw_string(
+			_font,
+			lp,
+			"%s %.2f" % [_slot_names[slot], v],
+			HORIZONTAL_ALIGNMENT_LEFT,
+			148,
+			9,
+			Color(0.7, 0.85, 1.0)
+		)
 	for ch in MEME_CHANNELS_LIST:
 		var p: Vector2 = meme_pos[ch]
 		var v: float = meme_means[ch]
 		var r: float = 3.0 + 7.0 * clampf(v, 0.0, 1.0)
-		draw_circle(p, r, Color(MEME_COLOR.r, MEME_COLOR.g, MEME_COLOR.b, 0.35 + 0.55 * clampf(v, 0.0, 1.0)))
+		draw_circle(
+			p, r, Color(MEME_COLOR.r, MEME_COLOR.g, MEME_COLOR.b, 0.35 + 0.55 * clampf(v, 0.0, 1.0))
+		)
 		draw_arc(p, r, 0.0, TAU, 24, MEME_COLOR, 1.0, true)
 		var lp := Vector2(size.x - 128.0, p.y + 4.0)
-		draw_line(p, Vector2(size.x - 132.0, p.y), Color(MEME_COLOR.r, MEME_COLOR.g, MEME_COLOR.b, 0.15), 1.0)
-		draw_string(_font, lp, "%s %.2f" % [_channel_names[ch], v],
-			HORIZONTAL_ALIGNMENT_LEFT, 124, 9, Color(1.0, 0.9, 0.7))
+		draw_line(
+			p,
+			Vector2(size.x - 132.0, p.y),
+			Color(MEME_COLOR.r, MEME_COLOR.g, MEME_COLOR.b, 0.15),
+			1.0
+		)
+		draw_string(
+			_font,
+			lp,
+			"%s %.2f" % [_channel_names[ch], v],
+			HORIZONTAL_ALIGNMENT_LEFT,
+			124,
+			9,
+			Color(1.0, 0.9, 0.7)
+		)
 
 	# Legend.
 	var ly: float = size.y - 30.0
 	draw_line(Vector2(14, ly - 4), Vector2(34, ly - 4), POS_COLOR, 3.0)
-	draw_string(_font, Vector2(40, ly), "holders carry more gene", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.75, 0.8, 0.85))
+	draw_string(
+		_font,
+		Vector2(40, ly),
+		"holders carry more gene",
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		9,
+		Color(0.75, 0.8, 0.85)
+	)
 	_draw_dashed(Vector2(178, ly - 4), Vector2(198, ly - 4), REQ_COLOR)
-	draw_string(_font, Vector2(204, ly), "genetic prerequisite", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.75, 0.8, 0.85))
+	draw_string(
+		_font,
+		Vector2(204, ly),
+		"genetic prerequisite",
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		9,
+		Color(0.75, 0.8, 0.85)
+	)
 	draw_line(Vector2(326, ly - 4), Vector2(346, ly - 4), DIT_COLOR, 1.0)
-	draw_string(_font, Vector2(352, ly), "DIT learning arm", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.75, 0.8, 0.85))
+	draw_string(
+		_font,
+		Vector2(352, ly),
+		"DIT learning arm",
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		9,
+		Color(0.75, 0.8, 0.85)
+	)
+
 
 func _draw_dashed(a: Vector2, b: Vector2, col: Color) -> void:
 	var segments := 10

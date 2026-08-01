@@ -190,6 +190,20 @@ pub struct World {
     /// stays ~16 when the world scales.
     #[serde(default = "default_hash_res")]
     pub hash_res: usize,
+    /// How often (in ticks) the codex observer (`observe_all`) runs. `0`/`1`
+    /// (the default) = every tick — bit-identical to a build without this
+    /// field. `N > 1` runs the ~45 emergence detectors only when
+    /// `tick % N == 0`, trading emergence-detection *resolution* for tick
+    /// throughput on large headless sweeps (the codex is ~a quarter of the
+    /// tick). The codex is a near-pure observer, so cadencing it leaves agent
+    /// trajectories unchanged EXCEPT when `war_enabled` feeds `codex.hostility`
+    /// back into `sense`; there, a coarser cadence slightly perturbs behavior.
+    ///
+    /// `#[serde(skip)]`: a runtime knob, not simulation state — it is excluded
+    /// from `state_hash` (so the determinism gate is unaffected) and resets to
+    /// every-tick on snapshot load, like the other non-state scratch here.
+    #[serde(skip)]
+    pub codex_interval: u64,
     #[serde(skip)]
     pub spatial: UniformSpatialHash,
     /// Spatial hash over `carcasses` (indexed by carcass index), rebuilt each
@@ -331,6 +345,8 @@ impl World {
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
             biome_res: crate::biome::BIOME_RES_DEFAULT,
             hash_res: crate::spatial::HASH_RES_DEFAULT,
+            // Every tick by default (bit-identical to a build without the knob).
+            codex_interval: 1,
             spatial: UniformSpatialHash::with_dims(
                 crate::biome::WORLD_SIZE_DEFAULT,
                 crate::spatial::HASH_RES_DEFAULT,
