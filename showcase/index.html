@@ -481,8 +481,25 @@
   }
 
   function esc(s){ return (""+s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+  // ---- event particles: embers rise from fire-kind events, sparks burst on
+  // war-kind events, others get a faint puff. A small pool in world coords,
+  // stepped once per drawn frame (world units per frame at ~60fps).
+  const particles = [];
+  function spawnParticles(x, y, kind){
+    if (reduce) return;
+    const n = kind==="war" ? 14 : kind==="fire" ? 18 : 6;
+    for (let i=0;i<n;i++){
+      if (particles.length > 400) particles.shift();
+      const a = Math.random()*6.283;
+      particles.push({x, y,
+        vx: Math.cos(a)*(kind==="war" ? 1.6 : 0.35)*(0.4+Math.random()),
+        vy: kind==="fire" ? -(0.4+Math.random()*0.9) : Math.sin(a)*1.1*(0.4+Math.random()),
+        life: 1, decay: 0.008 + Math.random()*0.014, kind});
+    }
+  }
   function emitCodex(e){
     const k = kindOf(e.type);
+    if (e.x || e.y) spawnParticles(e.x, e.y, k);
     const line=document.createElement("div"); line.className="codex-line";
     line.innerHTML = `<span class="tick">${e.t.toLocaleString()}</span> · `+
       `<span class="k-${k}">${esc(humanize(e.type))}</span> `+
@@ -568,6 +585,25 @@
         ctx.fillStyle = hexA(KCOL[k], 0.55*life);
         ctx.beginPath(); ctx.arc(px,py,2.4,0,6.28); ctx.fill();
       }
+    }
+
+    // event particles, additive so embers and sparks glow over the terrain
+    if (!reduce && particles.length){
+      ctx.globalCompositeOperation = "lighter";
+      for (let i=particles.length-1;i>=0;i--){
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        if (p.kind==="fire"){ p.vy -= 0.012; p.vx *= 0.99; }
+        else p.vy += 0.03;
+        p.life -= p.decay;
+        if (p.life<=0){ particles.splice(i,1); continue; }
+        ctx.globalAlpha = Math.min(1, p.life*1.4);
+        ctx.fillStyle = p.kind==="war" ? "#e8b04a" : p.kind==="fire" ? "#e0853a" : hexA(KCOL[p.kind],1);
+        const px=wx(p.x), py=wy(p.y);
+        ctx.fillRect(px-0.8, py-0.8, 1.6, 1.6);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
     }
 
     // agents: interpolate between bracketing frames by id

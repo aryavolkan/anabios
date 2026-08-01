@@ -57,6 +57,23 @@ var _death_mmis: Array[MultiMeshInstance2D] = []
 var _death_effects: Array = []
 var _birth_times: Dictionary = {}
 
+# Tier 2 effects: event-driven embers and firelight, ambient weather, bloom.
+var _embers: Array[GPUParticles2D] = []
+var _ember_idx: int = 0
+var _fire_lights: Array = []  # entries: [light: PointLight2D, t: float]
+var _fire_light_idx: int = 0
+var _motes: GPUParticles2D = null
+var _snow: GPUParticles2D = null
+var _weather_t: float = 999.0
+var _dust: Array[GPUParticles2D] = []
+var _dust_idx: int = 0
+var _moving_sample: PackedVector2Array = PackedVector2Array()
+var _fight_pts: PackedVector2Array = PackedVector2Array()
+var _trade_pts: PackedVector2Array = PackedVector2Array()
+var _event_cursor: int = 0
+var _prev_energy: PackedFloat32Array = PackedFloat32Array()
+var _match_prev: PackedInt32Array = PackedInt32Array()
+
 
 func _ready() -> void:
 	var scenario_path: String = GameConfig.scenario_path
@@ -90,9 +107,8 @@ func _ready() -> void:
 	# Texture + material are set BEFORE _make_wrap_clones() so the 8 torus
 	# wrap clones inherit them; use_custom_data exposes INSTANCE_CUSTOM to
 	# the shader (and is shared by the clones via the same MultiMesh).
-	var body_mat := ShaderMaterial.new()
-	body_mat.shader = FieldAgentShader
-	body_mat.set_shader_parameter("frames", ApeSprites.WALK_FRAME_COUNT)
+	# Per-species gait cadence: heavy apes amble, the upright toolmaker strides.
+	const WALK_FPS := [5.0, 4.2, 4.6, 4.8, 5.6]
 	_body_mmis.append(bodies)
 	for sp in range(1, ApeSprites.SPECIES_COUNT):
 		var mmi := MultiMeshInstance2D.new()
@@ -110,7 +126,11 @@ func _ready() -> void:
 		var mmi := _body_mmis[sp]
 		mmi.texture = ApeSprites.build_species_atlas(sp)
 		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		mmi.material = body_mat
+		var sp_mat := ShaderMaterial.new()
+		sp_mat.shader = FieldAgentShader
+		sp_mat.set_shader_parameter("frames", ApeSprites.POSE_COUNT)
+		sp_mat.set_shader_parameter("walk_fps", WALK_FPS[sp])
+		mmi.material = sp_mat
 	# use_custom_data can only be toggled at instance_count 0; the scene's
 	# Bodies ships with a pre-grown buffer, so clear first, enable, then
 	# _refresh_bodies re-grows it on the first tick. (The code-created
@@ -147,6 +167,11 @@ func _ready() -> void:
 		add_child(dmi)
 		move_child(dmi, carcasses.get_index() + 1 + sp)
 		_death_mmis.append(dmi)
+	_make_bloom()
+	_make_ember_pool()
+	_make_dust_pool()
+	_make_fire_light_pool()
+	_make_weather()
 	_make_wrap_clones()
 	# Replay & event camera (E2): snapshot ring + R/U/V modes.
 	var replay_manager := preload("res://scripts/replay_manager.gd").new()
@@ -184,6 +209,263 @@ func _ready() -> void:
 				var pid: int = int(sim.agent_near(focus, 5.0))
 				if pid >= 0:
 					inspector.pin(pid)
+
+
+# Screen glow so the additive combat layers (flashes, streaks) bloom where
+# they overlap; the threshold sits above the terrain/UI so only overbright
+# additive stacks and event lights halo.
+func _make_bloom() -> void:
+	var env := Environment.new()
+	env.glow_enabled = true
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	env.glow_intensity = 0.4
+	env.glow_strength = 1.0
+	env.glow_bloom = 0.05
+	env.glow_hdr_threshold = 0.9
+	var we := WorldEnvironment.new()
+	we.name = "BloomEnv"
+	we.environment = env
+	add_child(we)
+
+
+# Pooled one-shot ember bursts for "fire-kind" codex events (discoveries,
+# tools, settlements, markets): a spray of rising orange motes that fades as
+# it cools. Round-robin so a burst never cuts an earlier one short.
+func _make_ember_pool() -> void:
+	for i in 6:
+		var p := GPUParticles2D.new()
+		p.name = "Embers%d" % i
+		p.amount = 22
+		p.lifetime = 1.3
+		p.one_shot = true
+		p.explosiveness = 0.85
+		p.z_index = 6
+		p.visibility_rect = Rect2(-200, -200, 400, 400)
+		p.texture = _disc_texture(8)
+		var m := ParticleProcessMaterial.new()
+		m.direction = Vector3(0, -1, 0)
+		m.spread = 38.0
+		m.initial_velocity_min = 16.0
+		m.initial_velocity_max = 40.0
+		m.gravity = Vector3(0, -16, 0)
+		m.damping_min = 5.0
+		m.damping_max = 12.0
+		m.scale_min = 0.7
+		m.scale_max = 1.5
+		var grad := Gradient.new()
+		grad.set_color(0, Color(1.0, 0.72, 0.30))
+		grad.set_color(1, Color(1.0, 0.30, 0.08, 0.0))
+		var gt := GradientTexture1D.new()
+		gt.gradient = grad
+		m.color_ramp = gt
+		p.process_material = m
+		var add := CanvasItemMaterial.new()
+		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		p.material = add
+		add_child(p)
+		_embers.append(p)
+
+
+func _spawn_embers(pos: Vector2) -> void:
+	if _embers.is_empty():
+		return
+	var p := _embers[_ember_idx]
+	_ember_idx = (_ember_idx + 1) % _embers.size()
+	p.position = pos
+	p.restart()
+
+
+# Pooled dust puffs: at close zoom, walkers kick up a faint tan cloud so
+# movement has a sense of ground contact. Normal-blended (dust occludes,
+# it doesn't glow) and drab next to the embers on purpose.
+func _make_dust_pool() -> void:
+	for i in 3:
+		var p := GPUParticles2D.new()
+		p.name = "Dust%d" % i
+		p.amount = 8
+		p.lifetime = 0.7
+		p.one_shot = true
+		p.explosiveness = 0.7
+		p.z_index = 6
+		p.visibility_rect = Rect2(-100, -100, 200, 200)
+		p.texture = _disc_texture(8)
+		var m := ParticleProcessMaterial.new()
+		m.direction = Vector3(0, -1, 0)
+		m.spread = 160.0
+		m.initial_velocity_min = 5.0
+		m.initial_velocity_max = 13.0
+		m.gravity = Vector3(0, 9, 0)
+		m.damping_min = 8.0
+		m.damping_max = 16.0
+		m.scale_min = 1.2
+		m.scale_max = 2.2
+		var grad := Gradient.new()
+		grad.set_color(0, Color(0.72, 0.66, 0.52, 0.30))
+		grad.set_color(1, Color(0.72, 0.66, 0.52, 0.0))
+		var gt := GradientTexture1D.new()
+		gt.gradient = grad
+		m.color_ramp = gt
+		p.process_material = m
+		add_child(p)
+		_dust.append(p)
+
+
+func _update_dust() -> void:
+	if _dust.is_empty() or _moving_sample.is_empty() or paused:
+		return
+	if ($Camera2D as Camera2D).zoom.x < 2.5:
+		return
+	var p := _dust[_dust_idx]
+	_dust_idx = (_dust_idx + 1) % _dust.size()
+	p.position = _moving_sample[randi() % _moving_sample.size()] + Vector2(0, 2.0)
+	p.restart()
+
+
+# Pooled flickering fire lights: a warm PointLight2D (additive, so it can only
+# brighten) that breathes for a few seconds where a fire-kind event fired.
+const FIRE_LIGHT_TTL: float = 4.0
+
+
+func _make_fire_light_pool() -> void:
+	var tex := _radial_texture(64)
+	for i in 6:
+		var l := PointLight2D.new()
+		l.name = "FireLight%d" % i
+		l.texture = tex
+		l.texture_scale = 4.0
+		l.color = Color(1.0, 0.58, 0.22)
+		l.blend_mode = Light2D.BLEND_MODE_ADD
+		l.energy = 0.0
+		l.enabled = false
+		add_child(l)
+		_fire_lights.append([l, FIRE_LIGHT_TTL])
+
+
+func _spawn_fire_light(pos: Vector2) -> void:
+	if _fire_lights.is_empty():
+		return
+	var e: Array = _fire_lights[_fire_light_idx]
+	_fire_light_idx = (_fire_light_idx + 1) % _fire_lights.size()
+	(e[0] as PointLight2D).position = pos
+	(e[0] as PointLight2D).enabled = true
+	e[1] = 0.0
+
+
+func _update_fire_lights(delta: float) -> void:
+	for e in _fire_lights:
+		var l := e[0] as PointLight2D
+		if not l.enabled:
+			continue
+		e[1] += delta
+		var t: float = e[1]
+		if t >= FIRE_LIGHT_TTL:
+			l.enabled = false
+			l.energy = 0.0
+			continue
+		var fade := 1.0 - t / FIRE_LIGHT_TTL
+		l.energy = (0.85 + 0.3 * sin(t * 23.0) * sin(t * 7.3)) * fade
+
+
+# Radial falloff texture for the fire lights (bright core, soft edge).
+func _radial_texture(res: int) -> ImageTexture:
+	var img := Image.create(res, res, false, Image.FORMAT_RGBA8)
+	var c := (res - 1) * 0.5
+	for y in res:
+		for x in res:
+			var d := Vector2(x - c, y - c).length() / c
+			var a := clampf(1.0 - d * d, 0.0, 1.0)
+			img.set_pixel(x, y, Color(a, a, a, 1.0))
+	return ImageTexture.create_from_image(img)
+
+
+# Ambient weather: faint drifting motes everywhere (depth cue), snow when the
+# camera sits over tundra. Both are children of the camera so the emitter
+# follows the view; the emission box is resized to the visible world rect.
+func _make_weather() -> void:
+	var cam := $Camera2D as Camera2D
+	_motes = _make_ambient_particles(
+		"Motes", 70, Color(1.0, 0.95, 0.8, 0.10), Vector3(6, 1, 0), 7.0
+	)
+	cam.add_child(_motes)
+	_snow = _make_ambient_particles(
+		"Snow", 160, Color(0.95, 0.97, 1.0, 0.55), Vector3(2, 14, 0), 5.0
+	)
+	_snow.emitting = false
+	cam.add_child(_snow)
+
+
+func _make_ambient_particles(
+	pname: String, amount: int, col: Color, vel: Vector3, lifetime: float
+) -> GPUParticles2D:
+	var p := GPUParticles2D.new()
+	p.name = pname
+	p.amount = amount
+	p.lifetime = lifetime
+	p.z_index = 7
+	p.visibility_rect = Rect2(-4000, -4000, 8000, 8000)
+	p.texture = _disc_texture(8)
+	var m := ParticleProcessMaterial.new()
+	m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	m.emission_box_extents = Vector3(600, 400, 1)
+	m.direction = Vector3(vel.x, vel.y, 0).normalized()
+	m.spread = 180.0
+	m.initial_velocity_min = vel.length() * 0.5
+	m.initial_velocity_max = vel.length() * 1.5
+	m.gravity = Vector3.ZERO
+	m.scale_min = 0.5
+	m.scale_max = 1.1
+	m.color = col
+	p.process_material = m
+	return p
+
+
+# Keep the camera-child emitters covering the visible world rect, and poll the
+# biome under the camera to toggle snow over tundra (base colour 0.62/0.66/0.62
+# — the only pale, low-chroma land terrain; desert/savanna fail the b test).
+func _update_weather(delta: float) -> void:
+	var cam := $Camera2D as Camera2D
+	var vp: Vector2 = get_viewport_rect().size / cam.zoom.x * 0.55
+	for p in [_motes, _snow]:
+		if p != null:
+			(p.process_material as ParticleProcessMaterial).emission_box_extents = Vector3(
+				vp.x, vp.y, 1
+			)
+	_weather_t += delta
+	if _weather_t < 0.5 or _snow == null:
+		return
+	_weather_t = 0.0
+	var res := int(sim.biome_resolution())
+	var colors: PackedColorArray = sim.biome_colors()
+	var world: float = sim.world_size()
+	if res <= 0 or colors.size() != res * res or world <= 0.0:
+		return
+	var cx := clampi(int(fposmod(cam.position.x, world) / world * res), 0, res - 1)
+	var cy := clampi(int(fposmod(cam.position.y, world) / world * res), 0, res - 1)
+	var c: Color = colors[cy * res + cx]
+	_snow.emitting = c.r > 0.5 and c.g > 0.55 and c.b > 0.5 and absf(c.r - c.b) < 0.08
+
+
+# Codex-driven effects: fire-kind events light up and throw embers; war-kind
+# events kick the camera. The cursor mirrors codex_panel's so a reload resets.
+func _watch_events() -> void:
+	var count: int = int(sim.codex_event_count())
+	if count < _event_cursor:
+		_event_cursor = 0
+	if count == _event_cursor:
+		return
+	for ev in sim.codex_events_since(_event_cursor).slice(-10):
+		# (slice caps effects at the batch tail: a flood from scenario load or
+		# a tick jump is history, not news — don't light up ancient events.)
+		var t: int = int(ev["type"])
+		var loc: Vector2 = ev.get("loc", Vector2.ZERO)
+		match t:
+			4, 17, 35, 42, 43:  # NovelModule, Discovery, ToolUse, Settlement, Market
+				if loc != Vector2.ZERO:
+					_spawn_embers(loc)
+					_spawn_fire_light(loc)
+			7, 38:  # CombatRaid, War
+				($Camera2D as Camera2D).add_trauma(0.25)
+	_event_cursor = count
 
 
 # The world is a torus but rendering is not: a camera near a seam sees agents
@@ -259,6 +541,14 @@ func _notification(what: int) -> void:
 func _process(delta: float) -> void:
 	if not paused:
 		sim.step_n(ticks_per_frame)
+	# Fetch this tick's segments once: the trail pass draws them and the body
+	# pass uses their attacker/trader endpoints as fight/trade hotspots.
+	var streak_segs: PackedVector2Array = sim.combat_streaks()
+	var streak_cols: PackedColorArray = sim.combat_streak_colors()
+	var trade_segs: PackedVector2Array = sim.trade_routes()
+	var trade_cols: PackedColorArray = sim.trade_route_colors()
+	_fight_pts = _hotspots(streak_segs, 64)
+	_trade_pts = _hotspots(trade_segs, 64)
 	_refresh_bodies(delta)
 	_refresh_carcasses()
 	_refresh_death_effects(delta)
@@ -267,29 +557,29 @@ func _process(delta: float) -> void:
 		($Camera2D as Camera2D).add_trauma(minf(0.03, 0.0025 * flash_count))
 	var world: float = sim.world_size()
 	_update_segment_trail(
-		_streak_trail,
-		streaks.multimesh,
-		sim.combat_streaks(),
-		sim.combat_streak_colors(),
-		STREAK_TTL,
-		1.0,
-		0.85,
-		world
+		_streak_trail, streaks.multimesh, streak_segs, streak_cols, STREAK_TTL, 1.0, 0.85, world
 	)
 	_update_segment_trail(
-		_trade_trail,
-		trade_routes.multimesh,
-		sim.trade_routes(),
-		sim.trade_route_colors(),
-		TRADE_TTL,
-		0.5,
-		0.6,
-		world
+		_trade_trail, trade_routes.multimesh, trade_segs, trade_cols, TRADE_TTL, 0.5, 0.6, world
 	)
+	_watch_events()
+	_update_fire_lights(delta)
+	_update_weather(delta)
+	_update_dust()
 	var rate: String = "paused" if paused else ("%d×" % ticks_per_frame)
 	var total: int = int(sim.total_trades())
 	var trades: String = "" if total == 0 else " · %d trades" % total
 	hud.text = "tick %d · %d alive · %s%s" % [sim.tick(), sim.alive_count(), rate, trades]
+
+
+# Attacker/trader endpoints of this tick's segments (every second vector), so
+# the body pass can flag nearby agents with the fight/trade action poses.
+func _hotspots(segs: PackedVector2Array, cap: int) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var m := mini(segs.size() / 2, cap)
+	for i in m:
+		out.append(segs[2 * i])
+	return out
 
 
 func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
@@ -303,6 +593,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		_prev_smooth = PackedVector2Array()
 		_prev_sizes = PackedFloat32Array()
 		_prev_sp = PackedInt32Array()
+		_prev_energy = PackedFloat32Array()
 		return
 
 	var positions: PackedVector2Array = sim.alive_positions()
@@ -310,10 +601,12 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	var sizes: PackedFloat32Array = sim.alive_sizes()
 	var rots: PackedFloat32Array = sim.alive_rotations()
 	var sp_ids: PackedInt32Array = sim.alive_species_ids()
+	var energies: PackedFloat32Array = sim.alive_energy()
 	var body_colors: PackedColorArray = _body_colors(n)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n
 	var have_ids: bool = ids.size() == n
+	var have_en: bool = energies.size() == n
 
 	# Smoothed render positions: merge-join the current ascending id array
 	# against last frame's to find each agent's previous smoothed position,
@@ -323,9 +616,12 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	var k: float = 1.0 - pow(1.0 - SMOOTH, delta * 60.0)
 	var now: float = Time.get_ticks_msec() / 1000.0
 	var smooth: PackedVector2Array = positions
+	_match_prev = PackedInt32Array()
 	if have_ids:
 		smooth = PackedVector2Array()
 		smooth.resize(n)
+		_match_prev.resize(n)
+		_match_prev.fill(-1)
 		var p := 0
 		var pn: int = _prev_ids.size()
 		for i in n:
@@ -335,6 +631,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				p += 1
 			var target: Vector2 = positions[i]
 			if p < pn and _prev_ids[p] == id:
+				_match_prev[i] = p
 				var from: Vector2 = _prev_smooth[p]
 				if from.distance_squared_to(target) <= SNAP_DIST * SNAP_DIST:
 					smooth[i] = from.lerp(target, k)
@@ -351,6 +648,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		_prev_smooth = smooth
 		_prev_sizes = sizes
 		_prev_sp = sp_ids
+		_prev_energy = energies
 
 	# Zoom-compensated floor: as the camera pulls out, the minimum body size
 	# grows so hominin figures stay legible at the world overview instead of
@@ -360,6 +658,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	if cam != null:
 		zoom_boost = clampf(1.2 / cam.zoom.x, 1.0, 3.0)
 	var min_body := BODY_MIN * zoom_boost
+	# First few walkers this frame feed the close-zoom dust puffs.
+	_moving_sample = PackedVector2Array()
 
 	# Bucket alive indices by ape species — one MultiMesh per species.
 	var buckets: Array = []
@@ -397,9 +697,28 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			# heading's x-sign.
 			var rot: float = rots[i] if have_rots else 0.0
 			var moving: float = 1.0 if rot != 0.0 else 0.0
+			if moving != 0.0 and _moving_sample.size() < 8:
+				_moving_sample.append(smooth[i])
 			var face_left: float = 1.0 if cos(rot) < 0.0 else 0.0
 			var phase: float = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
-			mm.set_instance_custom_data(j, Color(phase, moving, face_left, 0.0))
+			# Action pose from sim signals: near a combat streak's attacker end
+			# -> fight; near a trade route's trader end -> trade; idle with
+			# rising energy -> eat. Priority fight > trade > eat.
+			var act := 0.0
+			for fp in _fight_pts:
+				if smooth[i].distance_squared_to(fp) < 36.0:
+					act = 2.0
+					break
+			if act == 0.0:
+				for tp in _trade_pts:
+					if smooth[i].distance_squared_to(tp) < 36.0:
+						act = 3.0
+						break
+			if act == 0.0 and moving == 0.0 and have_en:
+				var pi: int = _match_prev[i] if i < _match_prev.size() else -1
+				if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
+					act = 1.0
+			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / 3.0))
 
 	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
 	if module_layers.visible:
