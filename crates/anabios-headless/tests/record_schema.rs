@@ -72,6 +72,26 @@ fn record_output_matches_player_schema() {
         assert!(frames[0][key].is_array(), "frames[0].{key} must be an array");
     }
 
+    // frames[].st (combat streaks) and frames[].tr (trade routes) are
+    // `#[serde(skip_serializing_if = "Vec::is_empty")]` in record.rs, so
+    // presence is NOT required on any given frame — only guard shape when
+    // the key is present, across every frame, so the test stays robust on
+    // runs with no combat/trade while still catching a type/shape drift.
+    for (i, frame) in frames.iter().enumerate() {
+        for key in ["st", "tr"] {
+            let Some(v) = frame.get(key) else { continue };
+            let arr = v.as_array().unwrap_or_else(|| panic!("frames[{i}].{key} must be an array"));
+            assert!(
+                arr.len().is_multiple_of(4),
+                "frames[{i}].{key} length {} is not a multiple of 4 (flattened [x1,y1,x2,y2,...])",
+                arr.len()
+            );
+            for (j, elem) in arr.iter().enumerate() {
+                assert!(elem.is_i64() || elem.is_u64(), "frames[{i}].{key}[{j}] is not an integer");
+            }
+        }
+    }
+
     // sites: array; guard the non-empty case (predator-prey may not settle).
     let sites = replay.get("sites").and_then(Value::as_array).expect("`sites` must be an array");
     if let Some(first) = sites.first() {
