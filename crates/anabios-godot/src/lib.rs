@@ -41,10 +41,15 @@ struct CoevoSample {
     /// World adoption fraction per maladaptive practice (0 when cognition off).
     practice_adopt_frac: [f32; anabios_core::practice::PRACTICE_COUNT],
     /// Per affinity-bearing invention: mean affinity gene over holders vs
-    /// non-holders. The selection differential is `holder − nonholder`. Zero
-    /// for inventions with no affinity; all zero when the tree is inactive.
+    /// non-holders. Zero for inventions with no affinity; all zero when the
+    /// tree is inactive.
     affinity_holder_mean: [f32; anabios_core::invention::INVENTION_COUNT],
     affinity_nonholder_mean: [f32; anabios_core::invention::INVENTION_COUNT],
+    /// Selection differential (holder − nonholder), but exactly 0.0 while
+    /// either side of the comparison is empty — pre-adoption there is no
+    /// differential to report, and `0 − nonholder_mean` would read as a
+    /// spurious strong negative.
+    affinity_diff: [f32; anabios_core::invention::INVENTION_COUNT],
 }
 
 /// Soft cap on retained samples (~tens of KB each thousand ticks). Past this we
@@ -346,7 +351,7 @@ impl Simulation {
                         out.push(match which {
                             "holder" => s.affinity_holder_mean[idx],
                             "nonholder" => s.affinity_nonholder_mean[idx],
-                            _ => s.affinity_holder_mean[idx] - s.affinity_nonholder_mean[idx],
+                            _ => s.affinity_diff[idx],
                         });
                     }
                     return out;
@@ -590,12 +595,28 @@ impl Simulation {
         d.set("inventions", &held);
         d.set("invention_levels", &levels);
         d.set("tech_era", anabios_core::invention::tech_era(mask) as i64);
+        // Gene-gate visibility: unheld inventions this genome is currently too
+        // short of the GeneReq to acquire (only meaningful with the flag on).
+        d.set("gene_requirements", w.gene_requirements);
+        let mut gated = PackedStringArray::new();
+        if w.gene_requirements {
+            for (k, inv) in anabios_core::invention::INVENTIONS.iter().enumerate() {
+                if mask & anabios_core::invention::bit(k) == 0
+                    && !anabios_core::invention::gene_permits(g, k, true)
+                {
+                    gated.push(inv.name);
+                }
+            }
+        }
+        d.set("gated_inventions", &gated);
         d
     }
 
     /// The full invention tree metadata (static): one Dictionary per
     /// invention — `{ key, name, era, prereqs: PackedStringArray of keys,
-    /// buff, debuff }`. Lets GDScript render the tree without duplicating it.
+    /// buff, debuff, materials: PackedFloat32Array (per trade good),
+    /// affinity: {slot, coeff} or {}, gene_req: {slot, min} or {} }`.
+    /// Lets GDScript render the tree without duplicating it.
     #[func]
     fn invention_catalog(&self) -> Array<VarDictionary> {
         let mut out = Array::<VarDictionary>::new();
@@ -611,9 +632,127 @@ impl Simulation {
             d.set("prereqs", &prereqs);
             d.set("buff", inv.buff);
             d.set("debuff", inv.debuff);
+            let mut materials = PackedFloat32Array::new();
+            for &cost in inv.materials.iter() {
+                materials.push(cost);
+            }
+            d.set("materials", &materials);
+            let mut affinity = VarDictionary::new();
+            if let Some(a) = inv.affinity {
+                affinity.set("slot", anabios_core::genome::SLOT_NAMES[a.slot.idx()]);
+                affinity.set("coeff", a.coeff);
+            }
+            d.set("affinity", &affinity);
+            let mut gene_req = VarDictionary::new();
+            if let Some(req) = inv.gene_req {
+                gene_req.set("slot", anabios_core::genome::SLOT_NAMES[req.slot.idx()]);
+                gene_req.set("min", req.min);
+            }
+            d.set("gene_req", &gene_req);
             out.push(&d);
         }
         out
+    }
+
+    /// All 50 genome-slot display names, indexed by slot number (static).
+    #[func]
+    fn genome_slot_catalog(&self) -> PackedStringArray {
+        let mut out = PackedStringArray::new();
+        for name in anabios_core::genome::SLOT_NAMES.iter() {
+            out.push(*name);
+        }
+        out
+    }
+
+    /// All meme-channel display names, indexed by channel (static): the base
+    /// culture channels, then the invention tree, then the practices.
+    #[func]
+    fn meme_channel_catalog(&self) -> PackedStringArray {
+        const BASE: [&str; anabios_core::invention::INVENTION_CHANNEL_BASE] =
+            ["alarm", "dialect", "cooperation", "hunt", "meme_4", "skill", "technique", "meme_7"];
+        let mut out = PackedStringArray::new();
+        for name in BASE.iter() {
+            out.push(*name);
+        }
+        for inv in anabios_core::invention::INVENTIONS.iter() {
+            out.push(inv.key);
+        }
+        for p in anabios_core::practice::PRACTICES.iter() {
+            out.push(p.key);
+        }
+        out
+    }
+
+    /// Live dual-inheritance snapshot for the helix panel (view-only):
+    /// `{ gene_means: PackedFloat32Array(50) — population mean per genome
+    /// slot, meme_means: PackedFloat32Array(20) — population mean per meme
+    /// channel, affinity_diff: PackedFloat32Array(10) — per-invention
+    /// holder−nonholder affinity-gene mean (0 when no holders or the tree is
+    /// inactive) }`. Computed on demand; never mutates the world.
+    #[func]
+    fn helix_snapshot(&self) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        let mut gene_means = PackedFloat32Array::new();
+        let mut meme_means = PackedFloat32Array::new();
+        let mut affinity_diff = PackedFloat32Array::new();
+        let Some(w) = self.inner.as_ref() else {
+            d.set("gene_means", &gene_means);
+            d.set("meme_means", &meme_means);
+            d.set("affinity_diff", &affinity_diff);
+            return d;
+        };
+        use anabios_core::genome::GENOME_LEN;
+        use anabios_core::invention::{bit, held_mask, INVENTIONS, INVENTION_COUNT};
+        use anabios_core::program::MEME_CHANNELS;
+        let mut gene_sum = [0.0f32; GENOME_LEN];
+        let mut meme_sum = [0.0f32; MEME_CHANNELS];
+        let mut hold_sum = [0.0f32; INVENTION_COUNT];
+        let mut hold_n = [0.0f32; INVENTION_COUNT];
+        let mut non_sum = [0.0f32; INVENTION_COUNT];
+        let mut non_n = [0.0f32; INVENTION_COUNT];
+        let mut n = 0.0f32;
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            n += 1.0;
+            let g = &w.agents.genome[i];
+            for (slot, sum) in gene_sum.iter_mut().enumerate() {
+                *sum += g.raw(slot);
+            }
+            let m = &w.agents.meme_vector[i];
+            for ch in 0..MEME_CHANNELS {
+                meme_sum[ch] += m[ch];
+            }
+            let mask = held_mask(m);
+            for (k, inv) in INVENTIONS.iter().enumerate() {
+                let Some(a) = inv.affinity else { continue };
+                if mask & bit(k) != 0 {
+                    hold_sum[k] += g.get(a.slot);
+                    hold_n[k] += 1.0;
+                } else {
+                    non_sum[k] += g.get(a.slot);
+                    non_n[k] += 1.0;
+                }
+            }
+        }
+        let mean = |sum: f32, n: f32| if n > 0.0 { sum / n } else { 0.0 };
+        for s in gene_sum.iter() {
+            gene_means.push(mean(*s, n));
+        }
+        for s in meme_sum.iter() {
+            meme_means.push(mean(*s, n));
+        }
+        for k in 0..INVENTION_COUNT {
+            let holder = mean(hold_sum[k], hold_n[k]);
+            let nonholder = mean(non_sum[k], non_n[k]);
+            // Zero (not a spurious sign) while either side of the comparison
+            // is empty.
+            let diff = if hold_n[k] > 0.0 && non_n[k] > 0.0 { holder - nonholder } else { 0.0 };
+            affinity_diff.push(diff);
+        }
+        d.set("gene_means", &gene_means);
+        d.set("meme_means", &meme_means);
+        d.set("affinity_diff", &affinity_diff);
+        d
     }
 
     /// Total codex events recorded so far.
@@ -1215,6 +1354,7 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
     // the non-holder pass) so there is no per-tick allocation.
     let mut affinity_holder_mean = [0.0f32; anabios_core::invention::INVENTION_COUNT];
     let mut affinity_nonholder_mean = [0.0f32; anabios_core::invention::INVENTION_COUNT];
+    let mut affinity_diff = [0.0f32; anabios_core::invention::INVENTION_COUNT];
     if w.inventions_enabled && !memes.is_empty() {
         use anabios_core::invention::{bit, held_mask, INVENTIONS};
         for (k, inv) in INVENTIONS.iter().enumerate() {
@@ -1222,10 +1362,15 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
             scratch.keep.clear();
             scratch.keep.extend(memes.iter().map(|m| held_mask(m) & bit(k) != 0));
             affinity_holder_mean[k] = coevo::mean_slot_over(genomes, &scratch.keep, a.slot);
+            let n_holders = scratch.keep.iter().filter(|&&b| b).count();
             for b in scratch.keep.iter_mut() {
                 *b = !*b;
             }
             affinity_nonholder_mean[k] = coevo::mean_slot_over(genomes, &scratch.keep, a.slot);
+            // Only a two-sided comparison is a real differential.
+            if n_holders > 0 && n_holders < memes.len() {
+                affinity_diff[k] = affinity_holder_mean[k] - affinity_nonholder_mean[k];
+            }
         }
     }
     CoevoSample {
@@ -1245,6 +1390,7 @@ fn sample_into(w: &anabios_core::World, scratch: &mut SampleScratch) -> CoevoSam
         practice_adopt_frac,
         affinity_holder_mean,
         affinity_nonholder_mean,
+        affinity_diff,
     }
 }
 
@@ -1274,12 +1420,13 @@ fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
         practices.set(anabios_core::practice::PRACTICES[p].key, *f);
     }
     d.set("practice_adopt_frac", &practices);
-    // Per-invention affinity-gene selection differential (holder − nonholder),
-    // keyed by invention key; only affinity-bearing inventions are non-zero.
+    // Per-invention affinity-gene selection differential (holder − nonholder,
+    // 0 while either side is empty), keyed by invention key; only
+    // affinity-bearing inventions are non-zero.
     let mut aff = VarDictionary::new();
     for (k, inv) in anabios_core::invention::INVENTIONS.iter().enumerate() {
         if inv.affinity.is_some() {
-            aff.set(inv.key, s.affinity_holder_mean[k] - s.affinity_nonholder_mean[k]);
+            aff.set(inv.key, s.affinity_diff[k]);
         }
     }
     d.set("affinity_selection_diff", &aff);

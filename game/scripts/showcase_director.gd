@@ -43,7 +43,7 @@ const BODY_MODES := {"species": 0, "dialect": 1, "diet": 2, "energy": 3}
 const PANEL_NODES := {
 	"evo": "EvolutionPanel", "coevo": "CoevolutionPanel", "tech": "TechPanel",
 	"inspector": "Inspector", "legend": "LegendPanel", "codex": "CodexPanel",
-	"population": "PopulationPanel", "dit": "DitPanel",
+	"population": "PopulationPanel", "dit": "DitPanel", "helix": "HelixPanel",
 }
 
 var _beats: Array = []
@@ -213,7 +213,7 @@ func _do(action: Dictionary) -> void:
 					var vis: bool = bool(v.get("visible", true))
 					node.visible = vis
 					# The chart panels gate their redraw on _shown.
-					if pname in ["evo", "coevo"]:
+					if pname in ["evo", "coevo", "helix"]:
 						node.set("_shown", vis)
 			"highlight":
 				_clear_highlight()

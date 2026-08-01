@@ -107,13 +107,26 @@ jobs:
           if-no-files-found: warn
 
   determinism:
-    name: determinism smoke
-    runs-on: ubuntu-latest
+    name: determinism smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: build release
+      # The golden state hashes are pinned to bit-identical values across OSes
+      # (transcendentals are routed through libm/mathf precisely so macOS and
+      # Linux agree). That claim is only meaningful if it is actually run on
+      # both, so gate the golden-hash + parallel-vs-serial determinism tests on
+      # the matrix, in release (the profile the hashes are validated in).
+      - name: golden-hash + parallel determinism (cross-OS)
+        run: cargo test -p anabios-core --release --test determinism
+      # Run-to-run smoke: the headless binary must produce identical output on
+      # two independent runs of the same seed. Reuses the release build above.
+      - name: build release headless
         run: cargo build --release -p anabios-headless
       - name: run twice and diff
         run: |

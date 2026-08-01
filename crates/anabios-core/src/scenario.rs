@@ -8,6 +8,11 @@ use crate::prelude::Vec2;
 use crate::world::World;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+// Reject unknown keys so a misspelled feature flag (`inventions_enable`,
+// `sexual_dimorphism = true`) fails loudly at load instead of silently leaving
+// the feature off and quietly invalidating an experiment. Every field has a
+// `#[serde(default)]`, so absence is still fine — only *unrecognized* keys error.
+#[serde(deny_unknown_fields)]
 pub struct Scenario {
     pub name: String,
     pub seed: u64,
@@ -122,6 +127,7 @@ pub struct Scenario {
 /// A request for `count` agents distributed via the given placement, each
 /// initialized from the given trait overrides on top of a neutral genome.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AgentSpec {
     pub count: u32,
     #[serde(default)]
@@ -143,6 +149,7 @@ pub struct AgentSpec {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct TraitOverrides {
     pub perception_radius: Option<f32>,
     pub size: Option<f32>,
@@ -824,6 +831,34 @@ placement = { kind = "uniform" }
             err.to_string().contains("inventions_enabled"),
             "error should name the missing flag, got: {err}"
         );
+    }
+
+    #[test]
+    fn parse_toml_rejects_unknown_top_level_key() {
+        // A misspelled feature flag must fail at load rather than silently
+        // leaving the feature off (the whole point of deny_unknown_fields).
+        let text = "name = \"t\"\nseed = 1\ninventions_enable = true\n";
+        let err = Scenario::parse_toml(text).expect_err("typo'd flag must be rejected");
+        assert!(
+            err.to_string().contains("inventions_enable"),
+            "error should name the unknown key, got: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_toml_rejects_unknown_trait_key() {
+        // Unknown keys in nested tables (traits) are rejected too.
+        let text = r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 1
+placement = { kind = "uniform" }
+[agents.traits]
+sixe = 0.5
+"#;
+        let err = Scenario::parse_toml(text).expect_err("typo'd trait must be rejected");
+        assert!(err.to_string().contains("sixe"), "error should name the unknown key, got: {err}");
     }
 
     #[test]

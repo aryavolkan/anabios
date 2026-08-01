@@ -29,14 +29,38 @@ const CHARTS := [
 		],
 	},
 	{
-		"title": "invention adoption",
+		"title": "invention adoption — early",
 		"unit": "01",
 		"series": [
 			{"key": "inv_stone_tools_frac", "label": "stone tools", "color": Color(0.7, 0.7, 0.75)},
+			{"key": "inv_fire_frac", "label": "fire", "color": Color(1.0, 0.5, 0.3)},
 			{"key": "inv_farming_frac", "label": "farming", "color": Color(0.5, 0.9, 0.4)},
+			{"key": "inv_metalworking_frac", "label": "metalworking", "color": Color(0.75, 0.65, 0.5)},
+		],
+	},
+	{
+		"title": "invention adoption — late",
+		"unit": "01",
+		"series": [
 			{"key": "inv_writing_frac", "label": "writing", "color": Color(1.0, 0.85, 0.4)},
+			{"key": "inv_medicine_frac", "label": "medicine", "color": Color(0.5, 1.0, 0.7)},
+			{"key": "inv_husbandry_frac", "label": "husbandry", "color": Color(0.85, 0.7, 0.4)},
 			{"key": "inv_machinery_frac", "label": "machinery", "color": Color(0.9, 0.55, 0.3)},
+			{"key": "inv_electricity_frac", "label": "electricity", "color": Color(1.0, 0.95, 0.5)},
 			{"key": "inv_nuclear_power_frac", "label": "nuclear", "color": Color(0.65, 0.5, 1.0)},
+		],
+	},
+	{
+		# Tech→gene selection: affinity-gene mean over holders minus non-holders.
+		# Above zero = the invention is selecting its affinity gene upward.
+		"title": "gene↔tech selection",
+		"unit": "pm1",
+		"series": [
+			{"key": "aff_stone_tools_diff", "label": "Δ stone tools", "color": Color(0.7, 0.7, 0.75)},
+			{"key": "aff_fire_diff", "label": "Δ fire", "color": Color(1.0, 0.5, 0.3)},
+			{"key": "aff_farming_diff", "label": "Δ farming", "color": Color(0.5, 0.9, 0.4)},
+			{"key": "aff_writing_diff", "label": "Δ writing", "color": Color(1.0, 0.85, 0.4)},
+			{"key": "aff_machinery_diff", "label": "Δ machinery", "color": Color(0.9, 0.55, 0.3)},
 		],
 	},
 	{
@@ -185,7 +209,10 @@ func _draw_chart(c: Dictionary, cache: Dictionary, n: int, pad: float, plot_w: f
 	# y-scale.
 	var vmax := 1.0
 	var vmin := 0.0
-	if c["unit"] == "auto":
+	if c["unit"] == "pm1":
+		# Symmetric ±1 axis for signed series (selection differentials).
+		vmin = -1.0
+	elif c["unit"] == "auto":
 		vmax = 0.0001
 		for s in c["series"]:
 			if _hidden_keys.has(s["key"]):
@@ -196,8 +223,13 @@ func _draw_chart(c: Dictionary, cache: Dictionary, n: int, pad: float, plot_w: f
 	draw_rect(Rect2(Vector2(pad, top), Vector2(plot_w, h)), Color(1, 1, 1, 0.06))
 	draw_string(_font, Vector2(pad + 4, top + 12), str(c["title"]),
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.8, 0.85, 0.95))
-	# Legend rows (left gutter) + polylines.
+	if c["unit"] == "pm1":
+		var zero_y: float = top + h * 0.5
+		draw_line(Vector2(pad, zero_y), Vector2(pad + plot_w, zero_y), Color(1, 1, 1, 0.15), 1.0)
+	# Legend rows (left gutter) + polylines. Row step compresses when a chart
+	# has more series than its height would otherwise fit.
 	var cols: int = int(minf(plot_w, float(n)))
+	var row_step: float = minf(13.0, (h - 14.0) / float(maxi(1, c["series"].size())))
 	var legend_y: float = top + 12.0
 	for s in c["series"]:
 		var key: String = s["key"]
@@ -206,7 +238,7 @@ func _draw_chart(c: Dictionary, cache: Dictionary, n: int, pad: float, plot_w: f
 		var draw_col := Color(col.r, col.g, col.b, 0.3) if off else col
 		draw_string(_font, Vector2(6, legend_y), s["label"], HORIZONTAL_ALIGNMENT_LEFT, LEGEND_W, 10, draw_col)
 		_legend_hitboxes.append({"rect": Rect2(4, legend_y - 10, LEGEND_W + 4, 13), "key": key})
-		legend_y += 13.0
+		legend_y += row_step
 		if off:
 			continue
 		var arr: PackedFloat32Array = cache[key]

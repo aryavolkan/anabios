@@ -194,6 +194,24 @@ The HUD tick lands a few ticks past `ANABIOS_SHOT_TICKS` because the sim keeps
 running at 1x during the warm-up/wait frames, and streaks live only
 `STREAK_TTL` (8) ticks — keep `FRAMES` small when hunting tracers.
 
+## gene↔tech coupling (TG)
+
+Dual inheritance made visible: every invention carries a gene affinity (its
+buff scales with a coupled genome slot) plus a hard `GeneReq` gate and an
+era-scaled material basket, so culture both selects and waits on the genome.
+The `[X]` helix panel draws the genome (left strand) and memome (right
+strand) with rungs for every coupling; the `[Y]` chart's "gene↔tech
+selection" small-multiple plots the holder−nonholder differential over time.
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| coupling-t4001-helix.png | 4031 | `tech-gene-coupling` with the [X] dual-inheritance helix: fire adopted (1.43 mean level) and its Openness rung lit red — holders currently carry *less* Openness than non-holders (the traditionalist copy wave); stone_tools/farming/metalworking spreading behind it. |
+| coupling-t4001-coevo-selection.png | 4031 | Same run with the [Y] chart: all 10 inventions in the era-split adoption charts, and the ±1 "gene↔tech selection" panel catching Δfarming's green positive bump mid-sweep (zero line = no differential; flat zeros pre-adoption, not spurious negatives). |
+
+Reproduce: `ANABIOS_HELIX=1` / `ANABIOS_COEVO=1` with
+`ANABIOS_SCENARIO="res://../scenarios/tech-gene-coupling.toml"`,
+`ANABIOS_SHOT_TICKS=4000 ANABIOS_SHOT_FRAMES=30`.
+
 ## classic scenarios
 
 | File | Tick | What you're seeing |
