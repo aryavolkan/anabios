@@ -80,6 +80,46 @@ impl Acc {
     }
 }
 
+/// One measurement window for invasion analysis: the mutant strategy's count
+/// and the total live population at `tick`.
+#[derive(Clone, Copy, Debug)]
+pub struct InvasionWindow {
+    pub tick: u64,
+    pub mutant_n: u32,
+    pub total_n: u32,
+}
+
+/// Invasion fitness: the mutant's mean per-window log-growth rate while rare.
+///
+/// Averages `ln(n[k+1]/n[k])` over consecutive window pairs where window `k` is
+/// below `rare_frac_max` frequency and both counts are positive. Pairs touching
+/// a zero count are skipped (an `ln(0)` would be `-inf`). Returns `None` when no
+/// qualifying rare pair exists. Positive ⇒ the rare strategy can invade.
+pub fn invasion_fitness(windows: &[InvasionWindow], rare_frac_max: f64) -> Option<f64> {
+    let mut sum = 0.0_f64;
+    let mut pairs = 0_u64;
+    for pair in windows.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        if a.total_n == 0 {
+            continue;
+        }
+        let freq = a.mutant_n as f64 / a.total_n as f64;
+        if freq > rare_frac_max {
+            continue;
+        }
+        if a.mutant_n == 0 || b.mutant_n == 0 {
+            continue;
+        }
+        sum += (b.mutant_n as f64 / a.mutant_n as f64).ln();
+        pairs += 1;
+    }
+    if pairs == 0 {
+        None
+    } else {
+        Some(sum / pairs as f64)
+    }
+}
+
 /// Per-strategy aggregate over the currently-alive agents. Index 0 = Cultural,
 /// index 1 = Asocial. Read-only; safe to call every window during a run.
 pub fn sample_strategies(world: &World) -> [StrategyStat; 2] {
@@ -148,5 +188,45 @@ placement = { kind = \"uniform\" }
         assert_eq!(stats[0].mean_energy, 0.0);
         assert_eq!(stats[0].mean_skill, 0.0);
         assert_eq!(stats[0].max_era, 0);
+    }
+}
+
+#[cfg(test)]
+mod invasion_tests {
+    use super::*;
+
+    fn w(tick: u64, mutant_n: u32, total_n: u32) -> InvasionWindow {
+        InvasionWindow { tick, mutant_n, total_n }
+    }
+
+    #[test]
+    fn rare_mutant_that_grows_has_positive_invasion_fitness() {
+        // Mutant stays under 10% of the population but its count climbs.
+        let windows = [w(0, 10, 1000), w(100, 20, 1000), w(200, 40, 1000)];
+        let r = invasion_fitness(&windows, 0.10).unwrap();
+        assert!(r > 0.0, "growing rare mutant must invade, got {r}");
+    }
+
+    #[test]
+    fn rare_mutant_that_shrinks_is_excluded() {
+        let windows = [w(0, 40, 1000), w(100, 20, 1000), w(200, 10, 1000)];
+        let r = invasion_fitness(&windows, 0.10).unwrap();
+        assert!(r < 0.0, "shrinking rare mutant is excluded, got {r}");
+    }
+
+    #[test]
+    fn windows_above_rare_threshold_are_ignored() {
+        // Every window is >10% frequency → no qualifying rare pair → None.
+        let windows = [w(0, 500, 1000), w(100, 600, 1000)];
+        assert!(invasion_fitness(&windows, 0.10).is_none());
+    }
+
+    #[test]
+    fn extinction_pair_is_skipped_not_neg_infinity() {
+        // mutant_n[k+1] == 0 would make ln(0) = -inf; that pair must be skipped.
+        // The only surviving valid pair here is (10 -> 20): positive.
+        let windows = [w(0, 10, 1000), w(100, 20, 1000), w(200, 0, 1000)];
+        let r = invasion_fitness(&windows, 0.10).unwrap();
+        assert!(r.is_finite() && r > 0.0, "got {r}");
     }
 }
