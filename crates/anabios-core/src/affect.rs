@@ -129,8 +129,9 @@ pub fn develop_all(world: &mut World) {
     }
     use rayon::prelude::*;
     let cap = world.agents.capacity();
-    let crate::agent::AgentBuffers { affect, energy, alive, .. } = &mut world.agents;
-    let (energy, alive) = (&*energy, &*alive);
+    let sensors = &world.sensors;
+    let crate::agent::AgentBuffers { affect, energy, genome, alive, .. } = &mut world.agents;
+    let (energy, genome, alive) = (&*energy, &*genome, &*alive);
     affect[..cap].par_iter_mut().enumerate().for_each(|(i, a)| {
         if !alive[i] {
             return;
@@ -140,6 +141,13 @@ pub fn develop_all(world: &mut World) {
         // Layer 1: leaky-integrator update of the SEEK activation.
         let seek = LAMBDA_DEFAULT * a[SEEK] + (1.0 - LAMBDA_DEFAULT) * drive;
         a[SEEK] = seek.clamp(0.0, 1.0);
+
+        // FEAR (M-B): threat/survival drive from fresh sensors + Boldness. The
+        // sensors buffer can be shorter than capacity on a growth tick; guard it.
+        if i < sensors.len() {
+            let fear_in = fear_trigger(&sensors[i], &genome[i]);
+            a[FEAR] = (LAMBDA_FEAR * a[FEAR] + (1.0 - LAMBDA_FEAR) * fear_in).clamp(0.0, 1.0);
+        }
     });
 }
 
@@ -320,5 +328,37 @@ mod tests {
         let mut far = s;
         far.nearest_other_dist = FEAR_RANGE * 2.0;
         assert!(fear_trigger(&far, &Genome::neutral()) < neutral);
+    }
+
+    #[test]
+    fn develop_all_raises_fear_from_a_threatening_sensor() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::world::World;
+
+        // Flag ON: a close, large, hostile other-species sensor ⇒ FEAR integrates up.
+        let mut w = World::new(3);
+        w.affect_enabled = true;
+        let prey = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        w.resize_scratch(); // size world.sensors to capacity (crate-private; ok in lib test)
+        {
+            let s = &mut w.sensors[prey as usize];
+            s.nearest_other_id = 99;
+            s.nearest_other_dist = 30.0;
+            s.nearest_other_dir = Vec2::new(1.0, 0.0);
+            s.nearest_rel_size = 2.0; // predator twice our size
+            s.hostility = 0.4;
+        }
+        develop_all(&mut w); // reads world.sensors[prey], folds FEAR into affect[prey]
+        let fear = w.agents.affect[prey as usize][FEAR];
+        assert!(fear > 0.0, "a threatening sensor must raise FEAR via develop_all, got {fear}");
+
+        // Flag OFF: identical threatening sensor ⇒ develop_all is a strict no-op.
+        let mut w2 = World::new(3);
+        let prey2 = w2.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        w2.resize_scratch();
+        w2.sensors[prey2 as usize] = w.sensors[prey as usize];
+        develop_all(&mut w2);
+        assert_eq!(w2.agents.affect[prey2 as usize][FEAR], 0.0, "flag off ⇒ no FEAR");
     }
 }
