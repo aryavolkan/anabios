@@ -164,3 +164,39 @@ fn geographic_trade_turnover_is_ongoing() {
     // per-tick buffer — both count exactly one record per swap.
     assert_eq!(w.total_trades, (early + late) as u64, "total_trades must track every swap");
 }
+
+/// The `conserve_goods_on_death` flag parses from TOML and wires through to
+/// `World` (no behavior yet — Task 1 only adds the flag).
+#[test]
+fn conserve_goods_on_death_flag_parses_and_wires() {
+    let toml = "name = \"t\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nconserve_goods_on_death = true\n[[agents]]\narchetype = \"grazer\"\ncount = 4\n";
+    let w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
+    assert!(w.conserve_goods_on_death);
+}
+
+/// Killing an agent that holds goods snapshots them into `deaths_scratch`;
+/// `conserve_goods_step` redistributes the snapshot to the nearest living
+/// agent and drains the buffer.
+#[test]
+fn conserve_goods_step_moves_dead_inventory_to_living() {
+    use anabios_core::genome::Genome;
+    use anabios_core::prelude_test::Vec2;
+    let toml = "name = \"c\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nconserve_goods_on_death = true\n";
+    let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
+    // Two agents a few units apart; A holds goods, B is the nearest (only) living neighbour.
+    let a = w.spawn_agent(Vec2::new(10.0, 10.0), Genome::neutral());
+    let b = w.spawn_agent(Vec2::new(12.0, 10.0), Genome::neutral());
+    w.agents.inventory[a as usize] = [3.0, 1.0, 0.0, 2.0];
+    let before_b: f32 = w.agents.inventory[b as usize].iter().sum();
+    // Kill A; its goods must land on B after the conservation stage.
+    w.agents.kill(a);
+    anabios_core::resource::conserve_goods_step(&mut w);
+    let after_b: f32 = w.agents.inventory[b as usize].iter().sum();
+    assert!(
+        (after_b - before_b - 6.0).abs() < 1e-4,
+        "B should gain A's 6 units, got {after_b} from {before_b}"
+    );
+    assert_eq!(w.agents.inventory[b as usize], [3.0, 1.0, 0.0, 2.0]);
+    // Buffer is drained.
+    assert!(w.agents.deaths_scratch.is_empty());
+}
