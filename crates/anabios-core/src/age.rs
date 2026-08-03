@@ -16,14 +16,22 @@ pub fn age_and_starve(world: &mut crate::world::World) {
         let i = id as usize;
         world.agents.age[i] = world.agents.age[i].saturating_add(1);
 
-        let lifespan = (lifespan_of(&world.agents.genome[i]) as f32
-            * crate::invention::lifespan_multiplier_coupled(
-                crate::invention::held_mask(&world.agents.meme_vector[i]),
-                &world.agents.genome[i],
-                world.gene_tech_coupling,
-            )) as u32;
-        let died =
-            if world.agents.energy[i] <= 0.0 { true } else { world.agents.age[i] >= lifespan };
+        // Starvation short-circuits death, so the lifespan (a `held_mask` loop,
+        // a float multiply, and a cast — all pure and side-effect-free) is only
+        // needed on the non-starving path. Computing it lazily there skips the
+        // work for every agent that dies of starvation this tick; the result is
+        // unchanged because the value was unused on the `energy <= 0.0` branch.
+        let died = if world.agents.energy[i] <= 0.0 {
+            true
+        } else {
+            let lifespan = (lifespan_of(&world.agents.genome[i]) as f32
+                * crate::invention::lifespan_multiplier_coupled(
+                    crate::invention::held_mask(&world.agents.meme_vector[i]),
+                    &world.agents.genome[i],
+                    world.gene_tech_coupling,
+                )) as u32;
+            world.agents.age[i] >= lifespan
+        };
 
         if died {
             let sid = world.agents.species_id[i];
