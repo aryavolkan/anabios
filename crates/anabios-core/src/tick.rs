@@ -101,6 +101,10 @@ pub fn step(world: &mut World) {
     // Stage 7b: carcass aging + removal (design step 9 analogue).
     crate::carcass::carcass_step(world);
 
+    // Stage 7c: conserve trade goods on death (opt-in; no-op + buffer drain
+    // when off). Runs after all death stages so it captures this tick's deaths.
+    crate::resource::conserve_goods_step(world);
+
     // Stage 8c: pheromone field decay (design §3.7 step 9).
     world.pheromones.decay_step();
 

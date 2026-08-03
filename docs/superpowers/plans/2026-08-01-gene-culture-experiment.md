@@ -1,5 +1,17 @@
 # Next Gene-Culture Experiment (Confound-Controlled) Plan
 
+> **⚠️ SUPERSEDED — stale premise + resolved negative (2026-08-03).** This plan's
+> target, the "Inventiveness gene," no longer exists (replaced by the invention
+> tree), and the historical "cumulative-skill sweep" was a *Communicator-module*
+> shift, not a genome slot. The valid current-code version (toggle only
+> `gene_tech_coupling`, watch the coupled **Openness** gene) was piloted and is
+> **negative**: no coupled-gene sweep (coupled ≈ decoupled; Openness selected
+> down), populations boom-bust — consistent with the cognition-cost mechanism. The
+> full 3-arm apparatus was NOT built (pilot gate: criterion unreachable). See
+> [`../specs/2026-08-03-gene-culture-finding.md`](../specs/2026-08-03-gene-culture-finding.md).
+> The confound-control *method* below is still sound; a future attempt needs a
+> stable-population scenario and should re-target a real (current-code) coupled gene.
+
 > **For agentic workers:** research/experiment plan. Tasks are an experiment protocol; the "implementation" is scenario construction + a golden-tested analysis, and the deliverable is a written finding (positive OR negative). Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Run the next DIT gene-culture test designed to **disentangle module-vs-gene** before crediting any sweep — i.e. determine whether an observed advantage is carried by an evolvable *gene* or merely by a cultural *module* that any lineage can adopt.

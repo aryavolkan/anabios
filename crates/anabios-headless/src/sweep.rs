@@ -179,7 +179,7 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
     for name in score::ALL_EVENT_NAMES {
         write!(f, ",{name}")?;
     }
-    writeln!(f, ",emergence_score,novel_events,coverage")?;
+    writeln!(f, ",emergence_score,novel_events,coverage,novel_types")?;
     for r in runs {
         write!(
             f,
@@ -189,7 +189,8 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
         for name in score::ALL_EVENT_NAMES {
             write!(f, ",{}", r.counts.get(name).copied().unwrap_or(0))?;
         }
-        writeln!(f, ",{:.3},{},{:.3}", r.emergence_score, r.novel_events, r.coverage)?;
+        let novel = r.novel_types.join(";");
+        writeln!(f, ",{:.3},{},{:.3},{}", r.emergence_score, r.novel_events, r.coverage, novel)?;
     }
     Ok(())
 }

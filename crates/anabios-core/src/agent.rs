@@ -104,6 +104,11 @@ pub struct AgentBuffers {
     /// `#[serde(skip)]` — never part of the deterministic state hash.
     #[serde(skip)]
     pub scratch_ids: Vec<u32>,
+    /// Snapshots (position, trade-goods inventory) of agents killed this tick,
+    /// drained by `resource::conserve_goods_step` when `conserve_goods_on_death`
+    /// is on. `#[serde(skip)]` — scratch, never part of the state hash.
+    #[serde(skip)]
+    pub deaths_scratch: Vec<(crate::prelude::Vec2, [f32; crate::resource::GOOD_COUNT])>,
     /// Whether livestock ownership is active (mirrors `World::domestication_enabled`).
     /// Gates the O(n) owner-referrer clear in `kill`, so worlds with the feature
     /// off pay nothing. `#[serde(skip)]` and re-derived from the (serialized)
@@ -230,6 +235,19 @@ impl AgentBuffers {
         self.energy[i] = 0.0;
         self.free_list.push(id);
         self.live_count -= 1;
+
+        // Snapshot goods held at death (cheap; naturally a no-op when
+        // `resources_enabled` is off, since inventory is all-zero then).
+        // Only consumed by `resource::conserve_goods_step` when
+        // `conserve_goods_on_death` is on; otherwise cleared unread. Do not
+        // zero `self.inventory[i]` here — nothing reads a dead slot's
+        // inventory before reuse zeroes it, so leaving it is a no-op for
+        // every other reader and avoids any behavior change when the flag
+        // is off.
+        let inv = self.inventory[i];
+        if inv.iter().any(|&g| g > 0.0) {
+            self.deaths_scratch.push((self.position[i], inv));
+        }
 
         if self.track_livestock {
             for owner in self.livestock_of.iter_mut() {

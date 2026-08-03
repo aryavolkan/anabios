@@ -159,13 +159,15 @@ const GOLDEN: &[(u64, u64)] =
     // minimal so every term is exactly held_f32 — trajectory byte-identical,
     // only the serialized layout grew. Material baskets also grew richer, but
     // resources_enabled is off here so they are never consulted.
-    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 23→24): AgentBuffers
-    // gained the serialized `affect` column (7 f32/agent) and World gained
-    // `affect_enabled` (off here). develop_all no-ops (zero RNG), apply_affect is
-    // identity at neutral (all-zero) affect, and affect_speed_factor is exactly
-    // 1.0 — trajectory byte-identical; only the serialized layout grew, so all
-    // pinned hashes moved once.
-    &[(0, 0x7a5f9da9d71db7c2), (100, 0x687cf31a6d30a20a), (1000, 0xc42e32e2554593ca)];
+    // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
+    // World.conserve_goods_on_death added (flag off here) — layout growth
+    // only, trajectory byte-identical.
+    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 24→25): AgentBuffers
+    // gained the serialized `affect` column (7 f32/agent) + World.affect_enabled
+    // (off here); temperament slots renamed in place. develop_all no-ops (zero
+    // RNG), read-side hooks are identity, speed factor 1.0 — trajectory byte-
+    // identical atop the v24 conserve_goods layout; regenerated on the merged tree.
+    &[(0, 0x6bb5d8869a761f54), (100, 0x65364b6e789e97ec), (1000, 0xacd0d3f92a50cd56)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

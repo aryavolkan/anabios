@@ -1068,11 +1068,15 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // but coupling is off in this scenario so every multiplier is identity;
     // material baskets grew richer but resources_enabled is off so they are
     // never consulted — trajectory byte-identical, only the layout grew.
-    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 23→24): AgentBuffers
+    // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
+    // World.conserve_goods_on_death added (flag off here) — layout growth
+    // only, trajectory byte-identical.
+    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 24→25): AgentBuffers
     // gained the serialized `affect` column + World.affect_enabled (off here);
-    // temperament genome slots renamed in place. Affect stage no-ops flag-off and
-    // read-side hooks are identity — behavior byte-identical, pure layout growth.
-    &[(0, 0xa1c7380a7ac7d5e8), (100, 0x27a92d438e889125), (300, 0xabef3fa1bc50490e)];
+    // temperament slots renamed in place. Affect stage no-ops flag-off and read-
+    // side hooks are identity — byte-identical; regenerated on the merged tree
+    // atop the v24 conserve_goods layout.
+    &[(0, 0x32f0b66e193ca216), (100, 0xb330dcc07d39498d), (300, 0x3f72778bd95859e8)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

@@ -88,6 +88,10 @@ pub struct Scenario {
     /// `false` (default) leaves the world unchanged.
     #[serde(default)]
     pub resources_enabled: bool,
+    /// Opt-in: conserve trade goods on death (transfer to nearest living
+    /// agent) so long-run trade doesn't freeze. Default off.
+    #[serde(default)]
+    pub conserve_goods_on_death: bool,
     /// Opt-in: enable natural disasters (fire/drought/freeze on a Poisson
     /// schedule, succession scars). `false` (default) leaves the world
     /// unchanged — zero RNG draws, no state.
@@ -446,6 +450,7 @@ impl Scenario {
         if w.resources_enabled {
             w.market_field = vec![0.0; w.biome.cells.len()];
         }
+        w.conserve_goods_on_death = self.conserve_goods_on_death;
         w.war_enabled = self.war_enabled;
         w.settlement_enabled = self.settlement_enabled;
         w.sexual_dimorphism_enabled = self.sexual_dimorphism_enabled;

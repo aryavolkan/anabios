@@ -99,15 +99,17 @@ use crate::world::World;
 /// v23: hard genetic invention prerequisites — World.gene_requirements flag
 ///     (gates `invention::GeneReq` on discovery + social copy). Off in every
 ///     golden scenario ⇒ byte-identical behavior; only the layout grew.
-/// v24: M-A subcortical affect layer — AgentBuffers.affect column (7 serialized
-///     f32 per agent), World.affect_enabled flag, and genome temperament slots
-///     17/18/19/34/35 renamed in place (Boldness/Aggressiveness/Nurturance/
-///     Sociality/Reactivity — values/indices unchanged, so genome bytes are
-///     identical). affect_enabled off in every existing golden scenario ⇒
-///     develop_all no-ops (zero RNG), read-side hooks are identity, and the
-///     speed factor is exactly 1.0 — behavior byte-identical; only the
-///     serialized layout grew.
-pub const FORMAT_VERSION: u32 = 24;
+/// v24: supply-side trade fix — World.conserve_goods_on_death flag. Off in
+///      every existing scenario; serialized layout grew by one byte.
+/// v25: M-A subcortical affect layer — AgentBuffers.affect column (7 serialized
+///      f32 per agent), World.affect_enabled flag, and genome temperament slots
+///      17/18/19/34/35 renamed in place (Boldness/Aggressiveness/Nurturance/
+///      Sociality/Reactivity — values/indices unchanged, so genome bytes are
+///      identical). affect_enabled off in every existing golden scenario ⇒
+///      develop_all no-ops (zero RNG), read-side hooks are identity, and the
+///      speed factor is exactly 1.0 — behavior byte-identical; only the
+///      serialized layout grew (stacked on the v24 conserve_goods layout).
+pub const FORMAT_VERSION: u32 = 25;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
