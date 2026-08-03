@@ -1071,7 +1071,10 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
     // World.conserve_goods_on_death added (flag off here) — layout growth
     // only, trajectory byte-identical.
-    &[(0, 0x2b934d688ba72068), (100, 0x526b82e65a0664fe), (300, 0x460c54423fa45bf7)];
+    // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
+    // World.practices_enabled added, defaulting true (off-effect here) — layout
+    // growth only, trajectory byte-identical. Regenerated on the merged tree.
+    &[(0, 0x01b4b816646e5a89), (100, 0x06a90a4abcbf09cf), (300, 0xdd3454272b6967c8)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

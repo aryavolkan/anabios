@@ -162,7 +162,12 @@ const GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
     // World.conserve_goods_on_death added (flag off here) — layout growth
     // only, trajectory byte-identical.
-    &[(0, 0x4681b6fa4023114a), (100, 0xfcbafda8fd0b7727), (1000, 0x0d3d45eef7f71411)];
+    // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
+    // World.practices_enabled added, defaulting true so discovery still runs
+    // wherever cognition is on — but cognition is off in minimal, so behavior is
+    // byte-identical; only the serialized layout grew. Regenerated on the merged
+    // tree (carries both conserve_goods and practices fields).
+    &[(0, 0x59806c67bf3d427f), (100, 0x42aa33b84bab0f44), (1000, 0x7fe5f0a66c5bd154)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

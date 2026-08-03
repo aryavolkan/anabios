@@ -1,0 +1,24 @@
+# O1 reproducible practices-lever confirmation via the committed practices_enabled flag.
+# metric: cultural share retention f2000/f500 (>1 = culture gains share while rare). ticks=2500, n=10.
+# baseline = practices ON (default); practices_off = practices_enabled=false. cognition_off reference: see o1-lever-share-retention / findings doc.
+condition,scenario,seed,f500,f2000,retention
+baseline,o1-invasion-cultural-into-asocial.toml,1,0.0494,0.0364,0.7368
+baseline,o1-invasion-cultural-into-asocial.toml,2,0.1633,0.1060,0.6491
+baseline,o1-invasion-cultural-into-asocial.toml,3,0.1404,0.1114,0.7934
+baseline,o1-invasion-cultural-into-asocial.toml,4,0.0344,0.0641,1.8634
+baseline,o1-invasion-cultural-into-asocial.toml,5,0.1660,0.1166,0.7024
+baseline,o1-invasion-cultural-into-asocial.toml,6,0.0957,0.1173,1.2257
+baseline,o1-invasion-cultural-into-asocial.toml,7,0.0224,0.0256,1.1429
+baseline,o1-invasion-cultural-into-asocial.toml,8,0.0672,0.0953,1.4182
+baseline,o1-invasion-cultural-into-asocial.toml,9,0.1125,0.1071,0.9520
+baseline,o1-invasion-cultural-into-asocial.toml,10,0.1715,0.1534,0.8945
+practices_off,o1-lever-practices-off.toml,1,0.1202,0.1451,1.2072
+practices_off,o1-lever-practices-off.toml,2,0.1123,0.2633,2.3446
+practices_off,o1-lever-practices-off.toml,3,0.0394,0.0403,1.0228
+practices_off,o1-lever-practices-off.toml,4,0.0908,0.1468,1.6167
+practices_off,o1-lever-practices-off.toml,5,0.2734,0.3130,1.1448
+practices_off,o1-lever-practices-off.toml,6,0.0417,0.1398,3.3525
+practices_off,o1-lever-practices-off.toml,7,0.0297,0.0253,0.8519
+practices_off,o1-lever-practices-off.toml,8,0.0244,0.1334,5.4672
+practices_off,o1-lever-practices-off.toml,9,0.0848,0.0985,1.1616
+practices_off,o1-lever-practices-off.toml,10,0.1098,0.1335,1.2158

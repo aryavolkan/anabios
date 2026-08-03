@@ -1,0 +1,60 @@
+name = "o1-lever-mixing"
+seed = 318
+
+# O1 EXCLUSION AUTOPSY — Task 5, direction A: can a rare cultural mutant
+# invade a resident asocial world?
+#
+# Single dense mixed cradle cluster at the out-of-africa Cradle hub
+# (150,440): ~1000 asocial_forager RESIDENT + ~20 cultural_forager rare
+# MUTANT (~1.96% start frequency), overlapping radii so the two strategies
+# genuinely mix from tick 0 rather than starting segregated. All header
+# flags (climate/economy/cognition/war knobs) are copied verbatim from
+# scenarios/out-of-africa.toml so this is a one-variable-apart companion to
+# scenarios/o1-invasion-asocial-into-cultural.toml (only the resident/mutant
+# archetypes swap between the two files).
+#
+# Run with: anabios-headless autopsy --scenario <this file> --mutant cultural
+
+max_population = 3000
+
+env_period = 400
+climate_drift_rate = 0.00005
+season_period = 2000
+biome_adaptation = true
+living_biome = true
+nutrient_variation = true
+soil_fertility = true
+disasters_enabled = true
+terrain_habitat = true
+resources_enabled = true
+settlement_enabled = true
+inventions_enabled = true
+gene_tech_coupling = true
+cognition_enabled = true
+war_enabled = true
+sexual_dimorphism_enabled = true
+domestication_enabled = true
+
+# ---------------------------------------------------------------------------
+# MIXED CRADLE CLUSTER — resident asocial_forager population.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 1000
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 100.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+
+# ---------------------------------------------------------------------------
+# RARE MUTANT — cultural_forager, ~1.96% start frequency, same cluster
+# (overlapping radius so it genuinely mixes with the resident, not a
+# separate colony).
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 120
+archetype = "cultural_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 90.0 }
+[agents.traits]
+reproduction_threshold = 0.2
