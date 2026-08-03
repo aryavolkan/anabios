@@ -1068,7 +1068,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // but coupling is off in this scenario so every multiplier is identity;
     // material baskets grew richer but resources_enabled is off so they are
     // never consulted — trajectory byte-identical, only the layout grew.
-    &[(0, 0xd981ff10d58aa3ce), (100, 0x4a9a610ccdc046b0), (300, 0x1d5d39a800141ccf)];
+    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 23→24): AgentBuffers
+    // gained the serialized `affect` column + World.affect_enabled (off here);
+    // temperament genome slots renamed in place. Affect stage no-ops flag-off and
+    // read-side hooks are identity — behavior byte-identical, pure layout growth.
+    &[(0, 0xa1c7380a7ac7d5e8), (100, 0x27a92d438e889125), (300, 0xabef3fa1bc50490e)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

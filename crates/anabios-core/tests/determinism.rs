@@ -159,7 +159,13 @@ const GOLDEN: &[(u64, u64)] =
     // minimal so every term is exactly held_f32 — trajectory byte-identical,
     // only the serialized layout grew. Material baskets also grew richer, but
     // resources_enabled is off here so they are never consulted.
-    &[(0, 0x21ab4d62eb377544), (100, 0x9fc0f679f252e6d3), (1000, 0x60a3c8887f27808f)];
+    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 23→24): AgentBuffers
+    // gained the serialized `affect` column (7 f32/agent) and World gained
+    // `affect_enabled` (off here). develop_all no-ops (zero RNG), apply_affect is
+    // identity at neutral (all-zero) affect, and affect_speed_factor is exactly
+    // 1.0 — trajectory byte-identical; only the serialized layout grew, so all
+    // pinned hashes moved once.
+    &[(0, 0x7a5f9da9d71db7c2), (100, 0x687cf31a6d30a20a), (1000, 0xc42e32e2554593ca)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

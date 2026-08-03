@@ -99,7 +99,15 @@ use crate::world::World;
 /// v23: hard genetic invention prerequisites — World.gene_requirements flag
 ///     (gates `invention::GeneReq` on discovery + social copy). Off in every
 ///     golden scenario ⇒ byte-identical behavior; only the layout grew.
-pub const FORMAT_VERSION: u32 = 23;
+/// v24: M-A subcortical affect layer — AgentBuffers.affect column (7 serialized
+///     f32 per agent), World.affect_enabled flag, and genome temperament slots
+///     17/18/19/34/35 renamed in place (Boldness/Aggressiveness/Nurturance/
+///     Sociality/Reactivity — values/indices unchanged, so genome bytes are
+///     identical). affect_enabled off in every existing golden scenario ⇒
+///     develop_all no-ops (zero RNG), read-side hooks are identity, and the
+///     speed factor is exactly 1.0 — behavior byte-identical; only the
+///     serialized layout grew.
+pub const FORMAT_VERSION: u32 = 24;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

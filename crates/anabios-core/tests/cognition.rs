@@ -90,7 +90,12 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // inventions carry affinities and every buff site has a coupled variant,
     // but gene_tech_coupling is off in this scenario so behavior is
     // byte-identical — pure serialized-layout growth.
-    &[(0, 0x9dac7f3521effced), (100, 0x924cbfc640005e88), (300, 0x73c4b5dd69c38ba7)];
+    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 23→24): AgentBuffers
+    // gained the serialized `affect` column + World.affect_enabled (off here);
+    // temperament genome slots renamed in place (values/indices unchanged). Affect
+    // stage no-ops with the flag off and read-side hooks are identity — cognition
+    // behavior byte-identical; pure serialized-layout growth.
+    &[(0, 0xb0781285905c4311), (100, 0xa2c6265e2feea2da), (300, 0x569b8fcd1bc938e6)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {
