@@ -84,6 +84,11 @@ pub fn step(world: &mut World) {
     // no-op and zero RNG draws when `domestication_enabled` is false).
     crate::domestication::husbandry_step(world);
 
+    // Stage 6f: knowledge accumulation — per-species tech memory rises while
+    // any member holds Writing, decays otherwise (opt-in; no-op and zero RNG
+    // draws when `knowledge_enabled` is false).
+    crate::knowledge::knowledge_step(world);
+
     // Keep scratch sized to the post-reproduce capacity so end-of-tick detectors
     // (AlarmCall) that read actions/sensors/desired_direction see every agent —
     // reproduce (stage 6) can grow capacity past the top-of-tick resize.
