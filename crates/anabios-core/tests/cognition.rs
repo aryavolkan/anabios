@@ -90,7 +90,10 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // inventions carry affinities and every buff site has a coupled variant,
     // but gene_tech_coupling is off in this scenario so behavior is
     // byte-identical — pure serialized-layout growth.
-    &[(0, 0x9dac7f3521effced), (100, 0x924cbfc640005e88), (300, 0x73c4b5dd69c38ba7)];
+    // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
+    // World.conserve_goods_on_death added (flag off here) — layout growth
+    // only, trajectory byte-identical.
+    &[(0, 0xc12cb8151575e941), (100, 0x1cbaad57b818446e), (300, 0x70b81317449c5005)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

@@ -164,3 +164,12 @@ fn geographic_trade_turnover_is_ongoing() {
     // per-tick buffer — both count exactly one record per swap.
     assert_eq!(w.total_trades, (early + late) as u64, "total_trades must track every swap");
 }
+
+/// The `conserve_goods_on_death` flag parses from TOML and wires through to
+/// `World` (no behavior yet — Task 1 only adds the flag).
+#[test]
+fn conserve_goods_on_death_flag_parses_and_wires() {
+    let toml = "name = \"t\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nconserve_goods_on_death = true\n[[agents]]\narchetype = \"grazer\"\ncount = 4\n";
+    let w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
+    assert!(w.conserve_goods_on_death);
+}

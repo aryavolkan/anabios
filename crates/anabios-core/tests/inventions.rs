@@ -1068,7 +1068,10 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // but coupling is off in this scenario so every multiplier is identity;
     // material baskets grew richer but resources_enabled is off so they are
     // never consulted — trajectory byte-identical, only the layout grew.
-    &[(0, 0xd981ff10d58aa3ce), (100, 0x4a9a610ccdc046b0), (300, 0x1d5d39a800141ccf)];
+    // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
+    // World.conserve_goods_on_death added (flag off here) — layout growth
+    // only, trajectory byte-identical.
+    &[(0, 0x2b934d688ba72068), (100, 0x526b82e65a0664fe), (300, 0x460c54423fa45bf7)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
