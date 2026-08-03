@@ -60,6 +60,15 @@ pub const K_FLEE: f32 = 0.6;
 /// Non-defensive-intent damping gain under FEAR (share/broadcast/emit).
 pub const K_FEAR_DAMP: f32 = 0.5;
 
+// --- M-B: survival-reflex hijack ---
+/// Reactivity raises hijack sensitivity; Boldness lowers it. Both signed [-1,1].
+pub const K_HIJACK_REACT: f32 = 0.2;
+pub const K_HIJACK_BOLD: f32 = 0.2;
+/// Threat farther than this ⇒ Freeze (orient, don't be seen).
+pub const FREEZE_DIST: f32 = 140.0;
+/// Threat closer than this ⇒ cornered (Fight or Fright/Faint).
+pub const CORNER_DIST: f32 = 30.0;
+
 /// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
 pub type AffectState = [f32; AFFECT_SYSTEMS];
@@ -199,6 +208,67 @@ pub fn apply_affect(
             *c *= damp;
         }
     }
+}
+
+/// Survival-reflex override (Bracha: Freeze→Flight→Fight→Fright/Faint). When
+/// threat arousal, scaled by Reactivity/Boldness, reaches
+/// `HIJACK_AROUSAL_THRESHOLD`, OVERWRITE the LIVE action channels with the
+/// reflex chosen by threat proximity/escapability and return `true`. Otherwise
+/// leave `action` untouched and return `false`. ZERO RNG. Exact identity at
+/// neutral affect (arousal 0 ⇒ returns false before touching `action`).
+pub fn apply_hijack(
+    action: &mut ActionRegister,
+    affect: &AffectState,
+    genome: &Genome,
+    sensors: &SensorRegister,
+    energy: f32,
+) -> bool {
+    let threat = arousal(affect);
+    if threat <= 0.0 {
+        return false;
+    }
+    // "low road" cancel path: bold/steady agents keep cortical control longer.
+    let effective =
+        threat + K_HIJACK_REACT * genome.reactivity() - K_HIJACK_BOLD * genome.boldness();
+    if effective < HIJACK_AROUSAL_THRESHOLD {
+        return false;
+    }
+
+    // No locatable threat ⇒ Freeze in place.
+    if sensors.nearest_other_id == crate::sense::NO_NEIGHBOR_ID {
+        action.move_x = 0.0;
+        action.move_y = 0.0;
+        return true;
+    }
+    let d = sensors.nearest_other_dist;
+    let toward = sensors.nearest_other_dir;
+    if d >= FREEZE_DIST {
+        // Freeze — distant/ambiguous.
+        action.move_x = 0.0;
+        action.move_y = 0.0;
+    } else if d > CORNER_DIST {
+        // Flight — flee directly away; affect_speed_factor (arousal-driven)
+        // supplies the speed boost in integrate.rs.
+        action.move_x = -toward.x;
+        action.move_y = -toward.y;
+    } else {
+        // Cornered — Fight vs Fright/Faint resolved in Task 6.
+        return hijack_cornered(action, affect, sensors, energy);
+    }
+    let _ = energy;
+    true
+}
+
+// TEMPORARY stub — Task 6 replaces this with the real Fight/Faint resolution.
+fn hijack_cornered(
+    action: &mut ActionRegister,
+    _affect: &AffectState,
+    _sensors: &SensorRegister,
+    _energy: f32,
+) -> bool {
+    action.move_x = 0.0;
+    action.move_y = 0.0;
+    true
 }
 
 #[cfg(test)]
@@ -428,5 +498,46 @@ mod tests {
         assert!(act.move_x < 0.0, "FEAR should push away from +x threat, got {}", act.move_x);
         assert!(act.share_intent < 0.5, "FEAR should dampen sharing");
         assert!(act.broadcast_intent[0] < 0.4, "FEAR should dampen broadcasts");
+    }
+
+    #[test]
+    fn apply_hijack_gate_and_freeze_flight() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::program::ActionRegister;
+        use crate::sense::SensorRegister;
+
+        let g = Genome::neutral();
+
+        // Below-threshold arousal ⇒ no override, action untouched, returns false.
+        let mut low: AffectState = [0.0; AFFECT_SYSTEMS];
+        low[FEAR] = 0.3; // < HIJACK_AROUSAL_THRESHOLD (0.6)
+        let mut s = SensorRegister::default();
+        s.nearest_other_id = 2;
+        s.nearest_other_dist = 100.0;
+        s.nearest_other_dir = Vec2::new(1.0, 0.0);
+        let mut act = ActionRegister::default();
+        act.move_x = 0.9;
+        assert!(!apply_hijack(&mut act, &low, &g, &s, 100.0));
+        assert_eq!(act.move_x, 0.9, "no hijack below threshold");
+
+        // High arousal, DISTANT threat ⇒ Freeze (zero movement), returns true.
+        let mut hi: AffectState = [0.0; AFFECT_SYSTEMS];
+        hi[FEAR] = 0.9;
+        let mut freeze_s = s;
+        freeze_s.nearest_other_dist = FREEZE_DIST + 10.0;
+        let mut freeze_act = ActionRegister::default();
+        freeze_act.move_x = 0.9;
+        freeze_act.move_y = -0.4;
+        assert!(apply_hijack(&mut freeze_act, &hi, &g, &freeze_s, 100.0));
+        assert_eq!((freeze_act.move_x, freeze_act.move_y), (0.0, 0.0), "distant threat ⇒ Freeze");
+
+        // High arousal, MID-RANGE threat ⇒ Flight (flee away from +x), returns true.
+        let mut flight_s = s;
+        flight_s.nearest_other_dist = (FREEZE_DIST + CORNER_DIST) * 0.5;
+        let mut flight_act = ActionRegister::default();
+        flight_act.move_x = 0.9; // was charging toward threat
+        assert!(apply_hijack(&mut flight_act, &hi, &g, &flight_s, 100.0));
+        assert!(flight_act.move_x < 0.0, "mid-range threat ⇒ flee -x, got {}", flight_act.move_x);
     }
 }
