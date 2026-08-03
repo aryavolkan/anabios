@@ -70,4 +70,41 @@ refactoring.
 ## Non-goals
 - codex / observe_all (config lever already exists).
 - Any change that moves a golden hash.
-- Refactoring outside `sense.rs`.
+
+## Addendum — extended scope (second pass)
+
+After the initial two-change PR, the work was extended with more measured,
+byte-identical wins on the same hot path plus an audit of the other per-tick
+stages. Identity basis is stated per change: **provable** = pure
+reordering/deferral/hoisting of identical values; **golden-verified** =
+equivalent in exact arithmetic, confirmed identical by the determinism +
+inventions + cognition golden hashes and the full `all_scenarios` suite (the
+repo's behavioral-identity contract), with a noted floating-point boundary
+caveat.
+
+### P3 — defer the per-neighbor distance `sqrt` (`sense.rs`, `spatial.rs`)
+Add `torus_distance_sq` (and refactor `torus_distance = torus_distance_sq().sqrt()`,
+bit-identical). The neighbor scan compares **squared** distances and takes one
+`sqrt` per winner (≤3) instead of one per ring neighbor. Winner compares
+(`d_sq` vs `d_sq`) are **provable**; the radius reject (`d_sq > radius²`) is
+**golden-verified** (same idiom as P1). Bench: 10k −20.6% (p=0.00) on top of
+P1+P2.
+
+### P4 — hoist `row`/center-y out of `best_plant_direction`'s inner loop
+Loop-invariant across the inner `dx` loop. **Provable** (LLVM likely already
+LICMs it; primarily clarity).
+
+### Cross-stage audit wins (`integrate.rs`, `age.rs`, `interact.rs`) — all provable
+- `integrate_all`: compute `held_mask` once instead of 2–3× per agent/tick.
+- `age_and_starve`: compute `lifespan` lazily, after the `energy <= 0.0`
+  starvation short-circuit that leaves it unused.
+- `trade_pass`/`pick_swap`: hoist the `want(_, give)` terms out of the inner loop.
+Impact is workload-dependent (largest with inventions active / starvation-heavy
+ticks); small on the default scattered bench. Kept as provably-no-op cleanups.
+
+### Cumulative result & measurement caveat
+Sense stage, chaining clean cool-regime back-to-back A/Bs: ≈ **−40%** at both 1k
+and 10k (each step p=0.00). A single clean cumulative and a trustworthy
+tick-level number require a quiescent/CI machine: the dev laptop thermally
+throttles under sustained bench load (world-clone variance + throttling swamp
+the ~10% tick signal), so per-stage deltas are the reliable instrument.
