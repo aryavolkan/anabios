@@ -168,6 +168,84 @@ pub fn sense_all(
     });
 }
 
+/// Running "closest neighbor" bookkeeping for one agent's sense scan.
+///
+/// Tracks the nearest neighbor overall, plus the nearest of the same and of a
+/// different species. Directions and relative size/energy are derived once,
+/// *after* the scan (see `sense_one`), so the hot per-neighbor path does no
+/// `normalize` (a `sqrt`) and no division — only the ≤3 winners pay for those.
+///
+/// The winner's *position* is captured here as it streams past (it is already
+/// in-register for the distance test), so the post-scan direction math reads
+/// the stored `Vec2` instead of re-fetching `agents.position[id]` — a cold,
+/// random-index load at 10k agents that otherwise costs more than the `sqrt`s
+/// the deferral saves. Values are bit-identical either way; this only changes
+/// *where* the position comes from.
+#[derive(Clone, Copy)]
+struct NearestNeighbors {
+    crowding: u32,
+    nearest_dist: f32,
+    nearest_id: u32,
+    nearest_species: u32,
+    nearest_pos: Vec2,
+    same_dist: f32,
+    same_id: u32,
+    same_pos: Vec2,
+    other_dist: f32,
+    other_id: u32,
+    other_pos: Vec2,
+}
+
+impl NearestNeighbors {
+    #[inline]
+    fn new() -> Self {
+        Self {
+            crowding: 0,
+            nearest_dist: f32::INFINITY,
+            nearest_id: NO_NEIGHBOR_ID,
+            nearest_species: NO_NEIGHBOR_SPECIES,
+            nearest_pos: Vec2::ZERO,
+            same_dist: f32::INFINITY,
+            same_id: NO_NEIGHBOR_ID,
+            same_pos: Vec2::ZERO,
+            other_dist: f32::INFINITY,
+            other_id: NO_NEIGHBOR_ID,
+            other_pos: Vec2::ZERO,
+        }
+    }
+
+    /// Fold one in-range neighbor — id `oid`, at `pos`, distance `d`, of
+    /// `species` — into the running winners. Selection uses strict `<`, so the
+    /// first neighbor seen at a given distance wins, preserving the ascending
+    /// query order the former inline scan relied on for tie-breaks.
+    #[inline]
+    fn consider(&mut self, oid: u32, pos: Vec2, d: f32, species: u32, self_species: u32) {
+        self.crowding += 1;
+        if d < self.nearest_dist {
+            self.nearest_dist = d;
+            self.nearest_id = oid;
+            self.nearest_species = species;
+            self.nearest_pos = pos;
+        }
+        if species == self_species {
+            if d < self.same_dist {
+                self.same_dist = d;
+                self.same_id = oid;
+                self.same_pos = pos;
+            }
+        } else if d < self.other_dist {
+            self.other_dist = d;
+            self.other_id = oid;
+            self.other_pos = pos;
+        }
+    }
+
+    #[inline]
+    fn has_neighbor(&self) -> bool {
+        self.nearest_id != NO_NEIGHBOR_ID
+    }
+}
+
 /// Compute one alive agent's sensor register. Pure over the shared inputs.
 #[allow(clippy::too_many_arguments)]
 fn sense_one(
@@ -203,21 +281,11 @@ fn sense_one(
     let self_size = genome.get(GenomeSlot::Size).max(1e-3);
     let self_energy = agents.energy[i].max(1e-3);
 
-    let mut nearest_dist = f32::INFINITY;
-    let mut nearest_dir = Vec2::ZERO;
-    let mut has_neighbor = false;
-    let mut nearest_species: u32 = NO_NEIGHBOR_SPECIES;
-    let mut nearest_id: u32 = NO_NEIGHBOR_ID;
-    let mut nearest_rel_size = 0.0_f32;
-    let mut nearest_rel_energy = 0.0_f32;
-    let mut same_dist = f32::INFINITY;
-    let mut same_dir = Vec2::ZERO;
-    let mut same_id: u32 = NO_NEIGHBOR_ID;
-    let mut other_dist = f32::INFINITY;
-    let mut other_dir = Vec2::ZERO;
-    let mut other_id: u32 = NO_NEIGHBOR_ID;
-    let mut crowding: u32 = 0;
-
+    // Scan the neighbor ring recording only distances + winner ids (cheap
+    // compares). Direction and relative-metric math is deferred to the ≤3
+    // winners below, so a crowded agent no longer pays a `normalize` per
+    // neighbor it never keeps.
+    let mut nn = NearestNeighbors::new();
     spatial.query(pos, radius, |oid| {
         if oid == id {
             return;
@@ -227,32 +295,35 @@ fn sense_one(
         if d > radius {
             return;
         }
-        crowding += 1;
-        let dir = torus_direction(pos, other_pos, world_size);
-        let other_species = agents.species_id[oid as usize];
-        if d < nearest_dist {
-            nearest_dist = d;
-            nearest_dir = dir;
-            has_neighbor = true;
-            nearest_species = other_species;
-            nearest_id = oid;
-            nearest_rel_size = agents.genome[oid as usize].get(GenomeSlot::Size) / self_size;
-            // The hash holds only alive agents (rebuilt with the alive
-            // predicate before sense), so the neighbor's energy is >= 0.
-            nearest_rel_energy = agents.energy[oid as usize] / self_energy;
-        }
-        if other_species == self_species {
-            if d < same_dist {
-                same_dist = d;
-                same_dir = dir;
-                same_id = oid;
-            }
-        } else if d < other_dist {
-            other_dist = d;
-            other_dir = dir;
-            other_id = oid;
-        }
+        nn.consider(oid, other_pos, d, agents.species_id[oid as usize], self_species);
     });
+
+    let has_neighbor = nn.has_neighbor();
+    // Derive the stored directions + relative metrics once, from the winners.
+    // Each is bit-identical to what the inline scan wrote: same winner
+    // (selection is unchanged), same neighbor position (captured during the
+    // scan) / genome / energy fed to the same function. `nearest_rel_energy`:
+    // the hash holds only alive agents, so the neighbor's energy is >= 0.
+    let (nearest_dir, nearest_rel_size, nearest_rel_energy) = if has_neighbor {
+        let n = nn.nearest_id as usize;
+        (
+            torus_direction(pos, nn.nearest_pos, world_size),
+            agents.genome[n].get(GenomeSlot::Size) / self_size,
+            agents.energy[n] / self_energy,
+        )
+    } else {
+        (Vec2::ZERO, 0.0, 0.0)
+    };
+    let same_dir = if nn.same_id != NO_NEIGHBOR_ID {
+        torus_direction(pos, nn.same_pos, world_size)
+    } else {
+        Vec2::ZERO
+    };
+    let other_dir = if nn.other_id != NO_NEIGHBOR_ID {
+        torus_direction(pos, nn.other_pos, world_size)
+    } else {
+        Vec2::ZERO
+    };
 
     // Pheromone perception is gated by a Smell sensor module.
     let pheromone = if crate::module::has_smell(&agents.modules[i]) {
@@ -269,38 +340,38 @@ fn sense_one(
     let mut reg = SensorRegister {
         local_plant_biomass: local_cell.plant_biomass,
         plant_direction,
-        nearest_neighbor_dist: nearest_dist,
+        nearest_neighbor_dist: nn.nearest_dist,
         nearest_neighbor_dir: nearest_dir,
         has_neighbor,
-        nearest_neighbor_species: nearest_species,
-        nearest_neighbor_id: nearest_id,
-        nearest_same_dist: same_dist,
+        nearest_neighbor_species: nn.nearest_species,
+        nearest_neighbor_id: nn.nearest_id,
+        nearest_same_dist: nn.same_dist,
         nearest_same_dir: same_dir,
-        nearest_same_id: same_id,
-        nearest_other_dist: other_dist,
+        nearest_same_id: nn.same_id,
+        nearest_other_dist: nn.other_dist,
         nearest_other_dir: other_dir,
-        nearest_other_id: other_id,
+        nearest_other_id: nn.other_id,
         nearest_rel_size,
         nearest_rel_energy,
-        crowding,
+        crowding: nn.crowding,
         pheromone,
         nearest_kinship: 0.0,
         hostility: 0.0,
     };
 
     // War hostility of the nearest OTHER-species neighbor's species.
-    reg.hostility = if other_id != NO_NEIGHBOR_ID {
+    reg.hostility = if nn.other_id != NO_NEIGHBOR_ID {
         crate::codex::war::hostility_lookup(
             hostility,
             self_species,
-            agents.species_id[other_id as usize],
+            agents.species_id[nn.other_id as usize],
         )
     } else {
         0.0
     };
     // Kinship of the overall-nearest neighbor (0 when there is none).
     reg.nearest_kinship = if has_neighbor {
-        let n = nearest_id as usize;
+        let n = nn.nearest_id as usize;
         crate::kin::kinship(
             agents.lineage_id[i],
             &agents.parent_ids[i],
