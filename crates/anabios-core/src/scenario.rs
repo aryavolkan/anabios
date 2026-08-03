@@ -7,6 +7,12 @@ use crate::genome::{Genome, GenomeSlot};
 use crate::prelude::Vec2;
 use crate::world::World;
 
+/// Serde default for flags that preserve prior behavior when absent by being
+/// `true` (as opposed to the opt-in flags, which default `false`).
+pub(crate) fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // Reject unknown keys so a misspelled feature flag (`inventions_enable`,
 // `sexual_dimorphism = true`) fails loudly at load instead of silently leaving
@@ -118,6 +124,18 @@ pub struct Scenario {
     /// Effectively requires `inventions_enabled` (taming needs Husbandry).
     #[serde(default)]
     pub domestication_enabled: bool,
+    /// Maladaptive cultural practices (Inbreeding, Child Sacrifice). Unlike the
+    /// opt-in flags above, this defaults to `true`: practices run whenever
+    /// `cognition_enabled` is on, exactly as before the flag existed, so every
+    /// existing scenario is unchanged. Set `false` to suppress practice
+    /// *discovery* — the only source of practices in a fresh run (with none
+    /// discovered there is nothing for copy-toward-best or inherit-jitter to
+    /// amplify above threshold), so a fresh run effectively carries none. The O1
+    /// autopsy found payoff-blind practice adoption is the dominant lever
+    /// excluding culture; this flag makes that experiment reproducible. See
+    /// `docs/superpowers/specs/2026-08-03-o1-exclusion-findings.md`.
+    #[serde(default = "default_true")]
+    pub practices_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -456,6 +474,7 @@ impl Scenario {
         w.sexual_dimorphism_enabled = self.sexual_dimorphism_enabled;
         w.domestication_enabled = self.domestication_enabled;
         w.agents.track_livestock = self.domestication_enabled;
+        w.practices_enabled = self.practices_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);

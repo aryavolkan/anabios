@@ -176,6 +176,13 @@ pub struct World {
     /// the tick stage early-returns and zero RNG is drawn with the flag off.
     #[serde(default)]
     pub domestication_enabled: bool,
+    /// When true (the default), maladaptive cultural practices are active:
+    /// `practice::discover_step` may introduce Inbreeding / Child Sacrifice.
+    /// Set false to suppress practice discovery so a fresh run carries none —
+    /// the O1 autopsy's dominant culture-excluding lever. Defaults to `true`
+    /// (via `default_true`) so worlds without the flag behave exactly as before.
+    #[serde(default = "crate::scenario::default_true")]
+    pub practices_enabled: bool,
     /// Per-cell market density field (E8). Sized to the biome grid when
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
@@ -354,6 +361,9 @@ impl World {
             settlement_enabled: false,
             sexual_dimorphism_enabled: false,
             domestication_enabled: false,
+            // Practices default ON (gated by cognition_enabled), matching
+            // behavior before this flag existed; set false to disable discovery.
+            practices_enabled: true,
             market_field: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,

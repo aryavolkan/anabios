@@ -56,7 +56,7 @@ fn affect_scenario_survives_save_load_step() {
 /// SEEKING layer was wired; regenerate deliberately whenever an affect change
 /// is intentional.
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xe0ae0ba07f9e37af), (100, 0xd07db60464030bef), (300, 0x1edf5153ef1b87ae)];
+    &[(0, 0x48945c0200cea750), (100, 0x29432d7fb5e74d12), (300, 0x22a1de3ba06ffacb)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {

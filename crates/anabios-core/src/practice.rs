@@ -123,7 +123,11 @@ pub fn inbreeding_closeness(a: &Genome, b: &Genome) -> f32 {
 /// lineage can stumble onto a bad custom as readily as a good tech. No-op /
 /// zero RNG when the flag is off.
 pub fn discover_step(world: &mut World) {
-    if !world.cognition_enabled {
+    // Gated on cognition AND the practices toggle. With `practices_enabled`
+    // false no practice is ever discovered, so a fresh run carries none — the
+    // O1 autopsy's reproducible "disable the dominant culture-excluding lever"
+    // switch. Default-true keeps every existing scenario byte-identical.
+    if !world.cognition_enabled || !world.practices_enabled {
         return;
     }
     let mut ids = std::mem::take(&mut world.agents.scratch_ids);

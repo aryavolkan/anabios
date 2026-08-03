@@ -1,0 +1,7 @@
+direction,seed,mutant,rare_windows,first_freq,first_tick,last_freq,last_tick,share_trend
+cul_into_aso,318,cultural,11,0.0973,500,0.0080,5500,down_excluded
+aso_into_cul,318,asocial,10,0.0638,500,0.0357,5000,down_excluded
+cul_into_aso,1,cultural,40,0.0494,500,0.0023,20000,down_excluded
+aso_into_cul,1,asocial,14,0.0348,500,0.0392,15000,up_invades
+cul_into_aso,2,cultural,36,0.0955,2500,0.0027,20000,down_excluded
+aso_into_cul,2,asocial,8,0.0387,500,0.0769,4000,up_invades

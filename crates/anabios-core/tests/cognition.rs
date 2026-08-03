@@ -93,12 +93,16 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
     // World.conserve_goods_on_death added (flag off here) — layout growth
     // only, trajectory byte-identical.
-    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 24→25): AgentBuffers
+    // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
+    // World.practices_enabled added, defaulting true — practices still run in
+    // this cognition-on scenario, so behavior is byte-identical; only the
+    // serialized layout grew.
+    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 25→26): AgentBuffers
     // gained the serialized `affect` column + World.affect_enabled (off here);
     // temperament slots renamed in place. Affect stage no-ops flag-off and read-
     // side hooks are identity — cognition byte-identical; regenerated on the
-    // merged tree atop the v24 conserve_goods layout.
-    &[(0, 0x2c5a2e6315f73dad), (100, 0xd01f8c35fa34a184), (300, 0x86d5316b43611aa2)];
+    // merged tree atop the v25 practices_enabled layout.
+    &[(0, 0x7418be78ac5b6a8e), (100, 0xc826dd8de14fc635), (300, 0xcc22e0b61b1f9ac1)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

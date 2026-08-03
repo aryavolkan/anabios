@@ -162,12 +162,16 @@ const GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
     // World.conserve_goods_on_death added (flag off here) — layout growth
     // only, trajectory byte-identical.
-    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 24→25): AgentBuffers
+    // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
+    // World.practices_enabled added, defaulting true so discovery still runs
+    // wherever cognition is on — but cognition is off in minimal, so behavior is
+    // byte-identical; only the serialized layout grew.
+    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 25→26): AgentBuffers
     // gained the serialized `affect` column (7 f32/agent) + World.affect_enabled
     // (off here); temperament slots renamed in place. develop_all no-ops (zero
     // RNG), read-side hooks are identity, speed factor 1.0 — trajectory byte-
-    // identical atop the v24 conserve_goods layout; regenerated on the merged tree.
-    &[(0, 0x6bb5d8869a761f54), (100, 0x65364b6e789e97ec), (1000, 0xacd0d3f92a50cd56)];
+    // identical atop the v25 practices_enabled layout; regenerated on the merged tree.
+    &[(0, 0x29449d6177f79f6d), (100, 0xce6d341a0ccf0c79), (1000, 0x4fdc2d964af88fd5)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

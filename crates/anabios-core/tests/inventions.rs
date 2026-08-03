@@ -1071,12 +1071,15 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
     // World.conserve_goods_on_death added (flag off here) — layout growth
     // only, trajectory byte-identical.
-    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 24→25): AgentBuffers
+    // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
+    // World.practices_enabled added, defaulting true (off-effect here) — layout
+    // growth only, trajectory byte-identical.
+    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 25→26): AgentBuffers
     // gained the serialized `affect` column + World.affect_enabled (off here);
     // temperament slots renamed in place. Affect stage no-ops flag-off and read-
     // side hooks are identity — byte-identical; regenerated on the merged tree
-    // atop the v24 conserve_goods layout.
-    &[(0, 0x32f0b66e193ca216), (100, 0xb330dcc07d39498d), (300, 0x3f72778bd95859e8)];
+    // atop the v25 practices_enabled layout.
+    &[(0, 0x923a1d5ce42d70b3), (100, 0x30b5e9b3eefaf176), (300, 0xcf10bc7655fe538d)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
