@@ -192,9 +192,14 @@ pub fn torus_delta(a: Vec2, b: Vec2, world_size: f32) -> Vec2 {
     Vec2::new(dx, dy)
 }
 
-/// Wrap-aware distance between two points on a torus of the given `world_size`.
+/// Wrap-aware *squared* distance between two points on a torus of the given
+/// `world_size`. This is the body of `torus_distance` without the final
+/// `sqrt`: `torus_distance(a, b, ws) == torus_distance_sq(a, b, ws).sqrt()`
+/// bit-for-bit. Callers that only need to compare or reject by distance should
+/// use this (squares are monotonic on `[0, ∞)`) and take the `sqrt` once, at
+/// the end, on the few values they actually keep.
 #[inline]
-pub fn torus_distance(a: Vec2, b: Vec2, world_size: f32) -> f32 {
+pub fn torus_distance_sq(a: Vec2, b: Vec2, world_size: f32) -> f32 {
     let mut dx = (a.x - b.x).abs();
     let mut dy = (a.y - b.y).abs();
     if dx > world_size * 0.5 {
@@ -203,7 +208,13 @@ pub fn torus_distance(a: Vec2, b: Vec2, world_size: f32) -> f32 {
     if dy > world_size * 0.5 {
         dy = world_size - dy;
     }
-    (dx * dx + dy * dy).sqrt()
+    dx * dx + dy * dy
+}
+
+/// Wrap-aware distance between two points on a torus of the given `world_size`.
+#[inline]
+pub fn torus_distance(a: Vec2, b: Vec2, world_size: f32) -> f32 {
+    torus_distance_sq(a, b, world_size).sqrt()
 }
 
 #[cfg(test)]

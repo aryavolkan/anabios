@@ -441,13 +441,17 @@ fn pick_swap(
         if inv_a[give] < TRADE_UNIT {
             continue; // A cannot spare `give`
         }
+        // Both `want(_, give)` terms are invariant across the inner `recv` loop;
+        // hoist them (same operands, same subtraction order — bit-identical).
+        let want_a_give = want(inv_a, give);
+        let want_b_give = want(inv_b, give);
         for recv in 0..GOOD_COUNT {
             if recv == give || inv_b[recv] < TRADE_UNIT {
                 continue; // same good, or B cannot spare `recv`
             }
             // A gives `give`, receives `recv`; B gives `recv`, receives `give`.
-            let a_gain = want(inv_a, recv) - want(inv_a, give);
-            let b_gain = want(inv_b, give) - want(inv_b, recv);
+            let a_gain = want(inv_a, recv) - want_a_give;
+            let b_gain = want_b_give - want(inv_b, recv);
             if a_gain > 0.0 && b_gain > 0.0 {
                 let score = a_gain + b_gain;
                 if score > best_score {

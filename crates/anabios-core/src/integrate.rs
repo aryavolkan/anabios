@@ -65,6 +65,11 @@ pub fn integrate_all(
             }
             let dimorph_basal =
                 crate::dimorphism::metabolism_factor(&genome[i], sex[i], dimorphism_enabled);
+            // Held-invention bitmask: a pure function of this agent's meme
+            // vector, read by both the speed buff and the metabolism debuff
+            // below (and on both the moving and non-moving paths). Compute it
+            // once — it was previously recomputed per call site.
+            let inv_mask = crate::invention::held_mask(&meme_vector[i]);
 
             // Action gating: no Locomotor → no motion.
             if !crate::module::has(&modules[i], crate::module::ModuleType::Locomotor) {
@@ -72,9 +77,7 @@ pub fn integrate_all(
                 // Still pay basal metabolism (invention debuffs + IQ scale it).
                 let basal = BASAL_METABOLISM_COST
                     * genome[i].get(GenomeSlot::BasalMetabolism)
-                    * crate::invention::metabolism_multiplier(crate::invention::held_mask(
-                        &meme_vector[i],
-                    ))
+                    * crate::invention::metabolism_multiplier(inv_mask)
                     * crate::iq::metabolism_multiplier(iq[i])
                     * dimorph_basal;
                 *en -= basal;
@@ -87,7 +90,7 @@ pub fn integrate_all(
             let speed_factor = crate::personality::personality_speed_factor(&genome[i]);
             // Machinery buff: powered locomotion.
             let inv_speed = crate::invention::speed_multiplier_coupled(
-                crate::invention::held_mask(&meme_vector[i]),
+                inv_mask,
                 &genome[i],
                 gene_tech_coupling,
             );
@@ -102,9 +105,7 @@ pub fn integrate_all(
             let move_cost = MOVE_ENERGY_COST * move_dist * size;
             let basal = BASAL_METABOLISM_COST
                 * genome[i].get(GenomeSlot::BasalMetabolism)
-                * crate::invention::metabolism_multiplier(crate::invention::held_mask(
-                    &meme_vector[i],
-                ))
+                * crate::invention::metabolism_multiplier(inv_mask)
                 * crate::iq::metabolism_multiplier(iq[i])
                 * dimorph_basal;
             *en -= move_cost + basal;
