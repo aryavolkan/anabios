@@ -152,15 +152,21 @@ pub fn invasion_fitness_share(windows: &[InvasionWindow], rare_frac_max: f64) ->
     }
 }
 
-/// Per-strategy aggregate over the currently-alive agents. Index 0 = Cultural,
-/// index 1 = Asocial. Read-only; safe to call every window during a run.
-pub fn sample_strategies(world: &World) -> [StrategyStat; 2] {
+/// Per-strategy aggregate, bucketing each alive agent by `classify`. Index 0 =
+/// Cultural, index 1 = Asocial. Read-only. `sample_strategies` is this with the
+/// Communicator-module-presence classifier.
+pub fn sample_strategies_by<F>(world: &World, classify: F) -> [StrategyStat; 2]
+where
+    F: Fn(&World, usize) -> StrategyKind,
+{
     let mut cultural = Acc::default();
     let mut asocial = Acc::default();
     for id in world.agents.iter_alive() {
         let i = id as usize;
-        let is_cultural = module::has(&world.agents.modules[i], ModuleType::Communicator);
-        let acc = if is_cultural { &mut cultural } else { &mut asocial };
+        let acc = match classify(world, i) {
+            StrategyKind::Cultural => &mut cultural,
+            StrategyKind::Asocial => &mut asocial,
+        };
         acc.count += 1;
         acc.energy += world.agents.energy[i] as f64;
         acc.skill += world.agents.meme_vector[i][SKILL_CHANNEL] as f64;
@@ -170,6 +176,18 @@ pub fn sample_strategies(world: &World) -> [StrategyStat; 2] {
         acc.max_era = acc.max_era.max(era);
     }
     [cultural.finish(StrategyKind::Cultural), asocial.finish(StrategyKind::Asocial)]
+}
+
+/// Per-strategy aggregate keyed on Communicator-module presence (the per-tick
+/// phenotype). Index 0 = Cultural, index 1 = Asocial.
+pub fn sample_strategies(world: &World) -> [StrategyStat; 2] {
+    sample_strategies_by(world, |world, i| {
+        if module::has(&world.agents.modules[i], ModuleType::Communicator) {
+            StrategyKind::Cultural
+        } else {
+            StrategyKind::Asocial
+        }
+    })
 }
 
 #[cfg(test)]

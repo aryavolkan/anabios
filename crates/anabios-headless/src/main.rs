@@ -2,6 +2,7 @@
 
 mod autopsy;
 mod demo;
+mod founder;
 mod ledger;
 mod record;
 mod replay;
