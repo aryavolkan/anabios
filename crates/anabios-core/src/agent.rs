@@ -68,6 +68,13 @@ pub struct AgentBuffers {
     /// and the sample count — together the developmental average feeding `iq`.
     pub iq_enrich_acc: Vec<f32>,
     pub iq_enrich_ticks: Vec<u32>,
+    /// Per-agent subcortical affect activations (7 Panksepp systems, each in
+    /// `[0,1]`), developed each tick by `affect::develop_all` and read by the
+    /// affect bias hooks. Neutral default `[0.0; AFFECT_SYSTEMS]`; stays all-zero
+    /// when `World::affect_enabled` is false, so it is cost/identity-neutral
+    /// there. Serialized (persistent) — a path-dependent accumulator feeding
+    /// hashed movement, so it must NOT be `#[serde(skip)]` (still-ticks v13 footgun).
+    pub affect: Vec<crate::affect::AffectState>,
     /// Learned home point (E8): an EMA of position updated when
     /// `settlement_enabled`; inherited by offspring with drift. Spawned at
     /// the agent's spawn position; inert when the flag is off.
@@ -166,6 +173,7 @@ impl AgentBuffers {
             self.iq[i] = 0.0;
             self.iq_enrich_acc[i] = 0.0;
             self.iq_enrich_ticks[i] = 0;
+            self.affect[i] = [0.0; crate::affect::AFFECT_SYSTEMS];
             self.anchor[i] = position;
             self.harvest_exp[i] = [0.0; crate::resource::GOOD_COUNT];
             self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
@@ -190,6 +198,7 @@ impl AgentBuffers {
             self.iq.push(0.0);
             self.iq_enrich_acc.push(0.0);
             self.iq_enrich_ticks.push(0);
+            self.affect.push([0.0; crate::affect::AFFECT_SYSTEMS]);
             self.anchor.push(position);
             self.harvest_exp.push([0.0; crate::resource::GOOD_COUNT]);
             self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
@@ -407,5 +416,36 @@ mod tests {
         a.kill(id);
         assert_eq!(a.live_count(), 0);
         assert_eq!(a.iter_alive().count(), 0);
+    }
+
+    #[test]
+    fn spawn_zeroes_affect() {
+        let mut a = AgentBuffers::new();
+        let id = a.spawn(
+            Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0,
+            crate::module::starter_kit(), Program::empty(), false,
+        );
+        assert_eq!(a.affect[id as usize], [0.0; crate::affect::AFFECT_SYSTEMS]);
+        assert_eq!(a.affect.len(), a.capacity(), "affect grows in lockstep with capacity");
+    }
+
+    #[test]
+    fn reused_slot_resets_affect() {
+        let mut a = AgentBuffers::new();
+        let id0 = a.spawn(
+            Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0,
+            crate::module::starter_kit(), Program::empty(), false,
+        );
+        a.affect[id0 as usize][crate::affect::SEEK] = 0.9;
+        a.kill(id0);
+        let id1 = a.spawn(
+            Vec2::ZERO, neutral(), 2, [LINEAGE_NONE; 2], 0,
+            crate::module::starter_kit(), Program::empty(), false,
+        );
+        assert_eq!(id1, id0, "LIFO free list reuses slot 0");
+        assert_eq!(
+            a.affect[id1 as usize], [0.0; crate::affect::AFFECT_SYSTEMS],
+            "reused (dead) slot resets affect to neutral"
+        );
     }
 }
