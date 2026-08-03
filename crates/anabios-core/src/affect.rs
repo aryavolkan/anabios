@@ -69,8 +69,8 @@ pub fn homeostatic_drive(energy: f32) -> f32 {
 }
 
 /// Aggregate threat arousal from the defensive activations (FEAR, RAGE, PANIC).
-/// M-A: those stay 0.0, so this is a 0.0 baseline; M-B finalizes it with the
-/// hijack.
+/// `max` of the three — SEEKING and the affiliative systems do not raise threat.
+/// Exactly `0.0` at neutral. ZERO RNG.
 #[inline]
 pub fn arousal(affect: &AffectState) -> f32 {
     affect[FEAR].max(affect[RAGE]).max(affect[PANIC])
@@ -208,6 +208,20 @@ mod tests {
         a[RAGE] = 0.7;
         a[PANIC] = 0.1;
         assert!((arousal(&a) - 0.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn arousal_is_max_of_defensive_activations() {
+        let mut a: AffectState = [0.0; AFFECT_SYSTEMS];
+        assert_eq!(arousal(&a), 0.0); // neutral
+        a[SEEK] = 0.9; // appetitive, not defensive
+        assert_eq!(arousal(&a), 0.0, "SEEKING must not raise threat arousal");
+        a[FEAR] = 0.7;
+        assert_eq!(arousal(&a), 0.7);
+        a[PANIC] = 0.8;
+        assert_eq!(arousal(&a), 0.8, "PANIC dominates");
+        a[RAGE] = 0.85;
+        assert_eq!(arousal(&a), 0.85, "RAGE dominates");
     }
 
     #[test]
