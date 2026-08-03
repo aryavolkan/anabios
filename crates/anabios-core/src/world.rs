@@ -170,8 +170,10 @@ pub struct World {
     pub domestication_enabled: bool,
     /// When true, knowledge accumulation is active: Writing-holding cultures
     /// build durable, transmissible tech memory that survives population
-    /// bottlenecks. Off by default — no mechanic reads this flag yet (Task 1
-    /// of the knowledge-accumulation subsystem plumbs the flag only).
+    /// bottlenecks. Gates `knowledge::knowledge_step` (per-species accrual
+    /// while a member holds Writing) and the `KnowledgeRatchet` codex
+    /// detector. Off by default; off ⇒ byte-identical to pre-E14 worlds
+    /// (zero state written, zero RNG draws).
     #[serde(default)]
     pub knowledge_enabled: bool,
     /// Per-cell market density field (E8). Sized to the biome grid when

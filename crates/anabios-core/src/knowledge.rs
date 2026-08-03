@@ -30,6 +30,13 @@ pub const KNOWLEDGE_RATCHET_MIN: f32 = 0.5;
 /// Tick stage: rises `knowledge_by_species[sp]` for every species with a live
 /// Writing-holder this tick (capped at `KNOWLEDGE_MAX`), decays it slowly for
 /// every other species already tracked. RNG-free. No-op when the flag is off.
+///
+/// Note the intentional one-tick seeding delay: a species first seen holding
+/// Writing is `or_insert(0.0)`-ed *after* the gain/decay loop above, so its
+/// first tick with a Writing-holder seeds the entry at 0.0 and it only starts
+/// accruing `KNOWLEDGE_GAIN` from the following tick. This is deterministic
+/// and pinned by the `writer_species_knowledge_grows` test below — don't
+/// "fix" the ordering, or the golden hashes move.
 pub fn knowledge_step(world: &mut World) {
     if !world.knowledge_enabled {
         return;

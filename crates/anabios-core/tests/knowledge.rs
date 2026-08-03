@@ -112,5 +112,5 @@ fn knowledge_ratchet_emerges_across_seeds() {
             w.agents.live_count()
         );
     }
-    assert!(fired >= 1, "KnowledgeRatchet fired in ≥1/{SEEDS} seeds: {fired}");
+    assert!(fired >= 4, "KnowledgeRatchet fired in ≥4/{SEEDS} seeds: {fired}");
 }
