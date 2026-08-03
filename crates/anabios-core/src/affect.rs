@@ -55,6 +55,10 @@ pub const K_FEAR_HOSTILITY: f32 = 0.8;
 pub const K_FEAR_BOLDNESS: f32 = 0.3;
 /// FEAR leaky-integrator retention (how long fear lingers). Reuses the default.
 pub const LAMBDA_FEAR: f32 = LAMBDA_DEFAULT;
+/// Flee-bias gain: FEAR pushes movement away from the threat direction.
+pub const K_FLEE: f32 = 0.6;
+/// Non-defensive-intent damping gain under FEAR (share/broadcast/emit).
+pub const K_FEAR_DAMP: f32 = 0.5;
 
 /// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
@@ -177,6 +181,22 @@ pub fn apply_affect(
             let gain = 1.0 + K_SEEK_WANDER * seek;
             action.move_x *= gain;
             action.move_y *= gain;
+        }
+    }
+
+    // FEAR (M-B): flee the nearest other-species neighbor and dampen non-defensive
+    // LIVE intents (share/broadcast/emit). Guarded so neutral affect is identity.
+    let fear = affect[FEAR];
+    if fear != 0.0 && sensors.nearest_other_id != crate::sense::NO_NEIGHBOR_ID {
+        action.move_x -= K_FLEE * fear * sensors.nearest_other_dir.x;
+        action.move_y -= K_FLEE * fear * sensors.nearest_other_dir.y;
+        let damp = (1.0 - K_FEAR_DAMP * fear).max(0.0);
+        action.share_intent *= damp;
+        for c in action.broadcast_intent.iter_mut() {
+            *c *= damp;
+        }
+        for c in action.emit_intent.iter_mut() {
+            *c *= damp;
         }
     }
 }
@@ -374,5 +394,39 @@ mod tests {
         w2.sensors[prey2 as usize] = w.sensors[prey as usize];
         develop_all(&mut w2);
         assert_eq!(w2.agents.affect[prey2 as usize][FEAR], 0.0, "flag off ⇒ no FEAR");
+    }
+
+    #[test]
+    fn apply_affect_fear_flees_and_dampens_but_is_identity_at_neutral() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::program::ActionRegister;
+        use crate::sense::SensorRegister;
+
+        let g = Genome::neutral();
+        let mut s = SensorRegister::default();
+        s.nearest_other_id = 4;
+        s.nearest_other_dir = Vec2::new(1.0, 0.0); // threat to the +x
+
+        // Neutral affect ⇒ exact identity (no arithmetic).
+        let mut neutral_act = ActionRegister::default();
+        neutral_act.move_x = 0.3;
+        neutral_act.share_intent = 0.5;
+        let before = neutral_act;
+        apply_affect(&mut neutral_act, &[0.0; AFFECT_SYSTEMS], &g, &s, 100.0);
+        assert_eq!(neutral_act.move_x, before.move_x);
+        assert_eq!(neutral_act.share_intent, before.share_intent);
+
+        // High FEAR ⇒ movement biased AWAY from the threat, share dampened.
+        let mut a: AffectState = [0.0; AFFECT_SYSTEMS];
+        a[FEAR] = 0.8;
+        let mut act = ActionRegister::default();
+        act.move_x = 0.0;
+        act.share_intent = 0.5;
+        act.broadcast_intent[0] = 0.4;
+        apply_affect(&mut act, &a, &g, &s, 100.0);
+        assert!(act.move_x < 0.0, "FEAR should push away from +x threat, got {}", act.move_x);
+        assert!(act.share_intent < 0.5, "FEAR should dampen sharing");
+        assert!(act.broadcast_intent[0] < 0.4, "FEAR should dampen broadcasts");
     }
 }
