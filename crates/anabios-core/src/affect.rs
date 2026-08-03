@@ -41,11 +41,11 @@ pub const K_SEEK_WANDER: f32 = 0.3;
 /// Movement-speed gain from SEEKING (+ arousal, which is 0 in M-A).
 pub const K_AFFECT_SPEED: f32 = 0.5;
 
-/// Per-agent subcortical activations, one per Panksepp system, each in [0,1].
+/// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
 pub type AffectState = [f32; AFFECT_SYSTEMS];
 
-/// Layer-0 homeostatic drive: normalized energy deficit in [0,1]. 0 = sated
+/// Layer-0 homeostatic drive: normalized energy deficit in `[0,1]`. 0 = sated
 /// (energy >= SPAWN_ENERGY), → 1 as energy → 0. Setpoint is `SPAWN_ENERGY`.
 #[inline]
 pub fn homeostatic_drive(energy: f32) -> f32 {
