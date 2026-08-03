@@ -87,12 +87,29 @@ the ~1000-strong cultural resident line, not survival of the original 20
 asocial invaders. This result is reported as ambiguous, not as invasion
 evidence.
 
-**Population stability asymmetry:** asocial-resident worlds are stable
-(cul→aso seed 1: 2993/2998/2997 agents across the run, essentially flat;
-seed 2 has a transient dip to 2320 at t2000 then fully recovers).
-Cultural-resident worlds collapse (all three aso→cul worlds crash toward
-zero population). Culture, as currently modeled, is demographically fragile
-at density — independent of which direction is invading which.
+**Population stability is not uniformly asymmetric — apply the same caveat
+in both directions.** Two of the three cul→aso (asocial-resident) worlds
+are genuinely stable: seed 1 holds 2993/2998/2997 agents across the run,
+essentially flat; seed 2 has a transient dip to 2320 at t2000 then fully
+recovers. But **seed 318 also collapses**: total population (both
+strategies) falls from 2990 at tick 500 to zero from tick ~15000 through
+20000 — the asocial resident itself goes 2699→0 over that span, the same
+collapse phenomenon already noted for the aso→cul direction. So it is not
+"asocial-resident worlds are stable, cultural-resident worlds collapse" —
+collapse occurs in both directions (1/3 cul→aso worlds, all 3/3 aso→cul
+worlds), and culture-bearing cultural-resident worlds collapse more often,
+not exclusively. This does not change the cultural-exclusion verdict for
+seed 318, though: its cultural share was already in steep, monotone
+decline well before the crash (0.0973→0.0080, a ~12x drop over the first
+~5000 ticks, cultural count down to single digits by tick 4000) — the
+exclusion signal is established on its own timescale, independent of and
+prior to the eventual population collapse, so seed 318 still counts as a
+clean, unconfounded contributor to the cultural-excluded 3/3 result. Only
+the blanket "asocial-resident worlds are stable" framing is wrong; the
+underlying share-based exclusion finding is unaffected. Culture, as
+currently modeled, is demographically fragile at density in general — this
+shows up as outright collapse in all 3/3 cultural-resident worlds and in
+1/3 asocial-resident worlds.
 
 **Net bidirectional verdict:** the cultural-excluded direction is confirmed
 and strong (3/3, unconfounded). The asocial-invades direction is
@@ -220,23 +237,23 @@ here as findings for future milestones, not implemented in this one.
 
 ## 7. Handoff to O2/O3
 
-- **Target the cognition-culture cost coupling first.** The dominant,
-  causally-confirmed lever is the IQ tax/gating that cultural (Communicator-
-  bearing) agents pay under `cognition_enabled=true`. O2 (lifetime learning)
-  and O3 (make culture pay) should prioritize reducing culture's IQ tax
-  and/or decoupling culture's skill benefit from the IQ gate, so that
-  culture can pay for itself at low eras rather than being squeezed out
-  before era progression is even reachable.
-- **Fix the two instrument issues (§6) before O3's emergent-era-3
-  attempt.** A share-relative invasion-fitness output and a lineage-locked
-  founder tag will both be needed to cleanly measure whether O3's changes
-  actually let culture establish and climb, rather than re-litigating the
-  same confounds this milestone had to work around manually.
-- **The era-3 IQ ceiling itself remains untested**, not disproven as a
-  future constraint — it simply isn't the *current* blocker. Once O2/O3
-  changes let culture establish population share and era progression
-  becomes reachable, the era-3 gate (0.55) may yet turn out to matter; this
-  milestone only shows it plays no role in the world as currently tuned.
+O2 (lifetime learning) and O3 (make culture pay) should target the
+cognition-culture cost coupling first: the dominant, causally-confirmed
+lever is the IQ tax/gating that cultural (Communicator-bearing) agents pay
+under `cognition_enabled=true`, so reducing culture's IQ tax and/or
+decoupling culture's skill benefit from the IQ gate — letting culture pay
+for itself at low eras rather than being squeezed out before era
+progression is even reachable — is the highest-leverage next move. Fix the
+two instrument issues from §6 before O3's emergent-era-3 attempt, since a
+share-relative invasion-fitness output and a lineage-locked founder tag
+will both be needed to cleanly measure whether O3's changes actually let
+culture establish and climb, rather than re-litigating the same confounds
+this milestone had to work around manually. And note that the era-3 IQ
+ceiling itself remains untested, not disproven, as a future constraint —
+it simply isn't the *current* blocker; once O2/O3 changes let culture
+establish population share and era progression becomes reachable, the
+era-3 gate (0.55) may yet turn out to matter, but this milestone only shows
+it plays no role in the world as currently tuned.
 
 ## Artifacts
 
