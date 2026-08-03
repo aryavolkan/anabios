@@ -17,8 +17,6 @@ pub enum StrategyKind {
     Asocial,
 }
 
-pub const STRATEGY_KINDS: [StrategyKind; 2] = [StrategyKind::Cultural, StrategyKind::Asocial];
-
 pub fn strategy_label(k: StrategyKind) -> &'static str {
     match k {
         StrategyKind::Cultural => "cultural",
@@ -84,7 +82,6 @@ impl Acc {
 /// and the total live population at `tick`.
 #[derive(Clone, Copy, Debug)]
 pub struct InvasionWindow {
-    pub tick: u64,
     pub mutant_n: u32,
     pub total_n: u32,
 }
@@ -195,21 +192,21 @@ placement = { kind = \"uniform\" }
 mod invasion_tests {
     use super::*;
 
-    fn w(tick: u64, mutant_n: u32, total_n: u32) -> InvasionWindow {
-        InvasionWindow { tick, mutant_n, total_n }
+    fn w(mutant_n: u32, total_n: u32) -> InvasionWindow {
+        InvasionWindow { mutant_n, total_n }
     }
 
     #[test]
     fn rare_mutant_that_grows_has_positive_invasion_fitness() {
         // Mutant stays under 10% of the population but its count climbs.
-        let windows = [w(0, 10, 1000), w(100, 20, 1000), w(200, 40, 1000)];
+        let windows = [w(10, 1000), w(20, 1000), w(40, 1000)];
         let r = invasion_fitness(&windows, 0.10).unwrap();
         assert!(r > 0.0, "growing rare mutant must invade, got {r}");
     }
 
     #[test]
     fn rare_mutant_that_shrinks_is_excluded() {
-        let windows = [w(0, 40, 1000), w(100, 20, 1000), w(200, 10, 1000)];
+        let windows = [w(40, 1000), w(20, 1000), w(10, 1000)];
         let r = invasion_fitness(&windows, 0.10).unwrap();
         assert!(r < 0.0, "shrinking rare mutant is excluded, got {r}");
     }
@@ -217,7 +214,7 @@ mod invasion_tests {
     #[test]
     fn windows_above_rare_threshold_are_ignored() {
         // Every window is >10% frequency → no qualifying rare pair → None.
-        let windows = [w(0, 500, 1000), w(100, 600, 1000)];
+        let windows = [w(500, 1000), w(600, 1000)];
         assert!(invasion_fitness(&windows, 0.10).is_none());
     }
 
@@ -225,7 +222,7 @@ mod invasion_tests {
     fn extinction_pair_is_skipped_not_neg_infinity() {
         // mutant_n[k+1] == 0 would make ln(0) = -inf; that pair must be skipped.
         // The only surviving valid pair here is (10 -> 20): positive.
-        let windows = [w(0, 10, 1000), w(100, 20, 1000), w(200, 0, 1000)];
+        let windows = [w(10, 1000), w(20, 1000), w(0, 1000)];
         let r = invasion_fitness(&windows, 0.10).unwrap();
         assert!(r.is_finite() && r > 0.0, "got {r}");
     }

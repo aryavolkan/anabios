@@ -61,11 +61,7 @@ pub fn run(
                     s.max_era,
                 )?;
                 if s.kind == mutant {
-                    invasion.push(InvasionWindow {
-                        tick: world.tick,
-                        mutant_n: s.count,
-                        total_n: total,
-                    });
+                    invasion.push(InvasionWindow { mutant_n: s.count, total_n: total });
                 }
             }
         }
@@ -91,7 +87,6 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anabios_core::scenario::Scenario;
     use std::io::Write;
 
     // Minimal mixed world; a couple hundred ticks is enough to emit >1 window.
