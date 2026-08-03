@@ -1,5 +1,16 @@
 # Supply-Side Trade Fix (Conserve Goods on Death) Implementation Plan
 
+> **⚠️ PARTIALLY EXECUTED — the mechanism does NOT fix the freeze.** Tasks 1–2
+> (the `conserve_goods_on_death` flag + `conserve_goods_step`) were implemented,
+> reviewed, and kept as a correct opt-in mechanism. Task 3's proof **failed**:
+> conservation conserves goods but concentrates them on a few hoarders, so trade
+> still freezes; seven mechanisms were ultimately eliminated and the freeze is
+> intrinsic to the bilateral-barter primitive (see
+> [`../specs/2026-08-02-trade-freeze-diagnosis.md`](../specs/2026-08-02-trade-freeze-diagnosis.md)
+> Updates 1–2). Tasks 3–4 were NOT completed. Do not treat this plan as a
+> freeze fix; the `conserve_goods_on_death` mechanism ships as a standalone
+> feature only.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Stop the biome trade economy from freezing by making goods conservative — when an agent dies, its trade-goods inventory transfers to the nearest living agent instead of vanishing.

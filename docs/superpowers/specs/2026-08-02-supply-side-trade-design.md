@@ -1,5 +1,17 @@
 # Supply-Side Trade Fix — Design (2026-08-02)
 
+> **⚠️ OUTCOME: this mechanism does NOT fix the freeze (disproven by measurement).**
+> `conserve_goods_on_death` was implemented and measured: it correctly conserves
+> goods but *concentrates* them on a few "nearest-living" hoarders while the rest
+> go empty, so trade still freezes. Seven mechanisms were ultimately eliminated —
+> the freeze is intrinsic to the **bilateral-barter primitive**, not a supply/
+> demand parameter. See
+> [`2026-08-02-trade-freeze-diagnosis.md`](2026-08-02-trade-freeze-diagnosis.md)
+> Updates 1–2. The `conserve_goods_on_death` flag+mechanism are **kept as a
+> correct, opt-in feature** (goods conservation is reasonable on its own), but
+> they are NOT the trade-freeze fix. A durable fix needs an exchange-primitive
+> redesign (a separate project).
+
 Design for the Phase-2 roadmap item *Trade-economy redesign*, re-scoped after the
 [freeze diagnosis](2026-08-02-trade-freeze-diagnosis.md) disproved the original
 (demand-satiation) plan. **This design targets the measured cause: supply-side
