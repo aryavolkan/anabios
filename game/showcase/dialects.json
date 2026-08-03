@@ -1,0 +1,58 @@
+{
+  "_comment": "meme-sweep arc — two communicator clusters diverge and a dialect sweeps; scenario=dialects seed=0",
+  "seed": 0,
+  "beats": [
+    { "do": [
+      { "letterbox": true },
+      { "hud": false },
+      { "speed": 16 },
+      { "ground": "biome" },
+      { "body": "dialect" },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.6, "dur": 0.1 } },
+      { "title": { "chapter": "ANABIOS", "subtitle": "the shape of a word", "dur": 3.0 } }
+    ] },
+    { "after": 4.0, "do": [
+      { "hud": true },
+      { "title": { "chapter": "I. TWO TONGUES", "subtitle": "communicators, split east and west", "dur": 3.0 } },
+      { "lower_third": { "text": "two clusters of communicators, one range apart", "dur": 5.0 } },
+      { "camera": { "x": 260, "y": 512, "zoom": 1.4, "dur": 4.0 } }
+    ] },
+    { "after": 6.0, "do": [
+      { "camera": { "x": 764, "y": 512, "zoom": 1.4, "dur": 4.0 } },
+      { "title": { "chapter": "II. DRIFT", "subtitle": "isolation breeds accent", "dur": 3.0 } },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.7, "dur": 4.0 } }
+    ] },
+    { "on_event": "Dialect", "timeout": 60.0, "do": [
+      { "speed": 4 },
+      { "camera": { "at": "event", "zoom": 2.0, "dur": 1.5 } },
+      { "highlight": "event" },
+      { "follow": "event" },
+      { "lower_third": { "text": "Dialect — a new speech pattern crystallizes", "dur": 5.0 } }
+    ] },
+    { "after": 7.0, "do": [
+      { "unfollow": true },
+      { "clear_highlight": true },
+      { "speed": 16 },
+      { "title": { "chapter": "III. THE SWEEP", "subtitle": "one meme outcompetes the rest", "dur": 3.0 } },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.6, "dur": 3.0 } }
+    ] },
+    { "on_event": "MemeSweep", "timeout": 60.0, "do": [
+      { "speed": 4 },
+      { "punch": { "zoom": 1.3, "dur": 0.6 } },
+      { "camera": { "at": "event", "zoom": 1.8, "dur": 1.5 } },
+      { "highlight": "event" },
+      { "follow": "event" },
+      { "lower_third": { "text": "MemeSweep — a dialect sweeps through the population", "dur": 5.0 } }
+    ] },
+    { "after": 8.0, "do": [
+      { "unfollow": true },
+      { "clear_highlight": true },
+      { "speed": 1 },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.6, "dur": 5.0 } },
+      { "title": { "chapter": "ANABIOS", "subtitle": "culture drifts, then converges", "dur": 4.0 } }
+    ] },
+    { "after": 6.0, "do": [
+      { "end": true }
+    ] }
+  ]
+}

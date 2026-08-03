@@ -99,7 +99,9 @@ use crate::world::World;
 /// v23: hard genetic invention prerequisites — World.gene_requirements flag
 ///     (gates `invention::GeneReq` on discovery + social copy). Off in every
 ///     golden scenario ⇒ byte-identical behavior; only the layout grew.
-pub const FORMAT_VERSION: u32 = 23;
+/// v24: supply-side trade fix — World.conserve_goods_on_death flag. Off in
+///      every existing scenario; serialized layout grew by one byte.
+pub const FORMAT_VERSION: u32 = 24;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

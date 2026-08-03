@@ -1,0 +1,68 @@
+name: showcase
+
+# Publishes the static web replay player (showcase/) to GitHub Pages.
+#
+# Gated: this NEVER runs on ordinary pushes. It only runs when a maintainer
+# explicitly asks for it — via the Actions "Run workflow" button
+# (workflow_dispatch) or by pushing a `v*` release tag. replay.js is
+# regenerated at publish time from source (scenario + seed), not shipped
+# from the committed copy, so the hosted deck is reproducible.
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deployment at a time; let an in-flight deploy finish rather
+# than cancelling it out from under a viewer.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build release headless
+        run: cargo build --release -p anabios-headless
+
+      # Regenerates showcase/replay.js from source at publish time (overwrites
+      # the committed copy) so the hosted deck is reproducible from the sim,
+      # not from whatever was last checked in.
+      #
+      # `record` prints `state_hash=0x...` on stdout — the determinism
+      # receipt. That hash must match a local `anabios-headless record` (or
+      # `run`) of the same scenario/seed: if it doesn't, the sim, the
+      # toolchain, or the scenario file drifted between here and your
+      # machine, and the hosted replay should not be trusted until that's
+      # explained.
+      - name: regenerate showcase/replay.js
+        run: |
+          set -euo pipefail
+          ./target/release/anabios-headless record \
+            --scenario scenarios/out-of-africa-saga.toml --seed 318 \
+            --out showcase/replay.js | tee record.log
+          echo "::notice title=state_hash::$(grep -o 'state_hash=[^ ]*' record.log)"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: showcase
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

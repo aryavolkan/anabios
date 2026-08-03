@@ -159,7 +159,10 @@ const GOLDEN: &[(u64, u64)] =
     // minimal so every term is exactly held_f32 — trajectory byte-identical,
     // only the serialized layout grew. Material baskets also grew richer, but
     // resources_enabled is off here so they are never consulted.
-    &[(0, 0x21ab4d62eb377544), (100, 0x9fc0f679f252e6d3), (1000, 0x60a3c8887f27808f)];
+    // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
+    // World.conserve_goods_on_death added (flag off here) — layout growth
+    // only, trajectory byte-identical.
+    &[(0, 0x4681b6fa4023114a), (100, 0xfcbafda8fd0b7727), (1000, 0x0d3d45eef7f71411)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
