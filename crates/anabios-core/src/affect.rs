@@ -9,7 +9,9 @@
 //! (subsumption), NOT evolutionary strata. We model survival/motivational
 //! circuits and make no claim that agents *feel* anything.
 
-use crate::{genome::Genome, prelude::Vec2, program::ActionRegister, sense::SensorRegister, world::World};
+use crate::{
+    genome::Genome, prelude::Vec2, program::ActionRegister, sense::SensorRegister, world::World,
+};
 
 /// Number of Panksepp primary-process systems tracked per agent.
 pub const AFFECT_SYSTEMS: usize = 7;

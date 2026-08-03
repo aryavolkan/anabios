@@ -39,13 +39,15 @@ fn affect_scenario_survives_save_load_step() {
     let bytes = save_to_bytes(&world).expect("save");
     let mut reloaded = load_from_bytes(&bytes).expect("load");
     assert_eq!(
-        state_hash(&world), state_hash(&reloaded),
+        state_hash(&world),
+        state_hash(&reloaded),
         "load must restore identical state (affect column persisted)"
     );
     step(&mut world);
     step(&mut reloaded);
     assert_eq!(
-        state_hash(&world), state_hash(&reloaded),
+        state_hash(&world),
+        state_hash(&reloaded),
         "affect world diverged after save→load→step (non-serialized affect state?)"
     );
 }

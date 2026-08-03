@@ -98,7 +98,8 @@ pub fn integrate_all(
                 &genome[i],
                 gene_tech_coupling,
             );
-            let v = direction * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed * affect_speed);
+            let v = direction
+                * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed * affect_speed);
             *vel = v;
 
             let new_pos = *pos + v;

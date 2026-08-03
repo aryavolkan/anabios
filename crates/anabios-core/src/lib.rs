@@ -4,8 +4,8 @@
 //! over state buffers. Given the same seed and scenario, every run is
 //! bit-identical.
 
-pub mod age;
 pub mod affect;
+pub mod age;
 pub mod agent;
 pub mod behavior;
 pub mod biome;

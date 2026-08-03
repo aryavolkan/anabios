@@ -422,8 +422,14 @@ mod tests {
     fn spawn_zeroes_affect() {
         let mut a = AgentBuffers::new();
         let id = a.spawn(
-            Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0,
-            crate::module::starter_kit(), Program::empty(), false,
+            Vec2::ZERO,
+            neutral(),
+            1,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
         );
         assert_eq!(a.affect[id as usize], [0.0; crate::affect::AFFECT_SYSTEMS]);
         assert_eq!(a.affect.len(), a.capacity(), "affect grows in lockstep with capacity");
@@ -433,18 +439,31 @@ mod tests {
     fn reused_slot_resets_affect() {
         let mut a = AgentBuffers::new();
         let id0 = a.spawn(
-            Vec2::ZERO, neutral(), 1, [LINEAGE_NONE; 2], 0,
-            crate::module::starter_kit(), Program::empty(), false,
+            Vec2::ZERO,
+            neutral(),
+            1,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
         );
         a.affect[id0 as usize][crate::affect::SEEK] = 0.9;
         a.kill(id0);
         let id1 = a.spawn(
-            Vec2::ZERO, neutral(), 2, [LINEAGE_NONE; 2], 0,
-            crate::module::starter_kit(), Program::empty(), false,
+            Vec2::ZERO,
+            neutral(),
+            2,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
         );
         assert_eq!(id1, id0, "LIFO free list reuses slot 0");
         assert_eq!(
-            a.affect[id1 as usize], [0.0; crate::affect::AFFECT_SYSTEMS],
+            a.affect[id1 as usize],
+            [0.0; crate::affect::AFFECT_SYSTEMS],
             "reused (dead) slot resets affect to neutral"
         );
     }
