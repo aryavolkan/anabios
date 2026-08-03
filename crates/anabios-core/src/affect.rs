@@ -9,7 +9,7 @@
 //! (subsumption), NOT evolutionary strata. We model survival/motivational
 //! circuits and make no claim that agents *feel* anything.
 
-use crate::world::World;
+use crate::{genome::Genome, prelude::Vec2, program::ActionRegister, sense::SensorRegister, world::World};
 
 /// Number of Panksepp primary-process systems tracked per agent.
 pub const AFFECT_SYSTEMS: usize = 7;
@@ -102,11 +102,44 @@ pub fn develop_all(world: &mut World) {
     });
 }
 
+/// Read-side bias hook. Modulate `action` from current affect + percepts +
+/// temperament. EXACT IDENTITY at neutral (all-zero) affect — the SEEKING block
+/// is guarded `if seek != 0.0` (personality.rs idiom), so a neutral agent's
+/// action is left bit-for-bit unchanged. Called in decide_all right AFTER
+/// `apply_personality`. Writes only live channels; no RNG. M-A implements
+/// SEEKING; later milestones add their systems (they will read `genome`/`energy`).
+pub fn apply_affect(
+    action: &mut ActionRegister,
+    affect: &AffectState,
+    _genome: &Genome,
+    sensors: &SensorRegister,
+    _energy: f32,
+) {
+    // SEEKING: steer toward food when a plant direction is sensed; otherwise
+    // intensify the program's own heading as a deterministic exploratory wander
+    // (no RNG/position is available in the read-side hook).
+    let seek = affect[SEEK];
+    if seek != 0.0 {
+        let pd = sensors.plant_direction;
+        if pd != Vec2::ZERO {
+            action.move_x += K_SEEK_FORAGE * seek * pd.x;
+            action.move_y += K_SEEK_FORAGE * seek * pd.y;
+        } else {
+            let gain = 1.0 + K_SEEK_WANDER * seek;
+            action.move_x *= gain;
+            action.move_y *= gain;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::SPAWN_ENERGY;
     use crate::genome::Genome;
     use crate::prelude::Vec2;
+    use crate::program::ActionRegister;
+    use crate::sense::SensorRegister;
     use crate::world::World;
 
     #[test]
@@ -170,5 +203,36 @@ mod tests {
         let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
         develop_all(&mut w);
         assert_eq!(w.agents.affect[id as usize][SEEK], 0.0, "sated ⇒ no SEEKING");
+    }
+
+    #[test]
+    fn apply_affect_is_identity_at_neutral() {
+        let mut action = ActionRegister { move_x: 0.3, move_y: -0.2, ..Default::default() };
+        let before = action; // ActionRegister is Copy
+        let affect = [0.0; AFFECT_SYSTEMS];
+        let s = SensorRegister { plant_direction: Vec2::new(1.0, 0.0), ..Default::default() };
+        apply_affect(&mut action, &affect, &Genome::neutral(), &s, SPAWN_ENERGY);
+        assert_eq!(action.move_x, before.move_x);
+        assert_eq!(action.move_y, before.move_y);
+    }
+
+    #[test]
+    fn seeking_biases_toward_sensed_food() {
+        let mut action = ActionRegister::default();
+        let mut affect = [0.0; AFFECT_SYSTEMS];
+        affect[SEEK] = 1.0;
+        let s = SensorRegister { plant_direction: Vec2::new(1.0, 0.0), ..Default::default() };
+        apply_affect(&mut action, &affect, &Genome::neutral(), &s, 0.0);
+        assert!(action.move_x > 0.0, "high SEEKING steers toward food (+x)");
+    }
+
+    #[test]
+    fn seeking_intensifies_heading_when_no_food() {
+        let mut action = ActionRegister { move_x: 0.5, move_y: 0.0, ..Default::default() };
+        let mut affect = [0.0; AFFECT_SYSTEMS];
+        affect[SEEK] = 1.0;
+        let s = SensorRegister::default(); // plant_direction == Vec2::ZERO
+        apply_affect(&mut action, &affect, &Genome::neutral(), &s, 0.0);
+        assert!(action.move_x > 0.5, "no-food SEEKING intensifies the program's heading");
     }
 }

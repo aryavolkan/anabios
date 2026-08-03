@@ -196,6 +196,15 @@ fn decide_all(world: &mut World) {
                 &sensors[i],
                 agents.energy[i],
             );
+            // Subcortical affect bias (SEEKING in M-A): steer/intensify movement
+            // from the agent's current affect. Exact identity at neutral affect.
+            crate::affect::apply_affect(
+                &mut action,
+                &agents.affect[i],
+                &agents.genome[i],
+                &sensors[i],
+                agents.energy[i],
+            );
             // Habitat selection (opt-in): bias movement toward the nearby cell whose
             // climate best matches this agent's EnvAffinity, so lineages sort into
             // their preferred zone. Gated on the flag so flag-off stays byte-identical.
