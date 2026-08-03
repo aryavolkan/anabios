@@ -1,0 +1,19 @@
+name = "affect-seeking"
+seed = 12345
+# Flag-ON anchor for the M-A affect layer: identical world to minimal.toml, but
+# with SEEKING active so hungry agents forage toward food. The golden test in
+# tests/affect.rs pins the resulting flag-ON trajectory.
+affect_enabled = true
+# Pin the cap so the flag-ON golden test stays fast and stable.
+max_population = 2000
+
+[[agents]]
+count = 200
+placement = { kind = "uniform" }
+
+[agents.traits]
+perception_radius = 0.5
+size = 0.4
+basal_metabolism = 0.4
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

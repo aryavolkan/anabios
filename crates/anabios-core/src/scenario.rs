@@ -53,6 +53,11 @@ pub struct Scenario {
     /// `false` (default) leaves metabolism and culture unchanged.
     #[serde(default)]
     pub cognition_enabled: bool,
+    /// Opt-in: enable the subcortical affect layer (per-agent Panksepp activations
+    /// developed each tick; SEEKING biases foraging in M-A). `false` (default)
+    /// leaves behavior byte-identical.
+    #[serde(default)]
+    pub affect_enabled: bool,
     /// Opt-in: enable renewing biome (depleted cells recolonize from
     /// vegetated neighbours). `false` (default) leaves regrowth unchanged.
     #[serde(default)]
@@ -431,6 +436,7 @@ impl Scenario {
         w.gene_tech_coupling = self.gene_tech_coupling;
         w.gene_requirements = self.gene_requirements;
         w.cognition_enabled = self.cognition_enabled;
+        w.affect_enabled = self.affect_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;
         w.climate_drift_rate = self.climate_drift_rate;
@@ -621,6 +627,20 @@ count = 5
         let s1 = Scenario::parse_toml(gated).expect("parse");
         assert!(s1.gene_requirements);
         assert!(s1.instantiate().gene_requirements);
+    }
+
+    #[test]
+    fn affect_enabled_defaults_off_and_scenario_applies() {
+        // Omitting the field leaves it off (serde default) for baseline identity.
+        let base = "name = \"base\"\nseed = 1\n\n[[agents]]\ncount = 5\n[agents.traits]\n";
+        let s0 = Scenario::parse_toml(base).expect("parse");
+        assert!(!s0.affect_enabled);
+        assert!(!s0.instantiate().affect_enabled);
+        // Setting it propagates into the instantiated world.
+        let on = "name = \"on\"\nseed = 1\naffect_enabled = true\n\n[[agents]]\ncount = 5\n[agents.traits]\n";
+        let s1 = Scenario::parse_toml(on).expect("parse");
+        assert!(s1.affect_enabled);
+        assert!(s1.instantiate().affect_enabled);
     }
 
     #[test]
