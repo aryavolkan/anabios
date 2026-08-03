@@ -39,7 +39,7 @@ pub fn idf_weight(n_t: u64) -> f64 {
 }
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 53] = [
+pub const ALL_EVENT_NAMES: [&str; 54] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -93,6 +93,7 @@ pub const ALL_EVENT_NAMES: [&str; 53] = [
     "sex_ratio_collapse",
     "animal_domesticated",
     "livestock_herd",
+    "mass_fright",
 ];
 
 /// Per-type corpus run counts from the reference sweep (see module docs):
@@ -102,7 +103,7 @@ pub const ALL_EVENT_NAMES: [&str; 53] = [
 /// after the reference sweep (E3+) are definitionally unseen (`n_t = 0`) until
 /// the next regeneration. Weights are derived via [`idf_weight`], so this
 /// table is the *only* thing to update on a regeneration.
-pub const DEFAULT_CORPUS_NT: [(&str, u64); 53] = [
+pub const DEFAULT_CORPUS_NT: [(&str, u64); 54] = [
     ("extinction", 61),
     ("pop_crash", 56),
     ("speciation", 59),
@@ -156,6 +157,7 @@ pub const DEFAULT_CORPUS_NT: [(&str, u64); 53] = [
     ("sex_ratio_collapse", 0),    // post-corpus (E12)
     ("animal_domesticated", 0),   // post-corpus (E13)
     ("livestock_herd", 0),        // post-corpus (E13)
+    ("mass_fright", 0),           // post-corpus (M-B)
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -213,6 +215,7 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::SexRatioCollapse => "sex_ratio_collapse",
         EventType::AnimalDomesticated => "animal_domesticated",
         EventType::LivestockHerd => "livestock_herd",
+        EventType::MassFright => "mass_fright",
     }
 }
 

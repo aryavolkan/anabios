@@ -217,12 +217,16 @@ pub enum EventType {
     /// A livestock species sustained ≥`LIVESTOCK_HERD_MIN` living tamed members for
     /// `LIVESTOCK_HERD_WINDOW` consecutive ticks (`value` = tamed count).
     LivestockHerd = 52,
+    /// A cluster of same-species agents simultaneously in high FEAR — the first
+    /// mass fright / panic response (Bracha rout). `value` = frightened member
+    /// count; loc = species centroid.
+    MassFright = 53,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::LivestockHerd as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::MassFright as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {

@@ -18,6 +18,7 @@ use crate::program::MEME_CHANNELS;
 use crate::spatial::torus_distance;
 use crate::world::World;
 
+mod affect;
 mod agg;
 mod climate;
 mod combat;
@@ -386,6 +387,7 @@ pub fn observe_all(world: &mut World) {
     combat::detect_pack_hunting(world, &agg);
     spatial::detect_herd_cohesion(world, &agg);
     climate::detect_maladaptation(world, &agg);
+    affect::detect_mass_fright(world, &agg);
 
     world.codex_agg = agg;
 }
