@@ -167,3 +167,39 @@ research spike, not a quick fix. Note that the trade economy **is** functional a
 an early/mid-game mechanic (thousands of ticks of vigorous trade) — the open
 question is whether indefinite late-game trade is even a goal, or whether
 bounded-duration trade is acceptable.
+
+### Update 2 (2026-08-02): comparative-advantage consumption also fails — the barter *primitive* is the problem
+
+Seventh candidate: a per-tick consumption loop (each agent consumes a little of
+every good, regenerating deficits — the textbook "produce one, consume many,
+trade" model), prototyped and swept on `biome-trade` (16k ticks):
+
+| ZZ_CONSUME/good/tick | biome-trade late | +terrain_habitat late |
+|---|---|---|
+| 0 (baseline) | 0 | 319 |
+| 0.02 | 0 | 0 |
+| 0.05 | 0 | 0 |
+
+Consumption *lowered* trade even early (54.6k→14.6k→5.5k) and still froze late —
+because it drains the **give-side** below `TRADE_UNIT` (it consumes the home good
+too; sparse harvest can't refill), the exact trap perishability hit.
+
+**Conclusion — the freeze is intrinsic to the exchange *primitive*, not any
+supply/demand parameter.** `pick_swap` is **bilateral barter**: both parties must
+hold ≥ `TRADE_UNIT` of what they give, and `want` saturates at `STOCK_TARGET`.
+This makes trade a pure *redistribution-to-equilibrium* process that
+self-terminates, and it is squeezed from both sides:
+- anything that regenerates demand (perishability, consumption) also drains the
+  give-side below `TRADE_UNIT` → trade dies;
+- anything that adds supply (harvest ×6, conserve-on-death) → saturation or
+  hoarding → trade dies.
+
+Seven mechanisms were eliminated (perishability, conserve-on-death, harvest ×6,
+species-diversity [not the cause], invention-sink flag, comparative-advantage
+consumption, and combinations). A durable fix requires **redesigning the exchange
+primitive itself** — e.g. dropping the bilateral both-must-give constraint
+(allow unilateral sale / one-sided transfer), or a **price/market-mediated**
+exchange with continuous fractional quantities instead of a fixed `TRADE_UNIT`
+barter. That is a substantial engine redesign, not a lever or a spike. The trade
+economy remains a compelling **early/mid-game** mechanic (thousands of ticks of
+vigorous trade); indefinite late-game trade needs the primitive rework.
