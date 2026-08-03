@@ -89,6 +89,10 @@ pub struct Scenario {
     /// `false` (default) leaves the world unchanged.
     #[serde(default)]
     pub resources_enabled: bool,
+    /// Opt-in: conserve trade goods on death (transfer to nearest living
+    /// agent) so long-run trade doesn't freeze. Default off.
+    #[serde(default)]
+    pub conserve_goods_on_death: bool,
     /// Opt-in: enable natural disasters (fire/drought/freeze on a Poisson
     /// schedule, succession scars). `false` (default) leaves the world
     /// unchanged — zero RNG draws, no state.
@@ -119,7 +123,9 @@ pub struct Scenario {
     /// opt-in flags above, this defaults to `true`: practices run whenever
     /// `cognition_enabled` is on, exactly as before the flag existed, so every
     /// existing scenario is unchanged. Set `false` to suppress practice
-    /// *discovery* — no new practices arise, so a fresh run carries none. The O1
+    /// *discovery* — the only source of practices in a fresh run (with none
+    /// discovered there is nothing for copy-toward-best or inherit-jitter to
+    /// amplify above threshold), so a fresh run effectively carries none. The O1
     /// autopsy found payoff-blind practice adoption is the dominant lever
     /// excluding culture; this flag makes that experiment reproducible. See
     /// `docs/superpowers/specs/2026-08-03-o1-exclusion-findings.md`.
@@ -456,6 +462,7 @@ impl Scenario {
         if w.resources_enabled {
             w.market_field = vec![0.0; w.biome.cells.len()];
         }
+        w.conserve_goods_on_death = self.conserve_goods_on_death;
         w.war_enabled = self.war_enabled;
         w.settlement_enabled = self.settlement_enabled;
         w.sexual_dimorphism_enabled = self.sexual_dimorphism_enabled;

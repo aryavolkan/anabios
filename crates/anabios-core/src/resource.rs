@@ -203,6 +203,58 @@ pub fn resource_step(world: &mut World) {
     }
 }
 
+/// Conserve trade goods on death: redistribute each snapshot recorded by
+/// `AgentBuffers::kill` this tick to the nearest living agent, so goods stay
+/// in the economy instead of vanishing. RNG-free. No-op (and drains the
+/// buffer) unless both `resources_enabled` and `conserve_goods_on_death`.
+///
+/// Deliberately a plain O(deaths × population) linear scan rather than a
+/// `world.spatial` query: `UniformSpatialHash::query` always visits a fixed
+/// one-cell ring around the probe position regardless of the `radius`
+/// argument passed to it (the argument only bounds-checks against
+/// `perception_max_radius`, it does not widen the cell ring visited) — see
+/// `spatial.rs`. That makes an "expanding radius" search both unsound (a
+/// closer agent just outside the ring can be skipped in favor of a farther
+/// one inside it) and unsafe (any radius above `perception_max_radius`,
+/// e.g. small worlds where `world_size / hash_res < 8`, trips its
+/// `debug_assert`). Deaths that carry goods are rare per tick and populations
+/// here are bounded (`reproduce::MAX_POPULATION`), so the exact linear scan
+/// costs nothing observable while guaranteeing a true nearest match.
+pub fn conserve_goods_step(world: &mut World) {
+    if !world.resources_enabled || !world.conserve_goods_on_death {
+        world.agents.deaths_scratch.clear();
+        return;
+    }
+    if world.agents.deaths_scratch.is_empty() {
+        return;
+    }
+    let deaths = std::mem::take(&mut world.agents.deaths_scratch);
+    for (pos, inv) in &deaths {
+        // Exact nearest living agent: ascending-id scan, strict `<` plus
+        // lowest-index tie-break on equal distance = deterministic.
+        let mut best: Option<u32> = None;
+        let mut best_d = f32::INFINITY;
+        for id in world.agents.iter_alive() {
+            let j = id as usize;
+            let d =
+                crate::spatial::torus_distance(*pos, world.agents.position[j], world.world_size);
+            if d < best_d || (d == best_d && best.is_some_and(|b| id < b)) {
+                best_d = d;
+                best = Some(id);
+            }
+        }
+        if let Some(id) = best {
+            let j = id as usize;
+            for (dst, src) in world.agents.inventory[j].iter_mut().zip(inv.iter()) {
+                *dst += src;
+            }
+        }
+        // If no living agent exists at all (empty world), the goods are
+        // simply dropped — there is nobody to hold them.
+    }
+    // `deaths` (the taken buffer) is dropped; `deaths_scratch` is now empty.
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
