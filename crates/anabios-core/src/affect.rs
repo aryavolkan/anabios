@@ -49,7 +49,9 @@ pub const FEAR_RANGE: f32 = 200.0;
 pub const K_FEAR_THREAT: f32 = 1.0;
 /// Weight of the war-hostility term in the FEAR trigger.
 pub const K_FEAR_HOSTILITY: f32 = 0.8;
-/// How strongly Boldness lowers the effective threat (raises the FEAR setpoint).
+/// Boldness gain on the FEAR response: fear is scaled by `(1 - K_FEAR_BOLDNESS *
+/// boldness())`, so bold (+1) feels ~0.7× and timid (−1) ~1.3× the raw threat;
+/// zero threat stays zero fear for every temperament.
 pub const K_FEAR_BOLDNESS: f32 = 0.3;
 /// FEAR leaky-integrator retention (how long fear lingers). Reuses the default.
 pub const LAMBDA_FEAR: f32 = LAMBDA_DEFAULT;
@@ -106,9 +108,10 @@ pub(crate) fn fear_trigger(sensors: &SensorRegister, genome: &Genome) -> f32 {
         threat += K_FEAR_THREAT * prox * (size + 0.5 * ener).min(1.0);
     }
     threat += K_FEAR_HOSTILITY * sensors.hostility;
-    // Boldness raises the setpoint: a bold agent needs a bigger raw threat to
-    // register the same fear. boldness() is signed [-1,+1], neutral 0.0.
-    threat = (threat - K_FEAR_BOLDNESS * genome.boldness()).clamp(0.0, 1.0);
+    // Boldness modulates the RESPONSE to threat as a GAIN, not a baseline offset:
+    // bold (+1) scales fear down (~0.7×), timid (−1) up (~1.3×) — but zero threat
+    // ⇒ zero fear for every temperament (no phantom baseline). Signed [-1,+1].
+    threat = (threat * (1.0 - K_FEAR_BOLDNESS * genome.boldness())).clamp(0.0, 1.0);
     threat
 }
 
@@ -282,23 +285,36 @@ mod tests {
         let mut s = SensorRegister::default();
         assert_eq!(fear_trigger(&s, &Genome::neutral()), 0.0);
 
-        // A large, close, hostile other-species neighbor ⇒ strong fear.
+        // A close, larger other-species neighbor ⇒ moderate (UNSATURATED) fear, so the
+        // boldness gain is demonstrable rather than hidden behind the 1.0 clamp.
         s.nearest_other_id = 7;
         s.nearest_neighbor_id = 7;
-        s.nearest_other_dist = 20.0;
+        s.nearest_other_dist = 60.0; // prox = 1 - 60/200 = 0.7
         s.nearest_other_dir = Vec2::new(1.0, 0.0);
-        s.nearest_rel_size = 2.0; // predator twice our size
-        s.nearest_rel_energy = 1.5;
-        s.hostility = 0.5;
-        let neutral = fear_trigger(&s, &Genome::neutral());
-        assert!(neutral > 0.4, "expected strong fear, got {neutral}");
-        assert!(neutral <= 1.0);
+        s.nearest_rel_size = 1.6; // size term = 1.6*0.5 = 0.8
+        s.nearest_rel_energy = 1.0; // no energy bonus
+        s.hostility = 0.0;
+        let neutral = fear_trigger(&s, &Genome::neutral()); // ~0.56, unsaturated
+        assert!(
+            neutral > 0.4 && neutral < 1.0,
+            "expected moderate unsaturated fear, got {neutral}"
+        );
 
-        // A bold genome (Boldness slot = 1.0 ⇒ boldness() = +1.0) feels LESS fear.
+        // A bold genome (Boldness = 1.0 ⇒ boldness() = +1.0) feels measurably LESS fear.
         let mut bold = Genome::neutral();
         bold.set(GenomeSlot::Boldness, 1.0);
         let brave = fear_trigger(&s, &bold);
-        assert!(brave < neutral, "boldness must lower the FEAR setpoint: {brave} !< {neutral}");
+        assert!(brave < neutral - 0.1, "boldness must scale fear down: {brave} vs {neutral}");
+
+        // Invariant: zero threat ⇒ zero fear for EVERY temperament, including timid
+        // (Boldness slot 0.0 ⇒ boldness() = -1.0). Guards against phantom baseline fear.
+        let mut timid = Genome::neutral();
+        timid.set(GenomeSlot::Boldness, 0.0);
+        assert_eq!(
+            fear_trigger(&SensorRegister::default(), &timid),
+            0.0,
+            "no threat ⇒ no fear even for timid"
+        );
 
         // A distant neighbor is barely threatening.
         let mut far = s;
