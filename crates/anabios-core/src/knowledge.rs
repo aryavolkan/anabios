@@ -21,6 +21,11 @@ pub const KNOWLEDGE_GAIN: f32 = 0.002;
 pub const KNOWLEDGE_DECAY: f32 = 0.0005;
 /// Knowledge accumulation ceiling.
 pub const KNOWLEDGE_MAX: f32 = 1.0;
+/// Threshold at which `KnowledgeRatchet` fires (once per species, latched via
+/// `CodexState.knowledge_ratchet_fired`): a species crossing this level has
+/// built durable, transmissible knowledge. See `codex::knowledge` for the v1
+/// vs. deferred-causal-re-acquisition detector design note.
+pub const KNOWLEDGE_RATCHET_MIN: f32 = 0.5;
 
 /// Tick stage: rises `knowledge_by_species[sp]` for every species with a live
 /// Writing-holder this tick (capped at `KNOWLEDGE_MAX`), decays it slowly for

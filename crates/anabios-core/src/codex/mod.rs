@@ -28,6 +28,7 @@ mod disturbance;
 mod domestication;
 mod event;
 mod invention;
+mod knowledge;
 mod metrics;
 mod params;
 mod population;
@@ -360,6 +361,7 @@ pub fn observe_all(world: &mut World) {
     dimorphism::detect_sexual_selection(world, &agg);
     dimorphism::detect_sex_ratio_collapse(world, &agg);
     domestication::detect_livestock_herd(world, &agg);
+    knowledge::detect_knowledge_ratchet(world, &agg);
     signatures::detect_ambush_and_tool(world, &agg);
     signatures::detect_flight(world, &agg);
     signatures::detect_structured_signaling(world);
