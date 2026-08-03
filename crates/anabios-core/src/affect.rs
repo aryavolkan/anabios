@@ -68,6 +68,12 @@ pub const K_HIJACK_BOLD: f32 = 0.2;
 pub const FREEZE_DIST: f32 = 140.0;
 /// Threat closer than this ⇒ cornered (Fight or Fright/Faint).
 pub const CORNER_DIST: f32 = 30.0;
+/// Cornered arousal at/above which a too-weak agent tips into Fright/Faint.
+pub const FAINT_AROUSAL: f32 = 0.95;
+/// Minimum energy to choose Fight (turn-and-attack) when cornered.
+pub const FIGHT_ENERGY_MIN: f32 = 0.35 * crate::agent::SPAWN_ENERGY;
+/// fire_intent asserted when the hijack chooses Fight.
+pub const FIRE_HIJACK: f32 = 1.0;
 
 /// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
@@ -252,22 +258,41 @@ pub fn apply_hijack(
         action.move_x = -toward.x;
         action.move_y = -toward.y;
     } else {
-        // Cornered — Fight vs Fright/Faint resolved in Task 6.
+        // Cornered — Fight vs Fright/Faint resolved below.
         return hijack_cornered(action, affect, sensors, energy);
     }
-    let _ = energy;
     true
 }
 
-// TEMPORARY stub — Task 6 replaces this with the real Fight/Faint resolution.
+/// Cornered branch: Fight when able, else Fright/Faint. Writes only LIVE
+/// channels. Always overrides ⇒ returns true.
 fn hijack_cornered(
     action: &mut ActionRegister,
-    _affect: &AffectState,
-    _sensors: &SensorRegister,
-    _energy: f32,
+    affect: &AffectState,
+    sensors: &SensorRegister,
+    energy: f32,
 ) -> bool {
-    action.move_x = 0.0;
-    action.move_y = 0.0;
+    let extreme = arousal(affect) >= FAINT_AROUSAL;
+    let can_fight = energy >= FIGHT_ENERGY_MIN;
+    if extreme && !can_fight {
+        // Fright/Faint — tonic immobility, suppress LIVE intents.
+        action.move_x = 0.0;
+        action.move_y = 0.0;
+        action.fire_intent = 0.0;
+        action.share_intent = 0.0;
+        for c in action.emit_intent.iter_mut() {
+            *c = 0.0;
+        }
+        for c in action.broadcast_intent.iter_mut() {
+            *c = 0.0;
+        }
+    } else {
+        // Fight — turn to the threat and attack.
+        action.move_x = sensors.nearest_other_dir.x;
+        action.move_y = sensors.nearest_other_dir.y;
+        action.fire_intent = action.fire_intent.max(FIRE_HIJACK);
+        action.target_id = sensors.nearest_other_id;
+    }
     true
 }
 
@@ -539,5 +564,44 @@ mod tests {
         flight_act.move_x = 0.9; // was charging toward threat
         assert!(apply_hijack(&mut flight_act, &hi, &g, &flight_s, 100.0));
         assert!(flight_act.move_x < 0.0, "mid-range threat ⇒ flee -x, got {}", flight_act.move_x);
+    }
+
+    #[test]
+    fn apply_hijack_cornered_fights_or_faints() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::program::{ActionRegister, NO_TARGET};
+        use crate::sense::SensorRegister;
+
+        let g = Genome::neutral();
+        let mut hi: AffectState = [0.0; AFFECT_SYSTEMS];
+        hi[FEAR] = 0.9;
+        let mut s = SensorRegister::default();
+        s.nearest_other_id = 11;
+        s.nearest_other_dir = Vec2::new(1.0, 0.0);
+        s.nearest_other_dist = CORNER_DIST * 0.5; // cornered
+
+        // Cornered but able (energy high) ⇒ Fight: approach + fire + target set.
+        let mut fight = ActionRegister::default();
+        assert!(apply_hijack(&mut fight, &hi, &g, &s, 100.0));
+        assert!(fight.move_x > 0.0, "Fight approaches the threat (+x)");
+        assert!(fight.fire_intent > 0.0, "Fight fires");
+        assert_eq!(fight.target_id, 11);
+        assert_ne!(fight.target_id, NO_TARGET);
+
+        // Cornered, extreme arousal, and too weak to fight ⇒ Fright/Faint:
+        // tonic immobility, intents suppressed.
+        let mut faint_aff: AffectState = [0.0; AFFECT_SYSTEMS];
+        faint_aff[FEAR] = FAINT_AROUSAL + 0.01;
+        let mut faint = ActionRegister::default();
+        faint.move_x = 0.7;
+        faint.fire_intent = 0.5;
+        faint.share_intent = 0.5;
+        faint.broadcast_intent[0] = 0.5;
+        assert!(apply_hijack(&mut faint, &faint_aff, &g, &s, FIGHT_ENERGY_MIN - 1.0));
+        assert_eq!((faint.move_x, faint.move_y), (0.0, 0.0), "Faint ⇒ tonic immobility");
+        assert_eq!(faint.fire_intent, 0.0);
+        assert_eq!(faint.share_intent, 0.0);
+        assert_eq!(faint.broadcast_intent[0], 0.0);
     }
 }
