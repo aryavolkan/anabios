@@ -93,10 +93,16 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
     // World.conserve_goods_on_death added (flag off here) — layout growth
     // only, trajectory byte-identical.
-    // Refreshed 2026-08-03: merged conservation+knowledge layout, FORMAT_VERSION 25
-    // (World.knowledge_enabled + CodexState.knowledge_by_species/knowledge_ratchet_fired
-    // added, flag off here) — layout growth only, trajectory byte-identical.
-    &[(0, 0x2f65a1918a8000fd), (100, 0xf52a5894d31bf9b0), (300, 0x3c7878809fb918df)];
+    // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
+    // World.practices_enabled added, defaulting true — practices still run in
+    // this cognition-on scenario, so behavior is byte-identical; only the
+    // serialized layout grew. Regenerated on the merged tree.
+    // Refreshed 2026-08-03 (merged main practices+conserve + knowledge layout,
+    // FORMAT_VERSION 25→26): World.knowledge_enabled + CodexState.knowledge_by_species
+    // + knowledge_ratchet_fired added, defaulting off/empty — flag is off in this
+    // scenario, so knowledge_step early-returns with zero draws; trajectory
+    // byte-identical, only the serialized layout grew.
+    &[(0, 0x1ccd02e22b4c11fe), (100, 0xbb47c5aa84631e89), (300, 0xaf7dbf7e5d683732)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

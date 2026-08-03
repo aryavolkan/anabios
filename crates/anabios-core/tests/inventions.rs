@@ -1071,10 +1071,15 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
     // World.conserve_goods_on_death added (flag off here) — layout growth
     // only, trajectory byte-identical.
-    // Refreshed 2026-08-03: merged conservation+knowledge layout, FORMAT_VERSION 25
-    // (World.knowledge_enabled + CodexState.knowledge_by_species/knowledge_ratchet_fired
-    // added, flag off here) — layout growth only, trajectory byte-identical.
-    &[(0, 0x14ad1380247b3816), (100, 0xecc59fa5c43515e8), (300, 0x862b527766454eaf)];
+    // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
+    // World.practices_enabled added, defaulting true (off-effect here) — layout
+    // growth only, trajectory byte-identical. Regenerated on the merged tree.
+    // Refreshed 2026-08-03 (merged main practices+conserve + knowledge layout,
+    // FORMAT_VERSION 25→26): World.knowledge_enabled + CodexState.knowledge_by_species
+    // + knowledge_ratchet_fired added, defaulting off/empty — flag is off in this
+    // scenario, so knowledge_step early-returns with zero draws; trajectory
+    // byte-identical, only the serialized layout grew.
+    &[(0, 0x63e24305ff8652b3), (100, 0x028d9156688c4115), (300, 0xf4a151dc7ce856b0)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
