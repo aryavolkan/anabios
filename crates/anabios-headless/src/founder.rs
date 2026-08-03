@@ -40,11 +40,11 @@ pub fn init(world: &World) -> FounderTracker {
 }
 
 impl FounderTracker {
-    /// Tag any newly-appeared lineage with its mother's founder tag. Call once
-    /// per tick: a birth's mother was tagged on a prior tick and lineage ids are
-    /// never reused, so the map only grows and every new lineage finds its
-    /// parent. Fallback (untracked mother / founder with no parent): current
-    /// module presence.
+    /// Tag any newly-appeared lineage with the founder tag of its first
+    /// recorded parent (`parent_ids[0]`). Call once per tick: a birth's
+    /// parent was tagged on a prior tick and lineage ids are never reused, so
+    /// the map only grows and every new lineage finds its parent. Fallback
+    /// (untracked parent / founder with no parent): current module presence.
     pub fn observe(&mut self, world: &World) {
         for id in world.agents.iter_alive() {
             let i = id as usize;
@@ -52,9 +52,9 @@ impl FounderTracker {
             if self.tag.contains_key(&lid) {
                 continue;
             }
-            let mother = world.agents.parent_ids[i][0];
-            let kind = if mother != LINEAGE_NONE {
-                self.tag.get(&mother).copied()
+            let parent = world.agents.parent_ids[i][0];
+            let kind = if parent != LINEAGE_NONE {
+                self.tag.get(&parent).copied()
             } else {
                 None
             }
@@ -105,6 +105,75 @@ placement = { kind = \"uniform\" }
         let stats = sample_by_founder(&world, &t);
         assert_eq!(stats[0].count, 2, "two communicator founders → Cultural-descended");
         assert_eq!(stats[1].count, 4, "four asocial founders → Asocial-descended");
+    }
+
+    #[test]
+    fn child_of_asocial_founder_keeps_founder_tag_despite_communicator_module() {
+        // Deterministic counterpart to the mutation-run test below: instead of
+        // hoping a 1500-tick run happens to mutate a Communicator into
+        // existence, directly construct the exact scenario the founder tag
+        // exists to handle — a child of an Asocial founder that itself CARRIES
+        // a Communicator module — and assert the lineage-locked tag ignores
+        // the module and reports the founder's strategy. A regression where
+        // `kind_of`/`observe` fell through to raw module presence would fail
+        // this test unconditionally.
+        const ASOCIAL: &str = "\
+name = \"t\"
+seed = 11
+[[agents]]
+count = 1
+archetype = \"asocial_forager\"
+placement = { kind = \"uniform\" }
+";
+        let mut world = Scenario::parse_toml(ASOCIAL).unwrap().instantiate();
+        let mut t = init(&world);
+
+        let founder_id = world.agents.iter_alive().next().unwrap();
+        let founder_i = founder_id as usize;
+        let founder_lineage = world.agents.lineage_id[founder_i];
+        assert_eq!(t.kind_of(&world, founder_i), StrategyKind::Asocial);
+
+        // Directly spawn a child of the founder that carries a Communicator
+        // module, bypassing the normal crossover/mutation birth path so the
+        // module presence is deterministic rather than left to chance.
+        let pos = world.agents.position[founder_i];
+        let genome = world.agents.genome[founder_i];
+        let species = world.agents.species_id[founder_i];
+        let program = world.agents.program[founder_i].clone();
+        let child_lineage = world.next_lineage();
+        let child_id = world.agents.spawn(
+            pos,
+            genome,
+            child_lineage,
+            [founder_lineage, LINEAGE_NONE],
+            species,
+            module::communicator_kit(),
+            program,
+            false,
+        );
+        let child_i = child_id as usize;
+
+        // Sanity: the raw module readout says this agent IS Cultural (it
+        // carries a Communicator module) — this proves the assertion below is
+        // a genuine disagreement between the two tags, not a vacuous one.
+        assert_eq!(
+            module_kind(&world, child_i),
+            StrategyKind::Cultural,
+            "test setup sanity: child must actually carry a Communicator module"
+        );
+
+        t.observe(&world);
+
+        // The lineage-locked tag must say Asocial: this agent DESCENDS from
+        // an asocial founder, regardless of the Communicator module it
+        // carries. This is the headline property this whole tracker exists
+        // for.
+        assert_eq!(
+            t.kind_of(&world, child_i),
+            StrategyKind::Asocial,
+            "child of an asocial founder must stay Asocial-descended even \
+             though it carries a Communicator module"
+        );
     }
 
     #[test]
