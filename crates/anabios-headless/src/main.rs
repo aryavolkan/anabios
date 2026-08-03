@@ -1,5 +1,6 @@
 //! Headless runner for anabios scenarios.
 
+mod autopsy;
 mod demo;
 mod ledger;
 mod record;
@@ -16,6 +17,23 @@ use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use ledger::StrategyKind;
+
+/// CLI spelling of the mutant strategy for `autopsy`.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum MutantArg {
+    Cultural,
+    Asocial,
+}
+
+impl From<MutantArg> for StrategyKind {
+    fn from(m: MutantArg) -> Self {
+        match m {
+            MutantArg::Cultural => StrategyKind::Cultural,
+            MutantArg::Asocial => StrategyKind::Asocial,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "anabios-headless", version, about = "Headless runner for anabios.")]
@@ -156,6 +174,24 @@ enum Command {
         #[arg(long, default_value_t = 1000)]
         report_every: u64,
     },
+    /// O1 diagnosis: run a scenario, log per-strategy (cultural vs asocial)
+    /// aggregates each window to a CSV, and report the invasion fitness of the
+    /// chosen rare strategy. Reads the world only; no sim/golden impact.
+    Autopsy {
+        #[arg(long)]
+        scenario: PathBuf,
+        #[arg(long)]
+        seed: Option<u64>,
+        #[arg(long, default_value_t = 20000)]
+        ticks: u64,
+        #[arg(long, default_value_t = 500)]
+        window: u64,
+        #[arg(long, default_value = "ledger.csv")]
+        out: PathBuf,
+        /// Which strategy is the rare mutant whose invasion fitness we report.
+        #[arg(long, value_enum, default_value_t = MutantArg::Cultural)]
+        mutant: MutantArg,
+    },
 }
 
 fn main() -> Result<()> {
@@ -201,6 +237,9 @@ fn main() -> Result<()> {
                 std::process::exit(1);
             }
             Ok(())
+        }
+        Command::Autopsy { scenario, seed, ticks, window, out, mutant } => {
+            autopsy::run(scenario, seed, ticks, window, out, mutant.into())
         }
     }
 }
