@@ -159,6 +159,7 @@ fn decide_all(world: &mut World) {
     let terrain_habitat = world.terrain_habitat;
     let settlement_enabled = world.settlement_enabled;
     let domestication_enabled = world.domestication_enabled;
+    let affect_enabled = world.affect_enabled;
     let ws = world.world_size;
     let cap = world.agents.capacity();
     world
@@ -269,6 +270,19 @@ fn decide_all(world: &mut World) {
                     action.move_y = pull.y;
                 }
             }
+            // Survival-reflex hijack (M-B, opt-in): under high threat-arousal the
+            // Bracha reflex overwrites the movement + defensive intents chosen so
+            // far. Gated so flag-off is byte-identical; zero RNG. Runs after every
+            // movement bias, before desired_direction normalization.
+            if affect_enabled {
+                crate::affect::apply_hijack(
+                    &mut action,
+                    &agents.affect[i],
+                    &agents.genome[i],
+                    &sensors[i],
+                    agents.energy[i],
+                );
+            }
             // Normalize the movement intent to a unit direction (identical to the
             // pre-M11 logic that lived inside `decide`). Guard against a non-finite
             // intent (an evolved program can overflow to `inf`; `inf/inf` would make
@@ -289,6 +303,7 @@ mod tests {
     use crate::prelude::Vec2;
     use crate::world::World;
 
+    use super::decide_all;
     use super::step;
 
     #[test]
@@ -402,5 +417,46 @@ mod tests {
         // a's nearest neighbor is b, so target should be b (not NO_TARGET).
         assert_eq!(w.actions[a as usize].target_id, b);
         assert_ne!(w.actions[a as usize].target_id, NO_TARGET);
+    }
+
+    #[test]
+    fn hijack_overrides_movement_in_decide_all_when_flag_on() {
+        use crate::affect::FEAR;
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::world::World;
+
+        // A prey with high FEAR + a distant threatening other-species sensor. With
+        // affect ON, the decide_all hijack must override its heading with Freeze
+        // (zero); with affect OFF, only the ungated apply_affect flee bias applies,
+        // leaving a non-zero heading.
+        let build = |affect_on: bool| -> Vec2 {
+            let mut w = World::new(9);
+            w.affect_enabled = affect_on;
+            let prey = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+            w.resize_scratch();
+            {
+                let s = &mut w.sensors[prey as usize];
+                s.nearest_other_id = 42;
+                s.nearest_other_dist = 150.0; // >= FREEZE_DIST(140) ⇒ Freeze
+                s.nearest_other_dir = Vec2::new(1.0, 0.0);
+                s.nearest_rel_size = 2.0;
+            }
+            w.agents.affect[prey as usize][FEAR] = 0.95; // arousal above hijack threshold
+            decide_all(&mut w);
+            w.desired_direction[prey as usize]
+        };
+        let off = build(false);
+        let on = build(true);
+        assert_ne!(on, off, "the gated hijack must change the frightened prey's heading");
+        // Distant threat + high arousal ⇒ hijack Freeze: desired heading zeroed.
+        // apply_affect (ungated, runs in BOTH builds) only ADDS a flee bias and
+        // never zeroes movement, so a zero heading isolates the gated hijack.
+        assert_eq!(
+            on,
+            Vec2::ZERO,
+            "high-arousal distant threat ⇒ hijack Freeze (zero heading), got {on:?}"
+        );
+        assert_ne!(off, Vec2::ZERO, "flag off ⇒ no hijack; prey still has a (flee) heading");
     }
 }
