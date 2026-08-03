@@ -1072,7 +1072,12 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // 23→24): World.knowledge_enabled added as a plain serialized field (flag
     // off here, no mechanic reads it yet) — trajectory byte-identical, only
     // the serialized layout grew, so bincode's state_hash moved.
-    &[(0, 0x2b934d688ba72068), (100, 0x526b82e65a0664fe), (300, 0x460c54423fa45bf7)];
+    // Refreshed 2026-08-03 (2) (knowledge-accumulation Task 2, FORMAT_VERSION
+    // stays 24): CodexState.knowledge_by_species / knowledge_ratchet_fired
+    // added as plain serialized fields (both empty, no detector reads/writes
+    // them yet) — trajectory byte-identical, only the serialized layout grew
+    // again, so bincode's state_hash moved a second time.
+    &[(0, 0xc39f00ef7327e7e8), (100, 0xff904dd4d88361fe), (300, 0x4044ca14631c7cb7)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

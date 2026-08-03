@@ -163,7 +163,12 @@ const GOLDEN: &[(u64, u64)] =
     // 23→24): World.knowledge_enabled added as a plain serialized field (flag
     // off here, no mechanic reads it yet) — trajectory byte-identical, only
     // the serialized layout grew, so bincode's state_hash moved.
-    &[(0, 0x4681b6fa4023114a), (100, 0xfcbafda8fd0b7727), (1000, 0x0d3d45eef7f71411)];
+    // Refreshed 2026-08-03 (2) (knowledge-accumulation Task 2, FORMAT_VERSION
+    // stays 24): CodexState.knowledge_by_species / knowledge_ratchet_fired
+    // added as plain serialized fields (both empty, no detector reads/writes
+    // them yet) — trajectory byte-identical, only the serialized layout grew
+    // again, so bincode's state_hash moved a second time.
+    &[(0, 0x81fdb4d4e836d58a), (100, 0xc66b00aff58b52e7), (1000, 0x8379fe0a71df3311)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

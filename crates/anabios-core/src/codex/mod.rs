@@ -269,6 +269,13 @@ pub struct CodexState {
     pub livestock_herd_streak: BTreeMap<u32, u64>,
     /// Species currently latched as livestock herds (re-arms on drop).
     pub livestock_herd_active: BTreeSet<u32>,
+    /// Per-species accumulated knowledge (E14; rises while any member holds
+    /// Writing, decays slowly otherwise). Written by `knowledge::knowledge_step`.
+    pub knowledge_by_species: BTreeMap<u32, f32>,
+    /// Species currently latched as having fired `KnowledgeRatchet` (re-arms
+    /// on re-founding — a species that lost Writing re-acquiring an
+    /// invention faster than founding rate due to retained knowledge).
+    pub knowledge_ratchet_fired: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }

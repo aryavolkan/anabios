@@ -94,7 +94,12 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // 23→24): World.knowledge_enabled added as a plain serialized field (flag
     // off here, no mechanic reads it yet) — trajectory byte-identical, only
     // the serialized layout grew, so bincode's state_hash moved.
-    &[(0, 0xc12cb8151575e941), (100, 0x1cbaad57b818446e), (300, 0x70b81317449c5005)];
+    // Refreshed 2026-08-03 (2) (knowledge-accumulation Task 2, FORMAT_VERSION
+    // stays 24): CodexState.knowledge_by_species / knowledge_ratchet_fired
+    // added as plain serialized fields (both empty, no detector reads/writes
+    // them yet) — trajectory byte-identical, only the serialized layout grew
+    // again, so bincode's state_hash moved a second time.
+    &[(0, 0x0493785858318341), (100, 0xabd8bb7293fc9aae), (300, 0x1a143202cf71b4c5)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {
