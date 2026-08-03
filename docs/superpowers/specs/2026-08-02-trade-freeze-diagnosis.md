@@ -127,3 +127,41 @@ Build release, then run the trade scenarios for ≥12 000 ticks and count
 `world.trade_routes` per tick (or read `world.total_trades` — it plateaus at the
 freeze). Dump `world.agents.inventory` at t12 000 on `biome-trade` to see the
 empty baskets; `world.resources` shows nodes still available.
+
+---
+
+## Update (2026-08-02): six candidate fixes eliminated — the freeze is a structural barter equilibrium
+
+Before/while attempting the supply-side redesign, six candidate mechanisms were
+measured against `biome-trade` at 16 000 ticks. Throughout the freeze the world
+is *healthy*: population ~2 000, **163–231 distinct species alive** (largest
+share ~13 %), resource nodes available. Trade thrives early (~50–150 k swaps in
+the first 2 k ticks) then collapses to **0 by ~t8–10 k, permanently.**
+
+| # | Candidate | Result |
+|---|---|---|
+| 1 | Perishability (demand decay) | Freezes at the same tick; *worse* mid-run (drains give-side below `TRADE_UNIT`). |
+| 2 | Conserve goods on death (lever A) | Goods conserved but **concentrated** on ~7 "nearest-living" hoarders (mean 3–5/good, yet 1987/1995 below `TRADE_UNIT`). Still 0. |
+| 3 | Harvest access ×6 (`HARVEST_RANGE` 2→12, nodes 40→120, lever B) | B-only late=0; A+B late=0. Not harvest access. |
+| 4 | Species-collapse check | **Disproven** — 163+ species remain; cross-species partners exist. |
+| 5 | Invention material sink (`inventions_enabled`+`cognition`) | late=0. (Caveat: grazers may not *learn*, so the sink may never activate — flag-flip alone doesn't help.) |
+| 6 | (baseline, no fix) | Freezes ~t10 k. |
+
+**Best current framing (a structural equilibrium, not a supply *or* demand bug
+alone):** `pick_swap` is **bilateral barter** requiring both parties to spare a
+`TRADE_UNIT`, and `want` saturates at `STOCK_TARGET`. Trade therefore drives
+every agent toward the *same* balanced `STOCK_TARGET` basket and then **stops** —
+once holdings equalize (or saturate, or deplete) there are no mutual want-gains
+left, and nothing in the scenario regenerates the asymmetry/demand that made
+early trade thrive (the original reproduction-dowry sink was removed; the
+invention sink is off, and even enabling it did not restart trade in this test).
+Harvest keeps *individual* home-good surpluses flowing early, but once the
+cross-sectional distribution equalizes, bilateral barter has nothing left to do.
+
+**Implication:** a durable fix likely requires changing the *demand model*
+itself (e.g. per-agent heterogeneous, non-saturating, continuously-regenerated
+demand — a real consumption loop), not a supply tweak or a single flag. That is a
+research spike, not a quick fix. Note that the trade economy **is** functional as
+an early/mid-game mechanic (thousands of ticks of vigorous trade) — the open
+question is whether indefinite late-game trade is even a goal, or whether
+bounded-duration trade is acceptable.
