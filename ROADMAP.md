@@ -79,13 +79,20 @@ sharpen the discovery loop that finds the next story.*
   run archive-weighted sweeps (`--archive`), and route corpus-unseen runs from
   `<out>/novel/` into a triage list. *Depends:* none. *Done when:* a weekly sweep
   surfaces a ranked shortlist of novel runs worth inspecting in the viewer.
-- **[R, M] Next gene-culture experiment (confound-controlled).** Prior results:
-  cumulative-skill culture *does* sweep the Inventiveness gene; a first-principles
-  culture gene does *not* sweep from standing variation, and winner-take-all caps
-  mask differentials. Design the next test to **disentangle module-vs-gene**
-  before crediting any sweep. *Depends:* scorecard sweeps (for scenario picks).
-  *Done when:* a scenario + seeded/first-principles A/B lands with a written
-  finding (positive *or* negative) and a golden-tested regression.
+- **[R, M] Next gene-culture experiment (confound-controlled).** **Resolved
+  2026-08-03 (negative) — see
+  [`docs/superpowers/specs/2026-08-03-gene-culture-finding.md`](docs/superpowers/specs/2026-08-03-gene-culture-finding.md).**
+  The premise was stale: the "Inventiveness gene" no longer exists (replaced by
+  the invention tree), and the historical "cumulative-skill sweep" was a
+  *Communicator-module* frequency shift, not a genome slot. The valid current-code
+  version — toggle only `gene_tech_coupling` and watch the coupled **Openness**
+  gene (excluded from speciation, auto-polymorphic) — returns **negative**: no
+  coupled-gene sweep (coupled ≈ decoupled; Openness selected *down*, not up), and
+  populations boom-bust to extinction. It corroborates the cognition-cost mechanism
+  (O1 exclusion autopsy; OoA climb) — the coupled behaviour is net-costly, so the
+  gene is disfavoured. Caught in a cheap pilot; the full 3-arm apparatus was not
+  built (pilot gate: criterion unreachable in current scenarios). A future attempt
+  must first re-tune a scenario for stable populations. *Depends:* scorecard sweeps.
 - **[E, M] Trade-economy redesign.** The biome trade-goods economy hits a
   `pick_swap` absorbing state that caps the economy. Redesign the exchange so
   trade routes stay live over long runs (candidate: demand-driven pricing or
