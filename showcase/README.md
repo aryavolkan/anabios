@@ -67,6 +67,29 @@ Farming & Trade at the first settlement/market, Writing at the first meme-sweep,
 at the first raid — falling back to even spacing when a signal never fires. Species names
 come from the scenario's archetype specs (dynamically speciated splinters show as `species N`).
 
+## Host it
+
+The player is published to GitHub Pages via `.github/workflows/showcase.yml` —
+gated, never on ordinary pushes:
+
+- **Publish trigger:** push a `v*` tag (e.g. `v0.5.0`), or run the workflow
+  manually from the Actions tab (`workflow_dispatch`).
+- **Hosted URL:** `https://<owner>.github.io/<repo>/` (placeholder — filled in
+  once the first deploy has run; check the Actions run's environment URL or
+  the repo's Pages settings for the real address).
+- The workflow rebuilds `anabios-headless` in release and regenerates
+  `showcase/replay.js` from `scenarios/out-of-africa-saga.toml` at seed `318`
+  (see "Regenerate the replay" above) before uploading `showcase/` as the
+  Pages artifact, so the hosted deck is reproducible from source rather than
+  the committed copy. It logs the run's `state_hash`; compare that against a
+  local `record` of the same scenario/seed to confirm the deploy matches.
+
+**Preview locally** without waiting on a deploy:
+
+```sh
+scripts/emergence.sh record-web out-of-africa-saga --seed 318 && open showcase/index.html
+```
+
 ## How it fits together
 
 ```

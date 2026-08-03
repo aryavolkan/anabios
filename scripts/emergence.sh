@@ -9,8 +9,10 @@
 # Usage:
 #   scripts/emergence.sh list                       # list available scenarios
 #   scripts/emergence.sh info    <scenario>         # print a scenario summary
-#   scripts/emergence.sh view   [scenario] [flags]  # WINDOWED Godot sandbox (watch it live)
+#   scripts/emergence.sh view    [scenario] [flags] # WINDOWED Godot sandbox (watch it live)
+#   scripts/emergence.sh capture <scenario> [flags] # WINDOWED screenshot (real window required)
 #   scripts/emergence.sh record  <scenario> [flags] # record a cinematic showcase MP4
+#   scripts/emergence.sh record-web <scenario> [flags] # regen the web player's showcase/replay.js
 #   scripts/emergence.sh run     <scenario> [flags] # run once, tally emergent events
 #   scripts/emergence.sh replay  <scenario> [flags] # deterministic event replay/verify
 #   scripts/emergence.sh sweep   <scenario> [flags] # multi-seed emergence scorecard
@@ -19,13 +21,17 @@
 #
 # Common passthrough flags: --ticks N  --seed N  --seeds N  --window N  --out DIR
 #
-# `view` opens a real window (needs Godot; set GODOT=/path/to/godot to override
-# the default lookup). With a scenario it boots straight in; with none it opens
-# the picker menu. Only `--seed N` is honored for view.
+# `view` and `capture` open a real window (needs Godot; set GODOT=/path/to/godot
+# to override the default lookup). With a scenario `view` boots straight in;
+# with none it opens the picker menu. Only `--seed N` is honored for view.
+# `capture` needs a real window too — it hard-errors on the headless dummy
+# renderer, so do not pass --rendering-driver dummy/--headless.
 #
 # Examples:
 #   scripts/emergence.sh view   predator-prey --seed 3   # watch it in a window
+#   scripts/emergence.sh capture predator-prey --seed 3 --out shot.png  # windowed screenshot
 #   scripts/emergence.sh record out-of-africa-saga --seed 318   # cinematic MP4
+#   scripts/emergence.sh record-web out-of-africa-saga --seed 318   # regen showcase/replay.js
 #   scripts/emergence.sh view                            # menu: pick a scenario
 #   scripts/emergence.sh run    predator-prey --ticks 5000
 #   scripts/emergence.sh replay weapons-arms-race --seed 3
@@ -169,6 +175,54 @@ case "$cmd" in
     echo "[record] wrote $out" >&2
     ;;
 
+  record-web)
+    # Regenerate the static web player's replay data. Writes a JS file the
+    # showcase/index.html player loads directly (open it in a browser).
+    # Flags: --seed N  --out FILE.js  (plus anything else --record accepts)
+    scn="$(resolve "${1:-}")"; shift || true; build
+    out="${ANABIOS_WEB_OUT:-$ROOT/showcase/replay.js}"
+    "$BIN" record --scenario "$scn" --out "$out" "$@"
+    echo "web replay: $out  (open showcase/index.html)"
+    ;;
+
+  capture)
+    # Windowed screenshot: boots a scenario in a real Godot window and saves
+    # a PNG via debug_capture.gd (ANABIOS_SHOT). Needs a real window — the
+    # capture reads back the rendered viewport, which the headless dummy
+    # renderer cannot do (debug_capture.gd hard-errors and quits on it).
+    # Flags: --seed N  --out PNG  --ticks N  (fast-forward before the shot)
+    scn="$(resolve "${1:-}")"; shift || true
+    name=$(basename "$scn" .toml)
+    godot="$(godot_bin)"
+    ( cd "$ROOT" && cargo build -p anabios-godot ) >&2
+    env_scn="res://../scenarios/$(basename "$scn")"
+
+    seed=""; out="$ROOT/runs/shots/$name.png"; ticks=""; rest=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --seed) seed="${2:-}"; shift 2 || die "--seed needs a value" ;;
+        --seed=*) seed="${1#--seed=}"; shift ;;
+        --out) out="${2:-}"; shift 2 || die "--out needs a value" ;;
+        --out=*) out="${1#--out=}"; shift ;;
+        --ticks) ticks="${2:-}"; shift 2 || die "--ticks needs a value" ;;
+        --ticks=*) ticks="${1#--ticks=}"; shift ;;
+        *) rest+=("$1"); shift ;;
+      esac
+    done
+    # debug_capture.gd does a raw img.save_png(path); absolutize a relative
+    # --out against the caller's cwd (Godot's own cwd may differ once it
+    # launches, same reasoning as the `record` case's --write-movie guard).
+    case "$out" in /*) ;; *) out="$PWD/$out" ;; esac
+    mkdir -p "$(dirname "$out")"
+
+    envs=("ANABIOS_SCENARIO=$env_scn" "ANABIOS_SHOT=$out")
+    [ -n "$seed" ] && envs+=("ANABIOS_SEED=$seed")
+    [ -n "$ticks" ] && envs+=("ANABIOS_SHOT_TICKS=$ticks")
+    echo "[capture] $name${seed:+ (seed=$seed)}${ticks:+ (ticks=$ticks)} → $out — windowed" >&2
+    env "${envs[@]}" "$godot" --path "$ROOT/game" res://scenes/main.tscn ${rest[@]+"${rest[@]}"}
+    echo "shot: $out"
+    ;;
+
   run)
     scn="$(resolve "${1:-}")"; shift || true; build
     mkdir -p "$OUT_DIR"
@@ -213,6 +267,6 @@ case "$cmd" in
     ;;
 
   help|-h|--help|*)
-    sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     ;;
 esac
