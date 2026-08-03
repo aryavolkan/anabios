@@ -53,12 +53,8 @@ impl FounderTracker {
                 continue;
             }
             let parent = world.agents.parent_ids[i][0];
-            let kind = if parent != LINEAGE_NONE {
-                self.tag.get(&parent).copied()
-            } else {
-                None
-            }
-            .unwrap_or_else(|| module_kind(world, i));
+            let kind = if parent != LINEAGE_NONE { self.tag.get(&parent).copied() } else { None }
+                .unwrap_or_else(|| module_kind(world, i));
             self.tag.insert(lid, kind);
         }
     }
@@ -66,10 +62,7 @@ impl FounderTracker {
     /// The lineage-locked tag for alive agent slot `i` (falls back to module
     /// presence for any untracked lineage — shouldn't happen if `observe` ran).
     pub fn kind_of(&self, world: &World, i: usize) -> StrategyKind {
-        self.tag
-            .get(&world.agents.lineage_id[i])
-            .copied()
-            .unwrap_or_else(|| module_kind(world, i))
+        self.tag.get(&world.agents.lineage_id[i]).copied().unwrap_or_else(|| module_kind(world, i))
     }
 }
 

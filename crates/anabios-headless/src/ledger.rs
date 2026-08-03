@@ -286,8 +286,7 @@ mod invasion_tests {
         // mutant's SHARE stays flat at 0.05. Absolute invasion fitness reads
         // negative (raw count falling); share fitness must read ~0 (no share change).
         // This is the exact confound O1 flagged.
-        let windows =
-            [w(5, 100), w(2, 40), w(1, 20)]; // shares 0.05, 0.05, 0.05; counts 5→2→1
+        let windows = [w(5, 100), w(2, 40), w(1, 20)]; // shares 0.05, 0.05, 0.05; counts 5→2→1
         let abs = invasion_fitness(&windows, 0.10).unwrap();
         let share = invasion_fitness_share(&windows, 0.10).unwrap();
         assert!(abs < 0.0, "absolute metric is confounded by the collapse: {abs}");
