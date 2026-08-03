@@ -86,12 +86,22 @@ sharpen the discovery loop that finds the next story.*
   before crediting any sweep. *Depends:* scorecard sweeps (for scenario picks).
   *Done when:* a scenario + seeded/first-principles A/B lands with a written
   finding (positive *or* negative) and a golden-tested regression.
-- **[E, M] Trade-economy redesign.** The biome trade-goods economy hits a
-  `pick_swap` absorbing state that caps the economy. Redesign the exchange so
-  trade routes stay live over long runs (candidate: demand-driven pricing or
-  perishable goods). *Depends:* none. *Done when:* `trade`/`geographic-trade`
-  scenarios sustain nonzero trade volume past the tick where the economy currently
-  freezes, with a determinism rehash.
+- **[E, M] Trade-economy redesign.** The biome trade-goods economy freezes over
+  long runs (`biome-trade` stops trading permanently by ~t10k). **Corrected
+  diagnosis (2026-08-02, measured — see
+  [`docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`](docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md)):**
+  the freeze is a **supply-side starvation** — agent inventories bleed to empty
+  (death-churn loses goods; ungated reproduction floods empty newborns; the tiny
+  `HARVEST_RANGE` can't refill a dispersed population), so no one can spare a
+  `TRADE_UNIT` to give. It is **not** a `pick_swap` demand-satiation "absorbing
+  state" (goods remain available in the biome and every agent's `want` is maxed at
+  the freeze). So demand-side fixes (perishability, non-satiating `want`,
+  demand-driven pricing) do **not** work — perishability was measured to freeze
+  `biome-trade` at the same tick and *reduce* `geographic-trade` throughout.
+  Redesign the **supply** side instead (candidates: preserve inventory on death,
+  sustain harvest access at scale, temper churn dilution). *Depends:* none.
+  *Done when:* `biome-trade`/`geographic-trade` sustain nonzero trade past the
+  current freeze tick, gated behind an opt-in flag, with a determinism rehash.
 
 **Phase-2 exit:** the flagship story is either emergent or honestly documented, and
 new mechanics/experiments are chosen by scorecard evidence.
