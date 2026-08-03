@@ -32,6 +32,12 @@ pub fn step(world: &mut World) {
         world.gene_tech_coupling,
     );
 
+    // Stage 2b: subcortical affect — update per-agent Panksepp activations from
+    // this tick's physiology (SEEKING from the energy deficit in M-A). Runs
+    // AFTER sense and BEFORE decide so the decision reads fresh affect. Strict
+    // no-op + zero RNG when `affect_enabled` is false.
+    crate::affect::develop_all(world);
+
     // Stage 3: decide.
     decide_all(world);
 

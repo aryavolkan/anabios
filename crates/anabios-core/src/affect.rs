@@ -9,6 +9,8 @@
 //! (subsumption), NOT evolutionary strata. We model survival/motivational
 //! circuits and make no claim that agents *feel* anything.
 
+use crate::world::World;
+
 /// Number of Panksepp primary-process systems tracked per agent.
 pub const AFFECT_SYSTEMS: usize = 7;
 
@@ -72,9 +74,40 @@ pub fn affect_reproduction_factor(_affect: &AffectState) -> f32 {
     1.0
 }
 
+/// Compute stage (Layer 0 → Layer 1). Update each alive agent's affect column
+/// from this tick's physiology as a leaky integrator. M-A drives SEEK from the
+/// homeostatic energy deficit; the other six systems stay 0.0 (later milestones
+/// fill their triggers — FEAR reads sensors in M-B, etc.). STRICT no-op when
+/// `!world.affect_enabled`. ZERO RNG. Index-disjoint `par_iter` (iq::develop_all
+/// template): each agent writes only its own slot and reads only shared columns
+/// by `&`, so the parallel loop is bit-identical to a serial ascending-id loop.
+/// Runs post-sense / pre-decide so THIS tick's decision reads fresh affect.
+pub fn develop_all(world: &mut World) {
+    if !world.affect_enabled {
+        return;
+    }
+    use rayon::prelude::*;
+    let cap = world.agents.capacity();
+    let crate::agent::AgentBuffers { affect, energy, alive, .. } = &mut world.agents;
+    let (energy, alive) = (&*energy, &*alive);
+    affect[..cap].par_iter_mut().enumerate().for_each(|(i, a)| {
+        if !alive[i] {
+            return;
+        }
+        // Layer 0: homeostatic drive (energy deficit) powers SEEKING.
+        let drive = homeostatic_drive(energy[i]);
+        // Layer 1: leaky-integrator update of the SEEK activation.
+        let seek = LAMBDA_DEFAULT * a[SEEK] + (1.0 - LAMBDA_DEFAULT) * drive;
+        a[SEEK] = seek.clamp(0.0, 1.0);
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::genome::Genome;
+    use crate::prelude::Vec2;
+    use crate::world::World;
 
     #[test]
     fn homeostatic_drive_is_zero_when_sated_and_one_when_empty() {
@@ -103,5 +136,39 @@ mod tests {
         let mut a = neutral;
         a[SEEK] = 1.0;
         assert!(affect_speed_factor(&a) > 1.0, "SEEKING speeds foraging up");
+    }
+
+    #[test]
+    fn develop_is_noop_when_flag_off() {
+        let mut w = World::new(2);
+        let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        w.agents.energy[id as usize] = 0.0; // would build SEEK if the layer ran
+        develop_all(&mut w);
+        assert_eq!(
+            w.agents.affect[id as usize], [0.0; AFFECT_SYSTEMS],
+            "flag off ⇒ affect untouched, zero work"
+        );
+    }
+
+    #[test]
+    fn seeking_builds_from_energy_deficit_when_on() {
+        let mut w = World::new(2);
+        w.affect_enabled = true;
+        let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        w.agents.energy[id as usize] = 0.0; // max drive = 1.0
+        develop_all(&mut w);
+        // One tick from neutral: seek = λ·0 + (1−λ)·1.0 = (1−λ).
+        let seek = w.agents.affect[id as usize][SEEK];
+        assert!((seek - (1.0 - LAMBDA_DEFAULT)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sated_agent_builds_no_seek() {
+        let mut w = World::new(2);
+        w.affect_enabled = true;
+        // Spawn energy == SPAWN_ENERGY ⇒ drive 0 ⇒ SEEK stays 0.
+        let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        develop_all(&mut w);
+        assert_eq!(w.agents.affect[id as usize][SEEK], 0.0, "sated ⇒ no SEEKING");
     }
 }
