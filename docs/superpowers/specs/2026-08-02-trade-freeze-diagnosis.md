@@ -7,6 +7,8 @@ the plan (and `ROADMAP.md`, and prior notes) misdiagnosed its cause** — so the
 planned fix cannot work. This doc records the corrected diagnosis and the
 evidence, so the next attempt starts from the right cause.
 
+> **⚠️ Read the [Update](#update-2026-08-02-six-candidate-fixes-eliminated--the-freeze-is-a-structural-barter-equilibrium) at the bottom first.** Sections §1–§3 correctly show the freeze is *not* demand-satiation and that perishability fails. But their conclusion that it is a pure **supply-side** problem with a supply-side fix was **also subsequently disproven** — conservation-on-death and 6× harvest access *both* still froze. The current best understanding (bottom Update) is that the freeze is a **structural bilateral-barter equilibrium**, not a supply *or* demand bug alone. The §1–§3 measurements stand; the "target supply" prescription in §"Root cause"/§"Implications" is superseded.
+
 ## TL;DR
 
 - The trade freeze is a **supply-side starvation**: over a long run, agent
