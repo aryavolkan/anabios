@@ -41,6 +41,19 @@ pub const K_SEEK_WANDER: f32 = 0.3;
 /// Movement-speed gain from SEEKING (+ arousal, which is 0 in M-A).
 pub const K_AFFECT_SPEED: f32 = 0.5;
 
+// --- M-B: FEAR / threat circuit ---
+/// Perception distance (world units) beyond which a threatening neighbor stops
+/// contributing to FEAR. Below it, proximity scales the threat linearly.
+pub const FEAR_RANGE: f32 = 200.0;
+/// Weight of the size/proximity threat term in the FEAR trigger.
+pub const K_FEAR_THREAT: f32 = 1.0;
+/// Weight of the war-hostility term in the FEAR trigger.
+pub const K_FEAR_HOSTILITY: f32 = 0.8;
+/// How strongly Boldness lowers the effective threat (raises the FEAR setpoint).
+pub const K_FEAR_BOLDNESS: f32 = 0.3;
+/// FEAR leaky-integrator retention (how long fear lingers). Reuses the default.
+pub const LAMBDA_FEAR: f32 = LAMBDA_DEFAULT;
+
 /// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
 pub type AffectState = [f32; AFFECT_SYSTEMS];
@@ -74,6 +87,29 @@ pub fn affect_speed_factor(affect: &AffectState) -> f32 {
 #[inline]
 pub fn affect_reproduction_factor(_affect: &AffectState) -> f32 {
     1.0
+}
+
+/// Instantaneous FEAR drive from THIS tick's fresh sensors + temperament.
+/// Pure function of `world.sensors` (recomputed every tick before `develop_all`
+/// reads it) + genome ⇒ replay-safe, ZERO RNG. Returns `[0,1]`. `0.0` when there
+/// is no locatable other-species neighbor and no hostility.
+pub(crate) fn fear_trigger(sensors: &SensorRegister, genome: &Genome) -> f32 {
+    let mut threat = 0.0f32;
+    if sensors.nearest_other_id != crate::sense::NO_NEIGHBOR_ID {
+        // Closer + bigger + more energetic other-species neighbor ⇒ scarier.
+        // rel_size/rel_energy are of the overall-nearest neighbor; when the
+        // nearest is the other-species predator (the case that matters) they
+        // describe it. Approximation documented in the spec-deviation note.
+        let prox = (1.0 - sensors.nearest_other_dist / FEAR_RANGE).clamp(0.0, 1.0);
+        let size = sensors.nearest_rel_size.clamp(0.0, 2.0) * 0.5; // rel 2.0 ⇒ 1.0
+        let ener = (sensors.nearest_rel_energy - 1.0).clamp(0.0, 1.0); // stronger prey feels safe
+        threat += K_FEAR_THREAT * prox * (size + 0.5 * ener).min(1.0);
+    }
+    threat += K_FEAR_HOSTILITY * sensors.hostility;
+    // Boldness raises the setpoint: a bold agent needs a bigger raw threat to
+    // register the same fear. boldness() is signed [-1,+1], neutral 0.0.
+    threat = (threat - K_FEAR_BOLDNESS * genome.boldness()).clamp(0.0, 1.0);
+    threat
 }
 
 /// Compute stage (Layer 0 → Layer 1). Update each alive agent's affect column
@@ -236,5 +272,37 @@ mod tests {
         let s = SensorRegister::default(); // plant_direction == Vec2::ZERO
         apply_affect(&mut action, &affect, &Genome::neutral(), &s, 0.0);
         assert!(action.move_x > 0.5, "no-food SEEKING intensifies the program's heading");
+    }
+
+    #[test]
+    fn fear_trigger_rises_with_close_big_hostile_threat_and_falls_with_boldness() {
+        use crate::genome::GenomeSlot;
+
+        // No neighbor ⇒ no fear.
+        let mut s = SensorRegister::default();
+        assert_eq!(fear_trigger(&s, &Genome::neutral()), 0.0);
+
+        // A large, close, hostile other-species neighbor ⇒ strong fear.
+        s.nearest_other_id = 7;
+        s.nearest_neighbor_id = 7;
+        s.nearest_other_dist = 20.0;
+        s.nearest_other_dir = Vec2::new(1.0, 0.0);
+        s.nearest_rel_size = 2.0; // predator twice our size
+        s.nearest_rel_energy = 1.5;
+        s.hostility = 0.5;
+        let neutral = fear_trigger(&s, &Genome::neutral());
+        assert!(neutral > 0.4, "expected strong fear, got {neutral}");
+        assert!(neutral <= 1.0);
+
+        // A bold genome (Boldness slot = 1.0 ⇒ boldness() = +1.0) feels LESS fear.
+        let mut bold = Genome::neutral();
+        bold.set(GenomeSlot::Boldness, 1.0);
+        let brave = fear_trigger(&s, &bold);
+        assert!(brave < neutral, "boldness must lower the FEAR setpoint: {brave} !< {neutral}");
+
+        // A distant neighbor is barely threatening.
+        let mut far = s;
+        far.nearest_other_dist = FEAR_RANGE * 2.0;
+        assert!(fear_trigger(&far, &Genome::neutral()) < neutral);
     }
 }
