@@ -16,6 +16,7 @@
 #   scripts/emergence.sh run     <scenario> [flags] # run once, tally emergent events
 #   scripts/emergence.sh replay  <scenario> [flags] # deterministic event replay/verify
 #   scripts/emergence.sh sweep   <scenario> [flags] # multi-seed emergence scorecard
+#   scripts/emergence.sh sweep-archived <scenario> [flags] # sweep scored against $ANABIOS_CORPUS
 #   scripts/emergence.sh soak    <scenario> [flags] # long run, novelty-decay curve
 #   scripts/emergence.sh demo    <scenario> [flags] # narrated invention race
 #
@@ -250,6 +251,21 @@ case "$cmd" in
     # Let an explicit --out passthrough win; otherwise default it.
     case " $* " in *" --out "*) "$BIN" sweep --scenario "$scn" "$@" ;;
       *) "$BIN" sweep --scenario "$scn" --out "$out" "$@"; echo "summary: $out/summary.csv" ;;
+    esac
+    ;;
+
+  sweep-archived)
+    # Convenience wrapper: sweep scored against a maintained reference
+    # corpus (see `sweep --archive`), so the weekly archive-weighted run
+    # doesn't need hand-passing --archive. Corpus-unseen runs land in
+    # <out>/novel/.
+    scn="$(resolve "${1:-}")"; shift || true; build
+    corpus="${ANABIOS_CORPUS:-runs/corpus}"
+    out="$OUT_DIR/sweep-$(basename "$scn" .toml)-archived"
+    # Let an explicit --out passthrough win; otherwise default it.
+    case " $* " in *" --out "*) "$BIN" sweep --scenario "$scn" --archive "$corpus" "$@" ;;
+      *) "$BIN" sweep --scenario "$scn" --archive "$corpus" --out "$out" "$@"
+         echo "summary: $out/summary.csv   novel: $out/novel/" ;;
     esac
     ;;
 
