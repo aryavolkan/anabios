@@ -322,6 +322,11 @@ fn best_plant_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 {
     let mut best_offset = Vec2::ZERO;
     let cell_reach = (radius / biome.cell_size).ceil() as i32 + 1;
     let (cx, cy) = biome.cell_coords(pos);
+    // The distance is only used to reject cells outside `radius`; the returned
+    // direction is chosen by biomass, not distance. Comparing squared lengths
+    // gives the identical reject set (both sides ≥ 0, `x → x*x` monotonic) while
+    // dropping a `sqrt` from every scanned biomass-positive cell.
+    let radius_sq = radius * radius;
 
     for dy in -cell_reach..=cell_reach {
         for dx in -cell_reach..=cell_reach {
@@ -339,8 +344,7 @@ fn best_plant_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 {
                 cell_center - pos + Vec2::splat(biome.world_size * 0.5),
                 Vec2::splat(biome.world_size),
             ) - Vec2::splat(biome.world_size * 0.5);
-            let dist = offset.length();
-            if dist > radius {
+            if offset.length_squared() > radius_sq {
                 continue;
             }
             if cell.plant_biomass > best_biomass {
