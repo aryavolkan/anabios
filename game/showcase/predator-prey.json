@@ -1,0 +1,76 @@
+{
+  "_comment": "collapse-and-recovery arc — grazers vs stalkers around a shared cluster; scenario=predator-prey seed=0",
+  "seed": 0,
+  "beats": [
+    { "do": [
+      { "letterbox": true },
+      { "hud": false },
+      { "speed": 16 },
+      { "ground": "biome" },
+      { "body": "species" },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.6, "dur": 0.1 } },
+      { "title": { "chapter": "ANABIOS", "subtitle": "predator & prey", "dur": 3.0 } }
+    ] },
+    { "after": 4.0, "do": [
+      { "hud": true },
+      { "title": { "chapter": "I. THE HUNT", "subtitle": "stalkers close on the herd", "dur": 3.0 } },
+      { "lower_third": { "text": "a handful of stalkers shadow sixty grazers at the world's heart", "dur": 5.0 } }
+    ] },
+    { "on_event": "Predation", "timeout": 45.0, "do": [
+      { "speed": 4 },
+      { "clear_highlight": true },
+      { "camera": { "at": "event", "zoom": 2.4, "dur": 1.5 } },
+      { "highlight": "event" },
+      { "lower_third": { "text": "Predation — a kill breaks from the herd", "dur": 4.5 } }
+    ] },
+    { "after": 6.0, "do": [
+      { "clear_highlight": true },
+      { "speed": 16 },
+      { "title": { "chapter": "II. THE COLLAPSE", "subtitle": "the herd thins", "dur": 3.0 } },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.9, "dur": 3.0 } }
+    ] },
+    { "on_event": "PopCrash", "timeout": 60.0, "do": [
+      { "speed": 1 },
+      { "punch": { "zoom": 1.4, "dur": 0.8 } },
+      { "camera": { "at": "event", "zoom": 1.6, "dur": 1.0 } },
+      { "highlight": "event" },
+      { "lower_third": { "text": "PopCrash — the prey population buckles", "dur": 5.0 } }
+    ] },
+    { "after": 6.0, "do": [
+      { "clear_highlight": true },
+      { "speed": 16 },
+      { "title": { "chapter": "III. TROPHIC ECHO", "subtitle": "the range answers back", "dur": 3.0 } },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.7, "dur": 3.0 } }
+    ] },
+    { "on_event": "TrophicCascade", "timeout": 45.0, "do": [
+      { "camera": { "at": "event", "zoom": 1.4, "dur": 1.5 } },
+      { "highlight": "event" },
+      { "lower_third": { "text": "TrophicCascade — the die-off ripples through the biome", "dur": 5.0 } }
+    ] },
+    { "after": 7.0, "do": [
+      { "clear_highlight": true },
+      { "title": { "chapter": "IV. THE REBOUND", "subtitle": "carrying capacity, and cycles", "dur": 3.0 } },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.6, "dur": 3.0 } }
+    ] },
+    { "on_event": "CarryingCap", "timeout": 45.0, "do": [
+      { "camera": { "at": "event", "zoom": 1.3, "dur": 1.5 } },
+      { "highlight": "event" },
+      { "lower_third": { "text": "CarryingCap — the range finds its ceiling again", "dur": 5.0 } }
+    ] },
+    { "on_event": "PopCycle", "timeout": 45.0, "do": [
+      { "clear_highlight": true },
+      { "camera": { "at": "event", "zoom": 1.3, "dur": 1.5 } },
+      { "highlight": "event" },
+      { "lower_third": { "text": "PopCycle — boom and bust settle into a rhythm", "dur": 5.0 } }
+    ] },
+    { "after": 6.0, "do": [
+      { "clear_highlight": true },
+      { "speed": 1 },
+      { "camera": { "x": 512, "y": 512, "zoom": 0.6, "dur": 5.0 } },
+      { "title": { "chapter": "ANABIOS", "subtitle": "predator and prey, in balance and out of it", "dur": 4.0 } }
+    ] },
+    { "after": 6.0, "do": [
+      { "end": true }
+    ] }
+  ]
+}

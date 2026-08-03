@@ -1,5 +1,18 @@
 # Trade-Economy Redesign Implementation Plan
 
+> **⚠️ SUPERSEDED — WRONG DIAGNOSIS (corrected 2026-08-02). DO NOT IMPLEMENT AS WRITTEN.**
+> This plan assumes the freeze is a **demand-satiation "absorbing state"**
+> (`want→0` once baskets saturate at `STOCK_TARGET`) and proposes **perishability**
+> / **non-satiating `want`**. Direct measurement disproved this: at the freeze,
+> agent inventories are **empty** (not saturated), every agent's `want` is maxed,
+> and goods remain available in the biome — the freeze is a **supply-side
+> starvation**, and perishability was measured to make it *worse*. See
+> [`../specs/2026-08-02-trade-freeze-diagnosis.md`](../specs/2026-08-02-trade-freeze-diagnosis.md)
+> for the evidence and the corrected (supply-side) direction. The Task 1 flag
+> mechanics below (opt-in flag + `FORMAT_VERSION` bump + golden rehash) remain a
+> useful pattern; Tasks 2–4's *mechanism* (perishability) does not. A future
+> redesign should be re-planned around the supply side before execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Remove the trade "absorbing state" so cross-species exchange stays alive over long runs, and make trade volume observable in sweeps — without breaking determinism.

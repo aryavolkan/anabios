@@ -79,6 +79,20 @@ fixes this. The resolution (§3) was **not** to sacrifice scale but to add the
 missing lever — starting-tech seeding — so the full-scale run can begin already
 holding the milestone tech.
 
+> **Systematic re-confirmation (2026-08-02).** A 16-seed × 20 000-tick sweep
+> re-measured the stall and isolated the mechanism — see
+> [`superpowers/specs/2026-08-02-ooa-climb-findings.md`](superpowers/specs/2026-08-02-ooa-climb-findings.md).
+> Baseline: **max era 1, 0/16 seeds reach even era-2 (Farming)** — so the era-3
+> IQ ceiling (`IQ_REQ_BY_ERA[2]=0.55`) the climb plan hypothesized is *never
+> approached*. The real block is **ecological competitive exclusion**: the
+> `innovator` lineage discovers Stone Tools + Fire (~t5100) but is driven extinct
+> by the fast, cheap-breeding `asocial_forager` (~t8570), collapsing the world to
+> a tech-less monoculture. A confounder-controlled variant that cuts the asocial
+> competitor 610→50 lifts the ceiling to era-2 for 12% of seeds and cuts churn
+> ~2–3×, but still yields **0/16 era-3** — necessary progress, nowhere near
+> sufficient. Decision-gate result: no single knob reaches the ≥50%-era-3 bar, so
+> **seeding stands as the honest framing**, now with systematic evidence.
+
 ---
 
 ## 3. The decision (RESOLVED): Option A — seed starting tech · **built & validated**

@@ -1068,16 +1068,13 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // but coupling is off in this scenario so every multiplier is identity;
     // material baskets grew richer but resources_enabled is off so they are
     // never consulted — trajectory byte-identical, only the layout grew.
-    // Refreshed 2026-08-03 (knowledge-accumulation Task 1, FORMAT_VERSION
-    // 23→24): World.knowledge_enabled added as a plain serialized field (flag
-    // off here, no mechanic reads it yet) — trajectory byte-identical, only
-    // the serialized layout grew, so bincode's state_hash moved.
-    // Refreshed 2026-08-03 (2) (knowledge-accumulation Task 2, FORMAT_VERSION
-    // stays 24): CodexState.knowledge_by_species / knowledge_ratchet_fired
-    // added as plain serialized fields (both empty, no detector reads/writes
-    // them yet) — trajectory byte-identical, only the serialized layout grew
-    // again, so bincode's state_hash moved a second time.
-    &[(0, 0xc39f00ef7327e7e8), (100, 0xff904dd4d88361fe), (300, 0x4044ca14631c7cb7)];
+    // Refreshed 2026-08-02 (supply-side trade fix, FORMAT_VERSION 23→24):
+    // World.conserve_goods_on_death added (flag off here) — layout growth
+    // only, trajectory byte-identical.
+    // Refreshed 2026-08-03: merged conservation+knowledge layout, FORMAT_VERSION 25
+    // (World.knowledge_enabled + CodexState.knowledge_by_species/knowledge_ratchet_fired
+    // added, flag off here) — layout growth only, trajectory byte-identical.
+    &[(0, 0x14ad1380247b3816), (100, 0xecc59fa5c43515e8), (300, 0x862b527766454eaf)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

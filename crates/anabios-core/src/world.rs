@@ -133,6 +133,11 @@ pub struct World {
     /// zero RNG and changes no state when off.
     #[serde(default)]
     pub resources_enabled: bool,
+    /// Opt-in: on death, an agent's trade-goods inventory transfers to the
+    /// nearest living agent instead of being lost, keeping the goods economy
+    /// conservative so long-run trade never starves to zero. `false` (default)
+    /// leaves the economy unchanged.
+    pub conserve_goods_on_death: bool,
     /// When true, the disaster scheduler is active: fire/drought/freeze
     /// disasters strike on a Poisson schedule and scar the biome into
     /// succession states (`disaster.rs`). Off by default; opt-in per
@@ -340,6 +345,7 @@ impl World {
             soil_fertility: false,
             resources: Vec::new(),
             resources_enabled: false,
+            conserve_goods_on_death: false,
             disasters_enabled: false,
             war_enabled: false,
             settlement_enabled: false,
