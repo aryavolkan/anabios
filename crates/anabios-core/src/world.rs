@@ -163,6 +163,12 @@ pub struct World {
     /// the tick stage early-returns and zero RNG is drawn with the flag off.
     #[serde(default)]
     pub domestication_enabled: bool,
+    /// When true, knowledge accumulation is active: Writing-holding cultures
+    /// build durable, transmissible tech memory that survives population
+    /// bottlenecks. Off by default — no mechanic reads this flag yet (Task 1
+    /// of the knowledge-accumulation subsystem plumbs the flag only).
+    #[serde(default)]
+    pub knowledge_enabled: bool,
     /// Per-cell market density field (E8). Sized to the biome grid when
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
@@ -339,6 +345,7 @@ impl World {
             settlement_enabled: false,
             sexual_dimorphism_enabled: false,
             domestication_enabled: false,
+            knowledge_enabled: false,
             market_field: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,

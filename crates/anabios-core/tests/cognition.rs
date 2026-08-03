@@ -90,7 +90,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // inventions carry affinities and every buff site has a coupled variant,
     // but gene_tech_coupling is off in this scenario so behavior is
     // byte-identical — pure serialized-layout growth.
-    &[(0, 0x9dac7f3521effced), (100, 0x924cbfc640005e88), (300, 0x73c4b5dd69c38ba7)];
+    // Refreshed 2026-08-03 (knowledge-accumulation Task 1, FORMAT_VERSION
+    // 23→24): World.knowledge_enabled added as a plain serialized field (flag
+    // off here, no mechanic reads it yet) — trajectory byte-identical, only
+    // the serialized layout grew, so bincode's state_hash moved.
+    &[(0, 0xc12cb8151575e941), (100, 0x1cbaad57b818446e), (300, 0x70b81317449c5005)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

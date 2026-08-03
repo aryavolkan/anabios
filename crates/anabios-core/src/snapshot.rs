@@ -99,7 +99,10 @@ use crate::world::World;
 /// v23: hard genetic invention prerequisites — World.gene_requirements flag
 ///     (gates `invention::GeneReq` on discovery + social copy). Off in every
 ///     golden scenario ⇒ byte-identical behavior; only the layout grew.
-pub const FORMAT_VERSION: u32 = 23;
+/// v24: knowledge-accumulation subsystem — World.knowledge_enabled flag.
+///     Off in every golden scenario and no mechanic reads it yet (Task 1
+///     plumbs the flag only); only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 24;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

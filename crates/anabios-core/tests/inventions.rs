@@ -1068,7 +1068,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // but coupling is off in this scenario so every multiplier is identity;
     // material baskets grew richer but resources_enabled is off so they are
     // never consulted — trajectory byte-identical, only the layout grew.
-    &[(0, 0xd981ff10d58aa3ce), (100, 0x4a9a610ccdc046b0), (300, 0x1d5d39a800141ccf)];
+    // Refreshed 2026-08-03 (knowledge-accumulation Task 1, FORMAT_VERSION
+    // 23→24): World.knowledge_enabled added as a plain serialized field (flag
+    // off here, no mechanic reads it yet) — trajectory byte-identical, only
+    // the serialized layout grew, so bincode's state_hash moved.
+    &[(0, 0x2b934d688ba72068), (100, 0x526b82e65a0664fe), (300, 0x460c54423fa45bf7)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
