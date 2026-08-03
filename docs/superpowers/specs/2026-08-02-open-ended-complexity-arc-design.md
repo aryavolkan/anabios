@@ -379,8 +379,11 @@ new axis. O8 is unstartable before O1/E1/E2 and is last by construction.
 
 ## 7. Open questions (resolved as phases close)
 
-1. **IQ ceiling vs competitive exclusion** — which actually blocks the climb? (O1 settles it;
-   the existing climb-experiment plan assumes the former, the project record says the latter.)
+1. **IQ ceiling vs competitive exclusion** — which actually blocks the climb? **RESOLVED:**
+   competitive exclusion, not the IQ ceiling (baseline never exceeds `max_era=0`, so the
+   era-3 IQ gate is never even tested); dominant lever = the cognition/IQ subsystem itself,
+   confirmed 4/4 seeds. See
+   [2026-08-03-o1-exclusion-findings.md](2026-08-03-o1-exclusion-findings.md).
 2. **Does emergent era-3 need seeding?** (O3's done-when accepts either outcome, with the
    invasion evidence.)
 3. **Does O5 need the non-deterministic escape hatch, or does a seeded env schedule suffice?**
