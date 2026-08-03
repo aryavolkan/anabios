@@ -99,7 +99,11 @@ use crate::world::World;
 /// v23: hard genetic invention prerequisites — World.gene_requirements flag
 ///     (gates `invention::GeneReq` on discovery + social copy). Off in every
 ///     golden scenario ⇒ byte-identical behavior; only the layout grew.
-pub const FORMAT_VERSION: u32 = 23;
+/// v24: maladaptive-practices toggle — World.practices_enabled flag (gates
+///     `practice::discover_step`). Defaults `true`, so practices still run
+///     wherever cognition is on ⇒ behavior unchanged in every golden scenario;
+///     only the serialized layout grew. (Reproducible O1-autopsy lever.)
+pub const FORMAT_VERSION: u32 = 24;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

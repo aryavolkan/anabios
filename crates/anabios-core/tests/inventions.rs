@@ -1068,7 +1068,7 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // but coupling is off in this scenario so every multiplier is identity;
     // material baskets grew richer but resources_enabled is off so they are
     // never consulted — trajectory byte-identical, only the layout grew.
-    &[(0, 0xd981ff10d58aa3ce), (100, 0x4a9a610ccdc046b0), (300, 0x1d5d39a800141ccf)];
+    &[(0, 0xba1f0514ec76325b), (100, 0x201994e3764109cd), (300, 0x92217528d0e87410)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

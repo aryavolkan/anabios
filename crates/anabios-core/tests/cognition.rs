@@ -90,7 +90,7 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // inventions carry affinities and every buff site has a coupled variant,
     // but gene_tech_coupling is off in this scenario so behavior is
     // byte-identical — pure serialized-layout growth.
-    &[(0, 0x9dac7f3521effced), (100, 0x924cbfc640005e88), (300, 0x73c4b5dd69c38ba7)];
+    &[(0, 0x8af7c4ab4abc764e), (100, 0x679be6aa0e4eab31), (300, 0x43ed4623055ec4ea)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

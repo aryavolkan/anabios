@@ -159,7 +159,11 @@ const GOLDEN: &[(u64, u64)] =
     // minimal so every term is exactly held_f32 — trajectory byte-identical,
     // only the serialized layout grew. Material baskets also grew richer, but
     // resources_enabled is off here so they are never consulted.
-    &[(0, 0x21ab4d62eb377544), (100, 0x9fc0f679f252e6d3), (1000, 0x60a3c8887f27808f)];
+    // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 23→24):
+    // World.practices_enabled added, defaulting true so practice discovery still
+    // runs wherever cognition is on — but cognition is off in minimal, so behavior
+    // is byte-identical; only the serialized layout grew. All three hashes moved.
+    &[(0, 0x36335e4231f400bd), (100, 0xe7736e178d0d6248), (1000, 0x8b4565bde7a4efc6)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

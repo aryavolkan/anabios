@@ -23,9 +23,18 @@ against asocial foragers well before era progression becomes relevant.
 A one-variable lever scan then asked *what drives the exclusion margin*, and
 found a single dominant, reversible lever: **the cognition/IQ subsystem
 itself**. Turning cognition off does not just soften the exclusion — it
-reverses it, in 2/2 pilot seeds and confirmed at matched n=4. The IQ
-tax/gating that cultural agents pay to be culture-capable is what tips the
-balance against them, not a ceiling they never reach.
+reverses it, in 2/2 pilot seeds and confirmed at matched n=4.
+
+A powered decomposition (§6, n=10) then isolated *which part* of the cognition
+subsystem does it, and the answer is sharp: **maladaptive cultural practices**.
+Disabling practice discovery alone — leaving IQ development, its metabolic cost,
+and the gates fully active — reproduces the entire cognition-off reversal
+(invade-fraction 40% → 90%). Culture loses because its transmission is
+*payoff-blind*: culture-capable agents catch Inbreeding / Child Sacrifice (a
+reproductive-fitness burden asocial foragers can't incur) as readily as they
+catch useful tech. This is now reproducible from committed code via the
+`practices_enabled` flag, and it redirects O2 toward **payoff-biased social
+learning** (§8) rather than cutting culture's IQ cost.
 
 ## 1. Fitness-ledger baseline (Task 4)
 
@@ -206,7 +215,56 @@ causally and robustly controls the cultural invasion margin. It is not
 merely correlated with some other varying condition — for each seed, only
 the `cognition_enabled` flag changes between the ON and OFF run.
 
-## 6. Two instrument-improvement findings
+## 6. Decomposition: the lever is maladaptive cultural practices (n=10)
+
+§5 pins the reversal on the *cognition subsystem* but leaves it undecomposed:
+`cognition_enabled` simultaneously toggles IQ development, the IQ metabolic
+cost, the invention/practice IQ gates, and maladaptive-practice discovery. A
+powered decomposition — n=10 seeds, each component toggled individually with
+cognition otherwise ON — isolates which one does the work. Metric:
+**invade-fraction**, the fraction of seeds where cultural share *grows* while
+rare (`retention = freq(t2000)/freq(t500) > 1`); it is the robust readout
+because per-seed variance at low n swamps the mean (the earlier n=4 probes were
+inconclusive on the mean).
+
+| condition (cognition ON unless noted) | invade-fraction |
+|---|---|
+| baseline | 40% |
+| remove IQ metabolic cost | 50% |
+| remove invention IQ gate | 50% |
+| **disable maladaptive practices** | **90%** |
+| all three combined | 90% |
+| cognition fully OFF | 90% |
+
+**Disabling maladaptive practices *alone* — IQ development, the metabolic cost,
+and the gates all still active — reproduces the entire cognition-off reversal
+(40% → 90%).** Removing the IQ metabolic cost or the invention gate barely moves
+it (50% each; the invention gate is inert here because these worlds never leave
+era 0). Practices is the lever. Full data (cost/gate conditions from a throwaway
+env-gated build, provenance noted inline):
+`docs/superpowers/data/o1/o1-decomposition-full.csv`.
+
+**Reproducible from committed code.** The decisive baseline-vs-practices contrast
+is now a first-class scenario flag, `practices_enabled` (default `true`, so every
+existing scenario is byte-identical; set `false` to suppress practice discovery,
+so a fresh run carries no practices). Re-running the two conditions at n=10
+through the committed flag reproduces the result exactly
+(`docs/superpowers/data/o1/o1-practices-decomposition.csv`):
+
+| condition | scenario | invade-fraction |
+|---|---|---|
+| practices ON (baseline) | `o1-invasion-cultural-into-asocial.toml` | 40% |
+| practices OFF | `o1-lever-practices-off.toml` | 90% |
+
+**Mechanism.** Maladaptive practices (Inbreeding, Child Sacrifice; `practice.rs`)
+spread by *payoff-blind* copy-toward-best transmission — the same rule inventions
+use — and carry a reproductive-fitness cost. Only culture-capable (Communicator)
+agents can catch them; asocial foragers cannot. So culture-bearing lineages
+import a reproductive burden their competitors are immune to. Culture is excluded
+not because cognition is expensive, but because its transmission is
+*undiscriminating*: it copies the harmful custom as readily as the useful tech.
+
+## 7. Two instrument-improvement findings
 
 Both surfaced independently in Task 5 and reconfirmed in Task 6/7; recorded
 here as findings for future milestones, not implemented in this one.
@@ -235,31 +293,44 @@ here as findings for future milestones, not implemented in this one.
    inherited (not recombined/mutated) across generations, separate from the
    mutable module-presence phenotype.
 
-## 7. Handoff to O2/O3
+## 8. Handoff to O2/O3
 
-O2 (lifetime learning) and O3 (make culture pay) should target the
-cognition-culture cost coupling first: the dominant, causally-confirmed
-lever is the IQ tax/gating that cultural (Communicator-bearing) agents pay
-under `cognition_enabled=true`, so reducing culture's IQ tax and/or
-decoupling culture's skill benefit from the IQ gate — letting culture pay
-for itself at low eras rather than being squeezed out before era
-progression is even reachable — is the highest-leverage next move. Fix the
-two instrument issues from §6 before O3's emergent-era-3 attempt, since a
-share-relative invasion-fitness output and a lineage-locked founder tag
-will both be needed to cleanly measure whether O3's changes actually let
-culture establish and climb, rather than re-litigating the same confounds
-this milestone had to work around manually. And note that the era-3 IQ
-ceiling itself remains untested, not disproven, as a future constraint —
-it simply isn't the *current* blocker; once O2/O3 changes let culture
-establish population share and era progression becomes reachable, the
-era-3 gate (0.55) may yet turn out to matter, but this milestone only shows
-it plays no role in the world as currently tuned.
+The §6 decomposition *redirects* O2. The intuitive hypothesis — that O2 should
+cut culture's up-front *cost* (the IQ tax) — is not supported: removing the IQ
+metabolic cost lifts invade-fraction only 40% → 50%, nowhere near the 90% the
+practices lever reaches. The real problem is **payoff-blind transmission** —
+culture copies maladaptive practices as readily as good tech.
+
+So O2's target should be **payoff-biased / content-biased social learning**
+(Boyd–Richerson content bias; the DIT `critical_learner` archetype already in
+the codebase): selective transmission that preferentially copies successful
+models and declines traits that lower a model's fitness, so culture keeps
+inventions and skill while *rejecting* Inbreeding / Child Sacrifice. That
+directly neutralizes the identified lever — and does so *with practices still
+present in the world* (culture learns to avoid them), which is the honest,
+general form of the `practices_enabled=false` result rather than deleting the
+antagonist. It is also a genuine lifetime-learning mechanism, so O2's slot in
+the arc survives with a corrected thesis.
+
+Before O3's emergent-era-3 attempt, fix the two instrument issues from §7 (a
+share-relative invasion-fitness output and a lineage-locked founder tag) — both
+are needed to cleanly measure whether O2/O3 changes actually let culture
+establish and climb, rather than re-litigating the confounds this milestone
+worked around manually. And note the era-3 IQ ceiling remains untested, not
+disproven: it plays no role in the world as currently tuned (culture never
+survives to approach it), but once payoff-biased transmission lets culture
+establish share and era progression becomes reachable, the 0.55 gate may yet
+matter.
 
 ## Artifacts
 
 - Scenarios: `scenarios/o1-invasion-cultural-into-asocial.toml`,
   `scenarios/o1-invasion-asocial-into-cultural.toml`,
-  `scenarios/o1-lever-{density,ceiling,cognition,mixing}.toml`.
+  `scenarios/o1-lever-{density,ceiling,cognition,mixing}.toml`,
+  `scenarios/o1-lever-practices-off.toml` (the §6 `practices_enabled=false` lever).
+- Decomposition data (§6): `docs/superpowers/data/o1/o1-decomposition-full.csv`
+  (all six conditions, n=10), `o1-practices-decomposition.csv` (the committed-flag
+  baseline-vs-practices reproduction, n=10).
 - Data: `docs/superpowers/data/o1/ooa-baseline-ledger.csv`,
   `inv-{cul-into-aso,aso-into-cul}-{318,1,2}.csv`, `invasion-share-analysis.csv`,
   `lever-{density,ceiling,cognition,mixing}-{1,2}.csv`,
