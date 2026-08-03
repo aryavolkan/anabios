@@ -499,14 +499,15 @@ mod tests {
         use crate::sense::SensorRegister;
 
         let g = Genome::neutral();
-        let mut s = SensorRegister::default();
-        s.nearest_other_id = 4;
-        s.nearest_other_dir = Vec2::new(1.0, 0.0); // threat to the +x
+        let s = SensorRegister {
+            nearest_other_id: 4,
+            nearest_other_dir: Vec2::new(1.0, 0.0), // threat to the +x
+            ..Default::default()
+        };
 
         // Neutral affect ⇒ exact identity (no arithmetic).
-        let mut neutral_act = ActionRegister::default();
-        neutral_act.move_x = 0.3;
-        neutral_act.share_intent = 0.5;
+        let mut neutral_act =
+            ActionRegister { move_x: 0.3, share_intent: 0.5, ..Default::default() };
         let before = neutral_act;
         apply_affect(&mut neutral_act, &[0.0; AFFECT_SYSTEMS], &g, &s, 100.0);
         assert_eq!(neutral_act.move_x, before.move_x);
@@ -515,9 +516,7 @@ mod tests {
         // High FEAR ⇒ movement biased AWAY from the threat, share dampened.
         let mut a: AffectState = [0.0; AFFECT_SYSTEMS];
         a[FEAR] = 0.8;
-        let mut act = ActionRegister::default();
-        act.move_x = 0.0;
-        act.share_intent = 0.5;
+        let mut act = ActionRegister { move_x: 0.0, share_intent: 0.5, ..Default::default() };
         act.broadcast_intent[0] = 0.4;
         apply_affect(&mut act, &a, &g, &s, 100.0);
         assert!(act.move_x < 0.0, "FEAR should push away from +x threat, got {}", act.move_x);
@@ -537,12 +536,13 @@ mod tests {
         // Below-threshold arousal ⇒ no override, action untouched, returns false.
         let mut low: AffectState = [0.0; AFFECT_SYSTEMS];
         low[FEAR] = 0.3; // < HIJACK_AROUSAL_THRESHOLD (0.6)
-        let mut s = SensorRegister::default();
-        s.nearest_other_id = 2;
-        s.nearest_other_dist = 100.0;
-        s.nearest_other_dir = Vec2::new(1.0, 0.0);
-        let mut act = ActionRegister::default();
-        act.move_x = 0.9;
+        let s = SensorRegister {
+            nearest_other_id: 2,
+            nearest_other_dist: 100.0,
+            nearest_other_dir: Vec2::new(1.0, 0.0),
+            ..Default::default()
+        };
+        let mut act = ActionRegister { move_x: 0.9, ..Default::default() };
         assert!(!apply_hijack(&mut act, &low, &g, &s, 100.0));
         assert_eq!(act.move_x, 0.9, "no hijack below threshold");
 
@@ -551,17 +551,15 @@ mod tests {
         hi[FEAR] = 0.9;
         let mut freeze_s = s;
         freeze_s.nearest_other_dist = FREEZE_DIST + 10.0;
-        let mut freeze_act = ActionRegister::default();
-        freeze_act.move_x = 0.9;
-        freeze_act.move_y = -0.4;
+        let mut freeze_act = ActionRegister { move_x: 0.9, move_y: -0.4, ..Default::default() };
         assert!(apply_hijack(&mut freeze_act, &hi, &g, &freeze_s, 100.0));
         assert_eq!((freeze_act.move_x, freeze_act.move_y), (0.0, 0.0), "distant threat ⇒ Freeze");
 
         // High arousal, MID-RANGE threat ⇒ Flight (flee away from +x), returns true.
         let mut flight_s = s;
         flight_s.nearest_other_dist = (FREEZE_DIST + CORNER_DIST) * 0.5;
-        let mut flight_act = ActionRegister::default();
-        flight_act.move_x = 0.9; // was charging toward threat
+        // was charging toward threat
+        let mut flight_act = ActionRegister { move_x: 0.9, ..Default::default() };
         assert!(apply_hijack(&mut flight_act, &hi, &g, &flight_s, 100.0));
         assert!(flight_act.move_x < 0.0, "mid-range threat ⇒ flee -x, got {}", flight_act.move_x);
     }
@@ -576,10 +574,12 @@ mod tests {
         let g = Genome::neutral();
         let mut hi: AffectState = [0.0; AFFECT_SYSTEMS];
         hi[FEAR] = 0.9;
-        let mut s = SensorRegister::default();
-        s.nearest_other_id = 11;
-        s.nearest_other_dir = Vec2::new(1.0, 0.0);
-        s.nearest_other_dist = CORNER_DIST * 0.5; // cornered
+        let s = SensorRegister {
+            nearest_other_id: 11,
+            nearest_other_dir: Vec2::new(1.0, 0.0),
+            nearest_other_dist: CORNER_DIST * 0.5, // cornered
+            ..Default::default()
+        };
 
         // Cornered but able (energy high) ⇒ Fight: approach + fire + target set.
         let mut fight = ActionRegister::default();
@@ -593,10 +593,12 @@ mod tests {
         // tonic immobility, intents suppressed.
         let mut faint_aff: AffectState = [0.0; AFFECT_SYSTEMS];
         faint_aff[FEAR] = FAINT_AROUSAL + 0.01;
-        let mut faint = ActionRegister::default();
-        faint.move_x = 0.7;
-        faint.fire_intent = 0.5;
-        faint.share_intent = 0.5;
+        let mut faint = ActionRegister {
+            move_x: 0.7,
+            fire_intent: 0.5,
+            share_intent: 0.5,
+            ..Default::default()
+        };
         faint.broadcast_intent[0] = 0.5;
         assert!(apply_hijack(&mut faint, &faint_aff, &g, &s, FIGHT_ENERGY_MIN - 1.0));
         assert_eq!((faint.move_x, faint.move_y), (0.0, 0.0), "Faint ⇒ tonic immobility");

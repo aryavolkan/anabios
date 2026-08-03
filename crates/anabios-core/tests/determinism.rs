@@ -192,6 +192,7 @@ fn parallel_matches_serial_across_thread_counts() {
         include_str!("../../../scenarios/minimal.toml"),
         include_str!("../../../scenarios/tech-gene-coupling.toml"),
         include_str!("../../../scenarios/affect-seeking.toml"),
+        include_str!("../../../scenarios/affect-threat.toml"),
     ] {
         let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
         const TICKS: u64 = 300;
