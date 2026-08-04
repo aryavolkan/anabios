@@ -97,12 +97,12 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // World.practices_enabled added, defaulting true — practices still run in
     // this cognition-on scenario, so behavior is byte-identical; only the
     // serialized layout grew.
-    // Refreshed 2026-08-04 (M-A affect layer merged atop knowledge layout,
-    // FORMAT_VERSION 26→27): AgentBuffers gained the serialized `affect` column +
-    // World.affect_enabled (off here) on top of the v26 knowledge fields
-    // (knowledge_enabled off, CodexState knowledge maps empty). Both stages
-    // no-op flag-off with zero RNG draws — cognition byte-identical; regenerated
-    // on the merged tree.
+    // Refreshed 2026-08-03 (main knowledge layout, FORMAT_VERSION →26):
+    // World.knowledge_enabled + CodexState knowledge fields, off in this scenario
+    // ⇒ knowledge_step early-returns, trajectory byte-identical, layout growth only.
+    // Refreshed 2026-08-03 (M-A+M-B affect layer, FORMAT_VERSION 26→27): affect
+    // column + flag + temperament + EventType::MassFright, all off/gated here ⇒
+    // byte-identical atop the v26 knowledge layout; regenerated on the merged tree.
     &[(0, 0x0651d4349bd1adca), (100, 0xd27616d8c335f2f7), (300, 0xfdd1827de27e1c2d)];
 
 #[test]

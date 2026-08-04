@@ -166,12 +166,14 @@ const GOLDEN: &[(u64, u64)] =
     // World.practices_enabled added, defaulting true so discovery still runs
     // wherever cognition is on — but cognition is off in minimal, so behavior is
     // byte-identical; only the serialized layout grew.
-    // Refreshed 2026-08-04 (M-A affect layer merged atop knowledge layout,
-    // FORMAT_VERSION 26→27): AgentBuffers gained the serialized `affect` column
-    // (7 f32/agent) + World.affect_enabled (off here) on top of the v26 knowledge
-    // fields (knowledge_enabled off, CodexState knowledge maps empty). develop_all
-    // and knowledge_step both no-op flag-off with zero RNG — trajectory
-    // byte-identical; regenerated on the merged tree.
+    // Refreshed 2026-08-03 (main knowledge layout, FORMAT_VERSION →26):
+    // World.knowledge_enabled + CodexState.{knowledge_by_species,
+    // knowledge_ratchet_fired}, off in minimal ⇒ knowledge_step early-returns,
+    // trajectory byte-identical, layout growth only.
+    // Refreshed 2026-08-03 (M-A+M-B affect layer, FORMAT_VERSION 26→27): affect
+    // column + affect_enabled + temperament slots + EventType::MassFright, all
+    // off/gated in minimal ⇒ zero RNG, identity hooks — trajectory byte-identical
+    // atop the v26 knowledge layout; regenerated on the merged tree.
     &[(0, 0x7032545f8e8c48cf), (100, 0xf37677f21f341cb3), (1000, 0x83de99245bcade91)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
@@ -193,6 +195,7 @@ fn parallel_matches_serial_across_thread_counts() {
         include_str!("../../../scenarios/minimal.toml"),
         include_str!("../../../scenarios/tech-gene-coupling.toml"),
         include_str!("../../../scenarios/affect-seeking.toml"),
+        include_str!("../../../scenarios/affect-threat.toml"),
     ] {
         let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
         const TICKS: u64 = 300;

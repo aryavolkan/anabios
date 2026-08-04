@@ -1,0 +1,25 @@
+name = "affect-threat"
+seed = 0
+affect_enabled = true
+# Combat pressure so the predators actually loom; keep population modest so the
+# story is the panic response, not Malthusian collapse.
+max_population = 500
+
+# Prey: a tight grazer herd at world center — the population that panics.
+[[agents]]
+count = 40
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+size = 0.4
+lifespan_bias = 1.0
+
+# Predators: a handful of large stalkers seeded inside the herd — immediate,
+# close, big other-species threats that spike prey FEAR.
+[[agents]]
+count = 8
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+size = 0.9
+lifespan_bias = 1.0

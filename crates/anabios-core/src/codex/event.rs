@@ -221,12 +221,16 @@ pub enum EventType {
     /// its founding rate because of retained per-species knowledge
     /// (`value` = accumulated knowledge at re-acquisition).
     KnowledgeRatchet = 53,
+    /// A cluster of same-species agents simultaneously in high FEAR — the first
+    /// mass fright / panic response (Bracha rout). `value` = frightened member
+    /// count; loc = species centroid.
+    MassFright = 54,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::KnowledgeRatchet as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::MassFright as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {

@@ -1074,11 +1074,12 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
     // World.practices_enabled added, defaulting true (off-effect here) — layout
     // growth only, trajectory byte-identical.
-    // Refreshed 2026-08-04 (M-A affect layer merged atop knowledge layout,
-    // FORMAT_VERSION 26→27): AgentBuffers gained the serialized `affect` column +
-    // World.affect_enabled (off here) on top of the v26 knowledge fields
-    // (knowledge_enabled off, CodexState knowledge maps empty). Both stages no-op
-    // flag-off with zero RNG — byte-identical; regenerated on the merged tree.
+    // Refreshed 2026-08-03 (main knowledge layout, FORMAT_VERSION →26):
+    // World.knowledge_enabled + CodexState knowledge fields, off here ⇒
+    // knowledge_step early-returns, trajectory byte-identical, layout growth only.
+    // Refreshed 2026-08-03 (M-A+M-B affect layer, FORMAT_VERSION 26→27): affect
+    // column + flag + temperament + EventType::MassFright, all off/gated here ⇒
+    // byte-identical atop the v26 knowledge layout; regenerated on the merged tree.
     &[(0, 0xc3487138b8eae271), (100, 0xee89ed84a363695e), (300, 0x7d5ebd1e5240c027)];
 
 #[test]

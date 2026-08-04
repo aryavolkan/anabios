@@ -25,6 +25,11 @@ pub const MATING_RANGE: f32 = 2.0;
 /// 0.5 means parents collectively pay `SPAWN_ENERGY` total (energy-conserving).
 pub const PARENT_ENERGY_COST_FRAC: f32 = 0.5;
 
+/// Multiplier on `ReproductionThreshold × SPAWN_ENERGY` that sets the mating
+/// energy gate (see `is_eligible`). Named so the affect layer's LUST trigger
+/// (`affect::trigger_lust`) reads the same reference the gate uses.
+pub const REPRO_ENERGY_MULT: f32 = 1.5;
+
 /// Default hard upper bound on alive agents. Reproduction skips at/above the
 /// cap. The live value is `World::max_population` (per-world overridable);
 /// this constant is the design's 10k-agent budget (design §8; the
@@ -288,8 +293,9 @@ fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
     // Conscientiousness raises the effective breeding threshold.
     let threshold = SPAWN_ENERGY
         * agents.genome[i].get(GenomeSlot::ReproductionThreshold)
-        * 1.5
-        * crate::personality::personality_reproduction_factor(&agents.genome[i]);
+        * REPRO_ENERGY_MULT
+        * crate::personality::personality_reproduction_factor(&agents.genome[i])
+        * crate::affect::affect_reproduction_factor(&agents.affect[i]);
     agents.energy[i] >= threshold
 }
 
@@ -818,5 +824,31 @@ mod tests {
         let before = w.agents.live_count();
         reproduce_all(&mut w);
         assert_eq!(w.agents.live_count(), before + 1, "flag off: reproduction unaffected");
+    }
+
+    #[test]
+    fn high_lust_lets_a_below_threshold_pair_mate() {
+        // Energy set between the LUST-lowered gate and the neutral gate: they mate
+        // only when LUST is high.
+        let mates = |lust: f32| -> bool {
+            let mut w = World::new(13);
+            let pos = find_grass_cell_center(&w);
+            let id0 = w.spawn_agent(pos, fertile_genome());
+            let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+            // fertile_genome: ReproductionThreshold 0.4 → neutral gate =
+            // SPAWN_ENERGY*0.4*1.5 = 0.6*SPAWN_ENERGY. LUST=1 gate = 0.7×that.
+            let gate = SPAWN_ENERGY * 0.4 * crate::reproduce::REPRO_ENERGY_MULT;
+            let e = gate * 0.85; // below neutral gate, above the LUST-lowered gate
+            w.agents.energy[id0 as usize] = e;
+            w.agents.energy[id1 as usize] = e;
+            w.agents.affect[id0 as usize][crate::affect::LUST] = lust;
+            w.agents.affect[id1 as usize][crate::affect::LUST] = lust;
+            w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+            let before = w.agents.live_count();
+            reproduce_all(&mut w);
+            w.agents.live_count() == before + 1
+        };
+        assert!(!mates(0.0), "neutral LUST: below-gate pair must not mate");
+        assert!(mates(1.0), "high LUST lowers the gate enough to mate");
     }
 }

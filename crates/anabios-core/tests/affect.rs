@@ -3,9 +3,15 @@
 //! behavior (SEEKING-biased foraging) so it cannot drift silently, and proves
 //! the serialized `affect` column survives a save→load→step round-trip.
 
+use anabios_core::affect::RAGE;
+use anabios_core::agent::SPAWN_ENERGY;
+use anabios_core::codex::EventType;
+use anabios_core::genome::{Genome, GenomeSlot};
+use anabios_core::prelude_test::{reassign_to_new_species, Vec2};
 use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
 use anabios_core::tick::step;
+use anabios_core::world::World;
 
 const SCENARIO: &str = include_str!("../../../scenarios/affect-seeking.toml");
 
@@ -55,12 +61,13 @@ fn affect_scenario_survives_save_load_step() {
 /// Pinned flag-ON golden. Generated once with `UPDATE_HASHES=1` after the
 /// SEEKING layer was wired; regenerate deliberately whenever an affect change
 /// is intentional.
-/// Refreshed 2026-08-04 (merged main atop the affect branch, FORMAT_VERSION
-/// 26→27): the v26 knowledge fields (CodexState knowledge maps, empty here) now
-/// serialize into the hashed state even in this flag-ON affect scenario, so the
-/// pinned values shifted — trajectory unchanged, layout-only regen.
+// Refreshed 2026-08-03 (M-C RAGE+LUST): agonistic + reproductive systems now act
+// flag-on — RAGE bias (fire/approach), LUST bias (approach) + lowered repro gate,
+// FEAR⊣RAGE inhibition, combat→RAGE impulse. A genuine flag-on behavior change
+// (NOT layout): no serialized column added, FORMAT_VERSION unchanged; flag-off
+// (minimal/cognition/inventions) byte-identical.
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x02734d84b9b4fbac), (100, 0x52096dfdbec3fb60), (300, 0xcc367a8fea5663e1)];
+    &[(0, 0x02734d84b9b4fbac), (100, 0x005b7f20fb47d1a0), (300, 0x1b2c3e0d5205ba03)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -94,4 +101,163 @@ fn affect_scenario_matches_golden_hashes() {
              If intentional, rerun with UPDATE_HASHES=1 and copy the printed values.",
         );
     }
+}
+
+// --- M-B: FEAR / hijack flag-on tests (affect-threat scenario) ---
+
+const THREAT_SCENARIO: &str = include_str!("../../../scenarios/affect-threat.toml");
+
+#[test]
+fn affect_threat_parses_with_flag_on() {
+    let s = Scenario::parse_toml(THREAT_SCENARIO).expect("parse affect-threat");
+    assert!(s.affect_enabled, "scenario must enable the affect layer");
+}
+
+#[test]
+fn affect_threat_is_self_consistent() {
+    let s = Scenario::parse_toml(THREAT_SCENARIO).expect("parse affect-threat");
+    let run = || {
+        let mut w = s.instantiate();
+        for _ in 0..300 {
+            step(&mut w);
+        }
+        state_hash(&w)
+    };
+    assert_eq!(run(), run(), "same seed + flag on ⇒ bit-identical");
+}
+
+#[test]
+fn affect_threat_survives_save_load_step() {
+    let s = Scenario::parse_toml(THREAT_SCENARIO).expect("parse affect-threat");
+    let mut world = s.instantiate();
+    for _ in 0..300 {
+        step(&mut world);
+    }
+    let bytes = save_to_bytes(&world).expect("save");
+    let mut reloaded = load_from_bytes(&bytes).expect("load");
+    assert_eq!(state_hash(&world), state_hash(&reloaded), "load must restore identical state");
+    step(&mut world);
+    step(&mut reloaded);
+    assert_eq!(
+        state_hash(&world),
+        state_hash(&reloaded),
+        "affect world diverged after save→load→step (hidden non-serialized affect state?)",
+    );
+}
+
+#[test]
+fn affect_threat_emits_mass_fright() {
+    let s = Scenario::parse_toml(THREAT_SCENARIO).expect("parse affect-threat");
+    let mut w = s.instantiate();
+    let mut saw = false;
+    for _ in 0..1500 {
+        step(&mut w);
+        if w.codex.events.iter().any(|e| e.event_type == EventType::MassFright) {
+            saw = true;
+            break;
+        }
+    }
+    assert!(saw, "predator-driven FEAR must produce a MassFright within 1500 ticks");
+}
+
+/// Pinned golden for the flag-ON affect-threat scenario. Regenerate deliberately
+/// with `UPDATE_HASHES=1` whenever an affect-behavior change is intentional.
+// Created 2026-08-03 (M-B): first pin of the FEAR/hijack layer's real behavior.
+// Refreshed 2026-08-03 (M-C RAGE+LUST): agonistic + reproductive systems act
+// flag-on in this predator scenario too (RAGE from combat/frustration, LUST).
+// Behavior change, not layout; FORMAT_VERSION unchanged.
+const THREAT_GOLDEN: &[(u64, u64)] =
+    &[(0, 0xa3127deefb009efc), (100, 0x66014cb3d1843222), (300, 0x0ce9164d2950d3d6)];
+
+#[test]
+fn affect_threat_matches_golden_hashes() {
+    let s = Scenario::parse_toml(THREAT_SCENARIO).expect("parse affect-threat");
+    let mut w = s.instantiate();
+    let max_tick = THREAT_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
+    let mut idx = 0;
+    let mut observed: Vec<(u64, u64)> = Vec::new();
+    while w.tick <= max_tick {
+        while idx < THREAT_GOLDEN.len() && THREAT_GOLDEN[idx].0 == w.tick {
+            observed.push((w.tick, state_hash(&w)));
+            idx += 1;
+        }
+        if w.tick == max_tick {
+            break;
+        }
+        step(&mut w);
+    }
+    if std::env::var("UPDATE_HASHES").is_ok() {
+        println!("// regenerated affect-threat hashes:");
+        for (t, h) in &observed {
+            println!("    ({t}, 0x{h:016x}),");
+        }
+        return;
+    }
+    for ((et, eh), (gt, gh)) in THREAT_GOLDEN.iter().zip(&observed) {
+        assert_eq!(et, gt, "tick mismatch");
+        assert_eq!(
+            *eh, *gh,
+            "affect-threat hash drift at tick {et}: expected 0x{eh:016x}, got 0x{gh:016x}"
+        );
+    }
+}
+
+// --- M-C: RAGE / LUST behavior + determinism tests ---
+
+/// Frustration (hungry + crowded) with an other-species neighbour present
+/// drives RAGE up over a few ticks, which raises the agent's fire_intent.
+#[test]
+fn frustration_raises_fire_intent() {
+    let mut w = World::new(7);
+    w.affect_enabled = true;
+    // A frustrated agent surrounded by an other-species crowd.
+    let mut g = Genome::neutral();
+    g.set(GenomeSlot::Aggressiveness, 1.0);
+    let me = w.spawn_agent(Vec2::new(500.0, 500.0), g) as usize;
+    w.agents.energy[me] = 0.05 * SPAWN_ENERGY; // deep deficit → high drive
+                                               // Ring of other-species neighbours to create crowding + an other target.
+    for k in 0..6 {
+        let other = w.spawn_agent(Vec2::new(500.5 + k as f32 * 0.3, 500.0), Genome::neutral());
+        // Register the neighbour in a fresh species (a bare `species_id = 1`
+        // write is unregistered — the species aggregation panics on it).
+        reassign_to_new_species(&mut w, other);
+    }
+    let mut prev_rage = 0.0;
+    for _ in 0..10 {
+        step(&mut w);
+        prev_rage = w.agents.affect[me][RAGE];
+        if !w.agents.is_alive(me as u32) {
+            break;
+        }
+    }
+    assert!(prev_rage > 0.0, "frustrated, crowded agent accrues RAGE: {prev_rage}");
+    // With RAGE up and an other-species target sensed, its action fires.
+    assert!(w.actions[me].fire_intent > 0.0, "RAGE drives fire_intent");
+}
+
+/// The affect column (RAGE/LUST) round-trips through save→load→step.
+#[test]
+fn affect_survives_save_load_step() {
+    let mut w = World::new(11);
+    w.affect_enabled = true;
+    // Seed a couple of agents and warm up so affect is non-zero.
+    for k in 0..8 {
+        let id = w.spawn_agent(Vec2::new(480.0 + k as f32, 500.0), Genome::neutral());
+        if k % 2 == 1 {
+            reassign_to_new_species(&mut w, id);
+        }
+    }
+    for _ in 0..50 {
+        step(&mut w);
+    }
+    let bytes = save_to_bytes(&w).expect("save");
+    let mut reloaded = load_from_bytes(&bytes).expect("load");
+    assert_eq!(state_hash(&w), state_hash(&reloaded), "load restores identical state");
+    step(&mut w);
+    step(&mut reloaded);
+    assert_eq!(
+        state_hash(&w),
+        state_hash(&reloaded),
+        "affect world diverged after save→load→step (hidden non-serialized affect state?)",
+    );
 }

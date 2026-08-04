@@ -207,6 +207,14 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         world.agents.energy[i] -= weapon.energy_cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
+        // M-C: being struck feeds RAGE. Written into the SERIALIZED affect
+        // column here (same tick as the hit), so it round-trips through save/
+        // load — unlike the #[serde(skip)] combat_damaged scratch, which the
+        // affect stage must not read across a tick boundary. Gated + zero RNG.
+        if world.affect_enabled {
+            let r = &mut world.agents.affect[t][crate::affect::RAGE];
+            *r = (*r + crate::affect::RAGE_ATTACK_IMPULSE).min(1.0);
+        }
         // E7 war substrate: cross-faction hits feed hostility (wars are
         // fought with hits, deaths are decisive moments).
         crate::codex::war::record_war_hit(
@@ -697,6 +705,56 @@ mod tests {
         assert!(
             w.codex.events.iter().any(|e| e.event_type == EventType::ResourceTraded),
             "a ResourceTraded event was recorded"
+        );
+    }
+
+    /// Build a weapon-bearing attacker adjacent to an other-species target,
+    /// with `fire_intent` above `FIRE_THRESHOLD` and sensors/spatial
+    /// populated so `combat_pass` will land a hit. Mirrors the fixture used
+    /// by `trade_pass`'s tests and by `metalworking_raises_combat_damage` in
+    /// `tests/inventions.rs`. Returns `(attacker, target)`.
+    fn setup_adjacent_combat_pair(w: &mut World) -> (u32, u32) {
+        let pos = Vec2::new(300.0, 300.0);
+        let attacker = w.spawn_agent(pos, Genome::neutral());
+        let target = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+        w.agents.modules[attacker as usize] = crate::module::predator_kit();
+        w.agents.species_id[target as usize] = 1;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut w.sensors,
+            w.world_size,
+            false,
+        );
+        w.actions[attacker as usize].fire_intent = 1.0;
+        (attacker, target)
+    }
+
+    #[test]
+    fn combat_damage_bumps_target_rage_when_affect_on() {
+        let mut w = World::new(13);
+        w.affect_enabled = true;
+        let (_attacker, target) = setup_adjacent_combat_pair(&mut w);
+        let before = w.agents.affect[target as usize][crate::affect::RAGE];
+        interact_all(&mut w);
+        let after = w.agents.affect[target as usize][crate::affect::RAGE];
+        assert!(after > before, "a struck agent accrues RAGE: {before} -> {after}");
+        assert!(after <= 1.0, "RAGE stays clamped: {after}");
+
+        // Flag-off: no write.
+        let mut w2 = World::new(13);
+        // affect_enabled defaults false
+        let (_a2, t2) = setup_adjacent_combat_pair(&mut w2);
+        interact_all(&mut w2);
+        assert_eq!(
+            w2.agents.affect[t2 as usize][crate::affect::RAGE],
+            0.0,
+            "flag off: combat must not touch affect"
         );
     }
 }

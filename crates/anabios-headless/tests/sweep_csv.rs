@@ -29,10 +29,10 @@ fn summary_csv_has_novel_types_column() {
         header.ends_with(",emergence_score,novel_events,coverage,novel_types"),
         "header was: {header}"
     );
-    // every data row must have exactly 63 fields
-    // (5 prefix + 54 event counts + emergence_score,novel_events,coverage,novel_types)
+    // every data row must have exactly 64 fields (5 prefix + EVENT_TYPE_COUNT=55
+    // per-event columns + emergence_score,novel_events,coverage,novel_types).
     for row in lines {
-        assert_eq!(row.split(',').count(), 63, "row: {row}");
+        assert_eq!(row.split(',').count(), 64, "row: {row}");
     }
 }
 
