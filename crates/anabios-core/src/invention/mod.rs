@@ -465,6 +465,9 @@ pub fn graze_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f
 }
 
 /// Graze-bite multiplier with coupling off (genome-independent, as before).
+/// Test-only oracle: production uses `graze_multiplier_coupled`, which equals
+/// this exactly at `coupling = false`.
+#[cfg(test)]
 #[inline]
 pub fn graze_multiplier(mask: u32) -> f32 {
     1.0 + STONE_TOOLS_BITE * held_f32(mask, STONE_TOOLS)
@@ -478,7 +481,9 @@ pub fn food_energy_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool
     1.0 + FIRE_ENERGY * coupled_held_genome(mask, FIRE, genome, coupling)
 }
 
-/// Energy-per-biomass multiplier with coupling off.
+/// Energy-per-biomass multiplier with coupling off. Test-only oracle for
+/// `food_energy_multiplier_coupled` at `coupling = false`.
+#[cfg(test)]
 #[inline]
 pub fn food_energy_multiplier(mask: u32) -> f32 {
     1.0 + FIRE_ENERGY * held_f32(mask, FIRE)
@@ -490,7 +495,9 @@ pub fn weapon_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> 
     1.0 + METALWORKING_DAMAGE * coupled_held_genome(mask, METALWORKING, genome, coupling)
 }
 
-/// Weapon-damage multiplier with coupling off.
+/// Weapon-damage multiplier with coupling off. Test-only oracle for
+/// `weapon_multiplier_coupled` at `coupling = false`.
+#[cfg(test)]
 #[inline]
 pub fn weapon_multiplier(mask: u32) -> f32 {
     1.0 + METALWORKING_DAMAGE * held_f32(mask, METALWORKING)
@@ -502,7 +509,9 @@ pub fn scavenge_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -
     1.0 + HUSBANDRY_SCAVENGE * coupled_held_genome(mask, HUSBANDRY, genome, coupling)
 }
 
-/// Scavenge-energy multiplier with coupling off.
+/// Scavenge-energy multiplier with coupling off. Test-only oracle for
+/// `scavenge_multiplier_coupled` at `coupling = false`.
+#[cfg(test)]
 #[inline]
 pub fn scavenge_multiplier(mask: u32) -> f32 {
     1.0 + HUSBANDRY_SCAVENGE * held_f32(mask, HUSBANDRY)
@@ -514,7 +523,9 @@ pub fn speed_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f
     1.0 + MACHINERY_SPEED * coupled_held_genome(mask, MACHINERY, genome, coupling)
 }
 
-/// Locomotor speed multiplier with coupling off.
+/// Locomotor speed multiplier with coupling off. Test-only oracle for
+/// `speed_multiplier_coupled` at `coupling = false`.
+#[cfg(test)]
 #[inline]
 pub fn speed_multiplier(mask: u32) -> f32 {
     1.0 + MACHINERY_SPEED * held_f32(mask, MACHINERY)
@@ -538,7 +549,9 @@ pub fn lifespan_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -
     1.0 + MEDICINE_LIFESPAN * coupled_held_genome(mask, MEDICINE, genome, coupling)
 }
 
-/// Lifespan multiplier with coupling off.
+/// Lifespan multiplier with coupling off. Test-only oracle for
+/// `lifespan_multiplier_coupled` at `coupling = false`.
+#[cfg(test)]
 #[inline]
 pub fn lifespan_multiplier(mask: u32) -> f32 {
     1.0 + MEDICINE_LIFESPAN * held_f32(mask, MEDICINE)
@@ -561,7 +574,9 @@ pub fn perception_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool)
     1.0 + ELECTRICITY_PERCEPTION * coupled_held_genome(mask, ELECTRICITY, genome, coupling)
 }
 
-/// Perception-radius multiplier with coupling off.
+/// Perception-radius multiplier with coupling off. Test-only oracle for
+/// `perception_multiplier_coupled` at `coupling = false`.
+#[cfg(test)]
 #[inline]
 pub fn perception_multiplier(mask: u32) -> f32 {
     1.0 + ELECTRICITY_PERCEPTION * held_f32(mask, ELECTRICITY)
@@ -583,7 +598,9 @@ pub fn spread_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> 
     1.0 + bonus * scale
 }
 
-/// Meme-copy / invention-spread multiplier with coupling off.
+/// Meme-copy / invention-spread multiplier with coupling off. Test-only oracle
+/// for `spread_multiplier_coupled` at `coupling = false`.
+#[cfg(test)]
 #[inline]
 pub fn spread_multiplier(mask: u32) -> f32 {
     if mask & bit(WRITING) == 0 {
@@ -616,7 +633,9 @@ pub fn discovery_multiplier(mask: u32) -> f32 {
 }
 
 /// Per-tick flat upkeep minus income from held inventions (Writing, Medicine,
-/// Electricity, Nuclear upkeep; Nuclear income). Positive = net drain.
+/// Electricity, Nuclear upkeep; Nuclear income). Positive = net drain. Test-only
+/// oracle for `flat_upkeep_coupled` at `coupling = false`.
+#[cfg(test)]
 pub fn flat_upkeep(mask: u32) -> f32 {
     let mut cost = 0.0;
     cost += WRITING_UPKEEP * held_f32(mask, WRITING);
