@@ -75,6 +75,14 @@ pub struct AgentBuffers {
     /// there. Serialized (persistent) — a path-dependent accumulator feeding
     /// hashed movement, so it must NOT be `#[serde(skip)]` (still-ticks v13 footgun).
     pub affect: Vec<crate::affect::AffectState>,
+    /// Previous-tick neighbour count (`SensorRegister.crowding` as `f32`),
+    /// written at the end of `affect::develop_all`. One-tick memory that lets
+    /// PANIC/GRIEF detect a *drop* in social contact (kin left / died), not
+    /// just an absolute-low crowding. Serialized (NOT `#[serde(skip)]`): it is
+    /// a path-dependent accumulator feeding hashed state, so dropping it on load
+    /// would make restore-and-continue diverge (still_ticks v13 footgun).
+    /// Stays `0.0` for every agent when `affect_enabled` is off.
+    pub affect_prev_crowding: Vec<f32>,
     /// Learned home point (E8): an EMA of position updated when
     /// `settlement_enabled`; inherited by offspring with drift. Spawned at
     /// the agent's spawn position; inert when the flag is off.
@@ -185,6 +193,7 @@ impl AgentBuffers {
         self.iq_enrich_acc[i] = 0.0;
         self.iq_enrich_ticks[i] = 0;
         self.affect[i] = [0.0; crate::affect::AFFECT_SYSTEMS];
+        self.affect_prev_crowding[i] = 0.0;
         self.anchor[i] = position;
         self.harvest_exp[i] = [0.0; crate::resource::GOOD_COUNT];
         self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
@@ -219,6 +228,7 @@ impl AgentBuffers {
         self.iq_enrich_acc.push(0.0);
         self.iq_enrich_ticks.push(0);
         self.affect.push([0.0; crate::affect::AFFECT_SYSTEMS]);
+        self.affect_prev_crowding.push(0.0);
         self.anchor.push(Vec2::ZERO);
         self.harvest_exp.push([0.0; crate::resource::GOOD_COUNT]);
         self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
@@ -245,6 +255,7 @@ impl AgentBuffers {
         }
         self.alive.set(i, false);
         self.energy[i] = 0.0;
+        self.affect_prev_crowding[i] = 0.0;
         self.free_list.push(id);
         self.live_count -= 1;
 
@@ -496,5 +507,41 @@ mod tests {
             [0.0; crate::affect::AFFECT_SYSTEMS],
             "reused (dead) slot resets affect to neutral"
         );
+    }
+
+    #[test]
+    fn spawn_zeroes_affect_prev_crowding_and_kill_resets() {
+        let mut a = AgentBuffers::new();
+        let id = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            1,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        // Present, zeroed, and sized to capacity on spawn.
+        assert_eq!(a.affect_prev_crowding[id as usize], 0.0);
+        assert_eq!(a.affect_prev_crowding.len(), a.capacity());
+        // A stale value is cleared on death (dead-slot reset).
+        a.affect_prev_crowding[id as usize] = 5.0;
+        a.kill(id);
+        assert_eq!(a.affect_prev_crowding[id as usize], 0.0, "dead slot reset");
+        // Reused slot re-initializes to 0.0.
+        a.affect_prev_crowding[id as usize] = 7.0;
+        let id2 = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            2,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        assert_eq!(id2, id, "slot reused");
+        assert_eq!(a.affect_prev_crowding[id as usize], 0.0, "reuse re-init");
     }
 }
