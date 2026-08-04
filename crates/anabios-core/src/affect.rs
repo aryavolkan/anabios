@@ -98,6 +98,18 @@ pub const K_LUST_REPRO: f32 = 0.3;
 /// LUST → approach-mate movement gain.
 pub const K_LUST_APPROACH: f32 = 0.4;
 
+// --- M-D: CARE (kin provision/protect) ---
+/// Below this overall-nearest kinship, CARE does not engage.
+pub const CARE_KINSHIP_MIN: f32 = 0.25;
+/// Same-species neighbour must be within this distance to elicit CARE.
+pub const CARE_RANGE: f32 = 40.0;
+/// CARE leaky-integrator retention.
+pub const LAMBDA_CARE: f32 = 0.8;
+/// CARE → `share_intent` gain (read side).
+pub const K_CARE_SHARE: f32 = 0.8;
+/// CARE → stay-near-kin movement gain (read side).
+pub const K_CARE_APPROACH: f32 = 0.3;
+
 /// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
 pub type AffectState = [f32; AFFECT_SYSTEMS];
@@ -201,6 +213,22 @@ pub fn trigger_lust(energy: f32, genome: &Genome, sensors: &SensorRegister) -> f
         return 0.0;
     }
     1.0
+}
+
+/// CARE activation target in `[0,1]` from kin proximity + Nurturance gain.
+/// Zero unless a same-species neighbour is both close (`< CARE_RANGE`) and
+/// sufficiently related (`> CARE_KINSHIP_MIN`). `nurturance` is the signed
+/// `[-1,+1]` temperament gene (neutral `0.0`). Pure; no RNG.
+#[inline]
+pub fn care_trigger(nearest_kinship: f32, nearest_same_dist: f32, nurturance: f32) -> f32 {
+    if nearest_kinship <= CARE_KINSHIP_MIN || nearest_same_dist >= CARE_RANGE {
+        return 0.0;
+    }
+    // Closer kin → stronger drive to stay and provision.
+    let proximity = (1.0 - nearest_same_dist / CARE_RANGE).clamp(0.0, 1.0);
+    // Neutral nurturance (0.0) → gain 0.5; caring temperament scales up.
+    let gain = (0.5 + 0.5 * nurturance).clamp(0.0, 1.0);
+    (nearest_kinship * proximity * gain).clamp(0.0, 1.0)
 }
 
 /// Compute stage (Layer 0 → Layer 1). Update each alive agent's affect column
@@ -406,6 +434,22 @@ mod tests {
     use crate::program::ActionRegister;
     use crate::sense::SensorRegister;
     use crate::world::World;
+
+    #[test]
+    fn care_trigger_rises_with_close_kin_and_zero_when_absent() {
+        // Close, highly-related kin, neutral nurturance → positive CARE.
+        let close = care_trigger(0.8, 4.0, 0.0);
+        assert!(close > 0.0, "close kin should elicit CARE, got {close}");
+        // No kinship → no CARE regardless of distance.
+        assert_eq!(care_trigger(0.0, 4.0, 0.0), 0.0);
+        // Kin out of range → no CARE.
+        assert_eq!(care_trigger(0.8, CARE_RANGE, 0.0), 0.0);
+        // Nurturance gain: more nurturant → stronger CARE at the same percept.
+        let nurt = care_trigger(0.8, 4.0, 1.0);
+        assert!(nurt > close, "nurturance should raise CARE: {nurt} > {close}");
+        // Bounded to [0,1].
+        assert!((0.0..=1.0).contains(&nurt));
+    }
 
     #[test]
     fn homeostatic_drive_is_zero_when_sated_and_one_when_empty() {
