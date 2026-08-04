@@ -1,0 +1,21 @@
+# Flag-on scenario for M-E (PLAY + IQ-enrichment coupling). Both the affect layer
+# and cognition are enabled so PLAY's movement bias AND its enrichment nudge are
+# exercised. A tight cluster of same-species juveniles keeps peers within
+# PLAY_PEER_RADIUS (40) with no war/predation, so juveniles PLAY.
+name = "affect-play"
+seed = 0
+affect_enabled = true
+cognition_enabled = true
+# Pin the cap so the golden-hash determinism test stays fast and stable.
+max_population = 400
+
+[[agents]]
+count = 60
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 50.0 }
+
+[agents.traits]
+perception_radius = 0.5
+size = 0.4
+basal_metabolism = 0.4
+lifespan_bias = 0.6
+reproduction_threshold = 0.5
