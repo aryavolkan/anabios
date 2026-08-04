@@ -128,6 +128,12 @@ pub const K_PANIC_REUNION: f32 = 0.4;
 /// PANIC⊣SEEK lateral-inhibition strength (withdrawal).
 pub const PANIC_SEEK_INHIBITION: f32 = 0.5;
 
+// --- M-E: PLAY (minimal — juvenile social play) ---
+/// A same-species peer within this distance counts as "nearby" for PLAY.
+pub const PLAY_PEER_RADIUS: f32 = 40.0;
+/// Social-approach movement gain per unit PLAY activation (toward the peer).
+pub const PLAY_APPROACH_GAIN: f32 = 0.3;
+
 /// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
 pub type AffectState = [f32; AFFECT_SYSTEMS];
@@ -290,9 +296,10 @@ pub fn develop_all(world: &mut World) {
     use rayon::prelude::*;
     let cap = world.agents.capacity();
     let sensors = &world.sensors;
-    let crate::agent::AgentBuffers { affect, affect_prev_crowding, energy, genome, alive, .. } =
-        &mut world.agents;
-    let (energy, genome, alive) = (&*energy, &*genome, &*alive);
+    let crate::agent::AgentBuffers {
+        affect, affect_prev_crowding, energy, age, genome, alive, ..
+    } = &mut world.agents;
+    let (energy, age, genome, alive) = (&*energy, &*age, &*genome, &*alive);
     affect[..cap]
         .par_iter_mut()
         .zip(affect_prev_crowding[..cap].par_iter_mut())
@@ -348,6 +355,21 @@ pub fn develop_all(world: &mut World) {
                 // M-D lateral inhibition — PANIC withdraws the appetitive SEEKING
                 // engine (mirrors the M-C FEAR⊣RAGE edge above).
                 a[SEEK] = (a[SEEK] - PANIC_SEEK_INHIBITION * a[PANIC]).clamp(0.0, 1.0);
+
+                // PLAY (M-E, lowest-fidelity): a juvenile with a same-species peer
+                // nearby and low threat accrues PLAY, scaled by Sociality. FEAR ⊣
+                // PLAY (no play under threat). Zero RNG; index-local (same `i`).
+                let play_target = if age[i] < crate::iq::IQ_MATURATION_AGE
+                    && sensors[i].nearest_same_dist < PLAY_PEER_RADIUS
+                {
+                    let safe = (1.0 - sensors[i].hostility).clamp(0.0, 1.0);
+                    let social_w = (0.5 + 0.5 * genome[i].sociality()).clamp(0.0, 1.0);
+                    safe * social_w
+                } else {
+                    0.0
+                };
+                let play_raw = LAMBDA_DEFAULT * a[PLAY] + (1.0 - LAMBDA_DEFAULT) * play_target;
+                a[PLAY] = (play_raw * (1.0 - a[FEAR])).clamp(0.0, 1.0);
 
                 // M-D: record this tick's crowding for next tick's PANIC.
                 *prev = sensors[i].crowding as f32;
@@ -448,6 +470,14 @@ pub fn apply_affect(
             action.move_x += K_PANIC_REUNION * panic * sensors.nearest_same_dir.x;
             action.move_y += K_PANIC_REUNION * panic * sensors.nearest_same_dir.y;
         }
+    }
+
+    // --- M-E: PLAY — a playful juvenile drifts toward its nearest same-species
+    // peer. Guarded on non-zero PLAY → exact identity at neutral affect. ---
+    let play = affect[PLAY];
+    if play != 0.0 && sensors.nearest_same_id != crate::sense::NO_NEIGHBOR_ID {
+        action.move_x += PLAY_APPROACH_GAIN * play * sensors.nearest_same_dir.x;
+        action.move_y += PLAY_APPROACH_GAIN * play * sensors.nearest_same_dir.y;
     }
 }
 
@@ -1182,5 +1212,71 @@ mod tests {
         assert!(act.emit_intent[PANIC_PHEROMONE_CHANNEL] > 0.0, "PANIC emits distress pheromone");
         assert!(act.broadcast_intent[ALARM_MEME_CHANNEL] > 0.0, "PANIC broadcasts alarm");
         assert!(act.move_y > 0.0, "PANIC biases movement toward nearest same-species (reunion)");
+    }
+
+    #[test]
+    fn play_activates_for_safe_juvenile_near_peer() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::world::World;
+        let mut w = World::new(2);
+        w.affect_enabled = true;
+        let a = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        let _b = w.spawn_agent(Vec2::new(505.0, 500.0), Genome::neutral());
+        let i = a as usize;
+        w.agents.age[i] = 0; // juvenile
+        w.sensors.resize(w.agents.capacity(), Default::default());
+        w.sensors[i].nearest_same_dist = 5.0; // peer near
+        w.sensors[i].hostility = 0.0; // safe
+        develop_all(&mut w);
+        assert!(w.agents.affect[i][PLAY] > 0.0, "safe juvenile near a peer should play");
+    }
+
+    #[test]
+    fn play_is_zero_for_adult_isolated_or_threatened() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::world::World;
+        let base = |setup: &dyn Fn(&mut World, usize)| -> f32 {
+            let mut w = World::new(1);
+            w.affect_enabled = true;
+            let a = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+            let i = a as usize;
+            w.sensors.resize(w.agents.capacity(), Default::default());
+            w.sensors[i].nearest_same_dist = 5.0;
+            w.sensors[i].hostility = 0.0;
+            w.agents.age[i] = 0;
+            setup(&mut w, i);
+            develop_all(&mut w);
+            w.agents.affect[i][PLAY]
+        };
+        assert_eq!(base(&|w, i| w.agents.age[i] = crate::iq::IQ_MATURATION_AGE), 0.0, "adult");
+        assert_eq!(base(&|w, i| w.sensors[i].nearest_same_dist = f32::INFINITY), 0.0, "isolated");
+        assert_eq!(base(&|w, i| w.sensors[i].hostility = 1.0), 0.0, "threatened");
+    }
+
+    #[test]
+    fn play_biases_movement_toward_peer() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::program::ActionRegister;
+        use crate::sense::SensorRegister;
+        let g = Genome::neutral();
+        let sensors = SensorRegister {
+            nearest_same_id: 0, // a peer exists
+            nearest_same_dir: Vec2::new(1.0, 0.0),
+            ..SensorRegister::default()
+        };
+        let mut affect = [0.0f32; AFFECT_SYSTEMS];
+        // Neutral (PLAY == 0): action left bit-for-bit unchanged.
+        let mut a0 = ActionRegister::default();
+        let before = a0.move_x;
+        apply_affect(&mut a0, &affect, &g, &sensors, 50.0);
+        assert_eq!(a0.move_x, before, "PLAY==0 must be exact identity");
+        // PLAY > 0: movement biases toward the peer (+x).
+        affect[PLAY] = 0.5;
+        let mut a1 = ActionRegister::default();
+        apply_affect(&mut a1, &affect, &g, &sensors, 50.0);
+        assert!(a1.move_x > 0.0, "playful juvenile should approach its peer");
     }
 }
