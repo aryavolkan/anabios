@@ -1,0 +1,18 @@
+# Flag-on affect scenario for M-D (CARE + PANIC/GRIEF). Same base as minimal.toml
+# but with the primitive-brain affect layer enabled.
+name = "affect-social"
+seed = 42
+affect_enabled = true
+# Pin the cap so the golden-hash determinism test stays fast and stable.
+max_population = 2000
+
+[[agents]]
+count = 200
+placement = { kind = "uniform" }
+
+[agents.traits]
+perception_radius = 0.5
+size = 0.4
+basal_metabolism = 0.4
+lifespan_bias = 0.6
+reproduction_threshold = 0.5
