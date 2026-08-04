@@ -52,14 +52,7 @@ pub mod prelude_test {
     /// Create a fresh species (bookkeeping tables consistent) and return its
     /// id. Test/bench-only way to make a second species before the first tick.
     pub fn fresh_species(w: &mut crate::world::World) -> u32 {
-        let sid = w.species_centroids.len() as u32;
-        // Grow all three parallel species tables explicitly so the helper is
-        // self-contained (not relying on add_to_species's internal resize).
-        w.species_centroids.push(crate::genome::Genome::neutral());
-        w.species_parents.push(Some(0));
-        w.species_member_counts.push(0);
-        w.next_species_id = sid + 1;
-        sid
+        w.push_species(crate::genome::Genome::neutral(), Some(0))
     }
 
     /// Move an already-spawned agent into `sid`, keeping member counts

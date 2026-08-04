@@ -488,6 +488,24 @@ impl World {
         id
     }
 
+    /// Append a new species: push `centroid` and `parent` (with zero members)
+    /// onto all three parallel species tables in lock-step and consume
+    /// `next_species_id`, returning the new id. This is the single place a
+    /// species row is grown, so the tables can't drift out of step (the former
+    /// hand-rolled pushes sometimes grew only two of the three, leaning on
+    /// `add_to_species`'s lazy resize by accident of call order). Callers place
+    /// members afterwards via `add_to_species`. Relies on the invariant
+    /// `next_species_id == species_centroids.len()`, which every species-growth
+    /// path maintains from `World::new` onward.
+    pub fn push_species(&mut self, centroid: Genome, parent: Option<u32>) -> u32 {
+        let id = self.next_species_id;
+        self.next_species_id = self.next_species_id.checked_add(1).expect("species id overflow");
+        self.species_centroids.push(centroid);
+        self.species_member_counts.push(0);
+        self.species_parents.push(parent);
+        id
+    }
+
     /// Increment the species member count, growing the table if needed.
     /// Called by every spawn path.
     pub fn add_to_species(&mut self, species_id: u32) {

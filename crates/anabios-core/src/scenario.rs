@@ -513,18 +513,10 @@ impl Scenario {
             // silently alias the default species 0.)
             let (species_id, kit) = match &spec.archetype {
                 Some(name) => {
-                    let sid = w.next_species_id;
-                    // Grow the species tables for this id (spawn_seeded's
-                    // add_to_species only grows the member-count vec).
-                    while w.species_centroids.len() <= sid as usize {
-                        w.species_centroids.push(Genome::neutral());
-                        // Placeholder parent; species_step overwrites on the
-                        // first reclustering. Founder archetypes have no real
-                        // parent species.
-                        w.species_parents.push(Some(0));
-                        w.species_member_counts.push(0);
-                    }
-                    w.next_species_id = sid + 1;
+                    // Fresh species row for this archetype. Placeholder parent
+                    // `Some(0)`; species_step overwrites it on the first
+                    // reclustering (founder archetypes have no real parent).
+                    let sid = w.push_species(Genome::neutral(), Some(0));
                     (sid, Some(archetype_kit(name)))
                 }
                 None => (0u32, None),
