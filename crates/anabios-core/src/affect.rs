@@ -291,6 +291,16 @@ pub fn apply_affect(
             *c *= damp;
         }
     }
+
+    // M-C RAGE: approach and attack the nearest other-species neighbour (the
+    // target combat_pass resolves). Guarded on RAGE ≠ 0 → exact identity at
+    // neutral affect.
+    let rage = affect[RAGE];
+    if rage != 0.0 && sensors.nearest_other_id != crate::sense::NO_NEIGHBOR_ID {
+        action.fire_intent += K_RAGE_FIRE * rage;
+        action.move_x += K_RAGE_APPROACH * rage * sensors.nearest_other_dir.x;
+        action.move_y += K_RAGE_APPROACH * rage * sensors.nearest_other_dir.y;
+    }
 }
 
 /// Survival-reflex override (Bracha: Freeze→Flight→Fight→Fright/Faint). When
@@ -791,5 +801,45 @@ mod tests {
         let calm = setup(0.0);
         let afraid = setup(1.0);
         assert!(afraid < calm, "FEAR must suppress RAGE: afraid={afraid} calm={calm}");
+    }
+
+    #[test]
+    fn apply_affect_rage_raises_fire_and_approaches_target() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::program::ActionRegister;
+        use crate::sense::SensorRegister;
+
+        let mut a = ActionRegister { fire_intent: 0.1, ..Default::default() };
+        let mut affect: AffectState = [0.0; AFFECT_SYSTEMS];
+        affect[RAGE] = 0.8;
+        let s = SensorRegister {
+            nearest_other_id: 5,
+            nearest_other_dir: Vec2::new(1.0, 0.0),
+            ..Default::default()
+        };
+        apply_affect(&mut a, &affect, &Genome::neutral(), &s, crate::agent::SPAWN_ENERGY);
+        assert!(a.fire_intent > 0.1, "RAGE raises fire_intent: {}", a.fire_intent);
+        assert!(a.move_x > 0.0, "RAGE approaches the target: {}", a.move_x);
+    }
+
+    #[test]
+    fn apply_affect_rage_is_identity_at_neutral() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::program::ActionRegister;
+        use crate::sense::SensorRegister;
+
+        let mut a = ActionRegister { fire_intent: 0.3, move_x: 0.2, ..Default::default() };
+        let before = a;
+        let affect: AffectState = [0.0; AFFECT_SYSTEMS]; // RAGE == 0
+        let s = SensorRegister {
+            nearest_other_id: 5,
+            nearest_other_dir: Vec2::new(1.0, 0.0),
+            ..Default::default()
+        };
+        apply_affect(&mut a, &affect, &Genome::neutral(), &s, crate::agent::SPAWN_ENERGY);
+        assert_eq!(a.fire_intent, before.fire_intent, "neutral RAGE: fire unchanged");
+        assert_eq!(a.move_x, before.move_x, "neutral RAGE: move unchanged");
     }
 }
