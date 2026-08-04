@@ -181,6 +181,14 @@ pub struct BiomeField {
     pub world_size: f32,
     /// Side length of one cell = `world_size / res` (was `CELL_SIZE`).
     pub cell_size: f32,
+    /// Reusable delta buffer for `recolonize_step`'s double-buffering, kept to
+    /// avoid a fresh `cells.len()`-sized allocation every call. Cleared and
+    /// resized to all-zero at the start of each `recolonize_step` before any
+    /// read, so it never carries state between calls. `#[serde(skip)]`: pure
+    /// scratch, excluded from the snapshot/state hash (default-empty on load,
+    /// immediately rebuilt on the next call).
+    #[serde(skip)]
+    recolonize_scratch: Vec<f32>,
 }
 
 /// Fraction of world extent below which a cell is open water.
@@ -305,7 +313,13 @@ impl BiomeField {
                 });
             }
         }
-        Self { cells, res, world_size, cell_size: world_size / res as f32 }
+        Self {
+            cells,
+            res,
+            world_size,
+            cell_size: world_size / res as f32,
+            recolonize_scratch: Vec::new(),
+        }
     }
 
     /// Convert a world position into a `(col, row)` cell index. Out-of-range
@@ -449,8 +463,13 @@ impl BiomeField {
     /// buffered so the result is independent of scan order. Deterministic.
     pub fn recolonize_step(&mut self, soil_fertility: bool) {
         let res = self.res;
-        // Read the pre-step biomass; write deltas, apply after.
-        let mut add = vec![0.0f32; self.cells.len()];
+        // Read the pre-step biomass; write deltas, apply after. The delta buffer
+        // is a reused scratch (mem::take/return, like the tick scratch buffers):
+        // cleared and re-zeroed to `cells.len()` so it's a fresh all-zero buffer
+        // each call without reallocating.
+        let mut add = std::mem::take(&mut self.recolonize_scratch);
+        add.clear();
+        add.resize(self.cells.len(), 0.0);
         for row in 0..res {
             for col in 0..res {
                 let idx = row * res + col;
@@ -486,6 +505,8 @@ impl BiomeField {
                 cell.plant_biomass = (cell.plant_biomass + *a).min(cap);
             }
         }
+        // Return the buffer so its allocation is reused next call.
+        self.recolonize_scratch = add;
     }
 
     /// Consume up to `desired` biomass from the cell containing `pos`,
@@ -930,11 +951,64 @@ mod tests {
     }
 
     #[test]
+    fn recolonize_step_reuses_scratch_without_carrying_state() {
+        // 3×3 all-grass grid (every cell colonizable), only the center
+        // vegetated; its four orthogonal neighbours are depleted and get seeded.
+        let build = || {
+            let mut cells = vec![grass_cell(0.0, SUCCESSION_CLIMAX); 9];
+            cells[4] = grass_cell(10.0, SUCCESSION_CLIMAX); // center (row 1, col 1)
+            BiomeField {
+                cells,
+                res: 3,
+                world_size: 24.0,
+                cell_size: 8.0,
+                recolonize_scratch: Vec::new(),
+            }
+        };
+
+        // Sanity: recolonization actually happens — each of the center's four
+        // neighbours gains `RECOLONIZE_RATE * mean_seed_biomass` (only the
+        // center exceeds the seed minimum, so the mean is just 10.0).
+        let mut once = build();
+        once.recolonize_step(false);
+        let expect_edge = RECOLONIZE_RATE * 10.0; // 0.8, well under the grass cap
+        for &e in &[1usize, 3, 5, 7] {
+            assert!((once.cells[e].plant_biomass - expect_edge).abs() < 1e-6);
+        }
+        for &corner in &[0usize, 2, 6, 8] {
+            assert_eq!(once.cells[corner].plant_biomass, 0.0, "no vegetated neighbour");
+        }
+
+        // The reused scratch must be cleared each call, not accumulated: a field
+        // whose scratch is dirty from a prior call but whose cells are reset to
+        // the initial state must produce exactly the same result as a fresh
+        // field's first call. If the delta buffer leaked the earlier call's
+        // values, `warm` would diverge from `clean`.
+        let mut warm = build();
+        warm.recolonize_step(false); // dirties warm.recolonize_scratch
+        warm.cells.clone_from(&build().cells); // reset cells; scratch stays dirty
+        warm.recolonize_step(false);
+
+        let mut clean = build(); // empty scratch
+        clean.recolonize_step(false);
+
+        let wb: Vec<f32> = warm.cells.iter().map(|c| c.plant_biomass).collect();
+        let cb: Vec<f32> = clean.cells.iter().map(|c| c.plant_biomass).collect();
+        assert_eq!(wb, cb, "reused scratch must be cleared, not carried across calls");
+    }
+
+    #[test]
     fn climax_regrowth_matches_pre_succession_arithmetic() {
         // The Climax path must be byte-identical to the original logistic
         // regrowth: b += r*b*(1 - b/K) with r = rate * pollution_mult.
         let cells = vec![grass_cell(5.0, SUCCESSION_CLIMAX)];
-        let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
+        let mut field = BiomeField {
+            cells,
+            res: 1,
+            world_size: 8.0,
+            cell_size: 8.0,
+            recolonize_scratch: Vec::new(),
+        };
         field.regrow_step(false);
         let c = field.cells[0];
         let r = TerrainType::Grass.regrowth_rate();
@@ -946,7 +1020,13 @@ mod tests {
     #[test]
     fn bare_cell_reseeds_to_pioneer() {
         let cells = vec![grass_cell(0.0, SUCCESSION_BARE)];
-        let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
+        let mut field = BiomeField {
+            cells,
+            res: 1,
+            world_size: 8.0,
+            cell_size: 8.0,
+            recolonize_scratch: Vec::new(),
+        };
         // One step: reseed by 0.5% of capacity (0.05), still below the 5%
         // pioneer-entry threshold (0.5).
         field.regrow_step(false);
@@ -963,7 +1043,13 @@ mod tests {
     fn pioneer_grows_fast_to_half_capacity_then_matures() {
         // Start pioneer just below its effective ceiling (0.5 × 10 = 5).
         let cells = vec![grass_cell(4.4, SUCCESSION_PIONEER)];
-        let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
+        let mut field = BiomeField {
+            cells,
+            res: 1,
+            world_size: 8.0,
+            cell_size: 8.0,
+            recolonize_scratch: Vec::new(),
+        };
         for _ in 0..40 {
             field.regrow_step(false);
         }
@@ -972,7 +1058,13 @@ mod tests {
         // Pioneer never exceeds 0.5 × terrain capacity while pioneer.
         // (After maturing, Climax regrowth resumes toward the full 10.0.)
         let cells2 = vec![grass_cell(0.6, SUCCESSION_PIONEER)];
-        let mut f2 = BiomeField { cells: cells2, res: 1, world_size: 8.0, cell_size: 8.0 };
+        let mut f2 = BiomeField {
+            cells: cells2,
+            res: 1,
+            world_size: 8.0,
+            cell_size: 8.0,
+            recolonize_scratch: Vec::new(),
+        };
         let mut peak = 0.0f32;
         for _ in 0..200 {
             f2.regrow_step(false);
@@ -986,7 +1078,13 @@ mod tests {
     #[test]
     fn pioneer_rescorched_to_zero_regresses_to_bare() {
         let cells = vec![grass_cell(0.0, SUCCESSION_PIONEER)];
-        let mut field = BiomeField { cells, res: 1, world_size: 8.0, cell_size: 8.0 };
+        let mut field = BiomeField {
+            cells,
+            res: 1,
+            world_size: 8.0,
+            cell_size: 8.0,
+            recolonize_scratch: Vec::new(),
+        };
         field.regrow_step(false);
         assert_eq!(field.cells[0].succession, SUCCESSION_BARE);
     }
