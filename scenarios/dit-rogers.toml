@@ -1,5 +1,7 @@
 name = "dit-rogers"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # Rogers' paradox: a population of individual-learners invaded by pure imitators
 # under a shifting environment (env_period = 200). The imitators are cheaper

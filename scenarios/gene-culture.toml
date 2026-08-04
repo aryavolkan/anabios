@@ -1,5 +1,7 @@
 name = "gene-culture"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # Culture-users: Communicator (culture-enabling GENE) + a program that shares
 # with kin only when the received cooperation MEME is also high. High altruism

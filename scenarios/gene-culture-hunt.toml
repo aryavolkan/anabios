@@ -1,5 +1,7 @@
 name = "gene-culture-hunt"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # Prey: ordinary grazers (herbivores, Locomotor speed 0.6). Food for hunters.
 [[agents]]

@@ -1,5 +1,7 @@
 name = "trophic-cascade"
 seed = 20260722
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # E3 showcase: a grazer herd and a stalker pack on the default range, tuned
 # like predator-prey but with a slightly larger predator pack — deeper

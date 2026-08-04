@@ -7,6 +7,10 @@ living_biome = true
 season_period = 2000
 max_population = 8000
 
+# Living sandbox: an 8k-cap coevolution world (2048², seasons, living
+# biome) pitched genetics against culture on equal footing. This is the
+# reference world for the gene-vs-culture finding.
+
 # Culture lineage (species 1): starter kit + Communicator → learned foraging skill.
 # Uniform placement mixes the cohorts so they share one environment (no regional
 # biome confound). See tests/living_sandbox.rs for the finding this produces.

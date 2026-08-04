@@ -1,5 +1,7 @@
 name = "divergent"
 seed = 4242
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # Population A: small, low-perception, low-metabolism herbivores
 # clustered near the world origin.

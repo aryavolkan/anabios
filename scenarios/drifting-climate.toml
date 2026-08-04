@@ -1,5 +1,7 @@
 name = "drifting-climate"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # E10 showcase: DRIFTING CLIMATE. The DIT env-variability optimum sweeps
 # seasonally (env_period = 400 → a full triangle cycle every 800 ticks), and on
