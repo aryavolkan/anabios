@@ -225,12 +225,27 @@ pub enum EventType {
     /// mass fright / panic response (Bracha rout). `value` = frightened member
     /// count; loc = species centroid.
     MassFright = 54,
+    /// A same-species cluster's high-FEAR member count rose sharply within a
+    /// short window — fear propagating through the group rather than a
+    /// simultaneous startle (`value` = current high-FEAR member count; loc =
+    /// species centroid).
+    PanicCascade = 55,
+    /// A same-species cluster of high-SEEK members converged on one patch
+    /// (`value` = high-SEEK member count; loc = high-SEEK centroid).
+    FeedingFrenzy = 56,
+    /// A same-species cluster sustained high mean RAGE, co-located, for a full
+    /// window (`value` = mean RAGE; loc = species centroid).
+    TerritorialRage = 57,
+    /// A species' population dropped sharply and survivors show sustained high
+    /// mean PANIC (separation distress) in the aftermath (`value` = mean
+    /// PANIC; loc = species centroid).
+    MassGrief = 58,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::MassFright as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::MassGrief as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -282,4 +297,22 @@ pub struct SigHit {
     pub species: u32,
     pub ambush: bool,
     pub tool_boosted: bool,
+}
+
+#[cfg(test)]
+mod affect_event_tests {
+    use super::*;
+    #[test]
+    fn affect_event_discriminants_are_appended_at_end() {
+        // Append-only invariant: the pre-existing tail keeps its discriminant,
+        // and the four new affect events follow it in order.
+        assert_eq!(EventType::LivestockHerd as u8, 52);
+        assert_eq!(EventType::KnowledgeRatchet as u8, 53);
+        assert_eq!(EventType::MassFright as u8, 54); // from M-B
+        assert_eq!(EventType::PanicCascade as u8, 55);
+        assert_eq!(EventType::FeedingFrenzy as u8, 56);
+        assert_eq!(EventType::TerritorialRage as u8, 57);
+        assert_eq!(EventType::MassGrief as u8, 58);
+        assert_eq!(EVENT_TYPE_COUNT, EventType::MassGrief as usize + 1);
+    }
 }
