@@ -239,6 +239,10 @@ pub fn develop_all(world: &mut World) {
             // neighbour present).
             let t_lust = trigger_lust(energy[i], &genome[i], &sensors[i]);
             a[LUST] = (LAMBDA_DEFAULT * a[LUST] + (1.0 - LAMBDA_DEFAULT) * t_lust).clamp(0.0, 1.0);
+
+            // M-C lateral inhibition — flee before fight: FEAR gates down RAGE,
+            // fully suppressing it at FEAR = 1 (with FEAR_INHIBITS_RAGE = 1).
+            a[RAGE] = (a[RAGE] * (1.0 - FEAR_INHIBITS_RAGE * a[FEAR])).clamp(0.0, 1.0);
         }
     });
 }
@@ -756,5 +760,36 @@ mod tests {
             develop_all(&mut w);
         } // let the leaky integrator climb
         assert!(w.agents.affect[id][LUST] > 0.0, "mate-ready agent accrues LUST");
+    }
+
+    #[test]
+    fn fear_suppresses_rage() {
+        // Two identical frustrated agents; the one with high FEAR ends with less RAGE.
+        use crate::agent::SPAWN_ENERGY;
+        use crate::genome::{Genome, GenomeSlot};
+        use crate::prelude::Vec2;
+        use crate::world::World;
+
+        let setup = |fear: f32| -> f32 {
+            let mut w = World::new(1);
+            w.affect_enabled = true;
+            let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral()) as usize;
+            let mut g = Genome::neutral();
+            g.set(GenomeSlot::ReproductionThreshold, 0.4);
+            w.agents.genome[id] = g;
+            w.agents.energy[id] = 0.05 * SPAWN_ENERGY;
+            w.sensors.resize(w.agents.capacity(), Default::default());
+            w.sensors[id].crowding = RAGE_CROWD_REF as u32;
+            // Preload FEAR before this tick's update so inhibition has something to
+            // gate against (M-B's FEAR update this tick blends toward its own trigger;
+            // with no threat sensed the trigger is ~0, so the preloaded value decays
+            // but stays positive for the high-fear case).
+            w.agents.affect[id][FEAR] = fear;
+            develop_all(&mut w);
+            w.agents.affect[id][RAGE]
+        };
+        let calm = setup(0.0);
+        let afraid = setup(1.0);
+        assert!(afraid < calm, "FEAR must suppress RAGE: afraid={afraid} calm={calm}");
     }
 }
