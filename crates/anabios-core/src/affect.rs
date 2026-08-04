@@ -1126,9 +1126,11 @@ mod tests {
         use crate::sense::SensorRegister;
 
         let g = Genome::neutral();
-        let mut sensors = SensorRegister::default();
-        sensors.nearest_same_id = 7;
-        sensors.nearest_same_dir = Vec2::new(1.0, 0.0);
+        let sensors = SensorRegister {
+            nearest_same_id: 7,
+            nearest_same_dir: Vec2::new(1.0, 0.0),
+            ..SensorRegister::default()
+        };
 
         // Neutral affect → exact identity.
         let mut base = ActionRegister::default();
@@ -1156,9 +1158,11 @@ mod tests {
         use crate::sense::SensorRegister;
 
         let g = Genome::neutral();
-        let mut sensors = SensorRegister::default();
-        sensors.nearest_same_id = 3;
-        sensors.nearest_same_dir = Vec2::new(0.0, 1.0);
+        let sensors = SensorRegister {
+            nearest_same_id: 3,
+            nearest_same_dir: Vec2::new(0.0, 1.0),
+            ..SensorRegister::default()
+        };
 
         // Neutral affect → exact identity.
         let mut base = ActionRegister::default();
