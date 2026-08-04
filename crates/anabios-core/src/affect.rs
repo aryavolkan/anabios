@@ -287,38 +287,69 @@ pub fn develop_all(world: &mut World) {
     use rayon::prelude::*;
     let cap = world.agents.capacity();
     let sensors = &world.sensors;
-    let crate::agent::AgentBuffers { affect, energy, genome, alive, .. } = &mut world.agents;
+    let crate::agent::AgentBuffers { affect, affect_prev_crowding, energy, genome, alive, .. } =
+        &mut world.agents;
     let (energy, genome, alive) = (&*energy, &*genome, &*alive);
-    affect[..cap].par_iter_mut().enumerate().for_each(|(i, a)| {
-        if !alive[i] {
-            return;
-        }
-        // Layer 0: homeostatic drive (energy deficit) powers SEEKING.
-        let drive = homeostatic_drive(energy[i]);
-        // Layer 1: leaky-integrator update of the SEEK activation.
-        let seek = LAMBDA_DEFAULT * a[SEEK] + (1.0 - LAMBDA_DEFAULT) * drive;
-        a[SEEK] = seek.clamp(0.0, 1.0);
+    affect[..cap]
+        .par_iter_mut()
+        .zip(affect_prev_crowding[..cap].par_iter_mut())
+        .enumerate()
+        .for_each(|(i, (a, prev))| {
+            if !alive[i] {
+                return;
+            }
+            // Layer 0: homeostatic drive (energy deficit) powers SEEKING.
+            let drive = homeostatic_drive(energy[i]);
+            // Layer 1: leaky-integrator update of the SEEK activation.
+            let seek = LAMBDA_DEFAULT * a[SEEK] + (1.0 - LAMBDA_DEFAULT) * drive;
+            a[SEEK] = seek.clamp(0.0, 1.0);
 
-        // FEAR (M-B): threat/survival drive from fresh sensors + Boldness. The
-        // sensors buffer can be shorter than capacity on a growth tick; guard it.
-        if i < sensors.len() {
-            let fear_in = fear_trigger(&sensors[i], &genome[i]);
-            a[FEAR] = (LAMBDA_FEAR * a[FEAR] + (1.0 - LAMBDA_FEAR) * fear_in).clamp(0.0, 1.0);
+            // FEAR (M-B): threat/survival drive from fresh sensors + Boldness. The
+            // sensors buffer can be shorter than capacity on a growth tick; guard it.
+            if i < sensors.len() {
+                let fear_in = fear_trigger(&sensors[i], &genome[i]);
+                a[FEAR] = (LAMBDA_FEAR * a[FEAR] + (1.0 - LAMBDA_FEAR) * fear_in).clamp(0.0, 1.0);
 
-            // M-C RAGE: derived frustration (hungry + blocked), gated by the
-            // aggressiveness gain gene. Zero RNG.
-            let t_rage = trigger_rage(drive, &genome[i], &sensors[i]);
-            a[RAGE] = (LAMBDA_DEFAULT * a[RAGE] + (1.0 - LAMBDA_DEFAULT) * t_rage).clamp(0.0, 1.0);
-            // M-C LUST: mate-readiness (energy ≥ mating gate + same-species
-            // neighbour present).
-            let t_lust = trigger_lust(energy[i], &genome[i], &sensors[i]);
-            a[LUST] = (LAMBDA_DEFAULT * a[LUST] + (1.0 - LAMBDA_DEFAULT) * t_lust).clamp(0.0, 1.0);
+                // M-C RAGE: derived frustration (hungry + blocked), gated by the
+                // aggressiveness gain gene. Zero RNG.
+                let t_rage = trigger_rage(drive, &genome[i], &sensors[i]);
+                a[RAGE] =
+                    (LAMBDA_DEFAULT * a[RAGE] + (1.0 - LAMBDA_DEFAULT) * t_rage).clamp(0.0, 1.0);
+                // M-C LUST: mate-readiness (energy ≥ mating gate + same-species
+                // neighbour present).
+                let t_lust = trigger_lust(energy[i], &genome[i], &sensors[i]);
+                a[LUST] =
+                    (LAMBDA_DEFAULT * a[LUST] + (1.0 - LAMBDA_DEFAULT) * t_lust).clamp(0.0, 1.0);
 
-            // M-C lateral inhibition — flee before fight: FEAR gates down RAGE,
-            // fully suppressing it at FEAR = 1 (with FEAR_INHIBITS_RAGE = 1).
-            a[RAGE] = (a[RAGE] * (1.0 - FEAR_INHIBITS_RAGE * a[FEAR])).clamp(0.0, 1.0);
-        }
-    });
+                // M-C lateral inhibition — flee before fight: FEAR gates down RAGE,
+                // fully suppressing it at FEAR = 1 (with FEAR_INHIBITS_RAGE = 1).
+                a[RAGE] = (a[RAGE] * (1.0 - FEAR_INHIBITS_RAGE * a[FEAR])).clamp(0.0, 1.0);
+
+                // Snapshot last tick's crowding BEFORE overwriting it below.
+                let prev_crowding = *prev;
+
+                // M-D: CARE trigger (leaky integrator) — kin proximity + Nurturance.
+                let care_raw = care_trigger(
+                    sensors[i].nearest_kinship,
+                    sensors[i].nearest_same_dist,
+                    genome[i].nurturance(),
+                );
+                a[CARE] = (LAMBDA_CARE * a[CARE] + (1.0 - LAMBDA_CARE) * care_raw).clamp(0.0, 1.0);
+
+                // M-D: PANIC/GRIEF trigger (leaky integrator) — isolation / kin loss.
+                let panic_raw =
+                    panic_trigger(sensors[i].crowding as f32, prev_crowding, genome[i].sociality());
+                a[PANIC] =
+                    (LAMBDA_PANIC * a[PANIC] + (1.0 - LAMBDA_PANIC) * panic_raw).clamp(0.0, 1.0);
+
+                // M-D lateral inhibition — PANIC withdraws the appetitive SEEKING
+                // engine (mirrors the M-C FEAR⊣RAGE edge above).
+                a[SEEK] = (a[SEEK] - PANIC_SEEK_INHIBITION * a[PANIC]).clamp(0.0, 1.0);
+
+                // M-D: record this tick's crowding for next tick's PANIC.
+                *prev = sensors[i].crowding as f32;
+            }
+        });
 }
 
 /// Read-side bias hook. Modulate `action` from current affect + percepts +
@@ -562,6 +593,52 @@ mod tests {
         let f = affect_reproduction_factor(&lusty);
         assert!((0.0..1.0).contains(&f), "high LUST lowers the reproduction gate: {f}");
         assert!((f - (1.0 - K_LUST_REPRO)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn develop_all_writes_care_panic_and_prev_crowding() {
+        use crate::genome::{Genome, GenomeSlot};
+        use crate::prelude::Vec2;
+        use crate::world::World;
+
+        // Isolated social agent → PANIC accrues, prev_crowding recorded.
+        let mut w = World::new(1);
+        w.affect_enabled = true;
+        let lone = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        crate::tick::step(&mut w);
+        assert!(
+            w.agents.affect[lone as usize][PANIC] > 0.0,
+            "isolated social agent should accrue PANIC"
+        );
+        assert_eq!(
+            w.agents.affect_prev_crowding[lone as usize], 0.0,
+            "lone agent saw zero neighbours this tick"
+        );
+
+        // A tight same-species kin cluster → CARE accrues for a member.
+        let mut w2 = World::new(2);
+        w2.affect_enabled = true;
+        let a = w2.spawn_agent(Vec2::new(300.0, 300.0), Genome::neutral());
+        let _b = w2.spawn_agent(Vec2::new(303.0, 300.0), Genome::neutral());
+        let _c = w2.spawn_agent(Vec2::new(300.0, 303.0), Genome::neutral());
+        crate::tick::step(&mut w2);
+        assert!(w2.agents.affect[a as usize][CARE] > 0.0, "kin-clustered agent should accrue CARE");
+        assert!(
+            w2.agents.affect_prev_crowding[a as usize] >= 1.0,
+            "clustered agent recorded neighbours in prev_crowding"
+        );
+
+        // Asocial isolated agent → no PANIC (temperament gate).
+        let mut w3 = World::new(3);
+        w3.affect_enabled = true;
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::Sociality, 0.0); // signed sociality() = -1 → no panic
+        let asoc = w3.spawn_agent(Vec2::new(500.0, 500.0), g);
+        crate::tick::step(&mut w3);
+        assert_eq!(
+            w3.agents.affect[asoc as usize][PANIC], 0.0,
+            "asocial agent must not panic from isolation"
+        );
     }
 
     #[test]
