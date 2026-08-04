@@ -47,6 +47,9 @@ var _glyph_clones: Array[MultiMeshInstance2D] = []
 const SMOOTH: float = 0.35
 const SNAP_DIST: float = 4.0
 const DEATH_TTL: float = 1.4
+# Seconds for a death ghost to topple from tilted to flat (ease-out-back, so
+# it rolls a hair past flat and settles — a body hitting the ground).
+const DEATH_FALL: float = 0.35
 const DEATH_CAP: int = 512
 const BIRTH_POP: float = 0.3
 var _prev_ids: PackedInt32Array = PackedInt32Array()
@@ -56,6 +59,9 @@ var _prev_sp: PackedInt32Array = PackedInt32Array()
 var _death_mmis: Array[MultiMeshInstance2D] = []
 var _death_effects: Array = []
 var _birth_times: Dictionary = {}
+# Smoothed per-id facing (0 = right, 1 = left) so turns ease through a brief
+# horizontal squash in the shader instead of snapping the mirror.
+var _facing: Dictionary = {}
 
 # Tier 2 effects (embers, firelight, ambient weather, bloom, codex-event
 # watcher) live in viewer_effects.gd, created as a child in _ready.
@@ -441,6 +447,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				smooth[i] = target
 				if not _birth_times.has(id):
 					_birth_times[id] = now
+					if _effects != null:
+						_effects.spawn_dust(target)
 		while p < pn:
 			_on_agent_death(_prev_ids[p], p)
 			p += 1
@@ -479,12 +487,13 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		for j in m:
 			var i: int = idx[j]
 			var sz: float = maxf(sizes[i] * BODY_SCALE, min_body)
-			# New agents pop in with a quick overshoot instead of blinking into
-			# existence; after BIRTH_POP seconds the scale is exactly 1.
+			# New agents squash in, then spring to full size with an overshoot
+			# (anticipation-then-pop) instead of blinking into existence;
+			# after BIRTH_POP seconds the scale is exactly 1.
 			if have_ids:
 				var age: float = now - float(_birth_times.get(ids[i], now - 1.0))
 				if age < BIRTH_POP:
-					sz *= _ease_out_back(age / BIRTH_POP)
+					sz *= _birth_scale(age / BIRTH_POP)
 			# Upright: the hominin stands, not spins — heading drives the
 			# walk shader (moving flag + facing), not the transform rotation.
 			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
@@ -499,7 +508,12 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			var moving: float = 1.0 if rot != 0.0 else 0.0
 			if moving != 0.0 and _moving_sample.size() < 8:
 				_moving_sample.append(smooth[i])
-			var face_left: float = 1.0 if cos(rot) < 0.0 else 0.0
+			# Ease the facing mirror per id: the shader's fractional mix turns
+			# the transition into a quick flip-squash rather than a snap.
+			var face_left := 1.0 if cos(rot) < 0.0 else 0.0
+			if have_ids:
+				face_left = lerpf(float(_facing.get(ids[i], face_left)), face_left, minf(1.0, delta * 12.0))
+				_facing[ids[i]] = face_left
 			var phase: float = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
 			# Action pose from sim signals: near a combat streak's attacker
 			# end -> fight if standing to strike, flee if running; near a
@@ -528,9 +542,12 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 
 # An id present last frame but gone now died (or left the alive list). Record a
 # fallen-figure ghost at its last smoothed position, in its species and size,
-# and forget its birth timestamp so a recycled id would pop in fresh.
+# toppling away from its last facing, and forget its animation state so a
+# recycled id would pop in fresh.
 func _on_agent_death(id: int, prev_idx: int) -> void:
 	_birth_times.erase(id)
+	var side: float = -1.0 if float(_facing.get(id, 0.0)) >= 0.5 else 1.0
+	_facing.erase(id)
 	if _death_effects.size() >= DEATH_CAP:
 		_death_effects.pop_front()
 	var sp := 0
@@ -539,7 +556,7 @@ func _on_agent_death(id: int, prev_idx: int) -> void:
 		sp = ApeSprites.ape_for_species(_prev_sp[prev_idx])
 	if prev_idx < _prev_sizes.size():
 		sz = maxf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN)
-	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz])
+	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz, side])
 
 
 # Age and draw the ghosts: fallen figures that fade out quadratically over
@@ -569,8 +586,22 @@ func _refresh_death_effects(delta: float) -> void:
 		for j in m:
 			var e: Array = _death_effects[idx[j]]
 			var life: float = 1.0 - float(e[1]) / DEATH_TTL
-			mm.set_instance_transform_2d(j, Transform2D(0.0, Vector2(e[3], e[3]), 0.0, e[0]))
+			# Topple: the ghost starts tilted and eases flat with a slight
+			# bounce, dipping vertically mid-fall (the impact squash).
+			var ft: float = clampf(float(e[1]) / DEATH_FALL, 0.0, 1.0)
+			var ang: float = float(e[4]) * 0.55 * (1.0 - _ease_out_back(ft))
+			var sy: float = float(e[3]) * (1.0 - 0.18 * sin(ft * PI))
+			mm.set_instance_transform_2d(j, Transform2D(ang, Vector2(e[3], sy), 0.0, e[0]))
 			mm.set_instance_color(j, Color(1, 1, 1, 0.85 * life * life))
+
+
+# Birth scale: a quick anticipation squash (grow 0.3 -> 0.8), then an
+# ease-out-back spring to 1.0 with overshoot.
+func _birth_scale(t: float) -> float:
+	const ANTICIPATE := 0.3
+	if t < ANTICIPATE:
+		return lerpf(0.3, 0.8, t / ANTICIPATE)
+	return 0.8 + 0.2 * _ease_out_back((t - ANTICIPATE) / (1.0 - ANTICIPATE))
 
 
 func _ease_out_back(t: float) -> float:

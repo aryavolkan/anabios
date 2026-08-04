@@ -161,6 +161,16 @@ func update_dust(moving_sample: PackedVector2Array, is_paused: bool) -> void:
 	p.restart()
 
 
+# One dust puff at `pos` (births), sharing the walkers' pool and zoom gate.
+func spawn_dust(pos: Vector2) -> void:
+	if _dust.is_empty() or _cam.zoom.x < 2.5:
+		return
+	var p := _dust[_dust_idx]
+	_dust_idx = (_dust_idx + 1) % _dust.size()
+	p.position = pos + Vector2(0, 2.0)
+	p.restart()
+
+
 # Pooled flickering fire lights: a warm PointLight2D (additive, so it can only
 # brighten) that breathes for a few seconds where a fire-kind event fired.
 func _make_fire_light_pool() -> void:
