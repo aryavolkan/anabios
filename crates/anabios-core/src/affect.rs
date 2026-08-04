@@ -457,7 +457,7 @@ mod tests {
         let mut lusty: AffectState = [0.0; AFFECT_SYSTEMS];
         lusty[LUST] = 1.0;
         let f = affect_reproduction_factor(&lusty);
-        assert!(f < 1.0 && f >= 0.0, "high LUST lowers the reproduction gate: {f}");
+        assert!((0.0..1.0).contains(&f), "high LUST lowers the reproduction gate: {f}");
         assert!((f - (1.0 - K_LUST_REPRO)).abs() < 1e-6);
     }
 
