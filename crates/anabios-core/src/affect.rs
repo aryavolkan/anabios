@@ -273,9 +273,12 @@ pub fn panic_trigger(crowding: f32, prev_crowding: f32, sociality: f32) -> f32 {
 }
 
 /// Compute stage (Layer 0 → Layer 1). Update each alive agent's affect column
-/// from this tick's physiology as a leaky integrator. M-A drives SEEK from the
-/// homeostatic energy deficit; the other six systems stay 0.0 (later milestones
-/// fill their triggers — FEAR reads sensors in M-B, etc.). STRICT no-op when
+/// from this tick's physiology as a leaky integrator. Six of the seven systems
+/// are driven here: SEEK from the homeostatic energy deficit (M-A), FEAR from
+/// threat sensors (M-B), RAGE + LUST from frustration/mate-readiness (M-C), and
+/// CARE + PANIC from kin proximity / social isolation (M-D), with the FEAR⊣RAGE
+/// and PANIC⊣SEEK lateral-inhibition edges. Only PLAY (slot 6) stays 0.0 until
+/// M-E fills it. STRICT no-op when
 /// `!world.affect_enabled`. ZERO RNG. Index-disjoint `par_iter` (iq::develop_all
 /// template): each agent writes only its own slot and reads only shared columns
 /// by `&`, so the parallel loop is bit-identical to a serial ascending-id loop.
