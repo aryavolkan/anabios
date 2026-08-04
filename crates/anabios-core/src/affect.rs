@@ -430,6 +430,22 @@ pub fn apply_affect(
             action.target_id = sensors.nearest_same_id;
         }
     }
+
+    // --- M-D: PANIC/GRIEF — distress signal + reunion (identity at neutral) ---
+    let panic = affect[PANIC];
+    if panic != 0.0 {
+        // Distress signal on both live broadcast channels. Consumption is
+        // module-gated downstream: `deposit_pass` (interact.rs) needs a
+        // Pheromone module; the AlarmCall detector (M-F) reads the alarm
+        // broadcast from Communicators. Writing the intent is affect's job.
+        action.emit_intent[PANIC_PHEROMONE_CHANNEL] += K_PANIC_EMIT * panic;
+        action.broadcast_intent[crate::culture::ALARM_MEME_CHANNEL] += K_PANIC_BROADCAST * panic;
+        // Reunion: bias movement toward the nearest same-species neighbour.
+        if sensors.nearest_same_id != crate::sense::NO_NEIGHBOR_ID {
+            action.move_x += K_PANIC_REUNION * panic * sensors.nearest_same_dir.x;
+            action.move_y += K_PANIC_REUNION * panic * sensors.nearest_same_dir.y;
+        }
+    }
 }
 
 /// Survival-reflex override (Bracha: Freeze→Flight→Fight→Fright/Faint). When
@@ -1130,5 +1146,34 @@ mod tests {
         assert!(act.share_intent > 0.0, "CARE should raise share_intent");
         assert!(act.move_x > 0.0, "CARE should bias movement toward kin");
         assert_eq!(act.target_id, 7, "CARE directs the share at the kin");
+    }
+
+    #[test]
+    fn apply_affect_panic_signals_and_seeks_reunion() {
+        use crate::culture::ALARM_MEME_CHANNEL;
+        use crate::genome::Genome;
+        use crate::program::ActionRegister;
+        use crate::sense::SensorRegister;
+
+        let g = Genome::neutral();
+        let mut sensors = SensorRegister::default();
+        sensors.nearest_same_id = 3;
+        sensors.nearest_same_dir = Vec2::new(0.0, 1.0);
+
+        // Neutral affect → exact identity.
+        let mut base = ActionRegister::default();
+        apply_affect(&mut base, &[0.0; AFFECT_SYSTEMS], &g, &sensors, 30.0);
+        assert_eq!(base.emit_intent[PANIC_PHEROMONE_CHANNEL], 0.0);
+        assert_eq!(base.broadcast_intent[ALARM_MEME_CHANNEL], 0.0);
+        assert_eq!(base.move_y, 0.0);
+
+        // Active PANIC → distress pheromone + alarm broadcast + reunion move.
+        let mut act = ActionRegister::default();
+        let mut affect = [0.0; AFFECT_SYSTEMS];
+        affect[PANIC] = 1.0;
+        apply_affect(&mut act, &affect, &g, &sensors, 30.0);
+        assert!(act.emit_intent[PANIC_PHEROMONE_CHANNEL] > 0.0, "PANIC emits distress pheromone");
+        assert!(act.broadcast_intent[ALARM_MEME_CHANNEL] > 0.0, "PANIC broadcasts alarm");
+        assert!(act.move_y > 0.0, "PANIC biases movement toward nearest same-species (reunion)");
     }
 }
