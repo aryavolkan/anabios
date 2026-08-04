@@ -415,6 +415,21 @@ pub fn apply_affect(
         action.move_x += K_LUST_APPROACH * lust * sensors.nearest_same_dir.x;
         action.move_y += K_LUST_APPROACH * lust * sensors.nearest_same_dir.y;
     }
+
+    // --- M-D: CARE — provision + protect kin (identity at neutral CARE) ---
+    let care = affect[CARE];
+    if care != 0.0 && sensors.nearest_same_id != crate::sense::NO_NEIGHBOR_ID {
+        // Protect: bias movement to stay near the kin.
+        action.move_x += K_CARE_APPROACH * care * sensors.nearest_same_dir.x;
+        action.move_y += K_CARE_APPROACH * care * sensors.nearest_same_dir.y;
+        // Provision: raise sharing. `share_pass` (interact.rs) transfers to
+        // `target_id` when it clears SHARE_THRESHOLD and Altruism > 0; direct
+        // the share at the kin when the program left no target.
+        action.share_intent += K_CARE_SHARE * care;
+        if action.target_id == crate::program::NO_TARGET {
+            action.target_id = sensors.nearest_same_id;
+        }
+    }
 }
 
 /// Survival-reflex override (Bracha: Freeze→Flight→Fight→Fright/Faint). When
@@ -1086,5 +1101,34 @@ mod tests {
         };
         apply_affect(&mut a, &affect, &Genome::neutral(), &s, crate::agent::SPAWN_ENERGY);
         assert_eq!(a.move_y, before.move_y, "neutral LUST: move unchanged");
+    }
+
+    #[test]
+    fn apply_affect_care_shares_and_stays_near_kin() {
+        use crate::genome::Genome;
+        use crate::program::{ActionRegister, NO_TARGET};
+        use crate::sense::SensorRegister;
+
+        let g = Genome::neutral();
+        let mut sensors = SensorRegister::default();
+        sensors.nearest_same_id = 7;
+        sensors.nearest_same_dir = Vec2::new(1.0, 0.0);
+
+        // Neutral affect → exact identity.
+        let mut base = ActionRegister::default();
+        let affect_zero = [0.0; AFFECT_SYSTEMS];
+        apply_affect(&mut base, &affect_zero, &g, &sensors, 30.0);
+        assert_eq!(base.share_intent, 0.0);
+        assert_eq!(base.move_x, 0.0);
+        assert_eq!(base.target_id, NO_TARGET);
+
+        // Active CARE → sharing raised, movement toward kin, target filled.
+        let mut act = ActionRegister::default();
+        let mut affect = [0.0; AFFECT_SYSTEMS];
+        affect[CARE] = 1.0;
+        apply_affect(&mut act, &affect, &g, &sensors, 30.0);
+        assert!(act.share_intent > 0.0, "CARE should raise share_intent");
+        assert!(act.move_x > 0.0, "CARE should bias movement toward kin");
+        assert_eq!(act.target_id, 7, "CARE directs the share at the kin");
     }
 }
