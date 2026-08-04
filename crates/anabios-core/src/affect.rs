@@ -110,6 +110,24 @@ pub const K_CARE_SHARE: f32 = 0.8;
 /// CARE → stay-near-kin movement gain (read side).
 pub const K_CARE_APPROACH: f32 = 0.3;
 
+// --- M-D: PANIC/GRIEF (separation distress) ---
+/// Crowding below this counts as social isolation.
+pub const PANIC_CROWDING_LOW: f32 = 2.0;
+/// Crowding drop (prev − now) that saturates the kin-loss term.
+pub const PANIC_LOSS_SCALE: f32 = 3.0;
+/// PANIC leaky-integrator retention (lingers slightly longer than CARE).
+pub const LAMBDA_PANIC: f32 = 0.85;
+/// Distress-pheromone channel PANIC emits on (read side).
+pub const PANIC_PHEROMONE_CHANNEL: usize = 0;
+/// PANIC → distress-pheromone `emit_intent` gain (read side).
+pub const K_PANIC_EMIT: f32 = 1.0;
+/// PANIC → alarm `broadcast_intent` gain (read side).
+pub const K_PANIC_BROADCAST: f32 = 1.0;
+/// PANIC → reunion (toward nearest same-species) movement gain (read side).
+pub const K_PANIC_REUNION: f32 = 0.4;
+/// PANIC⊣SEEK lateral-inhibition strength (withdrawal).
+pub const PANIC_SEEK_INHIBITION: f32 = 0.5;
+
 /// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
 pub type AffectState = [f32; AFFECT_SYSTEMS];
@@ -229,6 +247,29 @@ pub fn care_trigger(nearest_kinship: f32, nearest_same_dist: f32, nurturance: f3
     // Neutral nurturance (0.0) → gain 0.5; caring temperament scales up.
     let gain = (0.5 + 0.5 * nurturance).clamp(0.0, 1.0);
     (nearest_kinship * proximity * gain).clamp(0.0, 1.0)
+}
+
+/// PANIC/GRIEF activation target in `[0,1]` from social isolation and/or a
+/// one-tick drop in crowding, gated on social temperament. `crowding` /
+/// `prev_crowding` are this-tick and last-tick neighbour counts (as `f32`).
+/// `sociality` is the signed `[-1,+1]` temperament gene (neutral `0.0`);
+/// asocial agents (`sociality <= -1`) never panic from isolation. Pure; no RNG.
+#[inline]
+pub fn panic_trigger(crowding: f32, prev_crowding: f32, sociality: f32) -> f32 {
+    // Neutral sociality (0.0) → weight 0.5; asocial temperament → 0.0.
+    let social = (0.5 + 0.5 * sociality).clamp(0.0, 1.0);
+    if social <= 0.0 {
+        return 0.0;
+    }
+    // Absolute isolation: how far below the "not alone" reference we are.
+    let isolation = if crowding < PANIC_CROWDING_LOW {
+        (1.0 - crowding / PANIC_CROWDING_LOW).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    // Kin-loss: a drop in crowding since last tick (someone left / died).
+    let loss = ((prev_crowding - crowding) / PANIC_LOSS_SCALE).clamp(0.0, 1.0);
+    (social * isolation.max(loss)).clamp(0.0, 1.0)
 }
 
 /// Compute stage (Layer 0 → Layer 1). Update each alive agent's affect column
@@ -449,6 +490,24 @@ mod tests {
         assert!(nurt > close, "nurturance should raise CARE: {nurt} > {close}");
         // Bounded to [0,1].
         assert!((0.0..=1.0).contains(&nurt));
+    }
+
+    #[test]
+    fn panic_trigger_fires_on_isolation_and_loss_only_for_social() {
+        // Social agent, alone this tick → isolation panic.
+        let isolated = panic_trigger(0.0, 0.0, 0.0);
+        assert!(isolated > 0.0, "isolated social agent should panic, got {isolated}");
+        // Well-crowded, no drop → no panic.
+        assert_eq!(panic_trigger(6.0, 6.0, 0.0), 0.0);
+        // Sudden loss of kin (crowding fell) even while not fully isolated → panic.
+        let loss = panic_trigger(2.0, 6.0, 0.0);
+        assert!(loss > 0.0, "kin-loss drop should panic, got {loss}");
+        // Asocial temperament (sociality = -1) never panics from isolation.
+        assert_eq!(panic_trigger(0.0, 0.0, -1.0), 0.0);
+        // More social → stronger panic at the same isolation.
+        let very_social = panic_trigger(0.0, 0.0, 1.0);
+        assert!(very_social > isolated, "sociality should raise panic: {very_social} > {isolated}");
+        assert!((0.0..=1.0).contains(&very_social));
     }
 
     #[test]
