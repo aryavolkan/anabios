@@ -112,11 +112,18 @@ plan, with a confirmation that RNG draw order is unchanged when the flag is off.
   `EVENT_TYPE_COUNT` + the viewer's parallel name/color arrays per the boot-assert
   convention.
 - **Done-when:** with the flag on and practices still in the world, the cultural
-  mutant's **invade-fraction rises materially toward the practices-off ceiling
-  (~90%)**, at n≥10, measured on `autopsy` against the two O1 reference points
-  (payoff-blind baseline ~40%, practices-off ~90%) using the share-relative
-  metric from Step 0. A control assertion confirms **invention adoption is not
-  suppressed** (payoff bias must reject practices without rejecting good tech).
+  **founder lineage** does materially better than the payoff-blind baseline —
+  measured on `autopsy` with **`--tag founder` + the share-relative metric** (Step 0),
+  at n≥10. **Bar-setting caveat (O1 Step 0 correction):** the "~90% practices-off
+  ceiling" was a *module-tag* reading inflated by mutation drift; under the
+  lineage-locked tag the practices-off condition rescues culture from *extinction*
+  to a small persisting foothold, not a runaway invasion. So the honest O2a bar is
+  **first re-derive the true practices-off ceiling with `--tag founder`** (Step 0's
+  validation is a 3-seed start; extend seeds/ticks), then require payoff-biased
+  learning to move the cultural lineage measurably up toward that re-derived
+  ceiling — at minimum, prevent the lineage extinction the baseline shows. A control
+  assertion confirms **invention adoption is not suppressed** (payoff bias must
+  reject practices without rejecting good tech).
 
 ## 6. O2b — heritable payoff bias, and whether it evolves
 

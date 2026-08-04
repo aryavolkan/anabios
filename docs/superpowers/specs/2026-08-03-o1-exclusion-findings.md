@@ -217,6 +217,19 @@ the `cognition_enabled` flag changes between the ON and OFF run.
 
 ## 6. Decomposition: the lever is maladaptive cultural practices (n=10)
 
+> **⚠️ Correction (2026-08-03, O2 Step 0).** The invade-fraction numbers in this
+> section were measured with the **module-presence** strategy tag — the very tag
+> §7 flags as *not lineage-locked*. When O2 Step 0 built the lineage-locked
+> `--tag founder` instrument and re-measured, the **"90%" did not reproduce**: the
+> *seeded cultural lineage* is excluded even with practices off (it goes extinct
+> in the baseline and holds only a small non-growing foothold with practices off).
+> The "90% cultural" were largely **asocial lineages that mutated a Communicator
+> module**, not cultural-founder descendants. The practices lever **direction still
+> holds** (practices-off rescues culture from *extinction*; share-fitness improves),
+> but the *magnitude* here is inflated by the drift. Treat the invade-fraction
+> figures below as module-tag readings, not lineage-invasion. Corrected evidence:
+> `docs/superpowers/data/o2/step0-validation.md`.
+
 §5 pins the reversal on the *cognition subsystem* but leaves it undecomposed:
 `cognition_enabled` simultaneously toggles IQ development, the IQ metabolic
 cost, the invention/practice IQ gates, and maladaptive-practice discovery. A
