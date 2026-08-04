@@ -125,12 +125,17 @@ pub fn affect_speed_factor(affect: &AffectState) -> f32 {
     (1.0 + K_AFFECT_SPEED * affect[SEEK]).max(0.0)
 }
 
-/// Reproduction-threshold multiplier from LUST. Exactly `1.0` at neutral.
-/// M-A ships this identity stub; M-C implements the LUST effect and wires it
-/// into reproduce.rs.
+/// Reproduction-threshold multiplier from LUST. Exactly `1.0` at neutral affect;
+/// LUST lowers the mating energy gate by up to `K_LUST_REPRO` (30%). Consumed in
+/// `reproduce::is_eligible` alongside `personality_reproduction_factor`.
 #[inline]
-pub fn affect_reproduction_factor(_affect: &AffectState) -> f32 {
-    1.0
+pub fn affect_reproduction_factor(affect: &AffectState) -> f32 {
+    let lust = affect[LUST];
+    if lust != 0.0 {
+        (1.0 - K_LUST_REPRO * lust).max(0.0)
+    } else {
+        1.0
+    }
 }
 
 /// Instantaneous FEAR drive from THIS tick's fresh sensors + temperament.
@@ -443,6 +448,17 @@ mod tests {
         let mut a = neutral;
         a[SEEK] = 1.0;
         assert!(affect_speed_factor(&a) > 1.0, "SEEKING speeds foraging up");
+    }
+
+    #[test]
+    fn affect_reproduction_factor_lowers_gate_with_lust() {
+        let neutral: AffectState = [0.0; AFFECT_SYSTEMS];
+        assert_eq!(affect_reproduction_factor(&neutral), 1.0, "identity at neutral");
+        let mut lusty: AffectState = [0.0; AFFECT_SYSTEMS];
+        lusty[LUST] = 1.0;
+        let f = affect_reproduction_factor(&lusty);
+        assert!(f < 1.0 && f >= 0.0, "high LUST lowers the reproduction gate: {f}");
+        assert!((f - (1.0 - K_LUST_REPRO)).abs() < 1e-6);
     }
 
     #[test]
