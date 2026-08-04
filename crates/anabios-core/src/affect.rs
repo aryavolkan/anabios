@@ -230,6 +230,15 @@ pub fn develop_all(world: &mut World) {
         if i < sensors.len() {
             let fear_in = fear_trigger(&sensors[i], &genome[i]);
             a[FEAR] = (LAMBDA_FEAR * a[FEAR] + (1.0 - LAMBDA_FEAR) * fear_in).clamp(0.0, 1.0);
+
+            // M-C RAGE: derived frustration (hungry + blocked), gated by the
+            // aggressiveness gain gene. Zero RNG.
+            let t_rage = trigger_rage(drive, &genome[i], &sensors[i]);
+            a[RAGE] = (LAMBDA_DEFAULT * a[RAGE] + (1.0 - LAMBDA_DEFAULT) * t_rage).clamp(0.0, 1.0);
+            // M-C LUST: mate-readiness (energy ≥ mating gate + same-species
+            // neighbour present).
+            let t_lust = trigger_lust(energy[i], &genome[i], &sensors[i]);
+            a[LUST] = (LAMBDA_DEFAULT * a[LUST] + (1.0 - LAMBDA_DEFAULT) * t_lust).clamp(0.0, 1.0);
         }
     });
 }
@@ -715,5 +724,37 @@ mod tests {
         assert_eq!(trigger_lust(repro_energy + 1.0, &g, &no_mate), 0.0);
         // Mate present but below the mating energy gate → no lust.
         assert_eq!(trigger_lust(repro_energy - 1.0, &g, &with_mate), 0.0);
+    }
+
+    #[test]
+    fn develop_all_raises_rage_when_frustrated_and_lust_when_mate_ready() {
+        use crate::agent::SPAWN_ENERGY;
+        use crate::genome::{Genome, GenomeSlot};
+        use crate::prelude::Vec2;
+        use crate::world::World;
+
+        let mut w = World::new(1);
+        w.affect_enabled = true;
+        let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral()) as usize;
+        // Hungry (high drive) and crowded → frustration; energy above the mating
+        // gate with a same-species neighbour present → mate-ready.
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::ReproductionThreshold, 0.4);
+        w.agents.genome[id] = g;
+        w.agents.energy[id] = 0.05 * SPAWN_ENERGY; // deep energy deficit → drive ≈ 1
+        w.sensors.resize(w.agents.capacity(), Default::default());
+        w.sensors[id].crowding = RAGE_CROWD_REF as u32;
+        w.sensors[id].nearest_same_id = 999; // a same-species neighbour exists
+
+        // Mate-ready branch needs energy ≥ gate; run once frustrated (low energy)
+        // to check RAGE, then again well-fed to check LUST.
+        develop_all(&mut w);
+        assert!(w.agents.affect[id][RAGE] > 0.0, "frustrated agent accrues RAGE");
+
+        w.agents.energy[id] = SPAWN_ENERGY; // above the mating gate
+        for _ in 0..5 {
+            develop_all(&mut w);
+        } // let the leaky integrator climb
+        assert!(w.agents.affect[id][LUST] > 0.0, "mate-ready agent accrues LUST");
     }
 }
