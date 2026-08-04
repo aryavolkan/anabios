@@ -13,7 +13,8 @@ const BODY_SPECIES := 0
 const BODY_DIALECT := 1
 const BODY_DIET := 2
 const BODY_ENERGY := 3
-const BODY_MAX := 4
+const BODY_AFFECT := 4
+const BODY_MAX := 5
 
 var ground_mode: int = GROUND_BIOME
 var body_mode: int = BODY_SPECIES
