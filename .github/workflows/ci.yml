@@ -19,7 +19,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -71,7 +71,7 @@ jobs:
           - id: rest
             filter: "not (binary(=predator_prey_emergence) | binary(=cooperation_emergence) | binary(=dimorphism))"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
@@ -136,7 +136,7 @@ jobs:
             filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants))"
             partition: "--partition count:3/3"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
@@ -153,7 +153,7 @@ jobs:
       - name: collect coverage (shard ${{ matrix.id }})
         run: cargo llvm-cov nextest --workspace -E "${{ matrix.filter }}" ${{ matrix.partition }} --lcov --output-path lcov-${{ matrix.id }}.info
       - name: upload shard tracefile
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lcov-shard-${{ matrix.id }}
           path: lcov-${{ matrix.id }}.info
@@ -164,9 +164,9 @@ jobs:
     needs: coverage-collect
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: download shard tracefiles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: lcov-shard-*
           path: shards
@@ -184,7 +184,7 @@ jobs:
       # to debug.
       - name: upload lcov artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lcov
           path: shards
@@ -198,7 +198,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # The golden state hashes are pinned to bit-identical values across OSes
@@ -225,7 +225,7 @@ jobs:
     name: godot viewer (headless smoke)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # The Godot viewer is a gdextension backed by the `anabios-godot` crate.
