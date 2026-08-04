@@ -181,8 +181,7 @@ mod tests {
         let herder = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
         // Species 1 (the calf's): grow the species tables like scenario
         // instantiation does for archetype species.
-        w.species_centroids.push(Genome::neutral());
-        w.species_parents.push(Some(0));
+        w.push_species(Genome::neutral(), Some(0));
         let calf = w.spawn_seeded(
             Vec2::new(500.0 + dist, 500.0),
             Genome::neutral(),

@@ -67,12 +67,7 @@ pub fn species_step(world: &mut World) {
             world.agents.species_id[i] = best_id as u32;
         } else {
             // Allocate a new species with this agent's genome as centroid.
-            let new_id = world.next_species_id;
-            world.next_species_id =
-                world.next_species_id.checked_add(1).expect("species id overflow");
-            world.species_centroids.push(g);
-            world.species_member_counts.push(0); // helper increments below
-            world.species_parents.push(Some(cur_species as u32));
+            let new_id = world.push_species(g, Some(cur_species as u32));
             world.remove_from_species(cur_species as u32);
             world.add_to_species(new_id);
             world.agents.species_id[i] = new_id;

@@ -76,8 +76,7 @@ mod tests {
         let mut w = World::new(5);
         w.inventions_enabled = true;
         w.knowledge_enabled = true;
-        w.species_centroids.push(Genome::neutral());
-        w.species_parents.push(Some(0));
+        w.push_species(Genome::neutral(), Some(0));
         let writer = w.spawn_seeded(
             Vec2::new(500.0, 500.0),
             Genome::neutral(),

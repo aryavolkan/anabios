@@ -161,58 +161,70 @@ impl AgentBuffers {
         program: Program,
         sex: bool,
     ) -> AgentId {
-        let id = if let Some(id) = self.free_list.pop() {
-            let i = id as usize;
-            self.position[i] = position;
-            self.velocity[i] = Vec2::ZERO;
-            self.energy[i] = SPAWN_ENERGY;
-            self.age[i] = 0;
-            self.genome[i] = genome;
-            self.lineage_id[i] = lineage_id;
-            self.parent_ids[i] = parent_ids;
-            self.species_id[i] = species_id;
-            self.modules[i] = modules;
-            self.program[i] = program;
-            self.meme_vector[i] = [0.0; crate::program::MEME_CHANNELS];
-            self.inventory[i] = [0.0; crate::resource::GOOD_COUNT];
-            self.iq[i] = 0.0;
-            self.iq_enrich_acc[i] = 0.0;
-            self.iq_enrich_ticks[i] = 0;
-            self.affect[i] = [0.0; crate::affect::AFFECT_SYSTEMS];
-            self.anchor[i] = position;
-            self.harvest_exp[i] = [0.0; crate::resource::GOOD_COUNT];
-            self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
-            self.sex.set(i, sex);
-            self.livestock_of[i] = AGENT_NULL;
-            self.alive.set(i, true);
-            id
-        } else {
-            let i = self.position.len();
-            self.position.push(position);
-            self.velocity.push(Vec2::ZERO);
-            self.energy.push(SPAWN_ENERGY);
-            self.age.push(0);
-            self.genome.push(genome);
-            self.lineage_id.push(lineage_id);
-            self.parent_ids.push(parent_ids);
-            self.species_id.push(species_id);
-            self.modules.push(modules);
-            self.program.push(program);
-            self.meme_vector.push([0.0; crate::program::MEME_CHANNELS]);
-            self.inventory.push([0.0; crate::resource::GOOD_COUNT]);
-            self.iq.push(0.0);
-            self.iq_enrich_acc.push(0.0);
-            self.iq_enrich_ticks.push(0);
-            self.affect.push([0.0; crate::affect::AFFECT_SYSTEMS]);
-            self.anchor.push(position);
-            self.harvest_exp.push([0.0; crate::resource::GOOD_COUNT]);
-            self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
-            self.sex.push(sex);
-            self.livestock_of.push(AGENT_NULL);
-            self.alive.push(true);
-            i as AgentId
+        // Reuse a dead slot, or grow every column by one default row. Either
+        // way we then write every field by index below — one write path, so the
+        // free-list and grow cases can never silently diverge on a value.
+        let id = match self.free_list.pop() {
+            Some(id) => id,
+            None => self.grow_one(),
         };
+        let i = id as usize;
+        self.position[i] = position;
+        self.velocity[i] = Vec2::ZERO;
+        self.energy[i] = SPAWN_ENERGY;
+        self.age[i] = 0;
+        self.genome[i] = genome;
+        self.lineage_id[i] = lineage_id;
+        self.parent_ids[i] = parent_ids;
+        self.species_id[i] = species_id;
+        self.modules[i] = modules;
+        self.program[i] = program;
+        self.meme_vector[i] = [0.0; crate::program::MEME_CHANNELS];
+        self.inventory[i] = [0.0; crate::resource::GOOD_COUNT];
+        self.iq[i] = 0.0;
+        self.iq_enrich_acc[i] = 0.0;
+        self.iq_enrich_ticks[i] = 0;
+        self.affect[i] = [0.0; crate::affect::AFFECT_SYSTEMS];
+        self.anchor[i] = position;
+        self.harvest_exp[i] = [0.0; crate::resource::GOOD_COUNT];
+        self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
+        self.sex.set(i, sex);
+        self.livestock_of[i] = AGENT_NULL;
+        self.alive.set(i, true);
         self.live_count += 1;
+        id
+    }
+
+    /// Grow every per-agent column by one placeholder row and return the new
+    /// slot's id. The sole caller (`spawn`) overwrites every field immediately,
+    /// so the pushed values are throwaway defaults — this exists only so the
+    /// real spawn values have a single write path. A column omitted here desyncs
+    /// the buffer lengths and panics loudly on the next indexed write in
+    /// `spawn`, rather than silently corrupting a slot.
+    fn grow_one(&mut self) -> AgentId {
+        let id = self.position.len() as AgentId;
+        self.position.push(Vec2::ZERO);
+        self.velocity.push(Vec2::ZERO);
+        self.energy.push(0.0);
+        self.age.push(0);
+        self.genome.push(Genome::neutral());
+        self.lineage_id.push(LINEAGE_NONE);
+        self.parent_ids.push([LINEAGE_NONE; 2]);
+        self.species_id.push(0);
+        self.modules.push(ModuleList::default());
+        self.program.push(Program::empty());
+        self.meme_vector.push([0.0; crate::program::MEME_CHANNELS]);
+        self.inventory.push([0.0; crate::resource::GOOD_COUNT]);
+        self.iq.push(0.0);
+        self.iq_enrich_acc.push(0.0);
+        self.iq_enrich_ticks.push(0);
+        self.affect.push([0.0; crate::affect::AFFECT_SYSTEMS]);
+        self.anchor.push(Vec2::ZERO);
+        self.harvest_exp.push([0.0; crate::resource::GOOD_COUNT]);
+        self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
+        self.sex.push(false);
+        self.livestock_of.push(AGENT_NULL);
+        self.alive.push(false);
         id
     }
 
