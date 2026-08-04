@@ -200,6 +200,40 @@ pub const TEMP_LAPSE: f32 = 0.55;
 /// Whittaker band cutoffs for temperature and moisture.
 pub const BAND_LO: f32 = 0.33;
 pub const BAND_HI: f32 = 0.66;
+/// fBm of averaged octaves concentrates near 0.5; a linear contrast about 0.5
+/// widens the elevation distribution so lowland basins (Water/Desert) and
+/// high peaks (Rock) actually occur, not just mid-elevation terrain.
+pub const ELEV_CONTRAST: f32 = 2.1;
+
+/// Scenario-tunable climate knobs (the follow-up deferred by the 2026-07-27
+/// worldgen design doc). Defaults exactly reproduce the compile-time
+/// constants, so an untouched scenario generates a bit-identical world;
+/// setting any knob reshapes the climate for that scenario only.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ClimateParams {
+    /// Shifted onto every cell's temperature before classification
+    /// (negative = ice age, positive = hothouse). 0.0 = current climate.
+    pub temp_bias: f32,
+    /// Shifted onto every cell's moisture before classification
+    /// (negative = arid world, positive = lush world). 0.0 = current.
+    pub moisture_bias: f32,
+    /// Elevation cutoff for open water (higher = more ocean / archipelagos).
+    pub sea_level: f32,
+    /// Elevation distribution widening about 0.5 (higher = more abyssal
+    /// basins AND more rock peaks).
+    pub elev_contrast: f32,
+}
+
+impl Default for ClimateParams {
+    fn default() -> Self {
+        Self {
+            temp_bias: 0.0,
+            moisture_bias: 0.0,
+            sea_level: SEA_LEVEL,
+            elev_contrast: ELEV_CONTRAST,
+        }
+    }
+}
 
 /// Latitude temperature: 1 at the equator (v=0.5), 0 at the poles (v=0 or 1).
 /// A raised-cosine (not a triangle) so the tropics/subtropics stay hot
@@ -223,7 +257,17 @@ pub fn latitude_moisture(v: f32) -> f32 {
 /// Whittaker classification: elevation gates water/rock, then (temperature,
 /// moisture) select the land biome. Hard thresholds, no border dithering.
 pub fn classify(elevation: f32, temperature: f32, moisture: f32) -> TerrainType {
-    if elevation < SEA_LEVEL {
+    classify_with(elevation, temperature, moisture, SEA_LEVEL)
+}
+
+/// `classify` with a scenario-overridden sea level (see `ClimateParams`).
+pub fn classify_with(
+    elevation: f32,
+    temperature: f32,
+    moisture: f32,
+    sea_level: f32,
+) -> TerrainType {
+    if elevation < sea_level {
         return TerrainType::Water;
     }
     if elevation > ROCK_LINE {
@@ -258,6 +302,13 @@ impl BiomeField {
     /// Generate a biome field deterministically from a seed, at the given
     /// grid resolution and world extent per axis.
     pub fn generate(seed: u64, res: usize, world_size: f32) -> Self {
+        Self::generate_with(seed, res, world_size, &ClimateParams::default())
+    }
+
+    /// `generate` with scenario climate knobs. The default `ClimateParams`
+    /// reproduces `generate` bit-identically; the RNG draw order is
+    /// unchanged, so knobs reshape the climate without reseeding the world.
+    pub fn generate_with(seed: u64, res: usize, world_size: f32, climate: &ClimateParams) -> Self {
         let mut rng = Rng::from_seed(seed);
         // Climate-driven pipeline. Draw order is part of the determinism
         // contract: reordering these fBm constructions rehashes every world.
@@ -275,27 +326,30 @@ impl BiomeField {
 
         const WARP_AMP: f32 = 0.35;
         const TEMP_NOISE: f32 = 0.10;
-        // fBm of averaged octaves concentrates near 0.5; a linear contrast about
-        // 0.5 widens the elevation distribution so lowland basins (Water/Desert)
-        // and high peaks (Rock) actually occur, not just mid-elevation terrain.
-        const ELEV_CONTRAST: f32 = 2.1;
+        let contrast = climate.elev_contrast.max(0.1);
         let mut cells = Vec::with_capacity(res * res);
         for row in 0..res {
             for col in 0..res {
                 let u = col as f32 / res as f32;
                 let v = row as f32 / res as f32;
                 let (wu, wv) = crate::noise::warp(&warp_x, &warp_y, u, v, WARP_AMP);
-                let elev = ((elevation.sample(wu, wv) - 0.5) * ELEV_CONTRAST + 0.5).clamp(0.0, 1.0);
-                // Temperature: hot equator, cold poles, colder at altitude.
-                let temperature = (latitude_temp(v) - TEMP_LAPSE * (elev - SEA_LEVEL).max(0.0)
-                    + TEMP_NOISE * (temp_noise.sample(u, v) - 0.5))
+                let elev = ((elevation.sample(wu, wv) - 0.5) * contrast + 0.5).clamp(0.0, 1.0);
+                // Temperature: hot equator, cold poles, colder at altitude,
+                // plus the scenario's global bias (ice age / hothouse).
+                let temperature = (latitude_temp(v)
+                    - TEMP_LAPSE * (elev - climate.sea_level).max(0.0)
+                    + TEMP_NOISE * (temp_noise.sample(u, v) - 0.5)
+                    + climate.temp_bias)
                     .clamp(0.0, 1.0);
                 // Moisture: latitude band profile (wet equator / dry subtropics /
                 // wet temperate) blended with an fBm field sampled on warped
-                // coordinates so it tracks the warped landmasses.
-                let moisture = (0.5 * latitude_moisture(v) + 0.5 * moisture_noise.sample(wu, wv))
+                // coordinates so it tracks the warped landmasses, plus the
+                // scenario's global bias (arid / lush world).
+                let moisture = (0.5 * latitude_moisture(v)
+                    + 0.5 * moisture_noise.sample(wu, wv)
+                    + climate.moisture_bias)
                     .clamp(0.0, 1.0);
-                let terrain = classify(elev, temperature, moisture);
+                let terrain = classify_with(elev, temperature, moisture, climate.sea_level);
                 let nq = nutrient.sample(u, v);
                 let nutrient_quality =
                     NUTRIENT_QUALITY_MIN + (NUTRIENT_QUALITY_MAX - NUTRIENT_QUALITY_MIN) * nq;
@@ -738,6 +792,65 @@ mod tests {
             assert_eq!(a.cells[i].moisture, b.cells[i].moisture);
             assert_eq!(a.cells[i].env, b.cells[i].env);
         }
+    }
+
+    #[test]
+    fn default_climate_params_are_bit_identical() {
+        let a = BiomeField::generate(42, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+        let b = BiomeField::generate_with(
+            42,
+            BIOME_RES_DEFAULT,
+            WORLD_SIZE_DEFAULT,
+            &ClimateParams::default(),
+        );
+        for i in 0..a.cells.len() {
+            assert_eq!(a.cells[i].terrain, b.cells[i].terrain);
+            assert_eq!(a.cells[i].moisture, b.cells[i].moisture);
+            assert_eq!(a.cells[i].env, b.cells[i].env);
+            assert_eq!(a.cells[i].fertility, b.cells[i].fertility);
+        }
+    }
+
+    #[test]
+    fn climate_knobs_reshape_terrain() {
+        let base = BiomeField::generate(42, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT);
+        let count =
+            |b: &BiomeField, t: TerrainType| b.cells.iter().filter(|c| c.terrain == t).count();
+        // Ice age: taiga/tundra expand at the expense of hotter biomes.
+        let ice = BiomeField::generate_with(
+            42,
+            BIOME_RES_DEFAULT,
+            WORLD_SIZE_DEFAULT,
+            &ClimateParams { temp_bias: -0.25, ..Default::default() },
+        );
+        let cold_base = count(&base, TerrainType::Taiga) + count(&base, TerrainType::Tundra);
+        let cold_ice = count(&ice, TerrainType::Taiga) + count(&ice, TerrainType::Tundra);
+        assert!(
+            cold_ice > cold_base,
+            "ice age should expand cold biomes: {cold_base} -> {cold_ice}"
+        );
+        // Arid world: desert expands.
+        let arid = BiomeField::generate_with(
+            42,
+            BIOME_RES_DEFAULT,
+            WORLD_SIZE_DEFAULT,
+            &ClimateParams { moisture_bias: -0.25, ..Default::default() },
+        );
+        assert!(
+            count(&arid, TerrainType::Desert) > count(&base, TerrainType::Desert),
+            "arid bias should expand desert"
+        );
+        // Raised sea level: more water.
+        let sea = BiomeField::generate_with(
+            42,
+            BIOME_RES_DEFAULT,
+            WORLD_SIZE_DEFAULT,
+            &ClimateParams { sea_level: 0.55, ..Default::default() },
+        );
+        assert!(
+            count(&sea, TerrainType::Water) > count(&base, TerrainType::Water),
+            "higher sea level should expand water"
+        );
     }
 
     #[test]
