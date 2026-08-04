@@ -70,16 +70,16 @@ pub(super) fn detect_feeding_frenzy(world: &mut World, agg: &SpeciesAggTable) {
         );
         let converged = spread <= FRENZY_SPREAD_MAX;
         let count = idx.len() as f32;
-        if let Some(ev) = edge_trigger_species(&mut world.codex.frenzy_active, sid, converged, || {
-            CodexEvent {
+        if let Some(ev) =
+            edge_trigger_species(&mut world.codex.frenzy_active, sid, converged, || CodexEvent {
                 event_type: EventType::FeedingFrenzy,
                 tick,
                 species_id: sid,
                 value: count,
                 loc_x: lx,
                 loc_y: ly,
-            }
-        }) {
+            })
+        {
             to_push.push(ev);
         }
     }
