@@ -97,12 +97,13 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // World.practices_enabled added, defaulting true — practices still run in
     // this cognition-on scenario, so behavior is byte-identical; only the
     // serialized layout grew.
-    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 25→26): AgentBuffers
-    // gained the serialized `affect` column + World.affect_enabled (off here);
-    // temperament slots renamed in place. Affect stage no-ops flag-off and read-
-    // side hooks are identity — cognition byte-identical; regenerated on the
-    // merged tree atop the v25 practices_enabled layout.
-    &[(0, 0x7418be78ac5b6a8e), (100, 0xc826dd8de14fc635), (300, 0xcc22e0b61b1f9ac1)];
+    // Refreshed 2026-08-04 (M-A affect layer merged atop knowledge layout,
+    // FORMAT_VERSION 26→27): AgentBuffers gained the serialized `affect` column +
+    // World.affect_enabled (off here) on top of the v26 knowledge fields
+    // (knowledge_enabled off, CodexState knowledge maps empty). Both stages
+    // no-op flag-off with zero RNG draws — cognition byte-identical; regenerated
+    // on the merged tree.
+    &[(0, 0x0651d4349bd1adca), (100, 0xd27616d8c335f2f7), (300, 0xfdd1827de27e1c2d)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

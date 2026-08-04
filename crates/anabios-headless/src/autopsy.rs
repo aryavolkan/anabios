@@ -10,12 +10,23 @@ use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 use anyhow::{Context, Result};
 
+use crate::founder;
 use crate::ledger::{
-    invasion_fitness, sample_strategies, strategy_label, InvasionWindow, StrategyKind,
+    invasion_fitness, invasion_fitness_share, sample_strategies, strategy_label, InvasionWindow,
+    StrategyKind,
 };
 
 /// Frequency below which a strategy counts as "rare" for invasion analysis.
 const RARE_FRAC_MAX: f64 = 0.10;
+
+/// Which strategy key `autopsy` buckets by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FounderTagMode {
+    /// Per-tick Communicator-module presence (the original O1 key).
+    Module,
+    /// Lineage-locked founder tag (mutation-robust; O2 Step 0).
+    Founder,
+}
 
 pub fn run(
     scenario_path: PathBuf,
@@ -24,6 +35,7 @@ pub fn run(
     window: u64,
     out: PathBuf,
     mutant: StrategyKind,
+    tag: FounderTagMode,
 ) -> Result<()> {
     let window = window.max(1);
     let text = std::fs::read_to_string(&scenario_path)
@@ -33,6 +45,7 @@ pub fn run(
         scenario.seed = s;
     }
     let mut world = scenario.instantiate();
+    let mut tracker = (tag == FounderTagMode::Founder).then(|| founder::init(&world));
 
     let mut csv = std::fs::File::create(&out)
         .with_context(|| format!("creating ledger {}", out.display()))?;
@@ -42,8 +55,14 @@ pub fn run(
 
     for t in 0..ticks {
         step(&mut world);
+        if let Some(t) = tracker.as_mut() {
+            t.observe(&world);
+        }
         if (t + 1) % window == 0 {
-            let stats = sample_strategies(&world);
+            let stats = match &tracker {
+                Some(t) => founder::sample_by_founder(&world, t),
+                None => sample_strategies(&world),
+            };
             let total: u32 = stats.iter().map(|s| s.count).sum();
             for s in &stats {
                 let freq = if total == 0 { 0.0 } else { s.count as f64 / total as f64 };
@@ -80,6 +99,22 @@ pub fn run(
             );
         }
     }
+
+    match invasion_fitness_share(&invasion, RARE_FRAC_MAX) {
+        Some(r) => {
+            let verdict = if r > 0.0 { "INVADES" } else { "EXCLUDED" };
+            println!(
+                "invasion_fitness_share mutant={} r={:.5} {}",
+                strategy_label(mutant),
+                r,
+                verdict
+            );
+        }
+        None => println!(
+            "invasion_fitness_share mutant={} r=none (no rare-phase data)",
+            strategy_label(mutant)
+        ),
+    }
     println!("ledger written: {}", out.display());
     Ok(())
 }
@@ -111,7 +146,8 @@ placement = { kind = \"uniform\" }
         std::fs::File::create(&scen).unwrap().write_all(MIX.as_bytes()).unwrap();
         let csv = dir.join("ledger.csv");
 
-        run(scen, Some(7), 200, 50, csv.clone(), StrategyKind::Cultural).unwrap();
+        run(scen, Some(7), 200, 50, csv.clone(), StrategyKind::Cultural, FounderTagMode::Module)
+            .unwrap();
 
         let body = std::fs::read_to_string(&csv).unwrap();
         let mut lines = body.lines();
@@ -123,5 +159,22 @@ placement = { kind = \"uniform\" }
         assert!(body.contains(",asocial,"), "ledger has an asocial row");
         // 200 ticks / 50-tick window = at least 4 sampled windows × 2 strategies.
         assert!(lines.count() >= 8, "expected >=8 data rows");
+    }
+
+    #[test]
+    fn autopsy_reports_share_and_supports_founder_tag() {
+        let dir = std::env::temp_dir().join("anabios_o2_step0_autopsy");
+        std::fs::create_dir_all(&dir).unwrap();
+        let scen = dir.join("mix.toml");
+        std::fs::File::create(&scen).unwrap().write_all(MIX.as_bytes()).unwrap();
+
+        // Both tag modes must run and write a ledger with both strategies.
+        for mode in [FounderTagMode::Module, FounderTagMode::Founder] {
+            let csv = dir.join(format!("ledger-{mode:?}.csv"));
+            run(scen.clone(), Some(7), 200, 50, csv.clone(), StrategyKind::Cultural, mode).unwrap();
+            let body = std::fs::read_to_string(&csv).unwrap();
+            assert!(body.contains(",cultural,"), "ledger has a cultural row ({mode:?})");
+            assert!(body.contains(",asocial,"), "ledger has an asocial row ({mode:?})");
+        }
     }
 }

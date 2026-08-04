@@ -28,6 +28,7 @@ mod disturbance;
 mod domestication;
 mod event;
 mod invention;
+mod knowledge;
 mod metrics;
 mod params;
 mod population;
@@ -269,6 +270,14 @@ pub struct CodexState {
     pub livestock_herd_streak: BTreeMap<u32, u64>,
     /// Species currently latched as livestock herds (re-arms on drop).
     pub livestock_herd_active: BTreeSet<u32>,
+    /// Per-species accumulated knowledge (E14; rises while any member holds
+    /// Writing, decays slowly otherwise). Written by `knowledge::knowledge_step`.
+    pub knowledge_by_species: BTreeMap<u32, f32>,
+    /// Species that have fired `KnowledgeRatchet` — a permanent
+    /// once-per-species latch; fires the first tick
+    /// `knowledge_by_species[sp] >= KNOWLEDGE_RATCHET_MIN`. See
+    /// `codex::knowledge` for the v1-vs-deferred design note.
+    pub knowledge_ratchet_fired: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -353,6 +362,7 @@ pub fn observe_all(world: &mut World) {
     dimorphism::detect_sexual_selection(world, &agg);
     dimorphism::detect_sex_ratio_collapse(world, &agg);
     domestication::detect_livestock_herd(world, &agg);
+    knowledge::detect_knowledge_ratchet(world, &agg);
     signatures::detect_ambush_and_tool(world, &agg);
     signatures::detect_flight(world, &agg);
     signatures::detect_structured_signaling(world);

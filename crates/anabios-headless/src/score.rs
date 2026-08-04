@@ -4,13 +4,12 @@
 //! See `docs/superpowers/specs/2026-07-22-e1-emergence-scorecard-design.md`.
 //!
 //! Default-weight regeneration recipe (bump `WEIGHTS_VERSION` when redone):
-//! sweep 16 seeds × 5000 ticks of `divergent`, `inventions`, `predator-prey`,
-//! `cooperation` into one dir (`runs/corpus-e1/`, 64 runs), then paste the
-//! per-type run counts into `DEFAULT_CORPUS_NT` below. Weights are *derived*
-//! from those counts as IDF `ln(N / n_t)` — the counts are the single source
-//! of truth, so a mis-transcribed count can never desync from its weight.
-//! Event types added after the reference sweep (E3+) sit at `n_t = 0`
-//! (unseen → `NOVELTY_BONUS`).
+//! sweep 16 seeds of `divergent`, `inventions`, `predator-prey`, `cooperation`
+//! into one dir (`runs/corpus-eN.M/`, 64 runs), then paste the per-type run
+//! counts into `DEFAULT_CORPUS_NT` below. Weights are *derived* from those
+//! counts as IDF `ln(N / n_t)` — the counts are the single source of truth, so
+//! a mis-transcribed count can never desync from its weight. Types unseen in
+//! the corpus sit at `n_t = 0` (→ `NOVELTY_BONUS`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -19,7 +18,7 @@ use anabios_core::codex::{EventType, EVENT_TYPE_COUNT};
 use anyhow::{Context, Result};
 
 /// Version of the default weight table; bump on every regeneration.
-pub const WEIGHTS_VERSION: &str = "e1.1";
+pub const WEIGHTS_VERSION: &str = "e1.2";
 
 /// Number of runs in the reference corpus behind `DEFAULT_CORPUS_NT`.
 pub const CORPUS_RUNS: u64 = 64;
@@ -39,7 +38,7 @@ pub fn idf_weight(n_t: u64) -> f64 {
 }
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 53] = [
+pub const ALL_EVENT_NAMES: [&str; 54] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -93,69 +92,73 @@ pub const ALL_EVENT_NAMES: [&str; 53] = [
     "sex_ratio_collapse",
     "animal_domesticated",
     "livestock_herd",
+    "knowledge_ratchet",
 ];
 
 /// Per-type corpus run counts from the reference sweep (see module docs):
-/// 16 seeds × 5000 ticks of `divergent`, `inventions`, `predator-prey`,
-/// `cooperation` (64 runs, swept 2026-07-22) — how many runs fired each type.
-/// `0` means unseen in the corpus (weight `NOVELTY_BONUS`). Event types added
-/// after the reference sweep (E3+) are definitionally unseen (`n_t = 0`) until
-/// the next regeneration. Weights are derived via [`idf_weight`], so this
-/// table is the *only* thing to update on a regeneration.
-pub const DEFAULT_CORPUS_NT: [(&str, u64); 53] = [
-    ("extinction", 61),
-    ("pop_crash", 56),
-    ("speciation", 59),
-    ("migration", 54),
-    ("novel_module", 59),
-    ("novel_behavior", 61),
+/// 16 seeds × 3000 ticks of `divergent`, `inventions`, `predator-prey`,
+/// `cooperation` (64 runs, swept 2026-08-03 for vintage e1.2) — how many runs
+/// fired each type. `0` means unseen in the corpus (weight `NOVELTY_BONUS`).
+/// Unlike the e1.1 table (which predated E3–E13, leaving ~30 detectors
+/// permanently novel), this vintage covers the post-E3 detectors: only types
+/// that never fired across the 64 runs remain at `n_t = 0`. Weights are derived
+/// via [`idf_weight`], so this table is the *only* thing to update on a regen.
+/// `knowledge_ratchet` (E14) postdates this vintage and stays at `n_t = 0`.
+pub const DEFAULT_CORPUS_NT: [(&str, u64); 54] = [
+    ("extinction", 64),
+    ("pop_crash", 57),
+    ("speciation", 63),
+    ("migration", 63),
+    ("novel_module", 63),
+    ("novel_behavior", 64),
     ("predation", 16),
-    ("combat_raid", 15),
-    ("arms_race", 10),
-    ("territory_formation", 43),
-    ("niche_partitioning", 52),
-    ("dialect_formed", 48),
-    ("meme_sweep", 39),
-    ("alarm_call", 0),
+    ("combat_raid", 14),
+    ("arms_race", 7),
+    ("territory_formation", 59),
+    ("niche_partitioning", 62),
+    ("dialect_formed", 61),
+    ("meme_sweep", 50),
+    ("alarm_call", 0), // unseen in corpus
     ("evolved_cooperation", 16),
     ("pack_hunting", 3),
-    ("herd_cohesion", 54),
+    ("herd_cohesion", 61),
     ("invention_discovered", 16),
     ("invention_adopted", 16),
-    ("practice_discovered", 0),
-    ("practice_adopted", 0),
-    ("resource_traded", 0),
-    ("material_learning", 0),
-    ("pop_cycle", 0),             // post-corpus (E3)
-    ("boom_bust", 0),             // post-corpus (E3)
-    ("carrying_capacity", 0),     // post-corpus (E3)
-    ("trophic_cascade", 0),       // post-corpus (E3)
-    ("range_expansion", 0),       // post-corpus (E4)
-    ("segregation", 0),           // post-corpus (E4)
-    ("corridor_use", 0),          // post-corpus (E4)
-    ("succession", 0),            // post-corpus (E4)
-    ("trait_fixation", 0),        // post-corpus (E5)
-    ("rapid_adaptation", 0),      // post-corpus (E5)
-    ("convergent_evolution", 0),  // post-corpus (E5)
-    ("evolved_ambush", 0),        // post-corpus (E6)
-    ("evolved_tool", 0),          // post-corpus (E6)
-    ("evolved_flight", 0),        // post-corpus (E6)
-    ("structured_signaling", 0),  // post-corpus (E6)
-    ("war", 0),                   // post-corpus (E7)
-    ("war_ended", 0),             // post-corpus (E7)
-    ("alliance", 0),              // post-corpus (E7)
-    ("kin_network", 0),           // post-corpus (E7)
-    ("settlement", 0),            // post-corpus (E8)
-    ("market", 0),                // post-corpus (E8)
-    ("specialization_split", 0),  // post-corpus (E8)
-    ("tradition", 0),             // post-corpus (E9)
-    ("cultural_radiation", 0),    // post-corpus (E9)
-    ("institutional_ratchet", 0), // post-corpus (E9)
-    ("maladaptation_lag", 0),     // post-corpus (E11)
-    ("sexual_selection", 0),      // post-corpus (E12)
-    ("sex_ratio_collapse", 0),    // post-corpus (E12)
-    ("animal_domesticated", 0),   // post-corpus (E13)
-    ("livestock_herd", 0),        // post-corpus (E13)
+    ("practice_discovered", 0), // unseen in corpus
+    ("practice_adopted", 0),    // unseen in corpus
+    ("resource_traded", 0),     // unseen in corpus
+    ("material_learning", 0),   // unseen in corpus
+    ("pop_cycle", 47),
+    ("boom_bust", 44),
+    ("carrying_capacity", 64),
+    ("trophic_cascade", 10),
+    ("range_expansion", 56),
+    ("segregation", 17),
+    ("corridor_use", 62),
+    ("succession", 0), // unseen in corpus
+    ("trait_fixation", 45),
+    ("rapid_adaptation", 22),
+    ("convergent_evolution", 17),
+    ("evolved_ambush", 0), // unseen in corpus
+    ("evolved_tool", 0),   // unseen in corpus
+    ("evolved_flight", 48),
+    ("structured_signaling", 0), // unseen in corpus
+    ("war", 14),
+    ("war_ended", 14),
+    ("alliance", 16),
+    ("kin_network", 51),
+    ("settlement", 0),           // unseen in corpus
+    ("market", 0),               // unseen in corpus
+    ("specialization_split", 0), // unseen in corpus
+    ("tradition", 0),            // unseen in corpus
+    ("cultural_radiation", 32),
+    ("institutional_ratchet", 11),
+    ("maladaptation_lag", 0),   // unseen in corpus
+    ("sexual_selection", 0),    // unseen in corpus
+    ("sex_ratio_collapse", 0),  // unseen in corpus
+    ("animal_domesticated", 0), // unseen in corpus
+    ("livestock_herd", 0),      // unseen in corpus
+    ("knowledge_ratchet", 0),   // post-corpus (E14), unseen
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -213,6 +216,7 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::SexRatioCollapse => "sex_ratio_collapse",
         EventType::AnimalDomesticated => "animal_domesticated",
         EventType::LivestockHerd => "livestock_herd",
+        EventType::KnowledgeRatchet => "knowledge_ratchet",
     }
 }
 
@@ -370,41 +374,49 @@ mod tests {
     #[test]
     fn default_weights_match_documented_values() {
         // Regression guard: the derived weights must equal the human-audited
-        // reference values (from the 2026-07-22 sweep). If a corpus count in
-        // `DEFAULT_CORPUS_NT` is mis-transcribed, this pins where. Post-corpus
-        // types (n_t=0) sit at NOVELTY_BONUS.
+        // reference values (from the 2026-08-03 e1.2 sweep). If a corpus count
+        // in `DEFAULT_CORPUS_NT` is mis-transcribed, this pins where. Types
+        // unseen in the corpus (n_t=0) sit at NOVELTY_BONUS.
         let expected: &[(&str, f64)] = &[
-            ("extinction", 0.048009),
-            ("pop_crash", 0.133531),
-            ("speciation", 0.081346),
-            ("migration", 0.169899),
-            ("novel_module", 0.081346),
-            ("novel_behavior", 0.048009),
+            ("extinction", 0.000000),
+            ("pop_crash", 0.115832),
+            ("speciation", 0.015748),
+            ("migration", 0.015748),
+            ("novel_module", 0.015748),
+            ("novel_behavior", 0.000000),
             ("predation", 1.386294),
-            ("combat_raid", 1.450833),
-            ("arms_race", 1.856298),
-            ("territory_formation", 0.397683),
-            ("niche_partitioning", 0.207639),
-            ("dialect_formed", 0.287682),
-            ("meme_sweep", 0.495321),
+            ("combat_raid", 1.519826),
+            ("arms_race", 2.212973),
+            ("territory_formation", 0.081346),
+            ("niche_partitioning", 0.031749),
+            ("dialect_formed", 0.048009),
+            ("meme_sweep", 0.246860),
             ("alarm_call", NOVELTY_BONUS),
             ("evolved_cooperation", 1.386294),
             ("pack_hunting", 3.060271),
-            ("herd_cohesion", 0.169899),
+            ("herd_cohesion", 0.048009),
             ("invention_discovered", 1.386294),
             ("invention_adopted", 1.386294),
             ("practice_discovered", NOVELTY_BONUS),
             ("practice_adopted", NOVELTY_BONUS),
             ("resource_traded", NOVELTY_BONUS),
             ("material_learning", NOVELTY_BONUS),
+            // Post-E3 detectors now measured (were permanently novel under e1.1).
+            ("pop_cycle", 0.308735),
+            ("carrying_capacity", 0.000000),
+            ("range_expansion", 0.133531),
+            ("evolved_flight", 0.287682),
+            ("kin_network", 0.227057),
+            ("war", 1.519826),
+            ("boom_bust", 0.374693),
         ];
         let table = ScoreTable::default_table();
         for (name, want) in expected {
             let got = table.weights[name];
             assert!((got - want).abs() < 5e-6, "{name}: derived weight {got} != documented {want}");
         }
-        // Every post-corpus (E3+) type is unseen → NOVELTY_BONUS.
-        for name in ["pop_cycle", "war", "settlement", "specialization_split"] {
+        // Types that never fired across the 64-run e1.2 corpus → NOVELTY_BONUS.
+        for name in ["succession", "settlement", "specialization_split", "sexual_selection"] {
             assert_eq!(table.weights[name], NOVELTY_BONUS);
         }
     }

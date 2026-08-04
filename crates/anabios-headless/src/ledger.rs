@@ -117,15 +117,56 @@ pub fn invasion_fitness(windows: &[InvasionWindow], rare_frac_max: f64) -> Optio
     }
 }
 
-/// Per-strategy aggregate over the currently-alive agents. Index 0 = Cultural,
-/// index 1 = Asocial. Read-only; safe to call every window during a run.
-pub fn sample_strategies(world: &World) -> [StrategyStat; 2] {
+/// Share-relative invasion fitness: the mutant's mean per-window log-growth of
+/// *frequency* (share) while rare. Unlike [`invasion_fitness`] (raw count),
+/// this cancels global population change — a collapsing or booming world does
+/// not bias it, because both mutant and total move together in the ratio.
+///
+/// Averages `ln(freq[k+1]/freq[k])` over consecutive pairs where window `k`'s
+/// frequency is `<= rare_frac_max` and both windows have positive total and
+/// mutant counts. Returns `None` when no qualifying rare pair exists. Positive
+/// ⇒ the rare strategy gains share (invades).
+pub fn invasion_fitness_share(windows: &[InvasionWindow], rare_frac_max: f64) -> Option<f64> {
+    let mut sum = 0.0_f64;
+    let mut pairs = 0_u64;
+    for pair in windows.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        if a.total_n == 0 || b.total_n == 0 {
+            continue;
+        }
+        let fa = a.mutant_n as f64 / a.total_n as f64;
+        if fa > rare_frac_max {
+            continue;
+        }
+        if a.mutant_n == 0 || b.mutant_n == 0 {
+            continue;
+        }
+        let fb = b.mutant_n as f64 / b.total_n as f64;
+        sum += (fb / fa).ln();
+        pairs += 1;
+    }
+    if pairs == 0 {
+        None
+    } else {
+        Some(sum / pairs as f64)
+    }
+}
+
+/// Per-strategy aggregate, bucketing each alive agent by `classify`. Index 0 =
+/// Cultural, index 1 = Asocial. Read-only. `sample_strategies` is this with the
+/// Communicator-module-presence classifier.
+pub fn sample_strategies_by<F>(world: &World, classify: F) -> [StrategyStat; 2]
+where
+    F: Fn(&World, usize) -> StrategyKind,
+{
     let mut cultural = Acc::default();
     let mut asocial = Acc::default();
     for id in world.agents.iter_alive() {
         let i = id as usize;
-        let is_cultural = module::has(&world.agents.modules[i], ModuleType::Communicator);
-        let acc = if is_cultural { &mut cultural } else { &mut asocial };
+        let acc = match classify(world, i) {
+            StrategyKind::Cultural => &mut cultural,
+            StrategyKind::Asocial => &mut asocial,
+        };
         acc.count += 1;
         acc.energy += world.agents.energy[i] as f64;
         acc.skill += world.agents.meme_vector[i][SKILL_CHANNEL] as f64;
@@ -135,6 +176,18 @@ pub fn sample_strategies(world: &World) -> [StrategyStat; 2] {
         acc.max_era = acc.max_era.max(era);
     }
     [cultural.finish(StrategyKind::Cultural), asocial.finish(StrategyKind::Asocial)]
+}
+
+/// Per-strategy aggregate keyed on Communicator-module presence (the per-tick
+/// phenotype). Index 0 = Cultural, index 1 = Asocial.
+pub fn sample_strategies(world: &World) -> [StrategyStat; 2] {
+    sample_strategies_by(world, |world, i| {
+        if module::has(&world.agents.modules[i], ModuleType::Communicator) {
+            StrategyKind::Cultural
+        } else {
+            StrategyKind::Asocial
+        }
+    })
 }
 
 #[cfg(test)]
@@ -225,5 +278,33 @@ mod invasion_tests {
         let windows = [w(10, 1000), w(20, 1000), w(0, 1000)];
         let r = invasion_fitness(&windows, 0.10).unwrap();
         assert!(r.is_finite() && r > 0.0, "got {r}");
+    }
+
+    #[test]
+    fn share_metric_ignores_global_population_change() {
+        // Population collapses (mutant AND total both shrink each window) but the
+        // mutant's SHARE stays flat at 0.05. Absolute invasion fitness reads
+        // negative (raw count falling); share fitness must read ~0 (no share change).
+        // This is the exact confound O1 flagged.
+        let windows = [w(5, 100), w(2, 40), w(1, 20)]; // shares 0.05, 0.05, 0.05; counts 5→2→1
+        let abs = invasion_fitness(&windows, 0.10).unwrap();
+        let share = invasion_fitness_share(&windows, 0.10).unwrap();
+        assert!(abs < 0.0, "absolute metric is confounded by the collapse: {abs}");
+        assert!(share.abs() < 1e-9, "share metric cancels the collapse: {share}");
+    }
+
+    #[test]
+    fn share_metric_positive_when_share_grows() {
+        // Mutant share rises 0.02 → 0.04 → 0.06 while rare.
+        let windows = [w(2, 100), w(4, 100), w(6, 100)];
+        let r = invasion_fitness_share(&windows, 0.10).unwrap();
+        assert!(r > 0.0, "growing share must be positive, got {r}");
+    }
+
+    #[test]
+    fn share_metric_none_when_never_rare() {
+        // Every window above the rare threshold → no qualifying pair.
+        let windows = [w(500, 1000), w(600, 1000)];
+        assert!(invasion_fitness_share(&windows, 0.10).is_none());
     }
 }

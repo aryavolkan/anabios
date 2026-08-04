@@ -29,9 +29,10 @@ fn summary_csv_has_novel_types_column() {
         header.ends_with(",emergence_score,novel_events,coverage,novel_types"),
         "header was: {header}"
     );
-    // every data row must have exactly 62 fields
+    // every data row must have exactly 63 fields
+    // (5 prefix + 54 event counts + emergence_score,novel_events,coverage,novel_types)
     for row in lines {
-        assert_eq!(row.split(',').count(), 62, "row: {row}");
+        assert_eq!(row.split(',').count(), 63, "row: {row}");
     }
 }
 
@@ -61,8 +62,8 @@ fn novel_runs_are_copied_to_novel_dir() {
 
     let csv = std::fs::read_to_string(out.join("summary.csv")).unwrap();
     let any_novel = csv.lines().skip(1).any(|r| {
-        // novel_events is field index 59: 5 prefix + 53 event counts + emergence_score.
-        r.split(',').nth(59).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) > 0
+        // novel_events is field index 60: 5 prefix + 54 event counts + emergence_score.
+        r.split(',').nth(60).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) > 0
     });
     if any_novel {
         let novel = out.join("novel");
