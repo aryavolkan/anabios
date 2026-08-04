@@ -60,9 +60,48 @@ jobs:
       - name: test (release — runs emergence detectors, parallel)
         run: cargo nextest run --workspace --release
 
-  coverage:
-    name: coverage
+  # Coverage is collected in parallel shards, then unioned in the `coverage` job
+  # below. Instrumented execution of the full suite had grown to ~20 min in a
+  # single job. The cost is NOT spread evenly across tests: a handful of
+  # simulation-heavy integration tests explode under LLVM instrumentation (the
+  # same tests stay fast in release — see the `emergence` job), and they
+  # parallelize poorly (long CPU-bound sims with serial tails), so a naive
+  # count split just clusters them into one unlucky shard. We bin-pack instead:
+  #   - `scenarios`:  `all_scenarios` alone — its one test runs every scenario
+  #     back-to-back and is the single tallest pole (~5 min even by itself).
+  #   - `behavioral`: `traditions` (one ~370s test) + `invariants` (many mid-
+  #     weight tests that parallelize) — ~6 min.
+  #   - `bulk-1..3`:  everything else + the whole lib/unit suite, count-partitioned
+  #     3 ways (nextest -E <filter> --partition). Once the tall poles above are
+  #     carved out, the remainder is uniform enough that round-robin balances it
+  #     (~5-7 min each) instead of piling into one 16-min shard.
+  # The five filtersets are a complete, disjoint partition (the three bulk shards
+  # exhaust `not (scenarios | behavioral)`), so their union is the full workspace
+  # coverage. If a binary is renamed it just falls into `bulk` — coverage stays
+  # correct, only the balance drifts (and the gate catches any real coverage loss).
+  # Rebalance if a new heavyweight lands: give it its own shard like the poles.
+  coverage-collect:
+    name: coverage shard (${{ matrix.id }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: scenarios
+            filter: "binary(=all_scenarios)"
+            partition: ""
+          - id: behavioral
+            filter: "binary(=traditions) | binary(=invariants)"
+            partition: ""
+          - id: bulk-1
+            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants))"
+            partition: "--partition count:1/3"
+          - id: bulk-2
+            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants))"
+            partition: "--partition count:2/3"
+          - id: bulk-3
+            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants))"
+            partition: "--partition count:3/3"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -71,39 +110,51 @@ jobs:
       - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
-      # Instrument and run the workspace test suite ONCE; the two gates below are
-      # cheap reports over the same profile data (no recompile, no re-run). Run
-      # via nextest so the test binaries execute in parallel rather than serially.
-      #
-      # Coverage reflects the always-on lib + integration suite. Doctests are not
-      # measured (nextest doesn't run them, same as before); the emergence
-      # detectors run in debug here, where they are #[ignore]d.
-      - name: collect coverage
-        run: cargo llvm-cov nextest --workspace --no-report
-      # Gate 1 — whole-workspace floor. A backstop against total collapse. This
-      # number is dragged down by the Godot bindings (anabios-godot) and the CLI
-      # binaries (anabios-headless), which can't run under headless unit tests, so
-      # the floor sits well below the simulation logic's true level (~84% now).
-      - name: gate — workspace line coverage >= 82%
-        run: cargo llvm-cov report --fail-under-lines 82
-      # Gate 2 — core floor. anabios-core is the simulation logic where the tests
-      # and the determinism/correctness guarantees live; hold it near its current
-      # ~98%. Excluding the Godot/CLI crates stops their low-coverage glue from
-      # masking a regression in core. Raise these floors when coverage climbs;
-      # never lower them silently.
-      - name: gate — anabios-core line coverage >= 95%
-        run: cargo llvm-cov report --fail-under-lines 95 --ignore-filename-regex 'anabios-(godot|headless)/'
-      # Machine-readable report for humans/tools (Codecov, editors). Not a gate;
-      # runs even when a gate above fails so the artifact is available to debug.
-      - name: export lcov
-        if: always()
-        run: cargo llvm-cov report --lcov --output-path lcov.info
-      - name: upload lcov artifact
+      # Instrument the workspace once (build is cached), then run only this
+      # shard's slice of the test set (nextest -E filterset, optionally count-
+      # partitioned). --lcov emits a SELF-CONTAINED tracefile (this shard's own
+      # binaries + profile), so the report job can union the shards WITHOUT any
+      # cross-machine profraw/binary matching. Coverage reflects the always-on
+      # lib + integration suite; doctests aren't measured (nextest doesn't run
+      # them) and the emergence detectors run in debug here, where #[ignore]d.
+      - name: collect coverage (shard ${{ matrix.id }})
+        run: cargo llvm-cov nextest --workspace -E "${{ matrix.filter }}" ${{ matrix.partition }} --lcov --output-path lcov-${{ matrix.id }}.info
+      - name: upload shard tracefile
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov-shard-${{ matrix.id }}
+          path: lcov-${{ matrix.id }}.info
+          if-no-files-found: error
+
+  coverage:
+    name: coverage
+    needs: coverage-collect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: download shard tracefiles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: lcov-shard-*
+          path: shards
+          merge-multiple: true
+      # Union the partitions' per-line hits and enforce the floors in one pass.
+      # A line counts as covered if ANY shard executed it. Pure awk over the lcov
+      # DA records — no lcov CLI — so the gate is independent of tool version. The
+      # two floors mirror the previous single-job gates (workspace >= 82%, core
+      # >= 95% excluding the Godot/CLI crates). Raise these floors when coverage
+      # climbs; never lower them silently.
+      - name: gate — line coverage floors (workspace >= 82%, anabios-core >= 95%)
+        run: awk -v wmin=82 -v cmin=95 -f .github/scripts/lcov-line-gate.awk shards/*.info
+      # Machine-readable tracefiles for humans/tools (Codecov, editors). Not a
+      # gate; runs even when the gate above fails so the artifacts are available
+      # to debug.
+      - name: upload lcov artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lcov
-          path: lcov.info
+          path: shards
           if-no-files-found: warn
 
   determinism:
