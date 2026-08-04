@@ -97,7 +97,12 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // World.practices_enabled added, defaulting true — practices still run in
     // this cognition-on scenario, so behavior is byte-identical; only the
     // serialized layout grew. Regenerated on the merged tree.
-    &[(0, 0xc19e6d27f24fa00a), (100, 0xa0c330d1e4ee9ddb), (300, 0x2c004299dd285b9c)];
+    // Refreshed 2026-08-03 (merged main practices+conserve + knowledge layout,
+    // FORMAT_VERSION 25→26): World.knowledge_enabled + CodexState.knowledge_by_species
+    // + knowledge_ratchet_fired added, defaulting off/empty — flag is off in this
+    // scenario, so knowledge_step early-returns with zero draws; trajectory
+    // byte-identical, only the serialized layout grew.
+    &[(0, 0x1ccd02e22b4c11fe), (100, 0xbb47c5aa84631e89), (300, 0xaf7dbf7e5d683732)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

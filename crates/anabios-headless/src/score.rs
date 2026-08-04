@@ -38,7 +38,7 @@ pub fn idf_weight(n_t: u64) -> f64 {
 }
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 53] = [
+pub const ALL_EVENT_NAMES: [&str; 54] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -92,6 +92,7 @@ pub const ALL_EVENT_NAMES: [&str; 53] = [
     "sex_ratio_collapse",
     "animal_domesticated",
     "livestock_herd",
+    "knowledge_ratchet",
 ];
 
 /// Per-type corpus run counts from the reference sweep (see module docs):
@@ -102,7 +103,8 @@ pub const ALL_EVENT_NAMES: [&str; 53] = [
 /// permanently novel), this vintage covers the post-E3 detectors: only types
 /// that never fired across the 64 runs remain at `n_t = 0`. Weights are derived
 /// via [`idf_weight`], so this table is the *only* thing to update on a regen.
-pub const DEFAULT_CORPUS_NT: [(&str, u64); 53] = [
+/// `knowledge_ratchet` (E14) postdates this vintage and stays at `n_t = 0`.
+pub const DEFAULT_CORPUS_NT: [(&str, u64); 54] = [
     ("extinction", 64),
     ("pop_crash", 57),
     ("speciation", 63),
@@ -156,6 +158,7 @@ pub const DEFAULT_CORPUS_NT: [(&str, u64); 53] = [
     ("sex_ratio_collapse", 0),  // unseen in corpus
     ("animal_domesticated", 0), // unseen in corpus
     ("livestock_herd", 0),      // unseen in corpus
+    ("knowledge_ratchet", 0),   // post-corpus (E14), unseen
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -213,6 +216,7 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::SexRatioCollapse => "sex_ratio_collapse",
         EventType::AnimalDomesticated => "animal_domesticated",
         EventType::LivestockHerd => "livestock_herd",
+        EventType::KnowledgeRatchet => "knowledge_ratchet",
     }
 }
 

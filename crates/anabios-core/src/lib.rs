@@ -20,6 +20,7 @@ pub mod interact;
 pub mod invention;
 pub mod iq;
 pub mod kin;
+pub mod knowledge;
 pub mod mathf;
 pub mod metrics;
 pub mod module;

@@ -167,7 +167,12 @@ const GOLDEN: &[(u64, u64)] =
     // wherever cognition is on — but cognition is off in minimal, so behavior is
     // byte-identical; only the serialized layout grew. Regenerated on the merged
     // tree (carries both conserve_goods and practices fields).
-    &[(0, 0x59806c67bf3d427f), (100, 0x42aa33b84bab0f44), (1000, 0x7fe5f0a66c5bd154)];
+    // Refreshed 2026-08-03 (merged main practices+conserve + knowledge layout,
+    // FORMAT_VERSION 25→26): World.knowledge_enabled + CodexState.knowledge_by_species
+    // + knowledge_ratchet_fired added, defaulting off/empty — flag is off in
+    // minimal, so knowledge_step early-returns with zero draws; trajectory
+    // byte-identical, only the serialized layout grew.
+    &[(0, 0x77ee8797d0a74d55), (100, 0x0fdf324065a257b8), (1000, 0x3fa3abfb4e8767ce)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

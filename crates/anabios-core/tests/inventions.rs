@@ -1074,7 +1074,12 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
     // World.practices_enabled added, defaulting true (off-effect here) — layout
     // growth only, trajectory byte-identical. Regenerated on the merged tree.
-    &[(0, 0x01b4b816646e5a89), (100, 0x06a90a4abcbf09cf), (300, 0xdd3454272b6967c8)];
+    // Refreshed 2026-08-03 (merged main practices+conserve + knowledge layout,
+    // FORMAT_VERSION 25→26): World.knowledge_enabled + CodexState.knowledge_by_species
+    // + knowledge_ratchet_fired added, defaulting off/empty — flag is off in this
+    // scenario, so knowledge_step early-returns with zero draws; trajectory
+    // byte-identical, only the serialized layout grew.
+    &[(0, 0x63e24305ff8652b3), (100, 0x028d9156688c4115), (300, 0xf4a151dc7ce856b0)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
