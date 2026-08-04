@@ -1084,7 +1084,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // AgentBuffers.affect_prev_crowding serialized column. affect_enabled off in
     // this scenario ⇒ develop_all no-op, column stays 0.0 — trajectory
     // byte-identical, only the serialized layout grew.
-    &[(0, 0x7d0f3eb0fae1bef1), (100, 0x7b8804d161d26dd7), (300, 0x3c75eb087d89b888)];
+    // Refreshed 2026-08-04 (M-F affect observability, FORMAT_VERSION 28→29): new
+    // CodexState affect-detector fields ({frenzy_active, rage_streak,
+    // rage_active, fear_count_history, cascade_active, grief_active}); affect_enabled
+    // off in this scenario ⇒ detectors never fire — layout growth only.
+    &[(0, 0x3847fffa1211be71), (100, 0xbe65e10e9ebceed7), (300, 0x75d4288a841dba48)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
