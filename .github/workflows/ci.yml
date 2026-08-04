@@ -60,18 +60,35 @@ jobs:
       - name: test (release — runs emergence detectors, parallel)
         run: cargo nextest run --workspace --release
 
-  # Coverage is collected in parallel shards (nextest --partition), then unioned
-  # in the `coverage` job below. Instrumented execution of the full suite had
-  # grown to ~20 min in a single job; splitting the test set 3 ways cuts the
-  # wall-time to ~1/3 (the instrumented build is cached, so each shard only pays
-  # for its slice of test execution).
+  # Coverage is collected in parallel shards, then unioned in the `coverage` job
+  # below. Instrumented execution of the full suite had grown to ~20 min in a
+  # single job. The cost is NOT spread evenly across tests: a handful of
+  # simulation-heavy integration tests explode under LLVM instrumentation (the
+  # same tests stay fast in release — see the `emergence` job), so a naive
+  # count-based split just clusters them into one unlucky shard. Instead we
+  # bin-pack by test binary so no shard holds two monsters:
+  #   - `all_scenarios` alone: its one test runs every scenario back-to-back and
+  #     is ~470s instrumented — the single tallest pole, so it gets its own shard.
+  #   - `traditions` (~370s) + `invariants` (many mid-weight tests that parallelize).
+  #   - everything else + the whole lib/unit suite (the fast bulk).
+  # The three filtersets are a complete, disjoint partition (the third is the
+  # negation of the first two), so their union is the full workspace coverage.
+  # If a binary is renamed, it silently falls into the `rest` shard — coverage
+  # stays correct, only the balance drifts (and the gate would catch any real
+  # coverage loss). Rebalance the buckets if a new heavyweight lands.
   coverage-collect:
-    name: coverage shard ${{ matrix.shard }}/3
+    name: coverage shard (${{ matrix.id }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        include:
+          - id: scenarios
+            filter: "binary(=all_scenarios)"
+          - id: behavioral
+            filter: "binary(=traditions) | binary(=invariants)"
+          - id: rest
+            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants))"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -80,21 +97,20 @@ jobs:
       - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
-      # Instrument the workspace once, then run only this shard's 1/3 of the test
-      # set. Each shard links the full instrumented workspace (compile is cached)
-      # but executes just its slice, so wall-time is ~1/3 of the old single job.
-      # --lcov emits a SELF-CONTAINED tracefile (this shard's own binaries +
-      # profile), so the report job can union the three WITHOUT any cross-machine
-      # profraw/binary matching. Coverage reflects the always-on lib + integration
-      # suite; doctests aren't measured (nextest doesn't run them) and the
-      # emergence detectors run in debug here, where they are #[ignore]d.
-      - name: collect coverage (shard ${{ matrix.shard }}/3)
-        run: cargo llvm-cov nextest --workspace --partition count:${{ matrix.shard }}/3 --lcov --output-path lcov-${{ matrix.shard }}.info
+      # Instrument the workspace once (build is cached), then run only this
+      # shard's slice of the test set (nextest -E filterset). --lcov emits a
+      # SELF-CONTAINED tracefile (this shard's own binaries + profile), so the
+      # report job can union the shards WITHOUT any cross-machine profraw/binary
+      # matching. Coverage reflects the always-on lib + integration suite;
+      # doctests aren't measured (nextest doesn't run them) and the emergence
+      # detectors run in debug here, where they are #[ignore]d.
+      - name: collect coverage (shard ${{ matrix.id }})
+        run: cargo llvm-cov nextest --workspace -E "${{ matrix.filter }}" --lcov --output-path lcov-${{ matrix.id }}.info
       - name: upload shard tracefile
         uses: actions/upload-artifact@v4
         with:
-          name: lcov-shard-${{ matrix.shard }}
-          path: lcov-${{ matrix.shard }}.info
+          name: lcov-shard-${{ matrix.id }}
+          path: lcov-${{ matrix.id }}.info
           if-no-files-found: error
 
   coverage:
