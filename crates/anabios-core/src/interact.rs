@@ -304,7 +304,10 @@ fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
         }
         let pos = world.agents.position[i];
         let mut best: Option<usize> = None;
-        let mut best_d = SCAVENGE_RANGE;
+        // Compare by *squared* distance (monotonic on [0, ∞)), so the nearest
+        // search drops a `sqrt` per visited carcass. `best_d2` is seeded with the
+        // squared range so the strict-`<` bound matches the range gate.
+        let mut best_d2 = SCAVENGE_RANGE * SCAVENGE_RANGE;
         world.carcass_spatial.query(pos, SCAVENGE_RANGE, |ci| {
             let ci = ci as usize;
             // Re-check flesh: an earlier scavenger this same tick may have
@@ -312,11 +315,11 @@ fn scavenge_pass(world: &mut World, alive_ids: &[u32]) {
             if world.carcasses[ci].flesh <= 0.0 {
                 return;
             }
-            let d = crate::spatial::torus_distance(pos, world.carcasses[ci].pos, world.world_size);
-            // Strict `<` on distance plus lowest-index tie-break reproduces the
-            // old ascending-index linear scan exactly.
-            if d < best_d || (d == best_d && best.is_some_and(|b| ci < b)) {
-                best_d = d;
+            let d2 =
+                crate::spatial::torus_distance_sq(pos, world.carcasses[ci].pos, world.world_size);
+            // Strict `<` plus lowest-index tie-break = deterministic nearest.
+            if d2 < best_d2 || (d2 == best_d2 && best.is_some_and(|b| ci < b)) {
+                best_d2 = d2;
                 best = Some(ci);
             }
         });
@@ -361,16 +364,19 @@ fn harvest_pass(world: &mut World, alive_ids: &[u32]) {
         }
         let pos = world.agents.position[i];
         let mut best: Option<usize> = None;
-        let mut best_d = HARVEST_RANGE;
+        // Compare by *squared* distance (monotonic on [0, ∞)), dropping a `sqrt`
+        // per visited node; `best_d2` seeded with the squared range.
+        let mut best_d2 = HARVEST_RANGE * HARVEST_RANGE;
         world.resource_spatial.query(pos, HARVEST_RANGE, |ri| {
             let ri = ri as usize;
             if world.resources[ri].amount <= 0.0 {
                 return;
             }
-            let d = crate::spatial::torus_distance(pos, world.resources[ri].pos, world.world_size);
+            let d2 =
+                crate::spatial::torus_distance_sq(pos, world.resources[ri].pos, world.world_size);
             // Strict `<` plus lowest-index tie-break = deterministic nearest.
-            if d < best_d || (d == best_d && best.is_some_and(|b| ri < b)) {
-                best_d = d;
+            if d2 < best_d2 || (d2 == best_d2 && best.is_some_and(|b| ri < b)) {
+                best_d2 = d2;
                 best = Some(ri);
             }
         });

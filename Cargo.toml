@@ -10,7 +10,10 @@ repository = "https://github.com/aryavolkan/anabios"
 
 [workspace.dependencies]
 glam = { version = "0.27", features = ["serde"] }
-rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }
+# Only the seeded Xoshiro stream is used (see anabios-core/src/rng.rs) — no
+# `thread_rng`/entropy — so rand needs no features. Dropping `std` prunes
+# getrandom/libc/rand_chacha from the shipped graph; keep it featureless.
+rand = { version = "0.8", default-features = false, features = [] }
 rand_xoshiro = { version = "0.6", features = ["serde1"] }
 serde = { version = "1", features = ["derive"] }
 bincode = "1.3"

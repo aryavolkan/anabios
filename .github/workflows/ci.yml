@@ -24,11 +24,16 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # fmt and doc are OS-independent by construction (source formatting +
+      # rustdoc), so run them once on ubuntu rather than duplicating on the
+      # scarcer macOS runner. clippy/test stay on both to catch platform cfg.
       - name: fmt
+        if: matrix.os == 'ubuntu-latest'
         run: cargo fmt --all --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: doc
+        if: matrix.os == 'ubuntu-latest'
         run: cargo doc --workspace --no-deps --document-private-items
       - name: test (lib + unit)
         run: cargo test --workspace --lib
