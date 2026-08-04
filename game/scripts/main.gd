@@ -512,7 +512,9 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			# the transition into a quick flip-squash rather than a snap.
 			var face_left := 1.0 if cos(rot) < 0.0 else 0.0
 			if have_ids:
-				face_left = lerpf(float(_facing.get(ids[i], face_left)), face_left, minf(1.0, delta * 12.0))
+				face_left = lerpf(
+					float(_facing.get(ids[i], face_left)), face_left, minf(1.0, delta * 12.0)
+				)
 				_facing[ids[i]] = face_left
 			var phase: float = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
 			# Action pose from sim signals: near a combat streak's attacker
