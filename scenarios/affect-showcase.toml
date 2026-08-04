@@ -1,0 +1,28 @@
+name = "affect-showcase"
+seed = 0
+affect_enabled = true
+# Combat pressure so the predators actually loom; keep population modest so
+# the story is the affect response, not Malthusian collapse.
+max_population = 600
+
+# Dense hungry grazer herd — small, low-reserve agents packed onto one patch,
+# so synchronized hunger drives a converged high-SEEK cluster (FeedingFrenzy).
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 50.0 }
+[agents.traits]
+size = 0.35
+basal_metabolism = 0.4
+lifespan_bias = 1.0
+
+# Predators seeded inside the herd — immediate, close, big other-species
+# threats that spike FEAR and let it propagate through the cluster
+# (PanicCascade).
+[[agents]]
+count = 10
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 50.0 }
+[agents.traits]
+size = 0.9
+lifespan_bias = 1.0
