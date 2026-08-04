@@ -124,6 +124,12 @@ pub struct Scenario {
     /// Effectively requires `inventions_enabled` (taming needs Husbandry).
     #[serde(default)]
     pub domestication_enabled: bool,
+    /// Opt-in: knowledge accumulation — Writing-holding cultures build
+    /// durable, transmissible tech memory that survives population
+    /// bottlenecks. `false` (default) keeps the world byte-identical.
+    /// Effectively requires `inventions_enabled` (Writing must exist).
+    #[serde(default)]
+    pub knowledge_enabled: bool,
     /// Maladaptive cultural practices (Inbreeding, Child Sacrifice). Unlike the
     /// opt-in flags above, this defaults to `true`: practices run whenever
     /// `cognition_enabled` is on, exactly as before the flag existed, so every
@@ -405,6 +411,11 @@ pub enum ScenarioError {
     )]
     InventionsDisabled,
     #[error(
+        "knowledge_enabled requires `inventions_enabled = true` — knowledge accumulation \
+         tracks Writing-holding cultures, which don't exist without the invention tree"
+    )]
+    KnowledgeNeedsInventions,
+    #[error(
         "hash_res must be >= 3 (got {0}): the spatial-hash neighbour query walks a \
          3-cell ring, which aliases onto the same cells at a lower resolution and \
          double-counts neighbours"
@@ -422,6 +433,9 @@ impl Scenario {
             && scenario.agents.iter().any(|s| !s.starting_inventions.is_empty())
         {
             return Err(ScenarioError::InventionsDisabled);
+        }
+        if scenario.knowledge_enabled && !scenario.inventions_enabled {
+            return Err(ScenarioError::KnowledgeNeedsInventions);
         }
         for spec in &scenario.agents {
             for name in &spec.starting_inventions {
@@ -474,6 +488,7 @@ impl Scenario {
         w.sexual_dimorphism_enabled = self.sexual_dimorphism_enabled;
         w.domestication_enabled = self.domestication_enabled;
         w.agents.track_livestock = self.domestication_enabled;
+        w.knowledge_enabled = self.knowledge_enabled;
         w.practices_enabled = self.practices_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {

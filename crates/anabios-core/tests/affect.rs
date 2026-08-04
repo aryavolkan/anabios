@@ -57,7 +57,7 @@ fn affect_scenario_survives_save_load_step() {
 /// SEEKING layer was wired; regenerate deliberately whenever an affect change
 /// is intentional.
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x48945c0200cea750), (100, 0x29432d7fb5e74d12), (300, 0x22a1de3ba06ffacb)];
+    &[(0, 0x02734d84b9b4fbac), (100, 0x52096dfdbec3fb60), (300, 0xcc367a8fea5663e1)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -154,7 +154,7 @@ fn affect_threat_emits_mass_fright() {
 /// with `UPDATE_HASHES=1` whenever an affect-behavior change is intentional.
 // Created 2026-08-03 (M-B): first pin of the FEAR/hijack layer's real behavior.
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xc7a838c2945a1d94), (100, 0x01ce1a3a552fa28e), (300, 0x9467ba4b761fcdf6)];
+    &[(0, 0xa3127deefb009efc), (100, 0xc7761c3d97fa3748), (300, 0x04901f8da2a4d8e2)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

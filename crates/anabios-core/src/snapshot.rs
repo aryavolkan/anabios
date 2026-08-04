@@ -106,15 +106,18 @@ use crate::world::World;
 ///     wherever cognition is on ⇒ behavior unchanged in every golden scenario;
 ///     only the serialized layout grew (layered on v24's conserve_goods field).
 ///     (Reproducible O1-autopsy lever.)
-/// v26: M-A subcortical affect layer — AgentBuffers.affect column (7 serialized
-///      f32 per agent), World.affect_enabled flag, and genome temperament slots
-///      17/18/19/34/35 renamed in place (Boldness/Aggressiveness/Nurturance/
-///      Sociality/Reactivity — values/indices unchanged, so genome bytes are
-///      identical). affect_enabled off in every existing golden scenario ⇒
-///      develop_all no-ops (zero RNG), read-side hooks are identity, and the
-///      speed factor is exactly 1.0 — behavior byte-identical; only the
-///      serialized layout grew (stacked on v25's practices_enabled layout).
-pub const FORMAT_VERSION: u32 = 26;
+/// v26: knowledge-accumulation subsystem — World.knowledge_enabled flag +
+///      CodexState.{knowledge_by_species, knowledge_ratchet_fired}. Off in every
+///      golden scenario; only the serialized layout grew.
+/// v27: M-A+M-B subcortical affect layer — AgentBuffers.affect column (7
+///      serialized f32 per agent), World.affect_enabled flag, genome temperament
+///      slots 17/18/19/34/35 renamed in place (values/indices unchanged), and
+///      EventType::MassFright (appended after KnowledgeRatchet). affect_enabled
+///      off in every existing golden scenario ⇒ develop_all no-ops (zero RNG),
+///      read-side hooks are identity, speed factor exactly 1.0, and the FEAR/
+///      hijack paths are gated off — behavior byte-identical; only the serialized
+///      layout grew (stacked on v26's knowledge layout).
+pub const FORMAT_VERSION: u32 = 27;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

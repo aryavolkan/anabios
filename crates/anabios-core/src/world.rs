@@ -176,6 +176,14 @@ pub struct World {
     /// the tick stage early-returns and zero RNG is drawn with the flag off.
     #[serde(default)]
     pub domestication_enabled: bool,
+    /// When true, knowledge accumulation is active: Writing-holding cultures
+    /// build durable, transmissible tech memory that survives population
+    /// bottlenecks. Gates `knowledge::knowledge_step` (per-species accrual
+    /// while a member holds Writing) and the `KnowledgeRatchet` codex
+    /// detector. Off by default; off ⇒ byte-identical to pre-E14 worlds
+    /// (zero state written, zero RNG draws).
+    #[serde(default)]
+    pub knowledge_enabled: bool,
     /// When true (the default), maladaptive cultural practices are active:
     /// `practice::discover_step` may introduce Inbreeding / Child Sacrifice.
     /// Set false to suppress practice discovery so a fresh run carries none —
@@ -361,6 +369,7 @@ impl World {
             settlement_enabled: false,
             sexual_dimorphism_enabled: false,
             domestication_enabled: false,
+            knowledge_enabled: false,
             // Practices default ON (gated by cognition_enabled), matching
             // behavior before this flag existed; set false to disable discovery.
             practices_enabled: true,

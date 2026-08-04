@@ -217,10 +217,14 @@ pub enum EventType {
     /// A livestock species sustained ≥`LIVESTOCK_HERD_MIN` living tamed members for
     /// `LIVESTOCK_HERD_WINDOW` consecutive ticks (`value` = tamed count).
     LivestockHerd = 52,
+    /// A species that had lost Writing re-acquired an invention faster than
+    /// its founding rate because of retained per-species knowledge
+    /// (`value` = accumulated knowledge at re-acquisition).
+    KnowledgeRatchet = 53,
     /// A cluster of same-species agents simultaneously in high FEAR — the first
     /// mass fright / panic response (Bracha rout). `value` = frightened member
     /// count; loc = species centroid.
-    MassFright = 53,
+    MassFright = 54,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays

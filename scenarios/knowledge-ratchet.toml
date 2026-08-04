@@ -1,0 +1,27 @@
+name = "knowledge-ratchet"
+seed = 0
+inventions_enabled = true
+knowledge_enabled = true
+# Keep the world well below carrying-capacity saturation so the population
+# survives long enough (thousands of ticks) for knowledge to accrue past
+# KNOWLEDGE_RATCHET_MIN, mirroring the inventions/domestication demos.
+max_population = 400
+
+# E14 knowledge-ratchet demo: a single innovator culture seeded with Writing
+# (and its prerequisites) already held at tick 0 — knowledge accrual does not
+# depend on discovering era-3 Writing on its own (which is IQ-gated and can
+# take arbitrarily long); it depends only on a live Writing-holder existing
+# each tick. `lifespan_bias = 1.0` keeps the population viable across the long
+# horizon needed for `knowledge_by_species` to climb from 0.0 to
+# `KNOWLEDGE_RATCHET_MIN` at `KNOWLEDGE_GAIN` per tick. Watch the codex for
+# `KnowledgeRatchet`.
+
+[[agents]]
+count = 80
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 100.0 }
+starting_inventions = ["stone_tools", "fire", "farming", "writing"]
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0

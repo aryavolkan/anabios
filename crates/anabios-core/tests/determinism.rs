@@ -166,12 +166,15 @@ const GOLDEN: &[(u64, u64)] =
     // World.practices_enabled added, defaulting true so discovery still runs
     // wherever cognition is on — but cognition is off in minimal, so behavior is
     // byte-identical; only the serialized layout grew.
-    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 25→26): AgentBuffers
-    // gained the serialized `affect` column (7 f32/agent) + World.affect_enabled
-    // (off here); temperament slots renamed in place. develop_all no-ops (zero
-    // RNG), read-side hooks are identity, speed factor 1.0 — trajectory byte-
-    // identical atop the v25 practices_enabled layout; regenerated on the merged tree.
-    &[(0, 0x29449d6177f79f6d), (100, 0xce6d341a0ccf0c79), (1000, 0x4fdc2d964af88fd5)];
+    // Refreshed 2026-08-03 (main knowledge layout, FORMAT_VERSION →26):
+    // World.knowledge_enabled + CodexState.{knowledge_by_species,
+    // knowledge_ratchet_fired}, off in minimal ⇒ knowledge_step early-returns,
+    // trajectory byte-identical, layout growth only.
+    // Refreshed 2026-08-03 (M-A+M-B affect layer, FORMAT_VERSION 26→27): affect
+    // column + affect_enabled + temperament slots + EventType::MassFright, all
+    // off/gated in minimal ⇒ zero RNG, identity hooks — trajectory byte-identical
+    // atop the v26 knowledge layout; regenerated on the merged tree.
+    &[(0, 0x7032545f8e8c48cf), (100, 0xf37677f21f341cb3), (1000, 0x83de99245bcade91)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

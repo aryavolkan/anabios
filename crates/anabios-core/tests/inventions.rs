@@ -1074,12 +1074,13 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
     // World.practices_enabled added, defaulting true (off-effect here) — layout
     // growth only, trajectory byte-identical.
-    // Refreshed 2026-08-03 (M-A affect layer, FORMAT_VERSION 25→26): AgentBuffers
-    // gained the serialized `affect` column + World.affect_enabled (off here);
-    // temperament slots renamed in place. Affect stage no-ops flag-off and read-
-    // side hooks are identity — byte-identical; regenerated on the merged tree
-    // atop the v25 practices_enabled layout.
-    &[(0, 0x923a1d5ce42d70b3), (100, 0x30b5e9b3eefaf176), (300, 0xcf10bc7655fe538d)];
+    // Refreshed 2026-08-03 (main knowledge layout, FORMAT_VERSION →26):
+    // World.knowledge_enabled + CodexState knowledge fields, off here ⇒
+    // knowledge_step early-returns, trajectory byte-identical, layout growth only.
+    // Refreshed 2026-08-03 (M-A+M-B affect layer, FORMAT_VERSION 26→27): affect
+    // column + flag + temperament + EventType::MassFright, all off/gated here ⇒
+    // byte-identical atop the v26 knowledge layout; regenerated on the merged tree.
+    &[(0, 0xc3487138b8eae271), (100, 0xee89ed84a363695e), (300, 0x7d5ebd1e5240c027)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
