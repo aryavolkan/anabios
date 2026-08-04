@@ -75,6 +75,29 @@ pub const FIGHT_ENERGY_MIN: f32 = 0.35 * crate::agent::SPAWN_ENERGY;
 /// fire_intent asserted when the hijack chooses Fight.
 pub const FIRE_HIJACK: f32 = 1.0;
 
+// --- M-C: RAGE (agonistic) ---
+/// Neighbour count at which crowd-pressure (the "blocked from resources" half of
+/// frustration) saturates. Higher crowding + hunger ⇒ more RAGE.
+pub const RAGE_CROWD_REF: f32 = 6.0;
+/// RAGE added to a target's activation each time it takes combat damage
+/// (written into the serialized `affect` column by `interact::combat_pass`, so
+/// no new column and no serde-skip replay hazard). Clamped to 1.0.
+pub const RAGE_ATTACK_IMPULSE: f32 = 0.5;
+/// RAGE → `fire_intent` gain (approach-and-attack the combat target).
+pub const K_RAGE_FIRE: f32 = 1.0;
+/// RAGE → approach-target movement gain.
+pub const K_RAGE_APPROACH: f32 = 0.5;
+/// FEAR⊣RAGE lateral-inhibition strength (flee before fight): at FEAR = 1 and
+/// strength 1, RAGE is fully suppressed.
+pub const FEAR_INHIBITS_RAGE: f32 = 1.0;
+
+// --- M-C: LUST (reproductive) ---
+/// LUST → reproduction-threshold *reduction* (lowers the mating energy gate).
+/// At LUST = 1 the gate drops by this fraction (30%).
+pub const K_LUST_REPRO: f32 = 0.3;
+/// LUST → approach-mate movement gain.
+pub const K_LUST_APPROACH: f32 = 0.4;
+
 /// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
 pub type AffectState = [f32; AFFECT_SYSTEMS];
@@ -132,6 +155,47 @@ pub(crate) fn fear_trigger(sensors: &SensorRegister, genome: &Genome) -> f32 {
     // ⇒ zero fear for every temperament (no phantom baseline). Signed [-1,+1].
     threat = (threat * (1.0 - K_FEAR_BOLDNESS * genome.boldness())).clamp(0.0, 1.0);
     threat
+}
+
+/// RAGE trigger — *derived frustration*. anabios has no native "frustration"
+/// field, so we derive it: an agent is frustrated when it is **hungry while
+/// blocked**, i.e. high homeostatic `drive` (energy deficit, a proxy for low
+/// recent intake) AND high `crowding` (competitors in the way of the resource).
+/// The product means BOTH must hold — a well-fed crowded agent, or a starving
+/// solitary one, is not frustrated. Scaled by an `aggressiveness`-derived gain
+/// (RAGE gain gene, mapped `[-1,+1] → [0,1]`). Result in `[0,1]`.
+///
+/// Note: the "having-been-attacked this tick" half of the spec's heuristic is
+/// applied as a separate impulse in `interact::combat_pass` (see
+/// `RAGE_ATTACK_IMPULSE`), NOT here — combat runs after the affect stage, and
+/// its `#[serde(skip)]` `combat_damaged` scratch cannot be read into serialized
+/// affect across a tick boundary without reintroducing the serde-skip replay
+/// footgun. Writing the impulse into the serialized `affect` column at combat
+/// time keeps it determinism-safe.
+pub fn trigger_rage(drive: f32, genome: &Genome, sensors: &SensorRegister) -> f32 {
+    let crowd_pressure = (sensors.crowding as f32 / RAGE_CROWD_REF).clamp(0.0, 1.0);
+    let frustration = drive * crowd_pressure;
+    // aggressiveness() ∈ [-1,+1]; map to a [0,1] gain (neutral genome ⇒ 0.5).
+    let gain = (0.5 + 0.5 * genome.aggressiveness()).clamp(0.0, 1.0);
+    (frustration * gain).clamp(0.0, 1.0)
+}
+
+/// LUST trigger — mate-readiness. Rises to 1.0 when the agent's energy is at or
+/// above the mating gate (`SPAWN_ENERGY × ReproductionThreshold × REPRO_ENERGY_MULT`,
+/// the same reference `reproduce::is_eligible` uses) AND a same-species neighbour
+/// is in perception (`nearest_same_id`). Zero otherwise. Deterministic function
+/// of serialized/​recomputed state only (energy + genome + this tick's sensors).
+pub fn trigger_lust(energy: f32, genome: &Genome, sensors: &SensorRegister) -> f32 {
+    if sensors.nearest_same_id == crate::sense::NO_NEIGHBOR_ID {
+        return 0.0;
+    }
+    let repro_energy = crate::agent::SPAWN_ENERGY
+        * genome.get(crate::genome::GenomeSlot::ReproductionThreshold)
+        * crate::reproduce::REPRO_ENERGY_MULT;
+    if repro_energy <= 0.0 || energy < repro_energy {
+        return 0.0;
+    }
+    1.0
 }
 
 /// Compute stage (Layer 0 → Layer 1). Update each alive agent's affect column
@@ -605,5 +669,51 @@ mod tests {
         assert_eq!(faint.fire_intent, 0.0);
         assert_eq!(faint.share_intent, 0.0);
         assert_eq!(faint.broadcast_intent[0], 0.0);
+    }
+
+    #[test]
+    fn trigger_rage_scales_with_drive_and_crowding() {
+        use crate::genome::Genome;
+        use crate::sense::SensorRegister;
+        let g = Genome::neutral(); // aggressiveness() == 0.0 → gain 0.5
+                                   // No crowding → no frustration regardless of drive.
+        let alone = SensorRegister { crowding: 0, ..Default::default() };
+        assert_eq!(trigger_rage(1.0, &g, &alone), 0.0);
+        // High drive + crowded → positive frustration.
+        let crowded = SensorRegister { crowding: RAGE_CROWD_REF as u32, ..Default::default() };
+        let r = trigger_rage(1.0, &g, &crowded);
+        assert!(r > 0.0 && r <= 1.0, "frustrated agent has positive RAGE trigger: {r}");
+        // Well-fed (drive 0) → no frustration even when crowded.
+        assert_eq!(trigger_rage(0.0, &g, &crowded), 0.0);
+    }
+
+    #[test]
+    fn trigger_rage_gain_rises_with_aggressiveness() {
+        use crate::genome::{Genome, GenomeSlot};
+        use crate::sense::SensorRegister;
+        let crowded = SensorRegister { crowding: RAGE_CROWD_REF as u32, ..Default::default() };
+        let mut calm = Genome::neutral();
+        calm.set(GenomeSlot::Aggressiveness, 0.0); // aggressiveness() == -1.0 → gain 0.0
+        let mut fierce = Genome::neutral();
+        fierce.set(GenomeSlot::Aggressiveness, 1.0); // aggressiveness() == +1.0 → gain 1.0
+        assert!(trigger_rage(1.0, &fierce, &crowded) > trigger_rage(1.0, &calm, &crowded));
+    }
+
+    #[test]
+    fn trigger_lust_needs_mate_and_energy() {
+        use crate::agent::SPAWN_ENERGY;
+        use crate::genome::{Genome, GenomeSlot};
+        use crate::sense::{SensorRegister, NO_NEIGHBOR_ID};
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::ReproductionThreshold, 0.4);
+        let repro_energy = SPAWN_ENERGY * 0.4 * crate::reproduce::REPRO_ENERGY_MULT;
+        let with_mate = SensorRegister { nearest_same_id: 3, ..Default::default() };
+        let no_mate = SensorRegister { nearest_same_id: NO_NEIGHBOR_ID, ..Default::default() };
+        // Ready + mate present → lust.
+        assert!(trigger_lust(repro_energy + 1.0, &g, &with_mate) > 0.0);
+        // Ready but nobody around → no lust.
+        assert_eq!(trigger_lust(repro_energy + 1.0, &g, &no_mate), 0.0);
+        // Mate present but below the mating energy gate → no lust.
+        assert_eq!(trigger_lust(repro_energy - 1.0, &g, &with_mate), 0.0);
     }
 }

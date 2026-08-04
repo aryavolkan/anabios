@@ -25,6 +25,11 @@ pub const MATING_RANGE: f32 = 2.0;
 /// 0.5 means parents collectively pay `SPAWN_ENERGY` total (energy-conserving).
 pub const PARENT_ENERGY_COST_FRAC: f32 = 0.5;
 
+/// Multiplier on `ReproductionThreshold × SPAWN_ENERGY` that sets the mating
+/// energy gate (see `is_eligible`). Named so the affect layer's LUST trigger
+/// (`affect::trigger_lust`) reads the same reference the gate uses.
+pub const REPRO_ENERGY_MULT: f32 = 1.5;
+
 /// Default hard upper bound on alive agents. Reproduction skips at/above the
 /// cap. The live value is `World::max_population` (per-world overridable);
 /// this constant is the design's 10k-agent budget (design §8; the
@@ -288,7 +293,7 @@ fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
     // Conscientiousness raises the effective breeding threshold.
     let threshold = SPAWN_ENERGY
         * agents.genome[i].get(GenomeSlot::ReproductionThreshold)
-        * 1.5
+        * REPRO_ENERGY_MULT
         * crate::personality::personality_reproduction_factor(&agents.genome[i]);
     agents.energy[i] >= threshold
 }
