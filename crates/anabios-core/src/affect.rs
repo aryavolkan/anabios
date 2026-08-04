@@ -301,6 +301,15 @@ pub fn apply_affect(
         action.move_x += K_RAGE_APPROACH * rage * sensors.nearest_other_dir.x;
         action.move_y += K_RAGE_APPROACH * rage * sensors.nearest_other_dir.y;
     }
+
+    // M-C LUST: approach the nearest same-species neighbour (a potential mate).
+    // Guarded on LUST ≠ 0 → exact identity at neutral affect. mate_intent stays
+    // latent; the reproduction gate is lowered via affect_reproduction_factor.
+    let lust = affect[LUST];
+    if lust != 0.0 && sensors.nearest_same_id != crate::sense::NO_NEIGHBOR_ID {
+        action.move_x += K_LUST_APPROACH * lust * sensors.nearest_same_dir.x;
+        action.move_y += K_LUST_APPROACH * lust * sensors.nearest_same_dir.y;
+    }
 }
 
 /// Survival-reflex override (Bracha: Freeze→Flight→Fight→Fright/Faint). When
@@ -841,5 +850,45 @@ mod tests {
         apply_affect(&mut a, &affect, &Genome::neutral(), &s, crate::agent::SPAWN_ENERGY);
         assert_eq!(a.fire_intent, before.fire_intent, "neutral RAGE: fire unchanged");
         assert_eq!(a.move_x, before.move_x, "neutral RAGE: move unchanged");
+    }
+
+    #[test]
+    fn apply_affect_lust_approaches_same_species() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::program::ActionRegister;
+        use crate::sense::SensorRegister;
+
+        let mut a = ActionRegister::default();
+        let before_mate = a.mate_intent;
+        let mut affect: AffectState = [0.0; AFFECT_SYSTEMS];
+        affect[LUST] = 0.9;
+        let s = SensorRegister {
+            nearest_same_id: 4,
+            nearest_same_dir: Vec2::new(0.0, 1.0),
+            ..Default::default()
+        };
+        apply_affect(&mut a, &affect, &Genome::neutral(), &s, crate::agent::SPAWN_ENERGY);
+        assert!(a.move_y > 0.0, "LUST approaches the mate: {}", a.move_y);
+        assert_eq!(a.mate_intent, before_mate, "LUST must not touch latent mate_intent");
+    }
+
+    #[test]
+    fn apply_affect_lust_is_identity_at_neutral() {
+        use crate::genome::Genome;
+        use crate::prelude::Vec2;
+        use crate::program::ActionRegister;
+        use crate::sense::SensorRegister;
+
+        let mut a = ActionRegister { move_y: 0.2, ..Default::default() };
+        let before = a;
+        let affect: AffectState = [0.0; AFFECT_SYSTEMS]; // LUST == 0
+        let s = SensorRegister {
+            nearest_same_id: 4,
+            nearest_same_dir: Vec2::new(0.0, 1.0),
+            ..Default::default()
+        };
+        apply_affect(&mut a, &affect, &Genome::neutral(), &s, crate::agent::SPAWN_ENERGY);
+        assert_eq!(a.move_y, before.move_y, "neutral LUST: move unchanged");
     }
 }
