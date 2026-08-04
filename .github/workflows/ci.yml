@@ -64,18 +64,22 @@ jobs:
   # below. Instrumented execution of the full suite had grown to ~20 min in a
   # single job. The cost is NOT spread evenly across tests: a handful of
   # simulation-heavy integration tests explode under LLVM instrumentation (the
-  # same tests stay fast in release — see the `emergence` job), so a naive
-  # count-based split just clusters them into one unlucky shard. Instead we
-  # bin-pack by test binary so no shard holds two monsters:
-  #   - `all_scenarios` alone: its one test runs every scenario back-to-back and
-  #     is ~470s instrumented — the single tallest pole, so it gets its own shard.
-  #   - `traditions` (~370s) + `invariants` (many mid-weight tests that parallelize).
-  #   - everything else + the whole lib/unit suite (the fast bulk).
-  # The three filtersets are a complete, disjoint partition (the third is the
-  # negation of the first two), so their union is the full workspace coverage.
-  # If a binary is renamed, it silently falls into the `rest` shard — coverage
-  # stays correct, only the balance drifts (and the gate would catch any real
-  # coverage loss). Rebalance the buckets if a new heavyweight lands.
+  # same tests stay fast in release — see the `emergence` job), and they
+  # parallelize poorly (long CPU-bound sims with serial tails), so a naive
+  # count split just clusters them into one unlucky shard. We bin-pack instead:
+  #   - `scenarios`:  `all_scenarios` alone — its one test runs every scenario
+  #     back-to-back and is the single tallest pole (~5 min even by itself).
+  #   - `behavioral`: `traditions` (one ~370s test) + `invariants` (many mid-
+  #     weight tests that parallelize) — ~6 min.
+  #   - `bulk-1..3`:  everything else + the whole lib/unit suite, count-partitioned
+  #     3 ways (nextest -E <filter> --partition). Once the tall poles above are
+  #     carved out, the remainder is uniform enough that round-robin balances it
+  #     (~5-7 min each) instead of piling into one 16-min shard.
+  # The five filtersets are a complete, disjoint partition (the three bulk shards
+  # exhaust `not (scenarios | behavioral)`), so their union is the full workspace
+  # coverage. If a binary is renamed it just falls into `bulk` — coverage stays
+  # correct, only the balance drifts (and the gate catches any real coverage loss).
+  # Rebalance if a new heavyweight lands: give it its own shard like the poles.
   coverage-collect:
     name: coverage shard (${{ matrix.id }})
     runs-on: ubuntu-latest
@@ -85,10 +89,19 @@ jobs:
         include:
           - id: scenarios
             filter: "binary(=all_scenarios)"
+            partition: ""
           - id: behavioral
             filter: "binary(=traditions) | binary(=invariants)"
-          - id: rest
+            partition: ""
+          - id: bulk-1
             filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants))"
+            partition: "--partition count:1/3"
+          - id: bulk-2
+            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants))"
+            partition: "--partition count:2/3"
+          - id: bulk-3
+            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants))"
+            partition: "--partition count:3/3"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -98,14 +111,14 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
       # Instrument the workspace once (build is cached), then run only this
-      # shard's slice of the test set (nextest -E filterset). --lcov emits a
-      # SELF-CONTAINED tracefile (this shard's own binaries + profile), so the
-      # report job can union the shards WITHOUT any cross-machine profraw/binary
-      # matching. Coverage reflects the always-on lib + integration suite;
-      # doctests aren't measured (nextest doesn't run them) and the emergence
-      # detectors run in debug here, where they are #[ignore]d.
+      # shard's slice of the test set (nextest -E filterset, optionally count-
+      # partitioned). --lcov emits a SELF-CONTAINED tracefile (this shard's own
+      # binaries + profile), so the report job can union the shards WITHOUT any
+      # cross-machine profraw/binary matching. Coverage reflects the always-on
+      # lib + integration suite; doctests aren't measured (nextest doesn't run
+      # them) and the emergence detectors run in debug here, where #[ignore]d.
       - name: collect coverage (shard ${{ matrix.id }})
-        run: cargo llvm-cov nextest --workspace -E "${{ matrix.filter }}" --lcov --output-path lcov-${{ matrix.id }}.info
+        run: cargo llvm-cov nextest --workspace -E "${{ matrix.filter }}" ${{ matrix.partition }} --lcov --output-path lcov-${{ matrix.id }}.info
       - name: upload shard tracefile
         uses: actions/upload-artifact@v4
         with:
