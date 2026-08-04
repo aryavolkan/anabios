@@ -1080,7 +1080,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-03 (M-A+M-B affect layer, FORMAT_VERSION 26→27): affect
     // column + flag + temperament + EventType::MassFright, all off/gated here ⇒
     // byte-identical atop the v26 knowledge layout; regenerated on the merged tree.
-    &[(0, 0xc3487138b8eae271), (100, 0xee89ed84a363695e), (300, 0x7d5ebd1e5240c027)];
+    // Refreshed 2026-08-04 (affect M-D, FORMAT_VERSION 27→28): added
+    // AgentBuffers.affect_prev_crowding serialized column. affect_enabled off in
+    // this scenario ⇒ develop_all no-op, column stays 0.0 — trajectory
+    // byte-identical, only the serialized layout grew.
+    &[(0, 0x7d0f3eb0fae1bef1), (100, 0x7b8804d161d26dd7), (300, 0x3c75eb087d89b888)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

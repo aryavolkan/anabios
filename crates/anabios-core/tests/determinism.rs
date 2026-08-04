@@ -200,7 +200,11 @@ const GOLDEN: &[(u64, u64)] =
     // column + affect_enabled + temperament slots + EventType::MassFright, all
     // off/gated in minimal ⇒ zero RNG, identity hooks — trajectory byte-identical
     // atop the v26 knowledge layout; regenerated on the merged tree.
-    &[(0, 0x7032545f8e8c48cf), (100, 0xf37677f21f341cb3), (1000, 0x83de99245bcade91)];
+    // Refreshed 2026-08-04 (affect M-D, FORMAT_VERSION 27→28): added
+    // AgentBuffers.affect_prev_crowding serialized column. affect_enabled off in
+    // every golden scenario ⇒ develop_all no-op, column stays 0.0 — trajectory
+    // byte-identical, only the serialized layout grew, so all hashes moved once.
+    &[(0, 0xd22f51b113226467), (100, 0xe64cfff2307dd7a4), (1000, 0xf28f7526a6d2b90c)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -222,6 +226,7 @@ fn parallel_matches_serial_across_thread_counts() {
         include_str!("../../../scenarios/tech-gene-coupling.toml"),
         include_str!("../../../scenarios/affect-seeking.toml"),
         include_str!("../../../scenarios/affect-threat.toml"),
+        include_str!("../../../scenarios/affect-social.toml"),
     ] {
         let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
         const TICKS: u64 = 300;

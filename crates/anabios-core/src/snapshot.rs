@@ -117,7 +117,12 @@ use crate::world::World;
 ///      read-side hooks are identity, speed factor exactly 1.0, and the FEAR/
 ///      hijack paths are gated off — behavior byte-identical; only the serialized
 ///      layout grew (stacked on v26's knowledge layout).
-pub const FORMAT_VERSION: u32 = 27;
+/// v28: affect layer M-D — AgentBuffers.affect_prev_crowding (new serialized
+///      f32 column: one-tick crowding memory for PANIC/GRIEF separation
+///      detection). affect_enabled is off in every golden scenario ⇒
+///      develop_all early-returns, the column stays 0.0, and behaviour is
+///      byte-identical; only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 28;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
