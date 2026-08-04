@@ -42,7 +42,14 @@ fn record_output_matches_player_schema() {
         .arg("--scenario")
         .arg(&scenario)
         .arg("--ticks")
-        .arg("800")
+        // Under `cargo llvm-cov` the spawned binary is itself instrumented, so
+        // 800 ticks of predator-prey takes ~10 min and dominates the coverage
+        // job. This test only checks output SCHEMA (frame/event shape), not
+        // long-run behavior — 250 ticks exercises the same record/serialize code
+        // paths (so coverage is unchanged) and still reaches the ≥1-codex-event
+        // assertion (predator-prey combat fires within tens of ticks). Full 800
+        // off-coverage keeps the original reliability margin.
+        .arg(if cfg!(coverage) { "250" } else { "800" })
         .arg("--out")
         .arg(&out_path)
         .current_dir(&repo_root)

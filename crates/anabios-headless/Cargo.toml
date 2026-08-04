@@ -16,6 +16,13 @@ rayon = { workspace = true }
 [dev-dependencies]
 tempfile = "3"
 
+# `cargo llvm-cov` sets `--cfg coverage` for the whole build. Declare it as a
+# known cfg so `cfg!(coverage)` (used in tests to shorten instrumented sim runs)
+# doesn't trip the `unexpected_cfgs` lint under `-D warnings` in the non-coverage
+# CI jobs, where the cfg is simply false.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
+
 [[bin]]
 name = "anabios-headless"
 path = "src/main.rs"
