@@ -5,6 +5,7 @@ use anabios_core::culture::{ALARM_MEME_CHANNEL, MEME_BROADCAST_THRESHOLD};
 use anabios_core::genome::{Genome, GenomeSlot};
 use anabios_core::prelude_test::Vec2;
 use anabios_core::scenario::Scenario;
+use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 use anabios_core::world::World;
 
@@ -56,4 +57,30 @@ fn kin_cluster_raises_care_and_sharing() {
         w.actions[a as usize].share_intent > 0.0,
         "CARE should push share_intent above zero for a clustered agent"
     );
+}
+
+/// Flag-ON trajectory pin for the affect layer (CARE + PANIC live). Regenerate
+/// with `UPDATE_HASHES=1` when the affect behaviour changes deliberately.
+const AFFECT_GOLDEN: &[(u64, u64)] =
+    &[(0, 0x4cf16a4904f6ce43), (100, 0x545abf5efb171928), (300, 0x187277fc7cb0cc51)];
+
+#[test]
+fn affect_social_matches_golden_hashes() {
+    let mut w = Scenario::parse_toml(AFFECT_SOCIAL).expect("parse affect-social").instantiate();
+    let max_tick = AFFECT_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
+    let mut idx = 0;
+    let mut observed: Vec<(u64, u64)> = Vec::new();
+    while w.tick <= max_tick {
+        while idx < AFFECT_GOLDEN.len() && AFFECT_GOLDEN[idx].0 == w.tick {
+            observed.push((w.tick, state_hash(&w)));
+            idx += 1;
+        }
+        step(&mut w);
+    }
+    if std::env::var("UPDATE_HASHES").is_ok() {
+        for (t, h) in &observed {
+            println!("({t}, {h:#018x}),");
+        }
+    }
+    assert_eq!(observed, AFFECT_GOLDEN.to_vec(), "affect flag-on trajectory changed");
 }
