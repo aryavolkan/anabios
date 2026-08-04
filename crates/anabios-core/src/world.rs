@@ -90,6 +90,14 @@ pub struct World {
     /// `0.0` for every agent, so the metabolic multiplier is exact identity.
     #[serde(default)]
     pub cognition_enabled: bool,
+    /// When true, the subcortical affect layer is active: `affect::develop_all`
+    /// updates per-agent Panksepp activations and the affect bias hooks steer
+    /// behavior. Off by default; opt-in per scenario. When false the affect stage
+    /// is a strict no-op (zero RNG) and every read-side hook is exact identity, so
+    /// a flag-off world is byte-identical. Same bincode/`FORMAT_VERSION` caveat as
+    /// `env_period`.
+    #[serde(default)]
+    pub affect_enabled: bool,
     /// When true, depleted biome cells recolonize from vegetated neighbours
     /// each biome step (`BiomeField::recolonize_step`), before regrowth. Off
     /// by default; opt-in per scenario. Defaulted so old snapshots without
@@ -347,6 +355,7 @@ impl World {
             gene_tech_coupling: false,
             gene_requirements: false,
             cognition_enabled: false,
+            affect_enabled: false,
             living_biome: false,
             season_period: 0,
             climate_drift_rate: 0.0,
@@ -574,5 +583,11 @@ mod tests {
         let id = w.spawn_agent(Vec2::new(10.0, 10.0), Genome::neutral());
         assert!(w.agents.is_alive(id));
         assert_eq!(w.agents.energy[id as usize], SPAWN_ENERGY);
+    }
+
+    #[test]
+    fn affect_enabled_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.affect_enabled, "affect layer is opt-in; off by default");
     }
 }

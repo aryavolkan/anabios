@@ -48,12 +48,13 @@ pub fn integrate_all(
         genome,
         meme_vector,
         iq,
+        affect,
         sex,
         alive,
         ..
     } = agents;
-    let (modules, genome, meme_vector, iq, sex, alive) =
-        (&*modules, &*genome, &*meme_vector, &*iq, &*sex, &*alive);
+    let (modules, genome, meme_vector, iq, affect, sex, alive) =
+        (&*modules, &*genome, &*meme_vector, &*iq, &*affect, &*sex, &*alive);
     position[..cap]
         .par_iter_mut()
         .zip(velocity[..cap].par_iter_mut())
@@ -88,13 +89,17 @@ pub fn integrate_all(
             let module_speed = crate::module::effective_speed_max(&modules[i]).clamp(0.0, 1.0);
             // Openness scales effective speed (identity at neutral personality).
             let speed_factor = crate::personality::personality_speed_factor(&genome[i]);
+            // Affect movement-speed factor (SEEKING + arousal). Exactly 1.0 at
+            // neutral affect, so a flag-off world stays byte-identical.
+            let affect_speed = crate::affect::affect_speed_factor(&affect[i]);
             // Machinery buff: powered locomotion.
             let inv_speed = crate::invention::speed_multiplier_coupled(
                 inv_mask,
                 &genome[i],
                 gene_tech_coupling,
             );
-            let v = direction * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed);
+            let v = direction
+                * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed * affect_speed);
             *vel = v;
 
             let new_pos = *pos + v;
@@ -222,5 +227,29 @@ mod tests {
         let new_pos = w.agents.position[id as usize];
         // Moved roughly SPEED_MAX_CAP × 1.0 = 4.0 in +x.
         assert!((new_pos.x - 504.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn seeking_raises_effective_speed() {
+        // Two identical max-speed agents; the one with a SEEKING activation must
+        // travel farther under the same unit direction.
+        let displacement = |seek: f32| -> f32 {
+            let mut w = World::new(1);
+            let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+            for m in w.agents.modules[id as usize].iter_mut() {
+                if let crate::module::Module::Locomotor { max_speed, .. } = m {
+                    *max_speed = 1.0;
+                }
+            }
+            w.agents.affect[id as usize][crate::affect::SEEK] = seek;
+            let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
+            desired[id as usize] = Vec2::new(1.0, 0.0);
+            let before = w.agents.position[id as usize];
+            integrate_all(&mut w.agents, &desired, w.world_size, false, false);
+            (w.agents.position[id as usize] - before).length()
+        };
+        let neutral = displacement(0.0);
+        let seeking = displacement(1.0);
+        assert!(seeking > neutral, "SEEKING boosts movement speed: {neutral} -> {seeking}");
     }
 }

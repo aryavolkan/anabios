@@ -165,14 +165,14 @@ const GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
     // World.practices_enabled added, defaulting true so discovery still runs
     // wherever cognition is on — but cognition is off in minimal, so behavior is
-    // byte-identical; only the serialized layout grew. Regenerated on the merged
-    // tree (carries both conserve_goods and practices fields).
-    // Refreshed 2026-08-03 (merged main practices+conserve + knowledge layout,
-    // FORMAT_VERSION 25→26): World.knowledge_enabled + CodexState.knowledge_by_species
-    // + knowledge_ratchet_fired added, defaulting off/empty — flag is off in
-    // minimal, so knowledge_step early-returns with zero draws; trajectory
-    // byte-identical, only the serialized layout grew.
-    &[(0, 0x77ee8797d0a74d55), (100, 0x0fdf324065a257b8), (1000, 0x3fa3abfb4e8767ce)];
+    // byte-identical; only the serialized layout grew.
+    // Refreshed 2026-08-04 (M-A affect layer merged atop knowledge layout,
+    // FORMAT_VERSION 26→27): AgentBuffers gained the serialized `affect` column
+    // (7 f32/agent) + World.affect_enabled (off here) on top of the v26 knowledge
+    // fields (knowledge_enabled off, CodexState knowledge maps empty). develop_all
+    // and knowledge_step both no-op flag-off with zero RNG — trajectory
+    // byte-identical; regenerated on the merged tree.
+    &[(0, 0x7032545f8e8c48cf), (100, 0xf37677f21f341cb3), (1000, 0x83de99245bcade91)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -192,6 +192,7 @@ fn parallel_matches_serial_across_thread_counts() {
     for scenario_src in [
         include_str!("../../../scenarios/minimal.toml"),
         include_str!("../../../scenarios/tech-gene-coupling.toml"),
+        include_str!("../../../scenarios/affect-seeking.toml"),
     ] {
         let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
         const TICKS: u64 = 300;

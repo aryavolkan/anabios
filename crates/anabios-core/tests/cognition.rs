@@ -96,13 +96,14 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
     // World.practices_enabled added, defaulting true — practices still run in
     // this cognition-on scenario, so behavior is byte-identical; only the
-    // serialized layout grew. Regenerated on the merged tree.
-    // Refreshed 2026-08-03 (merged main practices+conserve + knowledge layout,
-    // FORMAT_VERSION 25→26): World.knowledge_enabled + CodexState.knowledge_by_species
-    // + knowledge_ratchet_fired added, defaulting off/empty — flag is off in this
-    // scenario, so knowledge_step early-returns with zero draws; trajectory
-    // byte-identical, only the serialized layout grew.
-    &[(0, 0x1ccd02e22b4c11fe), (100, 0xbb47c5aa84631e89), (300, 0xaf7dbf7e5d683732)];
+    // serialized layout grew.
+    // Refreshed 2026-08-04 (M-A affect layer merged atop knowledge layout,
+    // FORMAT_VERSION 26→27): AgentBuffers gained the serialized `affect` column +
+    // World.affect_enabled (off here) on top of the v26 knowledge fields
+    // (knowledge_enabled off, CodexState knowledge maps empty). Both stages
+    // no-op flag-off with zero RNG draws — cognition byte-identical; regenerated
+    // on the merged tree.
+    &[(0, 0x0651d4349bd1adca), (100, 0xd27616d8c335f2f7), (300, 0xfdd1827de27e1c2d)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

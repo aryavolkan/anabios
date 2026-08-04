@@ -1073,13 +1073,13 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // only, trajectory byte-identical.
     // Refreshed 2026-08-03 (maladaptive-practices toggle, FORMAT_VERSION 24→25):
     // World.practices_enabled added, defaulting true (off-effect here) — layout
-    // growth only, trajectory byte-identical. Regenerated on the merged tree.
-    // Refreshed 2026-08-03 (merged main practices+conserve + knowledge layout,
-    // FORMAT_VERSION 25→26): World.knowledge_enabled + CodexState.knowledge_by_species
-    // + knowledge_ratchet_fired added, defaulting off/empty — flag is off in this
-    // scenario, so knowledge_step early-returns with zero draws; trajectory
-    // byte-identical, only the serialized layout grew.
-    &[(0, 0x63e24305ff8652b3), (100, 0x028d9156688c4115), (300, 0xf4a151dc7ce856b0)];
+    // growth only, trajectory byte-identical.
+    // Refreshed 2026-08-04 (M-A affect layer merged atop knowledge layout,
+    // FORMAT_VERSION 26→27): AgentBuffers gained the serialized `affect` column +
+    // World.affect_enabled (off here) on top of the v26 knowledge fields
+    // (knowledge_enabled off, CodexState knowledge maps empty). Both stages no-op
+    // flag-off with zero RNG — byte-identical; regenerated on the merged tree.
+    &[(0, 0xc3487138b8eae271), (100, 0xee89ed84a363695e), (300, 0x7d5ebd1e5240c027)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

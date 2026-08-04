@@ -65,9 +65,14 @@ pub enum GenomeSlot {
     /// toward speciation distance (it is adaptive). Read only when
     /// `World::cognition_enabled`; inert otherwise.
     CognitivePotential = 16,
-    _DriveReserved17 = 17,
-    _DriveReserved18 = 18,
-    _DriveReserved19 = 19,
+    /// Boldness (temperament, signed via accessor): +1 bold (low FEAR setpoint /
+    /// high freeze threshold), −1 timid. Read by the affect layer. Counts toward
+    /// speciation distance. Inert when `World::affect_enabled` is false.
+    Boldness = 17,
+    /// Aggressiveness (temperament): +1 high RAGE gain, −1 placid.
+    Aggressiveness = 18,
+    /// Nurturance (temperament): +1 high CARE gain, −1 neglectful.
+    Nurturance = 19,
 
     // Behavioral biases (20..30)
     /// Declared; not yet read by behavior. Reserved: future foraging explore-vs-exploit bias.
@@ -107,8 +112,12 @@ pub enum GenomeSlot {
     /// Counts toward speciation distance (non-personality slot). Read only
     /// when `World::sexual_dimorphism_enabled`; inert otherwise.
     SexualDimorphism = 33,
-    _ReproReserved34 = 34,
-    _ReproReserved35 = 35,
+    /// Sociality (temperament): +1 strongly bonded (PANIC/PLAY/CARE bond weight),
+    /// −1 solitary. Read by the affect layer; counts toward speciation distance.
+    Sociality = 34,
+    /// Reactivity (temperament): +1 high arousal gain / low hijack threshold /
+    /// slow decay, −1 phlegmatic. Read by the affect layer.
+    Reactivity = 35,
     _ReproReserved36 = 36,
     _ReproReserved37 = 37,
     _ReproReserved38 = 38,
@@ -162,9 +171,9 @@ pub const SLOT_NAMES: [&str; GENOME_LEN] = [
     "KinPreference",
     "Territoriality",
     "CognitivePotential",
-    "reserved_17",
-    "reserved_18",
-    "reserved_19",
+    "Boldness",
+    "Aggressiveness",
+    "Nurturance",
     "ExploreVsExploit",
     "Conscientiousness",
     "AmbushPreference",
@@ -179,8 +188,8 @@ pub const SLOT_NAMES: [&str; GENOME_LEN] = [
     "OffspringInvestment",
     "MateChoosiness",
     "SexualDimorphism",
-    "reserved_34",
-    "reserved_35",
+    "Sociality",
+    "Reactivity",
     "reserved_36",
     "reserved_37",
     "reserved_38",
@@ -337,6 +346,27 @@ impl Genome {
     /// realized IQ develops from (`iq.rs`).
     pub fn cognitive_potential(&self) -> f32 {
         self.get(GenomeSlot::CognitivePotential)
+    }
+
+    /// Boldness in `[-1,+1]` (`2·slot − 1`). +1 bold, −1 timid. Neutral `0.5`→`0.0`.
+    pub fn boldness(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Boldness) - 1.0
+    }
+    /// Aggressiveness in `[-1,+1]`. +1 aggressive (high RAGE gain), −1 placid.
+    pub fn aggressiveness(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Aggressiveness) - 1.0
+    }
+    /// Nurturance in `[-1,+1]`. +1 nurturing (high CARE gain), −1 neglectful.
+    pub fn nurturance(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Nurturance) - 1.0
+    }
+    /// Sociality in `[-1,+1]`. +1 bonded, −1 solitary.
+    pub fn sociality(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Sociality) - 1.0
+    }
+    /// Reactivity in `[-1,+1]`. +1 reactive (high arousal gain), −1 phlegmatic.
+    pub fn reactivity(&self) -> f32 {
+        2.0 * self.get(GenomeSlot::Reactivity) - 1.0
     }
 
     /// Overwrite the 5 OCEAN slots with `N(0.5, INIT_SIGMA)` clamped to `[0,1]`,
@@ -623,5 +653,39 @@ mod tests {
         for v in child.0.iter() {
             assert!(*v >= 0.0 && *v <= 1.0);
         }
+    }
+
+    #[test]
+    fn temperament_slot_names_align_with_the_enum() {
+        assert_eq!(SLOT_NAMES[GenomeSlot::Boldness.idx()], "Boldness");
+        assert_eq!(SLOT_NAMES[GenomeSlot::Aggressiveness.idx()], "Aggressiveness");
+        assert_eq!(SLOT_NAMES[GenomeSlot::Nurturance.idx()], "Nurturance");
+        assert_eq!(SLOT_NAMES[GenomeSlot::Sociality.idx()], "Sociality");
+        assert_eq!(SLOT_NAMES[GenomeSlot::Reactivity.idx()], "Reactivity");
+    }
+
+    #[test]
+    fn temperament_accessors_are_signed_minus1_to_plus1() {
+        let mut g = Genome::neutral(); // all 0.5 → 0.0 signed
+        assert!(g.boldness().abs() < 1e-6);
+        assert!(g.reactivity().abs() < 1e-6);
+        g.set(GenomeSlot::Reactivity, 1.0);
+        assert!((g.reactivity() - 1.0).abs() < 1e-6);
+        g.set(GenomeSlot::Aggressiveness, 0.0);
+        assert!((g.aggressiveness() + 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn temperament_counts_toward_speciation_distance() {
+        // Recorded M-A decision: temperament is adaptive → it counts toward
+        // distance (unlike the OCEAN personality slots, which are masked out).
+        let a = Genome::neutral();
+        let mut b = Genome::neutral();
+        b.set(GenomeSlot::Boldness, 1.0);
+        assert!(a.distance(&b) > 0.0, "temperament (Boldness) must count toward distance");
+        // A pure personality change still contributes nothing.
+        let mut c = Genome::neutral();
+        c.set(GenomeSlot::Openness, 1.0);
+        assert_eq!(a.distance(&c), 0.0, "personality (Openness) stays excluded from distance");
     }
 }
