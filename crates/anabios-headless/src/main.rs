@@ -2,6 +2,7 @@
 
 mod autopsy;
 mod demo;
+mod founder;
 mod ledger;
 mod record;
 mod replay;
@@ -31,6 +32,22 @@ impl From<MutantArg> for StrategyKind {
         match m {
             MutantArg::Cultural => StrategyKind::Cultural,
             MutantArg::Asocial => StrategyKind::Asocial,
+        }
+    }
+}
+
+/// CLI spelling of the strategy-key mode for `autopsy`.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum TagArg {
+    Module,
+    Founder,
+}
+
+impl From<TagArg> for autopsy::FounderTagMode {
+    fn from(t: TagArg) -> Self {
+        match t {
+            TagArg::Module => autopsy::FounderTagMode::Module,
+            TagArg::Founder => autopsy::FounderTagMode::Founder,
         }
     }
 }
@@ -191,6 +208,10 @@ enum Command {
         /// Which strategy is the rare mutant whose invasion fitness we report.
         #[arg(long, value_enum, default_value_t = MutantArg::Cultural)]
         mutant: MutantArg,
+        /// Strategy key: `module` (per-tick Communicator presence, original) or
+        /// `founder` (lineage-locked founding-population tag, mutation-robust).
+        #[arg(long, value_enum, default_value_t = TagArg::Module)]
+        tag: TagArg,
     },
 }
 
@@ -238,8 +259,8 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        Command::Autopsy { scenario, seed, ticks, window, out, mutant } => {
-            autopsy::run(scenario, seed, ticks, window, out, mutant.into())
+        Command::Autopsy { scenario, seed, ticks, window, out, mutant, tag } => {
+            autopsy::run(scenario, seed, ticks, window, out, mutant.into(), tag.into())
         }
     }
 }
