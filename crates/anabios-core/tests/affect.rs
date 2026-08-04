@@ -71,8 +71,12 @@ fn affect_scenario_survives_save_load_step() {
 // the 200 same-species agents) and PANIC⊣SEEK inhibition damps SEEK — a real
 // flag-on trajectory change, layered on the affect_prev_crowding layout growth
 // (moved the flag-off minimal/cognition/inventions goldens too, see snapshot.rs v28).
+// Refreshed 2026-08-04 (M-E PLAY): juveniles with same-species peers now accrue
+// PLAY (movement approach-bias); a real flag-on behavior change (NO layout growth,
+// no new serialized column, FORMAT_VERSION unchanged). tick-0 hash is unchanged
+// (PLAY has not accrued yet); ticks 100/300 move. Flag-off goldens unaffected.
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x3b9688a730461dc4), (100, 0x6b1b8ff9d5274a7d), (300, 0x8516f480d8bdff89)];
+    &[(0, 0x3b9688a730461dc4), (100, 0x1d5c9c3005cc27df), (300, 0x0febbab089322258)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -175,8 +179,10 @@ fn affect_threat_emits_mass_fright() {
 // true here, so CARE/PANIC now genuinely compute (grazer herd kinship/crowding)
 // and PANIC⊣SEEK inhibition damps SEEK — a real flag-on trajectory change,
 // layered on the affect_prev_crowding layout growth.
+// Refreshed 2026-08-04 (M-E PLAY): juvenile grazers near same-species peers accrue
+// PLAY (movement approach-bias) — flag-on behavior change, no layout growth.
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x2a5f2e53b8351c8c), (100, 0x899d28620d3a7988), (300, 0xd352cf7afcc1fa4d)];
+    &[(0, 0x2a5f2e53b8351c8c), (100, 0x8cbe01fdcaf00bdc), (300, 0xd46da3afcdaadb06)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

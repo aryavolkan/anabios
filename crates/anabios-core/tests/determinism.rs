@@ -227,6 +227,9 @@ fn parallel_matches_serial_across_thread_counts() {
         include_str!("../../../scenarios/affect-seeking.toml"),
         include_str!("../../../scenarios/affect-threat.toml"),
         include_str!("../../../scenarios/affect-social.toml"),
+        // Both flags on: exercises the PLAY affect par_iter AND the PLAY→iq
+        // enrichment coupling in the cognition par_iter across thread counts (M-E).
+        include_str!("../../../scenarios/affect-play.toml"),
     ] {
         let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
         const TICKS: u64 = 300;
