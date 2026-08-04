@@ -29,6 +29,11 @@ pub const IQ_PLASTICITY: f32 = 0.5;
 pub const IQ_METABOLIC_COST: f32 = 0.25;
 /// Neighbour count that saturates the social-enrichment signal.
 pub const IQ_SOCIAL_REF: f32 = 8.0;
+/// Bounded PLAY contribution to a juvenile's social-enrichment signal, per unit
+/// PLAY activation (M-E). Small: PLAY nudges the sensed-crowding social term,
+/// which is re-clamped to `[0,1]` so realized IQ stays bounded. Read only when
+/// both `cognition_enabled` and `affect_enabled` are on.
+pub const PLAY_ENRICH_WEIGHT: f32 = 0.25;
 
 /// Basal-metabolism multiplier from realized IQ. Exact identity at `iq == 0`,
 /// so a flag-off world (where IQ stays 0) pays no cost and stays byte-identical.
@@ -49,6 +54,8 @@ pub fn develop_all(world: &mut World) {
     }
     use rayon::prelude::*;
     let cap = world.agents.capacity();
+    // M-E: read the affect flag BEFORE the `&mut world.agents` borrow below.
+    let affect_enabled = world.affect_enabled;
     // Each juvenile folds its OWN cell nutrition + sensed crowding into its OWN
     // iq accumulators — index-disjoint, no RNG (see the doc above). Bit-identical
     // to the old serial ascending-id loop. `biome`/`sensors` (shared) and
@@ -63,9 +70,10 @@ pub fn develop_all(world: &mut World) {
         position,
         genome,
         alive,
+        affect, // M-E: read-only PLAY source for the enrichment coupling
         ..
     } = &mut world.agents;
-    let (age, position, genome, alive) = (&*age, &*position, &*genome, &*alive);
+    let (age, position, genome, alive, affect) = (&*age, &*position, &*genome, &*alive, &*affect);
     iq_enrich_acc[..cap]
         .par_iter_mut()
         .zip(iq_enrich_ticks[..cap].par_iter_mut())
@@ -93,11 +101,22 @@ pub fn develop_all(world: &mut World) {
             // Social enrichment: local neighbour density from this tick's sense.
             // Per-agent bounds check — on a growth tick the sensors buffer can be
             // shorter than capacity (same discipline as invention crowding stress).
-            let social = if i < sensors.len() {
+            let mut social = if i < sensors.len() {
                 (sensors[i].crowding as f32 / IQ_SOCIAL_REF).clamp(0.0, 1.0)
             } else {
                 0.0
             };
+            // PLAY enrichment (M-E): a juvenile who plays banks slightly richer
+            // social enrichment. Gated on affect_enabled (this fn already
+            // early-returns when cognition is off) and guarded on non-zero PLAY,
+            // so the cognition golden (affect OFF) stays byte-identical. Re-clamped
+            // to `[0,1]` to keep realized IQ bounded.
+            if affect_enabled {
+                let play = affect[i][crate::affect::PLAY];
+                if play != 0.0 {
+                    social = (social + PLAY_ENRICH_WEIGHT * play).clamp(0.0, 1.0);
+                }
+            }
             *acc += 0.5 * nutrition + 0.5 * social;
             *ticks += 1;
             let enrich = *acc / *ticks as f32;
@@ -207,5 +226,42 @@ mod tests {
         develop_all(&mut w);
         assert_eq!(w.agents.iq[i], 0.42, "mature IQ must not change");
         assert_eq!(w.agents.iq_enrich_ticks[i], 0, "no juvenile sample recorded");
+    }
+
+    /// Develop one juvenile for a single tick with a fixed PLAY activation and the
+    /// affect flag toggled; crowding is held constant so only PLAY varies (M-E).
+    fn develop_with_play(play: f32, affect_on: bool) -> f32 {
+        let mut w = World::new(1);
+        w.cognition_enabled = true;
+        w.affect_enabled = affect_on;
+        let (col, row) = grass_cell(&w);
+        let cap = w.biome.at(col, row).terrain.carrying_capacity();
+        let idx = w.biome.cell_index(col, row);
+        w.biome.cells[idx].plant_biomass = 0.5 * cap; // fixed nutrition
+        let spot = Vec2::new((col as f32 + 0.5) * CELL_SIZE, (row as f32 + 0.5) * CELL_SIZE);
+        let id = w.spawn_agent(spot, Genome::neutral());
+        let i = id as usize;
+        w.agents.age[i] = 0;
+        w.sensors.resize(w.agents.capacity(), Default::default());
+        w.sensors[i].crowding = 4; // identical base social signal in every case
+        w.agents.affect[i][crate::affect::PLAY] = play;
+        develop_all(&mut w);
+        w.agents.iq[i]
+    }
+
+    #[test]
+    fn play_lifts_realized_iq_via_enrichment() {
+        // Both flags on, crowding held equal → the IQ delta is attributable to PLAY.
+        let played = develop_with_play(0.8, true);
+        let idle = develop_with_play(0.0, true);
+        assert!(played > idle, "PLAY should raise enrichment → higher IQ: {played} vs {idle}");
+    }
+
+    #[test]
+    fn play_enrichment_is_inert_when_affect_off() {
+        // Affect off: the PLAY column is present but the coupling must not read it.
+        let hi = develop_with_play(0.8, false);
+        let lo = develop_with_play(0.0, false);
+        assert_eq!(hi, lo, "affect off ⇒ PLAY column ignored, IQ byte-identical");
     }
 }
