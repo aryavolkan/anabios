@@ -42,23 +42,56 @@ jobs:
       - name: bench compile check
         run: cargo bench --workspace --no-run
 
-  emergence:
-    name: emergence (release)
+  # The integration + behavioural gate, in release so the emergence detectors
+  # (M11-M15) — `#[cfg_attr(debug_assertions, ignore)]`, hence skipped in any
+  # debug run — actually execute. A handful of those detectors each run a
+  # multi-seed simulation and dominate wall-time (predator_prey ~405s,
+  # cooperation ~326s, dimorphism ~177s), so a single job ran ~16 min. We shard
+  # by binary so the two biggest detectors never share a runner:
+  #   - `predation`:    predator_prey_emergence alone (the tallest pole, ~7 min).
+  #   - `cooperation`:  cooperation_emergence + dimorphism.
+  #   - `rest`:         everything else — the remaining detectors (domestication,
+  #     knowledge, …) + the whole lib/integration suite.
+  # The three filtersets are a complete, disjoint partition (the third is the
+  # negation of the first two), so every test still runs exactly once; all shards
+  # must pass. The `emergence (release)` job below fans them in so the gate keeps
+  # its single check name. (Unconditionally-#[ignore]d experiment harnesses in
+  # gene_culture.rs / dit_boundary.rs stay skipped — analysis tools, not gates.)
+  emergence-shard:
+    name: emergence shard (${{ matrix.id }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: predation
+            filter: "binary(=predator_prey_emergence)"
+          - id: cooperation
+            filter: "binary(=cooperation_emergence) | binary(=dimorphism)"
+          - id: rest
+            filter: "not (binary(=predator_prey_emergence) | binary(=cooperation_emergence) | binary(=dimorphism))"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
-      # The integration + behavioural gate, in release so the emergence detectors
-      # (M11-M15) — `#[cfg_attr(debug_assertions, ignore)]`, hence skipped in any
-      # debug run — actually execute. Each detector is its own integration binary
-      # doing a long simulation; `cargo test` runs those binaries serially, so
-      # nextest (one shared parallel pool across binaries) is the win here.
-      # (Unconditionally-#[ignore]d experiment harnesses in gene_culture.rs /
-      # dit_boundary.rs stay skipped — seed-dependent analysis tools, not gates.)
-      - name: test (release — runs emergence detectors, parallel)
-        run: cargo nextest run --workspace --release
+      - name: test (release) — shard ${{ matrix.id }}
+        run: cargo nextest run --workspace --release -E "${{ matrix.filter }}"
+
+  # Fan-in: keeps a single `emergence (release)` status check (matching the name
+  # branch protection may require) and fails if any shard failed. `if: always()`
+  # so it runs even when a shard fails (a failed `needs` otherwise just skips it).
+  emergence:
+    name: emergence (release)
+    needs: emergence-shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: all emergence shards passed
+        run: |
+          result='${{ needs.emergence-shard.result }}'
+          echo "emergence-shard matrix result: $result"
+          [ "$result" = "success" ] || { echo "::error::an emergence shard did not pass"; exit 1; }
 
   # Coverage is collected in parallel shards, then unioned in the `coverage` job
   # below. Instrumented execution of the full suite had grown to ~20 min in a
