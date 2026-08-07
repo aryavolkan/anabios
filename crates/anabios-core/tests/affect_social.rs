@@ -59,10 +59,12 @@ fn kin_cluster_raises_care_and_sharing() {
     );
 }
 
-/// Flag-ON trajectory pin for the affect layer (CARE + PANIC live). Regenerate
-/// with `UPDATE_HASHES=1` when the affect behaviour changes deliberately.
+/// Flag-ON trajectory pin for the affect layer (CARE + PANIC + PLAY live).
+/// Regenerate with `UPDATE_HASHES=1` when the affect behaviour changes.
+// Refreshed 2026-08-04 (M-E PLAY): juvenile members near same-species peers accrue
+// PLAY (movement approach-bias) — flag-on behavior change, no layout growth.
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x4cf16a4904f6ce43), (100, 0x545abf5efb171928), (300, 0x187277fc7cb0cc51)];
+    &[(0, 0x4cf16a4904f6ce43), (100, 0x0ba4b32ef67d14e0), (300, 0x16202b4663b5196e)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {
