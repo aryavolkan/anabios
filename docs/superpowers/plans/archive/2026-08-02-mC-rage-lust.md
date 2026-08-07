@@ -21,7 +21,7 @@
 
 - Requires **M-A** (affect framework: `affect.rs`, serialized `affect` column, `develop_all` stage post-sense/pre-decide, `apply_affect` SEEK bias, `homeostatic_drive`, `affect_reproduction_factor` identity stub, temperament genes incl. `aggressiveness()`, `affect_enabled` flag + a flag-ON affect scenario/golden) merged.
 - Requires **M-B** (FEAR activation folded in `develop_all`, `arousal`, the hijack) merged — M-C's FEAR⊣RAGE inhibition reads the FEAR activation M-B produces.
-- Interface signatures are normative from `docs/superpowers/plans/2026-08-02-affect-layer-interface-contract.md`. Indices: `SEEK=0, FEAR=1, RAGE=2, LUST=3, CARE=4, PANIC=5, PLAY=6`.
+- Interface signatures are normative from `docs/superpowers/plans/archive/2026-08-02-affect-layer-interface-contract.md`. Indices: `SEEK=0, FEAR=1, RAGE=2, LUST=3, CARE=4, PANIC=5, PLAY=6`.
 
 ---
 

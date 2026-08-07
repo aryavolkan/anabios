@@ -21,6 +21,25 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 - **Viewer** — Godot 4.6+ client: biome/species/pheromone overlays, inspector, codex panel, co-evolution charts, per-species tech panel
 - **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV), criterion benchmark suite
 
+## Scenarios
+
+`scenarios/` holds the curated, test-pinned set (41 TOMLs) — every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate → 200 ticks, recursively over the tree) and most back a dedicated integration test, a viewer menu entry, or a gallery/showcase capture. Highlights:
+
+| Scenario | Demonstrates |
+|---|---|
+| `minimal.toml` | Baseline grazing world; determinism goldens |
+| `divergent.toml` / `convergent.toml` | Speciation / trait evolution |
+| `predator-prey.toml` / `trophic-cascade.toml` | Predation, arms races, cascades |
+| `war.toml` / `weapons-arms-race.toml` / `weapons-arena.toml` | Kin war, weapon coevolution |
+| `biome-trade.toml` / `geographic-trade.toml` / `settlement.toml` | Trade economies & markets |
+| `inventions.toml` / `cognitive-coevolution.toml` / `knowledge-ratchet.toml` | Invention tree, cognition, writing |
+| `dimorphism.toml` / `domestication.toml` | Sexual selection, livestock |
+| `mammals-vs-reptiles.toml` | Vertebrate-class archetypes |
+| `out-of-africa.toml` / `out-of-africa-saga.toml` | The flagship every-feature-on arc |
+| `grand-theater.toml` / `sandbox-large.toml` | Staged & freeform large worlds |
+
+`scenarios/experiments/` holds archived experiment suites (O1 exclusion ablations, DIT boundary suite, biome/climate variants) — kept runnable and smoke-tested, but out of the viewer menu; see `scenarios/experiments/README.md`.
+
 ## Testing
 
 ```bash

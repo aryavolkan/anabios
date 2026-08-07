@@ -115,7 +115,7 @@ A `Control` with custom `_draw()` in the coevo panel's instrument style:
 
 Registered in `main.gd`, documented in the `[H]` legend, and capturable via
 `ANABIOS_HELIX=1` in `debug_capture.gd`. New flagship scenario
-`scenarios/gene-requirements.toml` turns on all four flags.
+`scenarios/experiments/gene-requirements.toml` turns on all four flags.
 
 ## 4. Evidence
 

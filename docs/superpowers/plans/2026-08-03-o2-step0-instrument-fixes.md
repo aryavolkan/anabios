@@ -535,7 +535,7 @@ Confirm the two new instruments give the same (or cleaner) O1 conclusion on a re
 
 - [ ] **Step 1: Build release.** `cargo build --release -p anabios-headless`
 
-- [ ] **Step 2: Run baseline vs practices-off with BOTH new instruments.** For seeds `1 2 3` on each of `scenarios/o1-invasion-cultural-into-asocial.toml` (practices on) and `scenarios/o1-lever-practices-off.toml` (practices off), run:
+- [ ] **Step 2: Run baseline vs practices-off with BOTH new instruments.** For seeds `1 2 3` on each of `scenarios/experiments/o1-invasion-cultural-into-asocial.toml` (practices on) and `scenarios/experiments/o1-lever-practices-off.toml` (practices off), run:
 ```
 ./target/release/anabios-headless autopsy --scenario <scen> --seed <s> --ticks 2500 --window 500 --tag founder --out docs/superpowers/data/o2/step0-<cond>-<s>.csv --mutant cultural
 ```

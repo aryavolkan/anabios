@@ -176,7 +176,7 @@ home_terrain:  Salt->Desert   Obsidian->Rock   Amber->Forest   Spice->Grass
 nodes but are not new `terrain_affinity` targets.
 
 ### Scenarios
-- **`scenarios/desert-tropical.toml`**: drop seed-scouting. Biomes are now guaranteed
+- **`scenarios/experiments/desert-tropical.toml`**: drop seed-scouting. Biomes are now guaranteed
   by latitude, so place the desert cohort in the subtropical band (`v≈0.33` →
   `y≈341`) and the tropical cohort at the equator (`v≈0.5` → `y≈512`). Update the
   header comment to describe the climate model, not the scout.

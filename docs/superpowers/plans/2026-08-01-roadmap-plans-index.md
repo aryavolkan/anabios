@@ -2,7 +2,7 @@
 
 This indexes the per-item implementation/testing plans for [`ROADMAP.md`](../../../ROADMAP.md). Each roadmap item maps to a plan file below. Code-bearing items use TDD task structure (failing test → minimal impl → verify → commit); research items use an experiment protocol with pre-registered criteria and a golden-tested regression. Two lighter items (perf, docs) have their concise plans inline at the bottom.
 
-**Execution:** each plan is self-contained and self-testable. To execute one, use `superpowers:subagent-driven-development` (fresh subagent per task, review between) or `superpowers:executing-plans` (inline batches with checkpoints).
+**Execution:** each plan is self-contained and self-testable. To execute one, use `superpowers:subagent-driven-development` (fresh subagent per task, review between) or `superpowers:executing-plans` (inline batches with checkpoints). Completed historical plans (milestones m1–m15, batches, E-series, affect mA–mF, plus the old `mN-followups.md` notes) live in [`archive/`](archive/).
 
 ## Roadmap item → plan
 

@@ -13,7 +13,7 @@
 
 ## Dependencies
 - Requires M-A..M-D merged (all affect systems present): the `affect` column + `affect_prev_crowding` column on `AgentBuffers`, `affect::develop_all`/`affect::arousal`, the `affect_enabled` world+scenario flag, and the SEEK/FEAR/RAGE/CARE/PANIC activations that these detectors read. M-E (PLAY) optional — no detector reads PLAY.
-- Interface contract: `docs/superpowers/plans/2026-08-02-affect-layer-interface-contract.md`. This milestone CONSUMES `AffectState`/`AFFECT_SYSTEMS`/`SEEK..PANIC` indices and `affect::arousal`; it does NOT rename or re-signature them.
+- Interface contract: `docs/superpowers/plans/archive/2026-08-02-affect-layer-interface-contract.md`. This milestone CONSUMES `AffectState`/`AFFECT_SYSTEMS`/`SEEK..PANIC` indices and `affect::arousal`; it does NOT rename or re-signature them.
 
 ---
 

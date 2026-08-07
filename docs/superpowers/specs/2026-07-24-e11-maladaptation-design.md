@@ -72,7 +72,7 @@ two new `CodexState` maps and the wider event-buffer variant space.
 - Unit tests (`codex/climate.rs`): a species pinned far from the optimum fires
   exactly once (latched); a species tracking the optimum never fires;
   `env_period == 0` never fires.
-- Scenario: `scenarios/maladaptation.toml` (`env_period = 400`,
+- Scenario: `scenarios/experiments/maladaptation.toml` (`env_period = 400`,
   `climate_drift_rate = 0.00008`, a slow-learning asocial `innate_forager`
   stock that never advances its skill). A 3000-tick headless run fires
   `MaladaptationLag` — the chronically-lagging stock is flagged maladapted.
