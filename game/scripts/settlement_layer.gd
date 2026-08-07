@@ -7,6 +7,7 @@ extends Node2D
 # presentation over read-only sim state, refreshed a few times a second.
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
+const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 
 const REDRAW_EVERY := 20
 # Huts are deliberately oversized next to agents (BODY_MIN ~6) so a village
@@ -120,7 +121,7 @@ func _redraw() -> void:
 		var ease := 1.0 - pow(1.0 - grow, 3.0)
 		var members: int = v["members"]
 		var pos: Vector2 = v["pos"]
-		var sp: int = ApeSprites.ape_for_species(sid)
+		var sp: int = MammalSprites.primate_skin_for(sid)
 		var coat := Color(ApeSprites.PAL[ApeSprites.FIELD_ZONE_COLORS[sp]["c"]])
 		var tint := Color(1, 1, 1).lerp(coat, 0.18)
 		tint.a = fade

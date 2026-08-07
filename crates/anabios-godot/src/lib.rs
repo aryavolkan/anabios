@@ -591,6 +591,7 @@ impl Simulation {
             "diet_carnivory",
             anabios_core::module::effective_diet_carnivory(&w.agents.modules[i]),
         );
+        d.set("size", 0.5 + 2.5 * g.get(anabios_core::genome::GenomeSlot::Size));
         d.set("skill", meme[SKILL_CHANNEL]);
         d.set("technique", meme[TECH_CHANNEL]);
         d.set("iq", w.agents.iq[i]);
