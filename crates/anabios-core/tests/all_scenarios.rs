@@ -13,13 +13,22 @@ fn scenarios_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scenarios")
 }
 
-/// Collect every `*.toml` under `scenarios/`, sorted for determinism.
+/// Collect every `*.toml` under `scenarios/` (recursively, so archived
+/// experiments in `scenarios/experiments/` keep smoke coverage), sorted
+/// for determinism.
 fn scenario_files() -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = fs::read_dir(scenarios_dir())
-        .expect("read scenarios dir")
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "toml"))
-        .collect();
+    fn walk(dir: &PathBuf, out: &mut Vec<PathBuf>) {
+        for entry in fs::read_dir(dir).expect("read scenarios dir").filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else if path.extension().is_some_and(|x| x == "toml") {
+                out.push(path);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    walk(&scenarios_dir(), &mut files);
     files.sort();
     files
 }
