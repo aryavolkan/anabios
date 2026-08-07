@@ -56,7 +56,7 @@ const BIRTH_POP: float = 0.3
 var _prev_ids: PackedInt32Array = PackedInt32Array()
 var _prev_smooth: PackedVector2Array = PackedVector2Array()
 var _prev_sizes: PackedFloat32Array = PackedFloat32Array()
-var _prev_sp: PackedInt32Array = PackedInt32Array()
+var _prev_bucket: PackedInt32Array = PackedInt32Array()
 var _death_mmis: Array[MultiMeshInstance2D] = []
 var _death_effects: Array = []
 var _birth_times: Dictionary = {}
@@ -111,12 +111,12 @@ func _ready() -> void:
 	# Texture + material are set BEFORE _make_wrap_clones() so the 8 torus
 	# wrap clones inherit them; use_custom_data exposes INSTANCE_CUSTOM to
 	# the shader (and is shared by the clones via the same MultiMesh).
-	# Per-species gait cadence: heavy apes amble, the upright toolmaker strides.
-	const WALK_FPS := [5.0, 4.2, 4.6, 4.8, 5.6]
+	# Per-bucket gait cadence and rig kind come from the archetype registry
+	# (bucket_gait_fps reads ApeSprites.WALK_FPS for the hominin buckets).
 	_body_mmis.append(bodies)
-	for sp in range(1, ApeSprites.SPECIES_COUNT):
+	for b in range(1, MammalSprites.BUCKET_COUNT):
 		var mmi := MultiMeshInstance2D.new()
-		mmi.name = "Bodies%d" % sp
+		mmi.name = "Bodies%d" % b
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_2D
 		mm.use_colors = true
@@ -124,16 +124,17 @@ func _ready() -> void:
 		mm.mesh = bodies.multimesh.mesh
 		mmi.multimesh = mm
 		add_child(mmi)
-		move_child(mmi, bodies.get_index() + sp)
+		move_child(mmi, bodies.get_index() + b)
 		_body_mmis.append(mmi)
-	for sp in ApeSprites.SPECIES_COUNT:
-		var mmi := _body_mmis[sp]
-		mmi.texture = ApeSprites.build_species_atlas(sp)
+	for b in MammalSprites.BUCKET_COUNT:
+		var mmi := _body_mmis[b]
+		mmi.texture = MammalSprites.bucket_atlas(b)
 		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var sp_mat := ShaderMaterial.new()
 		sp_mat.shader = FieldAgentShader
-		sp_mat.set_shader_parameter("frames", ApeSprites.POSE_COUNT)
-		sp_mat.set_shader_parameter("walk_fps", WALK_FPS[sp])
+		sp_mat.set_shader_parameter("frames", MammalSprites.POSE_COUNT)
+		sp_mat.set_shader_parameter("walk_fps", MammalSprites.bucket_gait_fps(b))
+		sp_mat.set_shader_parameter("rig_kind", MammalSprites.bucket_rig_kind(b))
 		mmi.material = sp_mat
 	# use_custom_data can only be toggled at instance_count 0; the scene's
 	# Bodies ships with a pre-grown buffer, so clear first, enable, then
@@ -157,19 +158,19 @@ func _ready() -> void:
 	# Death ghosts: one MultiMesh per species drawing the fallen pose, fed by
 	# ids that vanish from the alive list in _refresh_bodies. They sit above
 	# the carcass discs (z -5) but below living bodies.
-	for sp in ApeSprites.SPECIES_COUNT:
+	for b in MammalSprites.BUCKET_COUNT:
 		var dmm := MultiMesh.new()
 		dmm.transform_format = MultiMesh.TRANSFORM_2D
 		dmm.use_colors = true
 		dmm.mesh = bodies.multimesh.mesh
 		var dmi := MultiMeshInstance2D.new()
-		dmi.name = "Deaths%d" % sp
+		dmi.name = "Deaths%d" % b
 		dmi.multimesh = dmm
-		dmi.texture = ApeSprites.build_fallen_texture(sp)
+		dmi.texture = MammalSprites.bucket_fallen(b)
 		dmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		dmi.z_index = -4
 		add_child(dmi)
-		move_child(dmi, carcasses.get_index() + 1 + sp)
+		move_child(dmi, carcasses.get_index() + 1 + b)
 		_death_mmis.append(dmi)
 	# Footstep tracks: walkers leave a short-lived dotted trail behind them.
 	var tmm := MultiMesh.new()
@@ -399,7 +400,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		_prev_ids = PackedInt32Array()
 		_prev_smooth = PackedVector2Array()
 		_prev_sizes = PackedFloat32Array()
-		_prev_sp = PackedInt32Array()
+		_prev_bucket = PackedInt32Array()
 		_prev_energy = PackedFloat32Array()
 		return
 
@@ -456,7 +457,6 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		_prev_ids = ids
 		_prev_smooth = smooth
 		_prev_sizes = sizes
-		_prev_sp = sp_ids
 		_prev_energy = energies
 
 	# Zoom-compensated floor: as the camera pulls out, the minimum body size
@@ -470,17 +470,26 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	# First few walkers this frame feed the close-zoom dust puffs.
 	_moving_sample = PackedVector2Array()
 
-	# Bucket alive indices by ape species — one MultiMesh per species.
+	# Bucket alive indices by render bucket — one MultiMesh per bucket. Selection
+	# is hardcoded to PRIMATE here (parity gate); Task 6 swaps in
+	# MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0).
+	var diet: PackedFloat32Array = sim.alive_diet()
+	var live: PackedInt32Array = _livestock_flags(n)
 	var buckets: Array = []
-	for sp in ApeSprites.SPECIES_COUNT:
+	for b in MammalSprites.BUCKET_COUNT:
 		buckets.append(PackedInt32Array())
+	var bucket_ix := PackedInt32Array()
+	bucket_ix.resize(n)
 	for i in n:
-		var sp: int = ApeSprites.ape_for_species(sp_ids[i]) if have_sp else 0
-		buckets[sp].append(i)
+		var arch := MammalSprites.PRIMATE
+		var b := MammalSprites.bucket_of(arch, sp_ids[i]) if have_sp else 0
+		bucket_ix[i] = b
+		buckets[b].append(i)
+	_prev_bucket = bucket_ix
 
-	for sp in ApeSprites.SPECIES_COUNT:
-		var mm: MultiMesh = _body_mmis[sp].multimesh
-		var idx: PackedInt32Array = buckets[sp]
+	for b in MammalSprites.BUCKET_COUNT:
+		var mm: MultiMesh = _body_mmis[b].multimesh
+		var idx: PackedInt32Array = buckets[b]
 		var m: int = idx.size()
 		if m > mm.instance_count:
 			mm.instance_count = m
@@ -555,8 +564,8 @@ func _on_agent_death(id: int, prev_idx: int) -> void:
 		_death_effects.pop_front()
 	var sp := 0
 	var sz := BODY_MIN
-	if prev_idx < _prev_sp.size():
-		sp = ApeSprites.ape_for_species(_prev_sp[prev_idx])
+	if prev_idx < _prev_bucket.size():
+		sp = _prev_bucket[prev_idx]
 	if prev_idx < _prev_sizes.size():
 		sz = maxf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN)
 	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz, side])
@@ -575,13 +584,13 @@ func _refresh_death_effects(delta: float) -> void:
 			write += 1
 	_death_effects.resize(write)
 	var buckets: Array = []
-	for sp in ApeSprites.SPECIES_COUNT:
+	for b in MammalSprites.BUCKET_COUNT:
 		buckets.append(PackedInt32Array())
 	for i in _death_effects.size():
 		buckets[_death_effects[i][2]].append(i)
-	for sp in ApeSprites.SPECIES_COUNT:
-		var mm: MultiMesh = _death_mmis[sp].multimesh
-		var idx: PackedInt32Array = buckets[sp]
+	for b in MammalSprites.BUCKET_COUNT:
+		var mm: MultiMesh = _death_mmis[b].multimesh
+		var idx: PackedInt32Array = buckets[b]
 		var m := idx.size()
 		if m > mm.instance_count:
 			mm.instance_count = m
