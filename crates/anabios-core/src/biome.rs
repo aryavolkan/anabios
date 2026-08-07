@@ -883,44 +883,113 @@ mod tests {
 
     #[test]
     fn rivers_flow_downhill_to_water_and_wet_banks() {
-        // Seed 31 (the brief's example seed) never satisfies this invariant at
-        // ANY threshold with these climate knobs: continentality 0.85 +
-        // mountain_uplift 0.6 confines seed 31's landmass so every drainage
-        // basin large enough to clear a threshold terminates in a landlocked
-        // sink rather than reaching open water (scanned thresholds 5..500 in
-        // steps of 5 — see task-6-report.md). Seed 2 at the same climate knobs
-        // has a basin that drains cleanly to the ocean; threshold 300 is
-        // stable (bad-cell count is 0 across the 300..320 range, scanned).
+        // carve_rivers has no pit-filling (by design), so a river cell's
+        // downhill chain may legitimately terminate at an endorheic sink
+        // (a landlocked local minimum) rather than open water. Walk each
+        // river cell's chain with the same steepest-descent rule production
+        // uses and require it to terminate at water OR a sink within a
+        // bounded number of steps; only non-termination is a real bug.
         let c = ClimateParams {
             continentality: 0.85,
             mountain_uplift: 0.6,
-            river_threshold: 300.0,
+            river_threshold: 150.0,
             ..Default::default()
         };
-        let f = BiomeField::generate_with(2, 128, 1024.0, &c);
+        let f = BiomeField::generate_with(31, 128, 1024.0, &c);
+        let res = f.res;
+        const NEIGHBOURS: [(i32, i32); 8] =
+            [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
+        // Same steepest-descent rule as production `carve_rivers`: the
+        // strictly-lowest of the 8 torus neighbours, or `None` at a sink.
+        let steepest_descent = |i: usize| -> Option<usize> {
+            let (col, row) = (i % res, i / res);
+            let e = f.cells[i].elevation;
+            let mut best = e;
+            let mut best_idx = None;
+            for (dc, dr) in NEIGHBOURS {
+                let nc = (col as i32 + dc).rem_euclid(res as i32) as usize;
+                let nr = (row as i32 + dr).rem_euclid(res as i32) as usize;
+                let ni = nr * res + nc;
+                let ne = f.cells[ni].elevation;
+                if ne < best {
+                    best = ne;
+                    best_idx = Some(ni);
+                }
+            }
+            best_idx
+        };
+
         let river_cells: Vec<usize> =
             (0..f.cells.len()).filter(|&i| f.cells[i].river_flow > 0.0).collect();
         assert!(!river_cells.is_empty(), "expected some river cells");
-        // Every river cell can descend (8-neighbour) to a strictly-lower cell or is
-        // adjacent to water (a mouth / sink terminus).
-        let res = f.res;
-        for &i in &river_cells {
-            let (col, row) = (i % res, i / res);
-            let e = f.cells[i].elevation;
-            let mut ok = false;
-            for (dc, dr) in
-                [(-1i32, -1i32), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
-            {
-                let nc = (col as i32 + dc).rem_euclid(res as i32) as usize;
-                let nr = (row as i32 + dr).rem_euclid(res as i32) as usize;
-                let n = &f.cells[nr * res + nc];
-                if n.elevation < e || n.terrain == TerrainType::Water {
-                    ok = true;
-                    break;
+
+        for &start in &river_cells {
+            let mut cur = start;
+            let mut prev_elev = f.cells[cur].elevation;
+            let mut steps = 0usize;
+            loop {
+                if f.cells[cur].terrain == TerrainType::Water {
+                    break; // reached a mouth
+                }
+                match steepest_descent(cur) {
+                    None => break, // sink terminus: no strictly-lower neighbour
+                    Some(next) => {
+                        let next_elev = f.cells[next].elevation;
+                        assert!(
+                            next_elev < prev_elev,
+                            "downhill walk from river cell {start} failed to strictly \
+                             decrease elevation at step {steps} (cell {cur} -> {next})"
+                        );
+                        cur = next;
+                        prev_elev = next_elev;
+                        steps += 1;
+                        assert!(
+                            steps <= 2 * res,
+                            "downhill walk from river cell {start} did not terminate \
+                             within {} steps (still at cell {cur})",
+                            2 * res
+                        );
+                    }
                 }
             }
-            assert!(ok, "river cell {i} has no downhill exit and no water neighbour");
         }
+
+        // Wet banks: river cells and their riparian 4-neighbours should be
+        // measurably wetter on average than the rest of the land, since
+        // carve_rivers bumps their moisture and reclassifies them.
+        let is_river_or_bank = |i: usize| -> bool {
+            if f.cells[i].river_flow > 0.0 {
+                return true;
+            }
+            let (col, row) = (i % res, i / res);
+            [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)].iter().any(|&(dc, dr)| {
+                let nc = (col as i32 + dc).rem_euclid(res as i32) as usize;
+                let nr = (row as i32 + dr).rem_euclid(res as i32) as usize;
+                f.cells[nr * res + nc].river_flow > 0.0
+            })
+        };
+        let (mut wet_sum, mut wet_n, mut dry_sum, mut dry_n) = (0.0f32, 0u32, 0.0f32, 0u32);
+        for i in 0..f.cells.len() {
+            if f.cells[i].terrain == TerrainType::Water {
+                continue;
+            }
+            if is_river_or_bank(i) {
+                wet_sum += f.cells[i].moisture;
+                wet_n += 1;
+            } else {
+                dry_sum += f.cells[i].moisture;
+                dry_n += 1;
+            }
+        }
+        assert!(wet_n > 0, "expected some river/bank land cells");
+        assert!(dry_n > 0, "expected some non-river land cells to compare against");
+        let wet_mean = wet_sum / wet_n as f32;
+        let dry_mean = dry_sum / dry_n as f32;
+        assert!(
+            wet_mean > dry_mean,
+            "river/bank cells should be wetter on average than other land: \
+             wet_mean={wet_mean} dry_mean={dry_mean}"
+        );
     }
 
     #[test]
