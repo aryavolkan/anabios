@@ -150,14 +150,14 @@ git commit -m "feat(viewer): expose alive_livestock_flags + domestication_enable
 
 ---
 
-### Task 2: Registry skeleton + pure `archetype_for` (all-Primate delegation)
+### Task 2: Registry — selector, render-bucket table, quad builders, coat hue
 
-Build the registry so it compiles and the viewer still renders identically (every archetype resolves to Primate for now; `main.gd` is not yet rewired). This isolates the pure selection logic behind a headless test.
+Build the whole rendering registry as one self-contained file plus the tiny `ape_sprites.gd` `_build_cell` generalization. `main.gd` is untouched, so the viewer renders identically; the new code is exercised starting Task 5. This isolates the pure selection logic behind a headless test. (No quad pose data yet — `_QUAD_DATA` is empty, so `bucket_atlas` falls back to ape art for quad buckets, which is fine because nothing routes agents there until Task 6.)
 
 **Files:**
 - Create: `game/scripts/mammal_sprites.gd`
 - Create: `game/scripts/test_mammal_sprites.gd`
-- Modify: `game/scripts/ape_sprites.gd` (only if a needed symbol isn't already public — `POSE_COUNT`, `build_species_atlas`, `build_fallen_texture`, `ape_for_species`, `NAMES` are already `const`/`static`, so likely no change)
+- Modify: `game/scripts/ape_sprites.gd` — (a) generalize `_build_cell` so a block's 5th element may be a `Color` (used directly) as well as a PAL string key (looked up), so the quad builder can reuse it instead of duplicating the outline pass — existing string-key callers unchanged → ape output byte-identical; (b) **add** `const WALK_FPS: PackedFloat32Array = [5.0, 4.2, 4.6, 4.8, 5.6]` (the per-hominin gait cadence, copied verbatim from the local `const WALK_FPS` in `main.gd._ready`) so the registry's `bucket_gait_fps` can read it. Leave `main.gd`'s local copy in place; Task 5 removes it when it rewrites the mesh-setup loop. (`POSE_COUNT`, `build_species_atlas`, `build_fallen_texture`, `ape_for_species`, `NAMES`, `SPECIES_COUNT` are already public.)
 
 **Interfaces:**
 - Consumes: `ApeSprites` (`SPECIES_COUNT`, `POSE_COUNT`, `build_species_atlas(sp)`, `build_fallen_texture(sp)`, `ape_for_species(id)`, `NAMES`).
@@ -170,6 +170,9 @@ Build the registry so it compiles and the viewer still renders identically (ever
   - `static func archetype_for(diet: float, size: float, livestock: bool) -> int`
   - `static func primate_skin_for(species_id: int) -> int` (delegates to `ApeSprites.ape_for_species`)
   - `const POSE_COUNT` (mirror of `ApeSprites.POSE_COUNT`, = 12)
+  - **Render-bucket model** (preserves the 5 distinct hominins — Primate is NOT one MultiMesh): `const SKIN_COUNT := ApeSprites.SPECIES_COUNT` (5), `const QUAD_ORDER := [HARE, DEER, BOAR, FOX, WOLF, LIVESTOCK]`, `const BUCKET_COUNT := SKIN_COUNT + 6` (11). Buckets `0..4` are the hominin skins (byte-identical to today's per-species ape meshes); buckets `5..10` are the quadruped archetypes in `QUAD_ORDER`.
+  - `static func bucket_of(archetype: int, species_id: int) -> int` — `PRIMATE` → `primate_skin_for(species_id)` (0..4); else → `SKIN_COUNT + QUAD_ORDER.find(archetype)`.
+  - `static func bucket_atlas(b: int) -> ImageTexture`, `bucket_fallen(b: int) -> ImageTexture`, `bucket_rig_kind(b: int) -> int`, `bucket_gait_fps(b: int) -> float` — the per-bucket render table; hominin buckets delegate to `ApeSprites` (and its `WALK_FPS`), quad buckets to the quad builders. Quad buckets with no pose data yet fall back to `ApeSprites` skin-0 art (harmless: they carry 0 instances until their rig lands).
 
 - [ ] **Step 1: Write the failing headless test** — `game/scripts/test_mammal_sprites.gd`
 
@@ -273,16 +276,133 @@ static func primate_skin_for(species_id: int) -> int:
 	return ApeSprites.ape_for_species(species_id)
 
 
-# --- Rendering (Task 2: all archetypes fall back to Primate art). ---
-# Replaced per-archetype in Tasks 4-7; kept delegating so the viewer renders
-# unchanged until main.gd is rewired.
-static func build_atlas(archetype: int, species_id: int) -> ImageTexture:
-	return ApeSprites.build_species_atlas(ApeSprites.ape_for_species(species_id))
+# --- Render-bucket table ---------------------------------------------------
+# Primate is NOT a single mesh: its five hominins keep their own buckets (0..4,
+# byte-identical to today), and the six quadruped archetypes take buckets 5..10.
+const SKIN_COUNT := ApeSprites.SPECIES_COUNT  # 5 hominins
+const QUAD_ORDER: Array = [HARE, DEER, BOAR, FOX, WOLF, LIVESTOCK]
+const BUCKET_COUNT := SKIN_COUNT + 6  # 11
+
+# Quadruped pose data, filled in Tasks 6-7. Absent archetypes fall back to ape
+# skin-0 art (harmless: those buckets carry 0 instances until their rig lands).
+const _QUAD_DATA := {}
 
 
-static func build_fallen(archetype: int, species_id: int) -> ImageTexture:
-	return ApeSprites.build_fallen_texture(ApeSprites.ape_for_species(species_id))
+# An agent's render bucket: hominin skin (0..4) for Primate, else the quad slot.
+static func bucket_of(archetype: int, species_id: int) -> int:
+	if archetype == PRIMATE:
+		return primate_skin_for(species_id)
+	return SKIN_COUNT + QUAD_ORDER.find(archetype)
+
+
+static func bucket_atlas(b: int) -> ImageTexture:
+	if b < SKIN_COUNT:
+		return ApeSprites.build_species_atlas(b)
+	var arch: int = QUAD_ORDER[b - SKIN_COUNT]
+	if _QUAD_DATA.has(arch):
+		return build_quad_atlas(_QUAD_DATA[arch].POSES)
+	return ApeSprites.build_species_atlas(0)  # fallback until the rig lands
+
+
+static func bucket_fallen(b: int) -> ImageTexture:
+	if b < SKIN_COUNT:
+		return ApeSprites.build_fallen_texture(b)
+	var arch: int = QUAD_ORDER[b - SKIN_COUNT]
+	if _QUAD_DATA.has(arch):
+		return build_quad_fallen(_QUAD_DATA[arch].POSES)
+	return ApeSprites.build_fallen_texture(0)
+
+
+static func bucket_rig_kind(b: int) -> int:
+	if b < SKIN_COUNT:
+		return RigKind.PRIMATE_RIG
+	return rig_kind(QUAD_ORDER[b - SKIN_COUNT])
+
+
+static func bucket_gait_fps(b: int) -> float:
+	if b < SKIN_COUNT:
+		return ApeSprites.WALK_FPS[b]
+	# Quad cadence: hares scurry, deer lope, boar trot, fox/wolf trot, cattle amble.
+	return [7.0, 4.6, 5.2, 6.5, 5.6, 4.0][b - SKIN_COUNT]
+
+
+# --- Quadruped atlas + per-species coat hue --------------------------------
+# Neutral value-ramp for quadruped rigs: coat mid, underside light, eye dark,
+# nose a touch lighter than coat. A per-instance coat-hue modulate (main.gd
+# _body_colors) turns this into a counter-shaded coloured animal.
+const QUAD_ZONES := {
+	"c": Color(0.60, 0.60, 0.60),
+	"u": Color(0.92, 0.92, 0.92),
+	"n": Color(0.74, 0.74, 0.74),
+	"e": Color(0.10, 0.10, 0.11),
+}
+
+# Per-archetype coat palette band: [base_hue, hue_jitter, saturation, value].
+# Species id jitters the hue within the band so a herd varies without leaving
+# the archetype's look (foxes rusty, wolves grey-brown, deer tan, hares sandy).
+const _COAT_BAND := {
+	HARE: [0.09, 0.05, 0.35, 0.82],
+	DEER: [0.07, 0.04, 0.45, 0.72],
+	BOAR: [0.05, 0.03, 0.30, 0.55],
+	FOX: [0.045, 0.02, 0.75, 0.90],
+	WOLF: [0.08, 0.06, 0.18, 0.62],
+	LIVESTOCK: [0.08, 0.10, 0.25, 0.80],
+}
+
+
+# Per-agent coat modulate. PRIMATE returns white (ape atlases carry their own
+# colours); quad archetypes return a stable per-species hue within their band.
+static func coat_hue(archetype: int, species_id: int) -> Color:
+	if not _COAT_BAND.has(archetype):
+		return Color(1, 1, 1)
+	var band: Array = _COAT_BAND[archetype]
+	var j := sin(float(species_id) * 12.9898)  # deterministic jitter in [-1, 1]
+	var hue: float = fposmod(band[0] + j * band[1], 1.0)
+	return Color.from_hsv(hue, band[2], band[3])
+
+
+# One rig's 12 poses baked into a 16x(12*16) neutral strip (pre-flipped for the
+# QuadMesh's flipped V, same as ApeSprites.build_species_atlas).
+static func build_quad_atlas(poses: Array) -> ImageTexture:
+	var atlas := Image.create(16, POSE_COUNT * 16, false, Image.FORMAT_RGBA8)
+	atlas.fill(Color(0, 0, 0, 0))
+	for fr in POSE_COUNT:
+		var cell: Image = _build_quad_cell(poses[fr])
+		cell.flip_y()
+		atlas.blit_rect(cell, Rect2i(0, 0, 16, 16), Vector2i(0, fr * 16))
+	return ImageTexture.create_from_image(atlas)
+
+
+# Fallen ghost: neutral pose rotated 90 CW, matching ApeSprites.build_fallen_texture.
+static func build_quad_fallen(poses: Array) -> ImageTexture:
+	var blocks: Array = []
+	for b in poses[0]:
+		blocks.append([15 - (b[1] + b[3]), b[0], b[3], b[2], b[4]])
+	var cell: Image = _build_quad_cell(blocks)
+	cell.flip_y()
+	return ImageTexture.create_from_image(cell)
+
+
+# Resolve a rig's zone-keyed blocks to explicit Colours via QUAD_ZONES, then
+# reuse the shared ApeSprites._build_cell (Color-aware after Step below) so the
+# 1px auto-outline pass is written once, not duplicated.
+static func _build_quad_cell(pose: Array) -> Image:
+	var blocks: Array = []
+	for b in pose:
+		blocks.append([b[0], b[1], b[2], b[3], QUAD_ZONES[b[4]]])
+	return ApeSprites._build_cell(blocks)
 ```
+
+Also edit `ape_sprites.gd` `_build_cell` in the SAME task: let a block's 5th element be a `Color` OR a PAL key — one branch, string callers unchanged:
+
+```gdscript
+	for b in blocks:
+		var col: Color = b[4] if (b.size() >= 5 and b[4] is Color) else \
+			(Color(1, 1, 1, 1) if b.size() < 5 else Color(PAL[b[4]]))
+		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), col)
+```
+
+And move `WALK_FPS` out of `main.gd._ready` into `ape_sprites.gd`: `const WALK_FPS: PackedFloat32Array = [5.0, 4.2, 4.6, 4.8, 5.6]`.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
@@ -294,11 +414,16 @@ Expected: `test_mammal_sprites: all passed`, exit 0.
 Run: `gdformat game/scripts/mammal_sprites.gd game/scripts/test_mammal_sprites.gd && gdformat --check game/scripts/ && gdlint game/scripts/`
 Expected: clean.
 
+- [ ] **Step 5b: Regression smoke — apes unchanged.** The `_build_cell` generalization touches ape rendering; confirm no script errors and (via a quick capture if convenient) that apes look identical. `main.gd` is not modified in this task.
+
+Run: `godot --headless --rendering-driver dummy --path game res://scenes/main.tscn --quit-after 120`
+Expected: `Initialize godot-rust`, zero `SCRIPT ERROR`.
+
 - [ ] **Step 6: Commit**
 
 ```bash
-git add game/scripts/mammal_sprites.gd game/scripts/test_mammal_sprites.gd
-git commit -m "feat(viewer): archetype registry + pure archetype_for selector (Primate delegation)"
+git add game/scripts/mammal_sprites.gd game/scripts/test_mammal_sprites.gd game/scripts/ape_sprites.gd
+git commit -m "feat(viewer): mammal archetype registry (selector, render-bucket table, quad builders)"
 ```
 
 ---
@@ -376,115 +501,18 @@ git commit -m "feat(viewer): field shader rig_kind uniform + quadruped gallop/po
 
 ---
 
-### Task 4: Quadruped atlas builder + per-species coat hue
+### Task 4: `main.gd` coat-hue wiring
 
-Add the neutral value-ramp atlas builder to the registry and the per-species coat-hue function, plus the `_body_colors` species-mode change in `main.gd`. Not yet wired into bucketing (still safe — `main.gd` renders apes until Task 5), so verify via a throwaway print/headless smoke.
+The quad builders and `coat_hue` already exist (Task 2). This task wires them into `main.gd`: species-mode `_body_colors` now returns each quadruped agent's per-species coat hue (Primate stays white), and a `_livestock_flags` helper feeds the selector. Not yet used for bucketing (still safe — `main.gd` renders apes until Task 5); verify via headless smoke.
 
 **Files:**
-- Modify: `game/scripts/mammal_sprites.gd`
-- Modify: `game/scripts/main.gd` (`_body_colors`, ~L648 default arm)
+- Modify: `game/scripts/main.gd` — add the `MammalSprites` preload, the `_livestock_flags` helper, and rewrite the `_body_colors` default (`_:`) arm (~L648).
 
 **Interfaces:**
-- Consumes: `ApeSprites._build_cell(blocks)` (already static), the pose-slot contract.
-- Produces:
-  - `static func coat_hue(archetype: int, species_id: int) -> Color` — stable per (archetype, species), inside the archetype's palette band.
-  - `static func build_quad_atlas(poses: Array) -> ImageTexture` — bakes a 16×(12·16) neutral strip from a rig's 12 pose block-lists using the neutral zone palette.
-  - `static func build_quad_fallen(poses: Array) -> ImageTexture` — neutral pose rotated 90° CW (matches `ApeSprites.build_fallen_texture`).
-  - `const QUAD_ZONES` — neutral grayscale palette for keys `"c"/"u"/"e"/"n"`.
+- Consumes: `MammalSprites.archetype_for`, `MammalSprites.coat_hue`; `sim.alive_diet()`, `sim.alive_sizes()`, `sim.alive_species_ids()`, `sim.domestication_enabled()`, `sim.alive_livestock_flags()`.
+- Produces: `func _livestock_flags(n: int) -> PackedInt32Array` (used again in Task 5); species-mode body colors carry quadruped coat hue.
 
-- [ ] **Step 1: Add the neutral palette + coat-hue + quadruped builders to `mammal_sprites.gd`**
-
-```gdscript
-# Neutral value-ramp for quadruped rigs: coat mid, underside light, eye dark,
-# nose a touch lighter than coat. A per-instance coat-hue modulate (main.gd
-# _body_colors) turns this into a counter-shaded coloured animal.
-const QUAD_ZONES := {
-	"c": Color(0.60, 0.60, 0.60),
-	"u": Color(0.92, 0.92, 0.92),
-	"n": Color(0.74, 0.74, 0.74),
-	"e": Color(0.10, 0.10, 0.11),
-}
-
-# Per-archetype coat palette band: base hue, hue jitter, saturation, value.
-# Species id jitters the hue within the band so a herd varies without leaving
-# the archetype's look (foxes rusty, wolves grey-brown, deer tan, hares sandy).
-const _COAT_BAND := {
-	HARE: [0.09, 0.05, 0.35, 0.82],
-	DEER: [0.07, 0.04, 0.45, 0.72],
-	BOAR: [0.05, 0.03, 0.30, 0.55],
-	FOX: [0.045, 0.02, 0.75, 0.90],
-	WOLF: [0.08, 0.06, 0.18, 0.62],
-	LIVESTOCK: [0.08, 0.10, 0.25, 0.80],
-}
-
-
-static func coat_hue(archetype: int, species_id: int) -> Color:
-	if not _COAT_BAND.has(archetype):
-		return Color(1, 1, 1)  # PRIMATE: atlas already carries its colours.
-	var band: Array = _COAT_BAND[archetype]
-	# Deterministic jitter in [-1, 1] from the species id.
-	var j := sin(float(species_id) * 12.9898) 
-	var hue: float = fposmod(band[0] + j * band[1], 1.0)
-	return Color.from_hsv(hue, band[2], band[3])
-
-
-static func build_quad_atlas(poses: Array) -> ImageTexture:
-	var atlas := Image.create(16, POSE_COUNT * 16, false, Image.FORMAT_RGBA8)
-	atlas.fill(Color(0, 0, 0, 0))
-	for fr in POSE_COUNT:
-		var cell: Image = _build_quad_cell(poses[fr])
-		cell.flip_y()
-		atlas.blit_rect(cell, Rect2i(0, 0, 16, 16), Vector2i(0, fr * 16))
-	return ImageTexture.create_from_image(atlas)
-
-
-static func build_quad_fallen(poses: Array) -> ImageTexture:
-	var blocks: Array = []
-	for b in poses[0]:
-		blocks.append([15 - (b[1] + b[3]), b[0], b[3], b[2], b[4]])
-	var cell: Image = _build_quad_cell(blocks)
-	cell.flip_y()
-	return ImageTexture.create_from_image(cell)
-
-
-# Like ApeSprites._build_pose but resolves zone keys against QUAD_ZONES (grays)
-# and reuses the shared outline pass by handing explicit RGBA to _build_cell.
-static func _build_quad_cell(pose: Array) -> Image:
-	var blocks: Array = []
-	for b in pose:
-		var col: Color = QUAD_ZONES[b[4]]
-		# _build_cell paints white when len < 5, or PAL[key] when len == 5; it
-		# has no gray keys, so pre-resolve to explicit rgba via a 6-int block
-		# form we add below.
-		blocks.append([b[0], b[1], b[2], b[3], col])
-	return _build_quad_cell_rgba(blocks)
-
-
-# 16x16 cell from [x,y,w,h,Color] blocks + the same auto 1px dark outline as
-# ApeSprites._build_cell (copied because that one keys colours through PAL).
-static func _build_quad_cell_rgba(blocks: Array) -> Image:
-	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	for b in blocks:
-		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), b[4])
-	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	var edges: Array = []
-	for y in 16:
-		for x in 16:
-			if img.get_pixel(x, y).a > 0.0:
-				continue
-			for d in dirs:
-				var nx: int = x + d.x
-				var ny: int = y + d.y
-				if nx >= 0 and nx < 16 and ny >= 0 and ny < 16 and img.get_pixel(nx, ny).a > 0.5:
-					edges.append(Vector2i(x, y))
-					break
-	for e in edges:
-		img.set_pixel(e.x, e.y, Color(0.20, 0.20, 0.22, 1.0))
-	return img
-```
-
-- [ ] **Step 2: Update `main.gd` `_body_colors` species-mode arm** — replace the default (`_:`) arm (~L648) so quadruped archetypes get their coat hue while Primate stays white:
+- [ ] **Step 1: Update `main.gd` `_body_colors` species-mode arm** — replace the default (`_:`) arm (~L648) so quadruped archetypes get their coat hue while Primate stays white:
 
 ```gdscript
 		_:
@@ -521,46 +549,45 @@ func _livestock_flags(n: int) -> PackedInt32Array:
 	return z
 ```
 
-- [ ] **Step 3: Scene smoke**
+- [ ] **Step 2: Scene smoke**
 
 Run: `godot --headless --rendering-driver dummy --path game res://scenes/main.tscn --quit-after 120`
 Expected: `Initialize godot-rust`, zero `SCRIPT ERROR`. (Visuals unchanged — `_body_colors` returns white for Primate, and every agent is still bucketed as an ape until Task 5.)
 
-- [ ] **Step 4: Format + lint**
+- [ ] **Step 3: Format + lint**
 
-Run: `gdformat game/scripts/mammal_sprites.gd game/scripts/main.gd && gdformat --check game/scripts/ && gdlint game/scripts/`
+Run: `gdformat game/scripts/main.gd && gdformat --check game/scripts/ && gdlint game/scripts/`
 Expected: clean.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add game/scripts/mammal_sprites.gd game/scripts/main.gd
-git commit -m "feat(viewer): quadruped neutral-atlas builder + per-species coat hue"
+git add game/scripts/main.gd
+git commit -m "feat(viewer): main.gd species-mode coat hue for quadruped archetypes"
 ```
 
 ---
 
-### Task 5: Rewire `main.gd` bucketing to the archetype registry (still all-Primate art)
+### Task 5: Rewire `main.gd` to the 11 render-bucket model (hardcoded-Primate parity)
 
-The highest-risk change, done while the registry still maps every archetype to Primate art (Task 2's delegation) so the on-screen result is **identical** — this proves the rewire in isolation before any quadruped art exists.
+The highest-risk change, done with selection hardcoded to `PRIMATE` so the on-screen result is **byte-identical** to today (the 5 hominin buckets are the current per-species ape meshes; the 6 quad buckets stay empty) — this proves the rewire in isolation before any quadruped art or real selection exists. Task 6 flips selection on.
 
 **Files:**
 - Modify: `game/scripts/main.gd` — `_ready` body/death setup (~L114-172), `_refresh_bodies` bucketing (~L472-538), `_on_agent_death`/`_refresh_death_effects` (~L549-589).
 
 **Interfaces:**
-- Consumes: `MammalSprites.ARCHETYPE_COUNT`, `archetype_for`, `rig_kind`, `build_atlas`, `build_fallen`, `primate_skin_for`, `POSE_COUNT`; `sim.alive_diet()`, `sim.alive_sizes()`, `sim.alive_species_ids()`, `_livestock_flags(n)`.
-- Produces: `main.gd` buckets by archetype (7 buckets); death ghosts keyed by archetype; `_prev_arch` replaces `_prev_sp` for death bucketing.
+- Consumes: `MammalSprites.BUCKET_COUNT`, `bucket_of`, `bucket_atlas`, `bucket_fallen`, `bucket_rig_kind`, `bucket_gait_fps`, `POSE_COUNT`, `PRIMATE`; `sim.alive_species_ids()`, `sim.alive_diet()`, `sim.alive_sizes()`, `_livestock_flags(n)`.
+- Produces: `main.gd` builds `MammalSprites.BUCKET_COUNT` (11) MultiMeshes and buckets by `MammalSprites.bucket_of(...)`; death ghosts keyed by render bucket; `_prev_bucket` replaces the `_prev_sp`→ape-index death lookup.
 
-- [ ] **Step 1: `_ready` — build 7 archetype MultiMeshes/materials.** Replace the `WALK_FPS`/species build loops (~L114-136) with an archetype loop. Because the neutral atlas needs no per-species bake, build one atlas per archetype using a representative species id (0); Primate delegates to its own per-species atlas keyed later per instance is not possible on a shared MultiMesh, so Primate uses skin 0's atlas here and per-instance color still tints — matching today where each ape species already had its own MultiMesh. **Keep one MultiMesh per archetype; Primate variety across the 5 hominins is preserved because Primate's atlas already carries hominin 0's colours and the inspector still names the exact hominin.** (Full per-hominin field variety is out of scope — see Non-goals.)
+> **Parity gate:** this task keeps selection hardcoded to `PRIMATE`, so `bucket_of(PRIMATE, species)` = `primate_skin_for(species)` = the hominin skin (0..4) — the exact per-species meshes that render today. The 6 quad buckets exist but stay empty (0 instances). On-screen result is **byte-identical**; only the plumbing changes. Task 6 flips selection to the real `archetype_for`.
+
+- [ ] **Step 1: `_ready` — build 11 render-bucket MultiMeshes/materials.** Replace the ape `WALK_FPS`/species build loops (~L114-136). `$Bodies` is bucket 0; create buckets 1..10. Set each material's atlas, `frames`, per-bucket `walk_fps` (`bucket_gait_fps`), and `rig_kind` (`bucket_rig_kind`) from the registry. (Delete `main.gd`'s now-unused local `const WALK_FPS`; the cadence lives in `ApeSprites.WALK_FPS`, read via `bucket_gait_fps`.)
 
 ```gdscript
-	# Per-archetype gait cadence (frames/sec): hares scurry, deer lope, wolves
-	# trot, the primate strides, livestock amble.
-	const GAIT_FPS := [7.0, 4.6, 5.2, 4.8, 6.5, 5.6, 4.0]
 	_body_mmis.append(bodies)
-	for a in range(1, MammalSprites.ARCHETYPE_COUNT):
+	for b in range(1, MammalSprites.BUCKET_COUNT):
 		var mmi := MultiMeshInstance2D.new()
-		mmi.name = "Bodies%d" % a
+		mmi.name = "Bodies%d" % b
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_2D
 		mm.use_colors = true
@@ -568,41 +595,44 @@ The highest-risk change, done while the registry still maps every archetype to P
 		mm.mesh = bodies.multimesh.mesh
 		mmi.multimesh = mm
 		add_child(mmi)
-		move_child(mmi, bodies.get_index() + a)
+		move_child(mmi, bodies.get_index() + b)
 		_body_mmis.append(mmi)
-	for a in MammalSprites.ARCHETYPE_COUNT:
-		var mmi := _body_mmis[a]
-		mmi.texture = MammalSprites.build_atlas(a, 0)
+	for b in MammalSprites.BUCKET_COUNT:
+		var mmi := _body_mmis[b]
+		mmi.texture = MammalSprites.bucket_atlas(b)
 		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var sp_mat := ShaderMaterial.new()
 		sp_mat.shader = FieldAgentShader
 		sp_mat.set_shader_parameter("frames", MammalSprites.POSE_COUNT)
-		sp_mat.set_shader_parameter("walk_fps", GAIT_FPS[a])
-		sp_mat.set_shader_parameter("rig_kind", MammalSprites.rig_kind(a))
+		sp_mat.set_shader_parameter("walk_fps", MammalSprites.bucket_gait_fps(b))
+		sp_mat.set_shader_parameter("rig_kind", MammalSprites.bucket_rig_kind(b))
 		mmi.material = sp_mat
 ```
 
-Update the death-ghost setup loop (~L159-172) to iterate `MammalSprites.ARCHETYPE_COUNT` and use `MammalSprites.build_fallen(a, 0)`.
+Update the death-ghost setup loop (~L159-172) to iterate `MammalSprites.BUCKET_COUNT` and use `MammalSprites.bucket_fallen(b)`.
 
-- [ ] **Step 2: `_refresh_bodies` — bucket by archetype.** After the existing `var sizes := sim.alive_sizes()` etc. (it already fetches `sizes`, `sp_ids`, `rots`; add `diet` and `live`), replace the ape-bucket block (~L472-478):
+- [ ] **Step 2: `_refresh_bodies` — bucket by render bucket.** `_refresh_bodies` already fetches `sizes`, `sp_ids`, `rots`; add `diet` and `live`. Replace the ape-bucket block (~L472-478):
 
 ```gdscript
 	var diet: PackedFloat32Array = sim.alive_diet()
 	var live: PackedInt32Array = _livestock_flags(n)
 	var buckets: Array = []
-	for a in MammalSprites.ARCHETYPE_COUNT:
+	for b in MammalSprites.BUCKET_COUNT:
 		buckets.append(PackedInt32Array())
-	var arch_of := PackedInt32Array()
-	arch_of.resize(n)
+	var bucket_of := PackedInt32Array()
+	bucket_of.resize(n)
 	for i in n:
-		var a := MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0) if have_sp else MammalSprites.PRIMATE
-		arch_of[i] = a
-		buckets[a].append(i)
+		# Parity gate: selection is hardcoded PRIMATE here; Task 6 swaps in
+		# `MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0)`.
+		var arch := MammalSprites.PRIMATE
+		var b := MammalSprites.bucket_of(arch, sp_ids[i]) if have_sp else 0
+		bucket_of[i] = b
+		buckets[b].append(i)
 ```
 
-Change the outer loop `for sp in ApeSprites.SPECIES_COUNT:` → `for a in MammalSprites.ARCHETYPE_COUNT:` and index `_body_mmis[a]`, `buckets[a]`. The per-instance transform/color/custom writes inside are unchanged. Record `_prev_arch` alongside `_prev_sp` for death bucketing (store `arch_of[i]` into a member array parallel to `_prev_smooth`).
+Change the outer loop `for sp in ApeSprites.SPECIES_COUNT:` → `for b in MammalSprites.BUCKET_COUNT:` and index `_body_mmis[b]`, `buckets[b]`. The per-instance transform/color/custom writes inside are unchanged. Write `bucket_of[i]` into a `_prev_bucket` member array (parallel to `_prev_smooth`) for death bucketing.
 
-- [ ] **Step 3: Death ghosts by archetype.** In `_on_agent_death` (~L555-558) replace `ApeSprites.ape_for_species(_prev_sp[prev_idx])` with the recorded `_prev_arch[prev_idx]`; in `_refresh_death_effects` (~L577-581) iterate `MammalSprites.ARCHETYPE_COUNT`. (Add a `_prev_arch: PackedInt32Array` member, written in `_refresh_bodies` next to `_prev_sp`/`_prev_sizes`.)
+- [ ] **Step 3: Death ghosts by render bucket.** In `_on_agent_death` (~L555-558) replace `ApeSprites.ape_for_species(_prev_sp[prev_idx])` with the recorded `_prev_bucket[prev_idx]`; in `_refresh_death_effects` (~L577-581) iterate `MammalSprites.BUCKET_COUNT`. (Add a `_prev_bucket: PackedInt32Array` member, written in `_refresh_bodies` next to `_prev_sizes`.)
 
 - [ ] **Step 4: Scene smoke — output identical.**
 
@@ -616,7 +646,7 @@ godot --headless --path game res://scenes/main.tscn --quit-after 300 \
   # with ANABIOS_ZOOM/ANABIOS_PIN env + debug_capture as used in showcase runs
 ```
 
-Expected: agents still render as the same hominins (registry maps all→Primate), confirming the rewire is behaviorally neutral.
+Expected: agents still render as the same five hominins (selection hardcoded to Primate → hominin skin buckets), confirming the rewire is behaviorally neutral.
 
 - [ ] **Step 6: Format, lint, commit**
 
@@ -635,11 +665,12 @@ Turn on real archetype selection and give Wolf real quadruped art. Carnivore+lar
 
 **Files:**
 - Create: `game/scripts/mammal_data/wolf.gd`
-- Modify: `game/scripts/mammal_sprites.gd` — replace `build_atlas`/`build_fallen` Primate-delegation with a per-archetype dispatch that uses `build_quad_atlas` for quadrupeds and `ApeSprites` for Primate.
+- Modify: `game/scripts/mammal_sprites.gd` — populate `_QUAD_DATA` with `WOLF` (a one-line `const` edit; `bucket_atlas`/`bucket_fallen` already dispatch through `_QUAD_DATA`).
+- Modify: `game/scripts/main.gd` — flip the Task-5 parity line from hardcoded `PRIMATE` to the real `archetype_for`.
 
 **Interfaces:**
-- Consumes: `build_quad_atlas`, `build_quad_fallen`, `QUAD_ZONES`.
-- Produces: `WolfData.POSES: Array` (12 pose block-lists); registry dispatch `build_atlas(archetype, species_id)` → quad atlas for `WOLF`, Primate art otherwise (other quadrupeds still fall back to Primate until their task lands).
+- Consumes: `build_quad_atlas`, `build_quad_fallen`, `QUAD_ZONES`, `_QUAD_DATA`; `MammalSprites.archetype_for`; the per-agent `diet`/`sizes`/`live` batches already fetched in `_refresh_bodies`.
+- Produces: `wolf.gd` `POSES: Array` (12 pose block-lists); WOLF-selecting agents route to bucket `SKIN_COUNT + QUAD_ORDER.find(WOLF)` and render the wolf atlas. Other quad archetypes still fall back to ape skin-0 art until their rig lands (Task 7).
 
 - [ ] **Step 1: Author `game/scripts/mammal_data/wolf.gd`.** Side profile, facing right (head at high x), y=0 top/back → y=15 bottom/feet; zone keys `c` coat, `u` underbelly/muzzle, `n` nose, `e` eye. The 12 poses follow the slot contract. This is the **worked reference rig**; expect ≤1px nudges during Step 6's capture.
 
@@ -767,26 +798,22 @@ const POSES: Array = [
 ]
 ```
 
-- [ ] **Step 2: Registry dispatch.** In `mammal_sprites.gd`, add the Wolf data preload and replace `build_atlas`/`build_fallen`:
+- [ ] **Step 2: Register Wolf + flip selection on.** In `mammal_sprites.gd`, populate the (Task-2) empty `_QUAD_DATA` const:
 
 ```gdscript
 const _QUAD_DATA := {
 	WOLF: preload("res://scripts/mammal_data/wolf.gd"),
 }
-
-
-static func build_atlas(archetype: int, species_id: int) -> ImageTexture:
-	if _QUAD_DATA.has(archetype):
-		return build_quad_atlas(_QUAD_DATA[archetype].POSES)
-	# Primate + not-yet-authored quadrupeds fall back to hominin art.
-	return ApeSprites.build_species_atlas(ApeSprites.ape_for_species(species_id))
-
-
-static func build_fallen(archetype: int, species_id: int) -> ImageTexture:
-	if _QUAD_DATA.has(archetype):
-		return build_quad_fallen(_QUAD_DATA[archetype].POSES)
-	return ApeSprites.build_fallen_texture(ApeSprites.ape_for_species(species_id))
 ```
+
+Then in `main.gd` `_refresh_bodies`, replace the Task-5 parity line with the real selector:
+
+```gdscript
+		var arch := MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0) if have_sp else MammalSprites.PRIMATE
+		var b := MammalSprites.bucket_of(arch, sp_ids[i])
+```
+
+(`bucket_atlas`/`bucket_fallen` already dispatch through `_QUAD_DATA` — no other registry change needed. WOLF now routes to its own bucket + atlas; every other quad archetype still falls back to ape skin-0 art until Task 7.)
 
 - [ ] **Step 3: Scene smoke.**
 
@@ -806,10 +833,10 @@ Expected: carnivore+large agents render as grey-brown wolves that trot (leg cycl
 
 - [ ] **Step 6: Format, lint, commit**
 
-Run: `gdformat game/scripts/mammal_sprites.gd game/scripts/mammal_data/wolf.gd && gdformat --check game/scripts/ && gdlint game/scripts/`
+Run: `gdformat game/scripts/mammal_sprites.gd game/scripts/mammal_data/wolf.gd game/scripts/main.gd && gdformat --check game/scripts/ && gdlint game/scripts/`
 
 ```bash
-git add game/scripts/mammal_sprites.gd game/scripts/mammal_data/wolf.gd
+git add game/scripts/mammal_sprites.gd game/scripts/mammal_data/wolf.gd game/scripts/main.gd
 git commit -m "feat(viewer): live archetype selection + Wolf quadruped rig end-to-end"
 ```
 
@@ -897,9 +924,13 @@ git commit -m "chore(viewer): tune archetype thresholds; full mammal roster gree
 ## Self-review
 
 **Spec coverage:**
-- §Component 1 registry → Tasks 2, 6, 7. §Component 2 selection → Task 2 (+tuning Task 9). §Component 3 atlas/tint → Task 4 (mask resolved to value-ramp, documented above). §Component 4 shader animation → Task 3 (+ per-rig flourishes exercised in 6/7). §Component 5 integration → Tasks 1 (accessor), 5 (bucketing), 8 (inspector/settlement). §Verification → every task's smoke + Task 9. §Build order → Tasks 1-9 follow it (accessor → registry → shader → atlas → rewire → template rig → remaining rigs → call sites → tune). All covered.
+- §Component 1 registry → Tasks 2, 6, 7. §Component 2 selection → Task 2 (+tuning Task 9). §Component 3 atlas/tint → Tasks 2 (builders + coat hue) & 4 (main.gd wiring); mask resolved to value-ramp, documented in the Design note. §Component 4 shader animation → Task 3 (+ per-rig flourishes exercised in 6/7). §Component 5 integration → Tasks 1 (accessor), 5 (bucketing), 8 (inspector/settlement). §Verification → every task's smoke + Task 9. §Build order → Tasks 1-9 follow it. All covered.
 - Spec's tentative 1-bit mask is intentionally superseded by the value-ramp tint; documented in the Design note.
+
+**Pre-flight fixes (applied before execution):**
+- **Primate must stay 5 hominins.** The one-mesh-per-archetype model would have collapsed the 5 hominins into one, contradicting the spec ("Primate picks 1 of 5 hominins by species_id"). Replaced with an **11 render-bucket model** (`bucket_of`): buckets 0-4 are the hominin skins (byte-identical to today's per-species ape meshes), 5-10 the quad archetypes. Tasks 2/5/6/8 use `BUCKET_COUNT`/`bucket_*` throughout; the Task-5 parity gate (hardcoded PRIMATE) is now truly byte-identical.
+- **No duplicated outline pass.** `ape_sprites._build_cell` is generalized to accept a `Color` or a PAL key (one branch), and the quad builder reuses it — no copy-pasted edge loop.
 
 **Placeholder scan:** No TBD/TODO. The per-rig art in Task 7 is specified by concrete silhouette/slot specs against the fully-worked Wolf reference (Task 6), plus a capture-verify loop — pixel authoring is inherently iterative and cannot be pre-rendered blind, which is why one rig is worked in full and the rest are precise deltas. Inspector per-archetype portrait is explicitly marked optional, not a hidden gap.
 
-**Type consistency:** `archetype_for(diet, size, livestock)`, `rig_kind(archetype)`, `coat_hue(archetype, species_id)`, `build_atlas(archetype, species_id)`, `build_fallen(archetype, species_id)`, `build_quad_atlas(poses)`, `livestock_flags_of(&World)`, `alive_livestock_flags()`, `domestication_enabled()`, `_livestock_flags(n)`, `_prev_arch` — used consistently across tasks. Enum `{HARE, DEER, BOAR, PRIMATE, FOX, WOLF, LIVESTOCK}` and `RigKind {PREY, PREDATOR, PRIMATE_RIG, LIVESTOCK_RIG}` referenced identically in the shader (int values 0-3) and registry.
+**Type consistency:** `archetype_for(diet, size, livestock)`, `rig_kind(archetype)`, `coat_hue(archetype, species_id)`, `bucket_of(archetype, species_id)`, `bucket_atlas/bucket_fallen/bucket_rig_kind/bucket_gait_fps(b)`, `build_quad_atlas(poses)`, `build_quad_fallen(poses)`, `livestock_flags_of(&World)`, `alive_livestock_flags()`, `domestication_enabled()`, `_livestock_flags(n)`, `_prev_bucket` — used consistently across tasks. `BUCKET_COUNT = SKIN_COUNT + 6 = 11`; `QUAD_ORDER = [HARE, DEER, BOAR, FOX, WOLF, LIVESTOCK]`. Enum `{HARE, DEER, BOAR, PRIMATE, FOX, WOLF, LIVESTOCK}` and `RigKind {PREY, PREDATOR, PRIMATE_RIG, LIVESTOCK_RIG}` referenced identically in the shader (int 0-3) and registry.
