@@ -969,14 +969,12 @@ mod tests {
     #[test]
     fn mountain_uplift_raises_connected_ranges() {
         let flat = {
-            let mut c = ClimateParams::default();
-            c.continentality = 0.85;
+            let c = ClimateParams { continentality: 0.85, ..Default::default() };
             BiomeField::generate_with(11, 128, 1024.0, &c)
         };
         let ranged = {
-            let mut c = ClimateParams::default();
-            c.continentality = 0.85;
-            c.mountain_uplift = 0.6;
+            let c =
+                ClimateParams { continentality: 0.85, mountain_uplift: 0.6, ..Default::default() };
             BiomeField::generate_with(11, 128, 1024.0, &c)
         };
         let rock =
