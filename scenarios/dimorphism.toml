@@ -1,5 +1,7 @@
 name = "dimorphism"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 sexual_dimorphism_enabled = true
 
 # E12 sexual dimorphism demo: a grazer herd under stalker predation with

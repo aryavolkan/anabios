@@ -1,5 +1,7 @@
 name = "dit-env-static"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # DIT env-variability, STATIC world (env_period = 4294967295 = u32::MAX =
 # culture::ENV_STATIC_PERIOD): the mechanism is active but the optimal technique

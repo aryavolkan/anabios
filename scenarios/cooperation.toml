@@ -1,5 +1,7 @@
 name = "cooperation"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # Dense cluster of cooperator herbivores. High altruism ensures share_pass
 # fires when kinship is above the 0.3 threshold, triggering EvolvedCooperation

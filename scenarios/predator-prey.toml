@@ -1,5 +1,7 @@
 name = "predator-prey"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # Prey: a herd of grazers clustered in the middle of the world.
 [[agents]]

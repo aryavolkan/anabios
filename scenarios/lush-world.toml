@@ -1,0 +1,26 @@
+name = "lush-world"
+seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
+
+# CLIMATE KNOB showcase: LUSH WORLD. `moisture_bias = +0.20` with a touch of
+# warmth floods the classification into rainforest and wet forest: forage is
+# everywhere, regrowth is relentless, and the living biome recolonizes any
+# bare patch in a few ticks. The constraint is never food — it's crowding.
+# Prediction: rapid approach to the population cap, dense settlement
+# clustering, and selection shifting from foraging efficiency to social and
+# competitive traits.
+living_biome = true
+settlement_enabled = true
+
+[climate]
+moisture_bias = 0.20
+temp_bias = 0.05
+
+[[agents]]
+count = 100
+archetype = "grazer"
+placement = { kind = "uniform" }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.35

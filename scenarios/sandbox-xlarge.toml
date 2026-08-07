@@ -7,6 +7,10 @@ living_biome = true
 season_period = 4000
 max_population = 12000
 
+# X-large sandbox: the 12k-cap stress world at 4096² (biome 512²,
+# seasons). Exists to prove determinism and throughput at the top of the
+# population budget.
+
 [[agents]]
 count = 4000
 placement = { kind = "uniform" }

@@ -1,5 +1,7 @@
 name = "dit-env-fast"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # DIT env-variability, FAST sweep (env_period = 8) — the optimal technique sweeps
 # up and down faster than the learn+copy loop can follow, so a learner's technique

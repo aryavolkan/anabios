@@ -140,14 +140,14 @@ const APES: Array = [
 # Blocks are [x, y, w, h, zone], drawn back-to-front.
 const SPECIES_COUNT := 5
 const WALK_FRAME_COUNT := 4
-# The atlas stacks WALK_FRAME_COUNT gait poses, then one still per action
+# The atlas stacks WALK_FRAME_COUNT gait poses, then TWO frames per action
 # (eat / fight / trade / flee) that main.gd derives from combat, trade and
-# energy signals; the shader switches to those rows when INSTANCE_CUSTOM.a != 0.
-const POSE_COUNT := 8
+# energy signals; the shader cycles each pair when INSTANCE_CUSTOM.a != 0.
+const POSE_COUNT := 12
 const POSE_EAT := 4
-const POSE_FIGHT := 5
-const POSE_TRADE := 6
-const POSE_FLEE := 7
+const POSE_FIGHT := 6
+const POSE_TRADE := 8
+const POSE_FLEE := 10
 # Gait: 0 neutral (idle), 1 contact-left, 2 passing (whole figure lifted 1px —
 # the walk bob), 3 contact-right. The shader cycles 1→2→3→2 when moving and
 # holds 0 when idle, so the stride reads as step-lift-step-lift.
@@ -222,7 +222,21 @@ const FIELD_POSES: Array = [
 		[6, 13, 2, 2, "c"],
 		[9, 13, 2, 2, "c"]
 	],
-	# 5 fight — lunging, arm raised high to strike, back leg braced
+	# 5 eat B — the chomp: head dips a pixel, hand comes up to the mouth
+	[
+		[7, 7, 4, 4, "c"],
+		[8, 9, 2, 2, "s"],
+		[8, 11, 2, 1, "c"],
+		[4, 8, 8, 5, "c"],
+		[7, 9, 2, 2, "a"],
+		[3, 9, 2, 2, "c"],
+		[4, 8, 2, 1, "s"],
+		[11, 10, 2, 3, "c"],
+		[11, 12, 2, 1, "s"],
+		[6, 13, 2, 2, "c"],
+		[9, 13, 2, 2, "c"]
+	],
+	# 6 fight — lunging, arm raised high to strike, back leg braced
 	[
 		[6, 1, 4, 4, "c"],
 		[7, 3, 2, 2, "s"],
@@ -237,7 +251,22 @@ const FIELD_POSES: Array = [
 		[8, 11, 2, 4, "c"],
 		[11, 13, 3, 2, "c"]
 	],
-	# 6 trade — upright, one arm extended forward offering the good
+	# 7 fight B — the strike lands: raised arm swings forward at shoulder height
+	[
+		[6, 1, 4, 4, "c"],
+		[7, 3, 2, 2, "s"],
+		[7, 5, 2, 1, "c"],
+		[4, 5, 8, 5, "c"],
+		[7, 6, 2, 2, "a"],
+		[11, 5, 4, 2, "c"],
+		[14, 4, 1, 1, "s"],
+		[3, 6, 2, 4, "c"],
+		[3, 9, 2, 1, "s"],
+		[3, 11, 3, 4, "c"],
+		[8, 11, 2, 4, "c"],
+		[11, 13, 3, 2, "c"]
+	],
+	# 8 trade — upright, one arm extended forward offering the good
 	[
 		[6, 2, 4, 4, "c"],
 		[7, 4, 2, 2, "s"],
@@ -251,7 +280,21 @@ const FIELD_POSES: Array = [
 		[6, 11, 2, 4, "c"],
 		[9, 11, 2, 4, "c"]
 	],
-	# 7 flee — leaning into a panicked run, both arms flung up
+	# 9 trade B — the offering arm dips a pixel (a small beckoning bob)
+	[
+		[6, 2, 4, 4, "c"],
+		[7, 4, 2, 2, "s"],
+		[7, 6, 2, 1, "c"],
+		[4, 6, 8, 5, "c"],
+		[7, 7, 2, 2, "a"],
+		[3, 7, 2, 4, "c"],
+		[3, 10, 2, 1, "s"],
+		[11, 7, 4, 2, "c"],
+		[14, 7, 1, 1, "s"],
+		[6, 11, 2, 4, "c"],
+		[9, 11, 2, 4, "c"]
+	],
+	# 10 flee — leaning into a panicked run, both arms flung up
 	[
 		[8, 2, 4, 4, "c"],
 		[9, 4, 2, 2, "s"],
@@ -264,6 +307,20 @@ const FIELD_POSES: Array = [
 		[12, 4, 2, 1, "s"],
 		[4, 11, 3, 4, "c"],
 		[9, 12, 3, 3, "c"]
+	],
+	# 11 flee B — the counter-stride: arms swap, legs scissor the other way
+	[
+		[8, 2, 4, 4, "c"],
+		[9, 4, 2, 2, "s"],
+		[8, 6, 2, 1, "c"],
+		[5, 6, 8, 5, "c"],
+		[8, 7, 2, 2, "a"],
+		[3, 6, 2, 3, "c"],
+		[3, 5, 2, 1, "s"],
+		[12, 4, 2, 4, "c"],
+		[12, 3, 2, 1, "s"],
+		[5, 12, 3, 3, "c"],
+		[9, 11, 3, 4, "c"]
 	],
 ]
 

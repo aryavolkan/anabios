@@ -7,6 +7,10 @@ living_biome = true
 season_period = 3000
 max_population = 6000
 
+# Large sandbox: a 6k-cap grazing world at 2048² with seasons and a
+# living biome — the scale test below sandbox-xlarge, with no culture
+# layer, so pure foraging ecology drives emergence.
+
 # A big herbivore population spread across the whole world.
 [[agents]]
 count = 1500

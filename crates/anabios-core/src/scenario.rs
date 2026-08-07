@@ -163,6 +163,40 @@ pub struct Scenario {
     /// `war_enabled`.
     #[serde(default)]
     pub codex_interval: Option<u64>,
+    /// Opt-in climate knobs (`[climate]` table). Absent = the compile-time
+    /// defaults, bit-identical to every pre-knob scenario. Any present field
+    /// regenerates the biome field with that override (seed and RNG draw
+    /// order unchanged). See `biome::ClimateParams`.
+    #[serde(default)]
+    pub climate: Option<ScenarioClimate>,
+}
+
+/// Scenario-facing climate overrides; every field optional, defaults from
+/// `biome::ClimateParams::default()`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScenarioClimate {
+    /// Global temperature shift (negative = ice age, positive = hothouse).
+    pub temp_bias: Option<f32>,
+    /// Global moisture shift (negative = arid world, positive = lush world).
+    pub moisture_bias: Option<f32>,
+    /// Elevation cutoff for open water (higher = more ocean / archipelagos).
+    pub sea_level: Option<f32>,
+    /// Elevation distribution widening (higher = deeper basins + more peaks).
+    pub elev_contrast: Option<f32>,
+}
+
+impl ScenarioClimate {
+    /// Resolve against the compile-time defaults.
+    pub fn resolve(&self) -> crate::biome::ClimateParams {
+        let d = crate::biome::ClimateParams::default();
+        crate::biome::ClimateParams {
+            temp_bias: self.temp_bias.unwrap_or(d.temp_bias),
+            moisture_bias: self.moisture_bias.unwrap_or(d.moisture_bias),
+            sea_level: self.sea_level.unwrap_or(d.sea_level),
+            elev_contrast: self.elev_contrast.unwrap_or(d.elev_contrast),
+        }
+    }
 }
 
 /// A request for `count` agents distributed via the given placement, each
@@ -496,6 +530,14 @@ impl Scenario {
         }
         if let Some(cap) = self.max_population {
             w.max_population = cap;
+        }
+        if let Some(climate) = &self.climate {
+            w.biome = crate::biome::BiomeField::generate_with(
+                self.seed,
+                w.biome_res,
+                w.world_size,
+                &climate.resolve(),
+            );
         }
         if let Some(interval) = self.codex_interval {
             w.codex_interval = interval;

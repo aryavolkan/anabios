@@ -1,5 +1,7 @@
 name = "dit-env-slow"
 seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
 
 # DIT env-variability, SLOW sweep (env_period = 400): the optimal foraging
 # technique sweeps slowly up and down (a triangle wave, full cycle = 2*period).

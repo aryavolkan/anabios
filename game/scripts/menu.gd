@@ -67,6 +67,31 @@ const SCENARIOS: Array[Dictionary] = [
 		"ground": 5,
 		"body": 1
 	},
+	# Climate knobs
+	{
+		"label": "Climate — Ice age (temp bias)",
+		"path": "res://../scenarios/ice-age.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Climate — Archipelago (sea level)",
+		"path": "res://../scenarios/archipelago.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Climate — Arid world (dry bias)",
+		"path": "res://../scenarios/arid-world.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Climate — Lush world (wet bias)",
+		"path": "res://../scenarios/lush-world.toml",
+		"ground": 0,
+		"body": 0
+	},
 	{
 		"label": "E12 — Sexual dimorphism",
 		"path": "res://../scenarios/dimorphism.toml",
@@ -177,6 +202,161 @@ const SCENARIOS: Array[Dictionary] = [
 		"path": "res://../scenarios/out-of-africa.toml",
 		"ground": 0,
 		"body": 0
+	},
+	{
+		"label": "Grand — Out of Africa saga (full scale)",
+		"path": "res://../scenarios/out-of-africa-saga.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Grand — Theater (staged emergence)",
+		"path": "res://../scenarios/grand-theater.toml",
+		"ground": 0,
+		"body": 0
+	},
+	# Sandbox worlds
+	{
+		"label": "Sandbox — Large (2048², 6k cap)",
+		"path": "res://../scenarios/sandbox-large.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Sandbox — X-large (4096², 12k cap)",
+		"path": "res://../scenarios/sandbox-xlarge.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Sandbox — Coevolution (tech tree)",
+		"path": "res://../scenarios/sandbox-coevolution.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Sandbox — Living coevolution (gene vs culture)",
+		"path": "res://../scenarios/living-sandbox-coevolution.toml",
+		"ground": 0,
+		"body": 0
+	},
+	# Biome & trade
+	{
+		"label": "Biome — Climate adaptation",
+		"path": "res://../scenarios/biome-adaptation.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Biome — Desert/tropical bands",
+		"path": "res://../scenarios/desert-tropical.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Trade — Biome goods economy",
+		"path": "res://../scenarios/biome-trade.toml",
+		"ground": 7,
+		"body": 0
+	},
+	{
+		"label": "Trade — Geographic junction",
+		"path": "res://../scenarios/geographic-trade.toml",
+		"ground": 7,
+		"body": 0
+	},
+	# Behavior & cognition
+	{
+		"label": "Behavior — Foraging selection",
+		"path": "res://../scenarios/foraging-selection.toml",
+		"ground": 0,
+		"body": 2
+	},
+	{
+		"label": "Behavior — Tool users",
+		"path": "res://../scenarios/tool-users.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Behavior — Affect: seeking",
+		"path": "res://../scenarios/affect-seeking.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Behavior — Affect: social",
+		"path": "res://../scenarios/affect-social.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Behavior — Affect: threat",
+		"path": "res://../scenarios/affect-threat.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Cognitive — Knowledge ratchet (writing)",
+		"path": "res://../scenarios/knowledge-ratchet.toml",
+		"ground": 0,
+		"body": 1
+	},
+	# War & weapons
+	{
+		"label": "War — Weapons arena",
+		"path": "res://../scenarios/weapons-arena.toml",
+		"ground": 0,
+		"body": 2
+	},
+	{
+		"label": "War — Weapons arms race",
+		"path": "res://../scenarios/weapons-arms-race.toml",
+		"ground": 0,
+		"body": 2
+	},
+	# O1 experiments
+	{
+		"label": "O1 — Invasion: asocial into cultural",
+		"path": "res://../scenarios/o1-invasion-asocial-into-cultural.toml",
+		"ground": 0,
+		"body": 1
+	},
+	{
+		"label": "O1 — Invasion: cultural into asocial",
+		"path": "res://../scenarios/o1-invasion-cultural-into-asocial.toml",
+		"ground": 0,
+		"body": 1
+	},
+	{
+		"label": "O1 — Lever: ceiling",
+		"path": "res://../scenarios/o1-lever-ceiling.toml",
+		"ground": 0,
+		"body": 1
+	},
+	{
+		"label": "O1 — Lever: cognition",
+		"path": "res://../scenarios/o1-lever-cognition.toml",
+		"ground": 0,
+		"body": 1
+	},
+	{
+		"label": "O1 — Lever: density",
+		"path": "res://../scenarios/o1-lever-density.toml",
+		"ground": 0,
+		"body": 1
+	},
+	{
+		"label": "O1 — Lever: mixing",
+		"path": "res://../scenarios/o1-lever-mixing.toml",
+		"ground": 0,
+		"body": 1
+	},
+	{
+		"label": "O1 — Lever: practices off",
+		"path": "res://../scenarios/o1-lever-practices-off.toml",
+		"ground": 0,
+		"body": 1
 	},
 ]
 

@@ -1,0 +1,26 @@
+name = "arid-world"
+seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
+
+# CLIMATE KNOB showcase: ARID WORLD. `moisture_bias = -0.24` dries the
+# whole planet: rainforest collapses to savanna, forest to grass, and the
+# subtropical desert bands merge into a global erg. Forage is scarce and
+# scattered; drought disasters scar what little grows. Prediction:
+# nomadism — constant RangeExpansion along the rare wet refugia, tight
+# clustering at riverless oases, and feast/famine population waves.
+disasters_enabled = true
+living_biome = true
+biome_adaptation = true
+
+[climate]
+moisture_bias = -0.24
+
+[[agents]]
+count = 120
+archetype = "grazer"
+placement = { kind = "uniform" }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+reproduction_threshold = 0.45

@@ -8,6 +8,10 @@ season_period = 2500
 inventions_enabled = true
 max_population = 8000
 
+# Sandbox coevolution: the 8k-cap invention-tree world (2048², seasons,
+# living biome). Culture and genetics share one environment and the tech
+# tree is the scoreboard.
+
 # Culture cohort: high-Openness innovators + Communicator → the invention
 # tree (stone tools → … → nuclear power) climbs, with buffs and debuffs.
 [[agents]]

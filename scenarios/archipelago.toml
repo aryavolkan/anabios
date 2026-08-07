@@ -1,0 +1,27 @@
+name = "archipelago"
+seed = 0
+# Cap living agents so the windowed viewer stays fluent (default is 10000).
+max_population = 2000
+
+# CLIMATE KNOB showcase: ARCHIPELAGO. `sea_level = 0.52` drowns half the
+# landmass, leaving island chains separated by open water; the higher
+# `elev_contrast` sharpens each island's central ridge. Terrain-habitat
+# pulls sort agents onto their preferred coastlines, and the resource
+# economy turns island borders into trade hubs. Prediction: TradeRoute
+# events stitching the chains together, SegregationEmerged by island,
+# and CorridorUse along the coasts.
+terrain_habitat = true
+resources_enabled = true
+
+[climate]
+sea_level = 0.52
+elev_contrast = 2.6
+
+# Island foragers seeded across the world; the flood does the sorting.
+[[agents]]
+count = 150
+archetype = "grazer"
+placement = { kind = "uniform" }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.4
