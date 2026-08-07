@@ -1,0 +1,40 @@
+# A continent-scale world: a small founder cohort seeded on one landmass beside
+# a river, dwarfed by oceans, mountain ranges, and a river network.
+#
+# Geography knobs (see docs/superpowers/specs/2026-08-07-continental-worldgen-design.md):
+#   continentality  - pulls land into a few large masses
+#   mountain_uplift - ridged linear ranges on land
+#   rain_shadow     - dry lee slopes downwind of ranges
+#   river_threshold - min flow-accumulation for a river cell (scale-dependent)
+#   sea_level       - elevation cutoff for open water; 0.45 (vs. the 0.35
+#                      default) carves real oceans instead of leaving the
+#                      world ~90% land
+#
+# Cluster center from a densest-patch scout over BiomeField::generate_with(7,
+# 512, 4096.0, <flagship climate>): (1492, 1020) lands in a 100%-Forest window
+# (grid col=186, row=127) with the nearest river cell only ~91 world units
+# away, well inside the radius=120 cluster.
+name = "continental"
+seed = 7
+world_size = 4096.0
+biome_res = 512
+hash_res = 256
+# Small population, large world.
+max_population = 800
+living_biome = true
+terrain_habitat = true
+
+[climate]
+continentality = 0.9
+mountain_uplift = 0.6
+rain_shadow = 0.4
+river_threshold = 150.0
+sea_level = 0.45
+
+# Founder cohort clustered on a river-adjacent forest (center from the scout).
+[[agents]]
+count = 120
+placement = { kind = "cluster", center_x = 1492.0, center_y = 1020.0, radius = 120.0 }
+[agents.traits]
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

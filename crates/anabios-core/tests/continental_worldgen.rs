@@ -1,4 +1,7 @@
 use anabios_core::biome::{BiomeField, ClimateParams, TerrainType};
+use anabios_core::scenario::Scenario;
+use anabios_core::snapshot::state_hash;
+use anabios_core::tick::step;
 
 fn continental() -> ClimateParams {
     ClimateParams {
@@ -35,4 +38,22 @@ fn continental_generation_is_deterministic() {
         assert_eq!(x.river_flow, y.river_flow);
         assert_eq!(x.moisture, y.moisture);
     }
+}
+
+#[test]
+fn continental_scenario_loads_and_runs_deterministically() {
+    let toml = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../scenarios/continental.toml"
+    ))
+    .expect("read continental.toml");
+    let scenario = Scenario::parse_toml(&toml).expect("parse");
+    let mut a = scenario.instantiate();
+    let mut b = scenario.instantiate();
+    for _ in 0..200 {
+        step(&mut a);
+        step(&mut b);
+    }
+    assert_eq!(state_hash(&a), state_hash(&b), "scenario must be deterministic");
+    assert!(a.agents.iter_alive().count() > 0, "population should survive 200 ticks");
 }
