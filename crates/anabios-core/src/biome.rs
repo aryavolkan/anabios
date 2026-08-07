@@ -226,6 +226,11 @@ pub const DEEP_OCEAN_ELEV: f32 = 0.15;
 /// less fragmented than unmasked ones in 10/15 sampled seeds, vs 2/15 with no
 /// contrast).
 pub const CONTINENT_MASK_CONTRAST: f32 = 8.0;
+/// Prevailing wind (westerly): upwind is `-WIND_DX/-WIND_DY` cells away.
+pub const WIND_DX: isize = 1;
+pub const WIND_DY: isize = 0;
+/// Upwind sample distance (cells) for the rain-shadow term.
+pub const SHADOW_DIST: isize = 4;
 
 /// Scenario-tunable climate knobs (the follow-up deferred by the 2026-07-27
 /// worldgen design doc). Defaults exactly reproduce the compile-time
@@ -418,10 +423,19 @@ impl BiomeField {
                 // wet temperate) blended with an fBm field sampled on warped
                 // coordinates so it tracks the warped landmasses, plus the
                 // scenario's global bias (arid / lush world).
-                let moisture = (0.5 * latitude_moisture(v)
+                let mut moisture = (0.5 * latitude_moisture(v)
                     + 0.5 * moisture_noise.sample(wu, wv)
                     + climate.moisture_bias)
                     .clamp(0.0, 1.0);
+                if climate.rain_shadow > 0.0 {
+                    let uc =
+                        (col as isize - WIND_DX * SHADOW_DIST).rem_euclid(res as isize) as usize;
+                    let ur =
+                        (row as isize - WIND_DY * SHADOW_DIST).rem_euclid(res as isize) as usize;
+                    let upwind_elev = elev_grid[ur * res + uc];
+                    moisture = (moisture - climate.rain_shadow * (upwind_elev - elev).max(0.0))
+                        .clamp(0.0, 1.0);
+                }
                 let terrain = classify_with(elev, temperature, moisture, climate.sea_level);
                 let nq = nutrient.sample(u, v);
                 let nutrient_quality =
@@ -984,6 +998,34 @@ mod tests {
             "uplift should create more rock: {} vs {}",
             rock(&ranged),
             rock(&flat)
+        );
+    }
+
+    #[test]
+    fn rain_shadow_dries_lee_of_ranges() {
+        // Compare mean moisture with and without rain-shadow on a mountainous world;
+        // the shadowed world must be drier on average over land.
+        let mk = |rs: f32| {
+            let c = ClimateParams {
+                continentality: 0.85,
+                mountain_uplift: 0.6,
+                rain_shadow: rs,
+                ..Default::default()
+            };
+            BiomeField::generate_with(23, 128, 1024.0, &c)
+        };
+        let mean_land_moisture = |f: &BiomeField| {
+            let land: Vec<f32> = f
+                .cells
+                .iter()
+                .filter(|c| c.terrain != TerrainType::Water)
+                .map(|c| c.moisture)
+                .collect();
+            land.iter().sum::<f32>() / land.len() as f32
+        };
+        assert!(
+            mean_land_moisture(&mk(0.5)) < mean_land_moisture(&mk(0.0)),
+            "rain-shadow should lower mean land moisture"
         );
     }
 
