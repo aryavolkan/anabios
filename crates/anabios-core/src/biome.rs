@@ -224,10 +224,9 @@ pub const DEEP_OCEAN_ELEV: f32 = 0.15;
 /// soft on its own — its wide transition band lets base-elevation noise poke
 /// land through the "ocean" side and cut through the "land" side, so masking
 /// can *increase* fragmentation instead of consolidating it. Sharpening the
-/// mask toward a near-binary land/ocean template fixes that (empirically
-/// verified: at `continentality = 0.85`, this makes continent-masked worlds
-/// less fragmented than unmasked ones in 10/15 sampled seeds, vs 2/15 with no
-/// contrast).
+/// mask's transition band toward a near-binary land/ocean template fixes
+/// that, letting an already land-majority base world consolidate into
+/// distinct landmasses rather than fragmenting.
 pub const CONTINENT_MASK_CONTRAST: f32 = 8.0;
 /// Prevailing wind (westerly): upwind is `-WIND_DX/-WIND_DY` cells away.
 pub const WIND_DX: isize = 1;
@@ -399,6 +398,9 @@ impl BiomeField {
                 if let Some(mn) = &mountain_noise {
                     let ridge = 1.0 - (2.0 * mn.sample(wu, wv) - 1.0).abs();
                     // Weight uplift to land interiors so ranges sit on continents.
+                    // Intentionally the raw (uncontrasted) mask, not `mask` above: this
+                    // gives ranges a soft falloff toward coasts instead of the sharpened
+                    // land template's near-binary edge.
                     let land_weight = continent_noise.as_ref().map_or(1.0, |cn| cn.sample(wu, wv));
                     elev = (elev + climate.mountain_uplift * ridge * land_weight).clamp(0.0, 1.0);
                 }

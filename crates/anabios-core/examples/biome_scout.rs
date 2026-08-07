@@ -160,10 +160,11 @@ fn main() {
             .and_then(|s| s.parse().ok())
             .unwrap_or(7);
         let climate = ClimateParams {
-            continentality: 0.85,
+            continentality: 0.9,
             mountain_uplift: 0.6,
             rain_shadow: 0.4,
             river_threshold: 150.0,
+            sea_level: 0.45,
             ..Default::default()
         };
         let field = BiomeField::generate_with(seed, 512, 4096.0, &climate);
