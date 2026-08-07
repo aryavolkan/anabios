@@ -65,6 +65,7 @@ const BUCKET_COUNT := SKIN_COUNT + 6  # 11
 const _QUAD_DATA := {
 	HARE: preload("res://scripts/mammal_data/hare.gd"),
 	DEER: preload("res://scripts/mammal_data/deer.gd"),
+	BOAR: preload("res://scripts/mammal_data/boar.gd"),
 	WOLF: preload("res://scripts/mammal_data/wolf.gd"),
 }
 
