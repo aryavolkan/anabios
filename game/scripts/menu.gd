@@ -297,6 +297,12 @@ const SCENARIOS: Array[Dictionary] = [
 		"body": 0
 	},
 	{
+		"label": "Behavior — Mammals vs reptiles (affect classes)",
+		"path": "res://../scenarios/mammals-vs-reptiles.toml",
+		"ground": 0,
+		"body": 2
+	},
+	{
 		"label": "Cognitive — Knowledge ratchet (writing)",
 		"path": "res://../scenarios/knowledge-ratchet.toml",
 		"ground": 0,
