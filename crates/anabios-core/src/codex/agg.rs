@@ -83,6 +83,15 @@ pub struct SpeciesAgg {
     /// domestication is off; the LivestockHerd detector reads this only
     /// under the flag.
     pub livestock_count: u32,
+    /// Per-affect-system activation sums over alive members (for species
+    /// means; M-F). Zero when the affect layer is off — the affect column is
+    /// all-zero then anyway.
+    pub affect_sum: [f64; crate::affect::AFFECT_SYSTEMS],
+    /// Member counts at/above the per-system HIGH_* thresholds (M-F).
+    pub high_fear: u32,
+    pub high_seek: u32,
+    pub high_rage: u32,
+    pub high_panic: u32,
 }
 
 impl Default for SpeciesAgg {
@@ -110,6 +119,11 @@ impl Default for SpeciesAgg {
             genome_sumsq: [0.0; 50],
             male_count: 0,
             livestock_count: 0,
+            affect_sum: [0.0; crate::affect::AFFECT_SYSTEMS],
+            high_fear: 0,
+            high_seek: 0,
+            high_rage: 0,
+            high_panic: 0,
         }
     }
 }
@@ -138,6 +152,11 @@ impl SpeciesAgg {
         self.genome_sumsq = [0.0; 50];
         self.male_count = 0;
         self.livestock_count = 0;
+        self.affect_sum = [0.0; crate::affect::AFFECT_SYSTEMS];
+        self.high_fear = 0;
+        self.high_seek = 0;
+        self.high_rage = 0;
+        self.high_panic = 0;
     }
 
     /// This tick's centroid (mean alive position), `(0,0)` when empty.
@@ -239,6 +258,25 @@ impl SpeciesAggTable {
             if world.agents.livestock_of[i] != crate::agent::AGENT_NULL {
                 e.livestock_count += 1;
             }
+            if world.affect_enabled && world.agents.affect.len() > i {
+                let af = &world.agents.affect[i];
+                for (k, s) in e.affect_sum.iter_mut().enumerate() {
+                    *s += af[k] as f64;
+                }
+                use crate::affect::{FEAR, PANIC, RAGE, SEEK};
+                if af[FEAR] >= HIGH_FEAR {
+                    e.high_fear += 1;
+                }
+                if af[SEEK] >= HIGH_SEEK {
+                    e.high_seek += 1;
+                }
+                if af[RAGE] >= HIGH_RAGE {
+                    e.high_rage += 1;
+                }
+                if af[PANIC] >= HIGH_PANIC {
+                    e.high_panic += 1;
+                }
+            }
         }
         // `occ_cells` was pushed once per member (with duplicates when members
         // share a cell); collapse each active species' list to the sorted set
@@ -258,6 +296,26 @@ mod tests {
     use super::*;
     use crate::genome::Genome;
     use crate::prelude::Vec2;
+
+    #[test]
+    fn build_aggregates_affect_activations() {
+        use crate::affect::{FEAR, SEEK};
+        let mut w = World::new(11);
+        w.affect_enabled = true;
+        let a = w.spawn_agent(Vec2::new(100.0, 100.0), Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(120.0, 100.0), Genome::neutral());
+        // Stamp distinctive activations directly on the serialized column.
+        w.agents.affect[a as usize][FEAR] = 0.9;
+        w.agents.affect[b as usize][FEAR] = 0.1;
+        w.agents.affect[a as usize][SEEK] = 0.8;
+        let mut agg = SpeciesAggTable::default();
+        agg.build(&w);
+        let e = agg.get(0).expect("species 0");
+        assert!((e.affect_sum[FEAR] - 1.0).abs() < 1e-5);
+        assert!((e.affect_sum[SEEK] - 0.8).abs() < 1e-5);
+        // Only `a` is above the HIGH-fear threshold (see params HIGH_* consts).
+        assert_eq!(e.high_fear, 1);
+    }
 
     /// Drift guard for the serde-skip accumulator footgun. `SpeciesAggTable`
     /// reuses `SpeciesAgg` entries across ticks: `build` populates them and

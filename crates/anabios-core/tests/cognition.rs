@@ -107,7 +107,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // AgentBuffers.affect_prev_crowding serialized column. affect_enabled off in
     // this scenario ⇒ develop_all no-op, column stays 0.0 — trajectory
     // byte-identical, only the serialized layout grew.
-    &[(0, 0x13ec7376a5c7289a), (100, 0x2394071d4857e923), (300, 0xb4c978f561f91a94)];
+    // Refreshed 2026-08-04 (M-F affect observability, FORMAT_VERSION 28→29): new
+    // CodexState affect-detector fields ({frenzy_active, rage_streak,
+    // rage_active, fear_count_history, cascade_active, grief_active}); affect_enabled
+    // off in this scenario ⇒ detectors never fire — layout growth only.
+    &[(0, 0x17059ba9dea8529a), (100, 0x8f5ba1f0dc208a63), (300, 0x67032f0377569454)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

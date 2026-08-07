@@ -75,8 +75,11 @@ fn affect_scenario_survives_save_load_step() {
 // PLAY (movement approach-bias); a real flag-on behavior change (NO layout growth,
 // no new serialized column, FORMAT_VERSION unchanged). tick-0 hash is unchanged
 // (PLAY has not accrued yet); ticks 100/300 move. Flag-off goldens unaffected.
+// Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): the new serialized
+// CodexState affect-detector fields grow every scenario's state-hash layout (and the
+// detectors run flag-on here), so all ticks — including tick 0 — move.
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x3b9688a730461dc4), (100, 0x1d5c9c3005cc27df), (300, 0x0febbab089322258)];
+    &[(0, 0xb25f4eb40cb89604), (100, 0x245e71b24fc4e3db), (300, 0xf0f0f110a73291c8)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -181,8 +184,11 @@ fn affect_threat_emits_mass_fright() {
 // layered on the affect_prev_crowding layout growth.
 // Refreshed 2026-08-04 (M-E PLAY): juvenile grazers near same-species peers accrue
 // PLAY (movement approach-bias) — flag-on behavior change, no layout growth.
+// Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): new serialized
+// CodexState detector fields grow the state-hash layout for this flag-on scenario
+// (detectors run), so all ticks move.
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x2a5f2e53b8351c8c), (100, 0x8cbe01fdcaf00bdc), (300, 0xd46da3afcdaadb06)];
+    &[(0, 0xd18740aef4ef494c), (100, 0x6ae7fe513e0c8b55), (300, 0x955f757a822e90f7)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

@@ -38,7 +38,7 @@ pub fn idf_weight(n_t: u64) -> f64 {
 }
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 55] = [
+pub const ALL_EVENT_NAMES: [&str; 59] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -94,6 +94,10 @@ pub const ALL_EVENT_NAMES: [&str; 55] = [
     "livestock_herd",
     "knowledge_ratchet",
     "mass_fright",
+    "panic_cascade",
+    "feeding_frenzy",
+    "territorial_rage",
+    "mass_grief",
 ];
 
 /// Per-type corpus run counts from the reference sweep (see module docs):
@@ -106,7 +110,7 @@ pub const ALL_EVENT_NAMES: [&str; 55] = [
 /// via [`idf_weight`], so this table is the *only* thing to update on a regen.
 /// `knowledge_ratchet` (E14) and `mass_fright` (M-B) postdate this vintage and
 /// stay at `n_t = 0`.
-pub const DEFAULT_CORPUS_NT: [(&str, u64); 55] = [
+pub const DEFAULT_CORPUS_NT: [(&str, u64); 59] = [
     ("extinction", 64),
     ("pop_crash", 57),
     ("speciation", 63),
@@ -162,6 +166,10 @@ pub const DEFAULT_CORPUS_NT: [(&str, u64); 55] = [
     ("livestock_herd", 0),      // unseen in corpus
     ("knowledge_ratchet", 0),   // post-corpus (E14), unseen
     ("mass_fright", 0),         // post-corpus (M-B), unseen
+    ("panic_cascade", 0),       // post-corpus (M-F), unseen
+    ("feeding_frenzy", 0),      // post-corpus (M-F), unseen
+    ("territorial_rage", 0),    // post-corpus (M-F), unseen
+    ("mass_grief", 0),          // post-corpus (M-F), unseen
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -221,6 +229,10 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::LivestockHerd => "livestock_herd",
         EventType::KnowledgeRatchet => "knowledge_ratchet",
         EventType::MassFright => "mass_fright",
+        EventType::PanicCascade => "panic_cascade",
+        EventType::FeedingFrenzy => "feeding_frenzy",
+        EventType::TerritorialRage => "territorial_rage",
+        EventType::MassGrief => "mass_grief",
     }
 }
 

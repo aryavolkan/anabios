@@ -122,7 +122,14 @@ use crate::world::World;
 ///      detection). affect_enabled is off in every golden scenario ⇒
 ///      develop_all early-returns, the column stays 0.0, and behaviour is
 ///      byte-identical; only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 28;
+/// v29: M-F affect observability — CodexState.{frenzy_active, rage_streak,
+///      rage_active, fear_count_history, cascade_active, grief_active} +
+///      EventType::{PanicCascade, FeedingFrenzy, TerritorialRage, MassGrief}.
+///      All detectors are gated on `affect_enabled` (off in every golden
+///      scenario), so they never fire there — behavior byte-identical; only
+///      the serialized layout grew. (The affect columns themselves were added
+///      in M-A.)
+pub const FORMAT_VERSION: u32 = 29;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

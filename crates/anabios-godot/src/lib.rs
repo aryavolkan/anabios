@@ -509,6 +509,20 @@ impl Simulation {
         out
     }
 
+    /// Arousal (max of FEAR/RAGE/PANIC) per alive agent, same order as
+    /// `alive_positions`. Naturally `0.0` for every agent when
+    /// `affect_enabled` is off — the affect column stays all-zero then.
+    #[func]
+    fn alive_arousal(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(anabios_core::affect::arousal(&w.agents.affect[id as usize]));
+            }
+        }
+        out
+    }
+
     /// Look up one alive agent by id. Returns a Dictionary; empty if dead.
     #[func]
     fn get_agent_info(&self, id: i64) -> VarDictionary {
@@ -577,6 +591,11 @@ impl Simulation {
             "livestock_of",
             if owner == anabios_core::agent::AGENT_NULL { -1 } else { owner as i64 },
         );
+        // M-F: subcortical affect layer, with the world flag so the inspector
+        // only renders the line when the layer is active (arousal is exactly
+        // 0.0 for every agent otherwise, since the affect column is all-zero).
+        d.set("affect_enabled", w.affect_enabled);
+        d.set("arousal", anabios_core::affect::arousal(&w.agents.affect[i]));
         d.set("dialect_hue", dialect_hue(meme));
         let mut names = PackedStringArray::new();
         for m in w.agents.modules[i].iter() {

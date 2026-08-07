@@ -6,7 +6,7 @@ const Palette = preload("res://scripts/palette.gd")
 const GROUND_NAMES := [
 	"biome", "phero-0", "phero-1", "phero-2", "phero-3", "env-optimum", "succession", "markets"
 ]
-const BODY_NAMES := ["species", "dialect", "diet", "energy"]
+const BODY_NAMES := ["species", "dialect", "diet", "energy", "arousal"]
 
 @onready var overlay = get_node("/root/Main/OverlayManager")
 @onready var module_layers = get_node("/root/Main/ModuleLayers")
@@ -74,6 +74,11 @@ func _rebuild_key(body_mode: int) -> void:
 		3:
 			_key_box.add_child(_header("body: energy"))
 			_key_box.add_child(_ramp_row(Color(0.2, 0.3, 0.8), Color(1.0, 0.9, 0.3), "low", "high"))
+		4:
+			_key_box.add_child(_header("body: arousal (fear/rage/panic)"))
+			_key_box.add_child(
+				_ramp_row(Color(0.55, 0.6, 0.7), Color(1.0, 0.35, 0.25), "calm", "aroused")
+			)
 		_:
 			_key_box.add_child(_header("body: species — each ape in its own colours"))
 

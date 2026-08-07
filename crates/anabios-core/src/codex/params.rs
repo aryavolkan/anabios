@@ -325,3 +325,43 @@ pub const SEXRATIO_MIN_MINORITY: u32 = 3;
 pub const LIVESTOCK_HERD_MIN: u32 = 6;
 /// Consecutive ticks at/above `LIVESTOCK_HERD_MIN` before LivestockHerd fires.
 pub const LIVESTOCK_HERD_WINDOW: u64 = 500;
+
+// --- M-F: affect-detector tuning (FeedingFrenzy, TerritorialRage,
+// PanicCascade, MassGrief) ---
+
+/// Per-system "high activation" thresholds (leaky-integrator value in `[0,1]`).
+pub const HIGH_FEAR: f32 = 0.6;
+pub const HIGH_SEEK: f32 = 0.6;
+pub const HIGH_RAGE: f32 = 0.6;
+pub const HIGH_PANIC: f32 = 0.6;
+
+/// PANIC CASCADE: high-FEAR member count must jump by >= this within the window.
+pub const CASCADE_MIN_SPREAD: u32 = 5;
+/// Ticks over which the high-FEAR count is compared for a cascade rise.
+pub const AFFECT_CASCADE_WINDOW: usize = 20;
+/// Min species members before a cascade is meaningful.
+pub const CASCADE_MIN_MEMBERS: u32 = 8;
+
+/// FEEDING FRENZY: converged high-SEEK members required.
+pub const FRENZY_MIN_MEMBERS: u32 = 6;
+/// Max RMS spatial spread (world units) for the high-SEEK members to count as
+/// "converged" on one patch.
+pub const FRENZY_SPREAD_MAX: f32 = 90.0;
+
+/// TERRITORIAL RAGE: species mean RAGE at/above this counts as an angry cluster.
+pub const RAGE_CLUSTER_MEAN: f32 = 0.5;
+/// Max RMS spread for the cluster to be territorial (co-located aggression).
+pub const RAGE_CLUSTER_SPREAD_MAX: f32 = 120.0;
+/// Ticks of sustained angry-cluster before TerritorialRage fires.
+pub const RAGE_WINDOW: u32 = 60;
+/// Min members for a rage cluster.
+pub const RAGE_MIN_MEMBERS: u32 = 5;
+
+/// MASS GRIEF: species mean PANIC at/above this after a die-off.
+pub const GRIEF_MEAN_PANIC: f32 = 0.45;
+/// Population-drop fraction (over the grief window) that qualifies as a die-off.
+pub const GRIEF_DROP_FRAC: f32 = 0.3;
+/// Ticks over which the die-off drop is measured.
+pub const GRIEF_WINDOW: usize = 60;
+/// Min pre-die-off population for grief to be meaningful.
+pub const GRIEF_MIN_PEAK: u32 = 12;
