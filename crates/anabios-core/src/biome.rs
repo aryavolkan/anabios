@@ -366,6 +366,8 @@ impl BiomeField {
         // knobs-off world keeps the exact pre-change RNG stream (goldens hold).
         let continent_noise =
             (climate.continentality > 0.0).then(|| crate::noise::Fbm::new(&mut rng, 3, 2, 2, 0.5));
+        let mountain_noise =
+            (climate.mountain_uplift > 0.0).then(|| crate::noise::Fbm::new(&mut rng, 3, 4, 2, 0.5));
 
         const WARP_AMP: f32 = 0.35;
         const TEMP_NOISE: f32 = 0.10;
@@ -385,6 +387,12 @@ impl BiomeField {
                     let mask = ((raw_mask - 0.5) * CONTINENT_MASK_CONTRAST + 0.5).clamp(0.0, 1.0);
                     let blend = 1.0 - climate.continentality + climate.continentality * mask;
                     elev = (DEEP_OCEAN_ELEV + (elev - DEEP_OCEAN_ELEV) * blend).clamp(0.0, 1.0);
+                }
+                if let Some(mn) = &mountain_noise {
+                    let ridge = 1.0 - (2.0 * mn.sample(wu, wv) - 1.0).abs();
+                    // Weight uplift to land interiors so ranges sit on continents.
+                    let land_weight = continent_noise.as_ref().map_or(1.0, |cn| cn.sample(wu, wv));
+                    elev = (elev + climate.mountain_uplift * ridge * land_weight).clamp(0.0, 1.0);
                 }
                 elev_grid[row * res + col] = elev;
             }
@@ -956,6 +964,29 @@ mod tests {
             assert_eq!(x.moisture, y.moisture);
             assert_eq!(x.env, y.env);
         }
+    }
+
+    #[test]
+    fn mountain_uplift_raises_connected_ranges() {
+        let flat = {
+            let mut c = ClimateParams::default();
+            c.continentality = 0.85;
+            BiomeField::generate_with(11, 128, 1024.0, &c)
+        };
+        let ranged = {
+            let mut c = ClimateParams::default();
+            c.continentality = 0.85;
+            c.mountain_uplift = 0.6;
+            BiomeField::generate_with(11, 128, 1024.0, &c)
+        };
+        let rock =
+            |f: &BiomeField| f.cells.iter().filter(|c| c.terrain == TerrainType::Rock).count();
+        assert!(
+            rock(&ranged) > rock(&flat),
+            "uplift should create more rock: {} vs {}",
+            rock(&ranged),
+            rock(&flat)
+        );
     }
 
     #[test]
