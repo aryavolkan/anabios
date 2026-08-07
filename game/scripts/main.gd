@@ -608,7 +608,9 @@ func _body_colors(n: int) -> PackedColorArray:
 			var out5 := PackedColorArray()
 			out5.resize(n)
 			for i in n:
-				out5[i] = Color(0.55, 0.6, 0.7).lerp(Color(1.0, 0.35, 0.25), clampf(ar[i], 0.0, 1.0))
+				out5[i] = Color(0.55, 0.6, 0.7).lerp(
+					Color(1.0, 0.35, 0.25), clampf(ar[i], 0.0, 1.0)
+				)
 			return out5
 		_:
 			# Species mode: white — the atlas already carries each ape's own
