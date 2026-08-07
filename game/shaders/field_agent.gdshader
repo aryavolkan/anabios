@@ -23,6 +23,9 @@ uniform float bob_hz = 1.4;
 uniform float bob_amp = 0.04;
 // Action loop cadence: each action's A/B frames swap at this rate.
 uniform float action_fps = 4.0;
+// Signature-move family (mammal_sprites.RigKind): 0 prey, 1 predator,
+// 2 primate (default = today's apes, all new branches off), 3 livestock.
+uniform int rig_kind = 2;
 
 varying flat vec4 anim;
 
@@ -45,16 +48,40 @@ void vertex() {
 	float sq = sin(TIME * 6.2831853 * walk_fps * 0.5 + phase) * anim.g;
 	VERTEX.y *= 1.0 - 0.05 * sq;
 	VERTEX.x *= 1.0 + 0.04 * sq;
-	// Fight: lunge toward the facing on each strike cycle — sharp out, eased
-	// return (one lunge spans the A/B frame pair). Flee: a small high-frequency
-	// tremble, panic in the shoulders.
+	// Fight/attack (act 2): primate lunges; predators add a forward pounce arc.
 	if (act > 1.5 && act < 2.5) {
 		float c = fract(TIME * action_fps * 0.5 + anim.r * 2.0);
 		float lunge = pow(max(sin(c * 3.14159265), 0.0), 1.5);
-		VERTEX.x += mix(1.0, -1.0, step(0.5, anim.b)) * lunge * 0.10;
-	} else if (act > 3.5) {
-		VERTEX.x += sin(TIME * 43.0 + phase) * 0.03;
-		VERTEX.y += cos(TIME * 37.0 + phase) * 0.02;
+		float dir = mix(1.0, -1.0, step(0.5, anim.b));
+		VERTEX.x += dir * lunge * 0.10;
+		if (rig_kind == 1) {          // PREDATOR pounce: lift through the leap
+			VERTEX.y += lunge * 0.12;
+			VERTEX.x += dir * lunge * 0.06;
+		}
+	} else if (act > 3.5) {           // Flee/gallop (act 4)
+		if (rig_kind == 0 || rig_kind == 1) {
+			// Quadruped gallop: stretch the body along travel + a bounding hop
+			// (prey bound higher than predators chase).
+			float g = TIME * walk_fps * 0.9 + anim.r * 6.2831853;
+			VERTEX.x *= 1.0 + 0.10 * abs(sin(g));
+			float hop = (rig_kind == 0) ? 0.10 : 0.05;
+			VERTEX.y += max(sin(g), 0.0) * hop;
+		} else {
+			// Biped flee tremble (unchanged primate behaviour).
+			VERTEX.x += sin(TIME * 43.0 + phase) * 0.03;
+			VERTEX.y += cos(TIME * 37.0 + phase) * 0.02;
+		}
+	}
+	// Livestock idle: a slow chewing head-bob (only while standing).
+	if (rig_kind == 3 && anim.g < 0.5 && act < 0.5) {
+		VERTEX.y += sin(TIME * 3.0 + phase) * 0.02;
+	}
+	// Quadruped idle tail/rear sway: the trailing (left) columns drift so a
+	// settled animal isn't frozen. UV.x < 0.5 is the rear before the facing
+	// mirror; scale by (1 - moving) so it only shows at rest.
+	if ((rig_kind == 0 || rig_kind == 1) && act < 0.5) {
+		float rear = clamp(0.5 - UV.x, 0.0, 0.5) * 2.0;
+		VERTEX.x += sin(TIME * 2.2 + phase) * 0.03 * rear * (1.0 - anim.g);
 	}
 }
 
