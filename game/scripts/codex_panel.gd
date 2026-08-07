@@ -55,7 +55,8 @@ const CHAPTER_NAMES: PackedStringArray = [
 	"SexRatio",
 	"Domesticated",
 	"LivestockHerd",
-	"Knowledge"
+	"Knowledge",
+	"MassFright"
 ]
 # One color per event type so the timeline is scannable at a glance (matches
 # the co-evolution chart's marker hues where they overlap).
@@ -114,6 +115,7 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.85, 0.7, 0.45),  # 51 AnimalDomesticated — leather tan
 	Color(0.6, 0.85, 0.55),  # 52 LivestockHerd     — pasture green
 	Color(0.4, 0.7, 0.95),  # 53 Knowledge         — archive blue
+	Color(0.95, 0.6, 0.85),  # 54 MassFright       — panic pink
 ]
 const MAX_RECENT: int = 30
 
