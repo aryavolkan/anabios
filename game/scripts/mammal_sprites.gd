@@ -62,7 +62,9 @@ const BUCKET_COUNT := SKIN_COUNT + 6  # 11
 
 # Quadruped pose data, filled in Tasks 6-7. Absent archetypes fall back to ape
 # skin-0 art (harmless: those buckets carry 0 instances until their rig lands).
-const _QUAD_DATA := {}
+const _QUAD_DATA := {
+	WOLF: preload("res://scripts/mammal_data/wolf.gd"),
+}
 
 
 # An agent's render bucket: hominin skin (0..4) for Primate, else the quad slot.

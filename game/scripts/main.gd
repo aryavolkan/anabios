@@ -470,9 +470,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	# First few walkers this frame feed the close-zoom dust puffs.
 	_moving_sample = PackedVector2Array()
 
-	# Bucket alive indices by render bucket — one MultiMesh per bucket. Selection
-	# is hardcoded to PRIMATE here (parity gate); Task 6 swaps in
-	# MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0).
+	# Bucket alive indices by render bucket — one MultiMesh per bucket.
 	var diet: PackedFloat32Array = sim.alive_diet()
 	var live: PackedInt32Array = _livestock_flags(n)
 	var buckets: Array = []
@@ -481,11 +479,20 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	var bucket_ix := PackedInt32Array()
 	bucket_ix.resize(n)
 	for i in n:
-		var arch := MammalSprites.PRIMATE
+		var arch := (
+			MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0)
+			if have_sp
+			else MammalSprites.PRIMATE
+		)
 		var b := MammalSprites.bucket_of(arch, sp_ids[i]) if have_sp else 0
 		bucket_ix[i] = b
 		buckets[b].append(i)
-	_prev_bucket = bucket_ix
+	# _prev_bucket must stay in sync with _prev_ids/_prev_smooth/_prev_sizes,
+	# which only refresh when have_ids holds (see the frame-cache block above);
+	# gating this the same way keeps the death-ghost bucket lookup (below)
+	# aligned with the ids it indexes instead of desyncing on off-frames.
+	if have_ids:
+		_prev_bucket = bucket_ix
 
 	for b in MammalSprites.BUCKET_COUNT:
 		var mm: MultiMesh = _body_mmis[b].multimesh
