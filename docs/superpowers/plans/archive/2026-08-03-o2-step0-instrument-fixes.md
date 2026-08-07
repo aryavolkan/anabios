@@ -1,6 +1,6 @@
 # O2 Step 0 — Instrument Fixes Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Fix the two O1-flagged instrument gaps so O2a's measurement and O2b's evolution claim are honest — a share-relative `invasion_fitness` variant (robust to non-stationary population) and a lineage-locked founder tag (robust to per-birth module mutation).
 
@@ -33,7 +33,7 @@ Add a frequency/share-based invasion metric next to the absolute-count one. This
 - Consumes: existing `InvasionWindow { mutant_n, total_n }`.
 - Produces: `pub fn invasion_fitness_share(windows: &[InvasionWindow], rare_frac_max: f64) -> Option<f64>` — mean of `ln(freq[k+1] / freq[k])` over consecutive window pairs where window `k`'s frequency `mutant_n/total_n <= rare_frac_max` and both windows have positive `total_n` and positive `mutant_n`. `None` if no qualifying pair. Positive ⇒ the rare strategy gains *share* while rare (invades), independent of whether total population is growing or collapsing.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to the existing `invasion_tests` module in `ledger.rs`:
 
@@ -68,12 +68,12 @@ fn share_metric_none_when_never_rare() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p anabios-headless ledger::invasion_tests -- --nocapture`
 Expected: FAIL to compile (`invasion_fitness_share` not found).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `ledger.rs` after `invasion_fitness`:
 
@@ -114,12 +114,12 @@ pub fn invasion_fitness_share(windows: &[InvasionWindow], rare_frac_max: f64) ->
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cargo test -p anabios-headless ledger::invasion_tests -- --nocapture`
 Expected: PASS (all invasion_tests, including the three new ones).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/anabios-headless/src/ledger.rs
@@ -150,7 +150,7 @@ Add a headless-side `FounderTracker` that tags each lineage by the strategy it *
   - `pub fn kind_of(&self, world: &World, i: usize) -> StrategyKind` — the lineage-locked tag for alive agent slot `i`.
   - `pub fn sample_by_founder(world: &World, tracker: &FounderTracker) -> [StrategyStat; 2]` — `ledger::sample_strategies_by(world, |w, i| tracker.kind_of(w, i))`.
 
-- [ ] **Step 1: Refactor `sample_strategies` to a classifier-parameterized form (behavior-preserving)**
+- [x] **Step 1: Refactor `sample_strategies` to a classifier-parameterized form (behavior-preserving)**
 
 In `ledger.rs`, replace the body of `sample_strategies` and add the generic form. The `Acc`/`StrategyStat` accumulation is unchanged — only the Cultural/Asocial decision is now injected:
 
@@ -194,12 +194,12 @@ pub fn sample_strategies(world: &World) -> [StrategyStat; 2] {
 }
 ```
 
-- [ ] **Step 2: Verify the refactor is behavior-preserving**
+- [x] **Step 2: Verify the refactor is behavior-preserving**
 
 Run: `cargo test -p anabios-headless ledger::tests -- --nocapture`
 Expected: PASS (the existing `sample_buckets_by_communicator_module` and `empty_strategy_has_zero_means_not_nan` still pass — the refactor changed structure, not behavior).
 
-- [ ] **Step 3: Write the failing founder test**
+- [x] **Step 3: Write the failing founder test**
 
 Create `crates/anabios-headless/src/founder.rs` with the test module first:
 
@@ -269,12 +269,12 @@ placement = { kind = \"uniform\" }
 }
 ```
 
-- [ ] **Step 4: Run test to verify it fails**
+- [x] **Step 4: Run test to verify it fails**
 
 Run: `cargo test -p anabios-headless founder:: -- --nocapture`
 Expected: FAIL to compile (`init`, `sample_by_founder`, `FounderTracker` not found; `mod founder;` not yet in `main.rs`).
 
-- [ ] **Step 5: Write the implementation**
+- [x] **Step 5: Write the implementation**
 
 Prepend the implementation above the test module in `founder.rs`:
 
@@ -363,12 +363,12 @@ pub fn sample_by_founder(world: &World, tracker: &FounderTracker) -> [StrategySt
 
 Then add `mod founder;` to `crates/anabios-headless/src/main.rs` beside the other `mod` declarations (e.g. after `mod ledger;`).
 
-- [ ] **Step 6: Run test + build**
+- [x] **Step 6: Run test + build**
 
 Run: `cargo test -p anabios-headless founder:: -- --nocapture && cargo build -p anabios-headless`
 Expected: both founder tests PASS; crate builds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add crates/anabios-headless/src/founder.rs crates/anabios-headless/src/ledger.rs crates/anabios-headless/src/main.rs
@@ -391,7 +391,7 @@ Make `autopsy` report the share-relative fitness alongside the absolute one, and
 - Consumes: `ledger::{invasion_fitness, invasion_fitness_share, sample_strategies, strategy_label, InvasionWindow, StrategyKind}`, `founder::{init, sample_by_founder, FounderTracker}`.
 - Produces: `autopsy::run(scenario, seed, ticks, window, out, mutant, tag)` where `tag: FounderTagMode` selects `module` (default, existing behavior) or `founder` sampling. stdout gains a second line: `invasion_fitness_share mutant=<label> r=<value|none> <VERDICT>`. The per-window CSV is unchanged.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Extend the `#[cfg(test)] mod tests` in `autopsy.rs`. Add a `FounderTagMode` param to the `run` call and assert both invasion lines are producible. Replace the existing single test call site and add a founder-mode variant:
 
@@ -419,12 +419,12 @@ Extend the `#[cfg(test)] mod tests` in `autopsy.rs`. Add a `FounderTagMode` para
 
 **Also update the pre-existing test** `autopsy_writes_ledger_rows_for_both_strategies` in the same module: its `run(...)` call currently passes 6 args and will not compile against the new signature. Add `FounderTagMode::Module` as the 7th argument, keeping all its existing assertions (header line, both-strategy rows, `>= 8` data rows). Both tests must compile and pass.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test -p anabios-headless autopsy:: -- --nocapture`
 Expected: FAIL to compile (`FounderTagMode` not found; the new test *and* the pre-existing `autopsy_writes_ledger_rows_for_both_strategies` both mismatch the new `run` arity — both get fixed in Step 3).
 
-- [ ] **Step 3: Implement in `autopsy.rs`**
+- [x] **Step 3: Implement in `autopsy.rs`**
 
 Add the mode enum and thread it through `run`:
 
@@ -471,7 +471,7 @@ and inside:
   ```
 - Add `invasion_fitness_share` and `crate::founder` to the `use` imports at the top of `autopsy.rs`.
 
-- [ ] **Step 4: Wire the `--tag` arg in `main.rs`**
+- [x] **Step 4: Wire the `--tag` arg in `main.rs`**
 
 Mirror the existing `MutantArg` value-enum pattern. Add:
 
@@ -510,7 +510,7 @@ And update the match arm to pass it:
         }
 ```
 
-- [ ] **Step 5: Run test + build + smoke**
+- [x] **Step 5: Run test + build + smoke**
 
 Run: `cargo test -p anabios-headless autopsy:: -- --nocapture && cargo build -p anabios-headless`
 Expected: test PASS; builds. Smoke both modes:
@@ -519,7 +519,7 @@ cargo run -p anabios-headless -- autopsy --scenario scenarios/inventions.toml --
 ```
 Expected: prints BOTH an `invasion_fitness …` and an `invasion_fitness_share …` line, plus `ledger written`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/anabios-headless/src/autopsy.rs crates/anabios-headless/src/main.rs
@@ -533,19 +533,19 @@ git commit -m "feat(o2-step0): autopsy reports share-relative fitness + --tag fo
 
 Confirm the two new instruments give the same (or cleaner) O1 conclusion on a real scenario, so O2a/O2b can rely on them. **Measurement only — record real numbers; do not invent.**
 
-- [ ] **Step 1: Build release.** `cargo build --release -p anabios-headless`
+- [x] **Step 1: Build release.** `cargo build --release -p anabios-headless`
 
-- [ ] **Step 2: Run baseline vs practices-off with BOTH new instruments.** For seeds `1 2 3` on each of `scenarios/experiments/o1-invasion-cultural-into-asocial.toml` (practices on) and `scenarios/experiments/o1-lever-practices-off.toml` (practices off), run:
+- [x] **Step 2: Run baseline vs practices-off with BOTH new instruments.** For seeds `1 2 3` on each of `scenarios/experiments/o1-invasion-cultural-into-asocial.toml` (practices on) and `scenarios/experiments/o1-lever-practices-off.toml` (practices off), run:
 ```
 ./target/release/anabios-headless autopsy --scenario <scen> --seed <s> --ticks 2500 --window 500 --tag founder --out docs/superpowers/data/o2/step0-<cond>-<s>.csv --mutant cultural
 ```
 Record both the `invasion_fitness` and `invasion_fitness_share` lines for each. (`docs/superpowers/data/o2/` — create it; do NOT use `runs/`, which is gitignored.)
 
-- [ ] **Step 3: Compare tags.** For one baseline seed, run once with `--tag module` and once with `--tag founder`; from the two ledger CSVs, record whether the late-window cultural counts differ (they will if module mutation occurred). Note the magnitude — this quantifies how much the old tag was drifting.
+- [x] **Step 3: Compare tags.** For one baseline seed, run once with `--tag module` and once with `--tag founder`; from the two ledger CSVs, record whether the late-window cultural counts differ (they will if module mutation occurred). Note the magnitude — this quantifies how much the old tag was drifting.
 
-- [ ] **Step 4: Confirm the conclusion holds.** Assert the O1 result survives the cleaner instruments: practices-off should still show the cultural strategy gaining share (share-fitness less negative / positive) relative to baseline. If the cleaner metric *changes* the conclusion, that is itself an important finding — record it prominently.
+- [x] **Step 4: Confirm the conclusion holds.** Assert the O1 result survives the cleaner instruments: practices-off should still show the cultural strategy gaining share (share-fitness less negative / positive) relative to baseline. If the cleaner metric *changes* the conclusion, that is itself an important finding — record it prominently.
 
-- [ ] **Step 5: Write a short validation note + commit.** Create `docs/superpowers/data/o2/step0-validation.md` with the recorded numbers, the module-vs-founder drift magnitude, and the "conclusion holds / changed" verdict. Commit the data + note:
+- [x] **Step 5: Write a short validation note + commit.** Create `docs/superpowers/data/o2/step0-validation.md` with the recorded numbers, the module-vs-founder drift magnitude, and the "conclusion holds / changed" verdict. Commit the data + note:
 
 ```bash
 git add docs/superpowers/data/o2/

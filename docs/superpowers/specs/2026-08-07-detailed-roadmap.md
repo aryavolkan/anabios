@@ -93,7 +93,7 @@ the counter-mechanism.
 
 | # | Item | Detail | Done when |
 |---|---|---|---|
-| 2.1 | O2 step 0: instrument fixes | Headless-only: share-relative `invasion_fitness` + lineage-locked `FounderTracker`. No core change, no golden impact | Plan tasks 1–2 merged with unit tests; autopsy output a strict superset of today |
+| 2.1 | O2 step 0: instrument fixes — **done 2026-08-07** | Headless-only: share-relative `invasion_fitness` + lineage-locked `FounderTracker`. No core change, no golden impact. Plan archived; validation note at `docs/superpowers/data/o2/step0-validation.md` (module tag was inflating cultural counts ~5×; O1 "invades" headline not reproduced under the founder tag) | Plan tasks 1–4 merged with unit tests; autopsy output a strict superset of today |
 | 2.2 | O2a: measurement | Re-run the O1 invasion/lever matrix under the fixed instruments; publish a corrected decomposition | Findings doc with CSVs in `docs/superpowers/data/o2/` |
 | 2.3 | O2b: payoff-biased learning | Design: `2026-08-03-o2-payoff-biased-learning-design.md`. Opt-in flag; pre-registered criteria | Either a measured condition where cultural share *grows*, or a documented negative with mechanism |
 
