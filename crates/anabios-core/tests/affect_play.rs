@@ -30,8 +30,11 @@ fn affect_play_scenario_is_self_consistent() {
 /// Flag-ON trajectory pin for M-E PLAY + enrichment (affect_enabled +
 /// cognition_enabled). Regenerate deliberately with `UPDATE_HASHES=1` when the
 /// PLAY behaviour changes on purpose.
+// Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): new serialized
+// CodexState detector fields grow the state-hash layout (detectors run flag-on),
+// so all ticks move.
 const PLAY_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x53e008fe4a247e67), (100, 0x308656b75266b59f), (200, 0x9e86d6d4f530551c)];
+    &[(0, 0xcb9dd60f7ce27427), (100, 0x938965a4f5d565c6), (200, 0x5cb5b8ae729f266b)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

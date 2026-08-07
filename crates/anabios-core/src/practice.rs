@@ -103,7 +103,9 @@ pub fn has(meme: &[f32; MEME_CHANNELS], p: usize) -> bool {
 }
 
 /// Whether an agent with realized `iq` may acquire a practice (no-op gate when
-/// cognition is disabled — but callers already gate the whole mechanism on it).
+/// cognition is disabled). The single source of the practice IQ gate: both
+/// discovery (`discover_step`) and social spread (`culture_step`) route through
+/// it, mirroring `invention::iq_permits`.
 #[inline]
 pub fn iq_permits(iq: f32, cognition_enabled: bool) -> bool {
     !cognition_enabled || iq >= PRACTICE_IQ_REQ
@@ -138,7 +140,7 @@ pub fn discover_step(world: &mut World) {
         if !module::has(&world.agents.modules[i], ModuleType::Communicator) {
             continue;
         }
-        if world.agents.iq[i] < PRACTICE_IQ_REQ {
+        if !iq_permits(world.agents.iq[i], world.cognition_enabled) {
             continue;
         }
         let openness = world.agents.genome[i].get(GenomeSlot::Openness);

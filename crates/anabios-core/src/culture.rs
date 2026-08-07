@@ -372,30 +372,33 @@ pub fn culture_step(world: &mut World) {
         }
         // Maladaptive practice spread: copy each practice toward the best-holding
         // neighbour (payoff-blind — the receiver has no idea it is harmful).
-        // IQ-gated on the receiver so low-cognition agents can still catch them.
+        // IQ-gated on the receiver, but the bar (PRACTICE_IQ_REQ = 0.10) is
+        // deliberately low: only the very lowest-cognition agents are spared, so
+        // maladaptive customs still spread widely.
         if world.cognition_enabled {
             let receiver_iq = world.agents.iq[i];
-            for (p, &target) in max_neighbour_practice.iter().enumerate() {
-                if receiver_iq < crate::practice::PRACTICE_IQ_REQ {
-                    continue;
-                }
-                let ch = crate::practice::channel(p);
-                let cur = world.agents.meme_vector[i][ch];
-                if target > cur {
-                    world.agents.meme_vector[i][ch] =
-                        cur + crate::practice::PRACTICE_SPREAD_RATE * (target - cur);
-                    // E9: adopt the teacher's variant when it lands in-band.
-                    let tv = max_neighbour_practice_variant[p];
-                    let new_val = world.agents.meme_vector[i][ch];
-                    if tv != 0
-                        && world
-                            .codex
-                            .meme_variants
-                            .get(&tv)
-                            .map(|v| v.band == crate::codex::traditions::band_of(new_val))
-                            .unwrap_or(false)
-                    {
-                        world.agents.meme_lineage[i][ch] = tv;
+            // The gate is loop-invariant (one receiver), so check it once through
+            // the shared `iq_permits` helper instead of per practice channel.
+            if crate::practice::iq_permits(receiver_iq, world.cognition_enabled) {
+                for (p, &target) in max_neighbour_practice.iter().enumerate() {
+                    let ch = crate::practice::channel(p);
+                    let cur = world.agents.meme_vector[i][ch];
+                    if target > cur {
+                        world.agents.meme_vector[i][ch] =
+                            cur + crate::practice::PRACTICE_SPREAD_RATE * (target - cur);
+                        // E9: adopt the teacher's variant when it lands in-band.
+                        let tv = max_neighbour_practice_variant[p];
+                        let new_val = world.agents.meme_vector[i][ch];
+                        if tv != 0
+                            && world
+                                .codex
+                                .meme_variants
+                                .get(&tv)
+                                .map(|v| v.band == crate::codex::traditions::band_of(new_val))
+                                .unwrap_or(false)
+                        {
+                            world.agents.meme_lineage[i][ch] = tv;
+                        }
                     }
                 }
             }

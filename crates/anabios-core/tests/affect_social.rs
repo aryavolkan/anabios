@@ -63,8 +63,11 @@ fn kin_cluster_raises_care_and_sharing() {
 /// Regenerate with `UPDATE_HASHES=1` when the affect behaviour changes.
 // Refreshed 2026-08-04 (M-E PLAY): juvenile members near same-species peers accrue
 // PLAY (movement approach-bias) — flag-on behavior change, no layout growth.
+// Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): new serialized
+// CodexState detector fields grow the state-hash layout (detectors run flag-on),
+// so all ticks move.
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x4cf16a4904f6ce43), (100, 0x0ba4b32ef67d14e0), (300, 0x16202b4663b5196e)];
+    &[(0, 0xbeb11724581230c3), (100, 0x0018f80a6396b3bc), (300, 0x663d384e0c4fa4fa)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

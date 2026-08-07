@@ -19,6 +19,7 @@ use crate::spatial::torus_distance;
 use crate::world::World;
 
 mod affect;
+mod affect_events;
 mod agg;
 mod climate;
 mod combat;
@@ -279,6 +280,18 @@ pub struct CodexState {
     /// `knowledge_by_species[sp] >= KNOWLEDGE_RATCHET_MIN`. See
     /// `codex::knowledge` for the v1-vs-deferred design note.
     pub knowledge_ratchet_fired: BTreeSet<u32>,
+    /// Species currently latched as feeding-frenzy (re-arms on drop; M-F).
+    pub frenzy_active: BTreeSet<u32>,
+    /// Per-species sustained-angry-cluster streak (TerritorialRage; M-F).
+    pub rage_streak: BTreeMap<u32, u32>,
+    /// Species currently latched as territorial-rage (M-F).
+    pub rage_active: BTreeSet<u32>,
+    /// Rolling per-species high-FEAR member counts (PanicCascade contagion; M-F).
+    pub fear_count_history: BTreeMap<u32, VecDeque<u32>>,
+    /// Species currently latched as panic-cascading (M-F).
+    pub cascade_active: BTreeSet<u32>,
+    /// Species currently latched as mass-grieving (re-arms when PANIC subsides; M-F).
+    pub grief_active: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -398,6 +411,12 @@ pub fn observe_all(world: &mut World) {
     spatial::detect_herd_cohesion(world, &agg);
     climate::detect_maladaptation(world, &agg);
     affect::detect_mass_fright(world, &agg);
+    if world.affect_enabled {
+        affect_events::detect_feeding_frenzy(world, &agg);
+        affect_events::detect_territorial_rage(world, &agg);
+        affect_events::detect_panic_cascade(world, &agg);
+        affect_events::detect_mass_grief(world, &agg);
+    }
 
     world.codex_agg = agg;
 }
