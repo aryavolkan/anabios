@@ -17,6 +17,7 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 - **Experiments** — DIT gene-culture technique model; biome climate adaptation (opt-in per scenario); runtime world dimensions + living/seasonal biomes
 - **Sexual dimorphism (E12)** — opt-in binary sex + female mate choice: `SexualDimorphism` gene scales male upkeep/damage/display and female metabolic efficiency; `MateChoosiness` sets the female acceptance bar; `SexualSelection`/`SexRatioCollapse` codex events. Opt-in per scenario (`sexual_dimorphism_enabled`)
 - **Domestication (E13)** — Husbandry holders tame wild juvenile herbivores into penned livestock (movement override toward the owner), draw per-tick milk yields from surplus adults, and herds breed born-tamed; `AnimalDomesticated`/`LivestockHerd` codex events. Opt-in per scenario (`domestication_enabled`, rides `inventions_enabled`)
+- **Vertebrate classes** — mammal/reptile founder archetypes (`mammal_grazer`, `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`) pairing class body plans with affect/cognition genome profiles: endotherm-approximated mammals (high metabolism, big-brained, social, bold) vs ectotherm-approximated reptiles (cheap idle, armored, hair-trigger freeze-fight-flight, ambush Jaws). Demo: `scenarios/mammals-vs-reptiles.toml`
 - **Viewer** — Godot 4.6+ client: biome/species/pheromone overlays, inspector, codex panel, co-evolution charts, per-species tech panel
 - **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV), criterion benchmark suite
 
