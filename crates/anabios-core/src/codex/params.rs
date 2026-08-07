@@ -329,7 +329,7 @@ pub const LIVESTOCK_HERD_WINDOW: u64 = 500;
 // --- M-F: affect-detector tuning (FeedingFrenzy, TerritorialRage,
 // PanicCascade, MassGrief) ---
 
-/// Per-system "high activation" thresholds (leaky-integrator value in [0,1]).
+/// Per-system "high activation" thresholds (leaky-integrator value in `[0,1]`).
 pub const HIGH_FEAR: f32 = 0.6;
 pub const HIGH_SEEK: f32 = 0.6;
 pub const HIGH_RAGE: f32 = 0.6;
