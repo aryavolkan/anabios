@@ -1,7 +1,8 @@
 //! Cognitive layer: a per-agent **realized IQ** that develops from a heritable
 //! gene modulated by the juvenile environment (nature + nurture), costs basal
-//! metabolism, and (Phase 2+) will gate which cultural traits an agent can
-//! acquire.
+//! metabolism, and gates which cultural traits an agent can acquire — high-era
+//! inventions and the maladaptive practices each require a minimum realized IQ
+//! (`invention::iq_permits` / `practice::iq_permits`).
 //!
 //! Realized IQ is a *phenotype*, not a gene. It starts at 0 and, during a
 //! juvenile window, is refined each tick toward a blend of the heritable
