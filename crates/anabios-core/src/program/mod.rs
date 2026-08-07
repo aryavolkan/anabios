@@ -848,7 +848,7 @@ mod tests {
 
     #[test]
     fn starter_library_has_all_starters() {
-        assert_eq!(starter_library().len(), 11);
+        assert_eq!(starter_library().len(), 15);
     }
 
     #[test]

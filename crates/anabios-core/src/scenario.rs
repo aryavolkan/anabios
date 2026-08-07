@@ -254,6 +254,26 @@ pub struct TraitOverrides {
     /// E12 reproductive knobs (read only with `sexual_dimorphism_enabled`).
     pub sexual_dimorphism: Option<f32>,
     pub mate_choosiness: Option<f32>,
+    /// Heritable cognitive baseline (`GenomeSlot::CognitivePotential`; read
+    /// only with `cognition_enabled`).
+    pub cognitive_potential: Option<f32>,
+    /// Affect-layer temperament genes (read only with `affect_enabled`):
+    /// Boldness scales the FEAR response down; Aggressiveness sets RAGE gain;
+    /// Reactivity raises survival-reflex hijack sensitivity. Nurturance and
+    /// Sociality are declared for the (not yet wired) CARE/PANIC/PLAY systems
+    /// and count toward speciation distance.
+    pub boldness: Option<f32>,
+    pub aggressiveness: Option<f32>,
+    pub reactivity: Option<f32>,
+    pub nurturance: Option<f32>,
+    pub sociality: Option<f32>,
+    /// Render-color genes (HSV); picked up by the Godot bridge.
+    pub color_hue: Option<f32>,
+    pub color_sat: Option<f32>,
+    pub color_val: Option<f32>,
+    /// Climate-match feeding bonus (`GenomeSlot::EnvAffinity`; read only with
+    /// `biome_adaptation`).
+    pub env_affinity: Option<f32>,
 }
 
 impl TraitOverrides {
@@ -309,6 +329,36 @@ impl TraitOverrides {
         if let Some(v) = self.mate_choosiness {
             g.set(GenomeSlot::MateChoosiness, v);
         }
+        if let Some(v) = self.cognitive_potential {
+            g.set(GenomeSlot::CognitivePotential, v);
+        }
+        if let Some(v) = self.boldness {
+            g.set(GenomeSlot::Boldness, v);
+        }
+        if let Some(v) = self.aggressiveness {
+            g.set(GenomeSlot::Aggressiveness, v);
+        }
+        if let Some(v) = self.reactivity {
+            g.set(GenomeSlot::Reactivity, v);
+        }
+        if let Some(v) = self.nurturance {
+            g.set(GenomeSlot::Nurturance, v);
+        }
+        if let Some(v) = self.sociality {
+            g.set(GenomeSlot::Sociality, v);
+        }
+        if let Some(v) = self.color_hue {
+            g.set(GenomeSlot::ColorHue, v);
+        }
+        if let Some(v) = self.color_sat {
+            g.set(GenomeSlot::ColorSat, v);
+        }
+        if let Some(v) = self.color_val {
+            g.set(GenomeSlot::ColorVal, v);
+        }
+        if let Some(v) = self.env_affinity {
+            g.set(GenomeSlot::EnvAffinity, v);
+        }
     }
 }
 
@@ -332,14 +382,16 @@ impl Default for Placement {
 /// names fall back to the grazer defaults.
 fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Program) {
     use crate::module::{
-        bruiser_kit, communicator_kit, fast_hunter_kit, marker_kit, predator_kit, slow_hunter_kit,
+        bruiser_kit, communicator_kit, fast_hunter_kit, mammal_grazer_kit, mammal_pursuer_kit,
+        marker_kit, predator_kit, reptile_ambusher_kit, reptile_basker_kit, slow_hunter_kit,
         spiner_kit, starter_kit,
     };
     use crate::program::{
         starter_asocial_forager, starter_asocial_prey, starter_bruiser, starter_communicator,
         starter_cooperator, starter_cultural_cooperator, starter_cultural_hunter,
-        starter_culture_prey, starter_grazer, starter_herd, starter_marker, starter_pack_hunter,
-        starter_sentinel, starter_spiner, starter_stalker,
+        starter_culture_prey, starter_grazer, starter_herd, starter_mammal_herd,
+        starter_mammal_pursuer, starter_marker, starter_pack_hunter, starter_reptile_ambusher,
+        starter_reptile_basker, starter_sentinel, starter_spiner, starter_stalker,
     };
     match name {
         "stalker" => (predator_kit(), starter_stalker()),
@@ -385,6 +437,14 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
             (m, starter_grazer())
         }
+        // Vertebrate-class archetypes: mammals (endotherm-approximated — high
+        // metabolism, social, cognitive) and reptiles (ectotherm-approximated —
+        // low metabolism, armored, ambush/bask). See `archetype_genome` for the
+        // temperament/cognition defaults that complete the class body plan.
+        "mammal_grazer" => (mammal_grazer_kit(), starter_mammal_herd()),
+        "mammal_pursuer" => (mammal_pursuer_kit(), starter_mammal_pursuer()),
+        "reptile_ambusher" => (reptile_ambusher_kit(), starter_reptile_ambusher()),
+        "reptile_basker" => (reptile_basker_kit(), starter_reptile_basker()),
         _ => (starter_kit(), starter_grazer()),
     }
 }
@@ -420,6 +480,72 @@ fn archetype_genome(name: &str, g: &mut Genome) {
             g.set(GenomeSlot::Openness, 0.2);
             g.set(GenomeSlot::IndividualLearning, 0.2);
             g.set(GenomeSlot::SocialLearning, 0.8);
+        }
+        // Mammal class defaults: the endotherm profile — a high basal
+        // metabolism (the warm-blooded tax) buying a big brain, sociality,
+        // and boldness. Cognitive potential is high; temperament leans
+        // affiliative (high Agreeableness/Extraversion) with a measured
+        // threat response (mild Boldness, low Reactivity).
+        "mammal_grazer" => {
+            g.set(GenomeSlot::BasalMetabolism, 0.8);
+            g.set(GenomeSlot::CognitivePotential, 0.8);
+            g.set(GenomeSlot::IndividualLearning, 0.8);
+            g.set(GenomeSlot::SocialLearning, 0.9);
+            g.set(GenomeSlot::Extraversion, 0.8);
+            g.set(GenomeSlot::Agreeableness, 0.7);
+            g.set(GenomeSlot::Boldness, 0.65);
+            g.set(GenomeSlot::Aggressiveness, 0.3);
+            g.set(GenomeSlot::Reactivity, 0.45);
+            g.set(GenomeSlot::Nurturance, 0.8);
+            g.set(GenomeSlot::Sociality, 0.8);
+            g.set(GenomeSlot::ColorHue, 0.08); // warm brown
+        }
+        "mammal_pursuer" => {
+            g.set(GenomeSlot::BasalMetabolism, 0.85);
+            g.set(GenomeSlot::CognitivePotential, 0.75);
+            g.set(GenomeSlot::IndividualLearning, 0.7);
+            g.set(GenomeSlot::SocialLearning, 0.85);
+            g.set(GenomeSlot::Extraversion, 0.75);
+            g.set(GenomeSlot::Agreeableness, 0.55);
+            g.set(GenomeSlot::Boldness, 0.8);
+            g.set(GenomeSlot::Aggressiveness, 0.75);
+            g.set(GenomeSlot::Reactivity, 0.4);
+            g.set(GenomeSlot::Nurturance, 0.6);
+            g.set(GenomeSlot::Sociality, 0.75);
+            g.set(GenomeSlot::ColorHue, 0.0); // red-brown
+        }
+        // Reptile class defaults: the ectotherm profile — low basal metabolism
+        // (the cold-blooded edge: cheap idle, no internal furnace), modest
+        // cognition, asocial temperament, and a hair-trigger affect layer
+        // (high Reactivity → fast freeze/fight/flight hijack) with high
+        // Aggressiveness for the ambush strike.
+        "reptile_ambusher" => {
+            g.set(GenomeSlot::BasalMetabolism, 0.2);
+            g.set(GenomeSlot::CognitivePotential, 0.35);
+            g.set(GenomeSlot::IndividualLearning, 0.3);
+            g.set(GenomeSlot::SocialLearning, 0.2);
+            g.set(GenomeSlot::Extraversion, 0.2);
+            g.set(GenomeSlot::Agreeableness, 0.3);
+            g.set(GenomeSlot::Boldness, 0.35);
+            g.set(GenomeSlot::Aggressiveness, 0.8);
+            g.set(GenomeSlot::Reactivity, 0.85);
+            g.set(GenomeSlot::Nurturance, 0.15);
+            g.set(GenomeSlot::Sociality, 0.2);
+            g.set(GenomeSlot::ColorHue, 0.33); // scaled green
+        }
+        "reptile_basker" => {
+            g.set(GenomeSlot::BasalMetabolism, 0.15);
+            g.set(GenomeSlot::CognitivePotential, 0.3);
+            g.set(GenomeSlot::IndividualLearning, 0.25);
+            g.set(GenomeSlot::SocialLearning, 0.15);
+            g.set(GenomeSlot::Extraversion, 0.2);
+            g.set(GenomeSlot::Agreeableness, 0.45);
+            g.set(GenomeSlot::Boldness, 0.3);
+            g.set(GenomeSlot::Aggressiveness, 0.2);
+            g.set(GenomeSlot::Reactivity, 0.7);
+            g.set(GenomeSlot::Nurturance, 0.1);
+            g.set(GenomeSlot::Sociality, 0.25);
+            g.set(GenomeSlot::ColorHue, 0.25); // olive
         }
         _ => {}
     }

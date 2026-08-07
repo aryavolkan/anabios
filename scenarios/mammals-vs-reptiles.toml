@@ -1,0 +1,55 @@
+name = "mammals-vs-reptiles"
+seed = 0
+max_population = 3000
+# The class contrast is the point: affect gives mammals their measured
+# fear/boldness and reptiles their hair-trigger freeze-fight-flight; cognition
+# gives the big-brained endotherms their IQ edge; biome_adaptation lets the
+# ectotherms' climate match (EnvAffinity) pay off.
+affect_enabled = true
+cognition_enabled = true
+biome_adaptation = true
+
+# --- Mammals --------------------------------------------------------------
+# Herd grazers: social, communicative endotherm prey. High metabolism funds
+# big brains and fast learning; the herd + alarm broadcast is their defense.
+[[agents]]
+count = 120
+archetype = "mammal_grazer"
+placement = { kind = "cluster", center_x = 340.0, center_y = 512.0, radius = 140.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+env_affinity = 0.5
+
+# Pursuit pack: cursorial predators (wolf-style) — fast, bold, coordinated.
+[[agents]]
+count = 16
+archetype = "mammal_pursuer"
+placement = { kind = "cluster", center_x = 340.0, center_y = 700.0, radius = 90.0 }
+[agents.traits]
+size = 0.6
+lifespan_bias = 1.0
+env_affinity = 0.5
+
+# --- Reptiles ---------------------------------------------------------------
+# Ambushers: sit-and-wait crocodile-style predators. Near-zero idle cost,
+# hair-trigger hijack, devastating point-blank Jaws.
+[[agents]]
+count = 24
+archetype = "reptile_ambusher"
+placement = { kind = "cluster", center_x = 684.0, center_y = 512.0, radius = 140.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+env_affinity = 0.8
+
+# Baskers: armored tortoise-style herbivores. Too slow to flee — they survive
+# on scales, low upkeep, and the freeze response.
+[[agents]]
+count = 80
+archetype = "reptile_basker"
+placement = { kind = "cluster", center_x = 684.0, center_y = 340.0, radius = 120.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+env_affinity = 0.8
