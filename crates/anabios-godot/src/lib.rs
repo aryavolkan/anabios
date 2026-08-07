@@ -485,6 +485,25 @@ impl Simulation {
         out
     }
 
+    /// Livestock flag (1 tamed / 0 wild) per alive agent, same order as
+    /// `alive_positions`. All-zero unless the scenario has domestication on.
+    #[func]
+    fn alive_livestock_flags(&self) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for f in livestock_flags_of(w) {
+                out.push(f);
+            }
+        }
+        out
+    }
+
+    /// Whether this world runs the E13 domestication subsystem.
+    #[func]
+    fn domestication_enabled(&self) -> bool {
+        self.inner.as_ref().map(|w| w.domestication_enabled).unwrap_or(false)
+    }
+
     /// Dialect hue per alive agent in `[0,1)`, same order as `alive_positions`.
     #[func]
     fn alive_dialect_hue(&self) -> PackedFloat32Array {
@@ -1311,6 +1330,20 @@ fn phero_intensity(v: f32) -> f32 {
     1.0 - (-x).exp()
 }
 
+/// Per-alive-agent livestock flag (1 tamed / 0 wild). Zero for every agent
+/// when domestication is disabled — `livestock_of` is `AGENT_NULL` then anyway,
+/// but the flag short-circuits so a viewer needn't special-case the scenario.
+fn livestock_flags_of(w: &anabios_core::World) -> Vec<i32> {
+    use anabios_core::agent::AGENT_NULL;
+    if !w.domestication_enabled {
+        return w.agents.iter_alive().map(|_| 0).collect();
+    }
+    w.agents
+        .iter_alive()
+        .map(|id| i32::from(w.agents.livestock_of[id as usize] != AGENT_NULL))
+        .collect()
+}
+
 /// Project a meme vector onto a stable hue in `[0,1)` so divergent dialects
 /// render as distinct body colors. The per-channel weights are normalized to
 /// sum to 1, so the hue is a weighted average of the meme values (bounded and
@@ -1550,5 +1583,24 @@ mod tests {
             *v = 0.7;
         }
         assert_eq!(dialect_hue(&wide), dialect_hue(&b));
+    }
+
+    #[test]
+    fn livestock_flags_match_alive_count_and_are_binary() {
+        // Minimal scenario has domestication OFF -> every flag must be 0.
+        let toml = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scenarios/minimal.toml"
+        ))
+        .expect("read minimal.toml");
+        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
+        for _ in 0..25 {
+            anabios_core::tick::step(&mut w);
+        }
+        let flags = super::livestock_flags_of(&w);
+        assert_eq!(flags.len(), w.agents.iter_alive().count());
+        assert!(flags.iter().all(|&f| f == 0 || f == 1));
+        assert!(!w.domestication_enabled);
+        assert!(flags.iter().all(|&f| f == 0), "domestication off => no livestock");
     }
 }
