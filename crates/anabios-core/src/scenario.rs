@@ -209,6 +209,17 @@ pub struct AgentSpec {
     pub placement: Placement,
     #[serde(default)]
     pub traits: TraitOverrides,
+    /// Named founder archetype: pairs a module kit with a starter behavior
+    /// program (and, for some, genome defaults — see `archetype_genome`), and
+    /// gives the spec a fresh species id. Valid names: `stalker`,
+    /// `pack_hunter`, `spiner`, `bruiser`, `sentinel`, `herd`, `marker`,
+    /// `communicator`, `cooperator`, `cultural_cooperator`, `asocial_forager`,
+    /// `culture_prey`, `asocial_prey`, `skilled_forager`, `fast_hunter`,
+    /// `slow_hunter`, `innate_forager`, `individual_learner`, `pure_imitator`,
+    /// `critical_learner`, `cultural_forager`, `innovator`, `traditionalist`,
+    /// `grazer`, and the vertebrate classes `mammal_grazer`,
+    /// `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`. Unknown names
+    /// fall back to the grazer kit + program.
     #[serde(default)]
     pub archetype: Option<String>,
     /// Inventions this spec's agents already HOLD at tick 0, named by their
@@ -999,6 +1010,52 @@ terrain_affinity = 0.87
         assert!(has(&br_mods, ModuleType::Jaws), "bruiser archetype carries Jaws");
         assert!(has(&br_mods, ModuleType::Armor), "bruiser archetype is armored");
         assert!(has(&br_mods, ModuleType::Reproductive), "bruiser lineage can establish");
+    }
+
+    #[test]
+    fn documented_archetype_names_all_resolve() {
+        // Keep `AgentSpec::archetype`'s doc comment honest: every name listed
+        // there must resolve to a dedicated match arm — not silently fall back
+        // to the grazer kit + program (the trap this guards: renaming a match
+        // arm and leaving the doc/name dangling).
+        let dedicated = [
+            "stalker",
+            "pack_hunter",
+            "spiner",
+            "bruiser",
+            "sentinel",
+            "herd",
+            "marker",
+            "communicator",
+            "cooperator",
+            "cultural_cooperator",
+            "asocial_forager",
+            "culture_prey",
+            "asocial_prey",
+            "skilled_forager",
+            "fast_hunter",
+            "slow_hunter",
+            "innate_forager",
+            "individual_learner",
+            "pure_imitator",
+            "critical_learner",
+            "cultural_forager",
+            "innovator",
+            "traditionalist",
+            "mammal_grazer",
+            "mammal_pursuer",
+            "reptile_ambusher",
+            "reptile_basker",
+        ];
+        let fallback = archetype_kit("definitely-not-an-archetype");
+        for name in dedicated {
+            assert!(
+                archetype_kit(name) != fallback,
+                "documented archetype '{name}' resolves to the grazer fallback"
+            );
+        }
+        // `grazer` is documented as the default and DOES resolve to the fallback.
+        assert_eq!(archetype_kit("grazer"), fallback);
     }
 
     #[test]
