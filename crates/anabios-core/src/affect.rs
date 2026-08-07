@@ -98,6 +98,36 @@ pub const K_LUST_REPRO: f32 = 0.3;
 /// LUST → approach-mate movement gain.
 pub const K_LUST_APPROACH: f32 = 0.4;
 
+// --- M-D: CARE (kin provision/protect) ---
+/// Below this overall-nearest kinship, CARE does not engage.
+pub const CARE_KINSHIP_MIN: f32 = 0.25;
+/// Same-species neighbour must be within this distance to elicit CARE.
+pub const CARE_RANGE: f32 = 40.0;
+/// CARE leaky-integrator retention.
+pub const LAMBDA_CARE: f32 = 0.8;
+/// CARE → `share_intent` gain (read side).
+pub const K_CARE_SHARE: f32 = 0.8;
+/// CARE → stay-near-kin movement gain (read side).
+pub const K_CARE_APPROACH: f32 = 0.3;
+
+// --- M-D: PANIC/GRIEF (separation distress) ---
+/// Crowding below this counts as social isolation.
+pub const PANIC_CROWDING_LOW: f32 = 2.0;
+/// Crowding drop (prev − now) that saturates the kin-loss term.
+pub const PANIC_LOSS_SCALE: f32 = 3.0;
+/// PANIC leaky-integrator retention (lingers slightly longer than CARE).
+pub const LAMBDA_PANIC: f32 = 0.85;
+/// Distress-pheromone channel PANIC emits on (read side).
+pub const PANIC_PHEROMONE_CHANNEL: usize = 0;
+/// PANIC → distress-pheromone `emit_intent` gain (read side).
+pub const K_PANIC_EMIT: f32 = 1.0;
+/// PANIC → alarm `broadcast_intent` gain (read side).
+pub const K_PANIC_BROADCAST: f32 = 1.0;
+/// PANIC → reunion (toward nearest same-species) movement gain (read side).
+pub const K_PANIC_REUNION: f32 = 0.4;
+/// PANIC⊣SEEK lateral-inhibition strength (withdrawal).
+pub const PANIC_SEEK_INHIBITION: f32 = 0.5;
+
 /// Per-agent subcortical activations, one per Panksepp system, each in `[0,1]`.
 /// Persistent (serialized). Neutral default = all zero.
 pub type AffectState = [f32; AFFECT_SYSTEMS];
@@ -203,10 +233,52 @@ pub fn trigger_lust(energy: f32, genome: &Genome, sensors: &SensorRegister) -> f
     1.0
 }
 
+/// CARE activation target in `[0,1]` from kin proximity + Nurturance gain.
+/// Zero unless a same-species neighbour is both close (`< CARE_RANGE`) and
+/// sufficiently related (`> CARE_KINSHIP_MIN`). `nurturance` is the signed
+/// `[-1,+1]` temperament gene (neutral `0.0`). Pure; no RNG.
+#[inline]
+pub fn care_trigger(nearest_kinship: f32, nearest_same_dist: f32, nurturance: f32) -> f32 {
+    if nearest_kinship <= CARE_KINSHIP_MIN || nearest_same_dist >= CARE_RANGE {
+        return 0.0;
+    }
+    // Closer kin → stronger drive to stay and provision.
+    let proximity = (1.0 - nearest_same_dist / CARE_RANGE).clamp(0.0, 1.0);
+    // Neutral nurturance (0.0) → gain 0.5; caring temperament scales up.
+    let gain = (0.5 + 0.5 * nurturance).clamp(0.0, 1.0);
+    (nearest_kinship * proximity * gain).clamp(0.0, 1.0)
+}
+
+/// PANIC/GRIEF activation target in `[0,1]` from social isolation and/or a
+/// one-tick drop in crowding, gated on social temperament. `crowding` /
+/// `prev_crowding` are this-tick and last-tick neighbour counts (as `f32`).
+/// `sociality` is the signed `[-1,+1]` temperament gene (neutral `0.0`);
+/// asocial agents (`sociality <= -1`) never panic from isolation. Pure; no RNG.
+#[inline]
+pub fn panic_trigger(crowding: f32, prev_crowding: f32, sociality: f32) -> f32 {
+    // Neutral sociality (0.0) → weight 0.5; asocial temperament → 0.0.
+    let social = (0.5 + 0.5 * sociality).clamp(0.0, 1.0);
+    if social <= 0.0 {
+        return 0.0;
+    }
+    // Absolute isolation: how far below the "not alone" reference we are.
+    let isolation = if crowding < PANIC_CROWDING_LOW {
+        (1.0 - crowding / PANIC_CROWDING_LOW).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    // Kin-loss: a drop in crowding since last tick (someone left / died).
+    let loss = ((prev_crowding - crowding) / PANIC_LOSS_SCALE).clamp(0.0, 1.0);
+    (social * isolation.max(loss)).clamp(0.0, 1.0)
+}
+
 /// Compute stage (Layer 0 → Layer 1). Update each alive agent's affect column
-/// from this tick's physiology as a leaky integrator. M-A drives SEEK from the
-/// homeostatic energy deficit; the other six systems stay 0.0 (later milestones
-/// fill their triggers — FEAR reads sensors in M-B, etc.). STRICT no-op when
+/// from this tick's physiology as a leaky integrator. Six of the seven systems
+/// are driven here: SEEK from the homeostatic energy deficit (M-A), FEAR from
+/// threat sensors (M-B), RAGE + LUST from frustration/mate-readiness (M-C), and
+/// CARE + PANIC from kin proximity / social isolation (M-D), with the FEAR⊣RAGE
+/// and PANIC⊣SEEK lateral-inhibition edges. Only PLAY (slot 6) stays 0.0 until
+/// M-E fills it. STRICT no-op when
 /// `!world.affect_enabled`. ZERO RNG. Index-disjoint `par_iter` (iq::develop_all
 /// template): each agent writes only its own slot and reads only shared columns
 /// by `&`, so the parallel loop is bit-identical to a serial ascending-id loop.
@@ -218,38 +290,69 @@ pub fn develop_all(world: &mut World) {
     use rayon::prelude::*;
     let cap = world.agents.capacity();
     let sensors = &world.sensors;
-    let crate::agent::AgentBuffers { affect, energy, genome, alive, .. } = &mut world.agents;
+    let crate::agent::AgentBuffers { affect, affect_prev_crowding, energy, genome, alive, .. } =
+        &mut world.agents;
     let (energy, genome, alive) = (&*energy, &*genome, &*alive);
-    affect[..cap].par_iter_mut().enumerate().for_each(|(i, a)| {
-        if !alive[i] {
-            return;
-        }
-        // Layer 0: homeostatic drive (energy deficit) powers SEEKING.
-        let drive = homeostatic_drive(energy[i]);
-        // Layer 1: leaky-integrator update of the SEEK activation.
-        let seek = LAMBDA_DEFAULT * a[SEEK] + (1.0 - LAMBDA_DEFAULT) * drive;
-        a[SEEK] = seek.clamp(0.0, 1.0);
+    affect[..cap]
+        .par_iter_mut()
+        .zip(affect_prev_crowding[..cap].par_iter_mut())
+        .enumerate()
+        .for_each(|(i, (a, prev))| {
+            if !alive[i] {
+                return;
+            }
+            // Layer 0: homeostatic drive (energy deficit) powers SEEKING.
+            let drive = homeostatic_drive(energy[i]);
+            // Layer 1: leaky-integrator update of the SEEK activation.
+            let seek = LAMBDA_DEFAULT * a[SEEK] + (1.0 - LAMBDA_DEFAULT) * drive;
+            a[SEEK] = seek.clamp(0.0, 1.0);
 
-        // FEAR (M-B): threat/survival drive from fresh sensors + Boldness. The
-        // sensors buffer can be shorter than capacity on a growth tick; guard it.
-        if i < sensors.len() {
-            let fear_in = fear_trigger(&sensors[i], &genome[i]);
-            a[FEAR] = (LAMBDA_FEAR * a[FEAR] + (1.0 - LAMBDA_FEAR) * fear_in).clamp(0.0, 1.0);
+            // FEAR (M-B): threat/survival drive from fresh sensors + Boldness. The
+            // sensors buffer can be shorter than capacity on a growth tick; guard it.
+            if i < sensors.len() {
+                let fear_in = fear_trigger(&sensors[i], &genome[i]);
+                a[FEAR] = (LAMBDA_FEAR * a[FEAR] + (1.0 - LAMBDA_FEAR) * fear_in).clamp(0.0, 1.0);
 
-            // M-C RAGE: derived frustration (hungry + blocked), gated by the
-            // aggressiveness gain gene. Zero RNG.
-            let t_rage = trigger_rage(drive, &genome[i], &sensors[i]);
-            a[RAGE] = (LAMBDA_DEFAULT * a[RAGE] + (1.0 - LAMBDA_DEFAULT) * t_rage).clamp(0.0, 1.0);
-            // M-C LUST: mate-readiness (energy ≥ mating gate + same-species
-            // neighbour present).
-            let t_lust = trigger_lust(energy[i], &genome[i], &sensors[i]);
-            a[LUST] = (LAMBDA_DEFAULT * a[LUST] + (1.0 - LAMBDA_DEFAULT) * t_lust).clamp(0.0, 1.0);
+                // M-C RAGE: derived frustration (hungry + blocked), gated by the
+                // aggressiveness gain gene. Zero RNG.
+                let t_rage = trigger_rage(drive, &genome[i], &sensors[i]);
+                a[RAGE] =
+                    (LAMBDA_DEFAULT * a[RAGE] + (1.0 - LAMBDA_DEFAULT) * t_rage).clamp(0.0, 1.0);
+                // M-C LUST: mate-readiness (energy ≥ mating gate + same-species
+                // neighbour present).
+                let t_lust = trigger_lust(energy[i], &genome[i], &sensors[i]);
+                a[LUST] =
+                    (LAMBDA_DEFAULT * a[LUST] + (1.0 - LAMBDA_DEFAULT) * t_lust).clamp(0.0, 1.0);
 
-            // M-C lateral inhibition — flee before fight: FEAR gates down RAGE,
-            // fully suppressing it at FEAR = 1 (with FEAR_INHIBITS_RAGE = 1).
-            a[RAGE] = (a[RAGE] * (1.0 - FEAR_INHIBITS_RAGE * a[FEAR])).clamp(0.0, 1.0);
-        }
-    });
+                // M-C lateral inhibition — flee before fight: FEAR gates down RAGE,
+                // fully suppressing it at FEAR = 1 (with FEAR_INHIBITS_RAGE = 1).
+                a[RAGE] = (a[RAGE] * (1.0 - FEAR_INHIBITS_RAGE * a[FEAR])).clamp(0.0, 1.0);
+
+                // Snapshot last tick's crowding BEFORE overwriting it below.
+                let prev_crowding = *prev;
+
+                // M-D: CARE trigger (leaky integrator) — kin proximity + Nurturance.
+                let care_raw = care_trigger(
+                    sensors[i].nearest_kinship,
+                    sensors[i].nearest_same_dist,
+                    genome[i].nurturance(),
+                );
+                a[CARE] = (LAMBDA_CARE * a[CARE] + (1.0 - LAMBDA_CARE) * care_raw).clamp(0.0, 1.0);
+
+                // M-D: PANIC/GRIEF trigger (leaky integrator) — isolation / kin loss.
+                let panic_raw =
+                    panic_trigger(sensors[i].crowding as f32, prev_crowding, genome[i].sociality());
+                a[PANIC] =
+                    (LAMBDA_PANIC * a[PANIC] + (1.0 - LAMBDA_PANIC) * panic_raw).clamp(0.0, 1.0);
+
+                // M-D lateral inhibition — PANIC withdraws the appetitive SEEKING
+                // engine (mirrors the M-C FEAR⊣RAGE edge above).
+                a[SEEK] = (a[SEEK] - PANIC_SEEK_INHIBITION * a[PANIC]).clamp(0.0, 1.0);
+
+                // M-D: record this tick's crowding for next tick's PANIC.
+                *prev = sensors[i].crowding as f32;
+            }
+        });
 }
 
 /// Read-side bias hook. Modulate `action` from current affect + percepts +
@@ -314,6 +417,37 @@ pub fn apply_affect(
     if lust != 0.0 && sensors.nearest_same_id != crate::sense::NO_NEIGHBOR_ID {
         action.move_x += K_LUST_APPROACH * lust * sensors.nearest_same_dir.x;
         action.move_y += K_LUST_APPROACH * lust * sensors.nearest_same_dir.y;
+    }
+
+    // --- M-D: CARE — provision + protect kin (identity at neutral CARE) ---
+    let care = affect[CARE];
+    if care != 0.0 && sensors.nearest_same_id != crate::sense::NO_NEIGHBOR_ID {
+        // Protect: bias movement to stay near the kin.
+        action.move_x += K_CARE_APPROACH * care * sensors.nearest_same_dir.x;
+        action.move_y += K_CARE_APPROACH * care * sensors.nearest_same_dir.y;
+        // Provision: raise sharing. `share_pass` (interact.rs) transfers to
+        // `target_id` when it clears SHARE_THRESHOLD and Altruism > 0; direct
+        // the share at the kin when the program left no target.
+        action.share_intent += K_CARE_SHARE * care;
+        if action.target_id == crate::program::NO_TARGET {
+            action.target_id = sensors.nearest_same_id;
+        }
+    }
+
+    // --- M-D: PANIC/GRIEF — distress signal + reunion (identity at neutral) ---
+    let panic = affect[PANIC];
+    if panic != 0.0 {
+        // Distress signal on both live broadcast channels. Consumption is
+        // module-gated downstream: `deposit_pass` (interact.rs) needs a
+        // Pheromone module; the AlarmCall detector (M-F) reads the alarm
+        // broadcast from Communicators. Writing the intent is affect's job.
+        action.emit_intent[PANIC_PHEROMONE_CHANNEL] += K_PANIC_EMIT * panic;
+        action.broadcast_intent[crate::culture::ALARM_MEME_CHANNEL] += K_PANIC_BROADCAST * panic;
+        // Reunion: bias movement toward the nearest same-species neighbour.
+        if sensors.nearest_same_id != crate::sense::NO_NEIGHBOR_ID {
+            action.move_x += K_PANIC_REUNION * panic * sensors.nearest_same_dir.x;
+            action.move_y += K_PANIC_REUNION * panic * sensors.nearest_same_dir.y;
+        }
     }
 }
 
@@ -408,6 +542,40 @@ mod tests {
     use crate::world::World;
 
     #[test]
+    fn care_trigger_rises_with_close_kin_and_zero_when_absent() {
+        // Close, highly-related kin, neutral nurturance → positive CARE.
+        let close = care_trigger(0.8, 4.0, 0.0);
+        assert!(close > 0.0, "close kin should elicit CARE, got {close}");
+        // No kinship → no CARE regardless of distance.
+        assert_eq!(care_trigger(0.0, 4.0, 0.0), 0.0);
+        // Kin out of range → no CARE.
+        assert_eq!(care_trigger(0.8, CARE_RANGE, 0.0), 0.0);
+        // Nurturance gain: more nurturant → stronger CARE at the same percept.
+        let nurt = care_trigger(0.8, 4.0, 1.0);
+        assert!(nurt > close, "nurturance should raise CARE: {nurt} > {close}");
+        // Bounded to [0,1].
+        assert!((0.0..=1.0).contains(&nurt));
+    }
+
+    #[test]
+    fn panic_trigger_fires_on_isolation_and_loss_only_for_social() {
+        // Social agent, alone this tick → isolation panic.
+        let isolated = panic_trigger(0.0, 0.0, 0.0);
+        assert!(isolated > 0.0, "isolated social agent should panic, got {isolated}");
+        // Well-crowded, no drop → no panic.
+        assert_eq!(panic_trigger(6.0, 6.0, 0.0), 0.0);
+        // Sudden loss of kin (crowding fell) even while not fully isolated → panic.
+        let loss = panic_trigger(2.0, 6.0, 0.0);
+        assert!(loss > 0.0, "kin-loss drop should panic, got {loss}");
+        // Asocial temperament (sociality = -1) never panics from isolation.
+        assert_eq!(panic_trigger(0.0, 0.0, -1.0), 0.0);
+        // More social → stronger panic at the same isolation.
+        let very_social = panic_trigger(0.0, 0.0, 1.0);
+        assert!(very_social > isolated, "sociality should raise panic: {very_social} > {isolated}");
+        assert!((0.0..=1.0).contains(&very_social));
+    }
+
+    #[test]
     fn homeostatic_drive_is_zero_when_sated_and_one_when_empty() {
         let e = crate::agent::SPAWN_ENERGY;
         assert_eq!(homeostatic_drive(e), 0.0);
@@ -459,6 +627,52 @@ mod tests {
         let f = affect_reproduction_factor(&lusty);
         assert!((0.0..1.0).contains(&f), "high LUST lowers the reproduction gate: {f}");
         assert!((f - (1.0 - K_LUST_REPRO)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn develop_all_writes_care_panic_and_prev_crowding() {
+        use crate::genome::{Genome, GenomeSlot};
+        use crate::prelude::Vec2;
+        use crate::world::World;
+
+        // Isolated social agent → PANIC accrues, prev_crowding recorded.
+        let mut w = World::new(1);
+        w.affect_enabled = true;
+        let lone = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        crate::tick::step(&mut w);
+        assert!(
+            w.agents.affect[lone as usize][PANIC] > 0.0,
+            "isolated social agent should accrue PANIC"
+        );
+        assert_eq!(
+            w.agents.affect_prev_crowding[lone as usize], 0.0,
+            "lone agent saw zero neighbours this tick"
+        );
+
+        // A tight same-species kin cluster → CARE accrues for a member.
+        let mut w2 = World::new(2);
+        w2.affect_enabled = true;
+        let a = w2.spawn_agent(Vec2::new(300.0, 300.0), Genome::neutral());
+        let _b = w2.spawn_agent(Vec2::new(303.0, 300.0), Genome::neutral());
+        let _c = w2.spawn_agent(Vec2::new(300.0, 303.0), Genome::neutral());
+        crate::tick::step(&mut w2);
+        assert!(w2.agents.affect[a as usize][CARE] > 0.0, "kin-clustered agent should accrue CARE");
+        assert!(
+            w2.agents.affect_prev_crowding[a as usize] >= 1.0,
+            "clustered agent recorded neighbours in prev_crowding"
+        );
+
+        // Asocial isolated agent → no PANIC (temperament gate).
+        let mut w3 = World::new(3);
+        w3.affect_enabled = true;
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::Sociality, 0.0); // signed sociality() = -1 → no panic
+        let asoc = w3.spawn_agent(Vec2::new(500.0, 500.0), g);
+        crate::tick::step(&mut w3);
+        assert_eq!(
+            w3.agents.affect[asoc as usize][PANIC], 0.0,
+            "asocial agent must not panic from isolation"
+        );
     }
 
     #[test]
@@ -906,5 +1120,67 @@ mod tests {
         };
         apply_affect(&mut a, &affect, &Genome::neutral(), &s, crate::agent::SPAWN_ENERGY);
         assert_eq!(a.move_y, before.move_y, "neutral LUST: move unchanged");
+    }
+
+    #[test]
+    fn apply_affect_care_shares_and_stays_near_kin() {
+        use crate::genome::Genome;
+        use crate::program::{ActionRegister, NO_TARGET};
+        use crate::sense::SensorRegister;
+
+        let g = Genome::neutral();
+        let sensors = SensorRegister {
+            nearest_same_id: 7,
+            nearest_same_dir: Vec2::new(1.0, 0.0),
+            ..SensorRegister::default()
+        };
+
+        // Neutral affect → exact identity.
+        let mut base = ActionRegister::default();
+        let affect_zero = [0.0; AFFECT_SYSTEMS];
+        apply_affect(&mut base, &affect_zero, &g, &sensors, 30.0);
+        assert_eq!(base.share_intent, 0.0);
+        assert_eq!(base.move_x, 0.0);
+        assert_eq!(base.target_id, NO_TARGET);
+
+        // Active CARE → sharing raised, movement toward kin, target filled.
+        let mut act = ActionRegister::default();
+        let mut affect = [0.0; AFFECT_SYSTEMS];
+        affect[CARE] = 1.0;
+        apply_affect(&mut act, &affect, &g, &sensors, 30.0);
+        assert!(act.share_intent > 0.0, "CARE should raise share_intent");
+        assert!(act.move_x > 0.0, "CARE should bias movement toward kin");
+        assert_eq!(act.target_id, 7, "CARE directs the share at the kin");
+    }
+
+    #[test]
+    fn apply_affect_panic_signals_and_seeks_reunion() {
+        use crate::culture::ALARM_MEME_CHANNEL;
+        use crate::genome::Genome;
+        use crate::program::ActionRegister;
+        use crate::sense::SensorRegister;
+
+        let g = Genome::neutral();
+        let sensors = SensorRegister {
+            nearest_same_id: 3,
+            nearest_same_dir: Vec2::new(0.0, 1.0),
+            ..SensorRegister::default()
+        };
+
+        // Neutral affect → exact identity.
+        let mut base = ActionRegister::default();
+        apply_affect(&mut base, &[0.0; AFFECT_SYSTEMS], &g, &sensors, 30.0);
+        assert_eq!(base.emit_intent[PANIC_PHEROMONE_CHANNEL], 0.0);
+        assert_eq!(base.broadcast_intent[ALARM_MEME_CHANNEL], 0.0);
+        assert_eq!(base.move_y, 0.0);
+
+        // Active PANIC → distress pheromone + alarm broadcast + reunion move.
+        let mut act = ActionRegister::default();
+        let mut affect = [0.0; AFFECT_SYSTEMS];
+        affect[PANIC] = 1.0;
+        apply_affect(&mut act, &affect, &g, &sensors, 30.0);
+        assert!(act.emit_intent[PANIC_PHEROMONE_CHANNEL] > 0.0, "PANIC emits distress pheromone");
+        assert!(act.broadcast_intent[ALARM_MEME_CHANNEL] > 0.0, "PANIC broadcasts alarm");
+        assert!(act.move_y > 0.0, "PANIC biases movement toward nearest same-species (reunion)");
     }
 }

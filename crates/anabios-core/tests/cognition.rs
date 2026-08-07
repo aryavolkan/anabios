@@ -103,7 +103,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-03 (M-A+M-B affect layer, FORMAT_VERSION 26→27): affect
     // column + flag + temperament + EventType::MassFright, all off/gated here ⇒
     // byte-identical atop the v26 knowledge layout; regenerated on the merged tree.
-    &[(0, 0x0651d4349bd1adca), (100, 0xd27616d8c335f2f7), (300, 0xfdd1827de27e1c2d)];
+    // Refreshed 2026-08-04 (affect M-D, FORMAT_VERSION 27→28): added
+    // AgentBuffers.affect_prev_crowding serialized column. affect_enabled off in
+    // this scenario ⇒ develop_all no-op, column stays 0.0 — trajectory
+    // byte-identical, only the serialized layout grew.
+    &[(0, 0x13ec7376a5c7289a), (100, 0x2394071d4857e923), (300, 0xb4c978f561f91a94)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {
