@@ -17,6 +17,15 @@ Five heavy scenarios that explode to ~10k agents / hundreds of species —
 synchronously in the harness (`step_n` over a 6,000-species speciation pass runs
 for many minutes), so they keep their prior stills; the other 37 are fresh.
 
+**2026-08-07 mammal-roster refresh:** the ecological/combat shots (arena,
+weapons-arms-race, predator-prey, trophic-cascade, divergent, grand-theater
+arena, gene-culture-hunt, and the E2 replay/event-camera) were recaptured after
+the viewer's quadruped mammal roster landed — grazers/stalkers/herds now render
+as Deer/Wolf/Hare/etc. by diet+size+role instead of hominins, and the body-mode
+legend reads "each animal in its own coat colours". Culture/DIT scenarios stay
+Primate (apes), so their stills are unchanged; `territories-t400-pher` keeps its
+prior still (a pheromone-overlay shot where the 60 agents are incidental).
+
 ## grand theater (all subsystems at once)
 
 Every opt-in flag on in one world (`grand-theater`, seed 424242): seasonal +
