@@ -211,6 +211,34 @@ mod tests {
     }
 
     #[test]
+    fn iq_raises_basal_metabolism() {
+        // Realized IQ costs basal metabolism (brains are expensive) — the tradeoff
+        // that keeps IQ from freely maxing out. A high-IQ agent must pay strictly
+        // more basal drain than an otherwise-identical low-IQ one, scaled by
+        // metabolism_multiplier(iq). No movement → basal is the only drain.
+        let drain = |iq: f32| -> f32 {
+            let mut w = World::new(1);
+            let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+            w.agents.iq[id as usize] = iq;
+            let desired = vec![Vec2::ZERO; w.agents.capacity()];
+            let before = w.agents.energy[id as usize];
+            integrate_all(&mut w.agents, &desired, w.world_size, false, false);
+            before - w.agents.energy[id as usize]
+        };
+        let low = drain(0.0);
+        let high = drain(1.0);
+        assert!(high > low, "high IQ must cost more basal metabolism: low={low} high={high}");
+        // iq == 0 is the identity multiplier; iq == 1 scales basal by
+        // (1 + IQ_METABOLIC_COST) — integrate applies iq::metabolism_multiplier,
+        // so the drain ratio matches it (tolerance for chained-float rounding).
+        let ratio = high / low;
+        assert!(
+            (ratio - (1.0 + crate::iq::IQ_METABOLIC_COST)).abs() < 1e-3,
+            "iq=1 basal ≈ neutral × (1 + IQ_METABOLIC_COST): ratio={ratio} (low={low} high={high})"
+        );
+    }
+
+    #[test]
     fn agent_with_locomotor_moves_proportionally_to_speed_param() {
         let mut w = World::new(1);
         let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
