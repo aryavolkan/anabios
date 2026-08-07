@@ -68,6 +68,7 @@ const _QUAD_DATA := {
 	BOAR: preload("res://scripts/mammal_data/boar.gd"),
 	FOX: preload("res://scripts/mammal_data/fox.gd"),
 	WOLF: preload("res://scripts/mammal_data/wolf.gd"),
+	LIVESTOCK: preload("res://scripts/mammal_data/livestock.gd"),
 }
 
 
