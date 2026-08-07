@@ -63,6 +63,7 @@ const BUCKET_COUNT := SKIN_COUNT + 6  # 11
 # Quadruped pose data, filled in Tasks 6-7. Absent archetypes fall back to ape
 # skin-0 art (harmless: those buckets carry 0 instances until their rig lands).
 const _QUAD_DATA := {
+	HARE: preload("res://scripts/mammal_data/hare.gd"),
 	DEER: preload("res://scripts/mammal_data/deer.gd"),
 	WOLF: preload("res://scripts/mammal_data/wolf.gd"),
 }
