@@ -232,6 +232,18 @@ pub struct ClimateParams {
     /// Elevation distribution widening about 0.5 (higher = more abyssal
     /// basins AND more rock peaks).
     pub elev_contrast: f32,
+    /// Continent shaping in `[0,1]`: 0 = today's fBm speckle; >0 pulls land into
+    /// a few large masses separated by ocean.
+    pub continentality: f32,
+    /// Ridged mountain uplift added to elevation on land: 0 = scattered peaks;
+    /// >0 raises connected linear ranges.
+    pub mountain_uplift: f32,
+    /// Orographic rain-shadow strength: 0 = no drying; >0 dries cells downwind
+    /// of higher terrain.
+    pub rain_shadow: f32,
+    /// Minimum flow-accumulation (in upstream-cell units) for a cell to become a
+    /// river. 0 = hydrology off (no rivers, `river_flow` stays 0).
+    pub river_threshold: f32,
 }
 
 impl Default for ClimateParams {
@@ -241,6 +253,10 @@ impl Default for ClimateParams {
             moisture_bias: 0.0,
             sea_level: SEA_LEVEL,
             elev_contrast: ELEV_CONTRAST,
+            continentality: 0.0,
+            mountain_uplift: 0.0,
+            rain_shadow: 0.0,
+            river_threshold: 0.0,
         }
     }
 }
@@ -716,6 +732,15 @@ fn idx_wrap(row: usize, col: usize, res: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn geography_knobs_default_off() {
+        let d = ClimateParams::default();
+        assert_eq!(d.continentality, 0.0);
+        assert_eq!(d.mountain_uplift, 0.0);
+        assert_eq!(d.rain_shadow, 0.0);
+        assert_eq!(d.river_threshold, 0.0);
+    }
 
     #[test]
     fn elevation_is_stored_and_bounded() {
