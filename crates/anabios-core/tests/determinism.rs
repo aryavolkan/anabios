@@ -265,7 +265,12 @@ const GOLDEN: &[(u64, u64)] =
     // CodexState affect-detector fields ({frenzy_active, rage_streak,
     // rage_active, fear_count_history, cascade_active, grief_active}); affect_enabled
     // off in minimal ⇒ detectors never fire — layout growth only.
-    &[(0, 0x4176fea65f300fa7), (100, 0xcf4c7cdb3805b964), (1000, 0x320c283b2b5ed80c)];
+    // Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
+    // BiomeCell.{elevation, river_flow} added; elevation is already computed
+    // during generation and is now merely stored, river_flow is 0.0 everywhere
+    // until hydrology lands — trajectory byte-identical, only the serialized
+    // layout grew.
+    &[(0, 0x7d66226166075781), (100, 0xa7ea5b7ba3f12ff2), (1000, 0xa23500dfd92bdd06)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

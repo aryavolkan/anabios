@@ -66,8 +66,11 @@ fn kin_cluster_raises_care_and_sharing() {
 // Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): new serialized
 // CodexState detector fields grow the state-hash layout (detectors run flag-on),
 // so all ticks move.
+// Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
+// BiomeCell.{elevation, river_flow} added — layout growth only, trajectory
+// byte-identical.
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xbeb11724581230c3), (100, 0x0018f80a6396b3bc), (300, 0x663d384e0c4fa4fa)];
+    &[(0, 0x95d7988f45ba4a59), (100, 0x5e01b80d32a9194a), (300, 0xeab86b240c25f018)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

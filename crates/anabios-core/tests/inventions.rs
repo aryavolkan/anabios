@@ -1088,7 +1088,10 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // CodexState affect-detector fields ({frenzy_active, rage_streak,
     // rage_active, fear_count_history, cascade_active, grief_active}); affect_enabled
     // off in this scenario ⇒ detectors never fire — layout growth only.
-    &[(0, 0x3847fffa1211be71), (100, 0xbe65e10e9ebceed7), (300, 0x75d4288a841dba48)];
+    // Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
+    // BiomeCell.{elevation, river_flow} added — layout growth only, trajectory
+    // byte-identical.
+    &[(0, 0xc649779c94057547), (100, 0x8dd9881fc4944f6d), (300, 0xf2718daa19aaf2b2)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

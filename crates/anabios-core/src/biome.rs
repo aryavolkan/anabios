@@ -167,6 +167,16 @@ pub struct BiomeCell {
     /// consumed only when `World::soil_fertility` is on.
     #[serde(default)]
     pub fertility: f32,
+    /// Normalized terrain elevation in `[0,1]` from generation (water/rock
+    /// gating, temperature lapse, hydrology). Stored so the viewer can render
+    /// shaded relief without recomputation. Static after generation.
+    #[serde(default)]
+    pub elevation: f32,
+    /// Normalized river flow-accumulation in `[0,1]`; `0.0` for non-river cells.
+    /// Set by the hydrology post-pass (`carve_rivers`) only when a scenario's
+    /// `river_threshold > 0`. Static after generation.
+    #[serde(default)]
+    pub river_flow: f32,
 }
 
 /// 128×128 biome field (at default dims). Indexed `[row * res + col]` with
@@ -364,6 +374,8 @@ impl BiomeField {
                     succession: SUCCESSION_CLIMAX,
                     nutrient_quality,
                     fertility,
+                    elevation: elev,
+                    river_flow: 0.0,
                 });
             }
         }
@@ -704,6 +716,19 @@ fn idx_wrap(row: usize, col: usize, res: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn elevation_is_stored_and_bounded() {
+        let f = BiomeField::generate(42, 64, 1024.0);
+        // Every cell has a populated elevation in range; water sits below sea level.
+        for c in &f.cells {
+            assert!((0.0..=1.0).contains(&c.elevation), "elev out of range: {}", c.elevation);
+            assert_eq!(c.river_flow, 0.0, "river_flow is 0 until hydrology is enabled");
+            if c.terrain == TerrainType::Water {
+                assert!(c.elevation < SEA_LEVEL + 1e-3, "water above sea level");
+            }
+        }
+    }
 
     #[test]
     fn new_terrains_have_productivity_ordering() {
@@ -1060,6 +1085,8 @@ mod tests {
             succession,
             nutrient_quality: 1.0,
             fertility: 1.0,
+            elevation: 0.5,
+            river_flow: 0.0,
         }
     }
 

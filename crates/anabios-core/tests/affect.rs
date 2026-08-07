@@ -78,8 +78,11 @@ fn affect_scenario_survives_save_load_step() {
 // Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): the new serialized
 // CodexState affect-detector fields grow every scenario's state-hash layout (and the
 // detectors run flag-on here), so all ticks — including tick 0 — move.
+// Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
+// BiomeCell.{elevation, river_flow} added — layout growth only, trajectory
+// byte-identical.
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xb25f4eb40cb89604), (100, 0x245e71b24fc4e3db), (300, 0xf0f0f110a73291c8)];
+    &[(0, 0x3e179d01ab39d11e), (100, 0xb515a256485ca489), (300, 0xc4158d0a9a486e0e)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -187,8 +190,11 @@ fn affect_threat_emits_mass_fright() {
 // Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): new serialized
 // CodexState detector fields grow the state-hash layout for this flag-on scenario
 // (detectors run), so all ticks move.
+// Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
+// BiomeCell.{elevation, river_flow} added — layout growth only, trajectory
+// byte-identical.
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xd18740aef4ef494c), (100, 0x6ae7fe513e0c8b55), (300, 0x955f757a822e90f7)];
+    &[(0, 0x46507f4854249632), (100, 0xa9e8606271a3373f), (300, 0x8dd9578b4d89b21d)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {
