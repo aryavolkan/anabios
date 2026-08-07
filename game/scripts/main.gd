@@ -3,6 +3,7 @@ extends Node2D
 const UiTheme = preload("res://scripts/ui_theme.gd")
 const Palette = preload("res://scripts/palette.gd")
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
+const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const FieldAgentShader = preload("res://shaders/field_agent.gdshader")
 
 # Number of sim ticks to run per rendered frame. Speeds: 1, 4, 16, 64.
@@ -646,12 +647,28 @@ func _body_colors(n: int) -> PackedColorArray:
 				)
 			return out5
 		_:
-			# Species mode: white — the atlas already carries each ape's own
-			# coat/skin colours; the other [C] modes tint over it.
+			# Species mode: Primate atlases carry their own coat/skin colours, so
+			# white; quadruped atlases are neutral grayscale, so each agent gets
+			# its per-species coat hue here. Diet/size come from the same batches
+			# _refresh_bodies already fetched.
 			var out4 := PackedColorArray()
 			out4.resize(n)
-			out4.fill(Color(1, 1, 1))
+			var diet: PackedFloat32Array = sim.alive_diet()
+			var sizes: PackedFloat32Array = sim.alive_sizes()
+			var sp_ids: PackedInt32Array = sim.alive_species_ids()
+			var live: PackedInt32Array = _livestock_flags(n)
+			for i in n:
+				var arch := MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0)
+				out4[i] = MammalSprites.coat_hue(arch, sp_ids[i])
 			return out4
+
+
+func _livestock_flags(n: int) -> PackedInt32Array:
+	if sim.domestication_enabled():
+		return sim.alive_livestock_flags()
+	var z := PackedInt32Array()
+	z.resize(n)
+	return z
 
 
 # A shaded disc, multiplied by each MultiMesh instance color to turn the flat
