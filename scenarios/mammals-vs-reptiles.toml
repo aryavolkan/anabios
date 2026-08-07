@@ -1,6 +1,6 @@
 name = "mammals-vs-reptiles"
 seed = 0
-max_population = 3000
+max_population = 1200
 # The class contrast is the point: affect gives mammals their measured
 # fear/boldness and reptiles their hair-trigger freeze-fight-flight; cognition
 # gives the big-brained endotherms their IQ edge; biome_adaptation lets the
@@ -9,27 +9,38 @@ affect_enabled = true
 cognition_enabled = true
 biome_adaptation = true
 
+[climate]
+moisture_bias = -0.15
+
 # --- Mammals --------------------------------------------------------------
 # Herd grazers: social, communicative endotherm prey. High metabolism funds
 # big brains and fast learning; the herd + alarm broadcast is their defense.
+# The low mutation_rate keeps the prey species coherent enough to keep
+# breeding — fragmented hyper-speciated prey stop mating, grow fat, and
+# become unkillable (energy is HP), starving every carnivore in the world.
 [[agents]]
-count = 120
+count = 80
 archetype = "mammal_grazer"
 placement = { kind = "cluster", center_x = 340.0, center_y = 512.0, radius = 140.0 }
 [agents.traits]
-size = 0.5
+size = 0.4
 lifespan_bias = 1.0
 env_affinity = 0.5
+reproduction_threshold = 0.5
+mutation_rate = 0.3
 
-# Pursuit pack: cursorial predators (wolf-style) — fast, bold, coordinated.
+# Pursuit pack: stalk-pounce predators (lion-style) — fast, very bold (their
+# archetype Boldness suppresses the FEAR that big high-energy prey radiate),
+# coordinated. A lowered reproduction gate lets the pack replace its losses.
 [[agents]]
-count = 16
+count = 24
 archetype = "mammal_pursuer"
 placement = { kind = "cluster", center_x = 340.0, center_y = 700.0, radius = 90.0 }
 [agents.traits]
-size = 0.6
+size = 0.65
 lifespan_bias = 1.0
 env_affinity = 0.5
+reproduction_threshold = 0.4
 
 # --- Reptiles ---------------------------------------------------------------
 # Ambushers: sit-and-wait crocodile-style predators. Near-zero idle cost,

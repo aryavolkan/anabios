@@ -105,13 +105,15 @@ pub fn slow_hunter_kit() -> ModuleList {
     ]
 }
 
-/// Mammal grazer: a social herbivore — good all-round senses and speed, a
-/// Communicator for meme/alarm culture, and Reproductive so the lineage
-/// establishes. The endotherm body plan pays its way through high activity;
-/// the metabolic cost lives in the genome (`BasalMetabolism`), not the kit.
+/// Mammal grazer: a social herbivore — good senses, modest speed (0.55: the
+/// herd + alarm is the defense, not the sprint — and it keeps fear-boosted
+/// flight below the pursuer's 0.95 top speed), a Communicator for meme/alarm
+/// culture, and Reproductive so the lineage establishes. The endotherm body
+/// plan pays its way through high activity; the metabolic cost lives in the
+/// genome (`BasalMetabolism`), not the kit.
 pub fn mammal_grazer_kit() -> ModuleList {
     smallvec![
-        Module::Locomotor { max_speed: 0.65, terrain_affinity: 0.5 },
+        Module::Locomotor { max_speed: 0.55, terrain_affinity: 0.5 },
         Module::Sensor { sensor_type: SensorType::Vision, radius: 0.7, acuity: 0.7 },
         Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 },
         Module::Communicator { range: 12.0, channel_id: 0 },
@@ -119,16 +121,19 @@ pub fn mammal_grazer_kit() -> ModuleList {
     ]
 }
 
-/// Mammal pursuer: a cursorial pack carnivore (wolf-style) — the fastest
-/// founder Locomotor, keen vision, carnivore Mouth, contact Weapon, a
+/// Mammal pursuer: a stalk-pounce pack carnivore (lion-style) — the fastest
+/// founder Locomotor (0.95 matches `fast_hunter_kit`: it must outsprint even
+/// fear-boosted prey, which the affect layer can drive to ~1.5× base speed),
+/// keen vision, carnivore Mouth, a max-power contact Weapon (16 damage: prey
+/// HP *is* its energy, so big hits are what keep fat prey killable), a
 /// Communicator for pack coordination, and Reproductive (unlike the sterile
 /// founder `predator_kit`, so the lineage persists and evolves).
 pub fn mammal_pursuer_kit() -> ModuleList {
     smallvec![
-        Module::Locomotor { max_speed: 0.85, terrain_affinity: 0.5 },
+        Module::Locomotor { max_speed: 0.95, terrain_affinity: 0.5 },
         Module::Sensor { sensor_type: SensorType::Vision, radius: 0.8, acuity: 0.7 },
         Module::Mouth { bite_size: 0.6, diet_affinity: 1.0 },
-        Module::Weapon { damage: 8.0, energy_cost: 1.0 },
+        Module::Weapon { damage: 16.0, energy_cost: 1.0 },
         Module::Communicator { range: 12.0, channel_id: 0 },
         Module::Reproductive { viability: 0.6, brood_size_bias: 0.5 },
     ]

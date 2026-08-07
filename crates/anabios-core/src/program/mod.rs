@@ -875,6 +875,97 @@ mod tests {
     }
 
     #[test]
+    fn mammal_herd_forages_cohere_flees_and_alarms() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        // Calm context (no predator): forage toward plants (+y) and cohere
+        // toward the herd (+x), no alarm.
+        let calm = EvalContext {
+            same_distance: 4.0,
+            same_dir: glam::Vec2::new(1.0, 0.0),
+            ..dummy_ctx(&g)
+        };
+        let a = evaluate(&starter_mammal_herd(), calm, &mut stack);
+        assert!(a.move_x > 0.0, "coheres toward herd: {:?}", a);
+        assert!(a.move_y > 0.0, "forages toward plants: {:?}", a);
+        assert!(a.broadcast_intent[0] <= 0.0, "no predator → no alarm: {:?}", a);
+        // Predator at dist 5 to the +x (between agent and herd): alarm fires
+        // on channel 0 and the flee term cancels the cohesion term.
+        let threatened = EvalContext {
+            same_distance: 4.0,
+            same_dir: glam::Vec2::new(1.0, 0.0),
+            other_distance: 5.0,
+            other_dir: glam::Vec2::new(1.0, 0.0),
+            ..dummy_ctx(&g)
+        };
+        let a = evaluate(&starter_mammal_herd(), threatened, &mut stack);
+        assert!(a.broadcast_intent[0] > 0.5, "predator close → alarm call: {:?}", a);
+        assert!(a.move_x <= 1e-6, "flee term cancels cohesion toward the threat: {:?}", a);
+    }
+
+    #[test]
+    fn mammal_pursuer_chases_broadcasts_and_strikes() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let ctx_at = |d: f32| EvalContext {
+            other_distance: d,
+            other_dir: glam::Vec2::new(1.0, 0.0),
+            ..dummy_ctx(&g)
+        };
+        // Beyond pouncing range (dist 20): hold position — lingering at the
+        // kill to scavenge beats chasing fresh prey across the herd.
+        let a = evaluate(&starter_mammal_pursuer(), ctx_at(20.0), &mut stack);
+        assert!(a.move_x.abs() < 1e-6, "beyond pounce range → hold: {:?}", a);
+        assert!(a.broadcast_intent[4] <= 0.0, "distant prey → silent: {:?}", a);
+        assert!(a.fire_intent <= 0.0, "distant prey → no strike: {:?}", a);
+        // Inside pouncing range (dist 10): chase.
+        let a = evaluate(&starter_mammal_pursuer(), ctx_at(10.0), &mut stack);
+        assert!(a.move_x > 0.0, "in range → pursue: {:?}", a);
+        assert!(a.fire_intent <= 0.0, "out of weapon reach: {:?}", a);
+        // Closing (dist 6): pack coordination broadcast.
+        let a = evaluate(&starter_mammal_pursuer(), ctx_at(6.0), &mut stack);
+        assert!(a.broadcast_intent[4] > 0.5, "closing → pack call: {:?}", a);
+        // Contact (dist 2): strike.
+        let a = evaluate(&starter_mammal_pursuer(), ctx_at(2.0), &mut stack);
+        assert!(a.fire_intent > 0.5, "contact → strike: {:?}", a);
+    }
+
+    #[test]
+    fn reptile_ambusher_holds_still_until_prey_commits() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let ctx_at = |d: f32| EvalContext {
+            other_distance: d,
+            other_dir: glam::Vec2::new(1.0, 0.0),
+            ..dummy_ctx(&g)
+        };
+        // Far prey (dist 20): the ectotherm edge — no movement wasted, no shot.
+        let a = evaluate(&starter_reptile_ambusher(), ctx_at(20.0), &mut stack);
+        assert!(a.move_x.abs() < 1e-6, "far prey → hold still: {:?}", a);
+        assert!(a.move_y.abs() < 1e-6, "far prey → hold still: {:?}", a);
+        assert!(a.fire_intent <= 0.0, "far prey → no strike: {:?}", a);
+        // Prey inside the lunge ring (dist 4): close in, Jaws still out of reach.
+        let a = evaluate(&starter_reptile_ambusher(), ctx_at(4.0), &mut stack);
+        assert!(a.move_x > 0.0, "lunge ring → close in: {:?}", a);
+        assert!(a.fire_intent <= 0.0, "outside Jaws reach: {:?}", a);
+        // Point-blank (dist 0.5): the ambush fires.
+        let a = evaluate(&starter_reptile_ambusher(), ctx_at(0.5), &mut stack);
+        assert!(a.fire_intent > 0.5, "point-blank → Jaws strike: {:?}", a);
+    }
+
+    #[test]
+    fn reptile_basker_grazes_and_mates_when_fed() {
+        let g = Genome::neutral();
+        let mut stack = Vec::new();
+        let a = evaluate(&starter_reptile_basker(), dummy_ctx(&g), &mut stack);
+        assert!(a.move_y > 0.0, "grazes toward plants: {:?}", a);
+        assert!(a.mate_intent <= 0.0, "hungry → no mating: {:?}", a);
+        let fed = EvalContext { energy: 50.0, ..dummy_ctx(&g) };
+        let a = evaluate(&starter_reptile_basker(), fed, &mut stack);
+        assert!(a.mate_intent > 0.0, "well-fed → mate: {:?}", a);
+    }
+
+    #[test]
     fn new_sense_nodes_push_context_values() {
         let g = Genome::neutral();
         let ctx = EvalContext {

@@ -403,14 +403,26 @@ pub fn starter_mammal_herd() -> Program {
     ])
 }
 
-/// Mammal pursuer: a cursorial pack hunter — chase the nearest other-species
-/// agent at speed, broadcast the hunt on channel 4 when within ~8 (pack
-/// coordination), fire the contact Weapon within ~3, mate when well-fed.
+/// Mammal pursuer: a stalk-pounce pack hunter (lion-style) — chase the
+/// nearest other-species agent only within pouncing range (~15 units; in a
+/// target-rich herd a wider gate means endlessly chasing fresh prey and never
+/// lingering at the kill to scavenge it, which carnivores do automatically
+/// within reach). Broadcasts the hunt on channel 4 when within ~8 (pack
+/// coordination), fires the contact Weapon within ~3, mates when well-fed.
 pub fn starter_mammal_pursuer() -> Program {
     Program::from_slice(&[
+        // pursue only when prey is within hunting range
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-15.0),
         Node::SenseOtherDirX,
+        Node::Mul,
         Node::MoveTowardX,
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-15.0),
         Node::SenseOtherDirY,
+        Node::Mul,
         Node::MoveTowardY,
         // coordinate the pack when closing in
         Node::SenseOtherDist,

@@ -274,6 +274,9 @@ pub struct TraitOverrides {
     /// Climate-match feeding bonus (`GenomeSlot::EnvAffinity`; read only with
     /// `biome_adaptation`).
     pub env_affinity: Option<f32>,
+    /// Genome mutation sigma scale (`GenomeSlot::MutationRate`). Lower values
+    /// slow lineage drift/speciation, keeping breeding pools coherent.
+    pub mutation_rate: Option<f32>,
 }
 
 impl TraitOverrides {
@@ -358,6 +361,9 @@ impl TraitOverrides {
         }
         if let Some(v) = self.env_affinity {
             g.set(GenomeSlot::EnvAffinity, v);
+        }
+        if let Some(v) = self.mutation_rate {
+            g.set(GenomeSlot::MutationRate, v);
         }
     }
 }
@@ -501,13 +507,13 @@ fn archetype_genome(name: &str, g: &mut Genome) {
             g.set(GenomeSlot::ColorHue, 0.08); // warm brown
         }
         "mammal_pursuer" => {
-            g.set(GenomeSlot::BasalMetabolism, 0.85);
+            g.set(GenomeSlot::BasalMetabolism, 0.65);
             g.set(GenomeSlot::CognitivePotential, 0.75);
             g.set(GenomeSlot::IndividualLearning, 0.7);
             g.set(GenomeSlot::SocialLearning, 0.85);
             g.set(GenomeSlot::Extraversion, 0.75);
             g.set(GenomeSlot::Agreeableness, 0.55);
-            g.set(GenomeSlot::Boldness, 0.8);
+            g.set(GenomeSlot::Boldness, 0.95);
             g.set(GenomeSlot::Aggressiveness, 0.75);
             g.set(GenomeSlot::Reactivity, 0.4);
             g.set(GenomeSlot::Nurturance, 0.6);
@@ -993,6 +999,76 @@ terrain_affinity = 0.87
         assert!(has(&br_mods, ModuleType::Jaws), "bruiser archetype carries Jaws");
         assert!(has(&br_mods, ModuleType::Armor), "bruiser archetype is armored");
         assert!(has(&br_mods, ModuleType::Reproductive), "bruiser lineage can establish");
+    }
+
+    #[test]
+    fn vertebrate_archetypes_resolve_to_their_kits() {
+        use crate::module::{has, has_smell, ModuleType};
+        let (mg_mods, _) = archetype_kit("mammal_grazer");
+        assert!(has(&mg_mods, ModuleType::Communicator), "mammal grazer is cultural");
+        assert!(has(&mg_mods, ModuleType::Reproductive), "mammal grazer breeds");
+        assert!(!has(&mg_mods, ModuleType::Weapon), "mammal grazer is unarmed");
+        let (mp_mods, _) = archetype_kit("mammal_pursuer");
+        assert!(has(&mp_mods, ModuleType::Weapon), "mammal pursuer is armed");
+        assert!(has(&mp_mods, ModuleType::Communicator), "mammal pursuer coordinates");
+        assert!(has(&mp_mods, ModuleType::Reproductive), "pursuer lineage can establish");
+        let (ra_mods, _) = archetype_kit("reptile_ambusher");
+        assert!(has(&ra_mods, ModuleType::Jaws), "reptile ambusher carries Jaws");
+        assert!(has(&ra_mods, ModuleType::Armor), "reptile ambusher is scaled");
+        assert!(has_smell(&ra_mods), "reptile ambusher smells its prey");
+        assert!(has(&ra_mods, ModuleType::Reproductive), "ambusher lineage can establish");
+        let (rb_mods, _) = archetype_kit("reptile_basker");
+        assert!(has(&rb_mods, ModuleType::Armor), "reptile basker is armored");
+        assert!(!has(&rb_mods, ModuleType::Jaws), "reptile basker is harmless");
+        assert!(!has(&rb_mods, ModuleType::Weapon), "reptile basker is harmless");
+        assert!(has(&rb_mods, ModuleType::Reproductive), "basker lineage can establish");
+    }
+
+    #[test]
+    fn vertebrate_archetypes_carry_class_genome_profiles() {
+        let mut g = Genome::neutral();
+        archetype_genome("mammal_grazer", &mut g);
+        assert_eq!(g.get(GenomeSlot::BasalMetabolism), 0.8, "endotherm tax");
+        assert_eq!(g.get(GenomeSlot::CognitivePotential), 0.8, "big-brained");
+        assert_eq!(g.get(GenomeSlot::Nurturance), 0.8, "parental investment");
+        let mut g = Genome::neutral();
+        archetype_genome("reptile_ambusher", &mut g);
+        assert_eq!(g.get(GenomeSlot::BasalMetabolism), 0.2, "ectotherm edge");
+        assert_eq!(g.get(GenomeSlot::Reactivity), 0.85, "hair-trigger hijack");
+        assert_eq!(g.get(GenomeSlot::Aggressiveness), 0.8, "ambush strike");
+    }
+
+    #[test]
+    fn trait_overrides_cover_affect_cognition_and_color_genes() {
+        let text = r#"
+name = "t"
+seed = 1
+affect_enabled = true
+cognition_enabled = true
+[[agents]]
+count = 2
+archetype = "reptile_ambusher"
+placement = { kind = "uniform" }
+[agents.traits]
+boldness = 0.9
+reactivity = 0.1
+cognitive_potential = 0.77
+color_hue = 0.5
+env_affinity = 0.42
+"#;
+        let s = Scenario::parse_toml(text).expect("parse");
+        let w = s.instantiate();
+        let id = w.agents.iter_alive().next().expect("one agent");
+        let g = &w.agents.genome[id as usize];
+        // Explicit trait overrides win over the archetype genome defaults
+        // (reptile_ambusher would otherwise pin Reactivity to 0.85).
+        assert_eq!(g.get(GenomeSlot::Boldness), 0.9);
+        assert_eq!(g.get(GenomeSlot::Reactivity), 0.1, "override beats archetype default");
+        assert_eq!(g.get(GenomeSlot::CognitivePotential), 0.77);
+        assert_eq!(g.get(GenomeSlot::ColorHue), 0.5);
+        assert_eq!(g.get(GenomeSlot::EnvAffinity), 0.42);
+        // Untouched archetype defaults still apply.
+        assert_eq!(g.get(GenomeSlot::BasalMetabolism), 0.2, "class default survives");
     }
 
     #[test]
