@@ -265,7 +265,10 @@ const GOLDEN: &[(u64, u64)] =
     // CodexState affect-detector fields ({frenzy_active, rage_streak,
     // rage_active, fear_count_history, cascade_active, grief_active}); affect_enabled
     // off in minimal ⇒ detectors never fire — layout growth only.
-    &[(0, 0x4176fea65f300fa7), (100, 0xcf4c7cdb3805b964), (1000, 0x320c283b2b5ed80c)];
+    // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+    // added World.payoff_biased_learning flag; off in minimal ⇒ transmission
+    // byte-identical — layout growth only, so all hashes moved once.
+    &[(0, 0x678ed740cf1d69ab), (100, 0x7aba5738a14aed0a), (1000, 0x5684cc5c0964521c)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

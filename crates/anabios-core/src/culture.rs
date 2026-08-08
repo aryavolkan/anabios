@@ -237,7 +237,61 @@ pub fn culture_step(world: &mut World) {
             max_neighbour_practice_variant,
             best_tech,
             best_tech_err,
+            best_model,
+            holder_energy_sum,
+            holder_count,
+            neighbour_energy_sum,
+            neighbour_count,
         } = scan_neighbor_memes(world, id, pos, range, env_on, opt);
+        // O2 payoff-biased learning (opt-in): re-target transmission before the
+        // rules below consume the scan. Off ⇒ every local is exactly what the
+        // payoff-blind scan produced (byte-identical).
+        let mut max_neighbour_skill = max_neighbour_skill;
+        let mut best_skill_neighbor = best_skill_neighbor;
+        let mut max_neighbour_inv = max_neighbour_inv;
+        let mut max_neighbour_inv_variant = max_neighbour_inv_variant;
+        let mut max_neighbour_practice = max_neighbour_practice;
+        let mut max_neighbour_practice_variant = max_neighbour_practice_variant;
+        if world.payoff_biased_learning {
+            // Model bias: copy from the highest-ENERGY Communicator neighbour
+            // rather than the highest-trait-level one — the fittest available
+            // model tends to carry fewer maladaptive practices.
+            if let Some(m) = best_model {
+                max_neighbour_skill = world.agents.meme_vector[m][SKILL_CHANNEL];
+                best_skill_neighbor = Some(m);
+                if world.inventions_enabled {
+                    for k in 0..crate::invention::INVENTION_COUNT {
+                        let ch = crate::invention::channel(k);
+                        max_neighbour_inv[k] = world.agents.meme_vector[m][ch];
+                        max_neighbour_inv_variant[k] = world.agents.meme_lineage[m][ch];
+                    }
+                }
+                if world.cognition_enabled {
+                    for p in 0..crate::practice::PRACTICE_COUNT {
+                        let ch = crate::practice::channel(p);
+                        max_neighbour_practice[p] = world.agents.meme_vector[m][ch];
+                        max_neighbour_practice_variant[p] = world.agents.meme_lineage[m][ch];
+                    }
+                }
+            }
+            // Content bias: decline a candidate trait when its local holders
+            // have lower mean energy than its non-holders — the trait is
+            // empirically maladaptive here, even if the chosen model carries
+            // it. Zeroing the copy target declines it (targets start at 0.0 =
+            // "no neighbour holds it", and levels are non-negative). Needs
+            // both groups present, else there is no local evidence either way.
+            for p in 0..crate::practice::PRACTICE_COUNT {
+                let held = holder_count[p];
+                if held > 0 && held < neighbour_count {
+                    let holder_mean = holder_energy_sum[p] / held as f32;
+                    let non_mean = (neighbour_energy_sum - holder_energy_sum[p])
+                        / (neighbour_count - held) as f32;
+                    if holder_mean < non_mean {
+                        max_neighbour_practice[p] = 0.0;
+                    }
+                }
+            }
+        }
         // Writing buff: the holder's meme copy rate and invention spread rate
         // are doubled (literacy accelerates all cultural transmission).
         let self_mask = if world.inventions_enabled {
@@ -446,6 +500,18 @@ struct NeighborMemeScan {
     best_tech: Option<f32>,
     /// `|tech - opt|` of `best_tech` (init `+inf`; env mode only).
     best_tech_err: f32,
+    /// Highest-ENERGY Communicator neighbour — the model-bias copy source.
+    /// Only populated when `world.payoff_biased_learning` is on.
+    best_model: Option<usize>,
+    /// Per practice channel: summed energy of holder neighbours
+    /// (`practice::has`) and how many they are. Content-bias evidence;
+    /// payoff-biased mode only.
+    holder_energy_sum: [f32; crate::practice::PRACTICE_COUNT],
+    holder_count: [u32; crate::practice::PRACTICE_COUNT],
+    /// Total energy sum / count over all Communicator neighbours, so the
+    /// content bias can derive non-holder means. Payoff-biased mode only.
+    neighbour_energy_sum: f32,
+    neighbour_count: u32,
 }
 
 /// Scan the Communicator neighbours of agent `id` within `range`, aggregating
@@ -470,6 +536,13 @@ fn scan_neighbor_memes(
     let mut best_skill_neighbor: Option<usize> = None;
     let mut max_neighbour_inv_variant = [0u32; crate::invention::INVENTION_COUNT];
     let mut max_neighbour_practice_variant = [0u32; crate::practice::PRACTICE_COUNT];
+    let payoff = world.payoff_biased_learning;
+    let mut best_model: Option<usize> = None;
+    let mut best_model_energy = f32::NEG_INFINITY;
+    let mut holder_energy_sum = [0.0f32; crate::practice::PRACTICE_COUNT];
+    let mut holder_count = [0u32; crate::practice::PRACTICE_COUNT];
+    let mut neighbour_energy_sum = 0.0f32;
+    let mut neighbour_count = 0u32;
     world.spatial.query(pos, range, |oid| {
         if oid == id {
             return;
@@ -477,6 +550,21 @@ fn scan_neighbor_memes(
         let j = oid as usize;
         if !module::has(&world.agents.modules[j], ModuleType::Communicator) {
             return;
+        }
+        if payoff {
+            let e = world.agents.energy[j];
+            neighbour_energy_sum += e;
+            neighbour_count += 1;
+            if e > best_model_energy {
+                best_model_energy = e;
+                best_model = Some(j);
+            }
+            for p in 0..crate::practice::PRACTICE_COUNT {
+                if crate::practice::has(&world.agents.meme_vector[j], p) {
+                    holder_energy_sum[p] += e;
+                    holder_count[p] += 1;
+                }
+            }
         }
         for ch in 0..MEME_CHANNELS {
             sum[ch] += world.actions[j].broadcast_intent[ch];
@@ -529,6 +617,11 @@ fn scan_neighbor_memes(
         max_neighbour_practice_variant,
         best_tech,
         best_tech_err,
+        best_model,
+        holder_energy_sum,
+        holder_count,
+        neighbour_energy_sum,
+        neighbour_count,
     }
 }
 

@@ -78,8 +78,10 @@ fn affect_scenario_survives_save_load_step() {
 // Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): the new serialized
 // CodexState affect-detector fields grow every scenario's state-hash layout (and the
 // detectors run flag-on here), so all ticks — including tick 0 — move.
+// Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+// World.payoff_biased_learning layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xb25f4eb40cb89604), (100, 0x245e71b24fc4e3db), (300, 0xf0f0f110a73291c8)];
+    &[(0, 0xf4b2b4dc1cc2a38a), (100, 0x88efbe735c1a66c5), (300, 0x0ee0d9c5d6d9f540)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -187,8 +189,10 @@ fn affect_threat_emits_mass_fright() {
 // Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): new serialized
 // CodexState detector fields grow the state-hash layout for this flag-on scenario
 // (detectors run), so all ticks move.
+// Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+// World.payoff_biased_learning layout growth only (off here).
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xd18740aef4ef494c), (100, 0x6ae7fe513e0c8b55), (300, 0x955f757a822e90f7)];
+    &[(0, 0x53dbd503cc79491a), (100, 0x6ca28cdac0ecade1), (300, 0x83a1f4bc923dfe65)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

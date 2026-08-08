@@ -66,8 +66,10 @@ fn kin_cluster_raises_care_and_sharing() {
 // Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): new serialized
 // CodexState detector fields grow the state-hash layout (detectors run flag-on),
 // so all ticks move.
+// Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+// World.payoff_biased_learning layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xbeb11724581230c3), (100, 0x0018f80a6396b3bc), (300, 0x663d384e0c4fa4fa)];
+    &[(0, 0xf4ea748934d49bff), (100, 0x2c430bd6aa9183b0), (300, 0xbaf2d09f2fc9e6e2)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

@@ -1088,7 +1088,9 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // CodexState affect-detector fields ({frenzy_active, rage_streak,
     // rage_active, fear_count_history, cascade_active, grief_active}); affect_enabled
     // off in this scenario ⇒ detectors never fire — layout growth only.
-    &[(0, 0x3847fffa1211be71), (100, 0xbe65e10e9ebceed7), (300, 0x75d4288a841dba48)];
+    // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+    // World.payoff_biased_learning layout growth only (off here).
+    &[(0, 0x8cde86cdda9202cd), (100, 0x58e1d18de622c8f3), (300, 0xc2aec1a6e0466136)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

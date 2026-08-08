@@ -111,7 +111,9 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // CodexState affect-detector fields ({frenzy_active, rage_streak,
     // rage_active, fear_count_history, cascade_active, grief_active}); affect_enabled
     // off in this scenario ⇒ detectors never fire — layout growth only.
-    &[(0, 0x17059ba9dea8529a), (100, 0x8f5ba1f0dc208a63), (300, 0x67032f0377569454)];
+    // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+    // World.payoff_biased_learning layout growth only (off here).
+    &[(0, 0xda7dae4272a0e0bc), (100, 0x69e0402d29b451d7), (300, 0xeb351759143a8a44)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

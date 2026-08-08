@@ -142,6 +142,15 @@ pub struct Scenario {
     /// `docs/superpowers/specs/2026-08-03-o1-exclusion-findings.md`.
     #[serde(default = "default_true")]
     pub practices_enabled: bool,
+    /// Opt-in O2 payoff-biased social learning: cultural transmission copies
+    /// from the highest-energy Communicator neighbour (model bias) and
+    /// declines traits whose local holders are lower-energy than non-holders
+    /// (content bias), so maladaptive practices are rejected while they still
+    /// exist in the world. Off by default ⇒ byte-identical payoff-blind
+    /// transmission. See
+    /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
+    #[serde(default)]
+    pub payoff_biased_learning: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -667,6 +676,7 @@ impl Scenario {
         w.agents.track_livestock = self.domestication_enabled;
         w.knowledge_enabled = self.knowledge_enabled;
         w.practices_enabled = self.practices_enabled;
+        w.payoff_biased_learning = self.payoff_biased_learning;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);

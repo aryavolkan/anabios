@@ -129,7 +129,10 @@ use crate::world::World;
 ///      scenario), so they never fire there — behavior byte-identical; only
 ///      the serialized layout grew. (The affect columns themselves were added
 ///      in M-A.)
-pub const FORMAT_VERSION: u32 = 29;
+/// v30: O2 payoff-biased learning — World.payoff_biased_learning flag. Off in
+///      every golden scenario ⇒ transmission is byte-identical; only the
+///      serialized layout grew (stacked on v29's affect-observability layout).
+pub const FORMAT_VERSION: u32 = 30;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
