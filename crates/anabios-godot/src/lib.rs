@@ -864,6 +864,10 @@ impl Simulation {
                 let (r, g, b) = river_tint((c.r, c.g, c.b), cell.river_flow);
                 c = Color::from_rgb(r, g, b);
             }
+            // Pack real elevation into alpha for the terrain shader's hillshade
+            // (C2). The shader forces opaque output, so alpha never affects
+            // rendering — it is a free data channel. RGB is unchanged.
+            c.a = cell.elevation.clamp(0.0, 1.0);
             out.push(c);
         }
         out
