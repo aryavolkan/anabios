@@ -1,0 +1,7 @@
+direction,seed,mutant,f500,mutant_final_count,final_tick,resident_final_count,world_zero_at,invasion_fitness_abs,invasion_fitness_share
+cul-into-aso,318,cultural,0.0077,0,20000,0,15000,-1.56775,-1.42357
+cul-into-aso,1,cultural,0.0094,0,20000,2997,,-0.97296,-0.97346
+cul-into-aso,2,cultural,0.0084,0,20000,2997,,-0.80472,-0.80472
+aso-into-cul,318,asocial,0.0212,0,20000,0,7500,-0.71107,-0.33525
+aso-into-cul,1,asocial,0.0139,0,20000,84,,-1.62905,-1.18279
+aso-into-cul,2,asocial,0.0154,0,20000,0,8500,-0.68680,-0.30757
