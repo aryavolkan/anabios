@@ -857,6 +857,17 @@ impl Simulation {
             if pol > 0.0 {
                 c = c.lerp(Color::from_rgb(0.32, 0.28, 0.24), (pol * 0.55) as f64);
             }
+            // Rivers (river_flow > 0) are a passable moisture field, not Water
+            // terrain, so they'd render as ordinary wet land. Tint them toward a
+            // river-blue that trips the terrain shader's is_water() shimmer.
+            if cell.river_flow > 0.0 {
+                let (r, g, b) = river_tint((c.r, c.g, c.b), cell.river_flow);
+                c = Color::from_rgb(r, g, b);
+            }
+            // Pack real elevation into alpha for the terrain shader's hillshade
+            // (C2). The shader forces opaque output, so alpha never affects
+            // rendering — it is a free data channel. RGB is unchanged.
+            c.a = cell.elevation.clamp(0.0, 1.0);
             out.push(c);
         }
         out
@@ -1336,6 +1347,30 @@ fn dialect_hue(meme: &[f32]) -> f32 {
     (acc / wsum).rem_euclid(1.0)
 }
 
+/// River presentation color and blend curve (viewer-only; see
+/// docs/superpowers/specs/2026-08-07-viewer-rivers-design.md). Brighter/cyan-er
+/// than the ocean blue (0.09, 0.19, 0.44) so rivers read against land and sea.
+const RIVER_BLUE: (f32, f32, f32) = (0.18, 0.42, 0.72);
+/// Blend floor so even low-flow creeks read as water; gain adds blue with
+/// `sqrt(flow)` so trunk rivers go fully blue. `river_flow` is normalized
+/// (`accum/max_accum`), hence the floor + sqrt rather than a linear ramp.
+const RIVER_MIX_MIN: f32 = 0.55;
+const RIVER_MIX_GAIN: f32 = 0.45;
+const RIVER_MIX_MAX: f32 = 1.0;
+
+/// Blend a cell color toward `RIVER_BLUE` by an amount that rises with
+/// `river_flow`. `river_flow <= 0.0` returns `rgb` unchanged (non-river cells
+/// are identical to before). Pure (no `godot` types) so it is unit-testable.
+fn river_tint(rgb: (f32, f32, f32), river_flow: f32) -> (f32, f32, f32) {
+    if river_flow <= 0.0 {
+        return rgb;
+    }
+    let mix =
+        (RIVER_MIX_MIN + RIVER_MIX_GAIN * river_flow.max(0.0).sqrt()).clamp(0.0, RIVER_MIX_MAX);
+    let lerp = |a: f32, b: f32| a + (b - a) * mix;
+    (lerp(rgb.0, RIVER_BLUE.0), lerp(rgb.1, RIVER_BLUE.1), lerp(rgb.2, RIVER_BLUE.2))
+}
+
 fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
     let h6 = (h.rem_euclid(1.0)) * 6.0;
     let i = h6.floor() as i32;
@@ -1495,6 +1530,34 @@ fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn river_tint_zero_flow_is_identity() {
+        let grass = (0.21_f32, 0.44, 0.19);
+        assert_eq!(river_tint(grass, 0.0), grass);
+        assert_eq!(river_tint(grass, -1.0), grass); // guard: no NaN from sqrt(<0)
+    }
+
+    #[test]
+    fn river_tint_is_blue_dominant_and_monotonic() {
+        let grass = (0.21_f32, 0.44, 0.19);
+        let (r, g, b) = river_tint(grass, 0.3);
+        assert!(b > grass.2, "river must raise the blue channel");
+        assert!(b > r && b > g, "river cell must be blue-dominant to trip is_water()");
+        let (_, _, b_lo) = river_tint(grass, 0.1);
+        let (_, _, b_hi) = river_tint(grass, 0.9);
+        assert!(b_hi >= b_lo, "higher flow must be at least as blue");
+    }
+
+    #[test]
+    fn river_tint_full_flow_satisfies_shader_is_water() {
+        // Mirror game/shaders/terrain.gdshader is_water() on the strongest river.
+        let (r, g, b) = river_tint((0.21, 0.44, 0.19), 1.0);
+        assert!(
+            b > r + 0.05 && b > g + 0.05 && b > 0.20 && r.max(g) < 0.45,
+            "full-flow river must satisfy is_water(): got ({r}, {g}, {b})"
+        );
+    }
 
     #[test]
     fn sample_now_is_bounded_and_nonneg() {

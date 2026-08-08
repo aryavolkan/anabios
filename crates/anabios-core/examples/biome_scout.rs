@@ -13,8 +13,9 @@
 //!   args: [seeds_to_scan]
 
 use anabios_core::biome::{
-    BiomeCell, BiomeField, TerrainType, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT,
+    BiomeCell, BiomeField, ClimateParams, TerrainType, BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT,
 };
+use std::io::Write;
 
 /// Half-width (in cells) of the window used to find each biome's densest patch.
 /// At the default 128-grid / 1024-world this is a ~64-unit radius, matching a
@@ -80,6 +81,42 @@ fn densest_patch(
     (best_col, best_row, best_hits)
 }
 
+fn terrain_rgb(t: TerrainType) -> (u8, u8, u8) {
+    match t {
+        TerrainType::Water => (23, 49, 112),
+        TerrainType::Grass => (54, 112, 48),
+        TerrainType::Forest => (18, 66, 28),
+        TerrainType::Desert => (173, 148, 84),
+        TerrainType::Rock => (107, 102, 115),
+        TerrainType::Savanna => (184, 168, 92),
+        TerrainType::Rainforest => (15, 87, 41),
+        TerrainType::Taiga => (41, 87, 66),
+        TerrainType::Tundra => (158, 168, 158),
+    }
+}
+
+/// Write a P6 PPM: terrain color, dimmed/brightened by elevation, rivers blue.
+fn write_ppm(path: &str, f: &BiomeField) -> std::io::Result<()> {
+    let res = f.res;
+    let mut buf = Vec::with_capacity(res * res * 3 + 32);
+    write!(buf, "P6\n{res} {res}\n255\n")?;
+    for c in &f.cells {
+        let (mut r, mut g, mut b) = terrain_rgb(c.terrain);
+        // Relief shading: scale by 0.6..1.15 with elevation.
+        let s = 0.6 + 0.55 * c.elevation;
+        r = (r as f32 * s).min(255.0) as u8;
+        g = (g as f32 * s).min(255.0) as u8;
+        b = (b as f32 * s).min(255.0) as u8;
+        if c.river_flow > 0.0 {
+            r = 40;
+            g = 90;
+            b = 200;
+        }
+        buf.extend_from_slice(&[r, g, b]);
+    }
+    std::fs::write(path, buf)
+}
+
 fn terrain_char(t: TerrainType) -> char {
     match t {
         TerrainType::Water => '~',
@@ -109,6 +146,33 @@ fn ascii_map(field: &BiomeField, cols: usize, rows: usize) {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(pos) = args.iter().position(|a| a == "--ppm") {
+        let path = args
+            .get(pos + 1)
+            .filter(|a| !a.starts_with("--"))
+            .cloned()
+            .unwrap_or_else(|| "world.ppm".into());
+        let seed: u64 = args
+            .iter()
+            .position(|a| a == "--seed")
+            .and_then(|i| args.get(i + 1))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(7);
+        let climate = ClimateParams {
+            continentality: 0.9,
+            mountain_uplift: 0.6,
+            rain_shadow: 0.4,
+            river_threshold: 150.0,
+            sea_level: 0.45,
+            ..Default::default()
+        };
+        let field = BiomeField::generate_with(seed, 512, 4096.0, &climate);
+        write_ppm(&path, &field).expect("write ppm");
+        eprintln!("wrote {path}");
+        return;
+    }
+
     let scan: u64 = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(64);
 
     let mut scores: Vec<Score> = (0..scan.max(1)).map(score_seed).collect();
