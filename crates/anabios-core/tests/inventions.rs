@@ -1090,7 +1090,7 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // off in this scenario ⇒ detectors never fire — layout growth only.
     // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
     // World.payoff_biased_learning layout growth only (off here).
-    &[(0, 0x8cde86cdda9202cd), (100, 0x58e1d18de622c8f3), (300, 0xc2aec1a6e0466136)];
+    &[(0, 0x1e39dd3efd50f3e1), (100, 0x4d17b16a9bf2a5a7), (300, 0x5aeaf40d874733a0)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

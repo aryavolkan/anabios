@@ -26,6 +26,7 @@ struct RunSummary {
     emergence_score: f64,
     novel_events: u64,
     coverage: f64,
+    total_trades: u64,
     novel_types: Vec<&'static str>,
 }
 
@@ -130,6 +131,7 @@ fn run_one(
         emergence_score: score::score(&counts, table),
         novel_events: novel_types.len() as u64,
         coverage: score::coverage(&counts),
+        total_trades: world.total_trades,
         novel_types,
         counts,
     })
@@ -179,7 +181,7 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
     for name in score::ALL_EVENT_NAMES {
         write!(f, ",{name}")?;
     }
-    writeln!(f, ",emergence_score,novel_events,coverage,novel_types")?;
+    writeln!(f, ",emergence_score,novel_events,coverage,total_trades,novel_types")?;
     for r in runs {
         write!(
             f,
@@ -190,7 +192,11 @@ fn write_summary_csv(out_dir: &Path, runs: &[RunSummary]) -> Result<()> {
             write!(f, ",{}", r.counts.get(name).copied().unwrap_or(0))?;
         }
         let novel = r.novel_types.join(";");
-        writeln!(f, ",{:.3},{},{:.3},{}", r.emergence_score, r.novel_events, r.coverage, novel)?;
+        writeln!(
+            f,
+            ",{:.3},{},{:.3},{},{}",
+            r.emergence_score, r.novel_events, r.coverage, r.total_trades, novel
+        )?;
     }
     Ok(())
 }

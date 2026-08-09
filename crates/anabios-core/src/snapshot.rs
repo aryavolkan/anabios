@@ -132,7 +132,10 @@ use crate::world::World;
 /// v30: O2 payoff-biased learning — World.payoff_biased_learning flag. Off in
 ///      every golden scenario ⇒ transmission is byte-identical; only the
 ///      serialized layout grew (stacked on v29's affect-observability layout).
-pub const FORMAT_VERSION: u32 = 30;
+/// v31: unilateral trade — World.unilateral_trade flag (surplus-gift fallback
+///      in `interact::trade_pass`). Off in every golden scenario ⇒
+///      byte-identical; only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 31;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

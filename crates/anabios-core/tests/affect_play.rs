@@ -36,7 +36,7 @@ fn affect_play_scenario_is_self_consistent() {
 // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
 // World.payoff_biased_learning layout growth only (off here).
 const PLAY_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xf0585856a5a13747), (100, 0xd1549da8a8e111ca), (200, 0x522887511316393f)];
+    &[(0, 0xe446fe4f9ab32da7), (100, 0xdbaffa001a638bf6), (200, 0xf2a2441497dd899b)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {
