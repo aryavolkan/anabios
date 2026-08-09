@@ -102,7 +102,7 @@ the counter-mechanism.
 | # | Item | Detail | Done when |
 |---|---|---|---|
 | 2.4 | Scorecard-driven sweeps | Weekly archive-weighted sweep (`--archive runs/corpus-e1`); triage `<out>/novel/`; regenerate corpus **after** any new codex event lands | Weekly shortlist of novel runs worth viewer inspection |
-| 2.5 | OoA climb — close out | Emergent era-3 is dead at grand scale (findings). Remaining work: record the seeding decision in `docs/showcase-plan.md` with the evidence table | Decision recorded; saga keeps `starting_inventions` |
+| 2.5 | OoA climb — close out — **done 2026-08-07** | Emergent era-3 is dead at grand scale (findings). Decision recorded in `docs/showcase-plan.md` §2 ("Decision record 2026-08-07"): evidence table consolidated, saga keeps `starting_inventions`, O-track corroboration linked, reopen conditions stated (ecological-stage fix, not discovery/IQ math) | Decision recorded; saga keeps `starting_inventions` |
 
 ### 4.3 Economy
 
