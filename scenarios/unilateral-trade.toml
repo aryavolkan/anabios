@@ -1,0 +1,58 @@
+# Unilateral-exchange trade economy: a `biome-trade` clone with the O2.6
+# freeze fix on. Two opt-in flags, one variable apart from the freeze:
+#   conserve_goods_on_death = true  (supply: goods survive death-churn)
+#   unilateral_trade = true         (primitive: surplus gifts when barter fails)
+# Baseline `biome-trade` freezes permanently at ~t9-10k (total_trades plateaus,
+# inventories empty, hoarded supply immobile under bilateral barter). The
+# integration test `unilateral_trade_stays_alive_past_freeze` (tests/trade.rs)
+# asserts nonzero trade in the t10000-12000 window, past the freeze tick.
+name = "unilateral-trade"
+seed = 20260719
+resources_enabled = true
+# O2.6 trade-freeze fix: keep goods in the population across death AND
+# break the both-must-give barter constraint (surplus gifts). See
+# docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md.
+conserve_goods_on_death = true
+unilateral_trade = true
+living_biome = true
+max_population = 2000
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 320
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4

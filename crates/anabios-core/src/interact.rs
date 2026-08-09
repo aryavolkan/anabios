@@ -478,10 +478,42 @@ fn pick_swap(
     best
 }
 
+/// Choose a unilateral surplus gift from A to B: A gives one `TRADE_UNIT` of
+/// a good it holds above `STOCK_TARGET + TRADE_UNIT` — so giving costs A
+/// nothing in `want` terms (its slot stays at/above target) — to B, who still
+/// wants that good. This is the O2.6 escape from the measured trade freeze:
+/// bilateral `pick_swap` self-terminates once holdings equalize or starve
+/// (both parties must spare a `TRADE_UNIT`), but a surplus gift only needs a
+/// giver above target and a receiver below it, so harvest-driven asymmetry
+/// keeps exchange alive. Picks the good maximizing B's deficit reduction;
+/// ties keep the lowest index. Deterministic, no RNG.
+fn pick_gift(
+    inv_a: &[f32; crate::resource::GOOD_COUNT],
+    inv_b: &[f32; crate::resource::GOOD_COUNT],
+) -> Option<usize> {
+    use crate::resource::{want, STOCK_TARGET, TRADE_UNIT};
+    let mut best: Option<usize> = None;
+    let mut best_want = 0.0f32;
+    for (give, &held) in inv_a.iter().enumerate() {
+        if held < STOCK_TARGET + TRADE_UNIT {
+            continue; // giving would cost A want — not surplus
+        }
+        let b_want = want(inv_b, give);
+        if b_want > best_want {
+            best_want = b_want;
+            best = Some(give);
+        }
+    }
+    best
+}
+
 /// Trade: each alive agent A (ascending) trades one `TRADE_UNIT` with its
 /// nearest OTHER-species neighbor B (from the sensor register), if a mutually-
 /// beneficial complementary swap exists and B is within `TRADE_RANGE`.
 /// Conserves total units of each good. No RNG.
+///
+/// With `World.unilateral_trade` on, a failed bilateral swap falls back to a
+/// one-sided surplus gift (`pick_gift`) — same conservation, same bookkeeping.
 fn trade_pass(world: &mut World, alive_ids: &[u32]) {
     use crate::resource::TRADE_UNIT;
     for &id in alive_ids {
@@ -499,14 +531,27 @@ fn trade_pass(world: &mut World, alive_ids: &[u32]) {
         }
         let inv_a = world.agents.inventory[i];
         let inv_b = world.agents.inventory[t];
-        let Some((give, recv)) = pick_swap(&inv_a, &inv_b) else {
-            continue;
+        // The goods moving A→B and B→A; a bilateral swap moves two, a
+        // unilateral gift moves one (recv == give, skipped below).
+        let (give, recv) = match pick_swap(&inv_a, &inv_b) {
+            Some(swap) => swap,
+            None => {
+                if !world.unilateral_trade {
+                    continue;
+                }
+                match pick_gift(&inv_a, &inv_b) {
+                    Some(give) => (give, give),
+                    None => continue,
+                }
+            }
         };
-        // Execute the swap (totals conserved: each side's sum is unchanged).
+        // Execute the transfer (totals conserved: each good's sum is unchanged).
         world.agents.inventory[i][give] -= TRADE_UNIT;
         world.agents.inventory[t][give] += TRADE_UNIT;
-        world.agents.inventory[t][recv] -= TRADE_UNIT;
-        world.agents.inventory[i][recv] += TRADE_UNIT;
+        if recv != give {
+            world.agents.inventory[t][recv] -= TRADE_UNIT;
+            world.agents.inventory[i][recv] += TRADE_UNIT;
+        }
         world.total_trades += 1;
         // E8 market field: the swap deposits density at the initiator's cell.
         crate::settlement::market_deposit(world, world.agents.position[i]);
@@ -596,6 +641,78 @@ mod tests {
         let a = [0.0f32; GOOD_COUNT];
         let b = [0.0f32; GOOD_COUNT];
         assert!(pick_swap(&a, &b).is_none());
+    }
+
+    #[test]
+    fn pick_gift_moves_surplus_to_a_wanter_at_zero_giver_cost() {
+        use crate::resource::{Good, GOOD_COUNT, STOCK_TARGET, TRADE_UNIT};
+        // A is hoarding Salt above STOCK_TARGET + TRADE_UNIT (the frozen
+        // state's conserve-on-death concentrator); B holds nothing and wants
+        // everything. No bilateral swap exists (B cannot give), but a surplus
+        // gift does — the freeze escape.
+        let mut a = [0.0f32; GOOD_COUNT];
+        let mut b = [0.0f32; GOOD_COUNT];
+        a[Good::Salt.index()] = STOCK_TARGET + TRADE_UNIT + 1.0;
+        assert!(pick_swap(&a, &b).is_none(), "bilateral barter is stuck here");
+        assert_eq!(pick_gift(&a, &b), Some(Good::Salt.index()));
+
+        // Gifts the good B wants MOST when B has partial baskets.
+        b[Good::Salt.index()] = 1.5; // want 0.5
+        a[Good::Obsidian.index()] = STOCK_TARGET + TRADE_UNIT + 1.0; // B wants 2.0
+        assert_eq!(pick_gift(&a, &b), Some(Good::Obsidian.index()));
+
+        // No surplus (giving would cost A want) → no gift.
+        let c = [STOCK_TARGET; GOOD_COUNT];
+        let d = [0.0f32; GOOD_COUNT];
+        assert_eq!(pick_gift(&c, &d), None);
+        // B wants nothing → no gift.
+        let e = [STOCK_TARGET; GOOD_COUNT];
+        let f = [STOCK_TARGET + TRADE_UNIT + 1.0; GOOD_COUNT];
+        assert_eq!(pick_gift(&f, &e), None);
+    }
+
+    #[test]
+    fn trade_pass_gifts_unilaterally_only_with_flag_on() {
+        use crate::resource::{Good, STOCK_TARGET, TRADE_UNIT};
+        for flag in [false, true] {
+            let mut w = World::new(5);
+            w.resources_enabled = true;
+            w.unilateral_trade = flag;
+            let pos = Vec2::new(300.0, 300.0);
+            let a = w.spawn_agent(pos, Genome::neutral());
+            let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+            w.agents.species_id[b as usize] = 1;
+            // Hoarder vs empty: bilateral pick_swap can never fire.
+            w.agents.inventory[a as usize][Good::Salt.index()] = STOCK_TARGET + TRADE_UNIT + 2.0;
+
+            w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+            w.resize_scratch();
+            crate::sense::sense_all(
+                &w.agents,
+                &w.biome,
+                &w.pheromones,
+                &w.spatial,
+                &w.codex.hostility,
+                &mut w.sensors,
+                w.world_size,
+                false,
+            );
+            let alive: Vec<u32> = w.agents.iter_alive().collect();
+            trade_pass(&mut w, &alive);
+
+            let got = w.agents.inventory[b as usize][Good::Salt.index()];
+            if flag {
+                assert!(
+                    got > 0.0,
+                    "flag on: the hoarder gifts surplus Salt to the empty neighbour"
+                );
+                // Total Salt is conserved across the pair.
+                let total: f32 = (0..2).map(|id| w.agents.inventory[id][Good::Salt.index()]).sum();
+                assert!((total - (STOCK_TARGET + TRADE_UNIT + 2.0)).abs() < 1e-6);
+            } else {
+                assert_eq!(got, 0.0, "flag off: no bilateral swap exists, nothing moves");
+            }
+        }
     }
 
     #[test]

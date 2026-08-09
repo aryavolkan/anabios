@@ -108,7 +108,7 @@ the counter-mechanism.
 
 | # | Item | Detail | Done when |
 |---|---|---|---|
-| 2.6 | Trade-economy redesign | Supply-side fix: conserve goods on death (shipped as opt-in mechanism in #103) is *not* the freeze fix — the freeze is a structural barter equilibrium. Candidates: sustain harvest access at scale, temper churn dilution. Plan: `plans/2026-08-01-trade-economy-redesign.md` | `biome-trade`/`geographic-trade` sustain nonzero trade past the freeze tick behind an opt-in flag, determinism rehashed |
+| 2.6 | Trade-economy redesign — **done 2026-08-07** | Per the corrected diagnosis (freeze is the bilateral-barter primitive + supply churn), shipped `unilateral_trade` (surplus-gift fallback when `pick_swap` fails) + `conserve_goods_on_death` together on `scenarios/unilateral-trade.toml`; `FORMAT_VERSION` 31, layout-only rehash. Measured on the pinned seed: baseline freezes after t10k (54 trades in the t10–12k window, 1 in t18–20k); the fix sustains **52,261** (t10–12k) and 2,851 (t18–20k) — data `docs/superpowers/data/trade-o26-unilateral-windows.csv`. Sweep CSV gains the `total_trades` column (canonical order `…coverage,total_trades,novel_types`) so the freeze is visible in sweeps | `biome-trade`/`geographic-trade` sustain nonzero trade past the freeze tick behind an opt-in flag, determinism rehashed |
 
 **Phase-2 exit:** flagship story is either emergent or honestly documented;
 new mechanics chosen by scorecard evidence. Gene-culture experiment is
