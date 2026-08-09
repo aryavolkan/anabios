@@ -74,9 +74,10 @@ gated, never on ordinary pushes:
 
 - **Publish trigger:** push a `v*` tag (e.g. `v0.5.0`), or run the workflow
   manually from the Actions tab (`workflow_dispatch`).
-- **Hosted URL:** `https://<owner>.github.io/<repo>/` (placeholder — filled in
-  once the first deploy has run; check the Actions run's environment URL or
-  the repo's Pages settings for the real address).
+- **Hosted URL:** https://aryavolkan.github.io/anabios/ — live since
+  2026-08-09 (first `workflow_dispatch` deploy, run 31332094901; the logged
+  `state_hash=0x71f277cb35441357` matches a local release `record` of the
+  same scenario/seed bit-for-bit).
 - The workflow rebuilds `anabios-headless` in release and regenerates
   `showcase/replay.js` from `scenarios/out-of-africa-saga.toml` at seed `318`
   (see "Regenerate the replay" above) before uploading `showcase/` as the

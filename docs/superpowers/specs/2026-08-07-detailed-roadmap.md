@@ -70,7 +70,7 @@ Plan: `plans/2026-08-01-web-showcase-and-capture.md`. Track V/S/T.
 
 | # | Item | Detail | Done when |
 |---|---|---|---|
-| 1.1 | Host the web replay player | Deploy `showcase/` (settlements, ghosts, trade lanes, poses already render, #96–#98); saga deck as landing experience | Shareable URL plays saga end-to-end, no console errors, desktop+mobile |
+| 1.1 | Host the web replay player — **done 2026-08-09** | Deployed: https://aryavolkan.github.io/anabios/ plays the saga deck (recorded from source at publish time; `state_hash` receipt verified bit-identical against a local release `record`) | Shareable URL plays saga end-to-end, no console errors, desktop+mobile |
 | 1.2 | Deck authoring pass | 2–3 curated decks beyond smoke: predator-prey collapse, dialect/meme sweep, invention race; each pinned to scenario+seed and listed in the player menu | Each deck regenerates from a one-line command |
 | 1.3 | Showcase-director cinematic pass | Fold tier-2/3 effects (embers, firelight, climate grade, footstep trails) into `game/showcase/*.json` beat lists | Headless capture produces a clean cinematic with no manual camera work |
 | 1.4 | Capture pipeline hardening | One command (`scripts/emergence.sh` or `make showcase`) regenerates every asset: viewer stills (gallery), web-deck JSON, MP4 | Documented; assets reproducible from pinned scenarios |
