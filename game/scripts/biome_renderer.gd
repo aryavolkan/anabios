@@ -72,6 +72,7 @@ func _setup(res: int) -> void:
 	# seamless world coordinates across the 9 wrap tiles.
 	if _terrain_mat != null:
 		_terrain_mat.set_shader_parameter("world_size", world)
+		_terrain_mat.set_shader_parameter("sea_level", sim.sea_level())
 	# Neighbor tiles are children (they inherit the wrap scale), each offset by
 	# whole worlds in biome-pixel units.
 	var i := 0

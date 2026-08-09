@@ -408,6 +408,16 @@ impl Simulation {
         self.inner.as_ref().map(|w| w.world_size).unwrap_or(anabios_core::biome::WORLD_SIZE_DEFAULT)
     }
 
+    /// Viewer-derived sea level (max water-cell elevation) for the terrain
+    /// shader's depth shading. Pure read; not simulation state.
+    #[func]
+    fn sea_level(&self) -> f32 {
+        self.inner
+            .as_ref()
+            .map(|w| water_line(&w.biome.cells))
+            .unwrap_or(anabios_core::biome::SEA_LEVEL)
+    }
+
     /// Return alive-agent positions as a Vector2 array, in ascending
     /// agent-id order. Dead agents are skipped.
     #[func]
@@ -1381,6 +1391,26 @@ fn dialect_hue(meme: &[f32]) -> f32 {
     (acc / wsum).rem_euclid(1.0)
 }
 
+/// Effective sea level for the viewer, DERIVED from the elevation field (no core
+/// storage): the highest elevation still classified as water. `classify` makes a
+/// cell Water iff `elevation < sea_level`, so the max water elevation is the tight
+/// lower bound on `sea_level`, and every land/rock cell sits at or above it.
+/// Falls back to `SEA_LEVEL` for an all-land field. Pure (no `godot` types) —
+/// unit-tested.
+fn water_line(cells: &[anabios_core::biome::BiomeCell]) -> f32 {
+    let mut max_water = f32::MIN;
+    for cell in cells {
+        if cell.terrain == anabios_core::biome::TerrainType::Water && cell.elevation > max_water {
+            max_water = cell.elevation;
+        }
+    }
+    if max_water == f32::MIN {
+        anabios_core::biome::SEA_LEVEL
+    } else {
+        max_water
+    }
+}
+
 /// River presentation color and blend curve (viewer-only; see
 /// docs/superpowers/specs/2026-08-07-viewer-rivers-design.md). Brighter/cyan-er
 /// than the ocean blue (0.09, 0.19, 0.44) so rivers read against land and sea.
@@ -1564,6 +1594,31 @@ fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn water_line_separates_sea_from_land() {
+        use anabios_core::biome::{BiomeField, ClimateParams, TerrainType, SEA_LEVEL};
+        // Empty field → SEA_LEVEL fallback (all-land / no-water edge case).
+        assert_eq!(water_line(&[]), SEA_LEVEL);
+
+        // Continental config with real oceans.
+        let climate = ClimateParams { continentality: 0.9, sea_level: 0.45, ..Default::default() };
+        let f = BiomeField::generate_with(7, 128, 4096.0, &climate);
+        let wl = water_line(&f.cells);
+        assert!(wl > 0.0 && wl <= climate.sea_level + 1e-6, "water_line in (0, sea_level]: {wl}");
+        for c in &f.cells {
+            if c.terrain == TerrainType::Water {
+                assert!(c.elevation <= wl + 1e-6, "water cell above water_line");
+            } else {
+                assert!(c.elevation >= wl - 1e-6, "land/rock cell below water_line");
+            }
+        }
+
+        // Default world: water_line ≈ SEA_LEVEL (shallowest water sits just below it).
+        let d = BiomeField::generate(1, 96, 1024.0);
+        let wld = water_line(&d.cells);
+        assert!((wld - SEA_LEVEL).abs() < 0.05, "default water_line near SEA_LEVEL: {wld}");
+    }
 
     #[test]
     fn river_tint_zero_flow_is_identity() {
