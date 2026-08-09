@@ -66,7 +66,7 @@ crowding→`iq_enrich_acc` path.
 
 ## Dependencies
 - Requires **M-A..M-D merged**. M-E consumes, from the interface contract
-  (`docs/superpowers/plans/2026-08-02-affect-layer-interface-contract.md`):
+  (`docs/superpowers/plans/archive/2026-08-02-affect-layer-interface-contract.md`):
   - `affect.rs`: constants `AFFECT_SYSTEMS = 7`, `PLAY = 6`, `FEAR = 1`,
     `LAMBDA_DEFAULT = 0.8`; the `affect: Vec<AffectState>` column
     (`agent.rs`, serialized); `affect::develop_all(world)` (M-A);

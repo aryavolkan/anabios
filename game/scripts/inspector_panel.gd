@@ -1,6 +1,7 @@
 extends PanelContainer
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
+const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 
 # Cap the module names listed so a module-heavy agent doesn't grow the panel
 # past its slot into the species panel below it.
@@ -79,12 +80,28 @@ func _process(_delta: float) -> void:
 	# Avatar: pick the hominin from the species id, wash the chip with a stable
 	# per-species hue so a lineage keeps a recognizable colour.
 	var sp: int = int(info["species_id"])
-	var ape: int = ApeSprites.ape_for_species(sp)
-	_avatar.texture = _ape_tex[ape]
-	_hue.color = Color.from_hsv(fmod(float(sp) * 0.61803, 1.0), 0.5, 0.95)
-	_ident.text = (
-		"%s\nsp %d · lin %d · id %d" % [ApeSprites.NAMES[ape], sp, info["lineage_id"], pinned_id]
+	var diet: float = info.get("diet_carnivory", 0.5)
+	var size: float = info.get("size", 1.0)
+	var live: bool = (
+		bool(info.get("domestication_enabled", false)) and int(info.get("livestock_of", -1)) != -1
 	)
+	var arch: int = MammalSprites.archetype_for(diet, size, live)
+	_hue.color = Color.from_hsv(fmod(float(sp) * 0.61803, 1.0), 0.5, 0.95)
+	if arch == MammalSprites.PRIMATE:
+		var ape: int = MammalSprites.primate_skin_for(sp)
+		_avatar.texture = _ape_tex[ape]
+		_ident.text = (
+			"%s\nsp %d · lin %d · id %d"
+			% [ApeSprites.NAMES[ape], sp, info["lineage_id"], pinned_id]
+		)
+	else:
+		# Quadruped archetypes: name by archetype. A per-archetype inspector
+		# portrait is out of scope; reuse a neutral placeholder avatar.
+		_avatar.texture = _ape_tex[0]
+		_ident.text = (
+			"%s\nsp %d · lin %d · id %d"
+			% [MammalSprites.NAMES[arch], sp, info["lineage_id"], pinned_id]
+		)
 	# Cap the module list so a module-heavy agent's wrapped names don't grow the
 	# panel down into the species panel below (the total count is on the line
 	# above). The full count is "module_count".

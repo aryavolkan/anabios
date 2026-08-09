@@ -1,0 +1,3 @@
+invasion_fitness mutant=cultural r=0.26183 INVADES
+invasion_fitness_share mutant=cultural r=0.26166 INVADES
+ledger written: docs/superpowers/data/o2/o2a/confirm-cogOFF-4.csv

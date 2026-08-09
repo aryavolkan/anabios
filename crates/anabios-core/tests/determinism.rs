@@ -265,12 +265,10 @@ const GOLDEN: &[(u64, u64)] =
     // CodexState affect-detector fields ({frenzy_active, rage_streak,
     // rage_active, fear_count_history, cascade_active, grief_active}); affect_enabled
     // off in minimal ⇒ detectors never fire — layout growth only.
-    // Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
-    // BiomeCell.{elevation, river_flow} added; elevation is already computed
-    // during generation and is now merely stored, river_flow is 0.0 everywhere
-    // until hydrology lands — trajectory byte-identical, only the serialized
-    // layout grew.
-    &[(0, 0x7d66226166075781), (100, 0xa7ea5b7ba3f12ff2), (1000, 0xa23500dfd92bdd06)];
+    // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+    // added World.payoff_biased_learning flag; off in minimal ⇒ transmission
+    // byte-identical — layout growth only, so all hashes moved once.
+    &[(0, 0x9cf84de0a7b43781), (100, 0x7b583ec35250a2e4), (1000, 0x9485c5058f880c6a)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

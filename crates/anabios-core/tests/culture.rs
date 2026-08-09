@@ -111,6 +111,114 @@ fn meme_l2_is_zero_for_equal_positive_for_divergent() {
     assert!(meme_l2(&a, &c) > 0.5);
 }
 
+// --- O2 payoff-biased social learning (opt-in flag) -------------------------
+
+/// A receiver + Communicator neighbours with hand-set energies and meme
+/// levels, ready for a direct `culture_step`. Returns (world, receiver id).
+fn payoff_world(seed: u64, flag: bool) -> (World, u32) {
+    let mut w = World::new(seed);
+    w.cognition_enabled = true;
+    w.payoff_biased_learning = flag;
+    let receiver = w.spawn_agent(Vec2::new(501.0, 500.0), Genome::neutral());
+    w.agents.modules[receiver as usize] = communicator_kit();
+    w.agents.iq[receiver as usize] = 0.5;
+    w.agents.energy[receiver as usize] = 50.0;
+    let cap = w.agents.capacity();
+    w.actions.resize(cap, Default::default());
+    (w, receiver)
+}
+
+fn add_neighbour(w: &mut World, x: f32, y: f32, energy: f32, practice: f32, skill: f32) -> u32 {
+    let id = w.spawn_agent(Vec2::new(x, y), Genome::neutral());
+    w.agents.modules[id as usize] = communicator_kit();
+    w.agents.energy[id as usize] = energy;
+    w.agents.meme_vector[id as usize][anabios_core::practice::channel(0)] = practice;
+    w.agents.meme_vector[id as usize][anabios_core::culture::SKILL_CHANNEL] = skill;
+    id
+}
+
+fn run_culture_step(w: &mut World) {
+    let cap = w.agents.capacity();
+    w.actions.resize(cap, Default::default());
+    w.spatial.rebuild(&w.agents.position, |k| w.agents.is_alive(k as u32));
+    anabios_core::culture::culture_step(w);
+}
+
+/// Content bias declines a locally-harmful trait even when the FITTEST model
+/// carries it: the max-energy neighbour holds the practice (so model bias
+/// alone would transmit), but holders' mean energy is below non-holders'.
+#[test]
+fn payoff_biased_content_bias_declines_maladaptive_practice() {
+    let pch = anabios_core::practice::channel(0);
+    let setup = |w: &mut World| {
+        add_neighbour(w, 503.0, 500.0, 100.0, 1.0, 0.0); // fittest, holds practice
+        add_neighbour(w, 497.0, 500.0, 20.0, 1.0, 0.0); // low-energy holder
+        add_neighbour(w, 500.0, 503.0, 90.0, 0.0, 0.0); // non-holder
+        add_neighbour(w, 500.0, 497.0, 90.0, 0.0, 0.0); // non-holder
+                                                        // holder mean 60 < non-holder mean 90 → locally maladaptive
+    };
+    let (mut won, r) = payoff_world(21, true);
+    setup(&mut won);
+    run_culture_step(&mut won);
+    assert_eq!(
+        won.agents.meme_vector[r as usize][pch], 0.0,
+        "content bias must decline the locally-harmful practice"
+    );
+
+    let (mut woff, r) = payoff_world(21, false);
+    setup(&mut woff);
+    run_culture_step(&mut woff);
+    assert!(
+        woff.agents.meme_vector[r as usize][pch] > 0.0,
+        "flag off: payoff-blind transmission copies the practice (control)"
+    );
+}
+
+/// Negative control: when holders are the FITTER group locally, payoff-biased
+/// transmission still copies the trait (the bias declines only on evidence of
+/// harm, never categorically).
+#[test]
+fn payoff_biased_keeps_trait_whose_holders_are_fitter() {
+    let pch = anabios_core::practice::channel(0);
+    let (mut w, r) = payoff_world(22, true);
+    add_neighbour(&mut w, 503.0, 500.0, 100.0, 1.0, 0.0);
+    add_neighbour(&mut w, 497.0, 500.0, 95.0, 1.0, 0.0);
+    add_neighbour(&mut w, 500.0, 503.0, 90.0, 0.0, 0.0);
+    add_neighbour(&mut w, 500.0, 497.0, 90.0, 0.0, 0.0);
+    // holder mean 97.5 > non-holder mean 90 → not maladaptive here
+    run_culture_step(&mut w);
+    assert!(
+        w.agents.meme_vector[r as usize][pch] > 0.0,
+        "trait with fitter holders must still transmit under the flag"
+    );
+}
+
+/// Model bias: the copy source is the highest-ENERGY neighbour, not the
+/// highest-trait-level one.
+#[test]
+fn payoff_biased_model_bias_copies_from_highest_energy_model() {
+    let setup = |w: &mut World| {
+        add_neighbour(w, 503.0, 500.0, 10.0, 0.0, 1.0); // skill expert, low energy
+        add_neighbour(w, 497.0, 500.0, 100.0, 0.0, 0.5); // fittest, half the skill
+    };
+    let (mut won, r) = payoff_world(23, true);
+    setup(&mut won);
+    run_culture_step(&mut won);
+    let on_skill = won.agents.meme_vector[r as usize][anabios_core::culture::SKILL_CHANNEL];
+
+    let (mut woff, r) = payoff_world(23, false);
+    setup(&mut woff);
+    run_culture_step(&mut woff);
+    let off_skill = woff.agents.meme_vector[r as usize][anabios_core::culture::SKILL_CHANNEL];
+
+    assert!(on_skill > 0.0, "still learns from the fittest model");
+    assert!(
+        on_skill < off_skill,
+        "model bias targets the 0.5-skill fittest neighbour, not the 1.0-skill expert: \
+         on={on_skill} off={off_skill}"
+    );
+}
+
 #[test]
 fn dialect_formed_fires_for_two_divergent_halves() {
     use anabios_core::codex::{observe_all, EventType, DIALECT_WINDOW};

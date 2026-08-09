@@ -33,11 +33,10 @@ fn affect_play_scenario_is_self_consistent() {
 // Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): new serialized
 // CodexState detector fields grow the state-hash layout (detectors run flag-on),
 // so all ticks move.
-// Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
-// BiomeCell.{elevation, river_flow} added — layout growth only, trajectory
-// byte-identical.
+// Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+// World.payoff_biased_learning layout growth only (off here).
 const PLAY_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x62b2ca6266d27381), (100, 0xc8bf6ac1067a6710), (200, 0x591af9f66846be59)];
+    &[(0, 0xfab608ee0e49e6bd), (100, 0x409f6e4e523761d0), (200, 0xedf5c8afa8f31501)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

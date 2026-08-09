@@ -8,7 +8,9 @@ This is a mid-term (one-quarter) plan across all four tracks. It assumes the
 tier-1→3 viewer animation stack and the web replay parity work (PRs #93–#98)
 have just landed on `main`. The quarter has three themed phases; each item
 carries a **track tag**, a **rough size** (S ≈ days, M ≈ 1–2 weeks, L ≈ 3+ weeks),
-its **dependencies**, and a **done-when** bar.
+its **dependencies**, and a **done-when** bar. The milestone-level detail layer
+(capability inventory, evidence base, per-item breakdowns, backlog) lives in
+[`docs/superpowers/specs/2026-08-07-detailed-roadmap.md`](docs/superpowers/specs/2026-08-07-detailed-roadmap.md).
 
 ## Tracks
 

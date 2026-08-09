@@ -363,6 +363,130 @@ pub fn starter_cultural_hunter() -> Program {
     ])
 }
 
+/// Mammal herd grazer: forage toward plants, cohere with the herd, flee
+/// predators on own detection, broadcast an alarm (channel 0) when one is
+/// close, and mate when well-fed. The social, communicative endotherm prey.
+pub fn starter_mammal_herd() -> Program {
+    Program::from_slice(&[
+        // forage
+        Node::SensePlantDirX,
+        Node::MoveTowardX,
+        Node::SensePlantDirY,
+        Node::MoveTowardY,
+        // herd cohesion
+        Node::SenseSameDirX,
+        Node::MoveTowardX,
+        Node::SenseSameDirY,
+        Node::MoveTowardY,
+        // alarm broadcast when a predator is within ~12
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-12.0),
+        Node::Broadcast(0),
+        // flee on own detection
+        Node::SenseOtherDirX,
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-12.0),
+        Node::Mul,
+        Node::MoveAwayX,
+        Node::SenseOtherDirY,
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-12.0),
+        Node::Mul,
+        Node::MoveAwayY,
+        // mate when well-fed
+        Node::SenseEnergy,
+        Node::ThresholdGt(35.0),
+        Node::Mate,
+    ])
+}
+
+/// Mammal pursuer: a stalk-pounce pack hunter (lion-style) — chase the
+/// nearest other-species agent only within pouncing range (~15 units; in a
+/// target-rich herd a wider gate means endlessly chasing fresh prey and never
+/// lingering at the kill to scavenge it, which carnivores do automatically
+/// within reach). Broadcasts the hunt on channel 4 when within ~8 (pack
+/// coordination), fires the contact Weapon within ~3, mates when well-fed.
+pub fn starter_mammal_pursuer() -> Program {
+    Program::from_slice(&[
+        // pursue only when prey is within hunting range
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-15.0),
+        Node::SenseOtherDirX,
+        Node::Mul,
+        Node::MoveTowardX,
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-15.0),
+        Node::SenseOtherDirY,
+        Node::Mul,
+        Node::MoveTowardY,
+        // coordinate the pack when closing in
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-8.0),
+        Node::Broadcast(4),
+        // strike at contact range
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-3.0),
+        Node::FireWeapon,
+        // mate when well-fed
+        Node::SenseEnergy,
+        Node::ThresholdGt(35.0),
+        Node::Mate,
+    ])
+}
+
+/// Reptile ambusher: the ectotherm sit-and-wait predator. Holds still while
+/// prey is far (no wasted movement — the low-metabolism edge), lunges only
+/// when prey closes inside ~6 units, and strikes with Jaws at point-blank
+/// (~1 unit, inside the Jaws module's 1.2 reach). Mates when well-fed.
+pub fn starter_reptile_ambusher() -> Program {
+    Program::from_slice(&[
+        // lunge only when prey is close: move toward × (dist < 6)
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-6.0),
+        Node::SenseOtherDirX,
+        Node::Mul,
+        Node::MoveTowardX,
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-6.0),
+        Node::SenseOtherDirY,
+        Node::Mul,
+        Node::MoveTowardY,
+        // strike at point-blank
+        Node::SenseOtherDist,
+        Node::Neg,
+        Node::ThresholdGt(-1.0),
+        Node::FireWeapon,
+        // mate when well-fed
+        Node::SenseEnergy,
+        Node::ThresholdGt(35.0),
+        Node::Mate,
+    ])
+}
+
+/// Reptile basker: slow, low-energy grazing toward plants; mates when
+/// well-fed. No flee reflex in the program — survival is delegated to Armor
+/// and the affect layer's freeze/fright hijack.
+pub fn starter_reptile_basker() -> Program {
+    Program::from_slice(&[
+        Node::SensePlantDirX,
+        Node::MoveTowardX,
+        Node::SensePlantDirY,
+        Node::MoveTowardY,
+        Node::SenseEnergy,
+        Node::ThresholdGt(35.0),
+        Node::Mate,
+    ])
+}
+
 /// Library of starter programs. Founders use index 0 (`starter_grazer`).
 pub fn starter_library() -> &'static [fn() -> Program] {
     &[
@@ -377,5 +501,9 @@ pub fn starter_library() -> &'static [fn() -> Program] {
         starter_communicator,
         starter_cooperator,
         starter_cultural_cooperator,
+        starter_mammal_herd,
+        starter_mammal_pursuer,
+        starter_reptile_ambusher,
+        starter_reptile_basker,
     ]
 }

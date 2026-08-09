@@ -337,10 +337,10 @@ matter.
 
 ## Artifacts
 
-- Scenarios: `scenarios/o1-invasion-cultural-into-asocial.toml`,
-  `scenarios/o1-invasion-asocial-into-cultural.toml`,
+- Scenarios: `scenarios/experiments/o1-invasion-cultural-into-asocial.toml`,
+  `scenarios/experiments/o1-invasion-asocial-into-cultural.toml`,
   `scenarios/o1-lever-{density,ceiling,cognition,mixing}.toml`,
-  `scenarios/o1-lever-practices-off.toml` (the §6 `practices_enabled=false` lever).
+  `scenarios/experiments/o1-lever-practices-off.toml` (the §6 `practices_enabled=false` lever).
 - Decomposition data (§6): `docs/superpowers/data/o1/o1-decomposition-full.csv`
   (all six conditions, n=10), `o1-practices-decomposition.csv` (the committed-flag
   baseline-vs-practices reproduction, n=10).

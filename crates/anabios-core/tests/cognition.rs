@@ -111,10 +111,9 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // CodexState affect-detector fields ({frenzy_active, rage_streak,
     // rage_active, fear_count_history, cascade_active, grief_active}); affect_enabled
     // off in this scenario ⇒ detectors never fire — layout growth only.
-    // Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
-    // BiomeCell.{elevation, river_flow} added — layout growth only, trajectory
-    // byte-identical.
-    &[(0, 0x398bb341d21107c8), (100, 0x2cf58309df37b349), (300, 0xeba8640bb4c2d4da)];
+    // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+    // World.payoff_biased_learning layout growth only (off here).
+    &[(0, 0xdf11ebc98d72dfb6), (100, 0x4e69079b065fbf51), (300, 0x9b9f6c6999906efe)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

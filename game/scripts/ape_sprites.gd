@@ -140,6 +140,8 @@ const APES: Array = [
 # Blocks are [x, y, w, h, zone], drawn back-to-front.
 const SPECIES_COUNT := 5
 const WALK_FRAME_COUNT := 4
+# Per-hominin gait cadence (frames/sec), read by mammal_sprites.bucket_gait_fps.
+const WALK_FPS: PackedFloat32Array = [5.0, 4.2, 4.6, 4.8, 5.6]
 # The atlas stacks WALK_FRAME_COUNT gait poses, then TWO frames per action
 # (eat / fight / trade / flee) that main.gd derives from combat, trade and
 # energy signals; the shader cycles each pair when INSTANCE_CUSTOM.a != 0.
@@ -343,7 +345,11 @@ static func _build_cell(blocks: Array) -> Image:
 	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	for b in blocks:
-		var col := Color(1, 1, 1, 1) if b.size() < 5 else Color(PAL[b[4]])
+		var col: Color = (
+			b[4]
+			if (b.size() >= 5 and b[4] is Color)
+			else (Color(1, 1, 1, 1) if b.size() < 5 else Color(PAL[b[4]]))
+		)
 		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), col)
 	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	var edges: Array = []

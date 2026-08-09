@@ -129,8 +129,13 @@ use crate::world::World;
 ///      scenario), so they never fire there — behavior byte-identical; only
 ///      the serialized layout grew. (The affect columns themselves were added
 ///      in M-A.)
-/// 30: BiomeCell.elevation + river_flow (continental worldgen)
-pub const FORMAT_VERSION: u32 = 30;
+/// 30: BiomeCell.elevation + river_flow (continental worldgen).
+/// 30 (parallel, origin/main): O2 payoff-biased learning — World.payoff_biased_learning.
+/// 31: merge of the two v30 branches — both layout growths stacked. Both features
+///     are off/inert in every golden scenario, so trajectories are byte-identical;
+///     only the serialized layout grew, and the bump to 31 distinguishes the merged
+///     layout from either parent's v30.
+pub const FORMAT_VERSION: u32 = 31;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

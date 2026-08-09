@@ -56,43 +56,6 @@ const SCENARIOS: Array[Dictionary] = [
 		"body": 1
 	},
 	{
-		"label": "E10 — Drifting climate (moving optimum)",
-		"path": "res://../scenarios/drifting-climate.toml",
-		"ground": 5,
-		"body": 1
-	},
-	{
-		"label": "E11 — Climate maladaptation (lag)",
-		"path": "res://../scenarios/maladaptation.toml",
-		"ground": 5,
-		"body": 1
-	},
-	# Climate knobs
-	{
-		"label": "Climate — Ice age (temp bias)",
-		"path": "res://../scenarios/ice-age.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Climate — Archipelago (sea level)",
-		"path": "res://../scenarios/archipelago.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Climate — Arid world (dry bias)",
-		"path": "res://../scenarios/arid-world.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Climate — Lush world (wet bias)",
-		"path": "res://../scenarios/lush-world.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
 		"label": "E12 — Sexual dimorphism",
 		"path": "res://../scenarios/dimorphism.toml",
 		"ground": 0,
@@ -146,31 +109,6 @@ const SCENARIOS: Array[Dictionary] = [
 		"ground": 1,
 		"body": 1
 	},
-	# DIT boundary
-	{
-		"label": "DIT — Env slow (culture tracks)",
-		"path": "res://../scenarios/dit-env-slow.toml",
-		"ground": 5,
-		"body": 1
-	},
-	{
-		"label": "DIT — Env fast (culture stale)",
-		"path": "res://../scenarios/dit-env-fast.toml",
-		"ground": 5,
-		"body": 1
-	},
-	{
-		"label": "DIT — Env static (culture redundant)",
-		"path": "res://../scenarios/dit-env-static.toml",
-		"ground": 5,
-		"body": 1
-	},
-	{
-		"label": "DIT — Rogers (imitators invade)",
-		"path": "res://../scenarios/dit-rogers.toml",
-		"ground": 5,
-		"body": 1
-	},
 	# Invention tree
 	{
 		"label": "Inventions — innovators vs traditionalists",
@@ -187,12 +125,6 @@ const SCENARIOS: Array[Dictionary] = [
 	{
 		"label": "TG — Gene↔tech coupling (soft selection)",
 		"path": "res://../scenarios/tech-gene-coupling.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "TG — Gene requirements (all gates on)",
-		"path": "res://../scenarios/gene-requirements.toml",
 		"ground": 0,
 		"body": 1
 	},
@@ -223,12 +155,6 @@ const SCENARIOS: Array[Dictionary] = [
 		"body": 0
 	},
 	{
-		"label": "Sandbox — X-large (4096², 12k cap)",
-		"path": "res://../scenarios/sandbox-xlarge.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
 		"label": "Sandbox — Coevolution (tech tree)",
 		"path": "res://../scenarios/sandbox-coevolution.toml",
 		"ground": 0,
@@ -244,12 +170,6 @@ const SCENARIOS: Array[Dictionary] = [
 	{
 		"label": "Biome — Climate adaptation",
 		"path": "res://../scenarios/biome-adaptation.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Biome — Desert/tropical bands",
-		"path": "res://../scenarios/desert-tropical.toml",
 		"ground": 0,
 		"body": 0
 	},
@@ -297,6 +217,12 @@ const SCENARIOS: Array[Dictionary] = [
 		"body": 0
 	},
 	{
+		"label": "Behavior — Mammals vs reptiles (affect classes)",
+		"path": "res://../scenarios/mammals-vs-reptiles.toml",
+		"ground": 0,
+		"body": 2
+	},
+	{
 		"label": "Cognitive — Knowledge ratchet (writing)",
 		"path": "res://../scenarios/knowledge-ratchet.toml",
 		"ground": 0,
@@ -314,49 +240,6 @@ const SCENARIOS: Array[Dictionary] = [
 		"path": "res://../scenarios/weapons-arms-race.toml",
 		"ground": 0,
 		"body": 2
-	},
-	# O1 experiments
-	{
-		"label": "O1 — Invasion: asocial into cultural",
-		"path": "res://../scenarios/o1-invasion-asocial-into-cultural.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "O1 — Invasion: cultural into asocial",
-		"path": "res://../scenarios/o1-invasion-cultural-into-asocial.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "O1 — Lever: ceiling",
-		"path": "res://../scenarios/o1-lever-ceiling.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "O1 — Lever: cognition",
-		"path": "res://../scenarios/o1-lever-cognition.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "O1 — Lever: density",
-		"path": "res://../scenarios/o1-lever-density.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "O1 — Lever: mixing",
-		"path": "res://../scenarios/o1-lever-mixing.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "O1 — Lever: practices off",
-		"path": "res://../scenarios/o1-lever-practices-off.toml",
-		"ground": 0,
-		"body": 1
 	},
 ]
 

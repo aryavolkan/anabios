@@ -142,6 +142,15 @@ pub struct Scenario {
     /// `docs/superpowers/specs/2026-08-03-o1-exclusion-findings.md`.
     #[serde(default = "default_true")]
     pub practices_enabled: bool,
+    /// Opt-in O2 payoff-biased social learning: cultural transmission copies
+    /// from the highest-energy Communicator neighbour (model bias) and
+    /// declines traits whose local holders are lower-energy than non-holders
+    /// (content bias), so maladaptive practices are rejected while they still
+    /// exist in the world. Off by default ⇒ byte-identical payoff-blind
+    /// transmission. See
+    /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
+    #[serde(default)]
+    pub payoff_biased_learning: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -229,6 +238,17 @@ pub struct AgentSpec {
     pub placement: Placement,
     #[serde(default)]
     pub traits: TraitOverrides,
+    /// Named founder archetype: pairs a module kit with a starter behavior
+    /// program (and, for some, genome defaults — see `archetype_genome`), and
+    /// gives the spec a fresh species id. Valid names: `stalker`,
+    /// `pack_hunter`, `spiner`, `bruiser`, `sentinel`, `herd`, `marker`,
+    /// `communicator`, `cooperator`, `cultural_cooperator`, `asocial_forager`,
+    /// `culture_prey`, `asocial_prey`, `skilled_forager`, `fast_hunter`,
+    /// `slow_hunter`, `innate_forager`, `individual_learner`, `pure_imitator`,
+    /// `critical_learner`, `cultural_forager`, `innovator`, `traditionalist`,
+    /// `grazer`, and the vertebrate classes `mammal_grazer`,
+    /// `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`. Unknown names
+    /// fall back to the grazer kit + program.
     #[serde(default)]
     pub archetype: Option<String>,
     /// Inventions this spec's agents already HOLD at tick 0, named by their
@@ -274,6 +294,29 @@ pub struct TraitOverrides {
     /// E12 reproductive knobs (read only with `sexual_dimorphism_enabled`).
     pub sexual_dimorphism: Option<f32>,
     pub mate_choosiness: Option<f32>,
+    /// Heritable cognitive baseline (`GenomeSlot::CognitivePotential`; read
+    /// only with `cognition_enabled`).
+    pub cognitive_potential: Option<f32>,
+    /// Affect-layer temperament genes (read only with `affect_enabled`):
+    /// Boldness scales the FEAR response down; Aggressiveness sets RAGE gain;
+    /// Reactivity raises survival-reflex hijack sensitivity. Nurturance and
+    /// Sociality are declared for the (not yet wired) CARE/PANIC/PLAY systems
+    /// and count toward speciation distance.
+    pub boldness: Option<f32>,
+    pub aggressiveness: Option<f32>,
+    pub reactivity: Option<f32>,
+    pub nurturance: Option<f32>,
+    pub sociality: Option<f32>,
+    /// Render-color genes (HSV); picked up by the Godot bridge.
+    pub color_hue: Option<f32>,
+    pub color_sat: Option<f32>,
+    pub color_val: Option<f32>,
+    /// Climate-match feeding bonus (`GenomeSlot::EnvAffinity`; read only with
+    /// `biome_adaptation`).
+    pub env_affinity: Option<f32>,
+    /// Genome mutation sigma scale (`GenomeSlot::MutationRate`). Lower values
+    /// slow lineage drift/speciation, keeping breeding pools coherent.
+    pub mutation_rate: Option<f32>,
 }
 
 impl TraitOverrides {
@@ -329,6 +372,39 @@ impl TraitOverrides {
         if let Some(v) = self.mate_choosiness {
             g.set(GenomeSlot::MateChoosiness, v);
         }
+        if let Some(v) = self.cognitive_potential {
+            g.set(GenomeSlot::CognitivePotential, v);
+        }
+        if let Some(v) = self.boldness {
+            g.set(GenomeSlot::Boldness, v);
+        }
+        if let Some(v) = self.aggressiveness {
+            g.set(GenomeSlot::Aggressiveness, v);
+        }
+        if let Some(v) = self.reactivity {
+            g.set(GenomeSlot::Reactivity, v);
+        }
+        if let Some(v) = self.nurturance {
+            g.set(GenomeSlot::Nurturance, v);
+        }
+        if let Some(v) = self.sociality {
+            g.set(GenomeSlot::Sociality, v);
+        }
+        if let Some(v) = self.color_hue {
+            g.set(GenomeSlot::ColorHue, v);
+        }
+        if let Some(v) = self.color_sat {
+            g.set(GenomeSlot::ColorSat, v);
+        }
+        if let Some(v) = self.color_val {
+            g.set(GenomeSlot::ColorVal, v);
+        }
+        if let Some(v) = self.env_affinity {
+            g.set(GenomeSlot::EnvAffinity, v);
+        }
+        if let Some(v) = self.mutation_rate {
+            g.set(GenomeSlot::MutationRate, v);
+        }
     }
 }
 
@@ -352,14 +428,16 @@ impl Default for Placement {
 /// names fall back to the grazer defaults.
 fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Program) {
     use crate::module::{
-        bruiser_kit, communicator_kit, fast_hunter_kit, marker_kit, predator_kit, slow_hunter_kit,
+        bruiser_kit, communicator_kit, fast_hunter_kit, mammal_grazer_kit, mammal_pursuer_kit,
+        marker_kit, predator_kit, reptile_ambusher_kit, reptile_basker_kit, slow_hunter_kit,
         spiner_kit, starter_kit,
     };
     use crate::program::{
         starter_asocial_forager, starter_asocial_prey, starter_bruiser, starter_communicator,
         starter_cooperator, starter_cultural_cooperator, starter_cultural_hunter,
-        starter_culture_prey, starter_grazer, starter_herd, starter_marker, starter_pack_hunter,
-        starter_sentinel, starter_spiner, starter_stalker,
+        starter_culture_prey, starter_grazer, starter_herd, starter_mammal_herd,
+        starter_mammal_pursuer, starter_marker, starter_pack_hunter, starter_reptile_ambusher,
+        starter_reptile_basker, starter_sentinel, starter_spiner, starter_stalker,
     };
     match name {
         "stalker" => (predator_kit(), starter_stalker()),
@@ -405,6 +483,14 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
             (m, starter_grazer())
         }
+        // Vertebrate-class archetypes: mammals (endotherm-approximated — high
+        // metabolism, social, cognitive) and reptiles (ectotherm-approximated —
+        // low metabolism, armored, ambush/bask). See `archetype_genome` for the
+        // temperament/cognition defaults that complete the class body plan.
+        "mammal_grazer" => (mammal_grazer_kit(), starter_mammal_herd()),
+        "mammal_pursuer" => (mammal_pursuer_kit(), starter_mammal_pursuer()),
+        "reptile_ambusher" => (reptile_ambusher_kit(), starter_reptile_ambusher()),
+        "reptile_basker" => (reptile_basker_kit(), starter_reptile_basker()),
         _ => (starter_kit(), starter_grazer()),
     }
 }
@@ -440,6 +526,72 @@ fn archetype_genome(name: &str, g: &mut Genome) {
             g.set(GenomeSlot::Openness, 0.2);
             g.set(GenomeSlot::IndividualLearning, 0.2);
             g.set(GenomeSlot::SocialLearning, 0.8);
+        }
+        // Mammal class defaults: the endotherm profile — a high basal
+        // metabolism (the warm-blooded tax) buying a big brain, sociality,
+        // and boldness. Cognitive potential is high; temperament leans
+        // affiliative (high Agreeableness/Extraversion) with a measured
+        // threat response (mild Boldness, low Reactivity).
+        "mammal_grazer" => {
+            g.set(GenomeSlot::BasalMetabolism, 0.8);
+            g.set(GenomeSlot::CognitivePotential, 0.8);
+            g.set(GenomeSlot::IndividualLearning, 0.8);
+            g.set(GenomeSlot::SocialLearning, 0.9);
+            g.set(GenomeSlot::Extraversion, 0.8);
+            g.set(GenomeSlot::Agreeableness, 0.7);
+            g.set(GenomeSlot::Boldness, 0.65);
+            g.set(GenomeSlot::Aggressiveness, 0.3);
+            g.set(GenomeSlot::Reactivity, 0.45);
+            g.set(GenomeSlot::Nurturance, 0.8);
+            g.set(GenomeSlot::Sociality, 0.8);
+            g.set(GenomeSlot::ColorHue, 0.08); // warm brown
+        }
+        "mammal_pursuer" => {
+            g.set(GenomeSlot::BasalMetabolism, 0.65);
+            g.set(GenomeSlot::CognitivePotential, 0.75);
+            g.set(GenomeSlot::IndividualLearning, 0.7);
+            g.set(GenomeSlot::SocialLearning, 0.85);
+            g.set(GenomeSlot::Extraversion, 0.75);
+            g.set(GenomeSlot::Agreeableness, 0.55);
+            g.set(GenomeSlot::Boldness, 0.95);
+            g.set(GenomeSlot::Aggressiveness, 0.75);
+            g.set(GenomeSlot::Reactivity, 0.4);
+            g.set(GenomeSlot::Nurturance, 0.6);
+            g.set(GenomeSlot::Sociality, 0.75);
+            g.set(GenomeSlot::ColorHue, 0.0); // red-brown
+        }
+        // Reptile class defaults: the ectotherm profile — low basal metabolism
+        // (the cold-blooded edge: cheap idle, no internal furnace), modest
+        // cognition, asocial temperament, and a hair-trigger affect layer
+        // (high Reactivity → fast freeze/fight/flight hijack) with high
+        // Aggressiveness for the ambush strike.
+        "reptile_ambusher" => {
+            g.set(GenomeSlot::BasalMetabolism, 0.2);
+            g.set(GenomeSlot::CognitivePotential, 0.35);
+            g.set(GenomeSlot::IndividualLearning, 0.3);
+            g.set(GenomeSlot::SocialLearning, 0.2);
+            g.set(GenomeSlot::Extraversion, 0.2);
+            g.set(GenomeSlot::Agreeableness, 0.3);
+            g.set(GenomeSlot::Boldness, 0.35);
+            g.set(GenomeSlot::Aggressiveness, 0.8);
+            g.set(GenomeSlot::Reactivity, 0.85);
+            g.set(GenomeSlot::Nurturance, 0.15);
+            g.set(GenomeSlot::Sociality, 0.2);
+            g.set(GenomeSlot::ColorHue, 0.33); // scaled green
+        }
+        "reptile_basker" => {
+            g.set(GenomeSlot::BasalMetabolism, 0.15);
+            g.set(GenomeSlot::CognitivePotential, 0.3);
+            g.set(GenomeSlot::IndividualLearning, 0.25);
+            g.set(GenomeSlot::SocialLearning, 0.15);
+            g.set(GenomeSlot::Extraversion, 0.2);
+            g.set(GenomeSlot::Agreeableness, 0.45);
+            g.set(GenomeSlot::Boldness, 0.3);
+            g.set(GenomeSlot::Aggressiveness, 0.2);
+            g.set(GenomeSlot::Reactivity, 0.7);
+            g.set(GenomeSlot::Nurturance, 0.1);
+            g.set(GenomeSlot::Sociality, 0.25);
+            g.set(GenomeSlot::ColorHue, 0.25); // olive
         }
         _ => {}
     }
@@ -544,6 +696,7 @@ impl Scenario {
         w.agents.track_livestock = self.domestication_enabled;
         w.knowledge_enabled = self.knowledge_enabled;
         w.practices_enabled = self.practices_enabled;
+        w.payoff_biased_learning = self.payoff_biased_learning;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
@@ -887,6 +1040,122 @@ terrain_affinity = 0.87
         assert!(has(&br_mods, ModuleType::Jaws), "bruiser archetype carries Jaws");
         assert!(has(&br_mods, ModuleType::Armor), "bruiser archetype is armored");
         assert!(has(&br_mods, ModuleType::Reproductive), "bruiser lineage can establish");
+    }
+
+    #[test]
+    fn documented_archetype_names_all_resolve() {
+        // Keep `AgentSpec::archetype`'s doc comment honest: every name listed
+        // there must resolve to a dedicated match arm — not silently fall back
+        // to the grazer kit + program (the trap this guards: renaming a match
+        // arm and leaving the doc/name dangling).
+        let dedicated = [
+            "stalker",
+            "pack_hunter",
+            "spiner",
+            "bruiser",
+            "sentinel",
+            "herd",
+            "marker",
+            "communicator",
+            "cooperator",
+            "cultural_cooperator",
+            "asocial_forager",
+            "culture_prey",
+            "asocial_prey",
+            "skilled_forager",
+            "fast_hunter",
+            "slow_hunter",
+            "innate_forager",
+            "individual_learner",
+            "pure_imitator",
+            "critical_learner",
+            "cultural_forager",
+            "innovator",
+            "traditionalist",
+            "mammal_grazer",
+            "mammal_pursuer",
+            "reptile_ambusher",
+            "reptile_basker",
+        ];
+        let fallback = archetype_kit("definitely-not-an-archetype");
+        for name in dedicated {
+            assert!(
+                archetype_kit(name) != fallback,
+                "documented archetype '{name}' resolves to the grazer fallback"
+            );
+        }
+        // `grazer` is documented as the default and DOES resolve to the fallback.
+        assert_eq!(archetype_kit("grazer"), fallback);
+    }
+
+    #[test]
+    fn vertebrate_archetypes_resolve_to_their_kits() {
+        use crate::module::{has, has_smell, ModuleType};
+        let (mg_mods, _) = archetype_kit("mammal_grazer");
+        assert!(has(&mg_mods, ModuleType::Communicator), "mammal grazer is cultural");
+        assert!(has(&mg_mods, ModuleType::Reproductive), "mammal grazer breeds");
+        assert!(!has(&mg_mods, ModuleType::Weapon), "mammal grazer is unarmed");
+        let (mp_mods, _) = archetype_kit("mammal_pursuer");
+        assert!(has(&mp_mods, ModuleType::Weapon), "mammal pursuer is armed");
+        assert!(has(&mp_mods, ModuleType::Communicator), "mammal pursuer coordinates");
+        assert!(has(&mp_mods, ModuleType::Reproductive), "pursuer lineage can establish");
+        let (ra_mods, _) = archetype_kit("reptile_ambusher");
+        assert!(has(&ra_mods, ModuleType::Jaws), "reptile ambusher carries Jaws");
+        assert!(has(&ra_mods, ModuleType::Armor), "reptile ambusher is scaled");
+        assert!(has_smell(&ra_mods), "reptile ambusher smells its prey");
+        assert!(has(&ra_mods, ModuleType::Reproductive), "ambusher lineage can establish");
+        let (rb_mods, _) = archetype_kit("reptile_basker");
+        assert!(has(&rb_mods, ModuleType::Armor), "reptile basker is armored");
+        assert!(!has(&rb_mods, ModuleType::Jaws), "reptile basker is harmless");
+        assert!(!has(&rb_mods, ModuleType::Weapon), "reptile basker is harmless");
+        assert!(has(&rb_mods, ModuleType::Reproductive), "basker lineage can establish");
+    }
+
+    #[test]
+    fn vertebrate_archetypes_carry_class_genome_profiles() {
+        let mut g = Genome::neutral();
+        archetype_genome("mammal_grazer", &mut g);
+        assert_eq!(g.get(GenomeSlot::BasalMetabolism), 0.8, "endotherm tax");
+        assert_eq!(g.get(GenomeSlot::CognitivePotential), 0.8, "big-brained");
+        assert_eq!(g.get(GenomeSlot::Nurturance), 0.8, "parental investment");
+        let mut g = Genome::neutral();
+        archetype_genome("reptile_ambusher", &mut g);
+        assert_eq!(g.get(GenomeSlot::BasalMetabolism), 0.2, "ectotherm edge");
+        assert_eq!(g.get(GenomeSlot::Reactivity), 0.85, "hair-trigger hijack");
+        assert_eq!(g.get(GenomeSlot::Aggressiveness), 0.8, "ambush strike");
+    }
+
+    #[test]
+    fn trait_overrides_cover_affect_cognition_and_color_genes() {
+        let text = r#"
+name = "t"
+seed = 1
+affect_enabled = true
+cognition_enabled = true
+[[agents]]
+count = 2
+archetype = "reptile_ambusher"
+placement = { kind = "uniform" }
+[agents.traits]
+boldness = 0.9
+reactivity = 0.1
+cognitive_potential = 0.77
+color_hue = 0.5
+env_affinity = 0.42
+"#;
+        let s = Scenario::parse_toml(text).expect("parse");
+        let w = s.instantiate();
+        let id = w.agents.iter_alive().next().expect("one agent");
+        let g = &w.agents.genome[id as usize];
+        // Explicit trait overrides win over the archetype genome defaults
+        // (reptile_ambusher would otherwise pin Reactivity to 0.85).
+        assert_eq!(g.get(GenomeSlot::Boldness), 0.9);
+        assert_eq!(g.get(GenomeSlot::Reactivity), 0.1, "override beats archetype default");
+        assert_eq!(g.get(GenomeSlot::CognitivePotential), 0.77);
+        assert_eq!(g.get(GenomeSlot::ColorHue), 0.5);
+        assert_eq!(g.get(GenomeSlot::EnvAffinity), 0.42);
+        // Untouched archetype defaults still apply.
+        assert_eq!(g.get(GenomeSlot::BasalMetabolism), 0.2, "class default survives");
     }
 
     #[test]

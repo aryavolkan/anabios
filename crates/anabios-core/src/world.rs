@@ -191,6 +191,17 @@ pub struct World {
     /// (via `default_true`) so worlds without the flag behave exactly as before.
     #[serde(default = "crate::scenario::default_true")]
     pub practices_enabled: bool,
+    /// Opt-in O2 payoff-biased social learning. When true, cultural
+    /// transmission in `culture::culture_step` (a) copies from the
+    /// highest-ENERGY Communicator neighbour rather than the
+    /// highest-trait-level one (model bias) and (b) declines any candidate
+    /// trait whose local holders have lower mean energy than non-holders
+    /// (content bias) — so maladaptive practices are rejected while they
+    /// still exist in the world. Off ⇒ byte-identical payoff-blind
+    /// transmission. See
+    /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
+    #[serde(default)]
+    pub payoff_biased_learning: bool,
     /// Per-cell market density field (E8). Sized to the biome grid when
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
@@ -373,6 +384,7 @@ impl World {
             // Practices default ON (gated by cognition_enabled), matching
             // behavior before this flag existed; set false to disable discovery.
             practices_enabled: true,
+            payoff_biased_learning: false,
             market_field: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,

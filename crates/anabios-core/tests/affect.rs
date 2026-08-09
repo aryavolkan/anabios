@@ -78,11 +78,10 @@ fn affect_scenario_survives_save_load_step() {
 // Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): the new serialized
 // CodexState affect-detector fields grow every scenario's state-hash layout (and the
 // detectors run flag-on here), so all ticks — including tick 0 — move.
-// Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
-// BiomeCell.{elevation, river_flow} added — layout growth only, trajectory
-// byte-identical.
+// Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+// World.payoff_biased_learning layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x3e179d01ab39d11e), (100, 0xb515a256485ca489), (300, 0xc4158d0a9a486e0e)];
+    &[(0, 0x08a30ff4cdcb60c8), (100, 0x3a253c54f927f78f), (300, 0xc977a67c39bfa68a)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -190,11 +189,10 @@ fn affect_threat_emits_mass_fright() {
 // Refreshed 2026-08-07 (M-F observability, FORMAT_VERSION 28→29): new serialized
 // CodexState detector fields grow the state-hash layout for this flag-on scenario
 // (detectors run), so all ticks move.
-// Refreshed 2026-08-07 (continental worldgen Task 1, FORMAT_VERSION 29→30):
-// BiomeCell.{elevation, river_flow} added — layout growth only, trajectory
-// byte-identical.
+// Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
+// World.payoff_biased_learning layout growth only (off here).
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x46507f4854249632), (100, 0xa9e8606271a3373f), (300, 0x8dd9578b4d89b21d)];
+    &[(0, 0xb34dc66b4e2819ec), (100, 0x1bdca680efe9922f), (300, 0x894c92e8a6f397c7)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

@@ -80,7 +80,7 @@ func _rebuild_key(body_mode: int) -> void:
 				_ramp_row(Color(0.55, 0.6, 0.7), Color(1.0, 0.35, 0.25), "calm", "aroused")
 			)
 		_:
-			_key_box.add_child(_header("body: species — each ape in its own colours"))
+			_key_box.add_child(_header("body: species — each animal in its own coat colours"))
 
 
 func _header(text: String) -> Label:
