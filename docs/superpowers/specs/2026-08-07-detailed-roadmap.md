@@ -101,7 +101,7 @@ the counter-mechanism.
 
 | # | Item | Detail | Done when |
 |---|---|---|---|
-| 2.4 | Scorecard-driven sweeps | Weekly archive-weighted sweep (`--archive runs/corpus-e1`); triage `<out>/novel/`; regenerate corpus **after** any new codex event lands | Weekly shortlist of novel runs worth viewer inspection |
+| 2.4 | Scorecard-driven sweeps — **done 2026-08-09** | e1.3 corpus (168 runs × 13 scenarios, incl. economy/culture/domestication/affect) cuts permanently-novel types 24/59 → 2/59; `WEIGHTS_VERSION` e1.3 with updated pinned weights. Weekly-loop validated: archived sweeps of biome-trade/predator-prey/weapons-arms-race produce discriminating, novel-free shortlists (docs/emergence-corpus.md §4). Corpus dir `runs/corpus-e1.3/` (local); regen rule: on any new codex event | Weekly shortlist of novel runs worth viewer inspection |
 | 2.5 | OoA climb — close out — **done 2026-08-07** | Emergent era-3 is dead at grand scale (findings). Decision recorded in `docs/showcase-plan.md` §2 ("Decision record 2026-08-07"): evidence table consolidated, saga keeps `starting_inventions`, O-track corroboration linked, reopen conditions stated (ecological-stage fix, not discovery/IQ math) | Decision recorded; saga keeps `starting_inventions` |
 
 ### 4.3 Economy

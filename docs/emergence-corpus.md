@@ -36,28 +36,42 @@ env var or symlink `runs/corpus` at the vintage you want active.
 
 The **shipped default table** (`ScoreTable::default_table()`, used whenever
 you sweep *without* `--archive`) is derived from `DEFAULT_CORPUS_NT` in
-`score.rs`, a hand-transcribed table of per-type counts from a **64-run
-reference sweep taken 2026-07-22** (16 seeds each of `divergent`,
-`inventions`, `predator-prey`, `cooperation` at 5000 ticks). That table's
-version is `score::WEIGHTS_VERSION = "e1.1"`.
+`score.rs`, a hand-transcribed table of per-type counts from a **168-run
+reference sweep taken 2026-08-09** (the e1.3 vintage; recipe below). That
+table's version is `score::WEIGHTS_VERSION = "e1.3"`. The current corpus
+lives at `runs/corpus-e1.3/`.
 
-**As of this writing, e1.1 is still current — it has not been regenerated
-since.** See the caveat in section 4 before reading anything into an
-absolute `emergence_score` for a type introduced after E3.
+Vintage history: e1.1 (2026-07-22, 64 runs × 4 scenarios) predated ~30
+post-E3 detectors; e1.2 (2026-08-03, same 64 runs) measured the post-E3
+detectors but still left 24/59 types at `n_t = 0` (no economy/culture/
+domestication/affect scenario in the corpus); **e1.3** broadened the corpus
+to 13 scenarios, cutting permanently-novel types to **2/59** (`evolved_tool`,
+`territorial_rage` — both genuinely rare).
 
-### Regen recipe (produces the next vintage, e.g. e1.2 — NOT currently done)
+### Regen recipe (the e1.3 vintage)
 
 ```bash
 cargo build --release -p anabios-headless
-for s in divergent inventions predator-prey cooperation; do
+for s in divergent inventions predator-prey cooperation \
+         biome-trade traditions trophic-cascade settlement; do
   ./target/release/anabios-headless sweep --scenario scenarios/$s.toml \
-    --seeds 16 --ticks 5000 --out runs/corpus-e1.2/$s
+    --seeds 16 --ticks 5000 --out runs/corpus-e1.3/$s
 done
-# then count per-type file-presence across the 64 *.events.jsonl (map the
+for s in dimorphism domestication knowledge-ratchet affect-showcase; do
+  ./target/release/anabios-headless sweep --scenario scenarios/$s.toml \
+    --seeds 8 --ticks 5000 --out runs/corpus-e1.3/$s
+done
+./target/release/anabios-headless sweep \
+  --scenario scenarios/experiments/o1-invasion-cultural-into-asocial.toml \
+  --seeds 8 --ticks 5000 --out runs/corpus-e1.3/o1-invasion
+# then count per-type file-presence across the 168 *.events.jsonl (map the
 # CamelCase event_type -> snake_case via score::event_name) into
-# DEFAULT_CORPUS_NT, bump WEIGHTS_VERSION to "e1.2", and update the pinned
-# regression test `default_weights_match_documented_values` in score.rs.
+# DEFAULT_CORPUS_NT, bump WEIGHTS_VERSION, and update the pinned regression
+# test `default_weights_match_documented_values` in score.rs.
 ```
+
+Regenerate the corpus (and table) whenever a new codex event type lands —
+new detectors sit at `n_t = 0` until the next vintage.
 
 Regenerating the default table shifts every scenario's absolute
 `emergence_score` (it's a rescale, not just an addition), so land it as its
@@ -67,7 +81,7 @@ history rather than folding it into an unrelated change.
 Note this recipe builds the *default reference table*, not an `--archive`
 corpus per se — but the same sweep output (a directory of
 `seed_XXXXXXXX.events.jsonl` files) is exactly what `--archive` consumes, so
-`runs/corpus-e1.2/` produced this way can also be pointed at directly with
+`runs/corpus-e1.3/` produced this way can also be pointed at directly with
 `--archive` / `ANABIOS_CORPUS` if you want empirical (not hand-baked)
 scoring at that vintage.
 
@@ -76,7 +90,7 @@ scoring at that vintage.
 For each scenario under active investigation:
 
 ```bash
-ANABIOS_CORPUS=runs/corpus-e1.1 scripts/emergence.sh sweep-archived <scenario> --seeds 32 --ticks 8000
+ANABIOS_CORPUS=runs/corpus-e1.3 scripts/emergence.sh sweep-archived <scenario> --seeds 32 --ticks 8000
 ```
 
 (Omit `ANABIOS_CORPUS` to use the default `runs/corpus`.) This wraps `sweep
@@ -97,10 +111,10 @@ interesting before opening the CSV.
 ## 3. Triage
 
 1. Open `<out>/summary.csv`. Columns: `seed, ticks, final_alive,
-   final_biomass, state_hash`, then one count column per event type (53
+   final_biomass, state_hash`, then one count column per event type (59
    columns, in `score::ALL_EVENT_NAMES` order), then `emergence_score,
-   novel_events, coverage, novel_types` — 62 columns total, `novel_types`
-   last.
+   novel_events, coverage, total_trades, novel_types` — 69 columns total,
+   `novel_types` last.
 2. Sort by `emergence_score` descending.
 3. For any row with `novel_events > 0`, read its `novel_types` column
    (semicolon-joined event-type names, persisted directly in the CSV — no
@@ -118,29 +132,18 @@ interesting before opening the CSV.
    scripts/emergence.sh view <scenario> --seed <n>
    ```
 
-## 4. Caveat: e1.1 scores post-E3 detectors as permanently novel
+## 4. Validated: the e1.3 loop discriminates (2026-08-09)
 
-**Task 3 (regenerating the weight table to e1.2) was not done.**
-`score::WEIGHTS_VERSION` is still `"e1.1"`, built from the 2026-07-22 sweep —
-which predates roughly 30 detectors added since E3 (e.g. `pop_cycle`, `war`,
-`settlement`, `specialization_split`, and others; see the full list of
-zero-count entries in `DEFAULT_CORPUS_NT` in `score.rs`).
+First weekly-style archived sweeps against `runs/corpus-e1.3` (16 seeds ×
+8000 ticks each): `biome-trade`, `predator-prey`, and `weapons-arms-race`
+(8 seeds) all produce **novel=0** shortlists whose `emergence_score` spread
+reflects genuine rarity differences (e.g. biome-trade seeds 13.8→10.8;
+arms-race seed 5 at 15.6 vs seed 3 at 10.0) — versus the pre-e1.3 behavior
+where *every* run flagged 10-14 permanently-novel types and the shortlist
+was noise. Under e1.3 a `novel_events > 0` row means the run fired
+`evolved_tool` or `territorial_rage` (the only two corpus-unseen types) or a
+detector added after 2026-08-09 — a triageable signal.
 
-Under e1.1, every one of those ~30 newer detectors has `n_t = 0` in the
-reference table, which the scoring math treats identically to "truly never
-seen in any corpus run": they score at the fixed `NOVELTY_BONUS` (`ln(64) +
-1 ≈ 5.16`) on *every* firing, forever — not just the first time. This
-inflates `emergence_score` for any run that fires a modern detector,
-independent of how common that behavior actually turns out to be once you
-look. It also means `novel_types`/`novel_events` will flag those detectors
-as "corpus-unseen" on every sweep, even after you've seen them fire hundreds
-of times across your own weekly runs.
-
-Practical effect on triage: don't read a high `emergence_score` alone as
-"rare and interesting" while e1.1 is active — cross-check against
-`novel_types` and use judgment about which of the flagged types are
-genuinely new to you versus just structurally excluded from the reference
-corpus. Regenerating to e1.2 with a corpus that includes post-E3 scenarios
-(or points `--archive` at an accumulated `runs/corpus-e1.1/` tree from real
-sweeps) will fix the discrimination — see the regen recipe in section 1 when
-that's wanted.
+(The old section-4 caveat — pre-e1.2 tables scored ~30 post-E3 detectors as
+permanently novel — is resolved by the e1.2/e1.3 regenerations; it survives
+here only as vintage history in section 1.)
