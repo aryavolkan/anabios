@@ -81,7 +81,10 @@ void fragment() {
 		// ~1 at the shoreline (elevation just below sea level), →0 in the deepest
 		// basin, so open-ocean trenches read dark and shelves read bright teal.
 		float elev = texture(TEXTURE, UV).a;
+		// Deepest basins sit well below sea level, so raw elev/sea_level never
+		// reaches 0; square it to deepen open ocean while keeping shelves bright.
 		float shallowness = clamp(elev / max(sea_level, 1e-3), 0.0, 1.0);
+		shallowness *= shallowness;
 		outc = mix(deep, shallow, shallowness);
 
 		// Slow directional shimmer in seamless world coordinates (continuous
