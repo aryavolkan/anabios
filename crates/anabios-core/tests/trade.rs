@@ -7,6 +7,51 @@ use anabios_core::tick::step;
 
 const TRADE: &str = include_str!("../../../scenarios/biome-trade.toml");
 const GEO: &str = include_str!("../../../scenarios/geographic-trade.toml");
+const UNI: &str = include_str!("../../../scenarios/unilateral-trade.toml");
+
+/// The `unilateral_trade` flag parses from TOML and wires through to `World`.
+#[test]
+fn unilateral_trade_flag_parses_and_wires() {
+    let toml = "name = \"t\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nunilateral_trade = true\n[[agents]]\narchetype = \"grazer\"\ncount = 4\n";
+    let w = Scenario::parse_toml(toml).unwrap().instantiate();
+    assert!(w.unilateral_trade);
+    // And the scenario file carries both freeze-fix flags.
+    let w = Scenario::parse_toml(UNI).expect("parse unilateral-trade").instantiate();
+    assert!(w.unilateral_trade && w.conserve_goods_on_death);
+}
+
+/// The unilateral-exchange scenario is deterministic (both new flags on).
+#[test]
+fn unilateral_trade_scenario_is_deterministic() {
+    let run = || {
+        let mut w = Scenario::parse_toml(UNI).expect("parse").instantiate();
+        for _ in 0..300 {
+            step(&mut w);
+        }
+        state_hash(&w)
+    };
+    assert_eq!(run(), run(), "unilateral-trade scenario must replay identically");
+}
+
+/// The unilateral-exchange economy turns over: cross-species trades occur.
+/// (The freeze-escape evidence — nonzero trade past the baseline ~t10k freeze
+/// — is a long-horizon property measured in release sweeps; see
+/// `docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`. At this
+/// horizon the baseline scenario also trades, so this only guards that the
+/// new code path doesn't break the economy.)
+#[test]
+fn unilateral_trade_scenario_produces_trades() {
+    let mut w = Scenario::parse_toml(UNI).expect("parse").instantiate();
+    let mut saw_trade = false;
+    for _ in 0..600 {
+        step(&mut w);
+        if w.codex.events.iter().any(|e| e.event_type == EventType::ResourceTraded) {
+            saw_trade = true;
+            break;
+        }
+    }
+    assert!(saw_trade, "expected at least one cross-species trade");
+}
 
 /// The trade scenario is deterministic: two independent runs match at tick 300.
 #[test]

@@ -93,6 +93,35 @@ holding the milestone tech.
 > sufficient. Decision-gate result: no single knob reaches the ≥50%-era-3 bar, so
 > **seeding stands as the honest framing**, now with systematic evidence.
 
+> **Decision record (2026-08-07, roadmap item 2.5 close-out).** The evidence
+> table behind the decision, consolidated from
+> [`superpowers/specs/2026-08-02-ooa-climb-findings.md`](superpowers/specs/2026-08-02-ooa-climb-findings.md)
+> (16 seeds × 20 000 ticks per condition):
+>
+> | Condition | max era (any seed) | seeds ≥ era-2 | seeds ≥ era-3 | any domestication |
+> |---|---|---|---|---|
+> | `out-of-africa` baseline | 1 | 0/16 | 0/16 | 0/16 |
+> | `ooa-noasocial` (competitor 610→50) | 2 | 2/16 (12%) | 0/16 | 0/16 |
+>
+> Gate: promote an emergent scenario only at ≥50% of seeds at era-3 without
+> ecosystem collapse — neither condition approaches it, so the decision is
+> final for this tuning: **`out-of-africa-saga` keeps
+> `starting_inventions`; the emergent era-3 climb is closed at grand scale.**
+> The O-track has since mechanistically corroborated the ecological block:
+> O1 showed culture's payoff-blind transmission makes cognitive lineages
+> net-costly against the asocial competitor
+> ([`2026-08-03-o1-exclusion-findings.md`](superpowers/specs/2026-08-03-o1-exclusion-findings.md));
+> O2a re-measured under the lineage-locked tag and found rare cultural
+> lineages excluded in every seed, with cultural-*resident* fragility the
+> real asymmetry
+> ([`2026-08-07-o2a-corrected-decomposition.md`](superpowers/specs/2026-08-07-o2a-corrected-decomposition.md));
+> O2b's first counter-mechanism (energy-keyed payoff bias) measured negative
+> ([`2026-08-07-o2b-payoff-biased-findings.md`](superpowers/specs/2026-08-07-o2b-payoff-biased-findings.md)).
+> Reopen only if a future mechanism fixes the *ecological* stage — protects
+> or subsidizes cognitive lineages against r-selected competitors (a
+> reproductive-success-keyed social learner, a culture fitness floor, niche
+> separation, or a competitor cap) — not the discovery/IQ math.
+
 ---
 
 ## 3. The decision (RESOLVED): Option A — seed starting tech · **built & validated**

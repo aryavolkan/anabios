@@ -113,7 +113,7 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // off in this scenario ⇒ detectors never fire — layout growth only.
     // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
     // World.payoff_biased_learning layout growth only (off here).
-    &[(0, 0xdf11ebc98d72dfb6), (100, 0x4e69079b065fbf51), (300, 0x9b9f6c6999906efe)];
+    &[(0, 0xa57a1f2e23f473a2), (100, 0x413b3ebaa22ace73), (300, 0xec8e42c90ac5e314)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

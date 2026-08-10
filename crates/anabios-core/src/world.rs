@@ -202,6 +202,16 @@ pub struct World {
     /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
     #[serde(default)]
     pub payoff_biased_learning: bool,
+    /// Opt-in unilateral (one-sided) exchange: when a bilateral barter swap
+    /// fails, `interact::trade_pass` falls back to a surplus GIFT — A gives
+    /// one `TRADE_UNIT` of a good it holds above `STOCK_TARGET + TRADE_UNIT`
+    /// (zero want-cost to A) to a partner that still wants it. Breaks the
+    /// both-must-give barter constraint that lets trade self-terminate at the
+    /// equalized/starved equilibrium (the measured freeze; see
+    /// `docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`). Off ⇒
+    /// byte-identical bilateral-only trade.
+    #[serde(default)]
+    pub unilateral_trade: bool,
     /// Per-cell market density field (E8). Sized to the biome grid when
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
@@ -385,6 +395,7 @@ impl World {
             // behavior before this flag existed; set false to disable discovery.
             practices_enabled: true,
             payoff_biased_learning: false,
+            unilateral_trade: false,
             market_field: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,

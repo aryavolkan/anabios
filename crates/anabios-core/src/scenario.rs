@@ -151,6 +151,14 @@ pub struct Scenario {
     /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
     #[serde(default)]
     pub payoff_biased_learning: bool,
+    /// Opt-in unilateral (one-sided) exchange: when no mutually-beneficial
+    /// barter swap exists, an agent may gift one `TRADE_UNIT` of a good it
+    /// holds above `STOCK_TARGET + TRADE_UNIT` to a partner that still wants
+    /// it — breaking the both-must-give constraint behind the measured trade
+    /// freeze (`docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`).
+    /// Off by default ⇒ byte-identical bilateral-only trade.
+    #[serde(default)]
+    pub unilateral_trade: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -697,6 +705,7 @@ impl Scenario {
         w.knowledge_enabled = self.knowledge_enabled;
         w.practices_enabled = self.practices_enabled;
         w.payoff_biased_learning = self.payoff_biased_learning;
+        w.unilateral_trade = self.unilateral_trade;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);

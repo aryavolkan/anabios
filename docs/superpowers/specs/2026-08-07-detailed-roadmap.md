@@ -70,7 +70,7 @@ Plan: `plans/2026-08-01-web-showcase-and-capture.md`. Track V/S/T.
 
 | # | Item | Detail | Done when |
 |---|---|---|---|
-| 1.1 | Host the web replay player | Deploy `showcase/` (settlements, ghosts, trade lanes, poses already render, #96–#98); saga deck as landing experience | Shareable URL plays saga end-to-end, no console errors, desktop+mobile |
+| 1.1 | Host the web replay player — **done 2026-08-09** | Deployed: https://aryavolkan.github.io/anabios/ plays the saga deck (recorded from source at publish time; `state_hash` receipt verified bit-identical against a local release `record`) | Shareable URL plays saga end-to-end, no console errors, desktop+mobile |
 | 1.2 | Deck authoring pass | 2–3 curated decks beyond smoke: predator-prey collapse, dialect/meme sweep, invention race; each pinned to scenario+seed and listed in the player menu | Each deck regenerates from a one-line command |
 | 1.3 | Showcase-director cinematic pass | Fold tier-2/3 effects (embers, firelight, climate grade, footstep trails) into `game/showcase/*.json` beat lists | Headless capture produces a clean cinematic with no manual camera work |
 | 1.4 | Capture pipeline hardening | One command (`scripts/emergence.sh` or `make showcase`) regenerates every asset: viewer stills (gallery), web-deck JSON, MP4 | Documented; assets reproducible from pinned scenarios |
@@ -101,14 +101,14 @@ the counter-mechanism.
 
 | # | Item | Detail | Done when |
 |---|---|---|---|
-| 2.4 | Scorecard-driven sweeps | Weekly archive-weighted sweep (`--archive runs/corpus-e1`); triage `<out>/novel/`; regenerate corpus **after** any new codex event lands | Weekly shortlist of novel runs worth viewer inspection |
-| 2.5 | OoA climb — close out | Emergent era-3 is dead at grand scale (findings). Remaining work: record the seeding decision in `docs/showcase-plan.md` with the evidence table | Decision recorded; saga keeps `starting_inventions` |
+| 2.4 | Scorecard-driven sweeps — **done 2026-08-09** | e1.3 corpus (168 runs × 13 scenarios, incl. economy/culture/domestication/affect) cuts permanently-novel types 24/59 → 2/59; `WEIGHTS_VERSION` e1.3 with updated pinned weights. Weekly-loop validated: archived sweeps of biome-trade/predator-prey/weapons-arms-race produce discriminating, novel-free shortlists (docs/emergence-corpus.md §4). Corpus dir `runs/corpus-e1.3/` (local); regen rule: on any new codex event | Weekly shortlist of novel runs worth viewer inspection |
+| 2.5 | OoA climb — close out — **done 2026-08-07** | Emergent era-3 is dead at grand scale (findings). Decision recorded in `docs/showcase-plan.md` §2 ("Decision record 2026-08-07"): evidence table consolidated, saga keeps `starting_inventions`, O-track corroboration linked, reopen conditions stated (ecological-stage fix, not discovery/IQ math) | Decision recorded; saga keeps `starting_inventions` |
 
 ### 4.3 Economy
 
 | # | Item | Detail | Done when |
 |---|---|---|---|
-| 2.6 | Trade-economy redesign | Supply-side fix: conserve goods on death (shipped as opt-in mechanism in #103) is *not* the freeze fix — the freeze is a structural barter equilibrium. Candidates: sustain harvest access at scale, temper churn dilution. Plan: `plans/2026-08-01-trade-economy-redesign.md` | `biome-trade`/`geographic-trade` sustain nonzero trade past the freeze tick behind an opt-in flag, determinism rehashed |
+| 2.6 | Trade-economy redesign — **done 2026-08-07** | Per the corrected diagnosis (freeze is the bilateral-barter primitive + supply churn), shipped `unilateral_trade` (surplus-gift fallback when `pick_swap` fails) + `conserve_goods_on_death` together on `scenarios/unilateral-trade.toml`; `FORMAT_VERSION` 31, layout-only rehash. Measured on the pinned seed: baseline freezes after t10k (54 trades in the t10–12k window, 1 in t18–20k); the fix sustains **52,261** (t10–12k) and 2,851 (t18–20k) — data `docs/superpowers/data/trade-o26-unilateral-windows.csv`. Sweep CSV gains the `total_trades` column (canonical order `…coverage,total_trades,novel_types`) so the freeze is visible in sweeps | `biome-trade`/`geographic-trade` sustain nonzero trade past the freeze tick behind an opt-in flag, determinism rehashed |
 
 **Phase-2 exit:** flagship story is either emergent or honestly documented;
 new mechanics chosen by scorecard evidence. Gene-culture experiment is

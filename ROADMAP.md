@@ -95,9 +95,14 @@ sharpen the discovery loop that finds the next story.*
   gene is disfavoured. Caught in a cheap pilot; the full 3-arm apparatus was not
   built (pilot gate: criterion unreachable in current scenarios). A future attempt
   must first re-tune a scenario for stable populations. *Depends:* scorecard sweeps.
-- **[E, M] Trade-economy redesign.** The biome trade-goods economy freezes over
-  long runs (`biome-trade` stops trading permanently by ~t10k). **Corrected
-  diagnosis (2026-08-02, measured — see
+- **[E, M] Trade-economy redesign.** **Resolved 2026-08-07 (shipped):**
+  `unilateral_trade` + `conserve_goods_on_death` on
+  `scenarios/unilateral-trade.toml` sustain trade past the freeze tick
+  (52,261 vs 54 swaps in the t10–12k window on the pinned seed —
+  `docs/superpowers/data/trade-o26-unilateral-windows.csv`), behind opt-in
+  flags with the determinism rehash (`FORMAT_VERSION` 31). The biome
+  trade-goods economy freezes over long runs (`biome-trade` stops trading
+  permanently by ~t10k). **Corrected diagnosis (2026-08-02, measured — see
   [`docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`](docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md)):**
   the freeze is a **supply-side starvation** — agent inventories bleed to empty
   (death-churn loses goods; ungated reproduction floods empty newborns; the tiny
