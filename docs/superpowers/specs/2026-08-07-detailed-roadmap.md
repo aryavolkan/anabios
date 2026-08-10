@@ -66,17 +66,19 @@ mechanism that makes culture pay.
 
 ## 3. Phase 1 — Ship the showcase (August, in progress)
 
-Plan: `plans/2026-08-01-web-showcase-and-capture.md`. Track V/S/T.
+Plan: `plans/archive/2026-08-01-web-showcase-and-capture.md` (completed). Track V/S/T.
 
 | # | Item | Detail | Done when |
 |---|---|---|---|
 | 1.1 | Host the web replay player — **done 2026-08-09** | Deployed: https://aryavolkan.github.io/anabios/ plays the saga deck (recorded from source at publish time; `state_hash` receipt verified bit-identical against a local release `record`) | Shareable URL plays saga end-to-end, no console errors, desktop+mobile |
-| 1.2 | Deck authoring pass | 2–3 curated decks beyond smoke: predator-prey collapse, dialect/meme sweep, invention race; each pinned to scenario+seed and listed in the player menu | Each deck regenerates from a one-line command |
-| 1.3 | Showcase-director cinematic pass | Fold tier-2/3 effects (embers, firelight, climate grade, footstep trails) into `game/showcase/*.json` beat lists | Headless capture produces a clean cinematic with no manual camera work |
-| 1.4 | Capture pipeline hardening | One command (`scripts/emergence.sh` or `make showcase`) regenerates every asset: viewer stills (gallery), web-deck JSON, MP4 | Documented; assets reproducible from pinned scenarios |
+| 1.2 | Deck authoring pass — **done 2026-08-10** | 4 curated decks in `game/showcase/` (saga, predator-prey collapse, dialects meme-sweep, inventions race), each pinned to scenario+seed in the deck JSON and reproducible via `scripts/emergence.sh record <name>`; smoke-recorded all four to MP4 (no stalls, end beats reached) | Each deck regenerates from a one-line command |
+| 1.3 | Showcase-director cinematic pass — **done 2026-08-10** | Saga deck drives tier-2/3 effects deliberately (`ground: biome/markets`, tech panel, lower-thirds); full `record` run produced the 15s saga cinematic with zero manual camera work | Headless capture produces a clean cinematic with no manual camera work |
+| 1.4 | Capture pipeline hardening — **done 2026-08-10** | `scripts/emergence.sh showcase` regenerates every showcase asset (web `replay.js` + all 4 deck MP4s) from pinned scenarios/seeds in one command; documented in `showcase/README.md` §Cinematic decks | Documented; assets reproducible from pinned scenarios |
 
-**Phase-1 exit:** the Out-of-Africa story is watchable by a stranger in a
-browser; every asset regenerates from source.
+**Phase-1 exit — REACHED 2026-08-10:** the Out-of-Africa story is watchable
+by a stranger in a browser (https://aryavolkan.github.io/anabios/, verified
+determinism receipt); every asset regenerates from source
+(`scripts/emergence.sh showcase`).
 
 **Dependencies/risks:** hosting choice (static host suffices — player is
 replay-only); deck pinning must survive the Phase-3 determinism work (record
