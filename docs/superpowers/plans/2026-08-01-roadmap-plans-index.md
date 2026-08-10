@@ -8,7 +8,7 @@ This indexes the per-item implementation/testing plans for [`ROADMAP.md`](../../
 
 | Phase | Track | Roadmap item | Plan |
 |-------|-------|--------------|------|
-| 1 | V/T | Publish & host web player · deck authoring · showcase-director cinematic · one-command capture | [web-showcase-and-capture](2026-08-01-web-showcase-and-capture.md) |
+| 1 | V/T | Publish & host web player · deck authoring · showcase-director cinematic · one-command capture | [web-showcase-and-capture](archive/2026-08-01-web-showcase-and-capture.md) (completed) |
 | 2 | R | Out-of-Africa era-3 climb problem | [out-of-africa-climb-experiment](2026-08-01-out-of-africa-climb-experiment.md) |
 | 2 | T | Emergence-scorecard-driven sweeps | [emergence-scorecard-sweeps](2026-08-01-emergence-scorecard-sweeps.md) |
 | 2 | R | Next gene-culture experiment (confound-controlled) | [gene-culture-experiment](2026-08-01-gene-culture-experiment.md) |

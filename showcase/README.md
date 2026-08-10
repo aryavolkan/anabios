@@ -67,8 +67,35 @@ Farming & Trade at the first settlement/market, Writing at the first meme-sweep,
 at the first raid — falling back to even spacing when a signal never fires. Species names
 come from the scenario's archetype specs (dynamically speciated splinters show as `species N`).
 
-## Host it
+## Cinematic decks (Godot Movie Maker MP4s)
 
+Beyond the web replay, the Godot viewer records scripted cinematic decks
+(`game/showcase/*.json` beat timelines over the live sim). Each deck is
+pinned to a same-named scenario and seed and regenerates from a one-line
+command (needs a real display + ffmpeg):
+
+| deck | scenario · seed | arc |
+|------|-----------------|-----|
+| `out-of-africa-saga` | `out-of-africa-saga.toml` · 318 | the flagship: exodus, fire, husbandry, writing |
+| `predator-prey` | `predator-prey.toml` · 0 | collapse-and-recovery: grazers vs stalkers |
+| `dialects` | `dialects.toml` · 0 | two clusters diverge; a dialect sweeps |
+| `inventions` | `inventions.toml` · 0 | the innovators-vs-traditionalists tech race |
+
+```sh
+scripts/emergence.sh showcase                 # everything below, one command
+# or individually:
+scripts/emergence.sh record-web out-of-africa-saga --seed 318   # web replay.js
+scripts/emergence.sh record out-of-africa-saga --seed 318       # runs/showcase/*.mp4
+scripts/emergence.sh record predator-prey                       # deck-pinned seed
+```
+
+`scripts/emergence.sh showcase` regenerates every showcase asset (this
+replay + all four deck MP4s into `runs/showcase/`) from the pinned
+scenarios/seeds — the roadmap Phase-1 reproducibility bar. Re-run it after
+any scenario/deck/sim change; the hosted replay is regenerated again by the
+Pages workflow at publish time.
+
+## Host it
 The player is published to GitHub Pages via `.github/workflows/showcase.yml` —
 gated, never on ordinary pushes:
 
