@@ -88,6 +88,13 @@ func _setup(res: int) -> void:
 	_last_mode = -999  # force an immediate redraw
 
 
+# The whole-world biome ImageTexture (res×res), shared with the minimap so it
+# reflects biome/biomass updates without a second rebuild. May be null before
+# the first _setup(); callers must guard.
+func world_texture() -> ImageTexture:
+	return _tex
+
+
 func _process(_delta: float) -> void:
 	var res: int = int(sim.biome_resolution())
 	if res != _res:

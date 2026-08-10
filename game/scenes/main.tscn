@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="MultiMesh" path="res://resources/body_multimesh.tres" id="2_mm"]
@@ -13,6 +13,7 @@
 [ext_resource type="Script" path="res://scripts/tech_panel.gd" id="14_tech"]
 [ext_resource type="Script" path="res://scripts/legend_panel.gd" id="12_legend"]
 [ext_resource type="Script" path="res://scripts/coevolution_panel.gd" id="13_coevo"]
+[ext_resource type="Script" path="res://scripts/minimap_panel.gd" id="15_minimap"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -193,6 +194,13 @@ multimesh = SubResource("MM_mod9")
 multimesh = SubResource("MM_mod10")
 
 [node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Minimap" type="Control" parent="UI"]
+offset_left = 10.0
+offset_top = 70.0
+offset_right = 210.0
+offset_bottom = 270.0
+script = ExtResource("15_minimap")
 
 [node name="HUD" type="Label" parent="UI"]
 offset_left = 10.0
