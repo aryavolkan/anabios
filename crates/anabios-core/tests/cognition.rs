@@ -113,7 +113,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // off in this scenario ⇒ detectors never fire — layout growth only.
     // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
     // World.payoff_biased_learning layout growth only (off here).
-    &[(0, 0x464c3148da13c4a0), (100, 0x6bd76194083be269), (300, 0x1a2b49cdd270690a)];
+    // Refreshed 2026-08-11 (apes-only inventions): culture cohort (innovator/
+    // traditionalist) reclassed omnivore (ape) so it can carry the tech tree;
+    // the diet change shifts feeding ecology and the invention-race trajectory.
+    // Regenerated on the gated tree.
+    &[(0, 0x1a05a7a2f582710c), (100, 0x1e6af0b8724fc2df), (300, 0xe71f444c39cdc0ac)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

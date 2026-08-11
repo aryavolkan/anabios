@@ -1168,7 +1168,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // off in this scenario ⇒ detectors never fire — layout growth only.
     // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
     // World.payoff_biased_learning layout growth only (off here).
-    &[(0, 0xabc8d07fc3892bc7), (100, 0xda82600fe52add4d), (300, 0x1e794aa302b6f2fa)];
+    // Refreshed 2026-08-11 (apes-only inventions): culture cohort (innovator/
+    // traditionalist) reclassed omnivore (ape) so it can carry the tech tree;
+    // the diet change shifts feeding ecology and the invention-race trajectory.
+    // Regenerated on the gated tree.
+    &[(0, 0x620ece243fc93a97), (100, 0x9bb144abcb0d6f5f), (300, 0xf28a2263a8c65713)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
