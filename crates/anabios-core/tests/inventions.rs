@@ -23,7 +23,7 @@ fn comm_kit() -> anabios_core::module::ModuleList {
         radius: 0.6,
         acuity: 0.6,
     });
-    m.push(Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 });
+    m.push(Module::Mouth { bite_size: 0.6, diet_affinity: 0.5 }); // omnivore -> ape
     m.push(Module::Communicator { range: 10.0, channel_id: 0 });
     m
 }
@@ -113,6 +113,36 @@ fn communicators_eventually_discover_stone_tools() {
         let mask = invention::held_mask(&w.agents.meme_vector[id as usize]);
         assert!(mask & !invention::bit(invention::STONE_TOOLS) == 0);
     }
+}
+
+/// A non-ape (herbivore) Communicator never discovers, even over many ticks —
+/// inventions are apes-only. An otherwise-identical ape does (covered by
+/// `communicators_eventually_discover_stone_tools`).
+#[test]
+fn non_ape_communicator_never_discovers() {
+    let mut w = World::new(13);
+    w.inventions_enabled = true;
+    size_scratch(&mut w);
+    for n in 0..12u32 {
+        let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+        let mut kit = comm_kit();
+        // Force herbivore diet -> non-ape, overriding comm_kit's omnivore Mouth.
+        for m in kit.iter_mut() {
+            if let Module::Mouth { diet_affinity, .. } = m {
+                *diet_affinity = 0.0;
+            }
+        }
+        w.agents.modules[id as usize] = kit;
+        w.agents.meme_vector[id as usize][SKILL_CHANNEL] = 1.0;
+    }
+    for _ in 0..3000 {
+        invention::invention_step(&mut w);
+    }
+    let discovered = w
+        .agents
+        .iter_alive()
+        .any(|id| invention::held_mask(&w.agents.meme_vector[id as usize]) != 0);
+    assert!(!discovered, "a non-ape must never discover an invention");
 }
 
 // --- Prereqs & atrophy --------------------------------------------------------

@@ -718,7 +718,9 @@ pub fn invention_step(world: &mut World) {
         let mut mask = held_mask(&world.agents.meme_vector[i]);
 
         // --- Innovation: one roll per Communicator with open candidates. ---
-        if module::has(&world.agents.modules[i], ModuleType::Communicator) {
+        if module::has(&world.agents.modules[i], ModuleType::Communicator)
+            && is_ape(&world.agents.genome[i], &world.agents.modules[i])
+        {
             let openness = world.agents.genome[i].get(crate::genome::GenomeSlot::Openness);
             let skill = world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL].clamp(0.0, 1.0);
             let disc_mult = discovery_multiplier(mask);
