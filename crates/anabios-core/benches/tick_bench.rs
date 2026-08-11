@@ -126,6 +126,32 @@ fn bench_stages(c: &mut Criterion) {
     group.finish();
 }
 
+/// Culture transmission under a dense 10k-communicator cluster — the hot path
+/// the sandbox-xlarge profile isolated (~73% of step at 12k agents). Each
+/// agent's neighbourhood scan is the per-neighbor channel loop in
+/// `scan_neighbor_memes`; clustering maximizes neighbours-per-agent.
+fn bench_culture(c: &mut Criterion) {
+    let mut group = c.benchmark_group("culture");
+    group.sample_size(20);
+    let mut w = World::new(3);
+    w.inventions_enabled = true;
+    w.cognition_enabled = true;
+    for i in 0..10_000usize {
+        // Dense cluster: radius-100 disc around the map centre, so every
+        // communicator's range-16 ring holds hundreds of neighbours.
+        let angle = (i as f32) * 2.399_963; // golden-angle spiral
+        let r = 100.0 * ((i as f32) / 10_000.0).sqrt();
+        let pos = Vec2::new(512.0 + r * angle.cos(), 512.0 + r * angle.sin());
+        let id = w.spawn_agent(pos, Genome::neutral());
+        w.agents.modules[id as usize] = anabios_core::module::communicator_kit();
+    }
+    warm(&mut w, 3);
+    group.bench_function("culture_step/10000_dense", |b| {
+        b.iter(|| anabios_core::culture::culture_step(&mut w));
+    });
+    group.finish();
+}
+
 /// Scavenge under a mass-death carcass load: the worst case the carcass
 /// spatial index fixes (the default tick bench has ~0 carcasses, so the
 /// scavenge path is invisible there). Each iteration starts from a fresh
@@ -164,5 +190,5 @@ fn bench_scavenge(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_tick, bench_stages, bench_scavenge);
+criterion_group!(benches, bench_tick, bench_stages, bench_culture, bench_scavenge);
 criterion_main!(benches);
