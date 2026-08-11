@@ -361,3 +361,25 @@ fn minimal_scenario_matches_golden_hashes() {
         );
     }
 }
+
+/// The real-Earth out-of-africa scenario must survive a save→load→step
+/// round-trip: from_earth's field + every opt-in subsystem, no hidden state.
+#[test]
+fn out_of_africa_earth_survives_save_load_step() {
+    const OOA_EARTH: &str = include_str!("../../../scenarios/out-of-africa-earth.toml");
+    let mut world = Scenario::parse_toml(OOA_EARTH).expect("parse ooa-earth").instantiate();
+    assert_eq!(world.biome.res, 256, "scenario must use the earth map res");
+    for _ in 0..300 {
+        step(&mut world);
+    }
+    let bytes = save_to_bytes(&world).expect("save");
+    let mut reloaded = load_from_bytes(&bytes).expect("load");
+    assert_eq!(state_hash(&world), state_hash(&reloaded), "load must restore identical state");
+    step(&mut world);
+    step(&mut reloaded);
+    assert_eq!(
+        state_hash(&world),
+        state_hash(&reloaded),
+        "ooa-earth diverged after save→load→step (hidden non-serialized state?)",
+    );
+}
