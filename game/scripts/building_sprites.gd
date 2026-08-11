@@ -198,3 +198,51 @@ static func build(kind: int) -> ImageTexture:
 
 static func building_for_invention(key: String) -> int:
 	return INVENTION_BUILDING.get(key, -1)
+
+
+const MARKET_MIN := 0.35
+const WAREHOUSE_MIN_MEMBERS := 40
+
+
+# Building kinds for the `want` highest-era held inventions, most-advanced
+# first. `era_of` maps invention key -> era. Ties break by INVENTION_BUILDING
+# insertion order (stable). Keys with no building are skipped.
+static func signature_kinds(
+	adopted: PackedStringArray, era_of: Dictionary, want: int
+) -> PackedInt32Array:
+	var order: Array = INVENTION_BUILDING.keys()
+	var held: Array = []
+	for key in adopted:
+		if not INVENTION_BUILDING.has(key):
+			continue
+		held.append({"key": key, "era": int(era_of.get(key, 0)), "ord": order.find(key)})
+	held.sort_custom(
+		func(a, b):
+			if a["era"] != b["era"]:
+				return a["era"] > b["era"]
+			return a["ord"] < b["ord"]
+	)
+	var out := PackedInt32Array()
+	for i in mini(want, held.size()):
+		out.push_back(INVENTION_BUILDING[held[i]["key"]])
+	return out
+
+
+# Trade building for a village: warehouse at large hubs, market at any hub,
+# nothing below MARKET_MIN density. `density_r` is the .r channel of the
+# market-field cell colour (base 0.10 -> amber 1.0).
+static func trade_kind(density_r: float, members: int) -> int:
+	if density_r < MARKET_MIN:
+		return -1
+	if members >= WAREHOUSE_MIN_MEMBERS:
+		return WAREHOUSE
+	return MARKET
+
+
+# Row-major biome-grid cell index for a world position (clamped in-bounds).
+static func market_cell(pos: Vector2, world_size: float, res: int) -> int:
+	if res <= 0 or world_size <= 0.0:
+		return -1
+	var ix := clampi(int(pos.x / world_size * float(res)), 0, res - 1)
+	var iy := clampi(int(pos.y / world_size * float(res)), 0, res - 1)
+	return iy * res + ix
