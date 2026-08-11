@@ -39,6 +39,38 @@ seed = 318
 # CorridorUse / RangeExpansion / SpeciationEvent for the trek,
 # MaterialLearning / InventionDiscovered / AnimalDomesticated for the
 # technology arc, and SexualSelection on the hominid lineages.
+#
+# Honest expectations (measured on this build): release, seed 318, 2000
+# ticks via both `demo` and `run --events-jsonl` (results agree bit-for-bit:
+# alive=2625, state_hash=0xf59bc5c4b2315ec4). Wall-clock: ~16.4s for 2000
+# ticks (~8s/1000 ticks) on a dev laptop — comfortably watchable at this
+# grand scale (max_population 3000, biome_res 256, world_size 4096, every
+# subsystem on) on the real Earth map; no founding-count reduction needed.
+# Population is NOT a smooth climb to the cap — it churns: 1142 initial ->
+# ~2580 by tick 500 -> a crash to ~1294 by tick 1500 -> a rebound to 2625 by
+# tick 2000, driven by heavy turnover (3418 PopulationCrash + 1741
+# Extinction events in the 2000-tick window; 3719 SpeciationEvent). Three
+# small lineages go extinct almost immediately (spiner t44, slow_hunter t90,
+# fast_hunter t111), two more mid-run (culture_prey t1077, cooperator
+# t1428). The r-selected asocial_forager comes to dominate the population
+# (2183/2625 = 83% alive at tick 2000), squeezing every cultural/cognitive
+# lineage down to a handful (innovator 40 -> 3, cultural_forager 40 -> 2,
+# sentinel 10 -> 0) — the same ecological-exclusion pattern documented on
+# the procedural grand-theater map. The real corridors DO carry traffic:
+# CorridorUse fires 94 times starting ~tick 1000 (Migration 696 times,
+# RangeExpansion 12), and settlement/trade activate modestly (SettlementFormed
+# 13, MarketEmerged 5). But the technology arc fully STALLS in this window:
+# zero InventionDiscovered, MaterialLearning, AnimalDomesticated, or
+# SexualSelection events fire in 2000 ticks — every species is still era 0,
+# 0/10 techs adopted, at the final tick. This scenario does NOT seed
+# `starting_inventions`; Stone Tools et al. must be discovered emergently,
+# and at 2000 ticks that climb hasn't even started. Whether the real
+# African cradle's geographic isolation (sea / Sahara / rift separating the
+# cognitive lineages from the fast asocial_forager) lets culture survive
+# past era-1 and reach era-3 given more ticks and seeds is the open question
+# sub-project B probes (16 seeds x 20k ticks, era-reached derived from
+# InventionDiscovered) against the documented 0/16 baseline on the
+# procedural map.
 
 max_population = 3000
 world_size = 4096.0
