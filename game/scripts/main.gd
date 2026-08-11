@@ -57,6 +57,10 @@ var _prev_ids: PackedInt32Array = PackedInt32Array()
 var _prev_smooth: PackedVector2Array = PackedVector2Array()
 var _prev_sizes: PackedFloat32Array = PackedFloat32Array()
 var _prev_bucket: PackedInt32Array = PackedInt32Array()
+# Last frame's per-agent body colour (coat hue for quads, white for the
+# self-coloured hominin atlases), kept in sync with the other _prev_* arrays so
+# a death ghost can inherit its agent's colour instead of a flat grey.
+var _prev_color: PackedColorArray = PackedColorArray()
 var _death_mmis: Array[MultiMeshInstance2D] = []
 var _death_effects: Array = []
 var _birth_times: Dictionary = {}
@@ -402,6 +406,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		_prev_sizes = PackedFloat32Array()
 		_prev_bucket = PackedInt32Array()
 		_prev_energy = PackedFloat32Array()
+		_prev_color = PackedColorArray()
 		return
 
 	var positions: PackedVector2Array = sim.alive_positions()
@@ -458,6 +463,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		_prev_smooth = smooth
 		_prev_sizes = sizes
 		_prev_energy = energies
+		_prev_color = body_colors
 
 	# Zoom-compensated floor: as the camera pulls out, the minimum body size
 	# grows so hominin figures stay legible at the world overview instead of
@@ -575,7 +581,13 @@ func _on_agent_death(id: int, prev_idx: int) -> void:
 		sp = _prev_bucket[prev_idx]
 	if prev_idx < _prev_sizes.size():
 		sz = maxf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN)
-	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz, side])
+	# Inherit the agent's body colour so a quadruped ghost keeps its coat hue
+	# instead of the neutral-grey value-ramp; hominin atlases are self-coloured
+	# (white here) so their ghosts are unchanged.
+	var col := Color(1, 1, 1)
+	if prev_idx < _prev_color.size():
+		col = _prev_color[prev_idx]
+	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz, side, col])
 
 
 # Age and draw the ghosts: fallen figures that fade out quadratically over
@@ -611,7 +623,9 @@ func _refresh_death_effects(delta: float) -> void:
 			var ang: float = float(e[4]) * 0.55 * (1.0 - _ease_out_back(ft))
 			var sy: float = float(e[3]) * (1.0 - 0.18 * sin(ft * PI))
 			mm.set_instance_transform_2d(j, Transform2D(ang, Vector2(e[3], sy), 0.0, e[0]))
-			mm.set_instance_color(j, Color(1, 1, 1, 0.85 * life * life))
+			var c: Color = e[5]
+			c.a = 0.85 * life * life
+			mm.set_instance_color(j, c)
 
 
 # Birth scale: a quick anticipation squash (grow 0.3 -> 0.8), then an
