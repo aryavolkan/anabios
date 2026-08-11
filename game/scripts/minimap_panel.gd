@@ -10,6 +10,7 @@ extends Control
 
 const BORDER := Color(0.8, 0.85, 0.9, 0.5)
 const VIEWRECT := Color(1.0, 1.0, 1.0, 0.9)
+const AGENT_DOT := Color(1.0, 0.75, 0.3, 0.85)
 
 
 func _ready() -> void:
@@ -37,6 +38,13 @@ func _draw() -> void:
 	var view_world := Vector2(vp.x / cam.zoom.x, vp.y / cam.zoom.y)
 	var center := Vector2(fposmod(cam.position.x, world), fposmod(cam.position.y, world))
 	var scale := ms / world
+	# Agents: one small dot each at its world position, so the population's
+	# location and spread read at a glance. Overlapping dots brighten into a
+	# cluster (natural density cue). ≤ max_population draws, once per frame.
+	var positions: PackedVector2Array = sim.alive_positions()
+	for p in positions:
+		var mp := Vector2(fposmod(p.x, world), fposmod(p.y, world)) * scale
+		draw_rect(Rect2(mp - Vector2(1, 1), Vector2(2, 2)), AGENT_DOT)
 	var top_left := (center - view_world * 0.5) * scale
 	draw_rect(Rect2(top_left, view_world * scale), VIEWRECT, false, 2.0)
 	# Panel border.
