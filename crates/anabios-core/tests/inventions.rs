@@ -199,6 +199,54 @@ fn spread_copies_toward_holder_neighbour_and_respects_prereqs() {
     assert_eq!(level_of(&w, receiver, invention::FARMING), 0.0, "Farming needs Fire first");
 }
 
+/// A non-ape receiver next to an ape holding Stone Tools does NOT copy the
+/// invention, but DOES still copy a maladaptive practice from a practice-holding
+/// neighbour. Practices are open to every animal.
+#[test]
+fn non_ape_copies_practices_but_not_inventions() {
+    use anabios_core::practice;
+    let mut w = World::new(23);
+    w.inventions_enabled = true;
+    w.cognition_enabled = true; // practice spread is cognition-gated
+
+    // Ape teacher holding Stone Tools + Child Sacrifice.
+    let teacher = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    w.agents.modules[teacher as usize] = comm_kit(); // omnivore -> ape
+    set_held(&mut w, teacher, invention::STONE_TOOLS);
+    w.agents.meme_vector[teacher as usize][practice::channel(practice::CHILD_SACRIFICE)] = 1.0;
+
+    // Non-ape (herbivore) Communicator receiver right next to the teacher.
+    let learner = w.spawn_agent(Vec2::new(500.5, 500.0), Genome::neutral());
+    let mut kit = comm_kit();
+    for m in kit.iter_mut() {
+        if let Module::Mouth { diet_affinity, .. } = m {
+            *diet_affinity = 0.0; // herbivore -> non-ape
+        }
+    }
+    w.agents.modules[learner as usize] = kit;
+    // Realized IQ only develops via the full tick's `iq::develop_all`, which
+    // this test skips (it drives `culture_step` directly). Set it directly so
+    // the cognition-enabled IQ gates (invention era-1 req 0.15, practice req
+    // 0.10) don't block the copy this test is trying to observe.
+    w.agents.iq[learner as usize] = 0.5;
+
+    size_scratch(&mut w);
+    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+    for _ in 0..50 {
+        anabios_core::culture::culture_step(&mut w);
+    }
+
+    assert_eq!(
+        level_of(&w, learner, invention::STONE_TOOLS),
+        0.0,
+        "non-ape must not copy an invention"
+    );
+    assert!(
+        w.agents.meme_vector[learner as usize][practice::channel(practice::CHILD_SACRIFICE)] > 0.0,
+        "non-ape must still copy a maladaptive practice"
+    );
+}
+
 #[test]
 fn writing_doubles_generic_meme_copy_rate() {
     let mut w = World::new(23);
