@@ -150,6 +150,16 @@ const POSE_EAT := 4
 const POSE_FIGHT := 6
 const POSE_TRADE := 8
 const POSE_FLEE := 10
+# Atlas layout: the 12 poses pack into a SQUARE 64x64 grid (4 cols x 4 rows,
+# last row unused), NOT a 16x192 vertical strip. On Metal (Apple GPUs) an
+# extreme-aspect texture sampled through a canvas_item ShaderMaterial on the
+# MultiMesh2D path corrupts into torn horizontal streaks — a near-square
+# power-of-two texture renders cleanly. The field_agent shader maps a pose
+# index `fr` to cell (fr % ATLAS_COLS, fr / ATLAS_COLS). Keep in sync with the
+# shader's ATLAS_COLS / ATLAS_PX / CELL_PX constants and mammal_sprites.
+const ATLAS_COLS := 4
+const ATLAS_PX := 64
+const CELL_PX := 16
 # Gait: 0 neutral (idle), 1 contact-left, 2 passing (whole figure lifted 1px —
 # the walk bob), 3 contact-right. The shader cycles 1→2→3→2 when moving and
 # holds 0 when idle, so the stride reads as step-lift-step-lift.
@@ -376,22 +386,33 @@ static func _build_pose(pose: Array, zones: Dictionary) -> Image:
 	return _build_cell(blocks)
 
 
-# One species' poses packed VERTICALLY into one (16 x POSE_COUNT*16) strip:
-# the 4 gait poses first, then the eat/fight/trade stills. One MultiMesh per
-# species samples its own strip. The strip is 16px
-# wide on purpose: wide-thin atlas textures sample garbage on the canvas
-# MultiMesh path (Metal), while 16px rows match the field mask that has
-# always rendered cleanly. Nearest-filtered; the transparent margins keep
-# cells from bleeding. Cells are stored upside-down: the MultiMesh QuadMesh
-# is a 3D mesh whose V axis renders flipped in the 2D canvas, so
-# pre-flipping the art draws figures upright.
+# One species' poses packed into a SQUARE 64x64 grid (ATLAS_COLS per row):
+# the 4 gait poses, then the eat/fight/trade/flee stills. One MultiMesh per
+# species samples its own grid. A near-square power-of-two atlas is deliberate:
+# an extreme-aspect (16x192) texture sampled through the field_agent
+# ShaderMaterial on the MultiMesh2D canvas path corrupts into torn streaks on
+# Metal; the 64x64 grid renders cleanly. Nearest-filtered; the transparent
+# margins keep cells from bleeding. Cells are stored upside-down: the MultiMesh
+# QuadMesh is a 3D mesh whose V axis renders flipped in the 2D canvas, so
+# pre-flipping the art draws figures upright. Cell(fr) = (fr % ATLAS_COLS,
+# fr / ATLAS_COLS) — kept in sync with field_agent.gdshader.
 static func build_species_atlas(sp: int) -> ImageTexture:
-	var atlas := Image.create(16, POSE_COUNT * 16, false, Image.FORMAT_RGBA8)
+	return _pack_grid(FIELD_POSES, FIELD_ZONE_COLORS[sp])
+
+
+# Shared grid packer: paint each pose to a 16x16 cell (flipped for the QuadMesh
+# V axis) and blit it into the 64x64 grid at its (col, row). Used by the ape
+# atlas here and the quadruped atlas in mammal_sprites (which passes explicit
+# Colours already resolved, so `zones` maps zone-key -> Color).
+static func _pack_grid(poses: Array, zones: Dictionary) -> ImageTexture:
+	var atlas := Image.create(ATLAS_PX, ATLAS_PX, false, Image.FORMAT_RGBA8)
 	atlas.fill(Color(0, 0, 0, 0))
-	for fr in POSE_COUNT:
-		var cell := _build_pose(FIELD_POSES[fr], FIELD_ZONE_COLORS[sp])
+	for fr in poses.size():
+		var cell := _build_pose(poses[fr], zones)
 		cell.flip_y()
-		atlas.blit_rect(cell, Rect2i(0, 0, 16, 16), Vector2i(0, fr * 16))
+		var cx := (fr % ATLAS_COLS) * CELL_PX
+		var cy := int(fr / ATLAS_COLS) * CELL_PX
+		atlas.blit_rect(cell, Rect2i(0, 0, CELL_PX, CELL_PX), Vector2i(cx, cy))
 	return ImageTexture.create_from_image(atlas)
 
 
