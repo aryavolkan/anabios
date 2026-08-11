@@ -40,6 +40,10 @@ var _frame: int = REDRAW_EVERY - 1  # redraw on the very first frame
 const LINGER := 45.0
 const FADE := 10.0
 var _villages: Dictionary = {}  # sid -> {pos, members, born, seen}
+# Per-lineage invention-landmark memory, same linger/fade contract as _villages
+# so a landmark eases in when a lineage first earns its tech and lingers/fades
+# when the lineage dies out, instead of popping. sid -> {pos, sig, born, seen}.
+var _lineage_marks: Dictionary = {}
 var _sites: Array = []  # last settlement_sites() result
 var _now: float = 0.0
 
@@ -221,6 +225,8 @@ func _place_invention_landmarks(
 		var s: int = sp_ids[i]
 		sum_pos[s] = (sum_pos.get(s, Vector2.ZERO) as Vector2) + sp_pos[i]
 		counts[s] = int(counts.get(s, 0)) + 1
+	# Fold the qualifying lineages into the landmark memory (eased pos, latest
+	# signature), then draw from memory below so marks linger/fade like villages.
 	for s in counts.keys():
 		var cnt: int = counts[s]
 		if cnt < INVENTION_MIN_MEMBERS:
@@ -232,14 +238,32 @@ func _place_invention_landmarks(
 		if sig.is_empty():
 			continue
 		var centroid: Vector2 = (sum_pos[s] as Vector2) / float(cnt)
-		for slot in sig.size():
-			var kind: int = sig[slot]
+		var mark: Dictionary = _lineage_marks.get(s, {})
+		if mark.is_empty():
+			_lineage_marks[s] = {"pos": centroid, "sig": sig, "born": _now, "seen": _now}
+		else:
+			mark["pos"] = (mark["pos"] as Vector2).lerp(centroid, 0.3)
+			mark["sig"] = sig
+			mark["seen"] = _now
+	for s in _lineage_marks.keys():
+		var m: Dictionary = _lineage_marks[s]
+		var stale: float = _now - float(m["seen"])
+		if stale > LINGER:
+			_lineage_marks.erase(s)
+			continue
+		var fade: float = clampf((LINGER - stale) / FADE, 0.0, 1.0)
+		var grow: float = clampf((_now - float(m["born"])) / 0.6, 0.0, 1.0)
+		var ease := 1.0 - pow(1.0 - grow, 3.0)
+		var lscale := BUILDING_SCALE * ease
+		var lcol := Color(1, 1, 1, fade)
+		var pos: Vector2 = m["pos"]
+		var msig: PackedInt32Array = m["sig"]
+		for slot in msig.size():
+			var kind: int = msig[slot]
 			var ang: float = float(s) * 2.39996 + float(slot) * 2.0
-			var lp := centroid + Vector2.from_angle(ang) * 22.0
-			build_xf[kind].append(
-				Transform2D(0.0, Vector2(BUILDING_SCALE, BUILDING_SCALE), 0.0, lp)
-			)
-			build_col[kind].append(Color(1, 1, 1, 1))
+			var lp := pos + Vector2.from_angle(ang) * 22.0
+			build_xf[kind].append(Transform2D(0.0, Vector2(lscale, lscale), 0.0, lp))
+			build_col[kind].append(lcol)
 
 
 func _write(mm: MultiMesh, xfs: Array, cols: Array) -> void:
