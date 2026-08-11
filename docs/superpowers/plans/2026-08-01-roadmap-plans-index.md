@@ -14,7 +14,7 @@ This indexes the per-item implementation/testing plans for [`ROADMAP.md`](../../
 | 2 | R | Next gene-culture experiment (confound-controlled) | [gene-culture-experiment](2026-08-01-gene-culture-experiment.md) |
 | 2 | E | Trade-economy redesign | [trade-economy-redesign](2026-08-01-trade-economy-redesign.md) |
 | 3 | E | One new emergence subsystem (knowledge accumulation) | [new-emergence-subsystem-knowledge](2026-08-01-new-emergence-subsystem-knowledge.md) |
-| 3 | T | Determinism & save/load hardening | [determinism-saveload-hardening](2026-08-01-determinism-saveload-hardening.md) |
+| 3 | T | Determinism & save/load hardening | [determinism-saveload-hardening](archive/2026-08-01-determinism-saveload-hardening.md) (completed) |
 | 3 | E | Perf headroom for large sweeps | inline below (§A) |
 | 3 | T | Docs & onboarding | inline below (§B) |
 

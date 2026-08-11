@@ -1,6 +1,6 @@
 # Determinism & Save/Load Hardening Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Guarantee every opt-in subsystem survives a save→load→step round-trip bit-identically, and audit `#[serde(skip)]` fields so no path-dependent accumulator can silently break replay.
 
@@ -41,7 +41,7 @@
 - Consumes: `Scenario::parse_toml`, `instantiate`, `step`, `save_to_bytes`, `load_from_bytes`, `state_hash` (all existing).
 - Produces: a reusable `fn roundtrip(scenario_src: &str, warm: u64, flag: fn(&World) -> bool)` helper.
 
-- [ ] **Step 1: Write the helper + first failing test** (for `resources_enabled` via biome-trade):
+- [x] **Step 1: Write the helper + first failing test** (for `resources_enabled` via biome-trade):
 
 ```rust
 use anabios_core::{scenario::Scenario, snapshot::{save_to_bytes, load_from_bytes, state_hash}, tick::step, world::World};
@@ -65,10 +65,10 @@ fn resources_roundtrip() {
 }
 ```
 
-- [ ] **Step 2: Run — expect PASS or FAIL.** Run: `cargo test -p anabios-core --test save_load_roundtrip resources_roundtrip`. If it FAILS, you've found a real footgun — go to Task 3, fix the skipped field (serialize it or re-derive on load), then this passes. If it PASSES, the subsystem is clean; keep the test as a regression guard.
-- [ ] **Step 3: Add two more** (`war_enabled`→war.toml @ 600 ticks; `settlement_enabled`→settlement.toml @ 800 ticks), same pattern.
-- [ ] **Step 4: Run all three.** Run: `cargo test -p anabios-core --test save_load_roundtrip`.
-- [ ] **Step 5: Commit.**
+- [x] **Step 2: Run — expect PASS or FAIL.** Run: `cargo test -p anabios-core --test save_load_roundtrip resources_roundtrip`. If it FAILS, you've found a real footgun — go to Task 3, fix the skipped field (serialize it or re-derive on load), then this passes. If it PASSES, the subsystem is clean; keep the test as a regression guard.
+- [x] **Step 3: Add two more** (`war_enabled`→war.toml @ 600 ticks; `settlement_enabled`→settlement.toml @ 800 ticks), same pattern.
+- [x] **Step 4: Run all three.** Run: `cargo test -p anabios-core --test save_load_roundtrip`.
+- [x] **Step 5: Commit.**
 
 ```bash
 git add crates/anabios-core/tests/save_load_roundtrip.rs
@@ -84,11 +84,11 @@ Add one test per remaining flag from the coverage-gap list. Group them so a revi
 **Files:**
 - Modify: `crates/anabios-core/tests/save_load_roundtrip.rs`
 
-- [ ] **Step 1: Add tests** for: `env_period` (dit-env-slow, 300t), `biome_adaptation` (biome-adaptation, 400t), `terrain_habitat` (geographic-trade, 400t), `inventions_enabled` (inventions, 500t), `gene_requirements` (gene-requirements, 500t), `cognition_enabled` (cognitive-coevolution, 400t), `living_biome` (living-sandbox-coevolution, 400t), `season_period` (sandbox-large, 300t), `climate_drift_rate` (drifting-climate, 400t — flag is `f32`, guard `w.climate_drift_rate > 0.0`), `nutrient_variation`+`soil_fertility` (foraging-selection, 400t), `disasters_enabled` (disturbance, 400t). Choose warm-up ticks long enough that the subsystem has fired (cross-check the subsystem's own integration test for the tick range it uses).
+- [x] **Step 1: Add tests** for: `env_period` (dit-env-slow, 300t), `biome_adaptation` (biome-adaptation, 400t), `terrain_habitat` (geographic-trade, 400t), `inventions_enabled` (inventions, 500t), `gene_requirements` (gene-requirements, 500t), `cognition_enabled` (cognitive-coevolution, 400t), `living_biome` (living-sandbox-coevolution, 400t), `season_period` (sandbox-large, 300t), `climate_drift_rate` (drifting-climate, 400t — flag is `f32`, guard `w.climate_drift_rate > 0.0`), `nutrient_variation`+`soil_fertility` (foraging-selection, 400t), `disasters_enabled` (disturbance, 400t). Choose warm-up ticks long enough that the subsystem has fired (cross-check the subsystem's own integration test for the tick range it uses).
 
-- [ ] **Step 2: Run the whole file.** Run: `cargo test -p anabios-core --test save_load_roundtrip`. Any FAIL is a real bug → Task 3.
-- [ ] **Step 3: Add an "everything-on" integration round-trip** using `grand-theater.toml` (warms all subsystems at once) at 500 ticks — the strongest single guard.
-- [ ] **Step 4: Commit.**
+- [x] **Step 2: Run the whole file.** Run: `cargo test -p anabios-core --test save_load_roundtrip`. Any FAIL is a real bug → Task 3.
+- [x] **Step 3: Add an "everything-on" integration round-trip** using `grand-theater.toml` (warms all subsystems at once) at 500 ticks — the strongest single guard.
+- [x] **Step 4: Commit.**
 
 ```bash
 git add crates/anabios-core/tests/save_load_roundtrip.rs
@@ -108,7 +108,7 @@ Document every skip and enforce the rule that a skipped field is either (a) pure
 **Interfaces:**
 - Produces: a compile-time-adjacent guard — a test that loads a warmed world, saves, loads, and asserts the two documented re-derivation caches (`pheromones.nonzero`, `agents.track_livestock`) are actually restored (not left default), catching a future removal of a `load_from_bytes` re-derivation line.
 
-- [ ] **Step 1: Write the guard test:**
+- [x] **Step 1: Write the guard test:**
 
 ```rust
 #[test]
@@ -125,9 +125,9 @@ fn load_rederives_skipped_caches() {
 }
 ```
 
-- [ ] **Step 2: Run — expect PASS** (both re-derivations exist today; this is a regression lock).
-- [ ] **Step 3: Write `docs/determinism-contract.md`** enumerating: the three-category skip rule; the current skip inventory (from the audit table above) with each field's category; the two load-time re-derivations that are load-bearing; and the **checklist for adding a subsystem** — "any new `#[serde(skip)]` field must be justified in one of the three categories; if it's a cache derived from serialized state, add the re-derivation to `load_from_bytes` AND a round-trip test."
-- [ ] **Step 4: Commit.**
+- [x] **Step 2: Run — expect PASS** (both re-derivations exist today; this is a regression lock).
+- [x] **Step 3: Write `docs/determinism-contract.md`** enumerating: the three-category skip rule; the current skip inventory (from the audit table above) with each field's category; the two load-time re-derivations that are load-bearing; and the **checklist for adding a subsystem** — "any new `#[serde(skip)]` field must be justified in one of the three categories; if it's a cache derived from serialized state, add the re-derivation to `load_from_bytes` AND a round-trip test."
+- [x] **Step 4: Commit.**
 
 ```bash
 git add crates/anabios-core/tests/serde_skip_audit.rs docs/determinism-contract.md
