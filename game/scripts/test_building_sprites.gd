@@ -77,5 +77,19 @@ func _init() -> void:
 	)
 	_check(B.market_cell(Vector2(1, 1), 0.0, 10) == -1, "bad world_size -> -1")
 
+	# signature_kinds skips keys with no building.
+	var mixed := PackedStringArray(["fire", "not_a_building"])
+	var only_fire: PackedInt32Array = B.signature_kinds(mixed, {"fire": 1}, 2)
+	_check(only_fire.size() == 1, "unbuildable key is skipped")
+	_check(only_fire[0] == B.FIRE, "only the buildable invention remains")
+
+	_check(B.market_cell(Vector2(1, 1), 100.0, 0) == -1, "res<=0 -> -1")
+	_check(B.trade_kind(B.MARKET_MIN - 0.01, 10) == -1, "just below MARKET_MIN -> none")
+	_check(B.trade_kind(B.MARKET_MIN, 10) == B.MARKET, "exactly MARKET_MIN -> market")
+	_check(
+		B.trade_kind(B.MARKET_MIN, B.WAREHOUSE_MIN_MEMBERS) == B.WAREHOUSE,
+		"exact thresholds -> warehouse"
+	)
+
 	print("test_building_sprites: all passed")
 	quit(0)
