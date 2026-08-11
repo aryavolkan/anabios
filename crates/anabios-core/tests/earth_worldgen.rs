@@ -32,3 +32,30 @@ fn from_earth_is_deterministic() {
         && x.env == y.env
         && x.moisture == y.moisture));
 }
+
+use anabios_core::scenario::Scenario;
+
+#[test]
+fn scenario_world_map_earth_uses_from_earth() {
+    let toml = r#"
+name = "t"
+seed = 1
+world_size = 4096.0
+biome_res = 256
+hash_res = 256
+world_map = "earth"
+[[agents]]
+count = 1
+placement = { kind = "uniform" }
+"#;
+    let w = Scenario::parse_toml(toml).expect("parse").instantiate();
+    assert_eq!(w.biome.res, 256);
+    // Matches from_earth's real map: central Africa is land.
+    let x = (20.0 + 180.0) / 360.0 * w.world_size;
+    let y = (90.0 - 0.0) / 180.0 * w.world_size;
+    let (col, row) = ((x / w.biome.cell_size) as usize, (y / w.biome.cell_size) as usize);
+    assert_ne!(
+        w.biome.cells[row * w.biome.res + col].terrain,
+        anabios_core::biome::TerrainType::Water,
+    );
+}
