@@ -439,6 +439,9 @@ pub enum Placement {
     Uniform,
     /// Cluster around `center` within `radius`.
     Cluster { center_x: f32, center_y: f32, radius: f32 },
+    /// Cluster around a real-world lat/lon (equirectangular → sim coords),
+    /// spread within `radius`. For real-map (`world_map`) scenarios.
+    Geo { lat: f32, lon: f32, radius: f32 },
 }
 
 #[allow(clippy::derivable_impls)]
@@ -788,6 +791,16 @@ impl Scenario {
                         Vec2::new(x, y)
                     }
                     Placement::Cluster { center_x, center_y, radius } => {
+                        let theta = w.rng.f32_range(0.0, std::f32::consts::TAU);
+                        let r = w.rng.f32_range(0.0, radius);
+                        Vec2::new(
+                            center_x + r * crate::mathf::cosf(theta),
+                            center_y + r * crate::mathf::sinf(theta),
+                        )
+                    }
+                    Placement::Geo { lat, lon, radius } => {
+                        let center_x = (lon + 180.0) / 360.0 * w.world_size;
+                        let center_y = (90.0 - lat) / 180.0 * w.world_size;
                         let theta = w.rng.f32_range(0.0, std::f32::consts::TAU);
                         let r = w.rng.f32_range(0.0, radius);
                         Vec2::new(

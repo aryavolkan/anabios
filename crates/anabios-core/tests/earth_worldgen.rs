@@ -59,3 +59,28 @@ placement = { kind = "uniform" }
         anabios_core::biome::TerrainType::Water,
     );
 }
+
+/// A geo placement lands agents near the mapped lat/lon; radius spread only.
+#[test]
+fn geo_placement_maps_latlon_to_position() {
+    let toml = r#"
+name = "t"
+seed = 7
+world_size = 4096.0
+biome_res = 256
+hash_res = 256
+world_map = "earth"
+[[agents]]
+count = 200
+placement = { kind = "geo", lat = 0.0, lon = 20.0, radius = 30.0 }
+"#;
+    let w = Scenario::parse_toml(toml).expect("parse").instantiate();
+    let cx = (20.0 + 180.0) / 360.0 * w.world_size;
+    let cy = (90.0 - 0.0) / 180.0 * w.world_size;
+    // Single agent spec → ids 0..200 are the geo-placed founders.
+    for id in 0..200usize {
+        let p = w.agents.position[id];
+        let d = ((p.x - cx).powi(2) + (p.y - cy).powi(2)).sqrt();
+        assert!(d <= 30.0 + 1e-3, "agent {id} at distance {d} beyond geo radius");
+    }
+}
