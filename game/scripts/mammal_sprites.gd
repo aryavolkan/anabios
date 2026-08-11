@@ -145,16 +145,13 @@ static func coat_hue(archetype: int, species_id: int) -> Color:
 	return Color.from_hsv(hue, band[2], band[3])
 
 
-# One rig's 12 poses baked into a 16x(12*16) neutral strip (pre-flipped for the
-# QuadMesh's flipped V, same as ApeSprites.build_species_atlas).
+# One rig's 12 poses baked into the shared 64x64 grid atlas (pre-flipped for
+# the QuadMesh's flipped V). QUAD_ZONES already maps each zone key to an
+# explicit neutral Colour, so ApeSprites._pack_grid resolves it the same way
+# the ape atlas resolves its PAL keys. Square-grid layout (not a 16x192 strip)
+# avoids the Metal MultiMesh2D texture corruption — see ApeSprites.ATLAS_PX.
 static func build_quad_atlas(poses: Array) -> ImageTexture:
-	var atlas := Image.create(16, POSE_COUNT * 16, false, Image.FORMAT_RGBA8)
-	atlas.fill(Color(0, 0, 0, 0))
-	for fr in POSE_COUNT:
-		var cell: Image = _build_quad_cell(poses[fr])
-		cell.flip_y()
-		atlas.blit_rect(cell, Rect2i(0, 0, 16, 16), Vector2i(0, fr * 16))
-	return ImageTexture.create_from_image(atlas)
+	return ApeSprites._pack_grid(poses, QUAD_ZONES)
 
 
 # Fallen ghost: neutral pose rotated 90 CW, matching ApeSprites.build_fallen_texture.

@@ -17,6 +17,12 @@ shader_type canvas_item;
 // the vertex stage adds a fight lunge / flee tremble on top.
 
 uniform int frames = 12;
+// Atlas layout: poses live in a SQUARE 64x64 grid, ATLAS_COLS per row (see
+// ape_sprites.gd — a 16x192 strip corrupts on Metal's MultiMesh2D canvas
+// path). A pose index `fr` maps to cell (fr % ATLAS_COLS, fr / ATLAS_COLS).
+const float ATLAS_COLS = 4.0;
+const float ATLAS_PX = 64.0;
+const float CELL_PX = 16.0;
 // Walk cadence (frames/sec) and idle bob (Hz, amplitude in sprite heights).
 uniform float walk_fps = 5.0;
 uniform float bob_hz = 1.4;
@@ -104,8 +110,11 @@ void fragment() {
 		float s = mod(floor(TIME * walk_fps + anim.r * 4.0), 4.0);
 		fr = mix(0.0, 1.0 + min(s, 4.0 - s), anim.g);
 	}
-	// Frames stack vertically in the strip; cells are pre-flipped (the QuadMesh
-	// V axis is flipped in the 2D canvas), so a plain sample draws the figure
-	// upright.
-	COLOR = texture(TEXTURE, vec2(u, (fr + UV.y) / float(frames))) * COLOR;
+	// Frames live in a 64x64 grid, ATLAS_COLS per row; cells are pre-flipped
+	// (the QuadMesh V axis is flipped in the 2D canvas), so a plain sample
+	// draws the figure upright. Map fr -> (col, row) and offset into its cell.
+	float col = mod(fr, ATLAS_COLS);
+	float row = floor(fr / ATLAS_COLS);
+	vec2 cell_uv = (vec2(col + u, row + UV.y)) * (CELL_PX / ATLAS_PX);
+	COLOR = texture(TEXTURE, cell_uv) * COLOR;
 }
