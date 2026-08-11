@@ -235,6 +235,18 @@ fn inherit_child_meme(world: &mut World, child_id: u32, i: usize, j: usize) {
         cognition_enabled,
         fidelity,
     );
+    // Apes-only inventions: a non-ape child inherits no invention channels
+    // (practice/base channels inherit normally). Runs AFTER inherit_meme so the
+    // jitter draw count is unchanged — this only overwrites stored values.
+    // `enforce_ape_only` already early-returns for apes and when the flag is
+    // off, so it is safe (and avoids a split-borrow) to call unconditionally.
+    let ci = child_id as usize;
+    crate::invention::enforce_ape_only(
+        &mut world.agents.meme_vector[ci],
+        &world.agents.genome[ci],
+        &world.agents.modules[ci],
+        world.inventions_enabled,
+    );
     // E9 lineage: the newborn's per-channel variants descend from its parents'
     // variants (band-matched) or are freshly minted.
     crate::codex::traditions::assign_birth_variants(world, child_id as usize, i, j);
@@ -588,6 +600,37 @@ mod tests {
         assert_eq!(control, 80, "no practice → every pair rears its child");
         assert!(sacrificed < control, "child sacrifice culls some: {sacrificed}/80");
         assert!((20..=60).contains(&sacrificed), "roughly half survive: {sacrificed}/80");
+    }
+
+    #[test]
+    fn non_ape_child_inherits_no_inventions() {
+        use crate::invention::{self, channel};
+        let mut w = World::new(31);
+        w.inventions_enabled = true;
+        let pos = find_grass_cell_center(&w);
+        // Two parents holding Stone Tools.
+        let a = w.spawn_agent(pos, fertile_genome());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+        // Give both parents a Communicator so the child gets one too, and Stone Tools.
+        for &p in &[a, b] {
+            w.agents.modules[p as usize]
+                .push(crate::module::Module::Communicator { range: 10.0, channel_id: 0 });
+            w.agents.meme_vector[p as usize][channel(invention::STONE_TOOLS)] = 1.0;
+        }
+        // Spawn a child slot and make it a NON-ape (herbivore Mouth), Communicator.
+        let child = w.spawn_agent(pos, fertile_genome());
+        let mut kit = crate::module::ModuleList::new();
+        kit.push(crate::module::Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 }); // non-ape
+        kit.push(crate::module::Module::Communicator { range: 10.0, channel_id: 0 });
+        w.agents.modules[child as usize] = kit;
+
+        inherit_child_meme(&mut w, child, a as usize, b as usize);
+
+        assert_eq!(
+            w.agents.meme_vector[child as usize][channel(invention::STONE_TOOLS)],
+            0.0,
+            "a non-ape child must inherit no inventions"
+        );
     }
 
     #[test]
