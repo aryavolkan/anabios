@@ -206,27 +206,30 @@ func _redraw() -> void:
 		_write(_building_mmis[k].multimesh, build_xf[k], build_col[k])
 
 
-# Invention landmarks follow the lineages that actually hold inventions, not the
-# settlements: the settling species carry no tech, so a landmark for a lineage's
-# most-advanced held invention is placed at that lineage's live centroid. One
-# pass over the alive arrays builds each species' centroid + head-count, then any
-# lineage past INVENTION_MIN_MEMBERS with a buildable invention gets its
-# landmark(s). Appends into the shared per-kind build accumulators.
+# Invention landmarks mark the lineages that actually hold inventions. In the sim
+# inventions are learned memes carried in any body — the ape/quadruped look is
+# just diet+size, and measurement shows the culture-carriers render as quadrupeds,
+# not apes — so landmarks are NOT restricted by archetype (they'd never appear).
+# Each landmark is PINNED at the spot the lineage first reached its tech (a
+# monument), not trailed after a nomadic herd. One pass over the alive arrays
+# builds each species' centroid + head-count; qualifying lineages fold into the
+# linger/fade memory, then draw below into the shared per-kind build accumulators.
 func _place_invention_landmarks(
 	stats_by_sid: Dictionary, build_xf: Array, build_col: Array
 ) -> void:
 	var sp_ids: PackedInt32Array = sim.alive_species_ids()
 	var sp_pos: PackedVector2Array = sim.alive_positions()
-	if sp_ids.size() == 0 or sp_ids.size() != sp_pos.size():
+	var n := sp_ids.size()
+	if n == 0 or sp_pos.size() != n:
 		return
 	var sum_pos: Dictionary = {}  # sid -> Vector2 sum of member positions
 	var counts: Dictionary = {}  # sid -> member count
-	for i in sp_ids.size():
+	for i in n:
 		var s: int = sp_ids[i]
 		sum_pos[s] = (sum_pos.get(s, Vector2.ZERO) as Vector2) + sp_pos[i]
 		counts[s] = int(counts.get(s, 0)) + 1
-	# Fold the qualifying lineages into the landmark memory (eased pos, latest
-	# signature), then draw from memory below so marks linger/fade like villages.
+	# Fold qualifying lineages into the landmark memory (pinned pos, latest
+	# signature); draw from memory below so marks linger/fade like villages.
 	for s in counts.keys():
 		var cnt: int = counts[s]
 		if cnt < INVENTION_MIN_MEMBERS:
@@ -237,12 +240,13 @@ func _place_invention_landmarks(
 		var sig: PackedInt32Array = Buildings.signature_kinds(adopted, _era_of, want)
 		if sig.is_empty():
 			continue
-		var centroid: Vector2 = (sum_pos[s] as Vector2) / float(cnt)
 		var mark: Dictionary = _lineage_marks.get(s, {})
 		if mark.is_empty():
+			var centroid: Vector2 = (sum_pos[s] as Vector2) / float(cnt)
 			_lineage_marks[s] = {"pos": centroid, "sig": sig, "born": _now, "seen": _now}
 		else:
-			mark["pos"] = (mark["pos"] as Vector2).lerp(centroid, 0.3)
+			# Position stays PINNED at the first-sighting centroid; only the
+			# signature (tech can advance) and the seen-time refresh.
 			mark["sig"] = sig
 			mark["seen"] = _now
 	for s in _lineage_marks.keys():
