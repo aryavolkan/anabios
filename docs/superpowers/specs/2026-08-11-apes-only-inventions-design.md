@@ -50,6 +50,32 @@ is stable in practice). A rare mid-life diet/size flip is out of scope — the
 gate is enforced only at the three transmission points below, matching how the
 viewer treats archetype as birth-fixed.
 
+## Reclass the culture cohort to apes (prerequisite)
+
+**Finding:** the invention-bearing archetypes are *not* apes today. `innovator`,
+`traditionalist` (`scenario.rs:489`) and `cultural_forager` (`scenario.rs:479`)
+all build on `starter_kit()`, whose Mouth is `diet_affinity: 0.0` — pure
+**herbivores** (`module/kits.rs:14`). With Size 0.5 they render as Deer/quadrupeds,
+not PRIMATE. So a naive gate would stop *every* invention scenario from working.
+
+**Decision:** reclass the culture cohort — `innovator`, `traditionalist`,
+`cultural_forager` — to apes by giving each an **omnivore** Mouth
+(`diet_affinity` in the primate band, use `0.5`). Size default 0.5 already
+clears `APE_SIZE_MIN`. This makes "inventors are apes" true in both the sim and
+the viewer (they now render as PRIMATE). Breadth is deliberately the culture
+cohort only: the communicator-family (`communicator`, `individual_learner`,
+`pure_imitator`, `critical_learner`, `cultural_cooperator`, `culture_prey`,
+`skilled_forager`) stays herbivore and loses invention ability — they are
+skill/meme-transmission archetypes, not the designated tech cohort.
+
+Implementation: in `archetype_kit`, the `innovator`/`traditionalist` arm and the
+`cultural_forager` arm each set the kit's Mouth `diet_affinity` to `0.5` before
+returning (mutate the Mouth already present from `starter_kit()`).
+
+The invention *test* helpers (`comm_kit()` in `tests/inventions.rs`, any unit-test
+Communicator) must likewise use an omnivore Mouth so their agents are apes and the
+existing behavioral tests keep exercising a real discoverer.
+
 ## The three gate points (all inside the existing `inventions_enabled` path)
 
 Every gate lives inside a block already guarded by `world.inventions_enabled`,
@@ -111,13 +137,19 @@ rendering catching up to the model rather than an independent rule.
 
 - `inventions_enabled = false`: byte-identical (all three gates are inside the
   enabled path). No golden change.
-- `inventions_enabled = true`: goldens **may** move, only for scenarios with
-  non-ape Communicators. The flagship `scenarios/inventions.toml` uses
-  `innovator`/`traditionalist` archetypes that default to omnivore + large
-  (already apes) and an asocial control with no Communicator, so its goldens
-  are expected to be **unchanged**. Run the full determinism/golden/inventions
-  suite; regen with `UPDATE_HASHES=1` only if hashes legitimately move, and
-  record which scenarios moved and why.
+- `inventions_enabled = true`: goldens **will** move — the reclass changes the
+  culture cohort's diet (feeding ecology shifts, not just the gate), so every
+  golden over a scenario that uses `innovator`/`traditionalist`/`cultural_forager`
+  rehashes: `inventions.rs` (`INVENTIONS_GOLDEN`), `determinism.rs`
+  (`tech-gene-coupling`, `cognitive-coevolution`), and any O1/O2 / traditions /
+  domestication / cognition golden built on those archetypes. This is expected
+  and intended.
+- Regen deliberately with `UPDATE_HASHES=1` (the golden tests print replacement
+  tuples), copy the printed values into each const, and annotate the const with
+  a dated "Refreshed … (apes-only inventions)" comment in the existing style.
+- Confirm the moves are confined to scenarios using a reclassed archetype +
+  `inventions_enabled`; a golden with none of those (e.g. `minimal.toml`,
+  pure-affect scenarios) must be **unchanged** — if one moves, that's a bug.
 
 ## Tests
 
