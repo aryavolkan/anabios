@@ -66,6 +66,9 @@ pub const NUTRIENT_QUALITY_MAX: f32 = 1.4;
 pub const FERTILITY_MIN: f32 = 0.5;
 pub const FERTILITY_MAX: f32 = 1.5;
 
+/// Moisture added to river cells and their 4-neighbours (riparian greening).
+pub const RIPARIAN_MOISTURE: f32 = 0.25;
+
 /// Season phase in \[0,1\], a triangle wave with full cycle `2*period` ticks.
 pub fn season_phase(tick: u64, period: u32) -> f32 {
     if period == 0 {
@@ -167,6 +170,16 @@ pub struct BiomeCell {
     /// consumed only when `World::soil_fertility` is on.
     #[serde(default)]
     pub fertility: f32,
+    /// Normalized terrain elevation in `[0,1]` from generation (water/rock
+    /// gating, temperature lapse, hydrology). Stored so the viewer can render
+    /// shaded relief without recomputation. Static after generation.
+    #[serde(default)]
+    pub elevation: f32,
+    /// Normalized river flow-accumulation in `[0,1]`; `0.0` for non-river cells.
+    /// Set by the hydrology post-pass (`carve_rivers`) only when a scenario's
+    /// `river_threshold > 0`. Static after generation.
+    #[serde(default)]
+    pub river_flow: f32,
 }
 
 /// 128×128 biome field (at default dims). Indexed `[row * res + col]` with
@@ -204,6 +217,22 @@ pub const BAND_HI: f32 = 0.66;
 /// widens the elevation distribution so lowland basins (Water/Desert) and
 /// high peaks (Rock) actually occur, not just mid-elevation terrain.
 pub const ELEV_CONTRAST: f32 = 2.1;
+/// Elevation that ocean basins are pulled down toward under continent shaping.
+pub const DEEP_OCEAN_ELEV: f32 = 0.15;
+/// Contrast applied to the continent mask before blending (mirrors
+/// `ELEV_CONTRAST`'s role for base elevation): the raw low-frequency fBm is too
+/// soft on its own — its wide transition band lets base-elevation noise poke
+/// land through the "ocean" side and cut through the "land" side, so masking
+/// can *increase* fragmentation instead of consolidating it. Sharpening the
+/// mask's transition band toward a near-binary land/ocean template fixes
+/// that, letting an already land-majority base world consolidate into
+/// distinct landmasses rather than fragmenting.
+pub const CONTINENT_MASK_CONTRAST: f32 = 8.0;
+/// Prevailing wind (westerly): upwind is `-WIND_DX/-WIND_DY` cells away.
+pub const WIND_DX: isize = 1;
+pub const WIND_DY: isize = 0;
+/// Upwind sample distance (cells) for the rain-shadow term.
+pub const SHADOW_DIST: isize = 4;
 
 /// Scenario-tunable climate knobs (the follow-up deferred by the 2026-07-27
 /// worldgen design doc). Defaults exactly reproduce the compile-time
@@ -222,6 +251,18 @@ pub struct ClimateParams {
     /// Elevation distribution widening about 0.5 (higher = more abyssal
     /// basins AND more rock peaks).
     pub elev_contrast: f32,
+    /// Continent shaping in `[0,1]`: 0 = today's fBm speckle; >0 pulls land into
+    /// a few large masses separated by ocean.
+    pub continentality: f32,
+    /// Ridged mountain uplift added to elevation on land: 0 = scattered peaks;
+    /// >0 raises connected linear ranges.
+    pub mountain_uplift: f32,
+    /// Orographic rain-shadow strength: 0 = no drying; >0 dries cells downwind
+    /// of higher terrain.
+    pub rain_shadow: f32,
+    /// Minimum flow-accumulation (in upstream-cell units) for a cell to become a
+    /// river. 0 = hydrology off (no rivers, `river_flow` stays 0).
+    pub river_threshold: f32,
 }
 
 impl Default for ClimateParams {
@@ -231,6 +272,10 @@ impl Default for ClimateParams {
             moisture_bias: 0.0,
             sea_level: SEA_LEVEL,
             elev_contrast: ELEV_CONTRAST,
+            continentality: 0.0,
+            mountain_uplift: 0.0,
+            rain_shadow: 0.0,
+            river_threshold: 0.0,
         }
     }
 }
@@ -324,16 +369,54 @@ impl BiomeField {
         let nutrient = crate::noise::Fbm::new(&mut rng, 5, 3, 2, 0.5);
         let fertility_noise = crate::noise::Fbm::new(&mut rng, 4, 3, 2, 0.5);
 
+        // Geography knobs draw AFTER the base seven and only when active, so a
+        // knobs-off world keeps the exact pre-change RNG stream (goldens hold).
+        let continent_noise =
+            (climate.continentality > 0.0).then(|| crate::noise::Fbm::new(&mut rng, 3, 2, 2, 0.5));
+        let mountain_noise =
+            (climate.mountain_uplift > 0.0).then(|| crate::noise::Fbm::new(&mut rng, 3, 4, 2, 0.5));
+
         const WARP_AMP: f32 = 0.35;
         const TEMP_NOISE: f32 = 0.10;
         let contrast = climate.elev_contrast.max(0.1);
+
+        // Pass 1: elevation grid (later tasks add mountain uplift here and
+        // read it for rain-shadow neighbour lookups).
+        let mut elev_grid = vec![0.0f32; res * res];
+        for row in 0..res {
+            for col in 0..res {
+                let u = col as f32 / res as f32;
+                let v = row as f32 / res as f32;
+                let (wu, wv) = crate::noise::warp(&warp_x, &warp_y, u, v, WARP_AMP);
+                let mut elev = ((elevation.sample(wu, wv) - 0.5) * contrast + 0.5).clamp(0.0, 1.0);
+                if let Some(cn) = &continent_noise {
+                    let raw_mask = cn.sample(wu, wv);
+                    let mask = ((raw_mask - 0.5) * CONTINENT_MASK_CONTRAST + 0.5).clamp(0.0, 1.0);
+                    let blend = 1.0 - climate.continentality + climate.continentality * mask;
+                    elev = (DEEP_OCEAN_ELEV + (elev - DEEP_OCEAN_ELEV) * blend).clamp(0.0, 1.0);
+                }
+                if let Some(mn) = &mountain_noise {
+                    let ridge = 1.0 - (2.0 * mn.sample(wu, wv) - 1.0).abs();
+                    // Weight uplift to land interiors so ranges sit on continents.
+                    // Intentionally the raw (uncontrasted) mask, not `mask` above: this
+                    // gives ranges a soft falloff toward coasts instead of the sharpened
+                    // land template's near-binary edge.
+                    let land_weight = continent_noise.as_ref().map_or(1.0, |cn| cn.sample(wu, wv));
+                    elev = (elev + climate.mountain_uplift * ridge * land_weight).clamp(0.0, 1.0);
+                }
+                elev_grid[row * res + col] = elev;
+            }
+        }
+
+        // Pass 2: temperature/moisture/nutrient/fertility, classification,
+        // and the BiomeCell build. `elev` comes from the pass-1 grid.
         let mut cells = Vec::with_capacity(res * res);
         for row in 0..res {
             for col in 0..res {
                 let u = col as f32 / res as f32;
                 let v = row as f32 / res as f32;
                 let (wu, wv) = crate::noise::warp(&warp_x, &warp_y, u, v, WARP_AMP);
-                let elev = ((elevation.sample(wu, wv) - 0.5) * contrast + 0.5).clamp(0.0, 1.0);
+                let elev = elev_grid[row * res + col];
                 // Temperature: hot equator, cold poles, colder at altitude,
                 // plus the scenario's global bias (ice age / hothouse).
                 let temperature = (latitude_temp(v)
@@ -345,10 +428,19 @@ impl BiomeField {
                 // wet temperate) blended with an fBm field sampled on warped
                 // coordinates so it tracks the warped landmasses, plus the
                 // scenario's global bias (arid / lush world).
-                let moisture = (0.5 * latitude_moisture(v)
+                let mut moisture = (0.5 * latitude_moisture(v)
                     + 0.5 * moisture_noise.sample(wu, wv)
                     + climate.moisture_bias)
                     .clamp(0.0, 1.0);
+                if climate.rain_shadow > 0.0 {
+                    let uc =
+                        (col as isize - WIND_DX * SHADOW_DIST).rem_euclid(res as isize) as usize;
+                    let ur =
+                        (row as isize - WIND_DY * SHADOW_DIST).rem_euclid(res as isize) as usize;
+                    let upwind_elev = elev_grid[ur * res + uc];
+                    moisture = (moisture - climate.rain_shadow * (upwind_elev - elev).max(0.0))
+                        .clamp(0.0, 1.0);
+                }
                 let terrain = classify_with(elev, temperature, moisture, climate.sea_level);
                 let nq = nutrient.sample(u, v);
                 let nutrient_quality =
@@ -364,15 +456,101 @@ impl BiomeField {
                     succession: SUCCESSION_CLIMAX,
                     nutrient_quality,
                     fertility,
+                    elevation: elev,
+                    river_flow: 0.0,
                 });
             }
         }
-        Self {
+        let mut field = Self {
             cells,
             res,
             world_size,
             cell_size: world_size / res as f32,
             recolonize_scratch: Vec::new(),
+        };
+        if climate.river_threshold > 0.0 {
+            field.carve_rivers(climate.river_threshold, climate.sea_level);
+        }
+        field
+    }
+
+    /// Flow-accumulation hydrology over the finished elevation field (no RNG).
+    /// Downhill routing (8-neighbour steepest descent, torus), accumulation in
+    /// descending-elevation order (stable index tie-break), river cells above
+    /// `threshold`, then a riparian moisture bump + reclassify on banks.
+    fn carve_rivers(&mut self, threshold: f32, sea_level: f32) {
+        let res = self.res;
+        let n = self.cells.len();
+        // 1. steepest-descent downhill neighbour (usize::MAX = sink or water).
+        let mut downhill = vec![usize::MAX; n];
+        for row in 0..res {
+            for col in 0..res {
+                let i = row * res + col;
+                if self.cells[i].terrain == TerrainType::Water {
+                    continue;
+                }
+                let e = self.cells[i].elevation;
+                let (mut best, mut best_idx) = (e, usize::MAX);
+                for (dc, dr) in
+                    [(-1i32, -1i32), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
+                {
+                    let nc = (col as i32 + dc).rem_euclid(res as i32) as usize;
+                    let nr = (row as i32 + dr).rem_euclid(res as i32) as usize;
+                    let ni = nr * res + nc;
+                    let ne = self.cells[ni].elevation;
+                    if ne < best {
+                        best = ne;
+                        best_idx = ni;
+                    }
+                }
+                downhill[i] = best_idx;
+            }
+        }
+        // 2. accumulate in descending elevation order (index tie-break).
+        let mut order: Vec<usize> = (0..n).collect();
+        order.sort_by(|&a, &b| {
+            self.cells[b]
+                .elevation
+                .partial_cmp(&self.cells[a].elevation)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.cmp(&b))
+        });
+        let mut accum = vec![1.0f32; n];
+        for &i in &order {
+            let d = downhill[i];
+            if d != usize::MAX {
+                accum[d] += accum[i];
+            }
+        }
+        // 3. mark river cells + normalized flow.
+        let max_accum = accum.iter().cloned().fold(1.0f32, f32::max);
+        let mut river = vec![false; n];
+        for i in 0..n {
+            if self.cells[i].terrain != TerrainType::Water && accum[i] >= threshold {
+                river[i] = true;
+                self.cells[i].river_flow = (accum[i] / max_accum).clamp(0.0, 1.0);
+            }
+        }
+        // 4. riparian moisture bump + reclassify on river cells & 4-neighbours.
+        for row in 0..res {
+            for col in 0..res {
+                let i = row * res + col;
+                if self.cells[i].terrain == TerrainType::Water {
+                    continue;
+                }
+                let near = river[i]
+                    || [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)].iter().any(|&(dc, dr)| {
+                        let nc = (col as i32 + dc).rem_euclid(res as i32) as usize;
+                        let nr = (row as i32 + dr).rem_euclid(res as i32) as usize;
+                        river[nr * res + nc]
+                    });
+                if near {
+                    let c = &mut self.cells[i];
+                    c.moisture = (c.moisture + RIPARIAN_MOISTURE).clamp(0.0, 1.0);
+                    c.terrain = classify_with(c.elevation, c.env, c.moisture, sea_level);
+                    c.plant_biomass = c.terrain.carrying_capacity();
+                }
+            }
         }
     }
 
@@ -706,6 +884,146 @@ mod tests {
     use super::*;
 
     #[test]
+    fn rivers_flow_downhill_to_water_and_wet_banks() {
+        // carve_rivers has no pit-filling (by design), so a river cell's
+        // downhill chain may legitimately terminate at an endorheic sink
+        // (a landlocked local minimum) rather than open water. Walk each
+        // river cell's chain with the same steepest-descent rule production
+        // uses and require it to terminate at water OR a sink within a
+        // bounded number of steps; only non-termination is a real bug.
+        let c = ClimateParams {
+            continentality: 0.85,
+            mountain_uplift: 0.6,
+            river_threshold: 150.0,
+            ..Default::default()
+        };
+        let f = BiomeField::generate_with(31, 128, 1024.0, &c);
+        let res = f.res;
+        const NEIGHBOURS: [(i32, i32); 8] =
+            [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
+        // Same steepest-descent rule as production `carve_rivers`: the
+        // strictly-lowest of the 8 torus neighbours, or `None` at a sink.
+        let steepest_descent = |i: usize| -> Option<usize> {
+            let (col, row) = (i % res, i / res);
+            let e = f.cells[i].elevation;
+            let mut best = e;
+            let mut best_idx = None;
+            for (dc, dr) in NEIGHBOURS {
+                let nc = (col as i32 + dc).rem_euclid(res as i32) as usize;
+                let nr = (row as i32 + dr).rem_euclid(res as i32) as usize;
+                let ni = nr * res + nc;
+                let ne = f.cells[ni].elevation;
+                if ne < best {
+                    best = ne;
+                    best_idx = Some(ni);
+                }
+            }
+            best_idx
+        };
+
+        let river_cells: Vec<usize> =
+            (0..f.cells.len()).filter(|&i| f.cells[i].river_flow > 0.0).collect();
+        assert!(!river_cells.is_empty(), "expected some river cells");
+
+        for &start in &river_cells {
+            let mut cur = start;
+            let mut prev_elev = f.cells[cur].elevation;
+            let mut steps = 0usize;
+            loop {
+                if f.cells[cur].terrain == TerrainType::Water {
+                    break; // reached a mouth
+                }
+                match steepest_descent(cur) {
+                    None => break, // sink terminus: no strictly-lower neighbour
+                    Some(next) => {
+                        let next_elev = f.cells[next].elevation;
+                        assert!(
+                            next_elev < prev_elev,
+                            "downhill walk from river cell {start} failed to strictly \
+                             decrease elevation at step {steps} (cell {cur} -> {next})"
+                        );
+                        cur = next;
+                        prev_elev = next_elev;
+                        steps += 1;
+                        assert!(
+                            steps <= 2 * res,
+                            "downhill walk from river cell {start} did not terminate \
+                             within {} steps (still at cell {cur})",
+                            2 * res
+                        );
+                    }
+                }
+            }
+        }
+
+        // Wet banks: river cells and their riparian 4-neighbours should be
+        // measurably wetter on average than the rest of the land, since
+        // carve_rivers bumps their moisture and reclassifies them.
+        let is_river_or_bank = |i: usize| -> bool {
+            if f.cells[i].river_flow > 0.0 {
+                return true;
+            }
+            let (col, row) = (i % res, i / res);
+            [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)].iter().any(|&(dc, dr)| {
+                let nc = (col as i32 + dc).rem_euclid(res as i32) as usize;
+                let nr = (row as i32 + dr).rem_euclid(res as i32) as usize;
+                f.cells[nr * res + nc].river_flow > 0.0
+            })
+        };
+        let (mut wet_sum, mut wet_n, mut dry_sum, mut dry_n) = (0.0f32, 0u32, 0.0f32, 0u32);
+        for i in 0..f.cells.len() {
+            if f.cells[i].terrain == TerrainType::Water {
+                continue;
+            }
+            if is_river_or_bank(i) {
+                wet_sum += f.cells[i].moisture;
+                wet_n += 1;
+            } else {
+                dry_sum += f.cells[i].moisture;
+                dry_n += 1;
+            }
+        }
+        assert!(wet_n > 0, "expected some river/bank land cells");
+        assert!(dry_n > 0, "expected some non-river land cells to compare against");
+        let wet_mean = wet_sum / wet_n as f32;
+        let dry_mean = dry_sum / dry_n as f32;
+        assert!(
+            wet_mean > dry_mean,
+            "river/bank cells should be wetter on average than other land: \
+             wet_mean={wet_mean} dry_mean={dry_mean}"
+        );
+    }
+
+    #[test]
+    fn river_threshold_zero_leaves_flow_empty() {
+        let c = ClimateParams { continentality: 0.85, ..Default::default() };
+        let f = BiomeField::generate_with(31, 96, 1024.0, &c);
+        assert!(f.cells.iter().all(|c| c.river_flow == 0.0));
+    }
+
+    #[test]
+    fn geography_knobs_default_off() {
+        let d = ClimateParams::default();
+        assert_eq!(d.continentality, 0.0);
+        assert_eq!(d.mountain_uplift, 0.0);
+        assert_eq!(d.rain_shadow, 0.0);
+        assert_eq!(d.river_threshold, 0.0);
+    }
+
+    #[test]
+    fn elevation_is_stored_and_bounded() {
+        let f = BiomeField::generate(42, 64, 1024.0);
+        // Every cell has a populated elevation in range; water sits below sea level.
+        for c in &f.cells {
+            assert!((0.0..=1.0).contains(&c.elevation), "elev out of range: {}", c.elevation);
+            assert_eq!(c.river_flow, 0.0, "river_flow is 0 until hydrology is enabled");
+            if c.terrain == TerrainType::Water {
+                assert!(c.elevation < SEA_LEVEL + 1e-3, "water above sea level");
+            }
+        }
+    }
+
+    #[test]
     fn new_terrains_have_productivity_ordering() {
         use TerrainType::*;
         assert!(Rainforest.carrying_capacity() > Forest.carrying_capacity());
@@ -809,6 +1127,113 @@ mod tests {
             assert_eq!(a.cells[i].env, b.cells[i].env);
             assert_eq!(a.cells[i].fertility, b.cells[i].fertility);
         }
+    }
+
+    /// Count connected land components (4-neighbour, torus) as a speckle metric.
+    fn land_component_count(f: &BiomeField) -> usize {
+        let res = f.res;
+        let mut seen = vec![false; f.cells.len()];
+        let is_land = |i: usize| f.cells[i].terrain != TerrainType::Water;
+        let mut comps = 0;
+        let mut stack = Vec::new();
+        for start in 0..f.cells.len() {
+            if seen[start] || !is_land(start) {
+                continue;
+            }
+            comps += 1;
+            stack.push(start);
+            seen[start] = true;
+            while let Some(i) = stack.pop() {
+                let (col, row) = (i % res, i / res);
+                for (dc, dr) in [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)] {
+                    let nc = (col as i32 + dc).rem_euclid(res as i32) as usize;
+                    let nr = (row as i32 + dr).rem_euclid(res as i32) as usize;
+                    let ni = nr * res + nc;
+                    if !seen[ni] && is_land(ni) {
+                        seen[ni] = true;
+                        stack.push(ni);
+                    }
+                }
+            }
+        }
+        comps
+    }
+
+    #[test]
+    fn continentality_reduces_land_fragmentation() {
+        let plain = BiomeField::generate(7, 128, 1024.0);
+        let cont = {
+            let c = ClimateParams { continentality: 0.85, ..Default::default() };
+            BiomeField::generate_with(7, 128, 1024.0, &c)
+        };
+        assert!(
+            land_component_count(&cont) < land_component_count(&plain),
+            "continentality should consolidate land: plain={} cont={}",
+            land_component_count(&plain),
+            land_component_count(&cont)
+        );
+    }
+
+    #[test]
+    fn continentality_zero_is_identity() {
+        // Two-pass refactor must not change values when the knob is off.
+        let a = BiomeField::generate(7, 96, 1024.0);
+        let b = BiomeField::generate_with(7, 96, 1024.0, &ClimateParams::default());
+        for (x, y) in a.cells.iter().zip(b.cells.iter()) {
+            assert_eq!(x.terrain, y.terrain);
+            assert_eq!(x.elevation, y.elevation);
+            assert_eq!(x.moisture, y.moisture);
+            assert_eq!(x.env, y.env);
+        }
+    }
+
+    #[test]
+    fn mountain_uplift_raises_connected_ranges() {
+        let flat = {
+            let c = ClimateParams { continentality: 0.85, ..Default::default() };
+            BiomeField::generate_with(11, 128, 1024.0, &c)
+        };
+        let ranged = {
+            let c =
+                ClimateParams { continentality: 0.85, mountain_uplift: 0.6, ..Default::default() };
+            BiomeField::generate_with(11, 128, 1024.0, &c)
+        };
+        let rock =
+            |f: &BiomeField| f.cells.iter().filter(|c| c.terrain == TerrainType::Rock).count();
+        assert!(
+            rock(&ranged) > rock(&flat),
+            "uplift should create more rock: {} vs {}",
+            rock(&ranged),
+            rock(&flat)
+        );
+    }
+
+    #[test]
+    fn rain_shadow_dries_lee_of_ranges() {
+        // Compare mean moisture with and without rain-shadow on a mountainous world;
+        // the shadowed world must be drier on average over land.
+        let mk = |rs: f32| {
+            let c = ClimateParams {
+                continentality: 0.85,
+                mountain_uplift: 0.6,
+                rain_shadow: rs,
+                ..Default::default()
+            };
+            BiomeField::generate_with(23, 128, 1024.0, &c)
+        };
+        let mean_land_moisture = |f: &BiomeField| {
+            let land: Vec<f32> = f
+                .cells
+                .iter()
+                .filter(|c| c.terrain != TerrainType::Water)
+                .map(|c| c.moisture)
+                .collect();
+            land.iter().sum::<f32>() / land.len() as f32
+        };
+        assert!(
+            mean_land_moisture(&mk(0.5)) < mean_land_moisture(&mk(0.0)),
+            "rain-shadow should lower mean land moisture"
+        );
     }
 
     #[test]
@@ -1060,6 +1485,8 @@ mod tests {
             succession,
             nutrient_quality: 1.0,
             fertility: 1.0,
+            elevation: 0.5,
+            river_flow: 0.0,
         }
     }
 

@@ -14,10 +14,11 @@ shader_type canvas_item;
 // passes the colors straight through so heatmaps stay faithful.
 
 uniform float biome_mode = 1.0;        // 1 = terrain treatment, 0 = passthrough
-uniform float relief_strength = 0.9;   // hillshade intensity on land
+uniform float relief_strength = 12.0;  // hillshade intensity on land (elevation gradient)
 uniform float soften = 0.45;           // 0 = crisp blocks, 1 = fully smoothed
 uniform vec2 light_dir = vec2(-0.65, -0.75); // light from upper-left
 uniform float world_size = 512.0;      // sim world extent, for seamless shimmer
+uniform float sea_level = 0.35;        // viewer-derived water line, for depth shading
 uniform float vignette = 0.12;         // corner darkening on terrain (0 = off)
 
 // World-space position of this fragment. The ground is drawn as 9 separate tiles
@@ -76,7 +77,15 @@ void fragment() {
 		// brighter teal shallows toward the coast.
 		vec3 deep = base * vec3(0.72, 0.82, 1.05);
 		vec3 shallow = mix(base, vec3(0.30, 0.62, 0.72), 0.55);
-		outc = mix(deep, shallow, coast);
+		// Real depth: elevation (packed in alpha, C2) relative to the water line.
+		// ~1 at the shoreline (elevation just below sea level), →0 in the deepest
+		// basin, so open-ocean trenches read dark and shelves read bright teal.
+		float elev = texture(TEXTURE, UV).a;
+		// Deepest basins sit well below sea level, so raw elev/sea_level never
+		// reaches 0; square it to deepen open ocean while keeping shelves bright.
+		float shallowness = clamp(elev / max(sea_level, 1e-3), 0.0, 1.0);
+		shallowness *= shallowness;
+		outc = mix(deep, shallow, shallowness);
 
 		// Slow directional shimmer in seamless world coordinates (continuous
 		// across the 9 wrap tiles). One world-width spans the same phase count
@@ -89,12 +98,15 @@ void fragment() {
 		// A crisp bright rim right at the waterline (surf).
 		outc += vec3(0.18, 0.26, 0.28) * smoothstep(0.24, 0.26, coast) * (1.0 - smoothstep(0.5, 0.9, coast));
 	} else {
-		// Land relief: treat luminance as pseudo-height and light it directionally.
-		float hL = luma(cL);
-		float hR = luma(cR);
-		float hU = luma(cU);
-		float hD = luma(cD);
-		vec2 grad = vec2(hR - hL, hD - hU);
+		// Land relief: sample the packed real elevation (biome texture alpha) at
+		// the four neighbours and light the height gradient directionally. This
+		// replaces the old luminance-as-height fake so mountain ranges (not
+		// bright biomes) cast the relief.
+		float eL = texture(TEXTURE, UV - vec2(px.x, 0.0)).a;
+		float eR = texture(TEXTURE, UV + vec2(px.x, 0.0)).a;
+		float eU = texture(TEXTURE, UV - vec2(0.0, px.y)).a;
+		float eD = texture(TEXTURE, UV + vec2(0.0, px.y)).a;
+		vec2 grad = vec2(eR - eL, eD - eU);
 		float shade = dot(normalize(light_dir), grad) * relief_strength;
 		// Brighten slopes facing the light, darken those facing away.
 		outc = base * (1.0 + clamp(shade, -0.5, 0.5));

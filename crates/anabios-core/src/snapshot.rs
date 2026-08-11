@@ -129,13 +129,19 @@ use crate::world::World;
 ///      scenario), so they never fire there — behavior byte-identical; only
 ///      the serialized layout grew. (The affect columns themselves were added
 ///      in M-A.)
-/// v30: O2 payoff-biased learning — World.payoff_biased_learning flag. Off in
-///      every golden scenario ⇒ transmission is byte-identical; only the
-///      serialized layout grew (stacked on v29's affect-observability layout).
-/// v31: unilateral trade — World.unilateral_trade flag (surplus-gift fallback
-///      in `interact::trade_pass`). Off in every golden scenario ⇒
+/// 30: BiomeCell.elevation + river_flow (continental worldgen).
+/// v30: O2 payoff-biased learning — World.payoff_biased_learning flag.
+/// v31 (main): unilateral trade — World.unilateral_trade flag (surplus-gift
+///      fallback in `interact::trade_pass`). Off in every golden scenario ⇒
 ///      byte-identical; only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 31;
+/// v31 (this branch, parallel): merge of continental-worldgen BiomeCell fields
+///      (elevation/river_flow) with O2 payoff-biased learning.
+/// 32: merge of this branch's v31 with main's v31 — all three layout growths
+///     (worldgen BiomeCell fields, payoff-biased learning, unilateral trade)
+///     stacked. Every flag is off/inert in every golden scenario ⇒ trajectories
+///     byte-identical; only the serialized layout grew. Bumped to 32 to
+///     distinguish the merged layout from either parent's v31.
+pub const FORMAT_VERSION: u32 = 32;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

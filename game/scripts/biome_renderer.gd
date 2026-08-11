@@ -72,6 +72,7 @@ func _setup(res: int) -> void:
 	# seamless world coordinates across the 9 wrap tiles.
 	if _terrain_mat != null:
 		_terrain_mat.set_shader_parameter("world_size", world)
+		_terrain_mat.set_shader_parameter("sea_level", sim.sea_level())
 	# Neighbor tiles are children (they inherit the wrap scale), each offset by
 	# whole worlds in biome-pixel units.
 	var i := 0
@@ -85,6 +86,13 @@ func _setup(res: int) -> void:
 			tile.position = Vector2(gx * _res, gy * _res)
 	_redraw_interval = REDRAW_EVERY * maxi(1, _res / 128)
 	_last_mode = -999  # force an immediate redraw
+
+
+# The whole-world biome ImageTexture (res×res), shared with the minimap so it
+# reflects biome/biomass updates without a second rebuild. May be null before
+# the first _setup(); callers must guard.
+func world_texture() -> ImageTexture:
+	return _tex
 
 
 func _process(_delta: float) -> void:

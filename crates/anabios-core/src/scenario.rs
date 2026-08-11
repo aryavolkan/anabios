@@ -201,6 +201,22 @@ pub struct ScenarioClimate {
     pub sea_level: Option<f32>,
     /// Elevation distribution widening (higher = deeper basins + more peaks).
     pub elev_contrast: Option<f32>,
+    /// Continent shaping in `[0,1]`: 0 = today's fBm speckle; >0 pulls land into
+    /// a few large masses separated by ocean.
+    #[serde(default)]
+    pub continentality: Option<f32>,
+    /// Ridged mountain uplift added to elevation on land: 0 = scattered peaks;
+    /// >0 raises connected linear ranges.
+    #[serde(default)]
+    pub mountain_uplift: Option<f32>,
+    /// Orographic rain-shadow strength: 0 = no drying; >0 dries cells downwind
+    /// of higher terrain.
+    #[serde(default)]
+    pub rain_shadow: Option<f32>,
+    /// Minimum flow-accumulation (in upstream-cell units) for a cell to become a
+    /// river. 0 = hydrology off (no rivers, `river_flow` stays 0).
+    #[serde(default)]
+    pub river_threshold: Option<f32>,
 }
 
 impl ScenarioClimate {
@@ -212,6 +228,10 @@ impl ScenarioClimate {
             moisture_bias: self.moisture_bias.unwrap_or(d.moisture_bias),
             sea_level: self.sea_level.unwrap_or(d.sea_level),
             elev_contrast: self.elev_contrast.unwrap_or(d.elev_contrast),
+            continentality: self.continentality.unwrap_or(d.continentality),
+            mountain_uplift: self.mountain_uplift.unwrap_or(d.mountain_uplift),
+            rain_shadow: self.rain_shadow.unwrap_or(d.rain_shadow),
+            river_threshold: self.river_threshold.unwrap_or(d.river_threshold),
         }
     }
 }
