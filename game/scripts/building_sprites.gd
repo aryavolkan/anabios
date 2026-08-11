@@ -200,7 +200,10 @@ static func building_for_invention(key: String) -> int:
 	return INVENTION_BUILDING.get(key, -1)
 
 
-const MARKET_MIN := 0.35
+# market_colors() lerps a dim base (.r ~0.10, meaning NO market) toward amber
+# (.r ~1.0, dense market), so the threshold must sit clearly above that 0.10
+# floor to mean "a real market", not merely bare terrain.
+const MARKET_MIN := 0.20
 const WAREHOUSE_MIN_MEMBERS := 40
 
 

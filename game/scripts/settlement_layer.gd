@@ -8,6 +8,7 @@ extends Node2D
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
+const Buildings = preload("res://scripts/building_sprites.gd")
 
 const REDRAW_EVERY := 20
 # Huts are deliberately oversized next to agents (BODY_MIN ~6) so a village
@@ -17,9 +18,21 @@ const FARM_SCALE := 11.0
 const FARM_MIN_MEMBERS := 24
 const MAX_HUTS := 6
 const MAX_FARMS := 4
+# Landmark/trade buildings sit a notch bigger than huts so a village's
+# invention history and trade role read at a glance from the ring around it.
+const BUILDING_SCALE := 16.0
+const LANDMARK2_MIN_MEMBERS := 32
+# Invention landmarks are anchored to the SPECIES that hold inventions, not to
+# settlements: in organic runs the settling lineages are asocial foragers with
+# no tech, while the inventive (cultural) lineages rarely settle. So a lineage
+# needs this many live members before its tech earns a landmark at its centroid
+# (keeps tiny splinter species from littering the map).
+const INVENTION_MIN_MEMBERS := 25
 
 var _huts: MultiMeshInstance2D
 var _farms: MultiMeshInstance2D
+var _building_mmis: Array[MultiMeshInstance2D] = []
+var _era_of: Dictionary = {}  # invention key -> era, cached once
 var _frame: int = REDRAW_EVERY - 1  # redraw on the very first frame
 # Villages linger: the sim's settlement latch drops the moment anchor cohesion
 # breaks, but a place people built shouldn't vanish overnight — sites stay
@@ -40,6 +53,16 @@ func _ready() -> void:
 	# QuadMesh's flipped V axis (same convention as the ape atlas).
 	_huts = _make_layer("Huts", _hut_texture(), 1)
 	_farms = _make_layer("Farms", _farm_texture(), -6)
+	# Landmark/trade buildings: one plain (no-shader) MultiMesh layer per
+	# kind, drawn above agents like huts. Kept as separate layers (rather
+	# than one shared atlas) so each building keeps its own untouched
+	# texture on the Metal-safe plain-MultiMesh path.
+	for k in Buildings.KIND_COUNT:
+		var tex := Buildings.build(k)
+		var mmi := _make_layer("Building_%s" % Buildings.NAMES[k], tex, 1)
+		_building_mmis.append(mmi)
+	for inv in sim.invention_catalog():
+		_era_of[String(inv["key"])] = int(inv["era"])
 	_make_wrap_clones()
 
 
@@ -61,7 +84,7 @@ func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2
 # Same 9-way torus tiling as the agent layers, sharing each MultiMesh.
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
-	for src in [_huts, _farms]:
+	for src in [_huts, _farms] + _building_mmis:
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
 				if gx == 0 and gy == 0:
@@ -110,6 +133,23 @@ func _redraw() -> void:
 	var hut_xf: Array = []
 	var hut_col: Array = []
 	var farm_xf: Array = []
+	# One species stats lookup per redraw (adopted inventions drive landmarks).
+	var stats_by_sid: Dictionary = {}
+	for st in sim.species_stats():
+		stats_by_sid[int(st["species_id"])] = st
+	# Market field only matters when resources are active; sampling an empty
+	# field cleanly disables all trade buildings below.
+	var market_field: PackedColorArray = (
+		sim.market_colors() if sim.resources_active() else PackedColorArray()
+	)
+	var market_res := int(sim.biome_resolution())
+	var world_sz: float = sim.world_size()
+	# Per-kind transform/colour accumulators for the building MultiMeshes.
+	var build_xf: Array = []
+	var build_col: Array = []
+	for k in Buildings.KIND_COUNT:
+		build_xf.append([])
+		build_col.append([])
 	for sid in _villages.keys():
 		var v: Dictionary = _villages[sid]
 		var stale: float = _now - float(v["seen"])
@@ -142,8 +182,64 @@ func _redraw() -> void:
 				var fp := pos + Vector2.from_angle(ang2) * (24.0 + float(i % 2) * 9.0)
 				var fs := FARM_SCALE * ease
 				farm_xf.append(Transform2D(ang2 * 0.5, Vector2(fs, fs), 0.0, fp))
+		# Trade building: market/warehouse where the live market-density field
+		# says this village sits on a real market, on a reserved slot north of
+		# the anchor. (Invention landmarks are handled separately below, keyed to
+		# the inventive lineages rather than to settlements.)
+		if not market_field.is_empty():
+			var ci := Buildings.market_cell(pos, world_sz, market_res)
+			if ci >= 0 and ci < market_field.size():
+				var tkind := Buildings.trade_kind(market_field[ci].r, members)
+				if tkind >= 0:
+					var tp := pos + Vector2(0.0, -26.0)
+					var ts := BUILDING_SCALE * ease
+					build_xf[tkind].append(Transform2D(0.0, Vector2(ts, ts), 0.0, tp))
+					build_col[tkind].append(Color(1, 1, 1, fade))
+	_place_invention_landmarks(stats_by_sid, build_xf, build_col)
 	_write(_huts.multimesh, hut_xf, hut_col)
 	_write_farms(farm_xf)
+	for k in Buildings.KIND_COUNT:
+		_write(_building_mmis[k].multimesh, build_xf[k], build_col[k])
+
+
+# Invention landmarks follow the lineages that actually hold inventions, not the
+# settlements: the settling species carry no tech, so a landmark for a lineage's
+# most-advanced held invention is placed at that lineage's live centroid. One
+# pass over the alive arrays builds each species' centroid + head-count, then any
+# lineage past INVENTION_MIN_MEMBERS with a buildable invention gets its
+# landmark(s). Appends into the shared per-kind build accumulators.
+func _place_invention_landmarks(
+	stats_by_sid: Dictionary, build_xf: Array, build_col: Array
+) -> void:
+	var sp_ids: PackedInt32Array = sim.alive_species_ids()
+	var sp_pos: PackedVector2Array = sim.alive_positions()
+	if sp_ids.size() == 0 or sp_ids.size() != sp_pos.size():
+		return
+	var sum_pos: Dictionary = {}  # sid -> Vector2 sum of member positions
+	var counts: Dictionary = {}  # sid -> member count
+	for i in sp_ids.size():
+		var s: int = sp_ids[i]
+		sum_pos[s] = (sum_pos.get(s, Vector2.ZERO) as Vector2) + sp_pos[i]
+		counts[s] = int(counts.get(s, 0)) + 1
+	for s in counts.keys():
+		var cnt: int = counts[s]
+		if cnt < INVENTION_MIN_MEMBERS:
+			continue
+		var stats: Dictionary = stats_by_sid.get(s, {})
+		var adopted: PackedStringArray = stats.get("adopted_inventions", PackedStringArray())
+		var want := 2 if cnt >= LANDMARK2_MIN_MEMBERS else 1
+		var sig: PackedInt32Array = Buildings.signature_kinds(adopted, _era_of, want)
+		if sig.is_empty():
+			continue
+		var centroid: Vector2 = (sum_pos[s] as Vector2) / float(cnt)
+		for slot in sig.size():
+			var kind: int = sig[slot]
+			var ang: float = float(s) * 2.39996 + float(slot) * 2.0
+			var lp := centroid + Vector2.from_angle(ang) * 22.0
+			build_xf[kind].append(
+				Transform2D(0.0, Vector2(BUILDING_SCALE, BUILDING_SCALE), 0.0, lp)
+			)
+			build_col[kind].append(Color(1, 1, 1, 1))
 
 
 func _write(mm: MultiMesh, xfs: Array, cols: Array) -> void:

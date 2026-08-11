@@ -169,3 +169,26 @@ layers already are).
   radius/phase — tuned visually so villages read clearly without clutter.
 - Whether the second landmark or the market wins the more prominent slot when a
   village is both high-tech and a trade hub.
+
+## Revision (2026-08-11): invention landmarks re-anchored to lineages
+
+Verification against real runs found a hard mismatch: the species that form
+settlements are asocial foragers carrying **zero** inventions (tech era 0 across
+every settled species in the full-arc `grand-theater` run), while the inventive
+(cultural) lineages rarely settle. Tying invention landmarks to settlements
+therefore showed nothing, at any threshold. Confirmed the inverse holds where it
+matters: in `inventions.toml` and `knowledge-ratchet` the dominant lineages hold
+inventions at ≥50% adoption.
+
+Design change (approved by the user): **invention landmarks are anchored to the
+inventive lineage, not to a settlement.** Each species past
+`INVENTION_MIN_MEMBERS` live members whose `adopted_inventions` yields a
+buildable invention gets its landmark(s) drawn at the species' live centroid
+(computed in GDScript from `alive_species_ids()` + `alive_positions()`). No core
+binding was needed — the existing `species_stats().adopted_inventions` signal
+suffices. Trade market/warehouse buildings remain settlement-anchored, with
+`MARKET_MIN` lowered to `0.20` (above the ~0.10 "no market" base of the
+`market_colors()` field) so a settlement only shows a market when it sits on a
+genuine market concentration. Verified live in `inventions.toml`: metalworking
+lineages render Metalworking forges at their centroids, cleanly, on the plain
+(no-shader) MultiMesh path.
