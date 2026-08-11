@@ -13,17 +13,22 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 - **Core sim** — deterministic SoA agent simulation: uniform-grid spatial hashing, evolvable postfix behavior programs, 50-slot float genome, modular morphology, speciation
 - **Interaction substrate (M11–M15)** — combat & predation, carcass scavenging, pheromone fields, communication/meme culture, kin-directed cooperation
 - **Invention tree** — 10-tech cumulative culture tree (Stone Tools → Fire → Farming/Metalworking → Writing/Medicine/Husbandry → Machinery/Electricity/Nuclear Power) riding the meme channels: individual discovery (Openness + skill gated), social spread, per-holder buffs *and* debuffs (metabolism, upkeep, crowding stress, biome pollution, radiation mutation); `InventionDiscovered`/`InventionAdopted` codex events. Opt-in per scenario (`inventions_enabled`)
-- **Codex** — 21 emergence detectors (extinction → herd cohesion → invention adoption → sexual selection) writing a persistent event timeline
+- **Codex** — 59 emergence detectors (extinction → herd cohesion → invention adoption → sexual selection → knowledge ratchet → affect cascades) writing a persistent event timeline
 - **Experiments** — DIT gene-culture technique model; biome climate adaptation (opt-in per scenario); runtime world dimensions + living/seasonal biomes
+- **Cognition** — realized IQ (metabolic cost, era gates) evolving under selection; maladaptive practices (Inbreeding, Child Sacrifice) spread by payoff-blind transmission — the measured culture-exclusion lever (O1). `cognition_enabled` / `practices_enabled`
+- **Affect layer (mA–mF)** — primitive-brain affect (SEEK/FEAR/RAGE/LUST/CARE/PANIC/PLAY) with hijack, panic cascades, feeding frenzies, territorial rage, mass grief. Opt-in (`affect_enabled`)
+- **Knowledge accumulation (E14)** — Writing-backed per-culture tech memory that survives population bottlenecks; `KnowledgeRatchet` event. Opt-in (`knowledge_enabled`, rides `inventions_enabled`)
+- **Trade economy** — biome trade goods with bilateral barter; the late-run freeze is measured and fixed opt-in (`resources_enabled`, `conserve_goods_on_death`, `unilateral_trade` — see `docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`)
+- **Payoff-biased learning (O2b, experimental)** — model + content bias in cultural transmission. Opt-in (`payoff_biased_learning`); measured negative on the energy proxy, see `docs/superpowers/specs/2026-08-07-o2b-payoff-biased-findings.md`
 - **Sexual dimorphism (E12)** — opt-in binary sex + female mate choice: `SexualDimorphism` gene scales male upkeep/damage/display and female metabolic efficiency; `MateChoosiness` sets the female acceptance bar; `SexualSelection`/`SexRatioCollapse` codex events. Opt-in per scenario (`sexual_dimorphism_enabled`)
 - **Domestication (E13)** — Husbandry holders tame wild juvenile herbivores into penned livestock (movement override toward the owner), draw per-tick milk yields from surplus adults, and herds breed born-tamed; `AnimalDomesticated`/`LivestockHerd` codex events. Opt-in per scenario (`domestication_enabled`, rides `inventions_enabled`)
 - **Vertebrate classes** — mammal/reptile founder archetypes (`mammal_grazer`, `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`) pairing class body plans with affect/cognition genome profiles: endotherm-approximated mammals (high metabolism, big-brained, social, bold) vs ectotherm-approximated reptiles (cheap idle, armored, hair-trigger freeze-fight-flight, ambush Jaws). Demo: `scenarios/mammals-vs-reptiles.toml`
 - **Viewer** — Godot 4.6+ client: biome/species/pheromone overlays, inspector, codex panel, co-evolution charts, per-species tech panel
-- **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV), criterion benchmark suite
+- **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV) with archive-weighted emergence scoring (`docs/emergence-corpus.md`), save/load snapshots (`docs/determinism-contract.md`), criterion benchmark suite
 
 ## Scenarios
 
-`scenarios/` holds the curated, test-pinned set (41 TOMLs) — every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate → 200 ticks, recursively over the tree) and most back a dedicated integration test, a viewer menu entry, or a gallery/showcase capture. Highlights:
+`scenarios/` holds the curated, test-pinned set (42 TOMLs) — every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate → 200 ticks, recursively over the tree) and most back a dedicated integration test, a viewer menu entry, or a gallery/showcase capture. **The full scenario → phenomenon → flag map is [`docs/scenarios.md`](docs/scenarios.md); a clone-to-finding walkthrough is [`docs/reproduce.md`](docs/reproduce.md).** Highlights:
 
 | Scenario | Demonstrates |
 |---|---|
@@ -137,4 +142,4 @@ The saga timeline (`game/showcase/out-of-africa-saga.json`) narrates the out-of-
 - **`anabios-headless`** — CLI for batch runs, W&B sweeps, codex mining
 - **`game/`** — Godot 4.6+ project (viewer, codex UI, world setup, scenario authoring)
 
-See the design doc for the full architecture, agent model, and roadmap. The forward roadmap is the emergence arc: [`docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md`](docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md) (milestones E1–E10).
+See the design doc for the full architecture and agent model. **Roadmap & plans:** [`ROADMAP.md`](ROADMAP.md) (quarterly) + [`docs/superpowers/plans/2026-08-01-roadmap-plans-index.md`](docs/superpowers/plans/2026-08-01-roadmap-plans-index.md) (per-item implementation plans). The longer-horizon emergence arc: [`docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md`](docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md) (milestones E1–E10).
