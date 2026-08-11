@@ -167,6 +167,17 @@ pub fn load_from_bytes(bytes: &[u8]) -> Result<World, SnapshotError> {
     // Re-derive the (serde-skipped) livestock gate from the persisted flag so a
     // reloaded domestication world clears orphaned owners exactly like the live one.
     world.agents.track_livestock = world.domestication_enabled;
+    // Re-derive the (serde-skipped) spatial hashes from the persisted world
+    // dims. They reset to `Default` on load — the 1024/64 grid — which is only
+    // correct for default-dim worlds: a custom `world_size`/`hash_res` world
+    // would reload with the wrong `cell_size` (clamping perception radii wrong)
+    // and wrong torus extent, silently diverging on the next step. Mirror
+    // `World::with_dims` exactly.
+    world.spatial = crate::spatial::UniformSpatialHash::with_dims(world.world_size, world.hash_res);
+    world.carcass_spatial =
+        crate::spatial::UniformSpatialHash::with_dims(world.world_size, world.hash_res);
+    world.resource_spatial =
+        crate::spatial::UniformSpatialHash::with_dims(world.world_size, world.hash_res);
     Ok(world)
 }
 
