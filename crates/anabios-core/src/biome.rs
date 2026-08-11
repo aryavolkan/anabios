@@ -204,6 +204,9 @@ pub struct BiomeField {
     recolonize_scratch: Vec<f32>,
 }
 
+/// Resolution of the embedded real-Earth rasters (see `assets/earth/`).
+pub const EARTH_RES: usize = 256;
+
 /// Fraction of world extent below which a cell is open water.
 pub const SEA_LEVEL: f32 = 0.35;
 /// Elevation above which a cell is barren rock/peak.
@@ -472,6 +475,52 @@ impl BiomeField {
             field.carve_rivers(climate.river_threshold, climate.sea_level);
         }
         field
+    }
+
+    /// Build a biome field from the embedded real-Earth rasters instead of the
+    /// procedural fBm pipeline. No RNG: a pure dequantize + `classify`. The
+    /// three `u8` assets hold elevation/temperature/moisture already normalized
+    /// to `[0,1]` (all real-world unit conversion lives in the offline builder,
+    /// `scripts/build_earth_map.py`). `res` must equal `EARTH_RES`.
+    pub fn from_earth(res: usize, world_size: f32) -> Self {
+        assert_eq!(res, EARTH_RES, "from_earth requires biome_res == EARTH_RES");
+        const ELEV: &[u8] = include_bytes!("../assets/earth/elevation.u8");
+        const TEMP: &[u8] = include_bytes!("../assets/earth/temperature.u8");
+        const MOIST: &[u8] = include_bytes!("../assets/earth/precip.u8");
+        assert!(
+            ELEV.len() == res * res && TEMP.len() == res * res && MOIST.len() == res * res,
+            "earth asset length must be res*res",
+        );
+        // Neutral midpoints for the fields the procedural path fills from noise;
+        // real nutrient/fertility variation is out of scope for v1.
+        let nutrient_quality = (NUTRIENT_QUALITY_MIN + NUTRIENT_QUALITY_MAX) / 2.0;
+        let fertility = (FERTILITY_MIN + FERTILITY_MAX) / 2.0;
+        let mut cells = Vec::with_capacity(res * res);
+        for i in 0..res * res {
+            let elevation = ELEV[i] as f32 / 255.0;
+            let temperature = TEMP[i] as f32 / 255.0;
+            let moisture = MOIST[i] as f32 / 255.0;
+            let terrain = classify_with(elevation, temperature, moisture, SEA_LEVEL);
+            cells.push(BiomeCell {
+                terrain,
+                plant_biomass: terrain.carrying_capacity(),
+                env: temperature,
+                moisture,
+                pollution: 0.0,
+                succession: SUCCESSION_CLIMAX,
+                nutrient_quality,
+                fertility,
+                elevation,
+                river_flow: 0.0,
+            });
+        }
+        Self {
+            cells,
+            res,
+            world_size,
+            cell_size: world_size / res as f32,
+            recolonize_scratch: Vec::new(),
+        }
     }
 
     /// Flow-accumulation hydrology over the finished elevation field (no RNG).
