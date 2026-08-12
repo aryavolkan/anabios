@@ -709,6 +709,7 @@ mod tests {
                 false,
             );
             let alive: Vec<u32> = w.agents.iter_alive().collect();
+            w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
             trade_pass(&mut w, &alive);
 
             let got = w.agents.inventory[b as usize][Good::Salt.index()];
@@ -756,6 +757,7 @@ mod tests {
         let total_salt_before: f32 =
             (0..2).map(|id| w.agents.inventory[id][Good::Salt.index()]).sum();
         let alive: Vec<u32> = w.agents.iter_alive().collect();
+        w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
         trade_pass(&mut w, &alive);
 
         // Both goods are conserved across the pair, and A moved toward a
@@ -801,6 +803,7 @@ mod tests {
             false,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
+        w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
         trade_pass(&mut w, &alive);
         assert_eq!(
             w.agents.inventory[a as usize][Good::Obsidian.index()],
@@ -834,6 +837,7 @@ mod tests {
             false,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
+        w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
         trade_pass(&mut w, &alive);
         assert!(w.codex.first_cross_species_trade, "latch set after first trade");
         assert!(
