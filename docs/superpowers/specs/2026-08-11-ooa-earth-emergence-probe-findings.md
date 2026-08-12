@@ -90,6 +90,42 @@ Stages 1–2 are worldgen/scenario engineering; stage 3 is the genuine research
 risk. Making tech *possible* and the world *viable* does not guarantee the
 era-3 climb — it only makes the culture question askable.
 
+## Probe 2 — is obsidian sufficient? (no; the quarry niche matters)
+
+Extended `earth_probe` + a throwaway end-to-end test (temporarily re-normalized
+the committed `elevation.u8` to a 3000 m ceiling, rebuilt, ran the demo, then
+`git checkout`-restored it):
+
+- **Obsidian lands in the right place.** After re-tuning to a ~3000 m ceiling,
+  the nearest Rock/obsidian to the cradle (lat 0.5, lon 37) is **23 sim-units
+  away at lat −0.4, lon 35.9 — the East African Rift**, where real obsidian
+  is (Rift volcanism). At 2000 m it's 5 units. So the elevation fix puts
+  obsidian at the historically-correct spot near the innovators; **no innovator
+  relocation to a foreign mountain is needed.**
+- **But obsidian alone does NOT make tech fire.** With Rock at 1.0% and obsidian
+  near the cradle, the demo *still* discovers nothing: the **innovator lineage
+  is competitively excluded almost immediately (40 → 2 alive by tick 2000)**,
+  before it can bank obsidian and discover.
+- **A scenario-authoring regression makes it worse.** The procedural
+  `out-of-africa.toml` gives innovators their OWN **QUARRY niche** at (240,430),
+  ~90 units from the cradle's 440 asocial foragers. The Earth port co-located the
+  innovators *with* the forager mass at the same cradle coords (lat 0.5, lon 37),
+  so they are crushed faster than in the procedural world. Recreating a separate
+  Rift-quarry niche near the obsidian is the real-geography analogue of that
+  separation.
+
+**Refined fix (to get tech FIRING at all — era 1/2):**
+1. Elevation re-tune (obsidian in the Rift). *Validated.*
+2. Place innovators at a **separate Rift-quarry niche** near the obsidian
+   (lat ≈ −0.4, lon ≈ 35.9), spatially apart from the asocial-forager mass —
+   recreating the procedural quarry separation the port lost.
+3. Era-3 still faces the competitive-exclusion wall (the hard open problem); 1+2
+   only aim to make discovery *possible and survivable enough to start the climb*.
+
+Population viability (72% ocean) was NOT the immediate binding constraint for
+era-1 — with obsidian present the world held ~1700 at tick 2000; the innovator
+lineage's fast exclusion is the binding constraint.
+
 ## Decision (open — for the human)
 
 Three directions, materially different in scope/appetite:
