@@ -57,8 +57,13 @@ the new behavior. The new golden values simply *are* the spec.
   cluster them so neighbors are present). The known trade-freeze may improve as a side
   effect but "fix the freeze" is not a success criterion here.
 - No dedicated new hub sprite — hubs reuse the polished Market/Warehouse art.
-- No new scenario file — hubs turn on with `resources_enabled`, so existing trade
-  scenarios (e.g. `inventions.toml`) get them automatically.
+- No new scenario file required for the mechanic — hubs turn on with
+  `resources_enabled`, so the existing trade scenarios (`biome-trade.toml`,
+  `geographic-trade.toml`, `unilateral-trade.toml`) get them automatically.
+  (Correction: `inventions.toml` sets `inventions_enabled` but NOT
+  `resources_enabled`, so it is a tech-tree scenario and produces zero hubs — an
+  earlier draft wrongly cited it here. A dedicated `trade-hubs.toml` showcase was
+  added later as a follow-up, not by this spec.)
 - No off-by-default gating for golden preservation — behavior is the new normal.
 
 ## Design
@@ -103,7 +108,7 @@ Algorithm:
 Tuning constants (module-level, in the resource/settlement layer):
 - `HUB_SCAN_RADIUS` — neighborhood radius in cells for the diversity score.
 - `HUB_MIN_SPACING` — minimum world-space distance between hubs.
-- `HUB_MAX_COUNT` — cap on hub count (target ~6; tune on `inventions.toml`).
+- `HUB_MAX_COUNT` — cap on hub count (target ~6; tune on `geographic-trade.toml`).
 
 Honest degradation: a single-terrain / low-diversity map yields few or zero hubs, so trade
 stays sparse — truthful rather than papered over.
@@ -184,9 +189,11 @@ does today (no trade subsystem at all).
 - `building_sprites.gd` — polish `_BLOCKS`; add 4 goods-icon builders.
 - `settlement_layer.gd` (or new `hub_layer.gd`) — hub rendering + goods-icon rings.
 
-**Goldens / scenarios:** regenerate golden fixtures; verify on `inventions.toml`.
+**Goldens / scenarios:** regenerate golden fixtures; verify on the trade scenarios
+(`biome-trade.toml` / `geographic-trade.toml`), which enable `resources_enabled`.
 
 ## Open questions
 
 None blocking. Constant values (`HUB_SCAN_RADIUS`, `HUB_MIN_SPACING`, `HUB_MAX_COUNT`,
-`HUB_PULL`, `HUB_TRADE_RANGE`) to be tuned during implementation against `inventions.toml`.
+`HUB_PULL`, `HUB_TRADE_RANGE`) to be tuned during implementation against a trade
+scenario such as `geographic-trade.toml`.

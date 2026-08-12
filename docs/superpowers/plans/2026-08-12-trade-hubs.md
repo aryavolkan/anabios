@@ -882,7 +882,7 @@ Note: `Buildings.MARKET_MIN` already exists (`building_sprites.gd:206`). Verify 
 Run: `cd game && godot --headless res://scenes/main.tscn --quit-after 120 2>&1 | tail -30`
 Expected: no `SCRIPT ERROR` / `Parse Error` lines; the run reaches quit cleanly. (Load a resources-enabled scenario in the menu path if the default scene doesn't auto-load one — check `main.gd` around line 94 `load_scenario_with_seed`.)
 
-- [ ] **Step 4: Visual confirmation (optional but recommended).** Launch the app on `biome-trade.toml` (or `inventions.toml`) and confirm marketplaces with goods rings appear at hub crossroads and agents visibly gather there. Use the project's run path (see the `run` skill / `main.gd` menu).
+- [ ] **Step 4: Visual confirmation (optional but recommended).** Launch the app on a trade scenario (`geographic-trade.toml` or `biome-trade.toml` — NOT `inventions.toml`, which leaves `resources_enabled` off and so places no hubs) and confirm marketplaces with goods rings appear at hub crossroads and agents visibly gather there. Use the project's run path (see the `run` skill / `main.gd` menu).
 
 - [ ] **Step 5: Commit.**
 
@@ -904,7 +904,7 @@ git commit -m "feat(viewer): hub layer — marketplaces + goods rings at trade h
 - 4 goods icons → Task 7.
 - Polish existing 12 sprites → Task 7 Step 2.
 - Godot accessor → Task 6.
-- Hubs turn on with `resources_enabled`, no new scenario file → Task 2 Step 6 (gated on `w.resources_enabled`), exercised on `biome-trade.toml`/`inventions.toml`.
+- Hubs turn on with `resources_enabled` → Task 2 Step 6 (gated on `w.resources_enabled`), exercised on `biome-trade.toml`/`geographic-trade.toml` (`inventions.toml` leaves resources off → no hubs). A dedicated `trade-hubs.toml` showcase was added as a follow-up.
 - Unit tests (placement determinism/spacing/cap, single-good empty, motive, direction+wrap, proximity), trade-at-hub behavior, save/load round-trip → Tasks 1–4.
 - Godot headless boot renders hub layer → Task 8 Step 3.
 All spec sections map to a task. No gaps.
