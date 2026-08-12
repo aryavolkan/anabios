@@ -1274,6 +1274,28 @@ impl Simulation {
         out
     }
 
+    /// Predetermined trade hubs: fixed marketplace positions with the goods that
+    /// meet there. Static after worldgen; the viewer draws a building + goods
+    /// ring at each. Empty unless the scenario enables resources.
+    #[func]
+    fn trade_hubs(&self) -> Array<VarDictionary> {
+        let mut out = Array::new();
+        let Some(w) = self.inner.as_ref() else {
+            return out;
+        };
+        for h in &w.trade_hubs {
+            let mut d = VarDictionary::new();
+            d.set("pos", Vector2::new(h.pos.x, h.pos.y));
+            let mut goods = PackedInt32Array::new();
+            for g in &h.goods {
+                goods.push(g.index() as i32);
+            }
+            d.set("goods", &goods);
+            out.push(&d);
+        }
+        out
+    }
+
     /// Number of module types (for the GDScript layer loop).
     #[func]
     fn module_type_count(&self) -> i64 {
