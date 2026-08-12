@@ -216,4 +216,36 @@ mod tests {
         assert!(!near_any_hub(&hubs, Vec2::new(50.0, 50.0), ws, 10.0));
         assert!(!near_any_hub(&[], Vec2::new(5.0, 5.0), ws, 10.0));
     }
+
+    #[test]
+    fn world_trade_hubs_survive_snapshot_roundtrip() {
+        use crate::snapshot::{load_from_bytes, save_to_bytes};
+        use crate::world::World;
+        let mut w = World::new(3);
+        w.resources_enabled = true;
+        // Paint a two-good split so placement yields hubs.
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 0..res {
+                let t = if col < res / 2 { TerrainType::Desert } else { TerrainType::Rock };
+                w.biome.at_mut(col, row).terrain = t;
+            }
+        }
+        w.trade_hubs = place_trade_hubs(&w.biome);
+        assert!(!w.trade_hubs.is_empty(), "painted split must yield hubs");
+        let bytes = save_to_bytes(&w).expect("save");
+        let w2 = load_from_bytes(&bytes).expect("load");
+        assert_eq!(w.trade_hubs, w2.trade_hubs, "hubs must round-trip identically");
+    }
+
+    #[test]
+    fn scenario_instantiate_populates_hubs_from_biome() {
+        use crate::scenario::Scenario;
+        const TRADE: &str = include_str!("../../../scenarios/biome-trade.toml");
+        let w = Scenario::parse_toml(TRADE).expect("parse").instantiate();
+        assert!(w.resources_enabled, "biome-trade must enable resources");
+        // apply() must have stored exactly what placement computes from the
+        // finalized biome (proves the wiring ran, not the default empty vec).
+        assert_eq!(w.trade_hubs, place_trade_hubs(&w.biome));
+    }
 }

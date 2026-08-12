@@ -216,6 +216,9 @@ pub struct World {
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
     pub market_field: Vec<f32>,
+    /// Predetermined trade hubs placed from the biome at instantiate (empty and
+    /// inert unless `resources_enabled`). Fixed after generation. Serialized.
+    pub trade_hubs: Vec<crate::hub::TradeHub>,
     /// Disaster scheduler + active disasters + succession sites. Inert
     /// unless `disasters_enabled`. Serialized.
     #[serde(default)]
@@ -397,6 +400,7 @@ impl World {
             payoff_biased_learning: false,
             unilateral_trade: false,
             market_field: Vec::new(),
+            trade_hubs: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
