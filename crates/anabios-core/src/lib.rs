@@ -16,6 +16,7 @@ pub mod dimorphism;
 pub mod disaster;
 pub mod domestication;
 pub mod genome;
+pub mod hub;
 pub mod integrate;
 pub mod interact;
 pub mod invention;
