@@ -303,6 +303,39 @@ pub const fn is_invention_channel(ch: usize) -> bool {
     ch >= INVENTION_CHANNEL_BASE && ch < INVENTION_CHANNEL_BASE + INVENTION_COUNT
 }
 
+/// Minimum genome `Size` for the viewer's "large" bucket. Equals the viewer's
+/// `SIZE_SPLIT` (1.25 world-units) under `size = 0.5 + 2.5 × Size`.
+pub const APE_SIZE_MIN: f32 = 0.30;
+/// Omnivore band lower bound (inclusive) — the viewer's `HERB_MAX`.
+pub const APE_DIET_LO: f32 = 0.34;
+/// Omnivore band upper bound (exclusive) — the viewer's `CARN_MIN`.
+pub const APE_DIET_HI: f32 = 0.66;
+
+/// True when the agent is the viewer's PRIMATE archetype (omnivore + large):
+/// the only archetype permitted to acquire cultural inventions. Practices are
+/// unaffected — any animal can hold and spread those.
+pub fn is_ape(genome: &Genome, modules: &module::ModuleList) -> bool {
+    let diet = module::effective_diet_carnivory(modules);
+    genome.get(GenomeSlot::Size) >= APE_SIZE_MIN && (APE_DIET_LO..APE_DIET_HI).contains(&diet)
+}
+
+/// Zero every invention channel of `meme` when the agent is not an ape (no-op
+/// when `inventions_enabled` is false, so flag-off scenarios are byte-identical).
+/// Practice and base channels are never touched. Consumes no RNG.
+pub fn enforce_ape_only(
+    meme: &mut [f32; MEME_CHANNELS],
+    genome: &Genome,
+    modules: &module::ModuleList,
+    inventions_enabled: bool,
+) {
+    if !inventions_enabled || is_ape(genome, modules) {
+        return;
+    }
+    for k in 0..INVENTION_COUNT {
+        meme[channel(k)] = 0.0;
+    }
+}
+
 /// Adoption level of invention `inv` in a meme vector.
 #[inline]
 pub fn level(meme: &[f32; MEME_CHANNELS], inv: usize) -> f32 {
@@ -685,7 +718,9 @@ pub fn invention_step(world: &mut World) {
         let mut mask = held_mask(&world.agents.meme_vector[i]);
 
         // --- Innovation: one roll per Communicator with open candidates. ---
-        if module::has(&world.agents.modules[i], ModuleType::Communicator) {
+        if module::has(&world.agents.modules[i], ModuleType::Communicator)
+            && is_ape(&world.agents.genome[i], &world.agents.modules[i])
+        {
             let openness = world.agents.genome[i].get(crate::genome::GenomeSlot::Openness);
             let skill = world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL].clamp(0.0, 1.0);
             let disc_mult = discovery_multiplier(mask);
@@ -805,6 +840,69 @@ pub fn invention_step(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(test)]
+    fn ape_modules(diet: f32) -> crate::module::ModuleList {
+        let mut m = crate::module::ModuleList::new();
+        m.push(crate::module::Module::Mouth { bite_size: 0.6, diet_affinity: diet });
+        m
+    }
+
+    #[test]
+    fn is_ape_matches_viewer_primate_band() {
+        use crate::genome::{Genome, GenomeSlot};
+        let mut large = Genome::neutral();
+        large.set(GenomeSlot::Size, 0.5); // -> world 1.75, large
+        let mut small = Genome::neutral();
+        small.set(GenomeSlot::Size, 0.25); // -> world 1.125, below SIZE_SPLIT
+
+        // omnivore + large = ape
+        assert!(is_ape(&large, &ape_modules(0.5)));
+        // omnivore boundary: 0.34 in-band, 0.66 out (half-open, matches CARN_MIN)
+        assert!(is_ape(&large, &ape_modules(APE_DIET_LO)));
+        assert!(!is_ape(&large, &ape_modules(APE_DIET_HI)));
+        // herbivore or carnivore large = not ape (Deer / Wolf)
+        assert!(!is_ape(&large, &ape_modules(0.0)));
+        assert!(!is_ape(&large, &ape_modules(0.9)));
+        // omnivore but small = not ape (Boar)
+        assert!(!is_ape(&small, &ape_modules(0.5)));
+        // size boundary: exactly APE_SIZE_MIN is large
+        let mut edge = Genome::neutral();
+        edge.set(GenomeSlot::Size, APE_SIZE_MIN);
+        assert!(is_ape(&edge, &ape_modules(0.5)));
+    }
+
+    #[test]
+    fn enforce_ape_only_strips_inventions_from_non_apes() {
+        use crate::genome::{Genome, GenomeSlot};
+        let mut meme = [0.0f32; crate::program::MEME_CHANNELS];
+        meme[channel(STONE_TOOLS)] = 1.0;
+        meme[channel(FIRE)] = 0.7;
+        // practice channel stand-in: a non-invention channel must be preserved
+        let practice_ch = crate::practice::channel(crate::practice::CHILD_SACRIFICE);
+        meme[practice_ch] = 1.0;
+
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::Size, 0.5);
+        let herb = ape_modules(0.0); // non-ape
+
+        // flag off: no-op even for a non-ape
+        let mut off = meme;
+        enforce_ape_only(&mut off, &g, &herb, false);
+        assert_eq!(off, meme);
+
+        // flag on, non-ape: invention channels zeroed, practice untouched
+        let mut on = meme;
+        enforce_ape_only(&mut on, &g, &herb, true);
+        assert_eq!(on[channel(STONE_TOOLS)], 0.0);
+        assert_eq!(on[channel(FIRE)], 0.0);
+        assert_eq!(on[practice_ch], 1.0);
+
+        // flag on, ape: unchanged
+        let mut ape = meme;
+        enforce_ape_only(&mut ape, &g, &ape_modules(0.5), true);
+        assert_eq!(ape, meme);
+    }
 
     #[test]
     fn id_from_name_resolves_keys_case_insensitively() {

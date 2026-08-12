@@ -206,14 +206,14 @@ func _redraw() -> void:
 		_write(_building_mmis[k].multimesh, build_xf[k], build_col[k])
 
 
-# Invention landmarks mark the lineages that actually hold inventions. In the sim
-# inventions are learned memes carried in any body — the ape/quadruped look is
-# just diet+size, and measurement shows the culture-carriers render as quadrupeds,
-# not apes — so landmarks are NOT restricted by archetype (they'd never appear).
-# Each landmark is PINNED at the spot the lineage first reached its tech (a
-# monument), not trailed after a nomadic herd. One pass over the alive arrays
-# builds each species' centroid + head-count; qualifying lineages fold into the
-# linger/fade memory, then draw below into the shared per-kind build accumulators.
+# Invention landmarks mark the lineages that hold inventions. The sim now gates
+# the tech tree to apes (the PRIMATE archetype: omnivore + large), so only ape
+# lineages ever carry inventions — `adopted_inventions` is populated for them
+# alone, and these landmarks therefore appear only over apes. Each landmark is
+# PINNED at the spot the lineage first reached its tech (a monument), not trailed
+# after a nomadic herd. One pass over the alive arrays builds each species'
+# centroid + head-count; qualifying lineages fold into the linger/fade memory,
+# then draw below into the shared per-kind build accumulators.
 func _place_invention_landmarks(
 	stats_by_sid: Dictionary, build_xf: Array, build_col: Array
 ) -> void:

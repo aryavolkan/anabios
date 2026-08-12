@@ -358,7 +358,9 @@ pub fn culture_step(world: &mut World) {
         // best-holding neighbour's level (learn-from-the-expert, the same
         // rule as the skill channel). Prereq-gated on the receiver's own
         // held mask, so the tree can't be skipped socially either.
-        if world.inventions_enabled {
+        if world.inventions_enabled
+            && crate::invention::is_ape(&world.agents.genome[i], &world.agents.modules[i])
+        {
             let rate = crate::invention::INVENTION_SPREAD_RATE
                 * crate::invention::spread_multiplier_coupled(
                     self_mask,

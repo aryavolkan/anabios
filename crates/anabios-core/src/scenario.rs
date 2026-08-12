@@ -432,6 +432,16 @@ impl Default for Placement {
     }
 }
 
+/// Retune the kit's Mouth to the primate omnivore band so the lineage renders
+/// as (and counts as) an ape — the only archetype allowed to carry inventions.
+fn make_omnivore(modules: &mut crate::module::ModuleList) {
+    for m in modules.iter_mut() {
+        if let crate::module::Module::Mouth { diet_affinity, .. } = m {
+            *diet_affinity = 0.5;
+        }
+    }
+}
+
 /// Resolve an archetype name to its starter program + module kit. Unknown
 /// names fall back to the grazer defaults.
 fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Program) {
@@ -478,6 +488,7 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
         // reproduction and bias the experiment for the wrong reason.
         "cultural_forager" => {
             let mut m = starter_kit();
+            make_omnivore(&mut m); // reclass to ape (primate) diet
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
             (m, starter_asocial_forager())
         }
@@ -488,6 +499,7 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
         // `archetype_genome`).
         "innovator" | "traditionalist" => {
             let mut m = starter_kit();
+            make_omnivore(&mut m); // reclass to ape (primate) diet
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
             (m, starter_grazer())
         }
@@ -795,6 +807,15 @@ impl Scenario {
                 for &ch in &seed_channels {
                     w.agents.meme_vector[id as usize][ch] = 1.0;
                 }
+                // Apes-only inventions: a non-ape seed holds nothing. No-op for apes and
+                // when the flag is off, so every existing scenario/golden stays byte-identical
+                // (the shipped seeded scenarios seed the ape `innovator`).
+                crate::invention::enforce_ape_only(
+                    &mut w.agents.meme_vector[id as usize],
+                    &w.agents.genome[id as usize],
+                    &w.agents.modules[id as usize],
+                    w.inventions_enabled,
+                );
             }
         }
         w
@@ -1200,6 +1221,27 @@ placement = { kind = "cluster", center_x = 100.0, center_y = 100.0, radius = 1.0
     }
 
     #[test]
+    fn non_ape_starting_inventions_are_stripped() {
+        use crate::invention::{has, STONE_TOOLS};
+        let text = r#"
+name = "t"
+seed = 1
+inventions_enabled = true
+[[agents]]
+count = 1
+archetype = "asocial_forager"
+starting_inventions = ["stone_tools"]
+placement = { kind = "cluster", center_x = 100.0, center_y = 100.0, radius = 1.0 }
+"#;
+        let w = Scenario::parse_toml(text).expect("parse").instantiate();
+        let id = w.agents.iter_alive().next().expect("one agent");
+        assert!(
+            !has(&w.agents.meme_vector[id as usize], STONE_TOOLS),
+            "a non-ape (herbivore) must not hold a seeded invention"
+        );
+    }
+
+    #[test]
     fn parse_toml_rejects_unknown_starting_invention() {
         let text = r#"
 name = "t"
@@ -1343,5 +1385,25 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
                 "agent {id} genome unchanged by seeding another spec"
             );
         }
+    }
+
+    #[test]
+    fn culture_cohort_archetypes_are_apes() {
+        use crate::genome::Genome;
+        // Default archetype genome (Size 0.5 = large); diet comes from the kit's Mouth.
+        for name in ["innovator", "traditionalist", "cultural_forager"] {
+            let (modules, _prog) = archetype_kit(name);
+            let mut g = Genome::neutral();
+            archetype_genome(name, &mut g);
+            assert!(
+                crate::invention::is_ape(&g, &modules),
+                "{name} must be an ape (omnivore + large) so it can carry inventions"
+            );
+        }
+        // Control: the asocial forager stays a non-ape herbivore.
+        let (modules, _) = archetype_kit("asocial_forager");
+        let mut g = Genome::neutral();
+        archetype_genome("asocial_forager", &mut g);
+        assert!(!crate::invention::is_ape(&g, &modules), "asocial_forager stays non-ape");
     }
 }

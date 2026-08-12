@@ -23,7 +23,7 @@ fn comm_kit() -> anabios_core::module::ModuleList {
         radius: 0.6,
         acuity: 0.6,
     });
-    m.push(Module::Mouth { bite_size: 0.6, diet_affinity: 0.0 });
+    m.push(Module::Mouth { bite_size: 0.6, diet_affinity: 0.5 }); // omnivore -> ape
     m.push(Module::Communicator { range: 10.0, channel_id: 0 });
     m
 }
@@ -115,6 +115,36 @@ fn communicators_eventually_discover_stone_tools() {
     }
 }
 
+/// A non-ape (herbivore) Communicator never discovers, even over many ticks —
+/// inventions are apes-only. An otherwise-identical ape does (covered by
+/// `communicators_eventually_discover_stone_tools`).
+#[test]
+fn non_ape_communicator_never_discovers() {
+    let mut w = World::new(13);
+    w.inventions_enabled = true;
+    size_scratch(&mut w);
+    for n in 0..12u32 {
+        let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+        let mut kit = comm_kit();
+        // Force herbivore diet -> non-ape, overriding comm_kit's omnivore Mouth.
+        for m in kit.iter_mut() {
+            if let Module::Mouth { diet_affinity, .. } = m {
+                *diet_affinity = 0.0;
+            }
+        }
+        w.agents.modules[id as usize] = kit;
+        w.agents.meme_vector[id as usize][SKILL_CHANNEL] = 1.0;
+    }
+    for _ in 0..3000 {
+        invention::invention_step(&mut w);
+    }
+    let discovered = w
+        .agents
+        .iter_alive()
+        .any(|id| invention::held_mask(&w.agents.meme_vector[id as usize]) != 0);
+    assert!(!discovered, "a non-ape must never discover an invention");
+}
+
 // --- Prereqs & atrophy --------------------------------------------------------
 
 #[test]
@@ -167,6 +197,54 @@ fn spread_copies_toward_holder_neighbour_and_respects_prereqs() {
     );
     assert_eq!(level_of(&w, receiver, invention::FIRE), 0.0, "Fire needs Stone Tools first");
     assert_eq!(level_of(&w, receiver, invention::FARMING), 0.0, "Farming needs Fire first");
+}
+
+/// A non-ape receiver next to an ape holding Stone Tools does NOT copy the
+/// invention, but DOES still copy a maladaptive practice from a practice-holding
+/// neighbour. Practices are open to every animal.
+#[test]
+fn non_ape_copies_practices_but_not_inventions() {
+    use anabios_core::practice;
+    let mut w = World::new(23);
+    w.inventions_enabled = true;
+    w.cognition_enabled = true; // practice spread is cognition-gated
+
+    // Ape teacher holding Stone Tools + Child Sacrifice.
+    let teacher = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+    w.agents.modules[teacher as usize] = comm_kit(); // omnivore -> ape
+    set_held(&mut w, teacher, invention::STONE_TOOLS);
+    w.agents.meme_vector[teacher as usize][practice::channel(practice::CHILD_SACRIFICE)] = 1.0;
+
+    // Non-ape (herbivore) Communicator receiver right next to the teacher.
+    let learner = w.spawn_agent(Vec2::new(500.5, 500.0), Genome::neutral());
+    let mut kit = comm_kit();
+    for m in kit.iter_mut() {
+        if let Module::Mouth { diet_affinity, .. } = m {
+            *diet_affinity = 0.0; // herbivore -> non-ape
+        }
+    }
+    w.agents.modules[learner as usize] = kit;
+    // Realized IQ only develops via the full tick's `iq::develop_all`, which
+    // this test skips (it drives `culture_step` directly). Set it directly so
+    // the cognition-enabled IQ gates (invention era-1 req 0.15, practice req
+    // 0.10) don't block the copy this test is trying to observe.
+    w.agents.iq[learner as usize] = 0.5;
+
+    size_scratch(&mut w);
+    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+    for _ in 0..50 {
+        anabios_core::culture::culture_step(&mut w);
+    }
+
+    assert_eq!(
+        level_of(&w, learner, invention::STONE_TOOLS),
+        0.0,
+        "non-ape must not copy an invention"
+    );
+    assert!(
+        w.agents.meme_vector[learner as usize][practice::channel(practice::CHILD_SACRIFICE)] > 0.0,
+        "non-ape must still copy a maladaptive practice"
+    );
 }
 
 #[test]
@@ -1090,7 +1168,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // off in this scenario ⇒ detectors never fire — layout growth only.
     // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
     // World.payoff_biased_learning layout growth only (off here).
-    &[(0, 0xabc8d07fc3892bc7), (100, 0xda82600fe52add4d), (300, 0x1e794aa302b6f2fa)];
+    // Refreshed 2026-08-11 (apes-only inventions): culture cohort (innovator/
+    // traditionalist) reclassed omnivore (ape) so it can carry the tech tree;
+    // the diet change shifts feeding ecology and the invention-race trajectory.
+    // Regenerated on the gated tree.
+    &[(0, 0x620ece243fc93a97), (100, 0x9bb144abcb0d6f5f), (300, 0xf28a2263a8c65713)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
