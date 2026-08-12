@@ -117,7 +117,7 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // traditionalist) reclassed omnivore (ape) so it can carry the tech tree;
     // the diet change shifts feeding ecology and the invention-race trajectory.
     // Regenerated on the gated tree.
-    &[(0, 0x1a05a7a2f582710c), (100, 0x1e6af0b8724fc2df), (300, 0xe71f444c39cdc0ac)];
+    &[(0, 0xcc115c0df11767ec), (100, 0xc6e6ed39a5d06c3f), (300, 0x3f688e11d9cbaeec)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {
