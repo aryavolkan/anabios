@@ -168,4 +168,35 @@ fn main() {
     for ceiling in [4000.0, 3000.0, 2000.0] {
         rock_near_cradle(&earth, ceiling);
     }
+    // Nearest ACTUAL Rock (obsidian) to the cradle on the regenerated field.
+    {
+        use anabios_core::biome::TerrainType;
+        let cradle_x = (37.0 + 180.0) / 360.0 * earth.world_size;
+        let cradle_y = (90.0 - 0.5) / 180.0 * earth.world_size;
+        let (mut best, mut bll) = (f32::MAX, (0.0f32, 0.0f32));
+        for row in 0..earth.res {
+            for col in 0..earth.res {
+                if earth.cells[row * earth.res + col].terrain == TerrainType::Rock {
+                    let x = (col as f32 + 0.5) * earth.cell_size;
+                    let y = (row as f32 + 0.5) * earth.cell_size;
+                    let dx = {
+                        let d = (x - cradle_x).abs();
+                        d.min(earth.world_size - d)
+                    };
+                    let d = (dx * dx + (y - cradle_y).powi(2)).sqrt();
+                    if d < best {
+                        best = d;
+                        bll = (
+                            90.0 - (row as f32 + 0.5) / earth.res as f32 * 180.0,
+                            (col as f32 + 0.5) / earth.res as f32 * 360.0 - 180.0,
+                        );
+                    }
+                }
+            }
+        }
+        println!(
+            "\nREGENERATED field: nearest ACTUAL Rock to cradle = {:.0} sim-units at lat{:.1} lon{:.1}",
+            best, bll.0, bll.1
+        );
+    }
 }

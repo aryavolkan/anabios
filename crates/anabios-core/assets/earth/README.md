@@ -21,11 +21,22 @@ the decision. The actual 256×256 `.u8` assets are produced by a later task
 - Alternate variant at the same resolution/URL prefix: `60s_surface_elev_gtif` (ice
   surface elevation instead of bedrock) — not fetched in this spike, but reachable via
   the same server if Task 1 prefers ice-surface over bedrock.
-- Planned normalization: raw elevation is meters relative to sea level (negative =
+- Normalization (current): raw elevation is meters relative to sea level (negative =
   ocean depth). Map to `[0,1]` such that **0 m → 0.35** (matching
-  `biome::SEA_LEVEL = 0.35`), with land stretching `0.35 → 1.0` over the observed max
-  elevation (~8849 m, Everest) and ocean stretching `0.35 → 0.0` over the observed min
-  (~-10935 m, Mariana Trench), then quantize to `u8`.
+  `biome::SEA_LEVEL = 0.35`); land stretches `0.35 → 1.0` over a **contrast ceiling of
+  `ELEV_CEILING_M = 3000 m`** (land at or above 3000 m clips to 1.0), and ocean
+  stretches `0.35 → 0.0` over the observed min (~-11000 m, Mariana Trench), then
+  quantize to `u8`. Retune via `build_earth_map.py --elev-ceiling`.
+  - **Why 3000 m, not the literal 8849 m (Everest):** an 8849 m ceiling compressed
+    essentially all land into normalized `0.35–0.50`, so `biome::ROCK_LINE = 0.78`
+    (≈ 5850 m under that mapping) was never reached — the map generated **0% Rock**,
+    hence no obsidian, hence the invention tech-tree (rooted at `stone_tools`, which
+    needs obsidian) was materially impossible. The 3000 m contrast ceiling restores
+    ~1% Rock globally, including obsidian-bearing Rock in the **East African Rift**
+    (~23 sim-units from the cradle at res 256 / world 4096). See
+    `docs/superpowers/specs/2026-08-11-ooa-earth-emergence-probe-findings.md`. Only
+    `elevation.u8` is affected; `temperature.u8` / `precip.u8` are unchanged, and the
+    land/water coastline is unchanged (only the land-elevation distribution shifts).
 
 ## Temperature — NASA NEO MOD_LSTD_M / MOD_LSTD_CLIM_M, MODIS Land Surface Temperature (Day), monthly, floating-point GeoTIFF
 

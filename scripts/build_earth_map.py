@@ -26,6 +26,21 @@ RES = 256
 OUT = Path(__file__).resolve().parents[1] / "crates/anabios-core/assets/earth"
 SEA_LEVEL_NORM = 0.35  # must match biome::SEA_LEVEL
 
+# Land-side elevation normalization ceiling, in meters. `0 m` always maps to
+# SEA_LEVEL_NORM; a real elevation of ELEV_CEILING_M (or higher) maps to 1.0.
+# This is a *contrast* knob, not a literal "highest point on Earth" figure:
+# real peaks (Everest, 8850 m) are rare, bilinear-resampling to
+# 256x256 smooths them away, and biome::ROCK_LINE = 0.78 needs a plausible
+# fraction of real mountainous terrain (East African Rift, Andes, Himalaya,
+# ...) to actually cross it. A high ceiling (e.g. 8850 m, the literal Everest
+# height) compresses nearly all land into the 0.35-0.50 band and produces 0%
+# Rock terrain -- see docs/superpowers/specs/2026-08-11-ooa-earth-emergence-
+# probe-findings.md. 3000 m was validated by that probe to restore realistic
+# Rock coverage (including obsidian-bearing Rock near the East African Rift
+# cradle) without over-mountainizing the whole map. Overridable via
+# --elev-ceiling for retuning.
+ELEV_CEILING_M = 3000.0
+
 
 def write_u8(name, grid):
     assert len(grid) == RES * RES, f"{name}: {len(grid)} != {RES * RES}"
@@ -105,7 +120,37 @@ def _monthly_mean(paths, is_fill):
     return mean, valid_mask
 
 
-def build_real(elev_path, temp_paths, precip_paths):
+def _normalize_elevation(elev_m, ceiling_m):
+    """Map raw elevation (meters, negative = ocean depth) to [0,1].
+
+    0 m -> SEA_LEVEL_NORM (unchanged, matches biome::SEA_LEVEL). Land
+    stretches SEA_LEVEL_NORM -> 1.0 over `ceiling_m` meters (a contrast knob,
+    see ELEV_CEILING_M above -- NOT the literal highest point on Earth); land
+    elevation at or above the ceiling clips to 1.0. Ocean stretches
+    SEA_LEVEL_NORM -> 0.0 over the observed real-world min (~-11000 m,
+    Mariana Trench), unchanged by the ceiling knob.
+    """
+    import numpy as np
+
+    return np.where(
+        elev_m >= 0,
+        SEA_LEVEL_NORM + (elev_m / ceiling_m) * (1.0 - SEA_LEVEL_NORM),
+        SEA_LEVEL_NORM * (1.0 + np.clip(elev_m, -11000, 0) / 11000.0),
+    ).clip(0, 1)
+
+
+def build_elevation_only(elev_path, ceiling_m):
+    """Build and write ONLY elevation.u8 from an elevation GeoTIFF, skipping
+    temperature/precipitation entirely -- no NEO monthly rasters needed. Used
+    to retune the elevation normalization without re-downloading/re-averaging
+    the (unrelated, unchanged) temperature and precip sources."""
+    elev_m = _load_raster(elev_path)
+    elev_m = _resample(elev_m)
+    en = _normalize_elevation(elev_m, ceiling_m)
+    write_u8("elevation", en.flatten().tolist())
+
+
+def build_real(elev_path, temp_paths, precip_paths, ceiling_m=ELEV_CEILING_M):
     import numpy as np
 
     elev_m = _load_raster(elev_path)
@@ -133,12 +178,8 @@ def build_real(elev_path, temp_paths, precip_paths):
     temp_c = _resample(temp_c)
     precip_mm = _resample(precip_mm)
 
-    # Elevation: 0 m -> SEA_LEVEL_NORM; deep ocean -> ~0.05; peaks -> ~1.0.
-    en = np.where(
-        elev_m >= 0,
-        SEA_LEVEL_NORM + (elev_m / 8850.0) * (1.0 - SEA_LEVEL_NORM),
-        SEA_LEVEL_NORM * (1.0 + np.clip(elev_m, -11000, 0) / 11000.0),
-    ).clip(0, 1)
+    # Elevation: 0 m -> SEA_LEVEL_NORM; deep ocean -> ~0.05; land >= ceiling_m -> 1.0.
+    en = _normalize_elevation(elev_m, ceiling_m)
     tn = ((temp_c + 40.0) / 80.0).clip(0, 1)  # -40..40 C -> 0..1
     pn = (np.log1p(precip_mm.clip(0, None)) / np.log1p(4000.0)).clip(0, 1)
     for name, arr in (("elevation", en), ("temperature", tn), ("precip", pn)):
@@ -203,12 +244,36 @@ if __name__ == "__main__":
         nargs="+",
         help="12 monthly precipitation GeoTIFFs (Jan..Dec), mm",
     )
+    ap.add_argument(
+        "--elev-only",
+        action="store_true",
+        help=(
+            "Build and write ONLY elevation.u8 from --elev, skipping "
+            "temperature/precip entirely (no --temp/--precip needed, no NEO "
+            "re-download). Use this to retune the elevation ceiling without "
+            "touching the unrelated, unchanged temperature/precip assets."
+        ),
+    )
+    ap.add_argument(
+        "--elev-ceiling",
+        type=float,
+        default=ELEV_CEILING_M,
+        help=(
+            "Land-side elevation normalization ceiling in meters (see "
+            f"ELEV_CEILING_M in this file for rationale; default {ELEV_CEILING_M:.0f})."
+        ),
+    )
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if a.source == "real":
-        if not (a.elev and a.temp and a.precip):
-            ap.error("--source real requires --elev, --temp (12 files), --precip (12 files)")
+        if not a.elev:
+            ap.error("--source real requires --elev")
         _require_real_deps()
-        build_real(a.elev, a.temp, a.precip)
+        if a.elev_only:
+            build_elevation_only(a.elev, a.elev_ceiling)
+        else:
+            if not (a.temp and a.precip):
+                ap.error("--source real requires --temp (12 files), --precip (12 files) unless --elev-only")
+            build_real(a.elev, a.temp, a.precip, a.elev_ceiling)
     else:
         build_synthetic()
