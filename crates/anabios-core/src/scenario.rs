@@ -186,6 +186,22 @@ pub struct Scenario {
     /// order unchanged). See `biome::ClimateParams`.
     #[serde(default)]
     pub climate: Option<ScenarioClimate>,
+    /// Opt-in real-world biome source. Absent = the procedural climate
+    /// pipeline (`climate`, if any, or the compile-time default). `Earth`
+    /// takes precedence over `climate` and builds the field from the
+    /// embedded 256x256 rasters via `BiomeField::from_earth` (requires
+    /// `biome_res == biome::EARTH_RES`).
+    #[serde(default)]
+    pub world_map: Option<WorldMapSource>,
+}
+
+/// Opt-in real-world biome source. Absent = the procedural climate pipeline.
+/// `Earth` builds the field from the embedded 256x256 rasters via
+/// `BiomeField::from_earth` (requires `biome_res == biome::EARTH_RES`).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorldMapSource {
+    Earth,
 }
 
 /// Scenario-facing climate overrides; every field optional, defaults from
@@ -423,6 +439,9 @@ pub enum Placement {
     Uniform,
     /// Cluster around `center` within `radius`.
     Cluster { center_x: f32, center_y: f32, radius: f32 },
+    /// Cluster around a real-world lat/lon (equirectangular → sim coords),
+    /// spread within `radius`. For real-map (`world_map`) scenarios.
+    Geo { lat: f32, lon: f32, radius: f32 },
 }
 
 #[allow(clippy::derivable_impls)]
@@ -725,13 +744,20 @@ impl Scenario {
         if let Some(cap) = self.max_population {
             w.max_population = cap;
         }
-        if let Some(climate) = &self.climate {
-            w.biome = crate::biome::BiomeField::generate_with(
-                self.seed,
-                w.biome_res,
-                w.world_size,
-                &climate.resolve(),
-            );
+        match &self.world_map {
+            Some(WorldMapSource::Earth) => {
+                w.biome = crate::biome::BiomeField::from_earth(w.biome_res, w.world_size);
+            }
+            None => {
+                if let Some(climate) = &self.climate {
+                    w.biome = crate::biome::BiomeField::generate_with(
+                        self.seed,
+                        w.biome_res,
+                        w.world_size,
+                        &climate.resolve(),
+                    );
+                }
+            }
         }
         if let Some(interval) = self.codex_interval {
             w.codex_interval = interval;
@@ -777,6 +803,16 @@ impl Scenario {
                         Vec2::new(x, y)
                     }
                     Placement::Cluster { center_x, center_y, radius } => {
+                        let theta = w.rng.f32_range(0.0, std::f32::consts::TAU);
+                        let r = w.rng.f32_range(0.0, radius);
+                        Vec2::new(
+                            center_x + r * crate::mathf::cosf(theta),
+                            center_y + r * crate::mathf::sinf(theta),
+                        )
+                    }
+                    Placement::Geo { lat, lon, radius } => {
+                        let center_x = (lon + 180.0) / 360.0 * w.world_size;
+                        let center_y = (90.0 - lat) / 180.0 * w.world_size;
                         let theta = w.rng.f32_range(0.0, std::f32::consts::TAU);
                         let r = w.rng.f32_range(0.0, radius);
                         Vec2::new(

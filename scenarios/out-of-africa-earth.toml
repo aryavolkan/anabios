@@ -1,0 +1,431 @@
+name = "out-of-africa-earth"
+seed = 318
+
+# OUT OF AFRICA — REAL EARTH. The full out-of-africa subsystem stack on a real
+# Earth map (world_map = "earth"): real elevation + temperature + precipitation
+# rasters (assets/earth/, built by scripts/build_earth_map.py) drive the biome
+# field through the existing Whittaker classify(). Founding lineages are placed
+# on real coordinates with `geo`: the cognitive cradle in equatorial East
+# Africa, archaics across Eurasia. The dispersal funnels through the real
+# African exits (Sinai / Bab-el-Mandeb, Gibraltar). Equirectangular; E-W wraps
+# (dateline), poles are ice at the y-edges.
+#
+# This is `out-of-africa.toml`'s population and lineage composition (same
+# counts, same traits) re-anchored from the procedural grand-theater map onto
+# real coordinates — the two scenarios differ ONLY in geography. Placements
+# were land-verified against assets/earth/elevation.u8 before landing (every
+# cluster center is LAND; each cluster disk sampled >=78% land, most >=90%).
+#
+#   AFRICA — the Cradle (equatorial East Africa, lat 0.5 / lon 37: Kenya/
+#   Ethiopia highlands) carries the founding foragers, the traditionalists,
+#   cultural foragers and the sentinel. The QUARRY sits just east (lat 0.5 /
+#   lon 38.5) with the innovators. The MEGAFAUNA BELT is East African savanna
+#   (lat -2 to -3 / lon 34.5-35.7): grazer/herd/stalker/spiner/bruiser/
+#   pack_hunter plus the two cultural-hunter packs. The SAHEL RELAY sits in
+#   North Africa (lat 13-14.5 / lon 8-12), the RAINFOREST commune in the
+#   Congo basin (lat 1 / lon 21), and the CAPE in South Africa (lat -32.5 to
+#   -33.5 / lon 21-23). A marker territory watches the EAST STRAIT from the
+#   Arabian peninsula (lat 20 / lon 45).
+#
+#   EURASIA — held only by ARCHAICS, spread from NW Europe (lat 50 / lon 10)
+#   through the Caucasus/Central-Asian steppe (lat 45-50 / lon 35-75) to NE
+#   Asia / Siberia (lat 55 / lon 105), plus the northern megafauna herds and
+#   cave-bear bruisers riding the same corridor.
+#
+# The exodus is emergent, not scripted: agents forage, trade, and settle their
+# way out through the real African corridors (Sinai/Bab-el-Mandeb toward
+# Arabia, Gibraltar toward Iberia) under the same DIT/cognition/war/
+# domestication stack as `out-of-africa.toml`. Watch Migration /
+# CorridorUse / RangeExpansion / SpeciationEvent for the trek,
+# MaterialLearning / InventionDiscovered / AnimalDomesticated for the
+# technology arc, and SexualSelection on the hominid lineages.
+#
+# Honest expectations (measured, release, seed 318, 2000 ticks via `run
+# --events-jsonl`: alive=998, state_hash=0xa3a859978b896fb1). Watchable at
+# grand scale (max_population 3000, biome_res 256, world_size 4096, every
+# subsystem on) on the real Earth map. The exodus IS real: Migration fires
+# 733x and CorridorUse 134x (the human dispersal through the real African
+# exits), amid heavy churn (2220 PopulationCrash, 1945 SpeciationEvent,
+# 1430 Extinction). But the technology arc STALLS: zero InventionDiscovered
+# / MaterialLearning / AnimalDomesticated in 2000 ticks — every species era 0.
+#
+# This scenario does NOT seed `starting_inventions`; Stone Tools et al. must
+# emerge. Sub-project B investigated whether they can (see
+# docs/superpowers/specs/2026-08-11-ooa-earth-emergence-probe-findings.md).
+# Result: NO. The elevation normalization was re-tuned so the real map now
+# has Rock/obsidian in the East African Rift (~23 units from the cradle) —
+# without it, `stone_tools` (needs obsidian) was materially impossible. But
+# even with obsidian reachable, the r-selected asocial_forager competitively
+# excludes the innovator lineage (40 -> ~3 by tick 2000) before it can bank
+# the materials to discover — the same ecological-exclusion wall documented
+# on the procedural map, which single-knob map/placement tuning does not
+# crack. Emergent era-3 ("inventions completed") is not reachable here; the
+# seeded `out-of-africa-saga` remains the honest showcase for the full
+# completed tech arc.
+
+max_population = 3000
+world_size = 4096.0
+biome_res = 256
+hash_res = 256
+world_map = "earth"
+
+env_period = 400
+climate_drift_rate = 0.00005
+season_period = 2000
+biome_adaptation = true
+living_biome = true
+nutrient_variation = true
+soil_fertility = true
+disasters_enabled = true
+terrain_habitat = true
+resources_enabled = true
+settlement_enabled = true
+inventions_enabled = true
+gene_tech_coupling = true
+cognition_enabled = true
+war_enabled = true
+sexual_dimorphism_enabled = true
+domestication_enabled = true
+
+# ---------------------------------------------------------------------------
+# THE CRADLE — equatorial East Africa (lat 0.5, lon 37.0: Kenya/Ethiopia
+# highlands). Land-verified: cluster center LAND (elev 118), disk samples
+# 89-96% land.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 220
+archetype = "asocial_forager"
+placement = { kind = "geo", lat = 0.5, lon = 37.0, radius = 120.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.12
+
+[[agents]]
+count = 70
+archetype = "asocial_forager"
+placement = { kind = "geo", lat = 0.5, lon = 37.0, radius = 120.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.87
+
+[[agents]]
+count = 150
+archetype = "asocial_forager"
+placement = { kind = "geo", lat = 0.5, lon = 37.0, radius = 120.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.62
+
+# ---------------------------------------------------------------------------
+# THE QUARRY (lat 0.5, lon 38.5) — just east of the Cradle. Land-verified:
+# cluster center LAND (elev 99), disk samples 87-89% land. Innovators camp
+# here with the local foragers.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 110
+archetype = "asocial_forager"
+placement = { kind = "geo", lat = 0.5, lon = 38.5, radius = 80.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.37
+
+[[agents]]
+count = 40
+archetype = "innovator"
+placement = { kind = "geo", lat = 0.5, lon = 38.5, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 1.0
+reproduction_threshold = 0.3
+sexual_dimorphism = 0.8
+mate_choosiness = 0.6
+
+[[agents]]
+count = 32
+archetype = "traditionalist"
+placement = { kind = "geo", lat = 0.5, lon = 37.0, radius = 100.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 0.05
+reproduction_threshold = 0.3
+sexual_dimorphism = 0.8
+mate_choosiness = 0.7
+
+[[agents]]
+count = 40
+archetype = "cultural_forager"
+placement = { kind = "geo", lat = 0.5, lon = 37.0, radius = 100.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+sexual_dimorphism = 0.6
+mate_choosiness = 0.5
+
+[[agents]]
+count = 10
+archetype = "sentinel"
+placement = { kind = "geo", lat = -0.5, lon = 37.0, radius = 70.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# MEGAFAUNA BELT — East African savanna (lat -2 to -3, lon 34.5-35.7).
+# Land-verified: all sub-cluster centers LAND, disk samples 91-100% land.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 48
+archetype = "grazer"
+placement = { kind = "geo", lat = -2.5, lon = 35.0, radius = 100.0 }
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "herd"
+placement = { kind = "geo", lat = -2.5, lon = 35.0, radius = 100.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "culture_prey"
+placement = { kind = "geo", lat = -2.0, lon = 34.5, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "asocial_prey"
+placement = { kind = "geo", lat = -3.0, lon = 35.5, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 10
+archetype = "stalker"
+placement = { kind = "geo", lat = -2.5, lon = 35.0, radius = 100.0 }
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "spiner"
+placement = { kind = "geo", lat = -2.0, lon = 35.5, radius = 70.0 }
+[agents.traits]
+size = 0.6
+perception_radius = 0.9
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "bruiser"
+placement = { kind = "geo", lat = -3.0, lon = 34.5, radius = 60.0 }
+[agents.traits]
+size = 0.8
+lifespan_bias = 1.0
+
+[[agents]]
+count = 10
+archetype = "pack_hunter"
+placement = { kind = "geo", lat = -2.7, lon = 35.7, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# Cultural hunters: the fast pack camps the quarry's savanna fringe (first
+# to hunt with worked weapons); the slow pack hunts the megafauna belt.
+[[agents]]
+count = 8
+archetype = "fast_hunter"
+placement = { kind = "geo", lat = 0.3, lon = 39.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+openness = 0.9
+
+[[agents]]
+count = 8
+archetype = "slow_hunter"
+placement = { kind = "geo", lat = -2.3, lon = 35.2, radius = 55.0 }
+[agents.traits]
+lifespan_bias = 1.0
+
+# ---------------------------------------------------------------------------
+# SAHEL RELAY — North Africa (lat 13-14.5, lon 8-12), straddling the route
+# from the Cradle toward the EAST STRAIT (Arabia). Land-verified: all centers
+# LAND, disk samples 100% land.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 32
+archetype = "innate_forager"
+placement = { kind = "geo", lat = 14.0, lon = 10.0, radius = 70.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "individual_learner"
+placement = { kind = "geo", lat = 14.5, lon = 8.0, radius = 55.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "pure_imitator"
+placement = { kind = "geo", lat = 14.5, lon = 12.0, radius = 55.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "critical_learner"
+placement = { kind = "geo", lat = 13.0, lon = 10.0, radius = 55.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# RAINFOREST + CAPE — the Congo-basin dialect commune (lat 1, lon 21), kin
+# cooperation lineages and a marker territory at the South-African Cape (lat
+# -32.5 to -33.5, lon 21-23), and an east-African marker on the Arabian
+# peninsula (lat 20, lon 45) watching the EAST STRAIT. Land-verified: all
+# centers LAND, disk samples 78-100% land.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 16
+archetype = "communicator"
+placement = { kind = "geo", lat = 1.0, lon = 21.0, radius = 90.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "cultural_cooperator"
+placement = { kind = "geo", lat = -33.0, lon = 22.0, radius = 70.0 }
+[agents.traits]
+altruism = 1.0
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 12
+archetype = "cooperator"
+placement = { kind = "geo", lat = -33.5, lon = 23.0, radius = 60.0 }
+[agents.traits]
+altruism = 0.8
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "marker"
+placement = { kind = "geo", lat = -32.5, lon = 21.0, radius = 60.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 16
+archetype = "marker"
+placement = { kind = "geo", lat = 20.0, lon = 45.0, radius = 80.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# ---------------------------------------------------------------------------
+# EURASIA — the north is held only by ARCHAICS: economically marginal
+# lineages with no local obsidian and no invention temperaments, plus wild
+# steppe herds and cave-bear bruisers. Spread from NW Europe through the
+# Caucasus/Central-Asian steppe to NE Asia/Siberia — deliberately left empty
+# of economic lineages in between: the first migrant culture to cross and
+# settle founds the north. Land-verified: all centers LAND, disk samples
+# 98-100% land.
+# ---------------------------------------------------------------------------
+
+# NW archaic hunter-gatherers (NW Europe, lat 50, lon 10): cold, pre-economic.
+[[agents]]
+count = 60
+archetype = "asocial_forager"
+placement = { kind = "geo", lat = 50.0, lon = 10.0, radius = 100.0 }
+[agents.traits]
+lifespan_bias = 1.0
+openness = 0.1
+reproduction_threshold = 0.3
+
+# Eastern archaics (Central Asia, lat 45, lon 75): conservative, copy only
+# what washes ashore.
+[[agents]]
+count = 20
+archetype = "traditionalist"
+placement = { kind = "geo", lat = 45.0, lon = 75.0, radius = 80.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 0.05
+reproduction_threshold = 0.3
+
+# NE dialect commune (NE Asia/Siberia, lat 55, lon 105): the north's own meme
+# pool, at maximal separation from the rainforest commune — dialect
+# divergence is the control experiment for how deep the two continents'
+# cultures drift.
+[[agents]]
+count = 16
+archetype = "communicator"
+placement = { kind = "geo", lat = 55.0, lon = 105.0, radius = 70.0 }
+[agents.traits]
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+# Northern megafauna: steppe herds (Central Asia, lat 50, lon 55) + cave
+# bears with the archaics (Caucasus, lat 48, lon 35).
+[[agents]]
+count = 24
+archetype = "grazer"
+placement = { kind = "geo", lat = 50.0, lon = 55.0, radius = 70.0 }
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+reproduction_threshold = 0.3
+
+[[agents]]
+count = 6
+archetype = "bruiser"
+placement = { kind = "geo", lat = 48.0, lon = 35.0, radius = 80.0 }
+[agents.traits]
+size = 0.85
+lifespan_bias = 1.0
+
+# ---------------------------------------------------------------------------
+# Archetype-free baseline stock (species 0): uniform across the whole map
+# (land, sea, and poles), exercising the no-archetype spawn path and the
+# biome-adaptation gene on the full real-Earth climate range.
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 60
+placement = { kind = "uniform" }
+[agents.traits]
+lifespan_bias = 0.6
+reproduction_threshold = 0.3
