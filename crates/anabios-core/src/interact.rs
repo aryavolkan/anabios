@@ -518,6 +518,17 @@ fn trade_pass(world: &mut World, alive_ids: &[u32]) {
     use crate::resource::TRADE_UNIT;
     for &id in alive_ids {
         let i = id as usize;
+        // Trade only at hubs: an agent not near any predetermined hub cannot
+        // barter this tick. Empty `trade_hubs` (resources off, or a hubless map)
+        // therefore disables all trade — intended.
+        if !crate::hub::near_any_hub(
+            &world.trade_hubs,
+            world.agents.position[i],
+            world.world_size,
+            crate::hub::HUB_TRADE_RANGE,
+        ) {
+            continue;
+        }
         let tgt = world.sensors[i].nearest_other_id;
         if tgt == crate::sense::NO_NEIGHBOR_ID {
             continue;

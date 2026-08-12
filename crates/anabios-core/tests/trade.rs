@@ -297,3 +297,53 @@ fn motivated_agent_gets_extra_pull_toward_hub() {
          unmotivated one: delta={delta:?}, dir={dir:?}"
     );
 }
+
+/// Barter only happens at hubs: two complementary agents far from every hub do
+/// NOT trade; the same pair placed on a hub DOES.
+#[test]
+fn trade_only_happens_at_hubs() {
+    use anabios_core::hub::TradeHub;
+    use anabios_core::prelude_test::Vec2;
+
+    // Minimal 2-agent world with resources on and one hub at the origin.
+    let build = |on_hub: bool| {
+        let toml = "name=\"t\"\nseed=1\nworld_size=256\nresources_enabled=true\n[[agents]]\narchetype=\"grazer\"\ncount=2\n";
+        let mut w = Scenario::parse_toml(toml).expect("parse").instantiate();
+        w.trade_hubs = vec![TradeHub { pos: Vec2::new(0.0, 0.0), cell: 0, goods: vec![] }];
+        let ids: Vec<u32> = w.agents.iter_alive().collect();
+        let (a, b) = (ids[0] as usize, ids[1] as usize);
+        // Complementary inventories so a swap is mutually beneficial.
+        w.agents.inventory[a] = [4.0, 0.0, 0.0, 0.0];
+        w.agents.inventory[b] = [0.0, 4.0, 0.0, 0.0];
+        // Species must differ for cross-species trade; force it via the
+        // proper species-table growth path (push_species keeps
+        // species_centroids/species_member_counts/species_parents in lock
+        // step, unlike hand-assigning species_id which leaves those tables
+        // too short and panics in species_step's centroid recompute).
+        let old_species = w.agents.species_id[b];
+        let new_species = w.push_species(w.agents.genome[b].clone(), None);
+        w.remove_from_species(old_species);
+        w.agents.species_id[b] = new_species;
+        w.add_to_species(new_species);
+        // Place them adjacent, either on the hub or far away.
+        let p = if on_hub { Vec2::new(1.0, 0.0) } else { Vec2::new(120.0, 120.0) };
+        w.agents.position[a] = p;
+        w.agents.position[b] = p + Vec2::new(1.0, 0.0);
+        w.agents.anchor[a] = p;
+        w.agents.anchor[b] = p + Vec2::new(1.0, 0.0);
+        w
+    };
+
+    let mut off_hub = build(false);
+    let before = off_hub.total_trades;
+    for _ in 0..30 {
+        step(&mut off_hub);
+    }
+    assert_eq!(off_hub.total_trades, before, "no trade away from hubs");
+
+    let mut on_hub = build(true);
+    for _ in 0..30 {
+        step(&mut on_hub);
+    }
+    assert!(on_hub.total_trades > 0, "trade must occur at a hub");
+}
