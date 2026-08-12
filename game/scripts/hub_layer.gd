@@ -7,7 +7,6 @@ extends Node2D
 # choice refreshes with the live market field. Presentation over read-only sim
 # state; plain no-shader MultiMesh (Metal-safe), same as settlement_layer.
 
-const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const Buildings = preload("res://scripts/building_sprites.gd")
 
 const HUB_SCALE := 20.0

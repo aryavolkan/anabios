@@ -218,6 +218,7 @@ pub struct World {
     pub market_field: Vec<f32>,
     /// Predetermined trade hubs placed from the biome at instantiate (empty and
     /// inert unless `resources_enabled`). Fixed after generation. Serialized.
+    #[serde(default)]
     pub trade_hubs: Vec<crate::hub::TradeHub>,
     /// Disaster scheduler + active disasters + succession sites. Inert
     /// unless `disasters_enabled`. Serialized.
