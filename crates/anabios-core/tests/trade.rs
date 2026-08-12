@@ -245,3 +245,55 @@ fn conserve_goods_step_moves_dead_inventory_to_living() {
     // Buffer is drained.
     assert!(w.agents.deaths_scratch.is_empty());
 }
+
+/// A trade-motivated agent gets steered toward the nearest hub inside
+/// `decide_all`. This isolates the new additive bias from every other
+/// movement force: `decide()` itself never reads inventory, so two
+/// otherwise-identical single-agent worlds (same seed, same start position,
+/// same program/genome/sensors) diverge in their first-tick displacement
+/// only through the hub-seeking block, which is gated on `has_trade_motive`.
+/// A population-level "clustering increases over time" version of this test
+/// was tried first and discarded: it already passed with no hub bias wired
+/// in at all (other forces + natural wandering were enough to keep the
+/// near-hub fraction from decreasing over 800 ticks), so it could not
+/// distinguish "feature present" from "feature absent" — not usable for TDD.
+#[test]
+fn motivated_agent_gets_extra_pull_toward_hub() {
+    use anabios_core::biome::WORLD_SIZE_DEFAULT;
+    use anabios_core::genome::Genome;
+    use anabios_core::hub::{best_hub_direction, TradeHub};
+    use anabios_core::prelude_test::Vec2;
+    use anabios_core::resource::{GOOD_COUNT, STOCK_TARGET, TRADE_UNIT};
+    use anabios_core::world::World;
+
+    let start = Vec2::new(5.0, 5.0);
+    let hub_pos = Vec2::new(50.0, 50.0);
+    let hub = || TradeHub { pos: hub_pos, cell: 0, goods: vec![] };
+
+    let run = |motivated: bool| {
+        let mut w = World::new(7);
+        w.resources_enabled = true;
+        w.trade_hubs = vec![hub()];
+        let a = w.spawn_agent(start, Genome::neutral());
+        w.agents.inventory[a as usize] = if motivated {
+            let mut inv = [STOCK_TARGET; GOOD_COUNT];
+            inv[0] = STOCK_TARGET + TRADE_UNIT * 2.0; // surplus -> has_trade_motive
+            inv
+        } else {
+            [STOCK_TARGET; GOOD_COUNT] // balanced -> no motive
+        };
+        step(&mut w);
+        w.agents.position[a as usize]
+    };
+
+    let pos_unmotivated = run(false);
+    let pos_motivated = run(true);
+    let dir = best_hub_direction(&[hub()], start, WORLD_SIZE_DEFAULT);
+    assert!(dir.length() > 0.5, "hub steering must produce a real direction");
+    let delta = pos_motivated - pos_unmotivated;
+    assert!(
+        delta.dot(dir) > 1e-4,
+        "trade-motivated agent should be pulled toward the hub relative to an \
+         unmotivated one: delta={delta:?}, dir={dir:?}"
+    );
+}
