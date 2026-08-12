@@ -1,0 +1,81 @@
+# Trade hubs showcase — agents travel to predetermined marketplaces to barter.
+#
+# This scenario is built to demonstrate the trade-hub mechanic end to end:
+#
+#   1. PLACEMENT. With `resources_enabled`, world generation scans the biome for
+#      crossroads where >= 2 distinct trade-good terrains meet and pins a small
+#      set of fixed `TradeHub`s there (border-diversity greedy scan, min-spacing,
+#      capped). On this seed the scan finds 6 hubs, three of them full four-good
+#      junctions (Salt/Desert, Obsidian/Rock, Amber/Forest, Spice/Grass all
+#      within reach). The viewer draws a market/warehouse sprite + a ring of
+#      trade-good icons at each.
+#
+#   2. SEEKING. Four species are each pinned via `terrain_affinity` to a distinct
+#      good's home terrain, and all spawn INTERMIXED on the four-way junction at
+#      (816, 336) — which sits on a four-good hub. As agents harvest their home
+#      terrain they build a surplus of one good and a deficit of the others; that
+#      trade motive turns on an additive steering bias toward the NEAREST hub
+#      (`tick.rs::decide_all`), so traders converge on the marketplace instead of
+#      wandering off.
+#
+#   3. TRADE ONLY AT HUBS. `trade_pass` now gates barter on hub proximity — a
+#      swap can only happen within `HUB_TRADE_RANGE` of a hub. Away from hubs
+#      there is no trading; the marketplace is where exchange actually occurs.
+#
+# Parameters (seed, counts, affinities, the (816,336) junction, terrain_habitat)
+# follow the proven `geographic-trade.toml` biome/placement, which already yields
+# heavy cross-species turnover on this seed — see that file's header for the
+# empirical placement rationale (border-seeking terrain pull + widened
+# TRADE_RANGE; the four terrains interleave finely at this junction). The only
+# reframing here is that this file is the canonical hub demo: launch it and watch
+# the marketplaces populate.
+#
+# Launch (windowed capture):
+#   ANABIOS_SCENARIO=res://../scenarios/trade-hubs.toml ANABIOS_SEED=424242 \
+#   ANABIOS_CAM_ZOOM=5 ANABIOS_CAM_X=816 ANABIOS_CAM_Y=336 \
+#   godot --path game game/scenes/main.tscn
+name = "trade-hubs"
+seed = 424242
+terrain_habitat = true
+resources_enabled = true
+max_population = 2200
+
+# All four good-species spawn intermixed on the four-good junction so the
+# hub-seeking bias and the terrain-habitat sort both have real work to do
+# (starting pre-sorted or pre-clustered by good would hide the mechanism).
+
+# Salt / Desert (~26% of the map).
+[[agents]]
+count = 312
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.12
+
+# Obsidian / Rock (~0.3% of the map — deliberately the smallest population).
+[[agents]]
+count = 65
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.37
+
+# Amber / Forest (~17% of the map).
+[[agents]]
+count = 195
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.62
+
+# Spice / Grass (~48% of the map — the largest population).
+[[agents]]
+count = 390
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.87
