@@ -126,6 +126,38 @@ Population viability (72% ocean) was NOT the immediate binding constraint for
 era-1 — with obsidian present the world held ~1700 at tick 2000; the innovator
 lineage's fast exclusion is the binding constraint.
 
+## Stage 1 + 2 results (2026-08-11, commit 21afdc3)
+
+**Stage 1 — elevation re-tune: DONE and it works.** Changed the builder's land
+elevation ceiling from 8850 m → **3000 m** (`ELEV_CEILING_M`), added an
+`--elev-only` builder mode, re-downloaded ETOPO, regenerated *only*
+`elevation.u8` (temp/precip byte-identical, coastlines unchanged,
+`earth_worldgen` 4/4 pass). Result on the regenerated `from_earth` field:
+**Rock 0% → 1.0%**, with actual obsidian-bearing Rock **23 sim-units from the
+cradle at lat −0.4, lon 35.9 (East African Rift)**. The tech-tree root is now
+materially reachable. Committed.
+
+**Stage 2 — Rift-quarry placement: measured, does NOT crack it.** Two configs
+tested by demo (8000 ticks, seed 318):
+- Obsidian available, original placement (innovators co-located with the forager
+  mass): **still zero discovery** — innovators 40 → ~4 by tick 2000.
+- Obsidian + a reworked quarry (innovators dense *on* the Rift obsidian, the
+  local forager block cut 110 → 20, the 440-strong cradle mass pulled NE off the
+  rift): **still zero discovery** — innovators 40 → ~3 by tick 2000. Survivors are
+  energy-*rich* (nrg 380–650) but too few, and never accumulate obsidian×2.
+
+So on the real map, obsidian + single-knob placement separation is **not enough**:
+the innovator lineage is competitively excluded to a handful before it can bank
+the materials to discover `stone_tools`. This is the documented
+competitive-exclusion wall (this doc's blocker #4, and the
+[ooa-climb findings](2026-08-02-ooa-climb-findings.md)), now confirmed to block
+even **era-1** on the real map's harsher (72%-ocean, lower-carrying-capacity)
+ecology. The placement experiment was reverted; only the stage-1 elevation fix is
+committed. Getting *any* tech to fire on the real map requires **stage 3** — an
+explicit ecological mechanism (culture fitness floor / competitor cap / niche
+protection), the genuine open research problem, which single-knob tuning does not
+solve.
+
 ## Decision (open — for the human)
 
 Three directions, materially different in scope/appetite:
