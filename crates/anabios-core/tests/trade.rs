@@ -321,7 +321,7 @@ fn trade_only_happens_at_hubs() {
         // step, unlike hand-assigning species_id which leaves those tables
         // too short and panics in species_step's centroid recompute).
         let old_species = w.agents.species_id[b];
-        let new_species = w.push_species(w.agents.genome[b].clone(), None);
+        let new_species = w.push_species(w.agents.genome[b], None);
         w.remove_from_species(old_species);
         w.agents.species_id[b] = new_species;
         w.add_to_species(new_species);
