@@ -316,7 +316,7 @@ pub const APE_DIET_HI: f32 = 0.66;
 /// unaffected — any animal can hold and spread those.
 pub fn is_ape(genome: &Genome, modules: &module::ModuleList) -> bool {
     let diet = module::effective_diet_carnivory(modules);
-    genome.get(GenomeSlot::Size) >= APE_SIZE_MIN && diet >= APE_DIET_LO && diet < APE_DIET_HI
+    genome.get(GenomeSlot::Size) >= APE_SIZE_MIN && (APE_DIET_LO..APE_DIET_HI).contains(&diet)
 }
 
 /// Zero every invention channel of `meme` when the agent is not an ape (no-op
