@@ -1296,6 +1296,25 @@ impl Simulation {
         out
     }
 
+    /// Per-hub trade tallies: one `PackedInt32Array` of GOOD_COUNT counts per hub,
+    /// in the same order as `trade_hubs()`. Empty until trading has occurred. This
+    /// is viewer-only scratch (not part of the simulation state).
+    #[func]
+    fn hub_trade_tally(&self) -> Array<PackedInt32Array> {
+        let mut out = Array::new();
+        let Some(w) = self.inner.as_ref() else {
+            return out;
+        };
+        for counts in &w.hub_trade_tally {
+            let mut row = PackedInt32Array::new();
+            for &c in counts.iter() {
+                row.push(c as i32);
+            }
+            out.push(&row);
+        }
+        out
+    }
+
     /// Number of module types (for the GDScript layer loop).
     #[func]
     fn module_type_count(&self) -> i64 {
