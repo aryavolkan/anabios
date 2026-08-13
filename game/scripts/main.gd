@@ -209,6 +209,10 @@ func _ready() -> void:
 	hub_layer.name = "HubLayer"
 	add_child(hub_layer)
 	move_child(hub_layer, module_layers.get_index())
+	var caravan_layer = preload("res://scripts/caravan_layer.gd").new()
+	caravan_layer.name = "CaravanLayer"
+	add_child(caravan_layer)
+	move_child(caravan_layer, module_layers.get_index())
 	_make_wrap_clones()
 	# Replay & event camera (E2): snapshot ring + R/U/V modes.
 	var replay_manager := preload("res://scripts/replay_manager.gd").new()
