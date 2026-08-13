@@ -121,6 +121,23 @@ pub fn near_any_hub(hubs: &[TradeHub], pos: Vec2, world_size: f32, range: f32) -
     })
 }
 
+/// Index of the nearest trade hub to `pos` under torus wrap, or `None` when there
+/// are no hubs. Deterministic (fixed order, strict `<` keeps the earliest on ties);
+/// reads no RNG.
+pub fn nearest_hub_index(hubs: &[TradeHub], pos: Vec2, world_size: f32) -> Option<usize> {
+    let world = Vec2::splat(world_size);
+    let half = Vec2::splat(world_size * 0.5);
+    let mut best: Option<(f32, usize)> = None;
+    for (i, h) in hubs.iter().enumerate() {
+        let off = wrap_torus(h.pos - pos + half, world) - half;
+        let d2 = off.length_squared();
+        if best.is_none_or(|(bd, _)| d2 < bd) {
+            best = Some((d2, i));
+        }
+    }
+    best.map(|(_, i)| i)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,5 +264,18 @@ mod tests {
         // apply() must have stored exactly what placement computes from the
         // finalized biome (proves the wiring ran, not the default empty vec).
         assert_eq!(w.trade_hubs, place_trade_hubs(&w.biome));
+    }
+
+    #[test]
+    fn nearest_hub_index_picks_closest_including_wrap() {
+        let ws = 100.0;
+        let hubs = vec![
+            TradeHub { pos: Vec2::new(10.0, 50.0), cell: 0, goods: vec![] },
+            TradeHub { pos: Vec2::new(60.0, 50.0), cell: 1, goods: vec![] },
+        ];
+        // x=95 is nearest to hub 0 (x=10) ACROSS the seam (dist 15), not hub 1 (dist 35).
+        assert_eq!(nearest_hub_index(&hubs, Vec2::new(95.0, 50.0), ws), Some(0));
+        assert_eq!(nearest_hub_index(&hubs, Vec2::new(55.0, 50.0), ws), Some(1));
+        assert_eq!(nearest_hub_index(&[], Vec2::new(0.0, 0.0), ws), None);
     }
 }
