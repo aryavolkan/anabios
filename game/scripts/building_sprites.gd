@@ -294,3 +294,26 @@ static func build_good_image(good_idx: int) -> Image:
 
 static func build_good(good_idx: int) -> ImageTexture:
 	return ImageTexture.create_from_image(build_good_image(good_idx))
+
+
+# 16x16 caravan cart: wooden body, pale canvas top, two dark wheels. Small so it
+# reads as a vehicle beside the bigger hub buildings.
+const _CART_BLOCKS: Array = [
+	[3, 6, 10, 4, "t"],  # wooden body
+	[3, 6, 10, 1, "b"],  # top rail of body
+	[4, 3, 8, 3, "B"],  # pale canvas cover
+	[4, 3, 8, 1, "W"],  # canvas highlight
+	[3, 10, 2, 2, "K"],  # left wheel
+	[11, 10, 2, 2, "K"],  # right wheel
+	[5, 9, 6, 1, "d"],  # axle shadow
+]
+
+
+static func build_cart_image() -> Image:
+	var img: Image = ApeSprites._build_cell(_CART_BLOCKS)
+	img.flip_y()
+	return img
+
+
+static func build_cart() -> ImageTexture:
+	return ImageTexture.create_from_image(build_cart_image())

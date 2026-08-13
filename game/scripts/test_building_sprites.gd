@@ -114,5 +114,18 @@ func _init() -> void:
 					opaque += 1
 		_check(opaque >= 8, "%s good has a visible icon" % B.GOOD_NAMES[g])
 
+	# --- caravan cart: 16x16 texture with a visible figure ---
+	var cart := B.build_cart()
+	_check(
+		cart != null and cart.get_width() == 16 and cart.get_height() == 16, "cart texture is 16x16"
+	)
+	var cart_img: Image = B.build_cart_image()
+	var cart_opaque := 0
+	for y in 16:
+		for x in 16:
+			if cart_img.get_pixel(x, y).a > 0.5:
+				cart_opaque += 1
+	_check(cart_opaque >= 8, "cart has a visible figure")
+
 	print("test_building_sprites: all passed")
 	quit(0)
