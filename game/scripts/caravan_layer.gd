@@ -18,6 +18,9 @@ const GOOD_DY := -9.0  # goods icon rides above the cart
 const REDRAW_MIX_EVERY := 40
 const LINE_COLOR := Color(0.85, 0.80, 0.55, 0.18)
 const LINE_DASH := 8.0
+# Convoy geometry, derived once from the cart constants (loop-invariant).
+const CONVOY_HALF := CART_GAP_FRAC * (CARTS_PER_ROUTE - 1) * 0.5
+const CART_MID := (CARTS_PER_ROUTE - 1) * 0.5
 
 var _cart_mmi: MultiMeshInstance2D
 var _good_mmis: Array[MultiMeshInstance2D] = []
@@ -25,6 +28,7 @@ var _hubs: Array = []
 var _routes: Array = []  # each: {a, b, pa: Vector2, pb: Vector2, cargo: PackedInt32Array}
 var _t: float = 0.0
 var _frame: int = 0
+var _built: bool = false  # route network built once (hubs are immutable at runtime)
 
 @onready var sim = get_node("/root/Main/Simulation")
 
@@ -39,7 +43,6 @@ func _ready() -> void:
 func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_2D
-	mm.use_colors = true
 	mm.mesh = QuadMesh.new()
 	var mmi := MultiMeshInstance2D.new()
 	mmi.name = pname
@@ -150,12 +153,15 @@ func _recompute_cargo(tallies: Array) -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	_frame += 1
-	if _routes.is_empty():
+	if not _built:
 		_hubs = sim.trade_hubs()
 		if _hubs.is_empty():
-			return
+			return  # hubs not placed yet (or resources off); retry next frame
+		_built = true
 		_build_routes()
 		queue_redraw()  # paint the (static) route lines once
+	if _routes.is_empty():
+		return  # <2 hubs: no routes to draw
 	if _frame % REDRAW_MIX_EVERY == 0:
 		_recompute_cargo(sim.hub_trade_tally())
 	_animate()
@@ -169,16 +175,14 @@ func _animate() -> void:
 	var good_xf: Array = []
 	for g in Buildings.GOOD_COUNT:
 		good_xf.append([])
-	# Convoy centre travels within [half, 1-half] so all carts stay on the route.
-	var half := CART_GAP_FRAC * float(CARTS_PER_ROUTE - 1) * 0.5
-	var center := lerpf(half, 1.0 - half, pingpong(_t / TRAVERSE_PERIOD, 1.0))
-	var mid := float(CARTS_PER_ROUTE - 1) * 0.5
+	# Convoy centre travels within [CONVOY_HALF, 1-CONVOY_HALF] so all carts stay on-route.
+	var center := lerpf(CONVOY_HALF, 1.0 - CONVOY_HALF, pingpong(_t / TRAVERSE_PERIOD, 1.0))
 	for r in _routes:
 		var pa: Vector2 = r["pa"]
 		var pb: Vector2 = r["pb"]
 		var cargo: PackedInt32Array = r["cargo"]
 		for c in CARTS_PER_ROUTE:
-			var f: float = center + (float(c) - mid) * CART_GAP_FRAC
+			var f: float = center + (float(c) - CART_MID) * CART_GAP_FRAC
 			var p := pa.lerp(pb, f)
 			cart_xf.append(Transform2D(0.0, Vector2(CART_SCALE, CART_SCALE), 0.0, p))
 			if c < cargo.size():
@@ -198,7 +202,6 @@ func _write(mm: MultiMesh, xfs: Array) -> void:
 	mm.visible_instance_count = m
 	for i in m:
 		mm.set_instance_transform_2d(i, xfs[i])
-		mm.set_instance_color(i, Color(1, 1, 1))
 
 
 # Faint dashed route lines, drawn at all 9 torus offsets so seam-crossing routes

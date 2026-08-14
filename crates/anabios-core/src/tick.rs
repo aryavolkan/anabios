@@ -251,7 +251,12 @@ fn decide_all(world: &mut World) {
             // with a real trade motive steer toward the nearest predetermined
             // hub so barter partners converge there. Motiveless agents forage
             // normally. Additive bias, normalized with the rest of the stack.
-            if resources_enabled && crate::hub::has_trade_motive(&agents.inventory[i]) {
+            // Skip the whole block on a hubless map (best_hub_direction would
+            // just return ZERO): saves the has_trade_motive scan, byte-identical.
+            if resources_enabled
+                && !trade_hubs.is_empty()
+                && crate::hub::has_trade_motive(&agents.inventory[i])
+            {
                 let pull = crate::hub::best_hub_direction(trade_hubs, agents.position[i], ws);
                 action.move_x += crate::hub::HUB_PULL * pull.x;
                 action.move_y += crate::hub::HUB_PULL * pull.y;

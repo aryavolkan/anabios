@@ -947,7 +947,46 @@ mod tests {
     }
 
     #[test]
-    fn hub_trade_tally_is_not_hashed_and_survives_reload() {
+    fn trade_pass_tally_attributes_to_the_nearest_hub() {
+        use crate::hub::TradeHub;
+        use crate::resource::{Good, GOOD_COUNT};
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        // Two hubs far apart; the traders sit right on the SECOND one.
+        let far = Vec2::new(300.0, 300.0);
+        let near = Vec2::new(900.0, 300.0);
+        let a = w.spawn_agent(near, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(near.x + 0.5, near.y), Genome::neutral());
+        crate::prelude_test::reassign_to_new_species(&mut w, b);
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+        w.trade_hubs = vec![
+            TradeHub { pos: far, cell: 0, goods: vec![] },
+            TradeHub { pos: near, cell: 1, goods: vec![] },
+        ];
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut w.sensors,
+            w.world_size,
+            false,
+        );
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        trade_pass(&mut w, &alive);
+        // The swap is attributed to hub 1 (nearest), leaving the far hub 0 untouched.
+        assert_eq!(w.hub_trade_tally.len(), 2);
+        assert_eq!(w.hub_trade_tally[0], [0u64; GOOD_COUNT], "far hub must stay empty");
+        assert!(w.hub_trade_tally[1][Good::Salt.index()] >= 1);
+        assert!(w.hub_trade_tally[1][Good::Obsidian.index()] >= 1);
+    }
+
+    #[test]
+    fn hub_trade_tally_excluded_from_hash_and_reset_on_reload() {
         use crate::hub::TradeHub;
         use crate::resource::Good;
         use crate::snapshot::{load_from_bytes, save_to_bytes, state_hash};

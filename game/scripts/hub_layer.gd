@@ -36,7 +36,6 @@ func _ready() -> void:
 func _make_layer(pname: String, tex: ImageTexture) -> MultiMeshInstance2D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_2D
-	mm.use_colors = true
 	mm.mesh = QuadMesh.new()
 	var mmi := MultiMeshInstance2D.new()
 	mmi.name = pname
@@ -119,4 +118,3 @@ func _write(mm: MultiMesh, xfs: Array) -> void:
 	mm.visible_instance_count = m
 	for i in m:
 		mm.set_instance_transform_2d(i, xfs[i])
-		mm.set_instance_color(i, Color(1, 1, 1))
