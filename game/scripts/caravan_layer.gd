@@ -10,8 +10,8 @@ const Buildings = preload("res://scripts/building_sprites.gd")
 
 const CARAVAN_NEIGHBORS := 2  # edges added per hub (undirected, deduped)
 const CARTS_PER_ROUTE := 3
-const TRAVERSE_PERIOD := 6.0  # seconds for one out-and-back along a route
-const CART_GAP_FRAC := 0.06  # fractional spacing between carts in a train
+const TRAVERSE_PERIOD := 10.0  # seconds for one out-and-back along a route
+const CART_GAP_FRAC := 0.08  # even fractional spacing between carts in a convoy
 const CART_SCALE := 11.0
 const GOOD_SCALE := 7.0
 const GOOD_DY := -9.0  # goods icon rides above the cart
@@ -161,20 +161,24 @@ func _process(delta: float) -> void:
 	_animate()
 
 
-# Place each route's cart train along its segment with a ping-pong lead position,
-# followers trailing by CART_GAP_FRAC; write per-instance transforms.
+# Place each route's cart convoy along its segment. Carts keep a FIXED even
+# spacing (CART_GAP_FRAC) and the convoy centre ping-pongs within a bounded band,
+# so carts never bunch up against the route ends. Writes per-instance transforms.
 func _animate() -> void:
 	var cart_xf: Array = []
 	var good_xf: Array = []
 	for g in Buildings.GOOD_COUNT:
 		good_xf.append([])
-	var lead := pingpong(_t / TRAVERSE_PERIOD, 1.0)
+	# Convoy centre travels within [half, 1-half] so all carts stay on the route.
+	var half := CART_GAP_FRAC * float(CARTS_PER_ROUTE - 1) * 0.5
+	var center := lerpf(half, 1.0 - half, pingpong(_t / TRAVERSE_PERIOD, 1.0))
+	var mid := float(CARTS_PER_ROUTE - 1) * 0.5
 	for r in _routes:
 		var pa: Vector2 = r["pa"]
 		var pb: Vector2 = r["pb"]
 		var cargo: PackedInt32Array = r["cargo"]
 		for c in CARTS_PER_ROUTE:
-			var f: float = clampf(lead - float(c) * CART_GAP_FRAC, 0.0, 1.0)
+			var f: float = center + (float(c) - mid) * CART_GAP_FRAC
 			var p := pa.lerp(pb, f)
 			cart_xf.append(Transform2D(0.0, Vector2(CART_SCALE, CART_SCALE), 0.0, p))
 			if c < cargo.size():
