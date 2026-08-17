@@ -128,6 +128,14 @@ const CHARTS := [
 const PAD_LEFT := 116.0  # left gutter for legend labels
 const PAD_RIGHT := 10.0
 const LEGEND_W := 104.0  # label wrap/clip width inside the gutter
+# Event markers stay full-height rules while they occupy at most this fraction
+# of the plot's pixel columns; past it they collapse into the rug band (see
+# _draw_marks), because wall-to-wall rules hide the curves they annotate.
+const MARK_RULE_DENSITY := 0.12
+const MARK_RUG_H := 6.0
+# Marker log cap. Bounded so a multi-hour run cannot grow it without limit; the
+# oldest marks scroll off the chart's time axis first anyway.
+const MARKS_MAX := 20000
 
 # Codex EventType ids we mark, mapped to a line color.
 # (0=Extinction, 2=Speciation, 11=DialectFormed, 12=MemeSweep.)
@@ -184,6 +192,8 @@ func _poll_marks() -> void:
 		var t: int = int(ev["type"])
 		if MARKER_COLORS.has(t):
 			_marks.append({"tick": int(ev["tick"]), "type": t})
+	while _marks.size() > MARKS_MAX:
+		_marks.pop_front()
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -290,6 +300,10 @@ func _draw_chart(
 	# has more series than its height would otherwise fit.
 	var cols: int = int(minf(plot_w, float(n)))
 	var row_step: float = minf(13.0, (h - 14.0) / float(maxi(1, c["series"].size())))
+	# Shrink the type with the row step. At a fixed size 10 the six-series charts
+	# ("invention adoption — late", "gene↔tech selection") packed rows ~7px apart
+	# and the labels overprinted each other into an unreadable smear.
+	var legend_fs: int = int(clampf(row_step - 1.0, 7.0, 10.0))
 	var legend_y: float = top + 12.0
 	for s in c["series"]:
 		var key: String = s["key"]
@@ -302,10 +316,12 @@ func _draw_chart(
 			s["label"],
 			HORIZONTAL_ALIGNMENT_LEFT,
 			LEGEND_W,
-			10,
+			legend_fs,
 			draw_col
 		)
-		_legend_hitboxes.append({"rect": Rect2(4, legend_y - 10, LEGEND_W + 4, 13), "key": key})
+		_legend_hitboxes.append(
+			{"rect": Rect2(4, legend_y - row_step + 2.0, LEGEND_W + 4, row_step), "key": key}
+		)
 		legend_y += row_step
 		if off:
 			continue
@@ -337,7 +353,14 @@ func _draw_chart(
 			draw_polyline(pts, col, 1.5, true)
 
 
-# Vertical color-coded lines at each markable event's tick, across all charts.
+# Codex events on the shared time axis. Marks are collapsed to one entry per
+# pixel column first: a long run fires thousands of Speciation/Extinction events
+# and drawing a full-height line per event painted the charts solid red, hiding
+# every curve underneath.
+#
+# Sparse enough to read as individual moments → the original full-height rules.
+# Denser than that → a compact rug band above the charts, which still shows
+# *when* things happened without destroying the plots.
 func _draw_marks(ticks: PackedFloat32Array, pad: float, plot_w: float) -> void:
 	var n: int = ticks.size()
 	if n < 2 or _marks.is_empty():
@@ -345,12 +368,29 @@ func _draw_marks(ticks: PackedFloat32Array, pad: float, plot_w: float) -> void:
 	var t_first: float = ticks[0]
 	var t_last: float = ticks[n - 1]
 	var span: float = maxf(1.0, t_last - t_first)
+	# column index -> event type of the last mark landing in that column.
+	var columns: Dictionary = {}
 	for m in _marks:
 		var mt: float = float(m["tick"])
 		if mt < t_first or mt > t_last:
 			continue
-		var mx: float = pad + ((mt - t_first) / span) * plot_w
-		draw_line(Vector2(mx, 16), Vector2(mx, size.y - 4), MARKER_COLORS[m["type"]], 1.0)
+		columns[int(((mt - t_first) / span) * (plot_w - 1.0))] = int(m["type"])
+	if columns.is_empty():
+		return
+	if float(columns.size()) <= plot_w * MARK_RULE_DENSITY:
+		for cx in columns:
+			var mx: float = pad + float(cx)
+			draw_line(Vector2(mx, 16), Vector2(mx, size.y - 4), MARKER_COLORS[columns[cx]], 1.0)
+		return
+	draw_rect(Rect2(Vector2(pad, 6.0), Vector2(plot_w, MARK_RUG_H)), Color(1, 1, 1, 0.05))
+	for cx in columns:
+		var rx: float = pad + float(cx)
+		draw_line(
+			Vector2(rx, 6.0),
+			Vector2(rx, 6.0 + MARK_RUG_H),
+			Color(MARKER_COLORS[columns[cx]], 0.9),
+			1.0
+		)
 
 
 func _draw_readout(index: int) -> void:

@@ -8,6 +8,16 @@ const GROUND_NAMES := [
 ]
 const BODY_NAMES := ["species", "dialect", "diet", "energy", "arousal"]
 
+# Key bindings, pre-broken to lines that fit the panel's 370px slot at font 13.
+# (One long "panels" line used to overflow the panel and bleed through the codex
+# panel beside it; keep every line under ~50 characters.)
+const CONTROLS_FMT := """[G] ground: %s
+[C] body: %s
+[M] module pips · [Y] co-evolution · [T] evolution
+[X] DIT helix · [F] reset view · [H] hide
+[R] replay event · [U] run to event · [V] event cam
+WASD/drag pan · wheel zoom · click inspect"""
+
 @onready var overlay = get_node("/root/Main/OverlayManager")
 @onready var module_layers = get_node("/root/Main/ModuleLayers")
 
@@ -27,6 +37,11 @@ func _ready() -> void:
 	add_child(vb)
 	_controls = Label.new()
 	_controls.add_theme_font_size_override("font_size", 13)
+	# The panel is a fixed 370px slot. Without wrapping, the key-binding lines ran
+	# past its right edge and bled through the (translucent) codex panel next to
+	# it; the lines below are pre-broken to fit, and this is the safety net for a
+	# wider font or a longer overlay name.
+	_controls.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vb.add_child(_controls)
 	_key_box = VBoxContainer.new()
 	_key_box.add_theme_constant_override("separation", 3)
@@ -45,10 +60,7 @@ func _process(_delta: float) -> void:
 		return
 	var g: int = clampi(overlay.ground_mode, 0, GROUND_NAMES.size() - 1)
 	var b: int = clampi(overlay.body_mode, 0, BODY_NAMES.size() - 1)
-	_controls.text = (
-		("[G] ground: %s\n[C] body: %s\n[M] module pips · [Y] co-evolution chart · [T] evolution · [X] DIT helix · [F] reset view\n[R] replay event · [U] run to event · [V] event cam\n[H] hide · WASD/drag pan · wheel zoom · click inspect")
-		% [GROUND_NAMES[g], BODY_NAMES[b]]
-	)
+	_controls.text = CONTROLS_FMT % [GROUND_NAMES[g], BODY_NAMES[b]]
 	var m: bool = module_layers.visible
 	if b != _last_body or m != _last_modules:
 		_last_body = b

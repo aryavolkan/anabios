@@ -185,7 +185,12 @@ func _redraw() -> void:
 				var ang2: float = sid * 1.7 + i * (TAU / farms)
 				var fp := pos + Vector2.from_angle(ang2) * (24.0 + float(i % 2) * 9.0)
 				var fs := FARM_SCALE * ease
-				farm_xf.append(Transform2D(ang2 * 0.5, Vector2(fs, fs), 0.0, fp))
+				# Quarter-turn steps, not the raw bearing: the plot sprite is
+				# 16x16 pixel art, and at an arbitrary angle its furrows aliased
+				# into a ragged brown lozenge. Snapping keeps the edges crisp
+				# and still gives each plot one of two orientations.
+				var frot: float = snappedf(ang2 * 0.5, PI * 0.5)
+				farm_xf.append(Transform2D(frot, Vector2(fs, fs), 0.0, fp))
 		# Trade building: market/warehouse where the live market-density field
 		# says this village sits on a real market, on a reserved slot north of
 		# the anchor. (Invention landmarks are handled separately below, keyed to

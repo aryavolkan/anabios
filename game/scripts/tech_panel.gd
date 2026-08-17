@@ -8,10 +8,31 @@ const REFRESH_EVERY := 6
 # Row cap (mirrors dit_panel/population_panel): keep the panel inside its
 # fixed slot so a long tail of singleton species can't grow it.
 const MAX_ROWS := 6
+# Tighter cap while the DIT table is also up — the two share one rail slot.
+const SHARED_MAX_ROWS := 4
 
 @onready var sim = get_node("/root/Main/Simulation")
 @onready var list: VBoxContainer = $VBox
+@onready var _dit: Control = get_parent().get_node_or_null("DitPanel")
 var _frame: int = 0
+# Scene-authored slot; the panel drops below the DIT table when that one is up.
+var _base_y: float = 0.0
+
+
+func _ready() -> void:
+	_base_y = position.y
+
+
+# The DIT table shares this slot in the right rail, and a scenario that runs the
+# environment model *and* the invention tree shows both — they used to overprint
+# ("TECH" stamped over "DIT env-optimum = …"). Stack under it instead, clamped so
+# the pair never runs off the bottom of the screen.
+func _restack() -> void:
+	var y: float = _base_y
+	if _dit != null and _dit.visible:
+		y = _dit.position.y + _dit.size.y + 10.0
+	var vp_h: float = get_viewport_rect().size.y
+	position.y = minf(y, maxf(_base_y, vp_h - size.y - 10.0))
 
 
 func _process(_delta: float) -> void:
@@ -19,6 +40,7 @@ func _process(_delta: float) -> void:
 		visible = false
 		return
 	visible = true
+	_restack()
 	_frame += 1
 	if _frame % REFRESH_EVERY != 4:  # phase-offset from dit_panel (== 3)
 		return
@@ -30,7 +52,8 @@ func _process(_delta: float) -> void:
 				return int(a["tech_era"]) > int(b["tech_era"])
 			return int(a["count"]) > int(b["count"])
 	)
-	var shown: int = min(stats.size(), MAX_ROWS)
+	var cap: int = SHARED_MAX_ROWS if _dit != null and _dit.visible else MAX_ROWS
+	var shown: int = min(stats.size(), cap)
 	var overflow: int = stats.size() - shown
 	_sync_label_count(shown + 1 + (1 if overflow > 0 else 0))  # +1 header row
 	var children: Array = list.get_children()

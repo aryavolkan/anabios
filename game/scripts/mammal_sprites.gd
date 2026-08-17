@@ -88,6 +88,17 @@ static func bucket_atlas(b: int) -> ImageTexture:
 	return ApeSprites.build_species_atlas(0)  # fallback until the rig lands
 
 
+# Single-pose portrait for the inspector's avatar tile: the archetype's neutral
+# (frame 0) pose, upright. The field atlases are pre-flipped for the MultiMesh
+# quad's V axis, so they cannot be shown directly in a TextureRect — and the
+# inspector used to fall back to an ape portrait for every quadruped, labelling
+# a chimp silhouette "Deer". Pair with coat_hue() as the TextureRect modulate.
+static func portrait(archetype: int) -> ImageTexture:
+	if not _QUAD_DATA.has(archetype):
+		return ApeSprites.build(0)
+	return ImageTexture.create_from_image(_build_quad_cell(_QUAD_DATA[archetype].POSES[0]))
+
+
 static func bucket_fallen(b: int) -> ImageTexture:
 	if b < SKIN_COUNT:
 		return ApeSprites.build_fallen_texture(b)

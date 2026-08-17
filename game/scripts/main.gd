@@ -88,6 +88,7 @@ func _ready() -> void:
 	var f = FileAccess.open(scenario_path, FileAccess.READ)
 	if f == null:
 		push_error("could not open " + scenario_path)
+		_fail_to_load("scenario not found:\n" + scenario_path)
 		return
 	var text = f.get_as_text()
 	f.close()
@@ -331,6 +332,21 @@ func _make_wrap_clones() -> void:
 
 # Give every HUD panel the shared instrument theme, and make the top-left
 # readout legible over any terrain with a dark outline.
+# Bail out of a scenario that could not be opened without leaving a half-built
+# scene behind. _ready() used to just `return` here, which skipped the theme and
+# every layer setup: the viewer came up as unstyled stock-Godot controls over an
+# empty world with no hint of what went wrong. Show the reason on the HUD, and
+# keep the theme so the Menu/Restart buttons still look like the rest of the app.
+func _fail_to_load(reason: String) -> void:
+	$UI.transform = Transform2D(0.0, Vector2.ONE * GameConfig.ui_scale, 0.0, Vector2.ZERO)
+	_apply_ui_theme()
+	hud.text = "⚠ " + reason
+	hud.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45))
+	for n in [$UI/Minimap, $UI/CodexPanel, $UI/LegendPanel, $UI/PopulationPanel]:
+		(n as CanvasItem).visible = false
+	set_process(false)
+
+
 func _apply_ui_theme() -> void:
 	var theme := UiTheme.build()
 	for child in $UI.get_children():
@@ -739,7 +755,10 @@ func _refresh_carcasses() -> void:
 		var pos: Vector2 = d["pos"]
 		var f: float = clampf(float(d["flesh"]) / 20.0 * 4.0, 3.0, 7.0)
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(f, f), 0.0, pos))
-		mm.set_instance_color(i, Color(0.77, 0.80, 0.86, 0.55))
+		# Bone, not the old cold near-white: at 0.55 alpha a pale blue-grey disc
+		# was the brightest thing on a green field, so every carcass pulled the
+		# eye like a UI marker. Warm and dim reads as remains on the ground.
+		mm.set_instance_color(i, Color(0.78, 0.74, 0.63, 0.42))
 
 
 func _refresh_flashes() -> int:
@@ -760,6 +779,10 @@ func _refresh_flashes() -> int:
 # ranged (Spines) volleys read as volleys; trade routes (trader→partner) are
 # thin, dim, and long-lived so recurring swaps along species borders
 # accumulate into visible lanes. Both tint to the initiator's genome hue.
+# Streaks/flashes draw above everything (they are events in the air); the trade
+# lanes draw at ground level, under bodies and huts (z=-2 in the scene) — over
+# a busy market they used to pile up into bright coloured scribbles across the
+# village roofs instead of reading as paths worn between settlements.
 const STREAK_TTL: int = 8
 const TRADE_TTL: int = 24
 var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]

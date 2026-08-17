@@ -19,6 +19,8 @@ var _avatar: TextureRect
 var _hue: ColorRect
 var _ident: Label
 var _ape_tex: Array = []
+# archetype -> portrait texture, built on first use (each bakes a 16x16 image).
+var _quad_tex: Dictionary = {}
 
 
 func _ready() -> void:
@@ -90,14 +92,19 @@ func _process(_delta: float) -> void:
 	if arch == MammalSprites.PRIMATE:
 		var ape: int = MammalSprites.primate_skin_for(sp)
 		_avatar.texture = _ape_tex[ape]
+		_avatar.modulate = Color.WHITE  # ape art carries its own colours
 		_ident.text = (
 			"%s\nsp %d · lin %d · id %d"
 			% [ApeSprites.NAMES[ape], sp, info["lineage_id"], pinned_id]
 		)
 	else:
-		# Quadruped archetypes: name by archetype. A per-archetype inspector
-		# portrait is out of scope; reuse a neutral placeholder avatar.
-		_avatar.texture = _ape_tex[0]
+		# Quadruped archetypes: the archetype's own rig, tinted with the same
+		# per-species coat hue the field figure wears, so the portrait matches
+		# the animal you clicked on.
+		if not _quad_tex.has(arch):
+			_quad_tex[arch] = MammalSprites.portrait(arch)
+		_avatar.texture = _quad_tex[arch]
+		_avatar.modulate = MammalSprites.coat_hue(arch, sp)
 		_ident.text = (
 			"%s\nsp %d · lin %d · id %d"
 			% [MammalSprites.NAMES[arch], sp, info["lineage_id"], pinned_id]
