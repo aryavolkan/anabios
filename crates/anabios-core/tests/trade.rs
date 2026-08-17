@@ -245,3 +245,105 @@ fn conserve_goods_step_moves_dead_inventory_to_living() {
     // Buffer is drained.
     assert!(w.agents.deaths_scratch.is_empty());
 }
+
+/// A trade-motivated agent gets steered toward the nearest hub inside
+/// `decide_all`. This isolates the new additive bias from every other
+/// movement force: `decide()` itself never reads inventory, so two
+/// otherwise-identical single-agent worlds (same seed, same start position,
+/// same program/genome/sensors) diverge in their first-tick displacement
+/// only through the hub-seeking block, which is gated on `has_trade_motive`.
+/// A population-level "clustering increases over time" version of this test
+/// was tried first and discarded: it already passed with no hub bias wired
+/// in at all (other forces + natural wandering were enough to keep the
+/// near-hub fraction from decreasing over 800 ticks), so it could not
+/// distinguish "feature present" from "feature absent" — not usable for TDD.
+#[test]
+fn motivated_agent_gets_extra_pull_toward_hub() {
+    use anabios_core::biome::WORLD_SIZE_DEFAULT;
+    use anabios_core::genome::Genome;
+    use anabios_core::hub::{best_hub_direction, TradeHub};
+    use anabios_core::prelude_test::Vec2;
+    use anabios_core::resource::{GOOD_COUNT, STOCK_TARGET, TRADE_UNIT};
+    use anabios_core::world::World;
+
+    let start = Vec2::new(5.0, 5.0);
+    let hub_pos = Vec2::new(50.0, 50.0);
+    let hub = || TradeHub { pos: hub_pos, cell: 0, goods: vec![] };
+
+    let run = |motivated: bool| {
+        let mut w = World::new(7);
+        w.resources_enabled = true;
+        w.trade_hubs = vec![hub()];
+        let a = w.spawn_agent(start, Genome::neutral());
+        w.agents.inventory[a as usize] = if motivated {
+            let mut inv = [STOCK_TARGET; GOOD_COUNT];
+            inv[0] = STOCK_TARGET + TRADE_UNIT * 2.0; // surplus -> has_trade_motive
+            inv
+        } else {
+            [STOCK_TARGET; GOOD_COUNT] // balanced -> no motive
+        };
+        step(&mut w);
+        w.agents.position[a as usize]
+    };
+
+    let pos_unmotivated = run(false);
+    let pos_motivated = run(true);
+    let dir = best_hub_direction(&[hub()], start, WORLD_SIZE_DEFAULT);
+    assert!(dir.length() > 0.5, "hub steering must produce a real direction");
+    let delta = pos_motivated - pos_unmotivated;
+    assert!(
+        delta.dot(dir) > 1e-4,
+        "trade-motivated agent should be pulled toward the hub relative to an \
+         unmotivated one: delta={delta:?}, dir={dir:?}"
+    );
+}
+
+/// Barter only happens at hubs: two complementary agents far from every hub do
+/// NOT trade; the same pair placed on a hub DOES.
+#[test]
+fn trade_only_happens_at_hubs() {
+    use anabios_core::hub::TradeHub;
+    use anabios_core::prelude_test::Vec2;
+
+    // Minimal 2-agent world with resources on and one hub at the origin.
+    let build = |on_hub: bool| {
+        let toml = "name=\"t\"\nseed=1\nworld_size=256\nresources_enabled=true\n[[agents]]\narchetype=\"grazer\"\ncount=2\n";
+        let mut w = Scenario::parse_toml(toml).expect("parse").instantiate();
+        w.trade_hubs = vec![TradeHub { pos: Vec2::new(0.0, 0.0), cell: 0, goods: vec![] }];
+        let ids: Vec<u32> = w.agents.iter_alive().collect();
+        let (a, b) = (ids[0] as usize, ids[1] as usize);
+        // Complementary inventories so a swap is mutually beneficial.
+        w.agents.inventory[a] = [4.0, 0.0, 0.0, 0.0];
+        w.agents.inventory[b] = [0.0, 4.0, 0.0, 0.0];
+        // Species must differ for cross-species trade; force it via the
+        // proper species-table growth path (push_species keeps
+        // species_centroids/species_member_counts/species_parents in lock
+        // step, unlike hand-assigning species_id which leaves those tables
+        // too short and panics in species_step's centroid recompute).
+        let old_species = w.agents.species_id[b];
+        let new_species = w.push_species(w.agents.genome[b], None);
+        w.remove_from_species(old_species);
+        w.agents.species_id[b] = new_species;
+        w.add_to_species(new_species);
+        // Place them adjacent, either on the hub or far away.
+        let p = if on_hub { Vec2::new(1.0, 0.0) } else { Vec2::new(120.0, 120.0) };
+        w.agents.position[a] = p;
+        w.agents.position[b] = p + Vec2::new(1.0, 0.0);
+        w.agents.anchor[a] = p;
+        w.agents.anchor[b] = p + Vec2::new(1.0, 0.0);
+        w
+    };
+
+    let mut off_hub = build(false);
+    let before = off_hub.total_trades;
+    for _ in 0..30 {
+        step(&mut off_hub);
+    }
+    assert_eq!(off_hub.total_trades, before, "no trade away from hubs");
+
+    let mut on_hub = build(true);
+    for _ in 0..30 {
+        step(&mut on_hub);
+    }
+    assert!(on_hub.total_trades > 0, "trade must occur at a hub");
+}

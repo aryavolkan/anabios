@@ -141,7 +141,10 @@ use crate::world::World;
 ///     stacked. Every flag is off/inert in every golden scenario ⇒ trajectories
 ///     byte-identical; only the serialized layout grew. Bumped to 32 to
 ///     distinguish the merged layout from either parent's v31.
-pub const FORMAT_VERSION: u32 = 32;
+/// 33: add `World.trade_hubs` (predetermined trade-hub placements), populated
+///     from the finalized biome at scenario instantiate when
+///     `resources_enabled`. Layout growth only.
+pub const FORMAT_VERSION: u32 = 33;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

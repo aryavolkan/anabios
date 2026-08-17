@@ -268,7 +268,7 @@ const GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
     // added World.payoff_biased_learning flag; off in minimal ⇒ transmission
     // byte-identical — layout growth only, so all hashes moved once.
-    &[(0, 0xef38371d4074d781), (100, 0xe80cfa7f358fd78a), (1000, 0xfc0d4246fb107736)];
+    &[(0, 0xdd391b271902d781), (100, 0xd6127315eef8b5aa), (1000, 0xd005aa108d667c76)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

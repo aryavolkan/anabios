@@ -69,7 +69,7 @@ fn kin_cluster_raises_care_and_sharing() {
 // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
 // World.payoff_biased_learning layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x913317995a0d6999), (100, 0xb7ecb56c5cbf356a), (300, 0x5b5c7c56bd2d0048)];
+    &[(0, 0x749d13d012077099), (100, 0x92bd3ffaf6d9e8ea), (300, 0x58a93278e94cad08)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

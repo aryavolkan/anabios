@@ -1274,6 +1274,47 @@ impl Simulation {
         out
     }
 
+    /// Predetermined trade hubs: fixed marketplace positions with the goods that
+    /// meet there. Static after worldgen; the viewer draws a building + goods
+    /// ring at each. Empty unless the scenario enables resources.
+    #[func]
+    fn trade_hubs(&self) -> Array<VarDictionary> {
+        let mut out = Array::new();
+        let Some(w) = self.inner.as_ref() else {
+            return out;
+        };
+        for h in &w.trade_hubs {
+            let mut d = VarDictionary::new();
+            d.set("pos", Vector2::new(h.pos.x, h.pos.y));
+            let mut goods = PackedInt32Array::new();
+            for g in &h.goods {
+                goods.push(g.index() as i32);
+            }
+            d.set("goods", &goods);
+            out.push(&d);
+        }
+        out
+    }
+
+    /// Per-hub trade tallies: one `PackedInt32Array` of GOOD_COUNT counts per hub,
+    /// in the same order as `trade_hubs()`. Empty until trading has occurred. This
+    /// is viewer-only scratch (not part of the simulation state).
+    #[func]
+    fn hub_trade_tally(&self) -> Array<PackedInt32Array> {
+        let mut out = Array::new();
+        let Some(w) = self.inner.as_ref() else {
+            return out;
+        };
+        for counts in &w.hub_trade_tally {
+            let mut row = PackedInt32Array::new();
+            for &c in counts.iter() {
+                row.push(c as i32);
+            }
+            out.push(&row);
+        }
+        out
+    }
+
     /// Number of module types (for the GDScript layer loop).
     #[func]
     fn module_type_count(&self) -> i64 {

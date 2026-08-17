@@ -162,6 +162,8 @@ fn decide_all(world: &mut World) {
     let biome = &world.biome;
     let biome_adaptation = world.biome_adaptation;
     let terrain_habitat = world.terrain_habitat;
+    let trade_hubs = &world.trade_hubs;
+    let resources_enabled = world.resources_enabled;
     let settlement_enabled = world.settlement_enabled;
     let domestication_enabled = world.domestication_enabled;
     let affect_enabled = world.affect_enabled;
@@ -244,6 +246,20 @@ fn decide_all(world: &mut World) {
                 );
                 action.move_x += crate::culture::TERRAIN_HABITAT_PULL * pull.x;
                 action.move_y += crate::culture::TERRAIN_HABITAT_PULL * pull.y;
+            }
+            // Trade-hub seeking (opt-in with the trade-goods subsystem): agents
+            // with a real trade motive steer toward the nearest predetermined
+            // hub so barter partners converge there. Motiveless agents forage
+            // normally. Additive bias, normalized with the rest of the stack.
+            // Skip the whole block on a hubless map (best_hub_direction would
+            // just return ZERO): saves the has_trade_motive scan, byte-identical.
+            if resources_enabled
+                && !trade_hubs.is_empty()
+                && crate::hub::has_trade_motive(&agents.inventory[i])
+            {
+                let pull = crate::hub::best_hub_direction(trade_hubs, agents.position[i], ws);
+                action.move_x += crate::hub::HUB_PULL * pull.x;
+                action.move_y += crate::hub::HUB_PULL * pull.y;
             }
             // Home-range anchoring (E8, opt-in): bias movement toward the
             // learned anchor, so species keep a place they return to. Gated

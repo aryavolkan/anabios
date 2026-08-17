@@ -516,8 +516,24 @@ fn pick_gift(
 /// one-sided surplus gift (`pick_gift`) — same conservation, same bookkeeping.
 fn trade_pass(world: &mut World, alive_ids: &[u32]) {
     use crate::resource::TRADE_UNIT;
+    // Keep the (serde-skipped) per-hub tally sized to the hub set: empty after a
+    // snapshot load, and stale if hubs ever change. Cheap no-op once sized.
+    if world.hub_trade_tally.len() != world.trade_hubs.len() {
+        world.hub_trade_tally = vec![[0u64; crate::resource::GOOD_COUNT]; world.trade_hubs.len()];
+    }
     for &id in alive_ids {
         let i = id as usize;
+        // Trade only at hubs: an agent not near any predetermined hub cannot
+        // barter this tick. Empty `trade_hubs` (resources off, or a hubless map)
+        // therefore disables all trade — intended.
+        if !crate::hub::near_any_hub(
+            &world.trade_hubs,
+            world.agents.position[i],
+            world.world_size,
+            crate::hub::HUB_TRADE_RANGE,
+        ) {
+            continue;
+        }
         let tgt = world.sensors[i].nearest_other_id;
         if tgt == crate::sense::NO_NEIGHBOR_ID {
             continue;
@@ -553,6 +569,18 @@ fn trade_pass(world: &mut World, alive_ids: &[u32]) {
             world.agents.inventory[i][recv] += TRADE_UNIT;
         }
         world.total_trades += 1;
+        // Viewer scratch: tally the traded good(s) to the nearest hub (the swap
+        // happened within HUB_TRADE_RANGE of one). Never read by the sim.
+        if let Some(h) = crate::hub::nearest_hub_index(
+            &world.trade_hubs,
+            world.agents.position[i],
+            world.world_size,
+        ) {
+            world.hub_trade_tally[h][give] += 1;
+            if recv != give {
+                world.hub_trade_tally[h][recv] += 1;
+            }
+        }
         // E8 market field: the swap deposits density at the initiator's cell.
         crate::settlement::market_deposit(world, world.agents.position[i]);
         // Viewer scratch: draw a route from the initiating trader to its
@@ -698,6 +726,7 @@ mod tests {
                 false,
             );
             let alive: Vec<u32> = w.agents.iter_alive().collect();
+            w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
             trade_pass(&mut w, &alive);
 
             let got = w.agents.inventory[b as usize][Good::Salt.index()];
@@ -745,6 +774,7 @@ mod tests {
         let total_salt_before: f32 =
             (0..2).map(|id| w.agents.inventory[id][Good::Salt.index()]).sum();
         let alive: Vec<u32> = w.agents.iter_alive().collect();
+        w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
         trade_pass(&mut w, &alive);
 
         // Both goods are conserved across the pair, and A moved toward a
@@ -790,6 +820,7 @@ mod tests {
             false,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
+        w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
         trade_pass(&mut w, &alive);
         assert_eq!(
             w.agents.inventory[a as usize][Good::Obsidian.index()],
@@ -823,6 +854,7 @@ mod tests {
             false,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
+        w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
         trade_pass(&mut w, &alive);
         assert!(w.codex.first_cross_species_trade, "latch set after first trade");
         assert!(
@@ -879,5 +911,103 @@ mod tests {
             0.0,
             "flag off: combat must not touch affect"
         );
+    }
+
+    #[test]
+    fn trade_pass_tallies_goods_to_nearest_hub() {
+        use crate::hub::TradeHub;
+        use crate::resource::Good;
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        let pos = Vec2::new(300.0, 300.0);
+        let a = w.spawn_agent(pos, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+        crate::prelude_test::reassign_to_new_species(&mut w, b);
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+        w.trade_hubs = vec![TradeHub { pos, cell: 0, goods: vec![] }];
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut w.sensors,
+            w.world_size,
+            false,
+        );
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        trade_pass(&mut w, &alive);
+        // A bilateral Salt<->Obsidian swap moves both goods; both counters at hub 0 rise.
+        assert_eq!(w.hub_trade_tally.len(), 1);
+        assert!(w.hub_trade_tally[0][Good::Salt.index()] >= 1);
+        assert!(w.hub_trade_tally[0][Good::Obsidian.index()] >= 1);
+    }
+
+    #[test]
+    fn trade_pass_tally_attributes_to_the_nearest_hub() {
+        use crate::hub::TradeHub;
+        use crate::resource::{Good, GOOD_COUNT};
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        // Two hubs far apart; the traders sit right on the SECOND one.
+        let far = Vec2::new(300.0, 300.0);
+        let near = Vec2::new(900.0, 300.0);
+        let a = w.spawn_agent(near, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(near.x + 0.5, near.y), Genome::neutral());
+        crate::prelude_test::reassign_to_new_species(&mut w, b);
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+        w.trade_hubs = vec![
+            TradeHub { pos: far, cell: 0, goods: vec![] },
+            TradeHub { pos: near, cell: 1, goods: vec![] },
+        ];
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &mut w.sensors,
+            w.world_size,
+            false,
+        );
+        let alive: Vec<u32> = w.agents.iter_alive().collect();
+        trade_pass(&mut w, &alive);
+        // The swap is attributed to hub 1 (nearest), leaving the far hub 0 untouched.
+        assert_eq!(w.hub_trade_tally.len(), 2);
+        assert_eq!(w.hub_trade_tally[0], [0u64; GOOD_COUNT], "far hub must stay empty");
+        assert!(w.hub_trade_tally[1][Good::Salt.index()] >= 1);
+        assert!(w.hub_trade_tally[1][Good::Obsidian.index()] >= 1);
+    }
+
+    #[test]
+    fn hub_trade_tally_excluded_from_hash_and_reset_on_reload() {
+        use crate::hub::TradeHub;
+        use crate::resource::Good;
+        use crate::snapshot::{load_from_bytes, save_to_bytes, state_hash};
+        let mut w = World::new(5);
+        w.resources_enabled = true;
+        let pos = Vec2::new(300.0, 300.0);
+        let a = w.spawn_agent(pos, Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
+        crate::prelude_test::reassign_to_new_species(&mut w, b);
+        w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
+        w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
+        w.trade_hubs = vec![TradeHub { pos, cell: 0, goods: vec![] }];
+        for _ in 0..20 {
+            crate::tick::step(&mut w);
+        }
+        assert!(w.hub_trade_tally.iter().any(|t| t.iter().any(|&c| c > 0)), "tally populated");
+        // Serde-skip: the tally is not in state_hash, so a reload (which drops it)
+        // must hash identically, and must step without panicking (self-heal sizing).
+        let bytes = save_to_bytes(&w).expect("save");
+        let mut reload = load_from_bytes(&bytes).expect("load");
+        assert_eq!(state_hash(&w), state_hash(&reload), "tally must not affect state_hash");
+        crate::tick::step(&mut reload);
     }
 }

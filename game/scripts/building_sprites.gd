@@ -55,26 +55,43 @@ const INVENTION_BUILDING := {
 
 # 16x16 block lists per kind, indexed by the enum.
 const _BLOCKS: Array = [
-	# MARKET — striped awning stall with goods baskets
+	# MARKET — peaked striped awning over a stall counter with goods baskets
 	[
-		[3, 10, 10, 4, "B"],
-		[3, 6, 1, 5, "b"],
-		[12, 6, 1, 5, "b"],
-		[2, 5, 12, 1, "R"],
-		[2, 6, 12, 1, "W"],
-		[4, 11, 2, 2, "o"],
-		[7, 11, 2, 2, "y"],
-		[10, 11, 2, 2, "n"],
+		[7, 3, 2, 1, "W"],
+		[5, 4, 2, 1, "R"],
+		[7, 4, 2, 1, "W"],
+		[9, 4, 2, 1, "R"],
+		[3, 5, 2, 1, "W"],
+		[5, 5, 2, 1, "R"],
+		[7, 5, 2, 1, "W"],
+		[9, 5, 2, 1, "R"],
+		[11, 5, 2, 1, "W"],
+		[2, 6, 2, 1, "R"],
+		[4, 6, 2, 1, "W"],
+		[6, 6, 2, 1, "R"],
+		[8, 6, 2, 1, "W"],
+		[10, 6, 2, 1, "R"],
+		[12, 6, 2, 1, "W"],
+		[2, 7, 12, 1, "b"],
+		[3, 8, 1, 4, "b"],
+		[12, 8, 1, 4, "b"],
+		[4, 9, 2, 2, "o"],
+		[7, 9, 2, 2, "y"],
+		[10, 9, 2, 2, "n"],
+		[3, 11, 10, 2, "B"],
+		[3, 13, 10, 1, "b"],
 	],
-	# WAREHOUSE — broad storehouse, big doors, stacked crates
+	# WAREHOUSE — broad storehouse, big ground-to-eave doors, stacked crates
 	[
 		[2, 6, 12, 8, "B"],
 		[1, 4, 14, 2, "b"],
 		[3, 3, 10, 1, "b"],
-		[6, 8, 4, 6, "K"],
-		[8, 8, 1, 6, "b"],
-		[3, 12, 2, 2, "r"],
-		[12, 12, 2, 2, "r"],
+		[6, 7, 5, 7, "K"],
+		[8, 7, 1, 7, "b"],
+		[3, 9, 2, 2, "m"],
+		[2, 11, 3, 3, "r"],
+		[11, 9, 2, 2, "m"],
+		[11, 11, 3, 3, "r"],
 	],
 	# STONE_TOOLS — worked-stone boulder + leaning tool rack
 	[
@@ -154,15 +171,16 @@ const _BLOCKS: Array = [
 		[6, 9, 3, 2, "t"],
 		[9, 9, 1, 1, "t"],
 	],
-	# MACHINERY — workshop with a waterwheel
+	# MACHINERY — workshop with a waterwheel over a connected flume
 	[
-		[3, 7, 6, 7, "B"],
-		[2, 6, 8, 1, "b"],
-		[9, 5, 6, 6, "d"],
-		[11, 5, 2, 6, "s"],
-		[9, 7, 6, 2, "s"],
-		[11, 7, 2, 2, "g"],
-		[9, 12, 6, 2, "s"],
+		[2, 7, 6, 7, "B"],
+		[1, 6, 8, 1, "b"],
+		[9, 4, 6, 6, "d"],
+		[9, 6, 6, 2, "s"],
+		[11, 4, 2, 6, "s"],
+		[11, 6, 2, 2, "g"],
+		[9, 10, 6, 1, "g"],
+		[9, 11, 6, 2, "s"],
 	],
 	# ELECTRICITY — glowing lamp post / pylon
 	[
@@ -249,3 +267,53 @@ static func market_cell(pos: Vector2, world_size: float, res: int) -> int:
 	var ix := clampi(int(pos.x / world_size * float(res)), 0, res - 1)
 	var iy := clampi(int(pos.y / world_size * float(res)), 0, res - 1)
 	return iy * res + ix
+
+
+const GOOD_COUNT := 4
+const GOOD_NAMES: PackedStringArray = ["Salt", "Obsidian", "Amber", "Spice"]
+
+# 16x16 goods icons, indexed by sim Good index (Salt=0..Spice=3). Small, centered
+# emblems drawn with the shared ApeSprites cell painter (auto 1px outline).
+const _GOOD_BLOCKS: Array = [
+	# SALT — white crystal cluster
+	[[6, 5, 4, 6, "W"], [7, 4, 2, 1, "w"], [5, 8, 1, 2, "W"], [10, 8, 1, 2, "W"]],
+	# OBSIDIAN — black glass shard
+	[[7, 4, 3, 8, "K"], [6, 6, 1, 4, "d"], [10, 7, 1, 3, "d"]],
+	# AMBER — orange gem
+	[[6, 6, 4, 4, "o"], [7, 5, 2, 1, "y"], [6, 9, 4, 1, "O"], [8, 6, 1, 1, "y"]],
+	# SPICE — red-brown mound with specks
+	[[5, 9, 6, 3, "r"], [6, 8, 4, 1, "R"], [7, 10, 1, 1, "y"], [9, 10, 1, 1, "y"]],
+]
+
+
+static func build_good_image(good_idx: int) -> Image:
+	var img: Image = ApeSprites._build_cell(_GOOD_BLOCKS[good_idx])
+	img.flip_y()
+	return img
+
+
+static func build_good(good_idx: int) -> ImageTexture:
+	return ImageTexture.create_from_image(build_good_image(good_idx))
+
+
+# 16x16 caravan cart: wooden body, pale canvas top, two dark wheels. Small so it
+# reads as a vehicle beside the bigger hub buildings.
+const _CART_BLOCKS: Array = [
+	[3, 6, 10, 4, "t"],  # wooden body
+	[3, 6, 10, 1, "b"],  # top rail of body
+	[4, 3, 8, 3, "B"],  # pale canvas cover
+	[4, 3, 8, 1, "W"],  # canvas highlight
+	[3, 10, 2, 2, "K"],  # left wheel
+	[11, 10, 2, 2, "K"],  # right wheel
+	[5, 9, 6, 1, "d"],  # axle shadow
+]
+
+
+static func build_cart_image() -> Image:
+	var img: Image = ApeSprites._build_cell(_CART_BLOCKS)
+	img.flip_y()
+	return img
+
+
+static func build_cart() -> ImageTexture:
+	return ImageTexture.create_from_image(build_cart_image())

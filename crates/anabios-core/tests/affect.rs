@@ -81,7 +81,7 @@ fn affect_scenario_survives_save_load_step() {
 // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
 // World.payoff_biased_learning layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xdd975a971738fb36), (100, 0x75b24d54f26d75e1), (300, 0x56aa884b5040e39e)];
+    &[(0, 0x13f6ae1784c12e96), (100, 0x41f76461d3248601), (300, 0xa9fa4216dea60bde)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -192,7 +192,7 @@ fn affect_threat_emits_mass_fright() {
 // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
 // World.payoff_biased_learning layout growth only (off here).
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x4f1caafe2de00d7a), (100, 0x3f78d4c48dd6187f), (300, 0x17c1018f0718cd15)];
+    &[(0, 0xa4a0f6dae22523da), (100, 0x86e2979c647d597f), (300, 0xda522c1a8af126b5)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

@@ -1172,7 +1172,7 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // traditionalist) reclassed omnivore (ape) so it can carry the tech tree;
     // the diet change shifts feeding ecology and the invention-race trajectory.
     // Regenerated on the gated tree.
-    &[(0, 0x620ece243fc93a97), (100, 0x9bb144abcb0d6f5f), (300, 0xf28a2263a8c65713)];
+    &[(0, 0xdc99e8e561833697), (100, 0x33597800611ba93f), (300, 0x2f4e33a6d3180eb3)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

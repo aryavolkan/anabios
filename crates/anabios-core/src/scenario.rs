@@ -759,6 +759,12 @@ impl Scenario {
                 }
             }
         }
+        // Predetermined trade hubs: placed from the finalized biome once the
+        // trade-goods subsystem is active. Must run AFTER the world_map match so
+        // it sees the real (Earth or climate) biome, not the default one.
+        if w.resources_enabled {
+            w.trade_hubs = crate::hub::place_trade_hubs(&w.biome);
+        }
         if let Some(interval) = self.codex_interval {
             w.codex_interval = interval;
         }

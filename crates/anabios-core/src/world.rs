@@ -216,6 +216,10 @@ pub struct World {
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
     pub market_field: Vec<f32>,
+    /// Predetermined trade hubs placed from the biome at instantiate (empty and
+    /// inert unless `resources_enabled`). Fixed after generation. Serialized.
+    #[serde(default)]
+    pub trade_hubs: Vec<crate::hub::TradeHub>,
     /// Disaster scheduler + active disasters + succession sites. Inert
     /// unless `disasters_enabled`. Serialized.
     #[serde(default)]
@@ -304,6 +308,13 @@ pub struct World {
     /// skipped by serialization like the other per-tick buffers.
     #[serde(skip)]
     pub trade_routes: Vec<(crate::prelude::Vec2, crate::prelude::Vec2, f32)>,
+    /// Per-hub, per-good count of goods that changed hands at that hub, index-aligned
+    /// to `trade_hubs`. Viewer scratch ONLY — never read by the simulation, so it is
+    /// `#[serde(skip)]` (not serialized, not in `state_hash`) like `trade_routes`.
+    /// `trade_pass` self-heals its length to `trade_hubs.len()`, so it survives a
+    /// snapshot load (which leaves it empty) without panicking.
+    #[serde(skip)]
+    pub hub_trade_tally: Vec<[u64; crate::resource::GOOD_COUNT]>,
     /// Consecutive ticks each agent has been below the still-speed
     /// threshold (E6 ambush instrumentation). Updated after integrate, read
     /// by `combat_pass` to stamp each `SigHit.ambush`. This is a
@@ -397,6 +408,7 @@ impl World {
             payoff_biased_learning: false,
             unilateral_trade: false,
             market_field: Vec::new(),
+            trade_hubs: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
@@ -425,6 +437,7 @@ impl World {
             combat_attacker: Vec::new(),
             combat_streaks: Vec::new(),
             trade_routes: Vec::new(),
+            hub_trade_tally: Vec::new(),
             still_ticks: Vec::new(),
             prev_desired_direction: Vec::new(),
             total_trades: 0,
