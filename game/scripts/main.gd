@@ -681,24 +681,21 @@ func _body_colors(n: int) -> PackedColorArray:
 			var out2 := PackedColorArray()
 			out2.resize(n)
 			for i in n:
-				out2[i] = Color(0.3, 0.9, 0.4).lerp(Color(1.0, 0.3, 0.3), clampf(diet[i], 0.0, 1.0))
+				out2[i] = Palette.ramp(Palette.RAMP_DIET, diet[i])
 			return out2
 		overlay.BODY_ENERGY:
 			var en: PackedFloat32Array = sim.alive_energy()
 			var out3 := PackedColorArray()
 			out3.resize(n)
 			for i in n:
-				var t := clampf(en[i] / 50.0, 0.0, 1.0)
-				out3[i] = Color(0.2, 0.3, 0.8).lerp(Color(1.0, 0.9, 0.3), t)
+				out3[i] = Palette.ramp(Palette.RAMP_ENERGY, en[i] / 50.0)
 			return out3
 		overlay.BODY_AFFECT:
 			var ar: PackedFloat32Array = sim.alive_arousal()
 			var out5 := PackedColorArray()
 			out5.resize(n)
 			for i in n:
-				out5[i] = Color(0.55, 0.6, 0.7).lerp(
-					Color(1.0, 0.35, 0.25), clampf(ar[i], 0.0, 1.0)
-				)
+				out5[i] = Palette.ramp(Palette.RAMP_AROUSAL, ar[i])
 			return out5
 		_:
 			# Species mode: Primate atlases carry their own coat/skin colours, so

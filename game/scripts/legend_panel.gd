@@ -80,17 +80,13 @@ func _rebuild_key(body_mode: int) -> void:
 			_key_box.add_child(_header("body: hue = dialect"))
 		2:
 			_key_box.add_child(_header("body: diet"))
-			_key_box.add_child(
-				_ramp_row(Color(0.3, 0.9, 0.4), Color(1.0, 0.3, 0.3), "herbivore", "carnivore")
-			)
+			_key_box.add_child(_ramp_row(Palette.RAMP_DIET, "herbivore", "carnivore"))
 		3:
 			_key_box.add_child(_header("body: energy"))
-			_key_box.add_child(_ramp_row(Color(0.2, 0.3, 0.8), Color(1.0, 0.9, 0.3), "low", "high"))
+			_key_box.add_child(_ramp_row(Palette.RAMP_ENERGY, "low", "high"))
 		4:
 			_key_box.add_child(_header("body: arousal (fear/rage/panic)"))
-			_key_box.add_child(
-				_ramp_row(Color(0.55, 0.6, 0.7), Color(1.0, 0.35, 0.25), "calm", "aroused")
-			)
+			_key_box.add_child(_ramp_row(Palette.RAMP_AROUSAL, "calm", "aroused"))
 		_:
 			_key_box.add_child(_header("body: species — each animal in its own coat colours"))
 
@@ -122,16 +118,18 @@ func _swatch_wrap(colors: PackedColorArray, names: PackedStringArray) -> HFlowCo
 	return flow
 
 
-func _ramp_row(a: Color, b: Color, left: String, right: String) -> HBoxContainer:
+# The key for a continuous body overlay. Samples the SAME Palette.ramp the
+# field colours use, so the swatches always match the agents on screen.
+func _ramp_row(r: Array, left: String, right: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 	var la := Label.new()
 	la.text = left
 	la.add_theme_font_size_override("font_size", 11)
 	row.add_child(la)
-	# Five swatches interpolating a -> b as a compact ramp.
+	# Five swatches stepping along the ramp.
 	for i in 5:
-		row.add_child(_chip(a.lerp(b, float(i) / 4.0)))
+		row.add_child(_chip(Palette.ramp(r, float(i) / 4.0)))
 	var lb := Label.new()
 	lb.text = right
 	lb.add_theme_font_size_override("font_size", 11)
