@@ -17,10 +17,30 @@ const SHARED_MAX_ROWS := 4
 var _frame: int = 0
 # Scene-authored slot; the panel drops below the DIT table when that one is up.
 var _base_y: float = 0.0
+# invention key -> era, read once from the catalog. Used to pick the single
+# most-advanced invention to name in a row (see _tech_summary).
+var _era_of: Dictionary = {}
 
 
 func _ready() -> void:
 	_base_y = position.y
+	for inv in sim.invention_catalog():
+		_era_of[String(inv["key"])] = int(inv["era"])
+
+
+# The row's tech cell. The panel is a 220px slot, and joining up to four
+# invention keys ("[stone_tools, fire, farming, metalworking]") ran the label
+# clean off the panel and off the right edge of the screen — Labels do not clip
+# by default. Name only the most advanced one and count the rest; the full list
+# is in the inspector. An em dash, not an empty "[]", when nothing is adopted.
+func _tech_summary(adopted: Array) -> String:
+	if adopted.is_empty():
+		return "—"
+	var best: String = String(adopted[0])
+	for key in adopted:
+		if int(_era_of.get(String(key), 0)) > int(_era_of.get(best, 0)):
+			best = String(key)
+	return best if adopted.size() == 1 else "%s +%d" % [best, adopted.size() - 1]
 
 
 # The DIT table shares this slot in the right rail, and a scenario that runs the
@@ -62,15 +82,14 @@ func _process(_delta: float) -> void:
 	(children[0] as Label).text = "TECH"
 	for i in shown:
 		var s: Dictionary = stats[i]
-		var adopted: Array = s["adopted_inventions"]
-		var techs: String = (
-			", ".join(adopted)
-			if adopted.size() <= 4
-			else ", ".join(adopted.slice(0, 4)) + ", +%d" % (adopted.size() - 4)
-		)
 		(children[i + 1] as Label).text = (
-			"sp %d  era %d  n=%d  [%s]"
-			% [int(s["species_id"]), int(s["tech_era"]), int(s["count"]), techs]
+			"sp %d  era %d  n=%d  %s"
+			% [
+				int(s["species_id"]),
+				int(s["tech_era"]),
+				int(s["count"]),
+				_tech_summary(s["adopted_inventions"]),
+			]
 		)
 	if overflow > 0:
 		(children[shown + 1] as Label).text = "+%d more species" % overflow
@@ -81,6 +100,9 @@ func _sync_label_count(want: int) -> void:
 	while have < want:
 		var lbl := Label.new()
 		lbl.add_theme_font_size_override("font_size", 12)
+		# Hard guarantee against a long species id / invention name spilling past
+		# the panel; _tech_summary keeps rows well inside this in practice.
+		lbl.clip_text = true
 		list.add_child(lbl)
 		have += 1
 	while have > want:

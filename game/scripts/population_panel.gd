@@ -49,6 +49,10 @@ func _sync_label_count(want: int) -> void:
 	while have < want:
 		var lbl := Label.new()
 		lbl.add_theme_font_size_override("font_size", 12)
+		# Rail panels are a fixed 220px slot and Labels do not clip by default —
+		# without this a long row draws straight over its neighbours (see the tech
+		# table, where the invention list ran off the edge of the screen).
+		lbl.clip_text = true
 		list.add_child(lbl)
 		have += 1
 	while have > want:
