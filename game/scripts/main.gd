@@ -251,6 +251,37 @@ func _ready() -> void:
 				var pid: int = int(sim.agent_near(focus, 5.0))
 				if pid >= 0:
 					inspector.pin(pid)
+	_layout_hud()
+
+
+# Panels pinned to the right edge / the bottom edge of the design viewport.
+const DESIGN_VP := Vector2(1280.0, 800.0)
+const HUD_RIGHT: PackedStringArray = ["Inspector", "PopulationPanel", "DitPanel", "TechPanel"]
+const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "CodexPanel"]
+
+
+# The HUD is laid out in absolute pixels against a 1280x800 viewport, and the
+# menu's UI-scale option scales the whole CanvasLayer about its origin — so a
+# panel at x=1050 lands at 1050*s, not at (screen edge - width). Below 1.0 the
+# right and bottom panels floated inward and left a dead band along two edges;
+# the layout only ever looked right at exactly 1.0. Re-place each edge group
+# inside the logical viewport the scale leaves behind (DESIGN_VP / s) so it
+# stays glued to its own edge at any scale. (Scales above 1.0 shrink the logical
+# viewport below the design size, which this fixed-size layout cannot fit — the
+# menu caps the option at 1.0 for that reason.)
+func _layout_hud() -> void:
+	var s: float = maxf(0.01, GameConfig.ui_scale)
+	if is_equal_approx(s, 1.0):
+		return
+	var shift: Vector2 = DESIGN_VP / s - DESIGN_VP
+	for n in HUD_RIGHT:
+		var c := $UI.get_node_or_null(n) as Control
+		if c != null:
+			c.position.x += shift.x
+	for n in HUD_BOTTOM:
+		var c2 := $UI.get_node_or_null(n) as Control
+		if c2 != null:
+			c2.position.y += shift.y
 
 
 # Footsteps: each walker sampled this frame drops a small fading track mark,

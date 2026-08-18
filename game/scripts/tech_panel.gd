@@ -51,7 +51,9 @@ func _restack() -> void:
 	var y: float = _base_y
 	if _dit != null and _dit.visible:
 		y = _dit.position.y + _dit.size.y + 10.0
-	var vp_h: float = get_viewport_rect().size.y
+	# Logical height: the UI layer is scaled by GameConfig.ui_scale, so the
+	# usable HUD height is the viewport divided by it, not the raw viewport.
+	var vp_h: float = get_viewport_rect().size.y / maxf(0.01, GameConfig.ui_scale)
 	position.y = minf(y, maxf(_base_y, vp_h - size.y - 10.0))
 
 

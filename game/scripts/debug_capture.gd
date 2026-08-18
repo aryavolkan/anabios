@@ -52,6 +52,12 @@ func _apply_config_overrides() -> void:
 		GameConfig.default_ground = int(OS.get_environment("ANABIOS_GROUND"))
 	if OS.has_environment("ANABIOS_BODY"):
 		GameConfig.default_body = int(OS.get_environment("ANABIOS_BODY"))
+	# HUD scale, same 0.5..2.0 range the menu's spin box offers. Exposed here so
+	# a capture run can check the layout at a scale other than 1.0 — every panel
+	# is positioned in absolute pixels, so scaling is exactly where the HUD is
+	# most likely to fall off the screen.
+	if OS.has_environment("ANABIOS_UI_SCALE"):
+		GameConfig.ui_scale = clampf(float(OS.get_environment("ANABIOS_UI_SCALE")), 0.5, 1.0)
 
 
 func _run(path: String, wait_frames: int) -> void:
