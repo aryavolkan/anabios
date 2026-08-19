@@ -15,15 +15,12 @@ const SHARED_MAX_ROWS := 4
 @onready var list: VBoxContainer = $VBox
 @onready var _dit: Control = get_parent().get_node_or_null("DitPanel")
 var _frame: int = 0
-# Scene-authored slot; the panel drops below the DIT table when that one is up.
-var _base_y: float = 0.0
 # invention key -> era, read once from the catalog. Used to pick the single
 # most-advanced invention to name in a row (see _tech_summary).
 var _era_of: Dictionary = {}
 
 
 func _ready() -> void:
-	_base_y = position.y
 	for inv in sim.invention_catalog():
 		_era_of[String(inv["key"])] = int(inv["era"])
 
@@ -43,26 +40,11 @@ func _tech_summary(adopted: Array) -> String:
 	return best if adopted.size() == 1 else "%s +%d" % [best, adopted.size() - 1]
 
 
-# The DIT table shares this slot in the right rail, and a scenario that runs the
-# environment model *and* the invention tree shows both — they used to overprint
-# ("TECH" stamped over "DIT env-optimum = …"). Stack under it instead, clamped so
-# the pair never runs off the bottom of the screen.
-func _restack() -> void:
-	var y: float = _base_y
-	if _dit != null and _dit.visible:
-		y = _dit.position.y + _dit.size.y + 10.0
-	# Logical height: the UI layer is scaled by GameConfig.ui_scale, so the
-	# usable HUD height is the viewport divided by it, not the raw viewport.
-	var vp_h: float = get_viewport_rect().size.y / maxf(0.01, GameConfig.ui_scale)
-	position.y = minf(y, maxf(_base_y, vp_h - size.y - 10.0))
-
-
 func _process(_delta: float) -> void:
 	if not bool(sim.inventions_enabled()):
 		visible = false
 		return
 	visible = true
-	_restack()
 	_frame += 1
 	if _frame % REFRESH_EVERY != 4:  # phase-offset from dit_panel (== 3)
 		return

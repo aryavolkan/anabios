@@ -258,6 +258,34 @@ func _ready() -> void:
 const DESIGN_VP := Vector2(1280.0, 800.0)
 const HUD_RIGHT: PackedStringArray = ["Inspector", "PopulationPanel", "DitPanel", "TechPanel"]
 const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "CodexPanel"]
+# The right rail, top to bottom. Every panel here is content-sized, so the stack
+# is laid out live rather than at fixed offsets (see _layout_rail).
+const RAIL_TOP := 10.0
+const RAIL_GAP := 10.0
+# Authored y of each rail panel, captured before the first layout pass. Each
+# acts as a floor, so a panel only moves when the one above actually needs the
+# room — the familiar layout is preserved and nothing jumps on a pin/unpin.
+var _rail_home: Dictionary = {}
+
+
+# Stack the right rail under whichever panels above it are actually visible.
+# All four used to sit at fixed y, sized for their worst expected content — so
+# a tall inspector (a tech-holding ape lists its inventions, and the detail
+# label wraps) drew straight down through the species table underneath it, with
+# the species panel painting over the inspector's last line. Laying the stack
+# out from the live panel heights means any of them can grow without colliding,
+# while the per-panel floor keeps the resting layout exactly where it was.
+func _layout_rail() -> void:
+	var y: float = RAIL_TOP
+	var limit: float = DESIGN_VP.y / maxf(0.01, GameConfig.ui_scale)
+	for n in HUD_RIGHT:
+		var c := $UI.get_node_or_null(n) as Control
+		if c == null or not c.visible:
+			continue
+		var home: float = _rail_home.get(n, RAIL_TOP)
+		# Never push a panel off the bottom; the last one clamps instead.
+		c.position.y = minf(maxf(y, home), maxf(RAIL_TOP, limit - c.size.y - RAIL_GAP))
+		y = c.position.y + c.size.y + RAIL_GAP
 
 
 # The HUD is laid out in absolute pixels against a 1280x800 viewport, and the
@@ -270,6 +298,10 @@ const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "CodexPane
 # viewport below the design size, which this fixed-size layout cannot fit — the
 # menu caps the option at 1.0 for that reason.)
 func _layout_hud() -> void:
+	for n in HUD_RIGHT:
+		var home := $UI.get_node_or_null(n) as Control
+		if home != null:
+			_rail_home[n] = home.position.y
 	var s: float = maxf(0.01, GameConfig.ui_scale)
 	if is_equal_approx(s, 1.0):
 		return
@@ -402,6 +434,7 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
+	_layout_rail()
 	if not paused:
 		sim.step_n(ticks_per_frame)
 	# Fetch this tick's segments once: the trail pass draws them and the body
