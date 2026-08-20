@@ -6,7 +6,7 @@ const REFRESH_EVERY := 6
 # long tail of singleton species can't grow it and spill onto neighbours.
 const MAX_ROWS := 6
 # Tighter cap while the tech table is also up: the two stack in one rail slot
-# (see tech_panel._restack) and two full-height tables do not fit between the
+# (main.gd _layout_rail) and two full-height tables do not fit between the
 # species panel and the bottom of the screen.
 const SHARED_MAX_ROWS := 4
 
