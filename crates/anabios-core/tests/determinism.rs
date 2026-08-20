@@ -298,7 +298,7 @@ const GOLDEN: &[(u64, u64)] =
     // added World.payoff_biased_learning flag; off in minimal ⇒ transmission
     // byte-identical — layout growth only, so all hashes moved once.
     // Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
-    // World.{anthro_race_enabled,culture_roots} + CodexState.{hunted_history,
+    // World.{anthro_race_enabled,culture_roots} + CodexState.{hunted_baselines,
     // hunted_active} + genome slot 43 renamed Vigilance (same index, same
     // [0,1] semantics) + Node::SenseCultureThreat (appended; joins the
     // mutation pool only under the flag). Flag off in minimal ⇒ culture mask

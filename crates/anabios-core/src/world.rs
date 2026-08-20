@@ -569,23 +569,36 @@ impl World {
         id
     }
 
-    /// Rebuild the per-species-id culture-lineage mask (anthropogenic arms
+    /// Refresh the per-species-id culture-lineage mask (anthropogenic arms
     /// race). Called once per tick before `sense_all`. Empty when the flag
     /// is off or no founder is tagged, so the threat sense reads exactly 0.0
     /// and the flag-off world stays byte-identical.
+    ///
+    /// Extends rather than rebuilds: `push_species` is the single species
+    /// growth path and only ever APPENDS a row (a parent pointer is never
+    /// rewritten), and `culture_roots` is filled at scenario instantiate
+    /// before the first tick — so every row already in the mask stays
+    /// correct, and only rows added since the last refresh need their
+    /// lineage root walked. Same mask as a full rebuild, at `O(new species)`
+    /// per tick instead of `O(species × lineage depth)` — the table reaches
+    /// ~1.1k species over a 20k-tick `anthro-race` run, though the walk is
+    /// cheap enough there that the win does not show in wall clock; the
+    /// point is that the cost stops growing with run length. A snapshot load
+    /// leaves the mask empty (`#[serde(skip)]`), so the next refresh
+    /// rebuilds it in full.
     pub fn refresh_culture_mask(&mut self) {
         if !self.anthro_race_enabled || self.culture_roots.is_empty() {
             self.culture_mask.clear();
             return;
         }
-        let n = self.next_species_id as usize;
-        let mut mask = vec![false; n];
-        for sid in 0..self.next_species_id {
-            if self.culture_roots.contains(&crate::codex::war::lineage_root(self, sid)) {
-                mask[sid as usize] = true;
-            }
+        debug_assert!(
+            self.culture_mask.len() <= self.next_species_id as usize,
+            "species rows are append-only; the mask can never outgrow the table",
+        );
+        for sid in self.culture_mask.len() as u32..self.next_species_id {
+            let tagged = crate::species::is_culture_lineage(self, sid);
+            self.culture_mask.push(tagged);
         }
-        self.culture_mask = mask;
     }
 
     /// Increment the species member count, growing the table if needed.

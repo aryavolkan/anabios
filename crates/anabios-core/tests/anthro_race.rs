@@ -71,6 +71,33 @@ fn tag_marks_founder_and_its_splinters_only() {
     assert!(species::is_culture_lineage(&w2, splinter), "splinter inherits via the root walk");
 }
 
+/// `refresh_culture_mask` extends the mask instead of rebuilding it every
+/// tick, which is only sound because species rows are append-only. Pin that
+/// the incremental result matches a from-scratch rebuild after speciation —
+/// a splinter of the tagged root must come back tagged, an unrelated one not.
+#[test]
+fn incremental_mask_refresh_matches_a_full_rebuild() {
+    let mut w = Scenario::parse_toml(SCENARIO).expect("parse").instantiate();
+    w.refresh_culture_mask();
+    let root = *w.culture_roots.iter().next().unwrap();
+    let before = w.culture_mask.clone();
+    assert!(before[root as usize], "the tagged founder is masked");
+
+    // Speciation appends rows: one splinter under the tagged root, one wild.
+    let tagged_splinter = w.push_species(Genome::neutral(), Some(root));
+    let wild_splinter = w.push_species(Genome::neutral(), Some(0));
+    w.refresh_culture_mask();
+    assert_eq!(w.culture_mask[..before.len()], before[..], "existing rows are untouched");
+    assert!(w.culture_mask[tagged_splinter as usize], "splinter of the tagged root is masked");
+    assert!(!w.culture_mask[wild_splinter as usize], "an unrelated splinter is not");
+
+    // Identical to a from-scratch rebuild (the state after a snapshot load).
+    let incremental = w.culture_mask.clone();
+    w.culture_mask.clear();
+    w.refresh_culture_mask();
+    assert_eq!(incremental, w.culture_mask, "incremental refresh == full rebuild");
+}
+
 #[test]
 fn culture_threat_sense_is_aimed_and_flag_gated() {
     // One armed tagged culture agent + one wild agent, in perception range.

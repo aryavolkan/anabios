@@ -74,9 +74,10 @@ impl RootAgg {
 
 /// Fire HuntedAdaptation when a hunted prey lineage answers its culture
 /// predator's rise (see the module doc for the signal design). One shot per
-/// qualifying pair: the latch is pruned only if the pair stops qualifying
-/// (hostility record cooled away, or a lineage went extinct), in which case
-/// a later re-heated feud re-baselines and may fire again.
+/// pair for as long as both lineages live: baselines and latches are STICKY
+/// across war episodes — a cooled hostility record pauses new qualification
+/// but never drops an existing pair — and are pruned only when a lineage
+/// goes extinct. Roots are never reused, so a pruned pair cannot re-form.
 pub(super) fn detect_hunted_adaptation(world: &mut World, agg: &SpeciesAggTable) {
     // Candidate hunter/hunted pairs from the war substrate: exactly one root
     // culture-tagged, with enough kills in the current hostility episode to
