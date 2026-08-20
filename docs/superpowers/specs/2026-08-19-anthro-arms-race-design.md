@@ -176,7 +176,8 @@ Reference scenario `scenarios/anthro-race.toml`, 20k ticks:
 
 - **The event fires emergently**: `HuntedAdaptation` in **6/8** seeds
   (`runs/anthro-on-20k`). The off arm structurally cannot fire (detector
-  gated; no culture roots).
+  gated; no culture roots). Re-measured over 16 seeds the same scenario
+  fires in 11/16; after the retune below, **13/16**.
 - **Hunting pressure is real**: the tagged lineage logged 174 kills on herd
   A by t5k in the diagnostic run (seed 7).
 - **The prey answer is speed, not vigilance**: at t20k the hunted herd's
@@ -186,9 +187,29 @@ Reference scenario `scenarios/anthro-race.toml`, 20k ticks:
   Hunters also suppressed the herd below the off-arm population cap
   (~100–250 vs 300). This channel asymmetry is why the detector uses a
   per-channel max rather than a summed index.
-- **Scenario lethality**: half the 20k runs end in total collapse (alive=0)
-  — the overhunted world dies. The event fires before collapse; tuning the
-  scenario for longer coexistence is follow-up work, not a detector fix.
+- **Scenario lethality (fixed by retune, 2026-08-20)**: as first written the
+  scenario killed its own world — **6/16** seeds ended at alive=0 and most
+  of the rest ended with the map grazed bare (final biomass ≈ 0). The cause
+  is the biome, not the detector: plain logistic regrowth is
+  `b += r*b*(1 - b/K)`, so a cell grazed to exactly zero has no seed left to
+  regrow from. Four hungry factions sharing one range strip the map
+  permanently, and every lineage starves. Enabling `living_biome`
+  (bare cells recolonize from live neighbours) and `soil_fertility`
+  (per-cell carrying capacity) with a population cap raised to 900 and
+  proportionally larger founder counts (32 apes / 70+70 herd / 14 pursuers)
+  gives, over 16 seeds × 20k ticks:
+
+  | | extinct worlds | `HuntedAdaptation` fires |
+  |---|---|---|
+  | before | 6/16 | 11/16 |
+  | after | **0/16** | **13/16** |
+
+  Both axes improve together: the race needs both sides alive to be
+  measurable, so keeping the world fed also makes the event more reliable.
+  The scenario is still deliberately scarce — several seeds bottom out in
+  the low hundreds before rebounding — because an abundant world removes the
+  pressure entirely (`living_biome` alone, without the density increase,
+  gives 8/8 survival but only 3/8 fires).
 - Without the `stone_tools` seed the culture lineage failed to establish
   (0 kills in 20k) — the seed is load-bearing in this scenario, mirroring
   the Out-of-Africa climb problem (ROADMAP Phase 2).

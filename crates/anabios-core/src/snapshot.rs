@@ -145,7 +145,7 @@ use crate::world::World;
 ///     from the finalized biome at scenario instantiate when
 ///     `resources_enabled`. Layout growth only.
 /// 34: add `World.anthro_race_enabled` + `World.culture_roots` and
-///     `CodexState.hunted_history`/`hunted_active` (anthropogenic arms race).
+///     `CodexState.hunted_baselines`/`hunted_active` (anthropogenic arms race).
 ///     Flag off in every golden scenario ⇒ trajectories byte-identical;
 ///     only the serialized layout grew.
 pub const FORMAT_VERSION: u32 = 34;

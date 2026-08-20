@@ -240,11 +240,16 @@ pub enum EventType {
     /// mean PANIC (separation distress) in the aftermath (`value` = mean
     /// PANIC; loc = species centroid).
     MassGrief = 58,
-    /// A prey lineage's defense index (armor + speed + Vigilance) co-rose
-    /// with its culture-lineage predator's power index (tech era + weapon
-    /// damage) over `HUNTED_WINDOW` — the anthropogenic arms race made
-    /// visible. `value` = prey defense rise; species = prey lineage's lowest
-    /// active species id; loc = prey centroid.
+    /// A hunted prey lineage answered its culture-lineage predator's rise —
+    /// the anthropogenic arms race made visible. Both sides are measured
+    /// against the baseline latched when the pair first qualified: the
+    /// predator's power index (tech era + normalized weapon damage) rose
+    /// ≥ `HUNTED_MIN_CULTURE_DELTA`, and the STRONGEST SINGLE prey defense
+    /// channel — normalized armor, mean speed, or the Vigilance gene — rose
+    /// ≥ `HUNTED_MIN_PREY_DELTA`. Per-channel max, never a sum: a herd
+    /// answers on one channel, so summing lets a decline elsewhere mask it.
+    /// `value` = the largest per-channel prey rise; species = prey lineage's
+    /// lowest active species id; loc = prey centroid.
     HuntedAdaptation = 59,
 }
 
