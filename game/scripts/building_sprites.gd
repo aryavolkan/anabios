@@ -275,10 +275,32 @@ const GOOD_NAMES: PackedStringArray = ["Salt", "Obsidian", "Amber", "Spice"]
 # 16x16 goods icons, indexed by sim Good index (Salt=0..Spice=3). Small, centered
 # emblems drawn with the shared ApeSprites cell painter (auto 1px outline).
 const _GOOD_BLOCKS: Array = [
-	# SALT — white crystal cluster
-	[[6, 5, 4, 6, "W"], [7, 4, 2, 1, "w"], [5, 8, 1, 2, "W"], [10, 8, 1, 2, "W"]],
-	# OBSIDIAN — black glass shard
-	[[7, 4, 3, 8, "K"], [6, 6, 1, 4, "d"], [10, 7, 1, 3, "d"]],
+	# SALT — faceted rock-salt cluster: a tall central prism with a lit face and
+	# a shaded one, flanked by two shoulder crystals. (Flat "W" throughout, as it
+	# was, made it a featureless white blob at hub scale — the brightest mark on
+	# the map with no shape to read.)
+	[
+		[5, 8, 2, 4, "s"],
+		[5, 7, 2, 1, "w"],
+		[10, 8, 2, 4, "s"],
+		[10, 7, 2, 1, "w"],
+		[6, 5, 4, 7, "s"],
+		[6, 5, 2, 7, "W"],
+		[7, 4, 2, 1, "W"],
+		[9, 6, 1, 5, "G"],
+	],
+	# OBSIDIAN — black glass shard, tapered to a point, with a specular sheen up
+	# its face. Solid "K" alone read as a hole punched in the terrain.
+	[
+		[6, 9, 5, 3, "K"],
+		[6, 6, 4, 3, "K"],
+		[7, 4, 3, 2, "K"],
+		[8, 3, 2, 1, "K"],
+		[7, 5, 1, 6, "X"],
+		[8, 4, 1, 7, "s"],
+		[9, 7, 2, 4, "x"],
+		[8, 11, 3, 1, "d"],
+	],
 	# AMBER — orange gem
 	[[6, 6, 4, 4, "o"], [7, 5, 2, 1, "y"], [6, 9, 4, 1, "O"], [8, 6, 1, 1, "y"]],
 	# SPICE — red-brown mound with specks

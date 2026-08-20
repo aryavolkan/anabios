@@ -8,10 +8,36 @@ const REFRESH_EVERY := 6
 # Row cap (mirrors dit_panel/population_panel): keep the panel inside its
 # fixed slot so a long tail of singleton species can't grow it.
 const MAX_ROWS := 6
+# Tighter cap while the DIT table is also up — the two share one rail slot.
+const SHARED_MAX_ROWS := 4
 
 @onready var sim = get_node("/root/Main/Simulation")
 @onready var list: VBoxContainer = $VBox
+@onready var _dit: Control = get_parent().get_node_or_null("DitPanel")
 var _frame: int = 0
+# invention key -> era, read once from the catalog. Used to pick the single
+# most-advanced invention to name in a row (see _tech_summary).
+var _era_of: Dictionary = {}
+
+
+func _ready() -> void:
+	for inv in sim.invention_catalog():
+		_era_of[String(inv["key"])] = int(inv["era"])
+
+
+# The row's tech cell. The panel is a 220px slot, and joining up to four
+# invention keys ("[stone_tools, fire, farming, metalworking]") ran the label
+# clean off the panel and off the right edge of the screen — Labels do not clip
+# by default. Name only the most advanced one and count the rest; the full list
+# is in the inspector. An em dash, not an empty "[]", when nothing is adopted.
+func _tech_summary(adopted: Array) -> String:
+	if adopted.is_empty():
+		return "—"
+	var best: String = String(adopted[0])
+	for key in adopted:
+		if int(_era_of.get(String(key), 0)) > int(_era_of.get(best, 0)):
+			best = String(key)
+	return best if adopted.size() == 1 else "%s +%d" % [best, adopted.size() - 1]
 
 
 func _process(_delta: float) -> void:
@@ -30,7 +56,8 @@ func _process(_delta: float) -> void:
 				return int(a["tech_era"]) > int(b["tech_era"])
 			return int(a["count"]) > int(b["count"])
 	)
-	var shown: int = min(stats.size(), MAX_ROWS)
+	var cap: int = SHARED_MAX_ROWS if _dit != null and _dit.visible else MAX_ROWS
+	var shown: int = min(stats.size(), cap)
 	var overflow: int = stats.size() - shown
 	_sync_label_count(shown + 1 + (1 if overflow > 0 else 0))  # +1 header row
 	var children: Array = list.get_children()
@@ -39,15 +66,14 @@ func _process(_delta: float) -> void:
 	(children[0] as Label).text = "TECH"
 	for i in shown:
 		var s: Dictionary = stats[i]
-		var adopted: Array = s["adopted_inventions"]
-		var techs: String = (
-			", ".join(adopted)
-			if adopted.size() <= 4
-			else ", ".join(adopted.slice(0, 4)) + ", +%d" % (adopted.size() - 4)
-		)
 		(children[i + 1] as Label).text = (
-			"sp %d  era %d  n=%d  [%s]"
-			% [int(s["species_id"]), int(s["tech_era"]), int(s["count"]), techs]
+			"sp %d  era %d  n=%d  %s"
+			% [
+				int(s["species_id"]),
+				int(s["tech_era"]),
+				int(s["count"]),
+				_tech_summary(s["adopted_inventions"]),
+			]
 		)
 	if overflow > 0:
 		(children[shown + 1] as Label).text = "+%d more species" % overflow
@@ -58,6 +84,9 @@ func _sync_label_count(want: int) -> void:
 	while have < want:
 		var lbl := Label.new()
 		lbl.add_theme_font_size_override("font_size", 12)
+		# Hard guarantee against a long species id / invention name spilling past
+		# the panel; _tech_summary keeps rows well inside this in practice.
+		lbl.clip_text = true
 		list.add_child(lbl)
 		have += 1
 	while have > want:

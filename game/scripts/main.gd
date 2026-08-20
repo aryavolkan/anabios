@@ -88,6 +88,7 @@ func _ready() -> void:
 	var f = FileAccess.open(scenario_path, FileAccess.READ)
 	if f == null:
 		push_error("could not open " + scenario_path)
+		_fail_to_load("scenario not found:\n" + scenario_path)
 		return
 	var text = f.get_as_text()
 	f.close()
@@ -250,6 +251,69 @@ func _ready() -> void:
 				var pid: int = int(sim.agent_near(focus, 5.0))
 				if pid >= 0:
 					inspector.pin(pid)
+	_layout_hud()
+
+
+# Panels pinned to the right edge / the bottom edge of the design viewport.
+const DESIGN_VP := Vector2(1280.0, 800.0)
+const HUD_RIGHT: PackedStringArray = ["Inspector", "PopulationPanel", "DitPanel", "TechPanel"]
+const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "CodexPanel"]
+# The right rail, top to bottom. Every panel here is content-sized, so the stack
+# is laid out live rather than at fixed offsets (see _layout_rail).
+const RAIL_TOP := 10.0
+const RAIL_GAP := 10.0
+# Authored y of each rail panel, captured before the first layout pass. Each
+# acts as a floor, so a panel only moves when the one above actually needs the
+# room — the familiar layout is preserved and nothing jumps on a pin/unpin.
+var _rail_home: Dictionary = {}
+
+
+# Stack the right rail under whichever panels above it are actually visible.
+# All four used to sit at fixed y, sized for their worst expected content — so
+# a tall inspector (a tech-holding ape lists its inventions, and the detail
+# label wraps) drew straight down through the species table underneath it, with
+# the species panel painting over the inspector's last line. Laying the stack
+# out from the live panel heights means any of them can grow without colliding,
+# while the per-panel floor keeps the resting layout exactly where it was.
+func _layout_rail() -> void:
+	var y: float = RAIL_TOP
+	var limit: float = DESIGN_VP.y / maxf(0.01, GameConfig.ui_scale)
+	for n in HUD_RIGHT:
+		var c := $UI.get_node_or_null(n) as Control
+		if c == null or not c.visible:
+			continue
+		var home: float = _rail_home.get(n, RAIL_TOP)
+		# Never push a panel off the bottom; the last one clamps instead.
+		c.position.y = minf(maxf(y, home), maxf(RAIL_TOP, limit - c.size.y - RAIL_GAP))
+		y = c.position.y + c.size.y + RAIL_GAP
+
+
+# The HUD is laid out in absolute pixels against a 1280x800 viewport, and the
+# menu's UI-scale option scales the whole CanvasLayer about its origin — so a
+# panel at x=1050 lands at 1050*s, not at (screen edge - width). Below 1.0 the
+# right and bottom panels floated inward and left a dead band along two edges;
+# the layout only ever looked right at exactly 1.0. Re-place each edge group
+# inside the logical viewport the scale leaves behind (DESIGN_VP / s) so it
+# stays glued to its own edge at any scale. (Scales above 1.0 shrink the logical
+# viewport below the design size, which this fixed-size layout cannot fit — the
+# menu caps the option at 1.0 for that reason.)
+func _layout_hud() -> void:
+	for n in HUD_RIGHT:
+		var home := $UI.get_node_or_null(n) as Control
+		if home != null:
+			_rail_home[n] = home.position.y
+	var s: float = maxf(0.01, GameConfig.ui_scale)
+	if is_equal_approx(s, 1.0):
+		return
+	var shift: Vector2 = DESIGN_VP / s - DESIGN_VP
+	for n in HUD_RIGHT:
+		var c := $UI.get_node_or_null(n) as Control
+		if c != null:
+			c.position.x += shift.x
+	for n in HUD_BOTTOM:
+		var c2 := $UI.get_node_or_null(n) as Control
+		if c2 != null:
+			c2.position.y += shift.y
 
 
 # Footsteps: each walker sampled this frame drops a small fading track mark,
@@ -331,6 +395,21 @@ func _make_wrap_clones() -> void:
 
 # Give every HUD panel the shared instrument theme, and make the top-left
 # readout legible over any terrain with a dark outline.
+# Bail out of a scenario that could not be opened without leaving a half-built
+# scene behind. _ready() used to just `return` here, which skipped the theme and
+# every layer setup: the viewer came up as unstyled stock-Godot controls over an
+# empty world with no hint of what went wrong. Show the reason on the HUD, and
+# keep the theme so the Menu/Restart buttons still look like the rest of the app.
+func _fail_to_load(reason: String) -> void:
+	$UI.transform = Transform2D(0.0, Vector2.ONE * GameConfig.ui_scale, 0.0, Vector2.ZERO)
+	_apply_ui_theme()
+	hud.text = "⚠ " + reason
+	hud.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45))
+	for n in [$UI/Minimap, $UI/CodexPanel, $UI/LegendPanel, $UI/PopulationPanel]:
+		(n as CanvasItem).visible = false
+	set_process(false)
+
+
 func _apply_ui_theme() -> void:
 	var theme := UiTheme.build()
 	for child in $UI.get_children():
@@ -355,6 +434,7 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
+	_layout_rail()
 	if not paused:
 		sim.step_n(ticks_per_frame)
 	# Fetch this tick's segments once: the trail pass draws them and the body
@@ -665,24 +745,21 @@ func _body_colors(n: int) -> PackedColorArray:
 			var out2 := PackedColorArray()
 			out2.resize(n)
 			for i in n:
-				out2[i] = Color(0.3, 0.9, 0.4).lerp(Color(1.0, 0.3, 0.3), clampf(diet[i], 0.0, 1.0))
+				out2[i] = Palette.ramp(Palette.RAMP_DIET, diet[i])
 			return out2
 		overlay.BODY_ENERGY:
 			var en: PackedFloat32Array = sim.alive_energy()
 			var out3 := PackedColorArray()
 			out3.resize(n)
 			for i in n:
-				var t := clampf(en[i] / 50.0, 0.0, 1.0)
-				out3[i] = Color(0.2, 0.3, 0.8).lerp(Color(1.0, 0.9, 0.3), t)
+				out3[i] = Palette.ramp(Palette.RAMP_ENERGY, en[i] / 50.0)
 			return out3
 		overlay.BODY_AFFECT:
 			var ar: PackedFloat32Array = sim.alive_arousal()
 			var out5 := PackedColorArray()
 			out5.resize(n)
 			for i in n:
-				out5[i] = Color(0.55, 0.6, 0.7).lerp(
-					Color(1.0, 0.35, 0.25), clampf(ar[i], 0.0, 1.0)
-				)
+				out5[i] = Palette.ramp(Palette.RAMP_AROUSAL, ar[i])
 			return out5
 		_:
 			# Species mode: Primate atlases carry their own coat/skin colours, so
@@ -739,7 +816,10 @@ func _refresh_carcasses() -> void:
 		var pos: Vector2 = d["pos"]
 		var f: float = clampf(float(d["flesh"]) / 20.0 * 4.0, 3.0, 7.0)
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(f, f), 0.0, pos))
-		mm.set_instance_color(i, Color(0.77, 0.80, 0.86, 0.55))
+		# Bone, not the old cold near-white: at 0.55 alpha a pale blue-grey disc
+		# was the brightest thing on a green field, so every carcass pulled the
+		# eye like a UI marker. Warm and dim reads as remains on the ground.
+		mm.set_instance_color(i, Color(0.78, 0.74, 0.63, 0.42))
 
 
 func _refresh_flashes() -> int:
@@ -760,6 +840,10 @@ func _refresh_flashes() -> int:
 # ranged (Spines) volleys read as volleys; trade routes (trader→partner) are
 # thin, dim, and long-lived so recurring swaps along species borders
 # accumulate into visible lanes. Both tint to the initiator's genome hue.
+# Streaks/flashes draw above everything (they are events in the air); the trade
+# lanes draw at ground level, under bodies and huts (z=-2 in the scene) — over
+# a busy market they used to pile up into bright coloured scribbles across the
+# village roofs instead of reading as paths worn between settlements.
 const STREAK_TTL: int = 8
 const TRADE_TTL: int = 24
 var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]

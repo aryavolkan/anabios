@@ -7,6 +7,16 @@ var _img: Image
 var _tex: ImageTexture
 var _res: int = 0
 
+# A biome-only copy of the world, for the minimap. `_tex` carries whatever the
+# [G] ground selection is showing, and the data overlays (pheromone, markets,
+# env-optimum) are near-black over most of the map — which turned the minimap
+# into a black square. This one always holds the terrain, refreshed on a slow
+# cadence because nothing reads it at full-screen size.
+var _mini_img: Image
+var _mini_tex: ImageTexture
+const MINI_REDRAW_EVERY := 10  # in units of _redraw_interval, not frames
+var _mini_frame: int = 0
+
 const REDRAW_EVERY := 6
 var _frame: int = 0
 var _last_mode: int = -999  # last (channel, or -1 biome, or -2 optimum) drawn
@@ -66,6 +76,9 @@ func _setup(res: int) -> void:
 	_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
 	_tex = ImageTexture.create_from_image(_img)
 	texture = _tex
+	_mini_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
+	_mini_tex = ImageTexture.create_from_image(_mini_img)
+	_mini_frame = 0
 	var world: float = sim.world_size()
 	scale = Vector2(world / _res, world / _res)
 	# Feed the world extent to the terrain shader so its water shimmer runs in
@@ -88,11 +101,18 @@ func _setup(res: int) -> void:
 	_last_mode = -999  # force an immediate redraw
 
 
-# The whole-world biome ImageTexture (res×res), shared with the minimap so it
-# reflects biome/biomass updates without a second rebuild. May be null before
-# the first _setup(); callers must guard.
+# The whole-world ground ImageTexture (res×res) as currently displayed — the
+# biome, or whichever data overlay [G] selected. May be null before the first
+# _setup(); callers must guard.
 func world_texture() -> ImageTexture:
 	return _tex
+
+
+# The whole-world *biome* ImageTexture, whatever the ground overlay is showing.
+# Identical to world_texture() in the default biome view (no second rebuild);
+# a separately-maintained copy while a data overlay is up.
+func minimap_texture() -> ImageTexture:
+	return _tex if _last_mode == -1 else _mini_tex
 
 
 func _process(_delta: float) -> void:
@@ -117,6 +137,17 @@ func _process(_delta: float) -> void:
 	# overlays (pheromone/optimum/market/succession) pass through faithfully.
 	if _terrain_mat != null:
 		_terrain_mat.set_shader_parameter("biome_mode", 1.0 if mode == -1 else 0.0)
+	# While a data overlay owns the ground texture, keep the minimap's biome copy
+	# current on its own (much slower) cadence — the minimap is 200px wide and
+	# the terrain creeps. `== 1` refreshes on the first frame after the switch so
+	# the copy is never stale-empty. In the biome view the minimap shares `_tex`
+	# and this does nothing.
+	if mode == -1:
+		_mini_frame = 0
+	else:
+		_mini_frame += 1
+		if _mini_frame % (_redraw_interval * MINI_REDRAW_EVERY) == 1:
+			_blit(sim.biome_colors(), _mini_img, _mini_tex)
 	# Throttle: rebuild every REDRAW_EVERY frames, but immediately when the ground
 	# selection changed (so [G]/overlay toggles feel instant).
 	_frame += 1
@@ -144,10 +175,14 @@ func _process(_delta: float) -> void:
 		colors = sim.pheromone_colors(mode)
 	else:
 		colors = sim.biome_colors()
-	if colors.size() != _res * _res:
-		return
+	_blit(colors, _img, _tex)
 
-	# Build an RGBA8 byte buffer in one pass (faster than per-pixel set_pixel).
+
+# Pack a res² colour grid into an RGBA8 byte buffer and push it to `tex` (one
+# pass; faster than per-pixel set_pixel). No-op on a size mismatch.
+func _blit(colors: PackedColorArray, img: Image, tex: ImageTexture) -> void:
+	if img == null or tex == null or colors.size() != _res * _res:
+		return
 	var bytes := PackedByteArray()
 	bytes.resize(_res * _res * 4)
 	for i in colors.size():
@@ -157,5 +192,5 @@ func _process(_delta: float) -> void:
 		bytes[o + 1] = int(clampf(col.g, 0.0, 1.0) * 255.0)
 		bytes[o + 2] = int(clampf(col.b, 0.0, 1.0) * 255.0)
 		bytes[o + 3] = int(clampf(col.a, 0.0, 1.0) * 255.0)
-	_img.set_data(_res, _res, false, Image.FORMAT_RGBA8, bytes)
-	_tex.update(_img)
+	img.set_data(_res, _res, false, Image.FORMAT_RGBA8, bytes)
+	tex.update(img)

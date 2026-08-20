@@ -297,6 +297,22 @@ jobs:
             fi
           done
           exit $rc
+      # Sprite-module unit tests. These SceneTree harnesses already existed but
+      # nothing ran them, so a bad edit to the block-art tables (building/goods/
+      # cart sprites, the mammal archetype registry) reached the viewer
+      # unchallenged. `dummy` driver: they only build Images, never render.
+      - name: sprite module tests
+        run: |
+          rc=0
+          for t in test_building_sprites test_mammal_sprites; do
+            echo "== $t =="
+            if ! godot --headless --rendering-driver dummy --path game \
+                 -s "res://scripts/$t.gd"; then
+              echo "::error::$t failed"
+              rc=1
+            fi
+          done
+          exit $rc
       # GDScript lint/format gate (gdtoolkit — the clippy/rustfmt analog for
       # GDScript). `gdformat --check` enforces formatting/width; `gdlint`
       # enforces the substantive rules (two stylistic rules are disabled in

@@ -156,7 +156,7 @@ z_index = 4
 
 [node name="TradeRoutes" type="MultiMeshInstance2D" parent="."]
 multimesh = SubResource("MM_trade")
-z_index = 3
+z_index = -2
 
 [node name="ModuleLayers" type="Node2D" parent="."]
 
@@ -265,7 +265,7 @@ script = ExtResource("10_pop")
 offset_left = 1050.0
 offset_top = 256.0
 offset_right = 1270.0
-offset_bottom = 466.0
+offset_bottom = 260.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/PopulationPanel"]
 
@@ -275,7 +275,7 @@ visible = false
 offset_left = 1050.0
 offset_top = 476.0
 offset_right = 1270.0
-offset_bottom = 666.0
+offset_bottom = 480.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/DitPanel"]
 
@@ -285,7 +285,7 @@ visible = false
 offset_left = 1050.0
 offset_top = 476.0
 offset_right = 1270.0
-offset_bottom = 666.0
+offset_bottom = 480.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/TechPanel"]
 
@@ -315,6 +315,7 @@ offset_left = 400.0
 offset_top = 560.0
 offset_right = 1030.0
 offset_bottom = 790.0
+grow_vertical = 0
 
 [node name="VBox" type="VBoxContainer" parent="UI/CodexPanel"]
 

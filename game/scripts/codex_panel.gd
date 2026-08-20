@@ -126,6 +126,13 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.5, 0.55, 0.75),  # 58 MassGrief        — mourning slate
 ]
 const MAX_RECENT: int = 30
+# Chapters listed in the running tally. A long run fires 20+ distinct event
+# types; wrapping them all grew the panel four lines taller and pushed the event
+# list off the bottom of the screen. Show the busiest few and count the rest.
+const MAX_COUNT_CHIPS: int = 10
+# Non-breaking space between a chapter and its tally: word-wrapping the tally
+# line otherwise split chips down the middle ("TraitFixed:" / "4 Market: 31").
+const NBSP: String = " "
 
 var _counts: Array[int] = []
 var _recent: Array[Dictionary] = []
@@ -186,10 +193,25 @@ func _process(_delta: float) -> void:
 func _render() -> void:
 	# Show only event types that have actually occurred — most of the 23 are
 	# zero, and listing them all overflows the panel with noise.
-	var parts: PackedStringArray = []
+	var fired: Array[int] = []
 	for i in CHAPTER_NAMES.size():
 		if _counts[i] > 0:
-			parts.append("%s: %d" % [CHAPTER_NAMES[i], _counts[i]])
+			fired.append(i)
+	# Busiest chapters first for the *selection*, then re-sorted by type id for
+	# the *display*: which chapters make the cut changes rarely, and inside the
+	# cut the order never moves, so the tally does not reshuffle every event.
+	var shown: Array[int] = fired.duplicate()
+	if shown.size() > MAX_COUNT_CHIPS:
+		shown.sort_custom(
+			func(a, b): return _counts[a] > _counts[b] if _counts[a] != _counts[b] else a < b
+		)
+		shown = shown.slice(0, MAX_COUNT_CHIPS)
+		shown.sort()
+	var parts: PackedStringArray = []
+	for i in shown:
+		parts.append("%s:%s%d" % [CHAPTER_NAMES[i], NBSP, _counts[i]])
+	if fired.size() > shown.size():
+		parts.append("+%d more" % (fired.size() - shown.size()))
 	counts_label.text = "  ".join(parts) if not parts.is_empty() else "codex"
 
 	for child in recent_list.get_children():

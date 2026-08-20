@@ -3,9 +3,13 @@ extends PanelContainer
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 
-# Cap the module names listed so a module-heavy agent doesn't grow the panel
-# past its slot into the species panel below it.
+# Caps on the name lists this panel prints. The rail below stacks live now, so
+# a tall inspector no longer collides with the species table — but an agent
+# holding the whole tech tree would still print a ten-name line that wraps to
+# five, burying the vital stats above it. Name a few and count the rest.
 const MAX_MODULE_NAMES: int = 5
+const MAX_INVENTION_NAMES: int = 4
+const MAX_GATED_NAMES: int = 3
 
 var pinned_id: int = -1
 
@@ -19,6 +23,8 @@ var _avatar: TextureRect
 var _hue: ColorRect
 var _ident: Label
 var _ape_tex: Array = []
+# archetype -> portrait texture, built on first use (each bakes a 16x16 image).
+var _quad_tex: Dictionary = {}
 
 
 func _ready() -> void:
@@ -90,29 +96,24 @@ func _process(_delta: float) -> void:
 	if arch == MammalSprites.PRIMATE:
 		var ape: int = MammalSprites.primate_skin_for(sp)
 		_avatar.texture = _ape_tex[ape]
+		_avatar.modulate = Color.WHITE  # ape art carries its own colours
 		_ident.text = (
 			"%s\nsp %d · lin %d · id %d"
 			% [ApeSprites.NAMES[ape], sp, info["lineage_id"], pinned_id]
 		)
 	else:
-		# Quadruped archetypes: name by archetype. A per-archetype inspector
-		# portrait is out of scope; reuse a neutral placeholder avatar.
-		_avatar.texture = _ape_tex[0]
+		# Quadruped archetypes: the archetype's own rig, tinted with the same
+		# per-species coat hue the field figure wears, so the portrait matches
+		# the animal you clicked on.
+		if not _quad_tex.has(arch):
+			_quad_tex[arch] = MammalSprites.portrait(arch)
+		_avatar.texture = _quad_tex[arch]
+		_avatar.modulate = MammalSprites.coat_hue(arch, sp)
 		_ident.text = (
 			"%s\nsp %d · lin %d · id %d"
 			% [MammalSprites.NAMES[arch], sp, info["lineage_id"], pinned_id]
 		)
-	# Cap the module list so a module-heavy agent's wrapped names don't grow the
-	# panel down into the species panel below (the total count is on the line
-	# above). The full count is "module_count".
-	var mods: Array = info["module_names"]
-	var mod_str: String
-	if mods.size() <= MAX_MODULE_NAMES:
-		mod_str = ", ".join(mods)
-	else:
-		mod_str = (
-			", ".join(mods.slice(0, MAX_MODULE_NAMES)) + " +%d" % (mods.size() - MAX_MODULE_NAMES)
-		)
+	var mod_str: String = _capped_join(info["module_names"], MAX_MODULE_NAMES)
 	var lines: PackedStringArray = [
 		"energy %.1f   age %d" % [info["energy"], info["age"]],
 		"program %d   modules %d" % [info["program_len"], info["module_count"]],
@@ -136,9 +137,18 @@ func _process(_delta: float) -> void:
 		lines.append("livestock of agent %d" % owner if owner >= 0 else "wild (not livestock)")
 	var held: Array = info.get("inventions", [])
 	if not held.is_empty():
-		lines.append("tech era %d: %s" % [int(info["tech_era"]), ", ".join(held)])
+		lines.append(
+			"tech era %d: %s" % [int(info["tech_era"]), _capped_join(held, MAX_INVENTION_NAMES)]
+		)
 	if info.get("gene_requirements", false):
 		var gated: Array = info.get("gated_inventions", [])
 		if not gated.is_empty():
-			lines.append("gene-gated: %s" % ", ".join(gated))
+			lines.append("gene-gated: %s" % _capped_join(gated, MAX_GATED_NAMES))
 	label.text = "\n".join(lines)
+
+
+# "a, b, c +4" — the first `cap` names, then a count of what was left out.
+func _capped_join(names: Array, cap: int) -> String:
+	if names.size() <= cap:
+		return ", ".join(names)
+	return ", ".join(names.slice(0, cap)) + " +%d" % (names.size() - cap)

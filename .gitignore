@@ -44,3 +44,4 @@ trace-*.json
 
 # Godot resource UID caches (regenerated on import)
 *.gd.uid
+*.gdshader.uid

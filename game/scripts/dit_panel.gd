@@ -5,9 +5,14 @@ const REFRESH_EVERY := 6
 # Row cap (mirrors population_panel): keep the panel inside its fixed slot so a
 # long tail of singleton species can't grow it and spill onto neighbours.
 const MAX_ROWS := 6
+# Tighter cap while the tech table is also up: the two stack in one rail slot
+# (main.gd _layout_rail) and two full-height tables do not fit between the
+# species panel and the bottom of the screen.
+const SHARED_MAX_ROWS := 4
 
 @onready var sim = get_node("/root/Main/Simulation")
 @onready var list: VBoxContainer = $VBox
+@onready var _tech: Control = get_parent().get_node_or_null("TechPanel")
 var _frame: int = 0
 
 
@@ -24,7 +29,8 @@ func _process(_delta: float) -> void:
 	stats.sort_custom(
 		func(a, b): return float(a["mean_technique_match"]) > float(b["mean_technique_match"])
 	)
-	var shown: int = min(stats.size(), MAX_ROWS)
+	var cap: int = SHARED_MAX_ROWS if _tech != null and _tech.visible else MAX_ROWS
+	var shown: int = min(stats.size(), cap)
 	var overflow: int = stats.size() - shown
 	_sync_label_count(shown + 1 + (1 if overflow > 0 else 0))  # +1 header row
 	var children: Array = list.get_children()
@@ -46,6 +52,10 @@ func _sync_label_count(want: int) -> void:
 	while have < want:
 		var lbl := Label.new()
 		lbl.add_theme_font_size_override("font_size", 12)
+		# Rail panels are a fixed 220px slot and Labels do not clip by default —
+		# without this a long row draws straight over its neighbours (see the tech
+		# table, where the invention list ran off the edge of the screen).
+		lbl.clip_text = true
 		list.add_child(lbl)
 		have += 1
 	while have > want:

@@ -44,7 +44,10 @@ func _ready() -> void:
 	visible = false
 	_font = ThemeDB.fallback_font
 	position = Vector2(392, 20)
-	size = Vector2(600, 660)
+	# Right edge at 1035, matching the co-evolution panel: at 600 wide it stopped
+	# 38px short of the codex panel behind it, leaving a sliver of event buttons
+	# poking out along its edge like a torn seam.
+	size = Vector2(643, 660)
 	_slot_names = sim.genome_slot_catalog()
 	_channel_names = sim.meme_channel_catalog()
 	var inv_cat: Array = sim.invention_catalog()
