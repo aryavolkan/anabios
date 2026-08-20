@@ -138,6 +138,7 @@ pub fn reproduce_all(world: &mut World) {
             &mut world.rng,
             world.war_enabled,
             world.settlement_enabled,
+            world.anthro_race_enabled,
         );
 
         let lineage = world.next_lineage();

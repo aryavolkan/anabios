@@ -240,12 +240,18 @@ pub enum EventType {
     /// mean PANIC (separation distress) in the aftermath (`value` = mean
     /// PANIC; loc = species centroid).
     MassGrief = 58,
+    /// A prey lineage's defense index (armor + speed + Vigilance) co-rose
+    /// with its culture-lineage predator's power index (tech era + weapon
+    /// damage) over `HUNTED_WINDOW` — the anthropogenic arms race made
+    /// visible. `value` = prey defense rise; species = prey lineage's lowest
+    /// active species id; loc = prey centroid.
+    HuntedAdaptation = 59,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::MassGrief as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::HuntedAdaptation as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -313,6 +319,7 @@ mod affect_event_tests {
         assert_eq!(EventType::FeedingFrenzy as u8, 56);
         assert_eq!(EventType::TerritorialRage as u8, 57);
         assert_eq!(EventType::MassGrief as u8, 58);
-        assert_eq!(EVENT_TYPE_COUNT, EventType::MassGrief as usize + 1);
+        assert_eq!(EventType::HuntedAdaptation as u8, 59);
+        assert_eq!(EVENT_TYPE_COUNT, EventType::HuntedAdaptation as usize + 1);
     }
 }

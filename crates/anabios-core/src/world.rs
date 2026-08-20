@@ -212,6 +212,21 @@ pub struct World {
     /// byte-identical bilateral-only trade.
     #[serde(default)]
     pub unilateral_trade: bool,
+    /// When true, the anthropogenic arms race is active: scenario-tagged
+    /// `culture_bearer` founder lineages are perceptible to wild agents as
+    /// tool-bearing threats (`SensorRegister::culture_threat`,
+    /// `Node::SenseCultureThreat`, the `Vigilance` gene's FEAR gain), and the
+    /// `HuntedAdaptation` codex detector pairs their power rise against prey
+    /// defensive-trait rises. Off by default — zero state written and
+    /// byte-identical with the flag off.
+    #[serde(default)]
+    pub anthro_race_enabled: bool,
+    /// Species ids of founders tagged `culture_bearer` in the scenario
+    /// (anthropogenic arms race). Membership tests walk to the lineage root,
+    /// so speciation splinters of a tagged founder stay tagged. Empty unless
+    /// `anthro_race_enabled`. Serialized.
+    #[serde(default)]
+    pub culture_roots: std::collections::BTreeSet<u32>,
     /// Per-cell market density field (E8). Sized to the biome grid when
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
@@ -339,6 +354,15 @@ pub struct World {
     /// state hashes; it resets to zero on snapshot load.
     #[serde(skip)]
     pub total_trades: u64,
+    /// Per-species-id lookup mask for the culture-lineage tag (anthropogenic
+    /// arms race), refreshed each tick by `refresh_culture_mask` before the
+    /// sense stage reads it. Empty when `anthro_race_enabled` is off or
+    /// nothing is tagged — `sense_one`'s `.get()` then yields `None`, so the
+    /// threat register stays exactly 0.0. Scratch: derived from
+    /// `culture_roots` + `species_parents`, so it is rebuilt (not trusted)
+    /// after a snapshot load.
+    #[serde(skip)]
+    pub culture_mask: Vec<bool>,
 }
 
 /// Serde default for `World::max_population` (old snapshots lack the field).
@@ -407,6 +431,8 @@ impl World {
             practices_enabled: true,
             payoff_biased_learning: false,
             unilateral_trade: false,
+            anthro_race_enabled: false,
+            culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
@@ -441,6 +467,7 @@ impl World {
             still_ticks: Vec::new(),
             prev_desired_direction: Vec::new(),
             total_trades: 0,
+            culture_mask: Vec::new(),
         }
     }
 
@@ -540,6 +567,25 @@ impl World {
         self.species_member_counts.push(0);
         self.species_parents.push(parent);
         id
+    }
+
+    /// Rebuild the per-species-id culture-lineage mask (anthropogenic arms
+    /// race). Called once per tick before `sense_all`. Empty when the flag
+    /// is off or no founder is tagged, so the threat sense reads exactly 0.0
+    /// and the flag-off world stays byte-identical.
+    pub fn refresh_culture_mask(&mut self) {
+        if !self.anthro_race_enabled || self.culture_roots.is_empty() {
+            self.culture_mask.clear();
+            return;
+        }
+        let n = self.next_species_id as usize;
+        let mut mask = vec![false; n];
+        for sid in 0..self.next_species_id {
+            if self.culture_roots.contains(&crate::codex::war::lineage_root(self, sid)) {
+                mask[sid as usize] = true;
+            }
+        }
+        self.culture_mask = mask;
     }
 
     /// Increment the species member count, growing the table if needed.

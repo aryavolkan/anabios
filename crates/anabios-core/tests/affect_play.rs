@@ -35,8 +35,11 @@ fn affect_play_scenario_is_self_consistent() {
 // so all ticks move.
 // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
 // World.payoff_biased_learning layout growth only (off here).
+// Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
+// World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
+// layout growth only (off here).
 const PLAY_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xd73de3821381a5f1), (100, 0x7bad7817689e7e10), (200, 0xe114064e27731ff9)];
+    &[(0, 0xd8a4de59de20074d), (100, 0x974e75172a768610), (200, 0x07cf4ecda2d1c721)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

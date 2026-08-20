@@ -1,0 +1,64 @@
+name = "anthro-race"
+seed = 0
+inventions_enabled = true
+affect_enabled = true
+war_enabled = true
+anthro_race_enabled = true
+# Keep the world small enough that the hunting interaction — not Malthusian
+# collapse — dominates, mirroring the domestication demo.
+max_population = 400
+
+# Anthropogenic arms race: a culture-tagged innovator lineage (seeded with
+# Stone Tools; it climbs the invention tree on its own) hunts two wild grazer
+# herds while a wild mammal pursuer hunts everything. The herds can perceive
+# the tool-bearers specifically (culture_threat sensor + evolvable
+# SenseCultureThreat program node) and their Vigilance gene drifts under
+# selection. Watch the codex for WarOrRaid (hunter vs herd), and —
+# on long runs — HuntedAdaptation: a herd's armor/speed/Vigilance co-rising
+# with the culture lineage's tech era and weapon damage.
+
+# The culture bearers ("humans"): armed innovator apes (Weapon + Communicator
+# + invention-eligible omnivore body plan), tagged so their speciation
+# splinters stay tagged.
+[[agents]]
+count = 24
+archetype = "ape_hunter"
+culture_bearer = true
+starting_inventions = ["stone_tools"]
+placement = { kind = "cluster", center_x = 400.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Prey herd A: plain grazers east of the culture, average vigilance.
+[[agents]]
+count = 40
+archetype = "herd"
+placement = { kind = "cluster", center_x = 620.0, center_y = 512.0, radius = 90.0 }
+[agents.traits]
+size = 0.5
+basal_metabolism = 0.5
+lifespan_bias = 1.0
+vigilance = 0.5
+
+# Prey herd B: a second, initially fearless herd further south — contrast
+# population for vigilance drift.
+[[agents]]
+count = 40
+archetype = "herd"
+placement = { kind = "cluster", center_x = 620.0, center_y = 300.0, radius = 90.0 }
+[agents.traits]
+size = 0.45
+basal_metabolism = 0.5
+lifespan_bias = 1.0
+vigilance = 0.2
+
+# A wild predator: mammal pursuers ranging the middle of the map. They hunt
+# the herds AND the culture bearers — the counter-pressure side of the race.
+[[agents]]
+count = 12
+archetype = "mammal_pursuer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 400.0, radius = 120.0 }
+[agents.traits]
+lifespan_bias = 1.0

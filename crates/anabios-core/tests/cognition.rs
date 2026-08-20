@@ -117,7 +117,10 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // traditionalist) reclassed omnivore (ape) so it can carry the tech tree;
     // the diet change shifts feeding ecology and the invention-race trajectory.
     // Regenerated on the gated tree.
-    &[(0, 0xcc115c0df11767ec), (100, 0xc6e6ed39a5d06c3f), (300, 0x3f688e11d9cbaeec)];
+    // Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
+    // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
+    // layout growth only (off here).
+    &[(0, 0xb453ed033b368152), (100, 0x794f5e152d0ce465), (300, 0xdc5d9d69576eebd8)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

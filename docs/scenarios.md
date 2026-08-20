@@ -31,6 +31,7 @@ the curated root set. Run any of these with
 | `knowledge-ratchet.toml` | E14 knowledge accumulation: Writing-backed tech memory survives bottlenecks | inventions, knowledge |
 | `dimorphism.toml` | Sexual selection via female mate choice | sexual_dimorphism |
 | `domestication.toml` | Taming, milk herds, born-tamed livestock | inventions, domestication |
+| `anthro-race.toml` | Anthropogenic arms race: tagged culture-bearers hunt herds that evolve aimed vigilance (`HuntedAdaptation`) | inventions, affect, war, anthro_race |
 | `biome-adaptation.toml` | Terrain-affinity adaptation to biomes | biome_adaptation |
 | `foraging-selection.toml` | Nutrient/soil gradients driving foraging traits | nutrient_variation, soil_fertility |
 | `disturbance.toml` | Disasters + succession in a living biome | disasters, living_biome |

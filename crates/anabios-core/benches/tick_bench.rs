@@ -112,6 +112,7 @@ fn bench_stages(c: &mut Criterion) {
                     &sw.pheromones,
                     &sw.spatial,
                     &sw.codex.hostility,
+                    &sw.culture_mask,
                     &mut sensors,
                     sw.world_size,
                     sw.gene_tech_coupling,

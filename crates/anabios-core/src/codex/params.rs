@@ -35,6 +35,16 @@ pub const ARMS_WINDOW: usize = 20;
 /// Minimum rise (window back − front) in a trait mean to count as "trending up".
 pub const ARMS_MIN_DELTA: f32 = 0.5;
 
+/// Cumulative cross-kills a culture/prey root pair must have logged (war
+/// substrate) before it counts as a hunter/hunted pair at all.
+pub const HUNTED_MIN_KILLS: u32 = 3;
+/// Minimum rise from the pairing baseline in ANY ONE prey defense channel
+/// (normalized armor, mean speed, or mean Vigilance) to credit a response.
+pub const HUNTED_MIN_PREY_DELTA: f32 = 0.05;
+/// Minimum rise from the pairing baseline in the culture lineage's power
+/// index (tech era + normalized weapon damage).
+pub const HUNTED_MIN_CULTURE_DELTA: f32 = 0.05;
+
 /// Ticks a species must stay clustered to count as a formed territory.
 pub const TERRITORY_WINDOW: usize = 60;
 /// Max RMS spread (world units) for a species to count as "clustered".

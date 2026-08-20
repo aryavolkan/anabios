@@ -50,6 +50,7 @@ pub fn decide(
             let (_, dist) = crate::settlement::anchor_sense_parts(anchor, pos, world_size);
             dist
         },
+        culture_threat: sensor.culture_threat,
     };
     let mut action = evaluate(program, ctx, eval_stack);
     action.target_id = if sensor.nearest_neighbor_id == NO_NEIGHBOR_ID {

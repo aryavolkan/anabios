@@ -337,6 +337,7 @@ fn metalworking_raises_combat_damage() {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut w.sensors,
             w.world_size,
             false,
@@ -1172,7 +1173,10 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // traditionalist) reclassed omnivore (ape) so it can carry the tech tree;
     // the diet change shifts feeding ecology and the invention-race trajectory.
     // Regenerated on the gated tree.
-    &[(0, 0xdc99e8e561833697), (100, 0x33597800611ba93f), (300, 0x2f4e33a6d3180eb3)];
+    // Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
+    // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
+    // layout growth only (off here).
+    &[(0, 0x29e44a7098b8f857), (100, 0x3da97b48372b7391), (300, 0x4815c43516578769)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
