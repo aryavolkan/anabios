@@ -73,6 +73,15 @@ pub struct SensorRegister {
     /// `#[serde(skip)]` scratch — no snapshot impact.
     #[serde(skip)]
     pub hostility: f32,
+    /// Tool-bearing culture-lineage threat of the nearest OTHER-species
+    /// neighbor (anthropogenic arms race): `weapon damage / DAMAGE_MAX` in
+    /// `[0,1]` when that neighbor belongs to a `culture_bearer` lineage and
+    /// carries a weapon; exactly 0.0 otherwise — including whenever
+    /// `anthro_race_enabled` is off (the culture mask is empty then), so
+    /// flag-off worlds are byte-identical.
+    /// `#[serde(skip)]` scratch — no snapshot impact.
+    #[serde(skip)]
+    pub culture_threat: f32,
 }
 
 impl Default for SensorRegister {
@@ -97,6 +106,7 @@ impl Default for SensorRegister {
             pheromone: [0.0; crate::program::PHEROMONE_CHANNELS],
             nearest_kinship: 0.0,
             hostility: 0.0,
+            culture_threat: 0.0,
         }
     }
 }
@@ -133,6 +143,7 @@ pub fn sense_all(
     pheromones: &crate::pheromone::PheromoneField,
     spatial: &UniformSpatialHash,
     hostility: &std::collections::BTreeMap<(u32, u32), crate::codex::HostilityRecord>,
+    culture_mask: &[bool],
     registers: &mut [SensorRegister],
     world_size: f32,
     gene_tech_coupling: bool,
@@ -161,6 +172,7 @@ pub fn sense_all(
             pheromones,
             spatial,
             hostility,
+            culture_mask,
             max_radius,
             world_size,
             gene_tech_coupling,
@@ -262,6 +274,7 @@ fn sense_one(
     pheromones: &crate::pheromone::PheromoneField,
     spatial: &UniformSpatialHash,
     hostility: &std::collections::BTreeMap<(u32, u32), crate::codex::HostilityRecord>,
+    culture_mask: &[bool],
     max_radius: f32,
     world_size: f32,
     gene_tech_coupling: bool,
@@ -370,6 +383,7 @@ fn sense_one(
         pheromone,
         nearest_kinship: 0.0,
         hostility: 0.0,
+        culture_threat: 0.0,
     };
 
     // War hostility of the nearest OTHER-species neighbor's species.
@@ -379,6 +393,23 @@ fn sense_one(
             self_species,
             agents.species_id[nn.other_id as usize],
         )
+    } else {
+        0.0
+    };
+    // Anthropogenic arms race: is the nearest OTHER-species neighbor a
+    // tool-bearing culture-lineage agent? Threat scales with its weapon
+    // damage. The empty mask (flag off / nothing tagged) yields 0.0 for
+    // every agent, keeping flag-off worlds byte-identical.
+    reg.culture_threat = if nn.other_id != NO_NEIGHBOR_ID {
+        let o = nn.other_id as usize;
+        let tagged = culture_mask.get(agents.species_id[o] as usize).copied().unwrap_or(false);
+        if tagged {
+            crate::module::effective_weapon(&agents.modules[o])
+                .map(|w| (w.damage / crate::module::DAMAGE_MAX).clamp(0.0, 1.0))
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        }
     } else {
         0.0
     };
@@ -480,6 +511,7 @@ mod tests {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut regs,
             w.world_size,
             false,
@@ -502,6 +534,7 @@ mod tests {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut regs,
             w.world_size,
             false,
@@ -526,6 +559,7 @@ mod tests {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut regs,
             w.world_size,
             false,
@@ -550,6 +584,7 @@ mod tests {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut regs,
             w.world_size,
             false,
@@ -564,6 +599,7 @@ mod tests {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut regs,
             w.world_size,
             false,
@@ -588,6 +624,7 @@ mod tests {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut regs,
             w.world_size,
             false,
@@ -616,6 +653,7 @@ mod tests {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut regs,
             w.world_size,
             false,
@@ -650,6 +688,7 @@ mod tests {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut regs,
             w.world_size,
             false,
@@ -681,6 +720,7 @@ mod tests {
             &w.pheromones,
             &w.spatial,
             &w.codex.hostility,
+            &w.culture_mask,
             &mut regs,
             w.world_size,
             false,

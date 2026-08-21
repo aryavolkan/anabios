@@ -28,6 +28,17 @@ pub const SPECIES_STEP_INTERVAL: u64 = 200;
 /// or split-off.
 pub const SPECIATION_THRESHOLD: f32 = 0.6;
 
+/// Anthropogenic arms-race tag: is `sid` a member of a culture-bearing
+/// ("human") lineage — i.e. does its lineage root carry the scenario's
+/// `culture_bearer` tag? Speciation splinters inherit the tag through the
+/// same root walk the war substrate uses, so a tagged founder's descendants
+/// stay tagged without any per-species bookkeeping. False when no founder is
+/// tagged (flag off ⇒ `culture_roots` empty ⇒ always false).
+pub fn is_culture_lineage(world: &World, sid: u32) -> bool {
+    !world.culture_roots.is_empty()
+        && world.culture_roots.contains(&crate::codex::war::lineage_root(world, sid))
+}
+
 pub fn species_step(world: &mut World) {
     recompute_centroids(world);
 

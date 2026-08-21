@@ -240,12 +240,23 @@ pub enum EventType {
     /// mean PANIC (separation distress) in the aftermath (`value` = mean
     /// PANIC; loc = species centroid).
     MassGrief = 58,
+    /// A hunted prey lineage answered its culture-lineage predator's rise —
+    /// the anthropogenic arms race made visible. Both sides are measured
+    /// against the baseline latched when the pair first qualified: the
+    /// predator's power index (tech era + normalized weapon damage) rose
+    /// ≥ `HUNTED_MIN_CULTURE_DELTA`, and the STRONGEST SINGLE prey defense
+    /// channel — normalized armor, mean speed, or the Vigilance gene — rose
+    /// ≥ `HUNTED_MIN_PREY_DELTA`. Per-channel max, never a sum: a herd
+    /// answers on one channel, so summing lets a decline elsewhere mask it.
+    /// `value` = the largest per-channel prey rise; species = prey lineage's
+    /// lowest active species id; loc = prey centroid.
+    HuntedAdaptation = 59,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
 /// correct as variants are appended; the viewer asserts its parallel name/color
 /// arrays against this at boot to catch a forgotten GDScript-side update.
-pub const EVENT_TYPE_COUNT: usize = EventType::MassGrief as usize + 1;
+pub const EVENT_TYPE_COUNT: usize = EventType::HuntedAdaptation as usize + 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
@@ -313,6 +324,7 @@ mod affect_event_tests {
         assert_eq!(EventType::FeedingFrenzy as u8, 56);
         assert_eq!(EventType::TerritorialRage as u8, 57);
         assert_eq!(EventType::MassGrief as u8, 58);
-        assert_eq!(EVENT_TYPE_COUNT, EventType::MassGrief as usize + 1);
+        assert_eq!(EventType::HuntedAdaptation as u8, 59);
+        assert_eq!(EVENT_TYPE_COUNT, EventType::HuntedAdaptation as usize + 1);
     }
 }

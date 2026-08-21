@@ -49,6 +49,11 @@ pub const FEAR_RANGE: f32 = 200.0;
 pub const K_FEAR_THREAT: f32 = 1.0;
 /// Weight of the war-hostility term in the FEAR trigger.
 pub const K_FEAR_HOSTILITY: f32 = 0.8;
+/// Weight of the culture-threat term in the FEAR trigger (anthropogenic arms
+/// race): a tool-bearing `culture_bearer` neighbor is scarier than its bulk
+/// alone suggests. Passed as `culture_weight` only when
+/// `World::anthro_race_enabled`; 0.0 (term skipped, bit-identical) otherwise.
+pub const K_FEAR_CULTURE_THREAT: f32 = 1.2;
 /// Boldness gain on the FEAR response: fear is scaled by `(1 - K_FEAR_BOLDNESS *
 /// boldness())`, so bold (+1) feels ~0.7× and timid (−1) ~1.3× the raw threat;
 /// zero threat stays zero fear for every temperament.
@@ -178,7 +183,7 @@ pub fn affect_reproduction_factor(affect: &AffectState) -> f32 {
 /// Pure function of `world.sensors` (recomputed every tick before `develop_all`
 /// reads it) + genome ⇒ replay-safe, ZERO RNG. Returns `[0,1]`. `0.0` when there
 /// is no locatable other-species neighbor and no hostility.
-pub(crate) fn fear_trigger(sensors: &SensorRegister, genome: &Genome) -> f32 {
+pub(crate) fn fear_trigger(sensors: &SensorRegister, genome: &Genome, culture_weight: f32) -> f32 {
     let mut threat = 0.0f32;
     if sensors.nearest_other_id != crate::sense::NO_NEIGHBOR_ID {
         // Closer + bigger + more energetic other-species neighbor ⇒ scarier.
@@ -191,6 +196,12 @@ pub(crate) fn fear_trigger(sensors: &SensorRegister, genome: &Genome) -> f32 {
         threat += K_FEAR_THREAT * prox * (size + 0.5 * ener).min(1.0);
     }
     threat += K_FEAR_HOSTILITY * sensors.hostility;
+    // Anthropogenic arms race: tool-bearing culture-lineage neighbors add
+    // their own aimed threat term. Skipped entirely (bit-identical) when the
+    // flag is off and the caller passes weight 0.0.
+    if culture_weight > 0.0 {
+        threat += culture_weight * sensors.culture_threat;
+    }
     // Boldness modulates the RESPONSE to threat as a GAIN, not a baseline offset:
     // bold (+1) scales fear down (~0.7×), timid (−1) up (~1.3×) — but zero threat
     // ⇒ zero fear for every temperament (no phantom baseline). Signed [-1,+1].
@@ -296,6 +307,10 @@ pub fn develop_all(world: &mut World) {
     use rayon::prelude::*;
     let cap = world.agents.capacity();
     let sensors = &world.sensors;
+    // Anthropogenic arms race: the aimed culture-threat FEAR term and the
+    // Vigilance gene's gain on it. Both are exact-identity with the flag
+    // off (weight 0.0 skips the term; gain 1.0 multiplies out).
+    let anthro = world.anthro_race_enabled;
     let crate::agent::AgentBuffers {
         affect, affect_prev_crowding, energy, age, genome, alive, ..
     } = &mut world.agents;
@@ -317,7 +332,14 @@ pub fn develop_all(world: &mut World) {
             // FEAR (M-B): threat/survival drive from fresh sensors + Boldness. The
             // sensors buffer can be shorter than capacity on a growth tick; guard it.
             if i < sensors.len() {
-                let fear_in = fear_trigger(&sensors[i], &genome[i]);
+                let fear_in = if anthro {
+                    // Vigilance gene (slot 43): 2×v gain on the FEAR input —
+                    // neutral 0.5 ⇒ identity, 1.0 ⇒ hair-trigger, 0.0 ⇒ numb.
+                    fear_trigger(&sensors[i], &genome[i], K_FEAR_CULTURE_THREAT)
+                        * (2.0 * genome[i].get(crate::genome::GenomeSlot::Vigilance))
+                } else {
+                    fear_trigger(&sensors[i], &genome[i], 0.0)
+                };
                 a[FEAR] = (LAMBDA_FEAR * a[FEAR] + (1.0 - LAMBDA_FEAR) * fear_in).clamp(0.0, 1.0);
 
                 // M-C RAGE: derived frustration (hungry + blocked), gated by the
@@ -776,7 +798,7 @@ mod tests {
 
         // No neighbor ⇒ no fear.
         let mut s = SensorRegister::default();
-        assert_eq!(fear_trigger(&s, &Genome::neutral()), 0.0);
+        assert_eq!(fear_trigger(&s, &Genome::neutral(), 0.0), 0.0);
 
         // A close, larger other-species neighbor ⇒ moderate (UNSATURATED) fear, so the
         // boldness gain is demonstrable rather than hidden behind the 1.0 clamp.
@@ -787,7 +809,7 @@ mod tests {
         s.nearest_rel_size = 1.6; // size term = 1.6*0.5 = 0.8
         s.nearest_rel_energy = 1.0; // no energy bonus
         s.hostility = 0.0;
-        let neutral = fear_trigger(&s, &Genome::neutral()); // ~0.56, unsaturated
+        let neutral = fear_trigger(&s, &Genome::neutral(), 0.0); // ~0.56, unsaturated
         assert!(
             neutral > 0.4 && neutral < 1.0,
             "expected moderate unsaturated fear, got {neutral}"
@@ -796,7 +818,7 @@ mod tests {
         // A bold genome (Boldness = 1.0 ⇒ boldness() = +1.0) feels measurably LESS fear.
         let mut bold = Genome::neutral();
         bold.set(GenomeSlot::Boldness, 1.0);
-        let brave = fear_trigger(&s, &bold);
+        let brave = fear_trigger(&s, &bold, 0.0);
         assert!(brave < neutral - 0.1, "boldness must scale fear down: {brave} vs {neutral}");
 
         // Invariant: zero threat ⇒ zero fear for EVERY temperament, including timid
@@ -804,7 +826,7 @@ mod tests {
         let mut timid = Genome::neutral();
         timid.set(GenomeSlot::Boldness, 0.0);
         assert_eq!(
-            fear_trigger(&SensorRegister::default(), &timid),
+            fear_trigger(&SensorRegister::default(), &timid, 0.0),
             0.0,
             "no threat ⇒ no fear even for timid"
         );
@@ -812,7 +834,7 @@ mod tests {
         // A distant neighbor is barely threatening.
         let mut far = s;
         far.nearest_other_dist = FEAR_RANGE * 2.0;
-        assert!(fear_trigger(&far, &Genome::neutral()) < neutral);
+        assert!(fear_trigger(&far, &Genome::neutral(), 0.0) < neutral);
     }
 
     #[test]

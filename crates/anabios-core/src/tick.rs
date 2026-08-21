@@ -20,13 +20,16 @@ pub fn step(world: &mut World) {
     // Stage 1: rebuild the spatial hash from current positions.
     world.spatial.rebuild(&world.agents.position, |i| world.agents.is_alive(i as u32));
 
-    // Stage 2: sense.
+    // Stage 2: sense. The culture-lineage mask (anthropogenic arms race) is
+    // refreshed first — a no-op leaving an empty mask when the flag is off.
+    world.refresh_culture_mask();
     sense_all(
         &world.agents,
         &world.biome,
         &world.pheromones,
         &world.spatial,
         &world.codex.hostility,
+        &world.culture_mask,
         &mut world.sensors,
         world.world_size,
         world.gene_tech_coupling,

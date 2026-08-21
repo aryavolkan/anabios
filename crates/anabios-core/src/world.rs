@@ -212,6 +212,21 @@ pub struct World {
     /// byte-identical bilateral-only trade.
     #[serde(default)]
     pub unilateral_trade: bool,
+    /// When true, the anthropogenic arms race is active: scenario-tagged
+    /// `culture_bearer` founder lineages are perceptible to wild agents as
+    /// tool-bearing threats (`SensorRegister::culture_threat`,
+    /// `Node::SenseCultureThreat`, the `Vigilance` gene's FEAR gain), and the
+    /// `HuntedAdaptation` codex detector pairs their power rise against prey
+    /// defensive-trait rises. Off by default — zero state written and
+    /// byte-identical with the flag off.
+    #[serde(default)]
+    pub anthro_race_enabled: bool,
+    /// Species ids of founders tagged `culture_bearer` in the scenario
+    /// (anthropogenic arms race). Membership tests walk to the lineage root,
+    /// so speciation splinters of a tagged founder stay tagged. Empty unless
+    /// `anthro_race_enabled`. Serialized.
+    #[serde(default)]
+    pub culture_roots: std::collections::BTreeSet<u32>,
     /// Per-cell market density field (E8). Sized to the biome grid when
     /// `resources_enabled` at instantiate; empty (inert) otherwise.
     #[serde(default)]
@@ -339,6 +354,15 @@ pub struct World {
     /// state hashes; it resets to zero on snapshot load.
     #[serde(skip)]
     pub total_trades: u64,
+    /// Per-species-id lookup mask for the culture-lineage tag (anthropogenic
+    /// arms race), refreshed each tick by `refresh_culture_mask` before the
+    /// sense stage reads it. Empty when `anthro_race_enabled` is off or
+    /// nothing is tagged — `sense_one`'s `.get()` then yields `None`, so the
+    /// threat register stays exactly 0.0. Scratch: derived from
+    /// `culture_roots` + `species_parents`, so it is rebuilt (not trusted)
+    /// after a snapshot load.
+    #[serde(skip)]
+    pub culture_mask: Vec<bool>,
 }
 
 /// Serde default for `World::max_population` (old snapshots lack the field).
@@ -407,6 +431,8 @@ impl World {
             practices_enabled: true,
             payoff_biased_learning: false,
             unilateral_trade: false,
+            anthro_race_enabled: false,
+            culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
@@ -441,6 +467,7 @@ impl World {
             still_ticks: Vec::new(),
             prev_desired_direction: Vec::new(),
             total_trades: 0,
+            culture_mask: Vec::new(),
         }
     }
 
@@ -540,6 +567,38 @@ impl World {
         self.species_member_counts.push(0);
         self.species_parents.push(parent);
         id
+    }
+
+    /// Refresh the per-species-id culture-lineage mask (anthropogenic arms
+    /// race). Called once per tick before `sense_all`. Empty when the flag
+    /// is off or no founder is tagged, so the threat sense reads exactly 0.0
+    /// and the flag-off world stays byte-identical.
+    ///
+    /// Extends rather than rebuilds: `push_species` is the single species
+    /// growth path and only ever APPENDS a row (a parent pointer is never
+    /// rewritten), and `culture_roots` is filled at scenario instantiate
+    /// before the first tick — so every row already in the mask stays
+    /// correct, and only rows added since the last refresh need their
+    /// lineage root walked. Same mask as a full rebuild, at `O(new species)`
+    /// per tick instead of `O(species × lineage depth)` — the table reaches
+    /// ~1.1k species over a 20k-tick `anthro-race` run, though the walk is
+    /// cheap enough there that the win does not show in wall clock; the
+    /// point is that the cost stops growing with run length. A snapshot load
+    /// leaves the mask empty (`#[serde(skip)]`), so the next refresh
+    /// rebuilds it in full.
+    pub fn refresh_culture_mask(&mut self) {
+        if !self.anthro_race_enabled || self.culture_roots.is_empty() {
+            self.culture_mask.clear();
+            return;
+        }
+        debug_assert!(
+            self.culture_mask.len() <= self.next_species_id as usize,
+            "species rows are append-only; the mask can never outgrow the table",
+        );
+        for sid in self.culture_mask.len() as u32..self.next_species_id {
+            let tagged = crate::species::is_culture_lineage(self, sid);
+            self.culture_mask.push(tagged);
+        }
     }
 
     /// Increment the species member count, growing the table if needed.

@@ -116,6 +116,12 @@ pub enum Node {
     SenseAnchorDirY,
     /// Distance to the home anchor, clamped to 1e6 (E8).
     SenseAnchorDist,
+    /// Tool-bearing threat level of the nearest other-species neighbor when
+    /// it belongs to a `culture_bearer` lineage (anthropogenic arms race),
+    /// in `[0,1]`; 0.0 otherwise and whenever the flag is off. Joins the
+    /// `random_node` mutation pool only under `anthro_race_enabled`, after
+    /// the hostility/anchor extras, so baseline pools stay byte-identical.
+    SenseCultureThreat,
 }
 
 /// What an agent wants to do this tick, produced by the evaluator.
@@ -210,6 +216,7 @@ impl Program {
             | Node::SenseAnchorDirX
             | Node::SenseAnchorDirY
             | Node::SenseAnchorDist
+            | Node::SenseCultureThreat
             | Node::Const(_) => 0,
             Node::Add | Node::Sub | Node::Mul | Node::Min | Node::Max => 2,
             Node::Neg | Node::Tanh | Node::ThresholdGt(_) => 1,
@@ -297,6 +304,7 @@ impl Program {
             Node::SenseAnchorDirX => 44,
             Node::SenseAnchorDirY => 45,
             Node::SenseAnchorDist => 46,
+            Node::SenseCultureThreat => 47,
         }
     }
 }
@@ -326,6 +334,9 @@ pub struct EvalContext<'a> {
     /// Unit direction toward the home anchor + distance (E8).
     pub anchor_dir: glam::Vec2,
     pub anchor_dist: f32,
+    /// Tool-bearing culture-lineage threat of the nearest other-species
+    /// neighbor (anthropogenic arms race); 0.0 when none/untagged/flag off.
+    pub culture_threat: f32,
 }
 
 /// Evaluate `program` against `ctx`. Returns the populated action register.
@@ -371,6 +382,7 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
             Node::SenseAnchorDirX => scratch.push(ctx.anchor_dir.x),
             Node::SenseAnchorDirY => scratch.push(ctx.anchor_dir.y),
             Node::SenseAnchorDist => scratch.push(ctx.anchor_dist.min(1e6)),
+            Node::SenseCultureThreat => scratch.push(ctx.culture_threat),
             Node::SenseMeme(ch) => {
                 scratch.push(ctx.meme_sample[(ch as usize).min(MEME_CHANNELS - 1)])
             }
@@ -457,11 +469,22 @@ pub fn evaluate(program: &Program, ctx: EvalContext, scratch: &mut Vec<f32>) -> 
 /// Random node drawn from the full grammar. Used by structural mutation.
 /// `war_enabled` adds `SenseHostility` as a 21st option (E7) — baseline
 /// scenarios (flag off) draw from the original 20-option pool and stay
-/// byte-identical.
-pub fn random_node(rng: &mut Rng, war_enabled: bool, settlement_enabled: bool) -> Node {
+/// byte-identical. `settlement_enabled` adds the three anchor senses after
+/// it, and `anthro_race_enabled` adds `SenseCultureThreat` last — gated
+/// extras are always appended AFTER existing ones, so any flag-off subset
+/// keeps its pool size and draw stream byte-identical.
+pub fn random_node(
+    rng: &mut Rng,
+    war_enabled: bool,
+    settlement_enabled: bool,
+    anthro_race_enabled: bool,
+) -> Node {
     // Gated extras, in order: SenseHostility (war), then the three anchor
-    // senses (settlement). Baseline flag-off pool stays 20 (byte-identical).
-    let extras = war_enabled as usize + if settlement_enabled { 3 } else { 0 };
+    // senses (settlement), then SenseCultureThreat (anthro race). Baseline
+    // flag-off pool stays 20 (byte-identical).
+    let extras = war_enabled as usize
+        + if settlement_enabled { 3 } else { 0 }
+        + anthro_race_enabled as usize;
     let pool = 20 + extras;
     let roll = rng.index(pool);
     if roll >= 20 {
@@ -472,11 +495,14 @@ pub fn random_node(rng: &mut Rng, war_enabled: bool, settlement_enabled: bool) -
             }
             idx -= 1;
         }
-        return match idx {
-            0 => Node::SenseAnchorDirX,
-            1 => Node::SenseAnchorDirY,
-            _ => Node::SenseAnchorDist,
-        };
+        if settlement_enabled && idx < 3 {
+            return match idx {
+                0 => Node::SenseAnchorDirX,
+                1 => Node::SenseAnchorDirY,
+                _ => Node::SenseAnchorDist,
+            };
+        }
+        return Node::SenseCultureThreat;
     }
     match roll {
         0 => Node::SenseEnergy,
@@ -509,6 +535,7 @@ pub fn point_mutate(
     rng: &mut Rng,
     war_enabled: bool,
     settlement_enabled: bool,
+    anthro_race_enabled: bool,
 ) {
     for node in program.nodes.iter_mut() {
         if rng.f32_unit() >= POINT_MUTATE_PROB {
@@ -519,7 +546,7 @@ pub fn point_mutate(
             Node::ThresholdGt(v) => {
                 Node::ThresholdGt((v + rng.gaussian(0.0, CONST_SIGMA)).clamp(-2.0, 2.0))
             }
-            _ => random_node(rng, war_enabled, settlement_enabled),
+            _ => random_node(rng, war_enabled, settlement_enabled, anthro_race_enabled),
         };
     }
 }
@@ -531,10 +558,13 @@ pub fn structural_mutate(
     rng: &mut Rng,
     war_enabled: bool,
     settlement_enabled: bool,
+    anthro_race_enabled: bool,
 ) {
     if program.nodes.len() < PROGRAM_MAX_NODES && rng.f32_unit() < INSERT_NODE_PROB {
         let pos = if program.nodes.is_empty() { 0 } else { rng.index(program.nodes.len()) };
-        program.nodes.insert(pos, random_node(rng, war_enabled, settlement_enabled));
+        program
+            .nodes
+            .insert(pos, random_node(rng, war_enabled, settlement_enabled, anthro_race_enabled));
     }
     if program.nodes.len() > 1 && rng.f32_unit() < DELETE_NODE_PROB {
         let pos = rng.index(program.nodes.len());
@@ -542,7 +572,7 @@ pub fn structural_mutate(
     }
     if !program.nodes.is_empty() && rng.f32_unit() < SUBTREE_REPLACE_PROB {
         let pos = rng.index(program.nodes.len());
-        program.nodes[pos] = random_node(rng, war_enabled, settlement_enabled);
+        program.nodes[pos] = random_node(rng, war_enabled, settlement_enabled, anthro_race_enabled);
     }
     while program.nodes.len() > PROGRAM_MAX_NODES {
         program.nodes.pop();
@@ -557,6 +587,7 @@ pub fn crossover_and_mutate(
     rng: &mut Rng,
     war_enabled: bool,
     settlement_enabled: bool,
+    anthro_race_enabled: bool,
 ) -> Program {
     let max_len = a.len().max(b.len());
     let split = if max_len == 0 { 0 } else { rng.index(max_len + 1) };
@@ -572,8 +603,8 @@ pub fn crossover_and_mutate(
         }
     }
     let mut child = Program { nodes };
-    point_mutate(&mut child, rng, war_enabled, settlement_enabled);
-    structural_mutate(&mut child, rng, war_enabled, settlement_enabled);
+    point_mutate(&mut child, rng, war_enabled, settlement_enabled, anthro_race_enabled);
+    structural_mutate(&mut child, rng, war_enabled, settlement_enabled, anthro_race_enabled);
     child
 }
 
@@ -636,6 +667,7 @@ mod tests {
             hostility: 0.0,
             anchor_dir: glam::Vec2::ZERO,
             anchor_dist: 0.0,
+            culture_threat: 0.0,
         }
     }
 
@@ -724,7 +756,7 @@ mod tests {
         let mut p = starter_grazer();
         let len = p.len();
         for _ in 0..50 {
-            point_mutate(&mut p, &mut rng, false, false);
+            point_mutate(&mut p, &mut rng, false, false, false);
         }
         assert_eq!(p.len(), len);
     }
@@ -734,7 +766,7 @@ mod tests {
         let mut rng = Rng::from_seed(11);
         let mut p = starter_grazer();
         for _ in 0..1000 {
-            structural_mutate(&mut p, &mut rng, false, false);
+            structural_mutate(&mut p, &mut rng, false, false, false);
             assert!(!p.is_empty());
             assert!(p.len() <= PROGRAM_MAX_NODES);
         }
@@ -745,7 +777,7 @@ mod tests {
         let mut rng = Rng::from_seed(13);
         let p = starter_grazer();
         for _ in 0..200 {
-            let c = crossover_and_mutate(&p, &p, &mut rng, false, false);
+            let c = crossover_and_mutate(&p, &p, &mut rng, false, false, false);
             assert!(c.len() <= PROGRAM_MAX_NODES);
         }
     }
@@ -755,8 +787,8 @@ mod tests {
         let p = starter_grazer();
         let mut r1 = Rng::from_seed(99);
         let mut r2 = Rng::from_seed(99);
-        let c1 = crossover_and_mutate(&p, &p, &mut r1, false, false);
-        let c2 = crossover_and_mutate(&p, &p, &mut r2, false, false);
+        let c1 = crossover_and_mutate(&p, &p, &mut r1, false, false, false);
+        let c2 = crossover_and_mutate(&p, &p, &mut r2, false, false, false);
         assert_eq!(c1, c2);
     }
 

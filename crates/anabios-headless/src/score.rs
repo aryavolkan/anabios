@@ -44,7 +44,7 @@ pub fn idf_weight(n_t: u64) -> f64 {
 }
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 59] = [
+pub const ALL_EVENT_NAMES: [&str; 60] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -104,6 +104,7 @@ pub const ALL_EVENT_NAMES: [&str; 59] = [
     "feeding_frenzy",
     "territorial_rage",
     "mass_grief",
+    "hunted_adaptation",
 ];
 
 /// Per-type corpus run counts from the reference sweep (see module docs):
@@ -113,9 +114,11 @@ pub const ALL_EVENT_NAMES: [&str; 59] = [
 /// broadened e1.2's four scenarios to cover economy, culture, domestication,
 /// dimorphism, knowledge, and affect detectors, cutting permanently-novel
 /// types from 24/59 to 2/59 (`evolved_tool`, `territorial_rage` — both
-/// genuinely rare). Weights are derived via [`idf_weight`], so this table is
-/// the *only* thing to update on a regen.
-pub const DEFAULT_CORPUS_NT: [(&str, u64); 59] = [
+/// genuinely rare). `hunted_adaptation` (added 2026-08-19, anthropogenic
+/// arms race) enters at 0 — novel until a corpus regen observes it. Weights
+/// are derived via [`idf_weight`], so this table is the *only* thing to
+/// update on a regen.
+pub const DEFAULT_CORPUS_NT: [(&str, u64); 60] = [
     ("extinction", 168),
     ("pop_crash", 157),
     ("speciation", 167),
@@ -175,6 +178,7 @@ pub const DEFAULT_CORPUS_NT: [(&str, u64); 59] = [
     ("feeding_frenzy", 8),
     ("territorial_rage", 0),
     ("mass_grief", 1),
+    ("hunted_adaptation", 0),
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -238,6 +242,7 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::FeedingFrenzy => "feeding_frenzy",
         EventType::TerritorialRage => "territorial_rage",
         EventType::MassGrief => "mass_grief",
+        EventType::HuntedAdaptation => "hunted_adaptation",
     }
 }
 

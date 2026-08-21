@@ -21,6 +21,7 @@ use crate::world::World;
 mod affect;
 mod affect_events;
 mod agg;
+mod anthro;
 mod climate;
 mod combat;
 mod culture;
@@ -292,6 +293,13 @@ pub struct CodexState {
     pub cascade_active: BTreeSet<u32>,
     /// Species currently latched as mass-grieving (re-arms when PANIC subsides; M-F).
     pub grief_active: BTreeSet<u32>,
+    /// Per (culture_root, prey_root) baseline indices latched when the pair
+    /// qualifies (anthropogenic arms race): `(culture power, prey armor,
+    /// prey speed, prey vigilance)` at qualification tick.
+    pub hunted_baselines: BTreeMap<(u32, u32), (f32, f32, f32, f32)>,
+    /// Hunter/hunted root pairs that have fired HuntedAdaptation (one shot
+    /// per continuous qualification).
+    pub hunted_active: BTreeSet<(u32, u32)>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -399,6 +407,9 @@ pub fn observe_all(world: &mut World) {
     combat::detect_predation(world);
     combat::detect_combat_raid(world);
     combat::detect_arms_race(world, &agg);
+    if world.anthro_race_enabled {
+        anthro::detect_hunted_adaptation(world, &agg);
+    }
     spatial::detect_territory_formation(world, &agg);
     spatial::detect_niche_partitioning(world, &agg);
     culture::detect_dialect_formed(world, &agg);

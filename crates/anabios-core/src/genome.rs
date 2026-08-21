@@ -134,7 +134,11 @@ pub enum GenomeSlot {
     /// Genetic affinity for a terrain TYPE (maps to a preferred trade good's home terrain).
     /// Read only under the terrain_habitat flag.
     TerrainAffinity = 42,
-    _SensoryReserved43 = 43,
+    /// Heritable wariness in `[0,1]` (anthropogenic arms race): scales the
+    /// affect FEAR input by `2 × v` (neutral 0.5 ⇒ identity gain). Read only
+    /// when `World::anthro_race_enabled`; inert otherwise. Counts toward
+    /// speciation distance — a hunted lineage that drifts wary can split.
+    Vigilance = 43,
     _SensoryReserved44 = 44,
     _SensoryReserved45 = 45,
     _SensoryReserved46 = 46,
@@ -197,7 +201,7 @@ pub const SLOT_NAMES: [&str; GENOME_LEN] = [
     "InnateTechnique",
     "EnvAffinity",
     "TerrainAffinity",
-    "reserved_43",
+    "Vigilance",
     "reserved_44",
     "reserved_45",
     "reserved_46",

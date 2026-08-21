@@ -159,6 +159,14 @@ pub struct Scenario {
     /// Off by default ⇒ byte-identical bilateral-only trade.
     #[serde(default)]
     pub unilateral_trade: bool,
+    /// Opt-in anthropogenic arms race: `culture_bearer`-tagged founder
+    /// lineages become perceptible to wild agents as tool-bearing threats
+    /// (new sensor + evolvable program node + the `Vigilance` gene's FEAR
+    /// gain), and the `HuntedAdaptation` codex detector pairs the culture
+    /// lineage's power rise against prey defensive-trait rises. `false`
+    /// (default) keeps the world byte-identical.
+    #[serde(default)]
+    pub anthro_race_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -270,7 +278,8 @@ pub struct AgentSpec {
     /// `culture_prey`, `asocial_prey`, `skilled_forager`, `fast_hunter`,
     /// `slow_hunter`, `innate_forager`, `individual_learner`, `pure_imitator`,
     /// `critical_learner`, `cultural_forager`, `innovator`, `traditionalist`,
-    /// `grazer`, and the vertebrate classes `mammal_grazer`,
+    /// `grazer`, `ape_hunter` (armed culture-bearer for the anthropogenic
+    /// arms race), and the vertebrate classes `mammal_grazer`,
     /// `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`. Unknown names
     /// fall back to the grazer kit + program.
     #[serde(default)]
@@ -285,6 +294,14 @@ pub struct AgentSpec {
     /// nothing, keeping the golden scenarios byte-identical.
     #[serde(default)]
     pub starting_inventions: Vec<String>,
+    /// Anthropogenic arms race: tag this spec's founder species as
+    /// culture-bearing ("human"). Wild agents can then perceive its members
+    /// as tool-bearing threats, and the `HuntedAdaptation` detector pairs
+    /// this lineage's power rise against prey adaptation. Speciation
+    /// splinters inherit the tag through the lineage-root walk. Requires
+    /// `anthro_race_enabled = true` (validated at parse).
+    #[serde(default)]
+    pub culture_bearer: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -341,6 +358,9 @@ pub struct TraitOverrides {
     /// Genome mutation sigma scale (`GenomeSlot::MutationRate`). Lower values
     /// slow lineage drift/speciation, keeping breeding pools coherent.
     pub mutation_rate: Option<f32>,
+    /// Heritable wariness (`GenomeSlot::Vigilance`; read only with
+    /// `anthro_race_enabled`).
+    pub vigilance: Option<f32>,
 }
 
 impl TraitOverrides {
@@ -428,6 +448,9 @@ impl TraitOverrides {
         }
         if let Some(v) = self.mutation_rate {
             g.set(GenomeSlot::MutationRate, v);
+        }
+        if let Some(v) = self.vigilance {
+            g.set(GenomeSlot::Vigilance, v);
         }
     }
 }
@@ -521,6 +544,17 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
             make_omnivore(&mut m); // reclass to ape (primate) diet
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
             (m, starter_grazer())
+        }
+        // Anthropogenic arms race: an armed culture-bearer — the ape body
+        // plan (omnivore diet ⇒ invention-eligible) plus a Weapon for
+        // hunting and a Communicator for the tech tree, keeping
+        // Reproductive so the lineage establishes. The "human hunter".
+        "ape_hunter" => {
+            let mut m = starter_kit();
+            make_omnivore(&mut m); // reclass to ape (primate) diet
+            m.push(crate::module::Module::Weapon { damage: 6.0, energy_cost: 1.0 });
+            m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
+            (m, starter_cultural_hunter())
         }
         // Vertebrate-class archetypes: mammals (endotherm-approximated — high
         // metabolism, social, cognitive) and reptiles (ectotherm-approximated —
@@ -661,6 +695,11 @@ pub enum ScenarioError {
     )]
     KnowledgeNeedsInventions,
     #[error(
+        "culture_bearer requires `anthro_race_enabled = true` — without the arms-race \
+         subsystem the culture-lineage tag is never read"
+    )]
+    CultureBearerNeedsAnthroRace,
+    #[error(
         "hash_res must be >= 3 (got {0}): the spatial-hash neighbour query walks a \
          3-cell ring, which aliases onto the same cells at a lower resolution and \
          double-counts neighbours"
@@ -681,6 +720,9 @@ impl Scenario {
         }
         if scenario.knowledge_enabled && !scenario.inventions_enabled {
             return Err(ScenarioError::KnowledgeNeedsInventions);
+        }
+        if !scenario.anthro_race_enabled && scenario.agents.iter().any(|s| s.culture_bearer) {
+            return Err(ScenarioError::CultureBearerNeedsAnthroRace);
         }
         for spec in &scenario.agents {
             for name in &spec.starting_inventions {
@@ -737,6 +779,7 @@ impl Scenario {
         w.practices_enabled = self.practices_enabled;
         w.payoff_biased_learning = self.payoff_biased_learning;
         w.unilateral_trade = self.unilateral_trade;
+        w.anthro_race_enabled = self.anthro_race_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
@@ -789,6 +832,12 @@ impl Scenario {
                 }
                 None => (0u32, None),
             };
+            // Anthropogenic arms race: record the culture-bearer founder's
+            // species id. Splinters inherit via the lineage-root walk, so
+            // nothing per-member is stored.
+            if spec.culture_bearer {
+                w.culture_roots.insert(species_id);
+            }
             // Resolve any starting inventions to meme channels once per spec.
             // `parse_toml` already rejects unknown names; this panic guards
             // programmatically-built scenarios that bypass parsing.

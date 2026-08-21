@@ -68,8 +68,11 @@ fn kin_cluster_raises_care_and_sharing() {
 // so all ticks move.
 // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
 // World.payoff_biased_learning layout growth only (off here).
+// Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
+// World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
+// layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x749d13d012077099), (100, 0x92bd3ffaf6d9e8ea), (300, 0x58a93278e94cad08)];
+    &[(0, 0x2da212eb3ea96e29), (100, 0x1c0319f3a49693e2), (300, 0x0ccc48fc1b1dfc0c)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

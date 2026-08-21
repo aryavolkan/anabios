@@ -22,13 +22,14 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 - **Payoff-biased learning (O2b, experimental)** — model + content bias in cultural transmission. Opt-in (`payoff_biased_learning`); measured negative on the energy proxy, see `docs/superpowers/specs/2026-08-07-o2b-payoff-biased-findings.md`
 - **Sexual dimorphism (E12)** — opt-in binary sex + female mate choice: `SexualDimorphism` gene scales male upkeep/damage/display and female metabolic efficiency; `MateChoosiness` sets the female acceptance bar; `SexualSelection`/`SexRatioCollapse` codex events. Opt-in per scenario (`sexual_dimorphism_enabled`)
 - **Domestication (E13)** — Husbandry holders tame wild juvenile herbivores into penned livestock (movement override toward the owner), draw per-tick milk yields from surplus adults, and herds breed born-tamed; `AnimalDomesticated`/`LivestockHerd` codex events. Opt-in per scenario (`domestication_enabled`, rides `inventions_enabled`)
+- **Anthropogenic arms race** — scenario-tagged `culture_bearer` lineages ("humans") are perceptible to wild agents as tool-bearing threats (new sensor + evolvable `SenseCultureThreat` program node + the `Vigilance` gene's FEAR gain); the `HuntedAdaptation` codex event fires when a hunted prey lineage's armor/speed/vigilance co-rises with its culture predator's tech era/weapon damage. Opt-in per scenario (`anthro_race_enabled`, spec: `docs/superpowers/specs/2026-08-19-anthro-arms-race-design.md`)
 - **Vertebrate classes** — mammal/reptile founder archetypes (`mammal_grazer`, `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`) pairing class body plans with affect/cognition genome profiles: endotherm-approximated mammals (high metabolism, big-brained, social, bold) vs ectotherm-approximated reptiles (cheap idle, armored, hair-trigger freeze-fight-flight, ambush Jaws). Demo: `scenarios/mammals-vs-reptiles.toml`
 - **Viewer** — Godot 4.6+ client: biome/species/pheromone overlays, inspector, codex panel, co-evolution charts, per-species tech panel
 - **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV) with archive-weighted emergence scoring (`docs/emergence-corpus.md`), save/load snapshots (`docs/determinism-contract.md`), criterion benchmark suite
 
 ## Scenarios
 
-`scenarios/` holds the curated, test-pinned set (42 TOMLs) — every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate → 200 ticks, recursively over the tree) and most back a dedicated integration test, a viewer menu entry, or a gallery/showcase capture. **The full scenario → phenomenon → flag map is [`docs/scenarios.md`](docs/scenarios.md); a clone-to-finding walkthrough is [`docs/reproduce.md`](docs/reproduce.md).** Highlights:
+`scenarios/` holds the curated, test-pinned set (43 TOMLs) — every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate → 200 ticks, recursively over the tree) and most back a dedicated integration test, a viewer menu entry, or a gallery/showcase capture. **The full scenario → phenomenon → flag map is [`docs/scenarios.md`](docs/scenarios.md); a clone-to-finding walkthrough is [`docs/reproduce.md`](docs/reproduce.md).** Highlights:
 
 | Scenario | Demonstrates |
 |---|---|
@@ -39,6 +40,7 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 | `biome-trade.toml` / `geographic-trade.toml` / `settlement.toml` | Trade economies & markets |
 | `inventions.toml` / `cognitive-coevolution.toml` / `knowledge-ratchet.toml` | Invention tree, cognition, writing |
 | `dimorphism.toml` / `domestication.toml` | Sexual selection, livestock |
+| `anthro-race.toml` | Human-vs-animal arms race (`HuntedAdaptation`) |
 | `mammals-vs-reptiles.toml` | Vertebrate-class archetypes |
 | `out-of-africa.toml` / `out-of-africa-saga.toml` | The flagship every-feature-on arc |
 | `grand-theater.toml` / `sandbox-large.toml` | Staged & freeform large worlds |
@@ -83,7 +85,7 @@ cargo build --release --bin anabios-headless
 cat runs/divergent-32/summary.csv
 ```
 
-The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion, invention_discovered, invention_adopted, practice_discovered, practice_adopted, resource_traded, material_learning, sexual_selection, sex_ratio_collapse, animal_domesticated, livestock_herd, emergence_score, novel_events, coverage` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
+The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion, invention_discovered, invention_adopted, practice_discovered, practice_adopted, resource_traded, material_learning, sexual_selection, sex_ratio_collapse, animal_domesticated, livestock_herd, hunted_adaptation, emergence_score, novel_events, coverage` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
 
 The last three columns are the **emergence scorecard**: `emergence_score` sums rarity weights (IDF) over the distinct event types a run fired, `coverage` is the fraction of all event types fired, and `novel_events` counts fired types never seen in the reference corpus. Pass `--archive runs/corpus-dir/` to recompute weights empirically against prior sweeps; runs firing corpus-unseen event types are copied to `<out>/novel/`. Use `emergence_score` as the metric when optimizing sweeps for discovery. See `docs/superpowers/specs/2026-07-22-e1-emergence-scorecard-design.md`.
 

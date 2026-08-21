@@ -80,8 +80,11 @@ fn affect_scenario_survives_save_load_step() {
 // detectors run flag-on here), so all ticks — including tick 0 — move.
 // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
 // World.payoff_biased_learning layout growth only (off here).
+// Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
+// World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
+// layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x13f6ae1784c12e96), (100, 0x41f76461d3248601), (300, 0xa9fa4216dea60bde)];
+    &[(0, 0x2f157297acad8a90), (100, 0xfe9e0ccb943f77d7), (300, 0xf77a6f2f21755bfa)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -191,8 +194,11 @@ fn affect_threat_emits_mass_fright() {
 // (detectors run), so all ticks move.
 // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
 // World.payoff_biased_learning layout growth only (off here).
+// Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
+// World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
+// layout growth only (off here).
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xa4a0f6dae22523da), (100, 0x86e2979c647d597f), (300, 0xda522c1a8af126b5)];
+    &[(0, 0xf0f9b8bcfe974584), (100, 0x47599113ba6cbd6f), (300, 0x8da9e3314ed4b02f)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {
