@@ -205,277 +205,275 @@ pub fn culture_step(world: &mut World) {
     alive_ids.clear();
     alive_ids.extend(world.agents.iter_alive());
     for &id in &alive_ids {
-        let i = id as usize;
-        if !module::has(&world.agents.modules[i], ModuleType::Communicator) {
-            continue;
-        }
-        let range = module::effective_communicator_range(&world.agents.modules[i])
-            .min(world.spatial.perception_max_radius());
-        if range <= 0.0 {
-            continue;
-        }
-        let pos = world.agents.position[i];
-        // DIT env mode: the current optimum the neighbour scan matches techniques
-        // against. Only meaningful when env mode is active.
-        let env_on = world.env_period > 0;
-        let opt = if env_on {
-            env_optimum_at(world.tick, world.env_period, world.climate_drift_rate)
-        } else {
-            0.0
-        };
-        // Gather the per-channel neighbour aggregates that the transmission rules
-        // below consume. Destructured back into locals so the application code is
-        // unchanged.
-        let NeighborMemeScan {
-            sum,
-            count,
-            max_neighbour_skill,
-            best_skill_neighbor,
-            max_neighbour_inv,
-            max_neighbour_inv_variant,
-            max_neighbour_practice,
-            max_neighbour_practice_variant,
-            best_tech,
-            best_tech_err,
-            best_model,
-            holder_energy_sum,
-            holder_count,
-            neighbour_energy_sum,
-            neighbour_count,
-        } = scan_neighbor_memes(world, id, pos, range, env_on, opt);
-        // O2 payoff-biased learning (opt-in): re-target transmission before the
-        // rules below consume the scan. Off ⇒ every local is exactly what the
-        // payoff-blind scan produced (byte-identical).
-        let mut max_neighbour_skill = max_neighbour_skill;
-        let mut best_skill_neighbor = best_skill_neighbor;
-        let mut max_neighbour_inv = max_neighbour_inv;
-        let mut max_neighbour_inv_variant = max_neighbour_inv_variant;
-        let mut max_neighbour_practice = max_neighbour_practice;
-        let mut max_neighbour_practice_variant = max_neighbour_practice_variant;
-        if world.payoff_biased_learning {
-            // Model bias: copy from the highest-ENERGY Communicator neighbour
-            // rather than the highest-trait-level one — the fittest available
-            // model tends to carry fewer maladaptive practices.
-            if let Some(m) = best_model {
-                max_neighbour_skill = world.agents.meme_vector[m][SKILL_CHANNEL];
-                best_skill_neighbor = Some(m);
-                if world.inventions_enabled {
-                    for k in 0..crate::invention::INVENTION_COUNT {
-                        let ch = crate::invention::channel(k);
-                        max_neighbour_inv[k] = world.agents.meme_vector[m][ch];
-                        max_neighbour_inv_variant[k] = world.agents.meme_lineage[m][ch];
-                    }
-                }
-                if world.cognition_enabled {
-                    for p in 0..crate::practice::PRACTICE_COUNT {
-                        let ch = crate::practice::channel(p);
-                        max_neighbour_practice[p] = world.agents.meme_vector[m][ch];
-                        max_neighbour_practice_variant[p] = world.agents.meme_lineage[m][ch];
-                    }
-                }
-            }
-            // Content bias: decline a candidate trait when its local holders
-            // have lower mean energy than its non-holders — the trait is
-            // empirically maladaptive here, even if the chosen model carries
-            // it. Zeroing the copy target declines it (targets start at 0.0 =
-            // "no neighbour holds it", and levels are non-negative). Needs
-            // both groups present, else there is no local evidence either way.
-            for p in 0..crate::practice::PRACTICE_COUNT {
-                let held = holder_count[p];
-                if held > 0 && held < neighbour_count {
-                    let holder_mean = holder_energy_sum[p] / held as f32;
-                    let non_mean = (neighbour_energy_sum - holder_energy_sum[p])
-                        / (neighbour_count - held) as f32;
-                    if holder_mean < non_mean {
-                        max_neighbour_practice[p] = 0.0;
-                    }
-                }
-            }
-        }
-        // Writing buff: the holder's meme copy rate and invention spread rate
-        // are doubled (literacy accelerates all cultural transmission).
-        let self_mask = if world.inventions_enabled {
-            crate::invention::held_mask(&world.agents.meme_vector[i])
-        } else {
-            0
-        };
-        // Writing↔CommunicationStrength coupling: the literacy spread bonus
-        // scales with the holder's gene when gene_tech_coupling is on (identity
-        // otherwise). Computed once for both spread sites in this iteration.
-        let coupling = world.gene_tech_coupling;
-        let meme_copy_rate = MEME_COPY_RATE
-            * crate::invention::spread_multiplier_coupled(
-                self_mask,
-                &world.agents.genome[i],
-                coupling,
-            );
-        for ch in 0..MEME_CHANNELS {
-            // The skill and technique channels carry cumulative learned values
-            // transmitted by their own social-learning rules below — they must NOT
-            // be dragged toward the broadcast mean by the generic meme lerp (which
-            // would pull them toward 0 and fight individual learning). Invention
-            // channels (8..MEME_CHANNELS) likewise have their own spread rule
-            // (copy-toward-best); they didn't exist before the tree, so
-            // excluding them unconditionally is flag-off neutral.
-            if ch == SKILL_CHANNEL
-                || ch == TECH_CHANNEL
-                || crate::invention::is_invention_channel(ch)
-                || crate::practice::is_practice_channel(ch)
-            {
-                continue;
-            }
-            if count[ch] > 0 {
-                let received = sum[ch] / count[ch] as f32;
-                let cur = world.agents.meme_vector[i][ch];
-                world.agents.meme_vector[i][ch] = cur + meme_copy_rate * (received - cur);
-            }
-        }
-        // Social learning of the foraging skill: copy toward the most-skilled
-        // neighbour (you can learn a skill from an expert much faster than by
-        // rediscovering it yourself).
-        let cur_skill = world.agents.meme_vector[i][SKILL_CHANNEL];
-        if count[0] > 0 && max_neighbour_skill > cur_skill {
-            world.agents.meme_vector[i][SKILL_CHANNEL] =
-                cur_skill + SKILL_SOCIAL_RATE * (max_neighbour_skill - cur_skill);
-            // E9: if the learned value lands in the teacher's band, adopt the
-            // teacher's variant (descent through social spread).
-            if let Some(j) = best_skill_neighbor {
-                let tv = world.agents.meme_lineage[j][SKILL_CHANNEL];
-                let new_val = world.agents.meme_vector[i][SKILL_CHANNEL];
-                if tv != 0
-                    && world
-                        .codex
-                        .meme_variants
-                        .get(&tv)
-                        .map(|v| v.band == crate::codex::traditions::band_of(new_val))
-                        .unwrap_or(false)
-                {
-                    world.agents.meme_lineage[i][SKILL_CHANNEL] = tv;
-                }
-            }
-        }
-        // Invention spread: copy each adoptable invention toward the
-        // best-holding neighbour's level (learn-from-the-expert, the same
-        // rule as the skill channel). Prereq-gated on the receiver's own
-        // held mask, so the tree can't be skipped socially either.
-        if world.inventions_enabled
-            && crate::invention::is_ape(&world.agents.genome[i], &world.agents.modules[i])
-        {
-            let rate = crate::invention::INVENTION_SPREAD_RATE
-                * crate::invention::spread_multiplier_coupled(
-                    self_mask,
-                    &world.agents.genome[i],
-                    coupling,
-                );
-            let cognition = world.cognition_enabled;
-            let receiver_iq = world.agents.iq[i];
-            // Material gate: with the economy on, the learner must hold the
-            // invention's trade-goods basket to make progress, and pays it
-            // when the copy crosses into functional adoption.
-            let resources = world.resources_enabled;
-            // Genetic prerequisite gate: with gene_requirements on, a genome
-            // short of the invention's GeneReq stalls the apprenticeship too.
-            let gene_reqs = world.gene_requirements;
-            for (k, &target) in max_neighbour_inv.iter().enumerate() {
-                if crate::invention::INVENTIONS[k].prereqs & !self_mask != 0 {
-                    continue; // missing foundations
-                }
-                if !crate::invention::iq_permits(receiver_iq, k, cognition) {
-                    continue; // insufficient IQ to acquire this trait
-                }
-                if !crate::invention::materials_permit(&world.agents.inventory[i], k, resources) {
-                    continue; // can't afford the materials for this trait
-                }
-                if !crate::invention::gene_permits(&world.agents.genome[i], k, gene_reqs) {
-                    continue; // genome falls short of this trait's prerequisite
-                }
+        transmit_to_receiver(world, id);
+    }
+    world.agents.scratch_ids = alive_ids;
+}
+
+/// One receiver's turn: gather the neighbour aggregates once, then run each
+/// transmission rule over them. Rules are applied in a fixed order and each
+/// owns a disjoint set of meme channels, so the sequence below is the whole
+/// specification of what one Communicator learns this tick.
+fn transmit_to_receiver(world: &mut World, id: u32) {
+    let i = id as usize;
+    if !module::has(&world.agents.modules[i], ModuleType::Communicator) {
+        return;
+    }
+    let range = module::effective_communicator_range(&world.agents.modules[i])
+        .min(world.spatial.perception_max_radius());
+    if range <= 0.0 {
+        return;
+    }
+    let pos = world.agents.position[i];
+    // DIT env mode: the current optimum the neighbour scan matches techniques
+    // against. Only meaningful when env mode is active.
+    let env_on = world.env_period > 0;
+    let opt = if env_on {
+        env_optimum_at(world.tick, world.env_period, world.climate_drift_rate)
+    } else {
+        0.0
+    };
+    let mut scan = scan_neighbor_memes(world, id, pos, range, env_on, opt);
+    // O2 payoff-biased learning (opt-in): re-target transmission before the
+    // rules below consume the scan. Off ⇒ every target is exactly what the
+    // payoff-blind scan produced (byte-identical).
+    if world.payoff_biased_learning {
+        apply_payoff_bias(world, &mut scan);
+    }
+    // Writing buff: the holder's meme copy rate and invention spread rate are
+    // doubled (literacy accelerates all cultural transmission). The literacy
+    // bonus scales with the holder's gene when `gene_tech_coupling` is on
+    // (identity otherwise); computed once for both spread sites below.
+    let self_mask = if world.inventions_enabled {
+        crate::invention::held_mask(&world.agents.meme_vector[i])
+    } else {
+        0
+    };
+    let literacy = crate::invention::spread_multiplier_coupled(
+        self_mask,
+        &world.agents.genome[i],
+        world.gene_tech_coupling,
+    );
+
+    transmit_broadcast_memes(world, i, &scan, MEME_COPY_RATE * literacy);
+    transmit_skill(world, i, &scan);
+    transmit_inventions(world, i, &scan, self_mask, literacy);
+    transmit_practices(world, i, &scan);
+    transmit_technique(world, i, &scan, env_on, opt);
+}
+
+/// E9 variant descent: adopt the teacher's meme variant on channel `ch` when
+/// the receiver's freshly-learned level lands inside that variant's band. A
+/// null variant (0) or an out-of-band value leaves the lineage untouched.
+/// Call sites read the *post-write* level, so this must run after the copy.
+fn adopt_teacher_variant(world: &mut World, i: usize, ch: usize, teacher_variant: u32) {
+    if teacher_variant == 0 {
+        return;
+    }
+    let new_val = world.agents.meme_vector[i][ch];
+    let in_band = world
+        .codex
+        .meme_variants
+        .get(&teacher_variant)
+        .is_some_and(|v| v.band == crate::codex::traditions::band_of(new_val));
+    if in_band {
+        world.agents.meme_lineage[i][ch] = teacher_variant;
+    }
+}
+
+/// O2 payoff-biased learning: re-point the scan's copy targets at evidence of
+/// what actually pays off locally, before any rule consumes them.
+fn apply_payoff_bias(world: &World, scan: &mut NeighborMemeScan) {
+    // Model bias: copy from the highest-ENERGY Communicator neighbour rather
+    // than the highest-trait-level one — the fittest available model tends to
+    // carry fewer maladaptive practices.
+    if let Some(m) = scan.best_model {
+        scan.max_neighbour_skill = world.agents.meme_vector[m][SKILL_CHANNEL];
+        scan.best_skill_neighbor = Some(m);
+        if world.inventions_enabled {
+            for k in 0..crate::invention::INVENTION_COUNT {
                 let ch = crate::invention::channel(k);
-                let cur = world.agents.meme_vector[i][ch];
-                if target > cur {
-                    world.agents.meme_vector[i][ch] = cur + rate * (target - cur);
-                    let new_val = world.agents.meme_vector[i][ch];
-                    // Completed the apprenticeship: crossing into functional
-                    // adoption consumes the material basket.
-                    if resources
-                        && cur < crate::invention::HELD_THRESHOLD
-                        && new_val >= crate::invention::HELD_THRESHOLD
-                    {
-                        crate::invention::consume_materials(&mut world.agents.inventory[i], k);
-                        world.codex.push_event(crate::codex::CodexEvent {
-                            event_type: crate::codex::EventType::MaterialLearning,
-                            tick: world.tick,
-                            species_id: world.agents.species_id[i],
-                            value: k as f32,
-                            loc_x: world.agents.position[i].x,
-                            loc_y: world.agents.position[i].y,
-                        });
-                    }
-                    // E9: adopt the teacher's variant when the learned level
-                    // lands in its band.
-                    let tv = max_neighbour_inv_variant[k];
-                    if tv != 0
-                        && world
-                            .codex
-                            .meme_variants
-                            .get(&tv)
-                            .map(|v| v.band == crate::codex::traditions::band_of(new_val))
-                            .unwrap_or(false)
-                    {
-                        world.agents.meme_lineage[i][ch] = tv;
-                    }
-                }
+                scan.max_neighbour_inv[k] = world.agents.meme_vector[m][ch];
+                scan.max_neighbour_inv_variant[k] = world.agents.meme_lineage[m][ch];
             }
         }
-        // Maladaptive practice spread: copy each practice toward the best-holding
-        // neighbour (payoff-blind — the receiver has no idea it is harmful).
-        // IQ-gated on the receiver, but the bar (PRACTICE_IQ_REQ = 0.10) is
-        // deliberately low: only the very lowest-cognition agents are spared, so
-        // maladaptive customs still spread widely.
         if world.cognition_enabled {
-            let receiver_iq = world.agents.iq[i];
-            // The gate is loop-invariant (one receiver), so check it once through
-            // the shared `iq_permits` helper instead of per practice channel.
-            if crate::practice::iq_permits(receiver_iq, world.cognition_enabled) {
-                for (p, &target) in max_neighbour_practice.iter().enumerate() {
-                    let ch = crate::practice::channel(p);
-                    let cur = world.agents.meme_vector[i][ch];
-                    if target > cur {
-                        world.agents.meme_vector[i][ch] =
-                            cur + crate::practice::PRACTICE_SPREAD_RATE * (target - cur);
-                        // E9: adopt the teacher's variant when it lands in-band.
-                        let tv = max_neighbour_practice_variant[p];
-                        let new_val = world.agents.meme_vector[i][ch];
-                        if tv != 0
-                            && world
-                                .codex
-                                .meme_variants
-                                .get(&tv)
-                                .map(|v| v.band == crate::codex::traditions::band_of(new_val))
-                                .unwrap_or(false)
-                        {
-                            world.agents.meme_lineage[i][ch] = tv;
-                        }
-                    }
-                }
-            }
-        }
-        // DIT env mode: social learners copy the technique toward the best-matched
-        // neighbour — but only if that neighbour is doing BETTER than they are
-        // (payoff-biased imitation). Copying indiscriminately would drag a
-        // well-adapted individual down toward its lagging neighbours; imitating
-        // only your betters means social learning can help but never hurt.
-        if env_on && world.agents.genome[i].get(GenomeSlot::SocialLearning) > 0.5 {
-            if let Some(target_tech) = best_tech {
-                let cur_tech = world.agents.meme_vector[i][TECH_CHANNEL];
-                let own_err = (cur_tech - opt).abs();
-                if best_tech_err < own_err {
-                    world.agents.meme_vector[i][TECH_CHANNEL] =
-                        cur_tech + ENV_SOCIAL_RATE * (target_tech - cur_tech);
-                }
+            for p in 0..crate::practice::PRACTICE_COUNT {
+                let ch = crate::practice::channel(p);
+                scan.max_neighbour_practice[p] = world.agents.meme_vector[m][ch];
+                scan.max_neighbour_practice_variant[p] = world.agents.meme_lineage[m][ch];
             }
         }
     }
-    world.agents.scratch_ids = alive_ids;
+    // Content bias: decline a candidate trait when its local holders have lower
+    // mean energy than its non-holders — the trait is empirically maladaptive
+    // here, even if the chosen model carries it. Zeroing the copy target
+    // declines it (targets start at 0.0 = "no neighbour holds it", and levels
+    // are non-negative). Needs both groups present, else there is no local
+    // evidence either way.
+    for p in 0..crate::practice::PRACTICE_COUNT {
+        let held = scan.holder_count[p];
+        if held > 0 && held < scan.neighbour_count {
+            let holder_mean = scan.holder_energy_sum[p] / held as f32;
+            let non_mean = (scan.neighbour_energy_sum - scan.holder_energy_sum[p])
+                / (scan.neighbour_count - held) as f32;
+            if holder_mean < non_mean {
+                scan.max_neighbour_practice[p] = 0.0;
+            }
+        }
+    }
+}
+
+/// The generic meme lerp: drag each broadcast-carried channel toward the
+/// neighbour mean.
+///
+/// The skill and technique channels carry cumulative learned values transmitted
+/// by their own social-learning rules — they must NOT be dragged toward the
+/// broadcast mean (which would pull them toward 0 and fight individual
+/// learning). Invention and practice channels likewise have their own
+/// copy-toward-best rules; they didn't exist before the tree, so excluding them
+/// unconditionally is flag-off neutral.
+fn transmit_broadcast_memes(world: &mut World, i: usize, scan: &NeighborMemeScan, rate: f32) {
+    for ch in 0..MEME_CHANNELS {
+        if ch == SKILL_CHANNEL
+            || ch == TECH_CHANNEL
+            || crate::invention::is_invention_channel(ch)
+            || crate::practice::is_practice_channel(ch)
+        {
+            continue;
+        }
+        if scan.count[ch] > 0 {
+            let received = scan.sum[ch] / scan.count[ch] as f32;
+            let cur = world.agents.meme_vector[i][ch];
+            world.agents.meme_vector[i][ch] = cur + rate * (received - cur);
+        }
+    }
+}
+
+/// Social learning of the foraging skill: copy toward the most-skilled
+/// neighbour (you can learn a skill from an expert much faster than by
+/// rediscovering it yourself).
+fn transmit_skill(world: &mut World, i: usize, scan: &NeighborMemeScan) {
+    let cur_skill = world.agents.meme_vector[i][SKILL_CHANNEL];
+    if !(scan.count[0] > 0 && scan.max_neighbour_skill > cur_skill) {
+        return;
+    }
+    world.agents.meme_vector[i][SKILL_CHANNEL] =
+        cur_skill + SKILL_SOCIAL_RATE * (scan.max_neighbour_skill - cur_skill);
+    if let Some(j) = scan.best_skill_neighbor {
+        let tv = world.agents.meme_lineage[j][SKILL_CHANNEL];
+        adopt_teacher_variant(world, i, SKILL_CHANNEL, tv);
+    }
+}
+
+/// Invention spread: copy each adoptable invention toward the best-holding
+/// neighbour's level (learn-from-the-expert, the same rule as the skill
+/// channel). Every gate is prereq-, IQ-, material- and gene-checked against the
+/// *receiver*, so the tree can't be skipped socially either.
+fn transmit_inventions(
+    world: &mut World,
+    i: usize,
+    scan: &NeighborMemeScan,
+    self_mask: u32,
+    literacy: f32,
+) {
+    if !world.inventions_enabled
+        || !crate::invention::is_ape(&world.agents.genome[i], &world.agents.modules[i])
+    {
+        return;
+    }
+    let rate = crate::invention::INVENTION_SPREAD_RATE * literacy;
+    for k in 0..crate::invention::INVENTION_COUNT {
+        if !receiver_can_learn_invention(world, i, k, self_mask) {
+            continue;
+        }
+        let target = scan.max_neighbour_inv[k];
+        let ch = crate::invention::channel(k);
+        let cur = world.agents.meme_vector[i][ch];
+        if target > cur {
+            world.agents.meme_vector[i][ch] = cur + rate * (target - cur);
+            let new_val = world.agents.meme_vector[i][ch];
+            // Completed the apprenticeship: crossing into functional adoption
+            // consumes the material basket.
+            if world.resources_enabled
+                && cur < crate::invention::HELD_THRESHOLD
+                && new_val >= crate::invention::HELD_THRESHOLD
+            {
+                crate::invention::consume_materials(&mut world.agents.inventory[i], k);
+                world.codex.push_event(crate::codex::CodexEvent {
+                    event_type: crate::codex::EventType::MaterialLearning,
+                    tick: world.tick,
+                    species_id: world.agents.species_id[i],
+                    value: k as f32,
+                    loc_x: world.agents.position[i].x,
+                    loc_y: world.agents.position[i].y,
+                });
+            }
+            adopt_teacher_variant(world, i, ch, scan.max_neighbour_inv_variant[k]);
+        }
+    }
+}
+
+/// The four gates an apprentice must clear before invention `k` can spread to
+/// it: held foundations, cognition, materials, and genome. Each gate is inert
+/// unless its feature flag is on.
+fn receiver_can_learn_invention(world: &World, i: usize, k: usize, self_mask: u32) -> bool {
+    crate::invention::INVENTIONS[k].prereqs & !self_mask == 0 // missing foundations
+        && crate::invention::iq_permits(world.agents.iq[i], k, world.cognition_enabled)
+        && crate::invention::materials_permit(
+            &world.agents.inventory[i],
+            k,
+            world.resources_enabled,
+        )
+        && crate::invention::gene_permits(&world.agents.genome[i], k, world.gene_requirements)
+}
+
+/// Maladaptive practice spread: copy each practice toward the best-holding
+/// neighbour (payoff-blind — the receiver has no idea it is harmful). IQ-gated
+/// on the receiver, but the bar (`PRACTICE_IQ_REQ`) is deliberately low: only
+/// the very lowest-cognition agents are spared, so maladaptive customs still
+/// spread widely. The gate is loop-invariant (one receiver), so it is checked
+/// once rather than per channel.
+fn transmit_practices(world: &mut World, i: usize, scan: &NeighborMemeScan) {
+    if !world.cognition_enabled
+        || !crate::practice::iq_permits(world.agents.iq[i], world.cognition_enabled)
+    {
+        return;
+    }
+    for p in 0..crate::practice::PRACTICE_COUNT {
+        let target = scan.max_neighbour_practice[p];
+        let ch = crate::practice::channel(p);
+        let cur = world.agents.meme_vector[i][ch];
+        if target > cur {
+            world.agents.meme_vector[i][ch] =
+                cur + crate::practice::PRACTICE_SPREAD_RATE * (target - cur);
+            adopt_teacher_variant(world, i, ch, scan.max_neighbour_practice_variant[p]);
+        }
+    }
+}
+
+/// DIT env mode: social learners copy the technique toward the best-matched
+/// neighbour — but only if that neighbour is doing BETTER than they are
+/// (payoff-biased imitation). Copying indiscriminately would drag a
+/// well-adapted individual down toward its lagging neighbours; imitating only
+/// your betters means social learning can help but never hurt.
+fn transmit_technique(
+    world: &mut World,
+    i: usize,
+    scan: &NeighborMemeScan,
+    env_on: bool,
+    opt: f32,
+) {
+    if !(env_on && world.agents.genome[i].get(GenomeSlot::SocialLearning) > 0.5) {
+        return;
+    }
+    let Some(target_tech) = scan.best_tech else { return };
+    let cur_tech = world.agents.meme_vector[i][TECH_CHANNEL];
+    let own_err = (cur_tech - opt).abs();
+    if scan.best_tech_err < own_err {
+        world.agents.meme_vector[i][TECH_CHANNEL] =
+            cur_tech + ENV_SOCIAL_RATE * (target_tech - cur_tech);
+    }
 }
 
 /// Per-channel neighbour aggregates gathered in one spatial query, consumed by

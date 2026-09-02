@@ -17,9 +17,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::path::PathBuf;
 
-use anabios_core::biome::{BiomeCell, TerrainType, SUCCESSION_BARE, SUCCESSION_PIONEER};
 use anabios_core::codex::CodexEvent;
-use anabios_core::invention::POLLUTION_CAP;
 use anabios_core::module::effective_diet_carnivory;
 use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::state_hash;
@@ -342,7 +340,7 @@ fn capture_biome(world: &World, out_res: usize) -> BiomeGrid {
             let (mut r, mut g, mut b, mut n) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
             for row in y0..y1 {
                 for col in x0..x1 {
-                    let c = biome_cell_color(world.biome.at(col, row));
+                    let c = anabios_core::biome::cell_color(world.biome.at(col, row));
                     r += c[0];
                     g += c[1];
                     b += c[2];
@@ -356,44 +354,6 @@ fn capture_biome(world: &World, out_res: usize) -> BiomeGrid {
         }
     }
     BiomeGrid { t: world.tick, b64: base64_encode(&bytes) }
-}
-
-/// Port of the Godot bridge `biome_colors` per-cell mapping, returning linear
-/// 0..1 RGB: terrain base → lushness by biomass → succession → pollution.
-fn biome_cell_color(cell: &BiomeCell) -> [f32; 3] {
-    let base = match cell.terrain {
-        TerrainType::Water => [0.09, 0.19, 0.44],
-        TerrainType::Grass => [0.21, 0.44, 0.19],
-        TerrainType::Forest => [0.07, 0.26, 0.11],
-        TerrainType::Desert => [0.68, 0.58, 0.33],
-        TerrainType::Rock => [0.42, 0.40, 0.45],
-        TerrainType::Savanna => [0.72, 0.66, 0.36],
-        TerrainType::Rainforest => [0.06, 0.34, 0.16],
-        TerrainType::Taiga => [0.16, 0.34, 0.26],
-        TerrainType::Tundra => [0.62, 0.66, 0.62],
-    };
-    let cap = cell.terrain.carrying_capacity();
-    let frac = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };
-    let mut c = match cell.terrain {
-        TerrainType::Grass => lerp3(base, [0.42, 0.80, 0.33], frac * 0.55),
-        TerrainType::Forest => lerp3(base, [0.20, 0.55, 0.24], frac * 0.55),
-        TerrainType::Desert => lerp3(base, [0.86, 0.78, 0.52], frac * 0.45),
-        _ => base,
-    };
-    c = match cell.succession {
-        SUCCESSION_BARE => lerp3(c, [0.36, 0.24, 0.13], 0.65),
-        SUCCESSION_PIONEER => lerp3(c, [0.55, 0.82, 0.30], 0.45),
-        _ => c,
-    };
-    let pol = (cell.pollution / POLLUTION_CAP).clamp(0.0, 1.0);
-    if pol > 0.0 {
-        c = lerp3(c, [0.32, 0.28, 0.24], pol * 0.55);
-    }
-    c
-}
-
-fn lerp3(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
-    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 }
 
 /// Thin the event stream to at most `max_events`, always keeping the first
@@ -531,42 +491,6 @@ mod tests {
         assert_eq!(base64_encode(b"fo"), "Zm8=");
         assert_eq!(base64_encode(b"foo"), "Zm9v");
         assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
-    }
-
-    fn cell(terrain: TerrainType, biomass: f32, succession: u8, pollution: f32) -> BiomeCell {
-        BiomeCell {
-            terrain,
-            plant_biomass: biomass,
-            env: 0.0,
-            moisture: 0.0,
-            pollution,
-            succession,
-            nutrient_quality: 0.0,
-            fertility: 0.0,
-            elevation: 0.5,
-            river_flow: 0.0,
-        }
-    }
-
-    /// The ported colour mapping matches the Godot bridge's fixed base colours
-    /// and moves toward the pollution grey as pollution rises. Locks the port.
-    #[test]
-    fn biome_colour_port_matches_bridge() {
-        // Pristine water: exact base colour, no biomass/succession/pollution terms.
-        assert_eq!(biome_cell_color(&cell(TerrainType::Water, 0.0, 0, 0.0)), [0.09, 0.19, 0.44]);
-        // Rock is a flat base too (no lushness branch).
-        assert_eq!(biome_cell_color(&cell(TerrainType::Rock, 0.0, 0, 0.0)), [0.42, 0.40, 0.45]);
-        // Pollution pulls any cell toward the industrial grey-brown.
-        let clean = biome_cell_color(&cell(TerrainType::Grass, 0.0, 0, 0.0));
-        let dirty = biome_cell_color(&cell(TerrainType::Grass, 0.0, 0, POLLUTION_CAP));
-        let dist = |c: [f32; 3]| (c[0] - 0.32).abs() + (c[1] - 0.28).abs() + (c[2] - 0.24).abs();
-        assert!(dist(dirty) < dist(clean), "pollution should approach the grey");
-        // Every channel stays in gamut.
-        for c in [clean, dirty] {
-            for ch in c {
-                assert!((0.0..=1.0).contains(&ch), "channel {ch} out of gamut");
-            }
-        }
     }
 
     /// Thinning keeps every event type's first occurrence, stays within the cap
