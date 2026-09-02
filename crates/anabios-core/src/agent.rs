@@ -105,6 +105,12 @@ pub struct AgentBuffers {
     /// with the husbandry orphan sweep as a backstop. Read only when
     /// `World::domestication_enabled`.
     pub livestock_of: Vec<AgentId>,
+    /// Pathogen infection intensity (disease subsystem): `0.0` = healthy,
+    /// `(0,1]` = infected, draining energy per tick. Written only by
+    /// `disease::disease_step` when `World::disease_enabled` is on; stays
+    /// all-zero otherwise. Serialized (persistent) — path-dependent state,
+    /// so it must NOT be `#[serde(skip)]` (still-ticks v13 footgun).
+    pub infection: Vec<f32>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -199,6 +205,7 @@ impl AgentBuffers {
         self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
         self.sex.set(i, sex);
         self.livestock_of[i] = AGENT_NULL;
+        self.infection[i] = 0.0;
         self.alive.set(i, true);
         self.live_count += 1;
         id
@@ -234,6 +241,7 @@ impl AgentBuffers {
         self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
         self.sex.push(false);
         self.livestock_of.push(AGENT_NULL);
+        self.infection.push(0.0);
         self.alive.push(false);
         id
     }
@@ -256,6 +264,7 @@ impl AgentBuffers {
         self.alive.set(i, false);
         self.energy[i] = 0.0;
         self.affect_prev_crowding[i] = 0.0;
+        self.infection[i] = 0.0;
         self.free_list.push(id);
         self.live_count -= 1;
 

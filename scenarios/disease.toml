@@ -1,0 +1,34 @@
+name = "disease"
+seed = 0
+disease_enabled = true
+inventions_enabled = true
+# Keep the world below carrying-capacity saturation so the populations survive
+# long enough for epidemic waves to rise and resolve.
+max_population = 500
+
+# Disease & epidemiology demo: two bands.
+#
+# 1. A dense susceptible grazer herd — the outbreak population. The tight
+#    cluster keeps crowding above SPILLOVER_MIN_NEIGHBORS so zoonotic
+#    spillover fires, the wave spreads by proximity, and energy-drain
+#    mortality funnels through the normal starve path. Watch the codex for
+#    `EpidemicOutbreak`.
+# 2. A medicine-bearing innovator band seeded with the full era-3 chain
+#    (medicine requires writing). Holders transmit less and recover faster —
+#    the counter-pressure. Watch for `MedicineContainment` when a wave that
+#    reaches the band resolves.
+
+[[agents]]
+count = 150
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 412.0, center_y = 512.0, radius = 30.0 }
+
+[[agents]]
+count = 60
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 662.0, center_y = 512.0, radius = 25.0 }
+starting_inventions = ["stone_tools", "fire", "farming", "writing", "medicine"]
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0

@@ -148,7 +148,12 @@ use crate::world::World;
 ///     `CodexState.hunted_baselines`/`hunted_active` (anthropogenic arms race).
 ///     Flag off in every golden scenario ⇒ trajectories byte-identical;
 ///     only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 34;
+/// 35: disease subsystem — `AgentBuffers.infection` column,
+///     `World.disease_enabled` flag, `CodexState.epidemic_latched`,
+///     EventType::{EpidemicOutbreak, MedicineContainment}. Flag off ⇒ the tick
+///     stage early-returns with zero RNG draws and the detector never fires;
+///     trajectories byte-identical; only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 35;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

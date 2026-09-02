@@ -120,7 +120,7 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
     // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
     // layout growth only (off here).
-    &[(0, 0xb453ed033b368152), (100, 0x794f5e152d0ce465), (300, 0xdc5d9d69576eebd8)];
+    &[(0, 0xa0a6a8182d92db14), (100, 0x11e596568ecf14bb), (300, 0xc6ff87ea62cddd5f)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

@@ -1176,7 +1176,7 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
     // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
     // layout growth only (off here).
-    &[(0, 0x29e44a7098b8f857), (100, 0x3da97b48372b7391), (300, 0x4815c43516578769)];
+    &[(0, 0x069e2f4d569b6097), (100, 0x1f8f685bb8180fc3), (300, 0xc117e1bef70b3462)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

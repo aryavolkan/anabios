@@ -27,6 +27,7 @@ mod combat;
 mod culture;
 mod cycles;
 mod dimorphism;
+mod disease;
 mod disturbance;
 mod domestication;
 mod event;
@@ -300,6 +301,12 @@ pub struct CodexState {
     /// Hunter/hunted root pairs that have fired HuntedAdaptation (one shot
     /// per continuous qualification).
     pub hunted_active: BTreeSet<(u32, u32)>,
+    /// Species currently outbreak-latched (disease subsystem): an
+    /// `EpidemicOutbreak` fired while the infected fraction was high; the
+    /// latch re-arms when the fraction falls below `OUTBREAK_REARM` (and a
+    /// medicine-bearing species resolving its wave fires
+    /// `MedicineContainment` at that transition).
+    pub epidemic_latched: BTreeSet<u32>,
     /// Ring buffer of recent events. Oldest dropped when full.
     pub events: VecDeque<CodexEvent>,
 }
@@ -409,6 +416,9 @@ pub fn observe_all(world: &mut World) {
     combat::detect_arms_race(world, &agg);
     if world.anthro_race_enabled {
         anthro::detect_hunted_adaptation(world, &agg);
+    }
+    if world.disease_enabled {
+        disease::detect_epidemic(world, &agg);
     }
     spatial::detect_territory_formation(world, &agg);
     spatial::detect_niche_partitioning(world, &agg);

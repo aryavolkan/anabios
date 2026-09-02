@@ -39,7 +39,7 @@ fn affect_play_scenario_is_self_consistent() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const PLAY_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xd8a4de59de20074d), (100, 0x974e75172a768610), (200, 0x07cf4ecda2d1c721)];
+    &[(0, 0x67b59d9e01d7eec5), (100, 0xe23dde7dd3f46ae3), (200, 0xf181196d891bf03a)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

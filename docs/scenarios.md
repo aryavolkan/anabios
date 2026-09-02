@@ -29,6 +29,7 @@ the curated root set. Run any of these with
 | `cognitive-coevolution.toml` | Cognition (IQ) evolving alongside culture | inventions, cognition |
 | `tech-gene-coupling.toml` | `gene_tech_coupling`: Openness ↔ invention spread | inventions, cognition, gene_tech_coupling |
 | `knowledge-ratchet.toml` | E14 knowledge accumulation: Writing-backed tech memory survives bottlenecks | inventions, knowledge |
+| `disease.toml` | Disease: crowding spillover → outbreak in a susceptible herd; medicine-bearing innovators resist (`EpidemicOutbreak`, `MedicineContainment`) | disease, inventions |
 | `dimorphism.toml` | Sexual selection via female mate choice | sexual_dimorphism |
 | `domestication.toml` | Taming, milk herds, born-tamed livestock | inventions, domestication |
 | `anthro-race.toml` | Anthropogenic arms race: tagged culture-bearers hunt herds that evolve aimed vigilance (`HuntedAdaptation`) | inventions, affect, war, anthro_race |

@@ -90,6 +90,8 @@ roundtrip_tests! {
         "../../../scenarios/experiments/o2-payoff-biased-learning.toml", 300, |w: &World| w.payoff_biased_learning, "payoff_biased_learning";
     unilateral_trade_roundtrip:
         "../../../scenarios/unilateral-trade.toml", 400, |w: &World| w.unilateral_trade && w.conserve_goods_on_death, "unilateral_trade+conserve_goods_on_death";
+    disease_roundtrip:
+        "../../../scenarios/disease.toml", 400, |w: &World| w.disease_enabled, "disease_enabled";
 }
 
 /// The strongest single guard: grand-theater warms every subsystem at once.

@@ -84,7 +84,7 @@ fn affect_scenario_survives_save_load_step() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x2f157297acad8a90), (100, 0xfe9e0ccb943f77d7), (300, 0xf77a6f2f21755bfa)];
+    &[(0, 0xc72734b17dc83056), (100, 0x206376eed8c2c416), (300, 0xfc00367c20aba7da)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -198,7 +198,7 @@ fn affect_threat_emits_mass_fright() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xf0f9b8bcfe974584), (100, 0x47599113ba6cbd6f), (300, 0x8da9e3314ed4b02f)];
+    &[(0, 0x04463385252f8172), (100, 0x9a2b2353d4b6a408), (300, 0x3bbf30d0bde21426)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {
