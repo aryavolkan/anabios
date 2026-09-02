@@ -87,6 +87,20 @@ the invasion margin or gets honestly closed.*
   ledger showing why. *If wrong:* if no niche-construction mechanism moves the margin,
   pivot the same levers to O5's co-evolving environment (Horizon 2 pulls forward) and record
   the pivot.
+  **Status 2026-09-02** (`2026-09-02-o3-repro-bias-findings.md`): the O1
+  apparatus was diet-confounded at HEAD (apes-only reclass) — corrected via
+  the `omnivore_forager` control + diet-matched scenario. Both canonical
+  niche-construction levers (fertility enrichment, culture-only tier)
+  measured **null with a mechanism**: energy doesn't bind founder share at
+  the cap; the margin lives on the birth ledger (practice birth tax).
+  Shipped `repro_biased_learning` (birth-outcome content bias, horizontal +
+  vertical): cultural *strategy* share roughly doubles under selection with
+  practices present (module-tag share-r +0.469 vs +0.321, 9/10 seeds,
+  paired), practice burden collapses ~4×, skill control clean — but the
+  *founder-lineage* bar (share-r > 0 majority) is honestly **missed**
+  (mutational inflow, not founder descent, captures the win). Remaining for
+  the O3 exit: the era-climb attempt with the tax neutralized, and a
+  founder-rescue variant if dynastic invasion is still the bar.
 - **[E, M] O4 — Transmission fidelity at demographic scale.** The collective-brain
   mechanism: fidelity/teaching scaling with effective population size so large
   populations hold more culture than small ones. *Depends:* O3 instrumentation

@@ -30,7 +30,6 @@ mod noise;
 pub mod personality;
 pub mod pheromone;
 pub mod practice;
-pub mod probe_o3;
 pub mod program;
 pub mod reproduce;
 pub mod resource;

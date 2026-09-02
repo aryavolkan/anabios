@@ -117,6 +117,15 @@ adoption filter never sees the main transmission channel during the early
 fixation window (52/66 Communicators hold practice 1 by t500, before any
 birth evidence exists).
 
+## Finding 7 — v1.1 adjudicated (see the findings doc)
+
+v1.1 (horizontal + vertical), n=10: founder bar **missed again** (1/10,
+mean -0.122); strategy-level (module-tag) effect **large and robust**
+(share-r 9/10 positive, mean +0.469 vs +0.321 baseline; growth ×4.66 vs
+×3.05; end-share 15.3% vs 9.2%). Full adjudication:
+`docs/superpowers/specs/2026-09-02-o3-repro-bias-findings.md`;
+per-run table `o3-measurement-summary.csv`; raw ledgers `raw/`.
+
 ## Pre-registration addendum — v1.1 vertical content bias (2026-09-02)
 
 Close the vertical bypass, same flag: at birth, when the parents' combined
