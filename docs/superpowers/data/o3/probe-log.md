@@ -156,6 +156,16 @@ fraction is the mechanism check. Expectation registered before results:
 trade circulation raises ape_mat; if held-era still decays with materials
 present, the residual gate is spread/fidelity (O4's territory, not O3's).
 
+## Finding 9 — trade-fix sweep: 7/11 dominant, first era-2, and the payoff gap
+
+rb + trade fixes + P1 tier, seeds 1–10+318 (`runs/o3-ape/trade-*`,
+copied to `raw-ape/`): **7/11 culture-dominant** (five >78%); materials
+flow (ape_mat 4%→26%, held_any 41→173, mean_era up to 0.44); **seed 4
+reaches max_era 2 — first era-2 event ever** (no era-2 row in ~140 runs
+before). Anti-correlation: dominant worlds are invention-dead, era-active
+worlds collapse — inventions don't pay demographically. Full adjudication:
+`docs/superpowers/specs/2026-09-02-o3-ape-composition-findings.md`.
+
 ## Pre-registration addendum — v1.1 vertical content bias (2026-09-02)
 
 Close the vertical bypass, same flag: at birth, when the parents' combined

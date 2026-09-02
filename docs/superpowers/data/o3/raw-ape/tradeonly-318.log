@@ -1,0 +1,6 @@
+[o3diag] t=2000 comm=584 comm_ape=473 ape_iq1=473 ape_mat=121 ape_chan=468 held_any=173 hold=[531, 242] births_ok=618 births_failed=49
+[o3diag] t=4000 comm=224 comm_ape=169 ape_iq1=169 ape_mat=79 ape_chan=168 held_any=101 hold=[220, 204] births_ok=248 births_failed=34
+[o3diag] t=6000 comm=30 comm_ape=19 ape_iq1=19 ape_mat=15 ape_chan=19 held_any=10 hold=[29, 27] births_ok=22 births_failed=11
+[o3diag] t=8000 comm=5 comm_ape=5 ape_iq1=5 ape_mat=4 ape_chan=5 held_any=0 hold=[4, 3] births_ok=1 births_failed=0
+[o3diag] t=10000 comm=0 comm_ape=0 ape_iq1=0 ape_mat=0 ape_chan=0 held_any=0 hold=[0, 0] births_ok=0 births_failed=0
+[o3diag] t=12000 comm=3 comm_ape=0 ape_iq1=0 ape_mat=0 ape_chan=0 held_any=0 hold=[0, 0] births_ok=1 births_failed=0

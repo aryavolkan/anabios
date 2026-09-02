@@ -106,6 +106,17 @@ the invasion margin or gets honestly closed.*
   tree), so the binding constraint has moved to **ape-composition of the
   surviving culture**. That is the next O3 lever; era progression is not
   testable until an ape lineage is among the winners.
+  **Ape-composition + material-gate probes (same date,
+  `2026-09-02-o3-ape-composition-findings.md`):** ape-survival levers work;
+  the era gate decomposes to **materials** (95% of apes clear the era-1 IQ
+  gate, ~0% hold the basket — the trade freeze operating on the invention
+  economy). rb + trade fixes + ape tier: **7/11 seeds culture-dominant**
+  (best condition yet) and **the first era-2 event in project history**
+  (seed 4, emergent, unseeded). Remaining gap, named: cultural dominance
+  and invention activity anti-correlate — **inventions don't pay
+  demographically**; the next mechanism cycle must make invention-holding
+  lineages win the intra-cultural contest (buff economics /
+  invention-gated tier), success = dominant AND era-active in one world.
 - **[E, M] O4 — Transmission fidelity at demographic scale.** The collective-brain
   mechanism: fidelity/teaching scaling with effective population size so large
   populations hold more culture than small ones. *Depends:* O3 instrumentation
