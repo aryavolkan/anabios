@@ -1,6 +1,11 @@
-# Q3 2026 Roadmap — Implementation & Testing Plans Index
+# Q3 2026 Roadmap — Implementation & Testing Plans Index (closed)
 
-This indexes the per-item implementation/testing plans for [`ROADMAP.md`](../../../ROADMAP.md). Each roadmap item maps to a plan file below. Code-bearing items use TDD task structure (failing test → minimal impl → verify → commit); research items use an experiment protocol with pre-registered criteria and a golden-tested regression. Two lighter items (perf, docs) have their concise plans inline at the bottom.
+**Status: closed 2026-09-01.** All Q3 roadmap items shipped (status record:
+[`docs/superpowers/specs/2026-08-07-detailed-roadmap.md`](../specs/2026-08-07-detailed-roadmap.md));
+the forward plan is now the long-horizon [`ROADMAP.md`](../../../ROADMAP.md). This
+index is kept as the record of how the Q3 items were implemented.
+
+This indexes the per-item implementation/testing plans for the Q3 2026 quarterly roadmap. Each roadmap item maps to a plan file below. Code-bearing items use TDD task structure (failing test → minimal impl → verify → commit); research items use an experiment protocol with pre-registered criteria and a golden-tested regression. Two lighter items (perf, docs) have their concise plans inline at the bottom.
 
 **Execution:** each plan is self-contained and self-testable. To execute one, use `superpowers:subagent-driven-development` (fresh subagent per task, review between) or `superpowers:executing-plans` (inline batches with checkpoints). Completed historical plans (milestones m1–m15, batches, E-series, affect mA–mF, plus the old `mN-followups.md` notes) live in [`archive/`](archive/).
 
@@ -9,14 +14,14 @@ This indexes the per-item implementation/testing plans for [`ROADMAP.md`](../../
 | Phase | Track | Roadmap item | Plan |
 |-------|-------|--------------|------|
 | 1 | V/T | Publish & host web player · deck authoring · showcase-director cinematic · one-command capture | [web-showcase-and-capture](archive/2026-08-01-web-showcase-and-capture.md) (completed) |
-| 2 | R | Out-of-Africa era-3 climb problem | [out-of-africa-climb-experiment](2026-08-01-out-of-africa-climb-experiment.md) |
-| 2 | T | Emergence-scorecard-driven sweeps | [emergence-scorecard-sweeps](2026-08-01-emergence-scorecard-sweeps.md) |
-| 2 | R | Next gene-culture experiment (confound-controlled) | [gene-culture-experiment](2026-08-01-gene-culture-experiment.md) |
-| 2 | E | Trade-economy redesign | [trade-economy-redesign](2026-08-01-trade-economy-redesign.md) |
-| 3 | E | One new emergence subsystem (knowledge accumulation) | [new-emergence-subsystem-knowledge](2026-08-01-new-emergence-subsystem-knowledge.md) |
+| 2 | R | Out-of-Africa era-3 climb problem | [out-of-africa-climb-experiment](archive/2026-08-01-out-of-africa-climb-experiment.md) (completed — closed as "seeding is honest") |
+| 2 | T | Emergence-scorecard-driven sweeps | [emergence-scorecard-sweeps](archive/2026-08-01-emergence-scorecard-sweeps.md) (completed) |
+| 2 | R | Next gene-culture experiment (confound-controlled) | [gene-culture-experiment](archive/2026-08-01-gene-culture-experiment.md) (resolved negative; plan superseded) |
+| 2 | E | Trade-economy redesign | [trade-economy-redesign](archive/2026-08-01-trade-economy-redesign.md) (completed) |
+| 3 | E | One new emergence subsystem (knowledge accumulation) | [new-emergence-subsystem-knowledge](archive/2026-08-01-new-emergence-subsystem-knowledge.md) (completed) |
 | 3 | T | Determinism & save/load hardening | [determinism-saveload-hardening](archive/2026-08-01-determinism-saveload-hardening.md) (completed) |
-| 3 | E | Perf headroom for large sweeps | inline below (§A) |
-| 3 | T | Docs & onboarding | inline below (§B) |
+| 3 | E | Perf headroom for large sweeps | inline below (§A) — completed ("no cheap win", `docs/perf-notes.md`) |
+| 3 | T | Docs & onboarding | inline below (§B) — completed (`docs/scenarios.md`, `docs/reproduce.md`) |
 
 The four Phase-1 items are combined into one plan because they share the showcase pipeline and are best sequenced together; the plan's five tasks map to them (hosting = Task 2, decks = Task 4/5, cinematic = Task 5, capture pipeline = Task 1/3).
 

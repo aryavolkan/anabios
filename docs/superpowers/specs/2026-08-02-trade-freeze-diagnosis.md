@@ -1,7 +1,7 @@
 # Trade-Economy Freeze — Corrected Diagnosis (2026-08-02)
 
 Investigation for the Phase-2 roadmap item *Trade-economy redesign*. Before
-building the [redesign plan](../plans/2026-08-01-trade-economy-redesign.md)'s
+building the [redesign plan](../plans/archive/2026-08-01-trade-economy-redesign.md)'s
 perishability fix, the freeze was measured directly. **The freeze is real, but
 the plan (and `ROADMAP.md`, and prior notes) misdiagnosed its cause** — so the
 planned fix cannot work. This doc records the corrected diagnosis and the

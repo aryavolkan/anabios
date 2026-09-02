@@ -1,7 +1,7 @@
 # Gene-Culture A/B — Finding (2026-08-03)
 
 Executes the Phase-2 roadmap item *Next gene-culture experiment (confound-controlled)*
-([plan](../plans/2026-08-01-gene-culture-experiment.md)). **Question:** when an
+([plan](../plans/archive/2026-08-01-gene-culture-experiment.md)). **Question:** when an
 apparent advantage tracks a gene, is it carried by the evolvable *gene* or merely
 by a cultural *module* any lineage can adopt? **Answer:** the experiment as
 written can't run (its premise gene no longer exists), and the valid current-code

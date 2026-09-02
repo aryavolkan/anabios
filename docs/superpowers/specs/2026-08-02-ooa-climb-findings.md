@@ -1,6 +1,6 @@
 # Out-of-Africa Invention-Climb Experiment — Findings (2026-08-02)
 
-Executes the [OoA climb experiment plan](../plans/2026-08-01-out-of-africa-climb-experiment.md)
+Executes the [OoA climb experiment plan](../plans/archive/2026-08-01-out-of-africa-climb-experiment.md)
 (Phase-2 roadmap item R). **Question:** can the grand-scale `out-of-africa` run
 reach the era-3 milestones (Writing, Husbandry) by *emergence*, or is seeding
 them (`starting_inventions`) the honest framing?
