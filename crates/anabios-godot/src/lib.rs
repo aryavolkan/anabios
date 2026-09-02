@@ -52,6 +52,38 @@ struct CoevoSample {
     affinity_diff: [f32; anabios_core::invention::INVENTION_COUNT],
 }
 
+/// The three affinity-gene series families, each naming one column of a
+/// per-invention array. Ordered longest-disambiguating-suffix last is NOT
+/// enough on its own — see the lookup-retry note in `coevo_series`.
+/// Picks one indexed column out of a history sample.
+type ColumnPick = fn(&CoevoSample, usize) -> f32;
+
+const AFFINITY_SUFFIXES: [(&str, ColumnPick); 3] = [
+    ("_holder", |s, i| s.affinity_holder_mean[i]),
+    ("_nonholder", |s, i| s.affinity_nonholder_mean[i]),
+    ("_diff", |s, i| s.affinity_diff[i]),
+];
+
+/// Strip `suffix` off `rest` and resolve what remains to a table index.
+/// `None` when the suffix doesn't match or the key isn't in the table.
+fn resolve_indexed(
+    rest: &str,
+    suffix: &str,
+    lookup: impl Fn(&str) -> Option<usize>,
+) -> Option<usize> {
+    lookup(rest.strip_suffix(suffix)?)
+}
+
+/// Index of an invention by its machine key.
+fn invention_index(key: &str) -> Option<usize> {
+    anabios_core::invention::INVENTIONS.iter().position(|i| i.key == key)
+}
+
+/// Index of a maladaptive practice by its machine key.
+fn practice_index(key: &str) -> Option<usize> {
+    anabios_core::practice::PRACTICES.iter().position(|p| p.key == key)
+}
+
 /// Soft cap on retained samples (~tens of KB each thousand ticks). Past this we
 /// stop appending and log once, rather than grow without bound.
 const COEVO_HISTORY_CAP: usize = 200_000;
@@ -311,53 +343,37 @@ impl Simulation {
     /// Invention adoption series are `inv_<key>_frac` (e.g. `inv_farming_frac`).
     #[func]
     fn coevo_series(&self, key: GString) -> PackedFloat32Array {
-        let mut out = PackedFloat32Array::new();
         let key_str = String::from(key);
-        if let Some(inv_key) = key_str.strip_prefix("inv_").and_then(|k| k.strip_suffix("_frac")) {
-            let Some(idx) =
-                anabios_core::invention::INVENTIONS.iter().position(|i| i.key == inv_key)
-            else {
-                return out;
+        // Indexed series first: `<prefix><table key><suffix>` names one column
+        // of a per-invention / per-practice array. `resolve_indexed` does the
+        // affix-strip + table lookup once for all of them, so adding a family
+        // is one row here rather than another hand-rolled parse block.
+        if let Some(rest) = key_str.strip_prefix("inv_") {
+            let Some(i) = resolve_indexed(rest, "_frac", invention_index) else {
+                return PackedFloat32Array::new();
             };
-            for s in &self.history {
-                out.push(s.inv_adopt_frac[idx]);
-            }
-            return out;
+            return self.collect(|s| s.inv_adopt_frac[i]);
         }
-        if let Some(pkey) = key_str.strip_prefix("practice_").and_then(|k| k.strip_suffix("_frac"))
-        {
-            let Some(idx) = anabios_core::practice::PRACTICES.iter().position(|p| p.key == pkey)
-            else {
-                return out;
+        if let Some(rest) = key_str.strip_prefix("practice_") {
+            let Some(i) = resolve_indexed(rest, "_frac", practice_index) else {
+                return PackedFloat32Array::new();
             };
-            for s in &self.history {
-                out.push(s.practice_adopt_frac[idx]);
-            }
-            return out;
+            return self.collect(|s| s.practice_adopt_frac[i]);
         }
-        // Affinity-gene selection series: `aff_<key>_holder`, `aff_<key>_nonholder`,
-        // or `aff_<key>_diff` (holder − nonholder) — one per affinity invention.
+        // Affinity-gene selection series: `aff_<key>_holder`, `_nonholder`, or
+        // `_diff` (holder − nonholder) — one per affinity invention.
         if let Some(rest) = key_str.strip_prefix("aff_") {
-            for (which, suffix) in
-                [("holder", "_holder"), ("nonholder", "_nonholder"), ("diff", "_diff")]
-            {
-                if let Some(inv_key) = rest.strip_suffix(suffix) {
-                    let Some(idx) =
-                        anabios_core::invention::INVENTIONS.iter().position(|i| i.key == inv_key)
-                    else {
-                        return out;
-                    };
-                    for s in &self.history {
-                        out.push(match which {
-                            "holder" => s.affinity_holder_mean[idx],
-                            "nonholder" => s.affinity_nonholder_mean[idx],
-                            _ => s.affinity_diff[idx],
-                        });
-                    }
-                    return out;
-                }
+            // Try every suffix before giving up: "_nonholder" also ENDS WITH
+            // "_holder", so a first-match-wins scan strips the wrong affix and
+            // then fails the table lookup. Continuing on a failed lookup is
+            // what makes the `_nonholder` family reachable at all.
+            for (suffix, pick) in AFFINITY_SUFFIXES {
+                let Some(i) = resolve_indexed(rest, suffix, invention_index) else {
+                    continue;
+                };
+                return self.collect(move |s| pick(s, i));
             }
-            return out;
+            return PackedFloat32Array::new();
         }
         let pick: fn(&CoevoSample) -> f32 = match key_str.as_str() {
             "mean_iq" => |s| s.mean_iq,
@@ -372,8 +388,14 @@ impl Simulation {
             "live_count" => |s| s.live_count,
             "species_count" => |s| s.species_count,
             "env_optimum" => |s| s.env_optimum,
-            _ => return out,
+            _ => return PackedFloat32Array::new(),
         };
+        self.collect(pick)
+    }
+
+    /// One value per history sample, oldest-first.
+    fn collect(&self, pick: impl Fn(&CoevoSample) -> f32) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
         for s in &self.history {
             out.push(pick(s));
         }
@@ -849,51 +871,23 @@ impl Simulation {
     /// ground view. Returns `RES²` colors, or empty if no world is loaded.
     #[func]
     fn biome_colors(&self) -> PackedColorArray {
-        use anabios_core::biome::{TerrainType, SUCCESSION_BARE, SUCCESSION_PIONEER};
         let mut out = PackedColorArray::new();
         let Some(w) = self.inner.as_ref() else { return out };
         for cell in w.biome.cells.iter() {
-            let base = match cell.terrain {
-                TerrainType::Water => Color::from_rgb(0.09, 0.19, 0.44),
-                TerrainType::Grass => Color::from_rgb(0.21, 0.44, 0.19),
-                TerrainType::Forest => Color::from_rgb(0.07, 0.26, 0.11),
-                TerrainType::Desert => Color::from_rgb(0.68, 0.58, 0.33),
-                TerrainType::Rock => Color::from_rgb(0.42, 0.40, 0.45),
-                TerrainType::Savanna => Color::from_rgb(0.72, 0.66, 0.36),
-                TerrainType::Rainforest => Color::from_rgb(0.06, 0.34, 0.16),
-                TerrainType::Taiga => Color::from_rgb(0.16, 0.34, 0.26),
-                TerrainType::Tundra => Color::from_rgb(0.62, 0.66, 0.62),
-            };
-            let cap = cell.terrain.carrying_capacity();
-            let frac = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };
-            let mut c = match cell.terrain {
-                TerrainType::Grass => {
-                    base.lerp(Color::from_rgb(0.42, 0.80, 0.33), (frac * 0.55) as f64)
-                }
-                TerrainType::Forest => {
-                    base.lerp(Color::from_rgb(0.20, 0.55, 0.24), (frac * 0.55) as f64)
-                }
-                TerrainType::Desert => {
-                    base.lerp(Color::from_rgb(0.86, 0.78, 0.52), (frac * 0.45) as f64)
-                }
-                _ => base,
-            };
-            c = match cell.succession {
-                SUCCESSION_BARE => c.lerp(Color::from_rgb(0.36, 0.24, 0.13), 0.65),
-                SUCCESSION_PIONEER => c.lerp(Color::from_rgb(0.55, 0.82, 0.30), 0.45),
-                _ => c,
-            };
-            let pol = (cell.pollution / anabios_core::invention::POLLUTION_CAP).clamp(0.0, 1.0);
-            if pol > 0.0 {
-                c = c.lerp(Color::from_rgb(0.32, 0.28, 0.24), (pol * 0.55) as f64);
-            }
+            // Terrain base -> lushness -> succession -> pollution is the shared
+            // ground mapping (`anabios_core::biome::cell_color`); the headless
+            // recorder renders the same bytes from it. Only the two bridge-only
+            // layers below are applied here.
+            let [r, g, b] = anabios_core::biome::cell_color(cell);
             // Rivers (river_flow > 0) are a passable moisture field, not Water
             // terrain, so they'd render as ordinary wet land. Tint them toward a
             // river-blue that trips the terrain shader's is_water() shimmer.
-            if cell.river_flow > 0.0 {
-                let (r, g, b) = river_tint((c.r, c.g, c.b), cell.river_flow);
-                c = Color::from_rgb(r, g, b);
-            }
+            let (r, g, b) = if cell.river_flow > 0.0 {
+                river_tint((r, g, b), cell.river_flow)
+            } else {
+                (r, g, b)
+            };
+            let mut c = Color::from_rgb(r, g, b);
             // Pack real elevation into alpha for the terrain shader's hillshade
             // (C2). The shader forces opaque output, so alpha never affects
             // rendering — it is a free data channel. RGB is unchanged.
@@ -1659,6 +1653,34 @@ mod tests {
         let d = BiomeField::generate(1, 96, 1024.0);
         let wld = water_line(&d.cells);
         assert!((wld - SEA_LEVEL).abs() < 0.05, "default water_line near SEA_LEVEL: {wld}");
+    }
+
+    /// Every affinity family must resolve to its own column. Regression guard:
+    /// "_nonholder" also ends with "_holder", so a scan that stops at the first
+    /// matching suffix strips the wrong affix and then finds no such invention —
+    /// which silently made the whole `_nonholder` family return nothing.
+    #[test]
+    fn affinity_suffixes_resolve_each_family() {
+        let key = anabios_core::invention::INVENTIONS[0].key;
+        let want = invention_index(key).expect("first invention resolves by key");
+        for (suffix, _) in AFFINITY_SUFFIXES {
+            let full = format!("{key}{suffix}");
+            let got = AFFINITY_SUFFIXES
+                .iter()
+                .find_map(|(s, _)| resolve_indexed(&full, s, invention_index));
+            assert_eq!(got, Some(want), "{full} did not resolve to its invention");
+        }
+    }
+
+    /// An unknown key in any indexed family resolves to nothing rather than
+    /// silently landing on index 0.
+    #[test]
+    fn unknown_indexed_keys_resolve_to_none() {
+        assert_eq!(resolve_indexed("no_such_invention_frac", "_frac", invention_index), None);
+        assert_eq!(resolve_indexed("no_such_practice_frac", "_frac", practice_index), None);
+        // Right key, wrong suffix.
+        let key = anabios_core::invention::INVENTIONS[0].key;
+        assert_eq!(resolve_indexed(&format!("{key}_frac"), "_diff", invention_index), None);
     }
 
     #[test]

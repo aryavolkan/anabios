@@ -310,155 +310,88 @@ pub struct AgentSpec {
     pub culture_bearer: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub struct TraitOverrides {
-    pub perception_radius: Option<f32>,
-    pub size: Option<f32>,
-    pub basal_metabolism: Option<f32>,
-    pub lifespan_bias: Option<f32>,
-    pub reproduction_threshold: Option<f32>,
+/// Declares the scenario `[traits]` table: one line per override, binding the
+/// TOML field name to the genome slot it pins. The struct and `apply` are both
+/// generated from this single list, so adding an override is a one-line change
+/// that cannot go half-wired — the previous hand-written struct/`apply` pair
+/// let a new field parse from TOML and then silently never reach the genome.
+macro_rules! trait_overrides {
+    ($( $(#[$meta:meta])* $field:ident => $slot:ident ),* $(,)?) => {
+        #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+        #[serde(deny_unknown_fields)]
+        pub struct TraitOverrides {
+            $( $(#[$meta])* pub $field: Option<f32>, )*
+        }
+
+        impl TraitOverrides {
+            /// Pin every override that is present onto `g`; absent ones leave
+            /// the archetype default / random draw untouched.
+            pub fn apply(&self, g: &mut Genome) {
+                $(
+                    if let Some(v) = self.$field {
+                        g.set(GenomeSlot::$slot, v);
+                    }
+                )*
+            }
+        }
+    };
+}
+
+trait_overrides! {
+    perception_radius => PerceptionRadius,
+    size => Size,
+    basal_metabolism => BasalMetabolism,
+    lifespan_bias => LifespanBias,
+    reproduction_threshold => ReproductionThreshold,
     /// Altruistic sharing drive (`GenomeSlot::Altruism`). Required for M15
     /// `starter_cooperator` scenarios; absent from all pre-M15 scenarios so
     /// the golden-tick hash is unaffected.
-    pub altruism: Option<f32>,
+    altruism => Altruism,
     /// DIT env-mode genome propensities (experiment). `InnateTechnique` is the
     /// genetic strategy's fixed technique; `IndividualLearning`/`SocialLearning`
     /// (`> 0.5`) enable learning-by-doing / social copying of the technique.
-    pub innate_technique: Option<f32>,
-    pub individual_learning: Option<f32>,
-    pub social_learning: Option<f32>,
+    innate_technique => InnateTechnique,
+    individual_learning => IndividualLearning,
+    social_learning => SocialLearning,
     /// Big Five personality overrides (stored `[0,1]`; `0.5` = neutral/0.0
     /// signed). When present, they pin the slot instead of the random draw.
-    pub openness: Option<f32>,
-    pub conscientiousness: Option<f32>,
-    pub extraversion: Option<f32>,
-    pub agreeableness: Option<f32>,
-    pub neuroticism: Option<f32>,
+    openness => Openness,
+    conscientiousness => Conscientiousness,
+    extraversion => Extraversion,
+    agreeableness => Agreeableness,
+    neuroticism => Neuroticism,
     /// Preferred-terrain drive (`GenomeSlot::TerrainAffinity`); pairs with
     /// `World::terrain_habitat` (geographic trade routes).
-    pub terrain_affinity: Option<f32>,
+    terrain_affinity => TerrainAffinity,
     /// E12 reproductive knobs (read only with `sexual_dimorphism_enabled`).
-    pub sexual_dimorphism: Option<f32>,
-    pub mate_choosiness: Option<f32>,
+    sexual_dimorphism => SexualDimorphism,
+    mate_choosiness => MateChoosiness,
     /// Heritable cognitive baseline (`GenomeSlot::CognitivePotential`; read
     /// only with `cognition_enabled`).
-    pub cognitive_potential: Option<f32>,
+    cognitive_potential => CognitivePotential,
     /// Affect-layer temperament genes (read only with `affect_enabled`):
     /// Boldness scales the FEAR response down; Aggressiveness sets RAGE gain;
     /// Reactivity raises survival-reflex hijack sensitivity. Nurturance and
     /// Sociality are declared for the (not yet wired) CARE/PANIC/PLAY systems
     /// and count toward speciation distance.
-    pub boldness: Option<f32>,
-    pub aggressiveness: Option<f32>,
-    pub reactivity: Option<f32>,
-    pub nurturance: Option<f32>,
-    pub sociality: Option<f32>,
+    boldness => Boldness,
+    aggressiveness => Aggressiveness,
+    reactivity => Reactivity,
+    nurturance => Nurturance,
+    sociality => Sociality,
     /// Render-color genes (HSV); picked up by the Godot bridge.
-    pub color_hue: Option<f32>,
-    pub color_sat: Option<f32>,
-    pub color_val: Option<f32>,
+    color_hue => ColorHue,
+    color_sat => ColorSat,
+    color_val => ColorVal,
     /// Climate-match feeding bonus (`GenomeSlot::EnvAffinity`; read only with
     /// `biome_adaptation`).
-    pub env_affinity: Option<f32>,
+    env_affinity => EnvAffinity,
     /// Genome mutation sigma scale (`GenomeSlot::MutationRate`). Lower values
     /// slow lineage drift/speciation, keeping breeding pools coherent.
-    pub mutation_rate: Option<f32>,
+    mutation_rate => MutationRate,
     /// Heritable wariness (`GenomeSlot::Vigilance`; read only with
     /// `anthro_race_enabled`).
-    pub vigilance: Option<f32>,
-}
-
-impl TraitOverrides {
-    pub fn apply(&self, g: &mut Genome) {
-        if let Some(v) = self.perception_radius {
-            g.set(GenomeSlot::PerceptionRadius, v);
-        }
-        if let Some(v) = self.size {
-            g.set(GenomeSlot::Size, v);
-        }
-        if let Some(v) = self.basal_metabolism {
-            g.set(GenomeSlot::BasalMetabolism, v);
-        }
-        if let Some(v) = self.lifespan_bias {
-            g.set(GenomeSlot::LifespanBias, v);
-        }
-        if let Some(v) = self.reproduction_threshold {
-            g.set(GenomeSlot::ReproductionThreshold, v);
-        }
-        if let Some(v) = self.altruism {
-            g.set(GenomeSlot::Altruism, v);
-        }
-        if let Some(v) = self.innate_technique {
-            g.set(GenomeSlot::InnateTechnique, v);
-        }
-        if let Some(v) = self.individual_learning {
-            g.set(GenomeSlot::IndividualLearning, v);
-        }
-        if let Some(v) = self.social_learning {
-            g.set(GenomeSlot::SocialLearning, v);
-        }
-        if let Some(v) = self.openness {
-            g.set(GenomeSlot::Openness, v);
-        }
-        if let Some(v) = self.conscientiousness {
-            g.set(GenomeSlot::Conscientiousness, v);
-        }
-        if let Some(v) = self.extraversion {
-            g.set(GenomeSlot::Extraversion, v);
-        }
-        if let Some(v) = self.agreeableness {
-            g.set(GenomeSlot::Agreeableness, v);
-        }
-        if let Some(v) = self.neuroticism {
-            g.set(GenomeSlot::Neuroticism, v);
-        }
-        if let Some(v) = self.terrain_affinity {
-            g.set(GenomeSlot::TerrainAffinity, v);
-        }
-        if let Some(v) = self.sexual_dimorphism {
-            g.set(GenomeSlot::SexualDimorphism, v);
-        }
-        if let Some(v) = self.mate_choosiness {
-            g.set(GenomeSlot::MateChoosiness, v);
-        }
-        if let Some(v) = self.cognitive_potential {
-            g.set(GenomeSlot::CognitivePotential, v);
-        }
-        if let Some(v) = self.boldness {
-            g.set(GenomeSlot::Boldness, v);
-        }
-        if let Some(v) = self.aggressiveness {
-            g.set(GenomeSlot::Aggressiveness, v);
-        }
-        if let Some(v) = self.reactivity {
-            g.set(GenomeSlot::Reactivity, v);
-        }
-        if let Some(v) = self.nurturance {
-            g.set(GenomeSlot::Nurturance, v);
-        }
-        if let Some(v) = self.sociality {
-            g.set(GenomeSlot::Sociality, v);
-        }
-        if let Some(v) = self.color_hue {
-            g.set(GenomeSlot::ColorHue, v);
-        }
-        if let Some(v) = self.color_sat {
-            g.set(GenomeSlot::ColorSat, v);
-        }
-        if let Some(v) = self.color_val {
-            g.set(GenomeSlot::ColorVal, v);
-        }
-        if let Some(v) = self.env_affinity {
-            g.set(GenomeSlot::EnvAffinity, v);
-        }
-        if let Some(v) = self.mutation_rate {
-            g.set(GenomeSlot::MutationRate, v);
-        }
-        if let Some(v) = self.vigilance {
-            g.set(GenomeSlot::Vigilance, v);
-        }
-    }
+    vigilance => Vigilance,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
