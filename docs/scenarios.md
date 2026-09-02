@@ -60,3 +60,20 @@ Notes:
 - `payoff_biased_learning` (O2b, measured negative) has no curated root
   scenario; its experiment lives at
   `scenarios/experiments/o2-payoff-biased-learning.toml`.
+
+## Decks tier (`scenarios/decks/`)
+
+The showcase garden — deck-dedicated scenarios that back the web replay player and the
+cinematic decks in `game/showcase/` — see [`scenarios/decks/README.md`](../scenarios/decks/README.md)
+for the tier conventions and the current deck → scenario · seed · asset pin registry. Unlike
+the core set, garden scenarios are pinned to a *recording* rather than a phenomenon claim;
+`crates/anabios-core/tests/deck_scenarios.rs` enforces the pin contract (curated deck →
+`scenario=<name>` + `seed` resolve and run 200 ticks at the pinned seed). The current
+decks back onto core scenarios:
+
+| deck | scenario · seed | asset |
+|---|---|---|
+| `out-of-africa-saga.json` | `out-of-africa-saga.toml` · 318 | web replay (`showcase/replay.js`) + `runs/showcase/out-of-africa-saga.mp4` |
+| `predator-prey.json` | `predator-prey.toml` · 0 | `runs/showcase/predator-prey.mp4` |
+| `dialects.json` | `dialects.toml` · 0 | `runs/showcase/dialects.mp4` |
+| `inventions.json` | `inventions.toml` · 0 | `runs/showcase/inventions.mp4` |

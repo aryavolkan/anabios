@@ -110,10 +110,13 @@ the invasion margin or gets honestly closed.*
   *Done when:* flag off-by-default, integration test + goldens + round-trip, new event
   types observed firing in a corpus sweep. *If wrong:* if the scorecard shows
   disease doesn't close a real coverage gap, substitute the corpus's top gap.
-- **[V, S] Scenario garden.** A `scenarios/decks/` tier pinned to showcase
-  assets, distinct from the test-pinned core set — as decks accumulate beyond the
-  current four. *Depends:* none. *Done when:* the tier exists with its own smoke
-  coverage, and `docs/scenarios.md` maps it.
+- **[V, S] Scenario garden.** ~~A `scenarios/decks/` tier pinned to showcase assets, distinct from the test-pinned core set —
+  as decks accumulate beyond the current four.~~ **Done 2026-09-01:** `scenarios/decks/README.md` documents the
+  tier (pinned to a *recording*, not a phenomenon claim), the pin convention, and the current deck →
+  scenario · seed · asset registry; `tests/deck_scenarios.rs` enforces the pin contract (curated deck
+  `_comment`/`seed` → `scenario=<name>` pins resolve and run 200 ticks at the pinned seed); the saga deck now declares
+  its pin in-JSON (was script-only). *Done when:* ~~the tier exists with its own smoke coverage, and
+  `docs/scenarios.md` maps it.~~ ✔
 
 **Horizon-1 exit:** the era-3 climb is either emergent on the Earth map or closed
 with a named, measured blocker; O4's demographic claim is adjudicated; one new
