@@ -126,6 +126,36 @@ mean -0.122); strategy-level (module-tag) effect **large and robust**
 `docs/superpowers/specs/2026-09-02-o3-repro-bias-findings.md`;
 per-run table `o3-measurement-summary.csv`; raw ledgers `raw/`.
 
+## Finding 8 — ape-composition probes + the era gate decomposed (branch o3-ape-composition)
+
+Probes P1 (`ANABIOS_O3_APE_TIER=1.0`, is_ape-only bite ×2) and P2
+(`ANABIOS_O3_APE_DIET=0.34`, band-edge founders) on the rb grand run, seeds
+2/3/5/318 (`runs/o3-ape/`):
+
+- Both levers can flip previously-collapsed worlds (seed 318 → **99.8%**
+  cultural under P1, 93.5% under P2) and keep apes alive to t20k (P1:
+  16–49 apes in 4/4 seeds; previously comm_ape → 0). Per-seed outcomes
+  churn chaotically (seed 3 lost its 94% flip under P1) — bistable regime,
+  claims must be distributional.
+- **Era still ≤ 1, mean_era 0.000 everywhere.** Gate decomposition via the
+  extended `[o3diag]` (seed 318, P1, t2000): of 781 apes, **95% clear the
+  era-1 IQ gate** (746) but **only 4% hold Stone Tools' 2-obsidian material
+  basket** (34); invention channels show progress (764) yet holding decays
+  (held_any 41 → 20). **The era climb is materials-blocked** — the known
+  trade-freeze result operating on the invention economy (goods don't
+  circulate; `unilateral_trade` — the shipped freeze fix — and
+  `conserve_goods_on_death` are both OFF in out-of-africa.toml).
+
+## Pre-registration — trade-fix probe (2026-09-02)
+
+`o3-ooa-rb-trade.toml` = rb + `unilateral_trade = true` +
+`conserve_goods_on_death = true` (both committed opt-in flags). Conditions:
++P1 tier (seeds 318, 3) and no-tier ablation (seed 318), 12000 ticks, diag
+on. **Read:** era-1 held count rising and any first era-2 event; ape_mat
+fraction is the mechanism check. Expectation registered before results:
+trade circulation raises ape_mat; if held-era still decays with materials
+present, the residual gate is spread/fidelity (O4's territory, not O3's).
+
 ## Pre-registration addendum — v1.1 vertical content bias (2026-09-02)
 
 Close the vertical bypass, same flag: at birth, when the parents' combined
