@@ -99,6 +99,14 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
             let skill = world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL];
             desired_bite *= 1.0 + crate::culture::SKILL_BONUS * skill.clamp(0.0, 1.0);
         }
+        // O3 probe B (throwaway, env-gated; identity when off): excludable
+        // resource tier — culture-capable agents reach food asocials cannot.
+        if is_comm {
+            let tier = crate::probe_o3::tier_mult();
+            if tier > 0.0 {
+                desired_bite *= 1.0 + tier;
+            }
+        }
         // Biome adaptation (opt-in): reward EnvAffinity matching the local
         // climate. Composes multiplicatively with the DIT/skill bonuses above.
         if world.biome_adaptation {
@@ -153,6 +161,20 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
             if world.env_period == 0 && is_comm {
                 let s = &mut world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL];
                 *s += crate::culture::SKILL_LEARN_RATE * (1.0 - *s);
+            }
+            // O3 probe A (throwaway, env-gated; no-op when off): niche
+            // construction — a skilled Communicator's successful foraging
+            // durably enriches the local soil (raises capacity for everyone).
+            if is_comm {
+                let gain = crate::probe_o3::niche_gain();
+                if gain > 0.0
+                    && world.agents.meme_vector[i][crate::culture::SKILL_CHANNEL]
+                        > crate::probe_o3::niche_skill_min()
+                {
+                    let (col, row) = world.biome.cell_coords(pos);
+                    let cell = world.biome.at_mut(col, row);
+                    cell.fertility = (cell.fertility + gain).min(crate::probe_o3::niche_cap());
+                }
             }
         }
     }

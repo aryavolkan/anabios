@@ -277,7 +277,9 @@ pub struct AgentSpec {
     /// `communicator`, `cooperator`, `cultural_cooperator`, `asocial_forager`,
     /// `culture_prey`, `asocial_prey`, `skilled_forager`, `fast_hunter`,
     /// `slow_hunter`, `innate_forager`, `individual_learner`, `pure_imitator`,
-    /// `critical_learner`, `cultural_forager`, `innovator`, `traditionalist`,
+    /// `critical_learner`, `cultural_forager`, `omnivore_forager` (the
+    /// diet-matched asocial control for `cultural_forager`), `innovator`,
+    /// `traditionalist`,
     /// `grazer`, `ape_hunter` (armed culture-bearer for the anthropogenic
     /// arms race), and the vertebrate classes `mammal_grazer`,
     /// `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`. Unknown names
@@ -465,6 +467,16 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
             let mut m = starter_kit();
             make_omnivore(&mut m); // reclass to ape (primate) diet
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
+            (m, starter_asocial_forager())
+        }
+        // O3 diet-matched control: the omnivore forager WITHOUT the
+        // Communicator. `cultural_forager` differs from this archetype by
+        // culture alone, so invasion contrasts against it isolate the
+        // Communicator (the ape reclass above made `asocial_forager` a
+        // diet-confounded control — omnivory, not culture, separated them).
+        "omnivore_forager" => {
+            let mut m = starter_kit();
+            make_omnivore(&mut m);
             (m, starter_asocial_forager())
         }
         // Invention-tree demo strategies: culture-bearing (starter_kit +
