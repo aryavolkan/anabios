@@ -98,9 +98,14 @@ the invasion margin or gets honestly closed.*
   practices present (module-tag share-r +0.469 vs +0.321, 9/10 seeds,
   paired), practice burden collapses ~4×, skill control clean — but the
   *founder-lineage* bar (share-r > 0 majority) is honestly **missed**
-  (mutational inflow, not founder descent, captures the win). Remaining for
-  the O3 exit: the era-climb attempt with the tax neutralized, and a
-  founder-rescue variant if dynastic invasion is still the bar.
+  (mutational inflow, not founder descent, captures the win).
+  **Era-climb probe (same date):** the grand run's ecological exclusion is
+  **breakable** — 0/6 → 3/6 seeds end culture-dominant (up to 94% share at
+  t20000) under the flag — but the era climb still does not start: the
+  winning culture is **non-ape** (`comm_ape` → 0; `is_ape` gates the tech
+  tree), so the binding constraint has moved to **ape-composition of the
+  surviving culture**. That is the next O3 lever; era progression is not
+  testable until an ape lineage is among the winners.
 - **[E, M] O4 — Transmission fidelity at demographic scale.** The collective-brain
   mechanism: fidelity/teaching scaling with effective population size so large
   populations hold more culture than small ones. *Depends:* O3 instrumentation

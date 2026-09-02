@@ -63,6 +63,7 @@ pub fn run(
             // and birth-outcome evidence among Communicator agents.
             if std::env::var("ANABIOS_O3_DIAG").is_ok() {
                 let mut n_comm = 0u32;
+                let mut n_comm_ape = 0u32;
                 let mut hold = [0u32; anabios_core::practice::PRACTICE_COUNT];
                 let mut bok = 0u64;
                 let mut bfail = 0u64;
@@ -75,6 +76,12 @@ pub fn run(
                         continue;
                     }
                     n_comm += 1;
+                    if anabios_core::invention::is_ape(
+                        &world.agents.genome[i],
+                        &world.agents.modules[i],
+                    ) {
+                        n_comm_ape += 1;
+                    }
                     bok += world.agents.births_ok[i] as u64;
                     bfail += world.agents.births_failed[i] as u64;
                     for (p, h) in hold.iter_mut().enumerate() {
@@ -84,9 +91,10 @@ pub fn run(
                     }
                 }
                 eprintln!(
-                    "[o3diag] t={} comm={} hold={:?} births_ok={} births_failed={}",
+                    "[o3diag] t={} comm={} comm_ape={} hold={:?} births_ok={} births_failed={}",
                     t + 1,
                     n_comm,
+                    n_comm_ape,
                     hold,
                     bok,
                     bfail

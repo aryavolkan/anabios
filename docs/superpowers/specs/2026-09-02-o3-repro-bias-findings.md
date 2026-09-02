@@ -99,6 +99,51 @@ bars should state which of the two they mean.
 - The fertility/tier probe scaffolding was throwaway (commit `dcfa222`);
   removed before merge — reproduce probe rows from that commit.
 
+## Era-climb probe (grand run, same session)
+
+`scenarios/out-of-africa.toml` (unseeded) ± the flag
+(`scenarios/experiments/o3-ooa-repro-bias.toml`), seeds {318,1,2,3,4,5},
+20000 ticks, module tag (`runs → data/o3/raw/ooa-*`):
+
+| seed | baseline end cultural share | repro-bias end cultural share |
+|---|---|---|
+| 318 | 0.000 (extinct) | 0.007 |
+| 1 | 0.003 | 0.003 |
+| 2 | 0.006 | **0.688** (n=2059) |
+| 3 | 0.001 | **0.942** (n=2824) |
+| 4 | 0.011 | 0.001 |
+| 5 | 0.014 | **0.138** |
+
+**The ecological exclusion of the OoA grand run is breakable**: 0/6 →
+**3/6 seeds end culture-dominant**, up to a 94%-cultural world sustained to
+t20000. This is the first committed-code lever that flips the grand run's
+outcome (`2026-08-02-ooa-climb-findings` recorded it as unreachable).
+
+**The era climb still does not start** — peak `max_era` ≤ 1 in all 12 runs,
+era 0 in the dominant worlds — and the `[o3diag]` ape-count shows why: the
+winning cultural population is **non-ape** (`comm_ape` 241 → 0 by t12000
+while `comm` holds ~1000-1800 in the seed-2 dominant run). Every
+`communicator_kit` cohort and every mutation-minted Communicator from
+herbivore stock is outside the `is_ape` band, so `enforce_ape_only` zeroes
+their invention channels — the culture that wins is invention-incapable by
+composition. The ape cultural cohorts (innovator/traditionalist/
+cultural_forager) pay the omnivore-diet + large-size tax against herbivore
+communicators who enjoy culture's benefits without it, and die out.
+
+Secondary observation (mechanism behaving as designed): late in the
+dominant run, Inbreeding re-saturates the winners (1002/1006 holders at
+t10000) while Child Sacrifice stays suppressed (~1%) — in a large outbred
+population Inbreeding's closeness-scaled cost is near zero, so there is no
+birth-failure evidence against it and the *evidence-based* filter honestly
+permits it. The bias suppresses customs in proportion to their observed
+harm, not categorically.
+
+**Blocker handoff:** the climb's binding constraint has moved from
+*ecological exclusion of culture* (broken here) to **ape-composition of the
+surviving culture** — the next lever must make the ape cultural lineages
+the ones that flourish (an income stream or niche non-apes cannot touch),
+measured on ape-communicator share, before era progression is testable.
+
 ## Honest next moves (not started here)
 
 1. **Founder-rescue variant, if wanted:** the binding factor is the
