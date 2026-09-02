@@ -202,6 +202,13 @@ pub struct World {
     /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
     #[serde(default)]
     pub payoff_biased_learning: bool,
+    /// Opt-in O3 reproductive-success payoff bias: content-bias-only practice
+    /// rejection keyed on observed neighbour birth outcomes
+    /// (`AgentBuffers::births_ok`/`births_failed`, counted only under this
+    /// flag). Off ⇒ byte-identical transmission and all-zero counters. See
+    /// `docs/superpowers/specs/2026-09-02-o3-corrected-apparatus-repro-bias-design.md`.
+    #[serde(default)]
+    pub repro_biased_learning: bool,
     /// Opt-in unilateral (one-sided) exchange: when a bilateral barter swap
     /// fails, `interact::trade_pass` falls back to a surplus GIFT — A gives
     /// one `TRADE_UNIT` of a good it holds above `STOCK_TARGET + TRADE_UNIT`
@@ -430,6 +437,7 @@ impl World {
             // behavior before this flag existed; set false to disable discovery.
             practices_enabled: true,
             payoff_biased_learning: false,
+            repro_biased_learning: false,
             unilateral_trade: false,
             anthro_race_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),

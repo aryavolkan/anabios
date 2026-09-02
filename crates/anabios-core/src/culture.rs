@@ -240,6 +240,12 @@ fn transmit_to_receiver(world: &mut World, id: u32) {
     if world.payoff_biased_learning {
         apply_payoff_bias(world, &mut scan);
     }
+    // O3 repro-biased learning (opt-in): decline practices whose local
+    // holders demonstrably bury more infants. Runs after the energy-proxy
+    // bias (both only ever zero practice targets, so order is benign).
+    if world.repro_biased_learning {
+        apply_repro_bias(&mut scan);
+    }
     // Writing buff: the holder's meme copy rate and invention spread rate are
     // doubled (literacy accelerates all cultural transmission). The literacy
     // bonus scales with the holder's gene when `gene_tech_coupling` is on
@@ -320,6 +326,37 @@ fn apply_payoff_bias(world: &World, scan: &mut NeighborMemeScan) {
             if holder_mean < non_mean {
                 scan.max_neighbour_practice[p] = 0.0;
             }
+        }
+    }
+}
+
+/// O3 repro-biased learning: content bias keyed on observed reproductive
+/// success — the only fitness proxy that can see a stillbirth/cull cost
+/// (energy cannot; O2b's measured failure). Scoped to practice channels
+/// only, and deliberately WITHOUT model bias (O2b's model bias measurably
+/// suppressed skill adoption). Decline a practice when, among Communicator
+/// neighbours, holders' birth-failure fraction exceeds non-holders' — with
+/// both groups present and at least one birth outcome observed in each,
+/// else there is no local evidence either way.
+fn apply_repro_bias(scan: &mut NeighborMemeScan) {
+    for p in 0..crate::practice::PRACTICE_COUNT {
+        let held = scan.holder_count_repro[p];
+        if held == 0 || held >= scan.neighbour_count_repro {
+            continue;
+        }
+        let h_ok = scan.holder_bok_sum[p];
+        let h_fail = scan.holder_bfail_sum[p];
+        let n_ok = scan.neighbour_bok_sum - h_ok;
+        let n_fail = scan.neighbour_bfail_sum - h_fail;
+        let h_births = h_ok + h_fail;
+        let n_births = n_ok + n_fail;
+        if h_births == 0 || n_births == 0 {
+            continue;
+        }
+        let h_frac = h_fail as f32 / h_births as f32;
+        let n_frac = n_fail as f32 / n_births as f32;
+        if h_frac > n_frac {
+            scan.max_neighbour_practice[p] = 0.0;
         }
     }
 }
@@ -512,6 +549,18 @@ struct NeighborMemeScan {
     /// content bias can derive non-holder means. Payoff-biased mode only.
     neighbour_energy_sum: f32,
     neighbour_count: u32,
+    /// O3 repro-biased mode only: per practice channel, holders' summed
+    /// birth outcomes (`births_ok`/`births_failed`) and holder count —
+    /// aggregated independently of the payoff-mode fields so each flag's
+    /// off-state stays byte-identical.
+    holder_bok_sum: [u32; crate::practice::PRACTICE_COUNT],
+    holder_bfail_sum: [u32; crate::practice::PRACTICE_COUNT],
+    holder_count_repro: [u32; crate::practice::PRACTICE_COUNT],
+    /// O3 repro-biased mode only: birth-outcome sums / count over ALL
+    /// Communicator neighbours (non-holder stats derive by subtraction).
+    neighbour_bok_sum: u32,
+    neighbour_bfail_sum: u32,
+    neighbour_count_repro: u32,
 }
 
 /// Scan the Communicator neighbours of agent `id` within `range`, aggregating
@@ -543,6 +592,13 @@ fn scan_neighbor_memes(
     let mut holder_count = [0u32; crate::practice::PRACTICE_COUNT];
     let mut neighbour_energy_sum = 0.0f32;
     let mut neighbour_count = 0u32;
+    let repro = world.repro_biased_learning;
+    let mut holder_bok_sum = [0u32; crate::practice::PRACTICE_COUNT];
+    let mut holder_bfail_sum = [0u32; crate::practice::PRACTICE_COUNT];
+    let mut holder_count_repro = [0u32; crate::practice::PRACTICE_COUNT];
+    let mut neighbour_bok_sum = 0u32;
+    let mut neighbour_bfail_sum = 0u32;
+    let mut neighbour_count_repro = 0u32;
     world.spatial.query(pos, range, |oid| {
         if oid == id {
             return;
@@ -563,6 +619,20 @@ fn scan_neighbor_memes(
                 if crate::practice::has(&world.agents.meme_vector[j], p) {
                     holder_energy_sum[p] += e;
                     holder_count[p] += 1;
+                }
+            }
+        }
+        if repro {
+            let bok = world.agents.births_ok[j] as u32;
+            let bfail = world.agents.births_failed[j] as u32;
+            neighbour_bok_sum += bok;
+            neighbour_bfail_sum += bfail;
+            neighbour_count_repro += 1;
+            for p in 0..crate::practice::PRACTICE_COUNT {
+                if crate::practice::has(&world.agents.meme_vector[j], p) {
+                    holder_bok_sum[p] += bok;
+                    holder_bfail_sum[p] += bfail;
+                    holder_count_repro[p] += 1;
                 }
             }
         }
@@ -622,6 +692,12 @@ fn scan_neighbor_memes(
         holder_count,
         neighbour_energy_sum,
         neighbour_count,
+        holder_bok_sum,
+        holder_bfail_sum,
+        holder_count_repro,
+        neighbour_bok_sum,
+        neighbour_bfail_sum,
+        neighbour_count_repro,
     }
 }
 

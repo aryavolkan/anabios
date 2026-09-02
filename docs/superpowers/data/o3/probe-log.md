@@ -93,3 +93,36 @@ stillbirth/cull cost), with practices still present in the world.
 n=10 founder-tag: founder share-r **> 0 in a majority of seeds**, with the
 practices-off run (+0.066, 6/10) as the honest ceiling reference, and an
 "invention/skill adoption not suppressed" control (the O2b failure mode).
+
+## Finding 6 — repro-bias v1 (horizontal-only): founder bar missed, strategy-level win
+
+v1 measurement (`runs/o3-matched/reprobias-*`, n=10): founder share-r > 0 in
+**2/10** (mean -0.079 vs baseline -0.087; paired Δ +0.007). **Bar missed.**
+Controls clean: founder mean_skill@2000 0.498 vs baseline 0.409 — no
+adoption suppression.
+
+But the env-gated `[o3diag]` instrument (autopsy, `ANABIOS_O3_DIAG=1`) shows
+the mechanism biting hard at the population level (seed 1): practice
+saturation among Communicators drops from ~95% (118-123/126 baseline
+holders at t2000) to ~20-25% (82-102/428), while the Communicator
+population **quadruples** (109 → 437 at t2500). Module-tag n=10 confirms:
+phenotype growth ×5.50 vs ×3.05, end-share 17.1% vs 9.2%, higher in 9/10
+seeds (`runs/o3-matched/mod{base,rb}-*`). The benefit accrues to the
+cultural *phenotype* (largely resident-derived Communicator mutants, ~50×
+the founders' mutational inflow), not the seeded founder lineage.
+
+**Identified bypass:** children are *born* holding practices
+(`inherit_child_meme` parent-averages every channel), so the horizontal
+adoption filter never sees the main transmission channel during the early
+fixation window (52/66 Communicators hold practice 1 by t500, before any
+birth evidence exists).
+
+## Pre-registration addendum — v1.1 vertical content bias (2026-09-02)
+
+Close the vertical bypass, same flag: at birth, when the parents' combined
+observed `births_failed >= births_ok` **and** `births_failed > 0`, the child
+declines (zeroes) every inherited practice channel — "the custom dies with
+the grieving family." Parameter-free, deterministic, zero-only, applied
+after `inherit_meme` so RNG draw counts are unchanged. Same n=10 protocol,
+same bar (founder share-r > 0 in a majority of seeds), same skill control,
+plus the strategy-level module-tag readout now recorded alongside.

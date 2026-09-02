@@ -304,7 +304,11 @@ const GOLDEN: &[(u64, u64)] =
     // mutation pool only under the flag). Flag off in minimal ⇒ culture mask
     // empty, threat sense 0.0, detector skipped — trajectory byte-identical,
     // only the serialized layout grew.
-    &[(0, 0xbcad52d25106fb41), (100, 0x0430f898c2b8c7ec), (1000, 0x1757cc043524a13a)];
+    // Refreshed 2026-09-02 (O3 repro-biased learning, FORMAT_VERSION →35):
+    // World.repro_biased_learning + AgentBuffers.{births_ok,births_failed}.
+    // Flag off in minimal ⇒ counters all-zero and unread, transmission
+    // unchanged — trajectory byte-identical, only the serialized layout grew.
+    &[(0, 0x978d83b9fd5401c1), (100, 0xd41537a3b1f924ba), (1000, 0x6bab0710e8622486)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

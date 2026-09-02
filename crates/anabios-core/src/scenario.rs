@@ -151,6 +151,15 @@ pub struct Scenario {
     /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
     #[serde(default)]
     pub payoff_biased_learning: bool,
+    /// Opt-in O3 reproductive-success payoff bias: cultural transmission
+    /// declines a maladaptive-practice channel when its local holders show a
+    /// higher observed birth-failure fraction than non-holders (content bias
+    /// only — no model bias, which O2b measured as skill-suppressing). The
+    /// only fitness proxy that can see a stillbirth/cull cost. Off by
+    /// default ⇒ byte-identical transmission and no birth-outcome counting.
+    /// See `docs/superpowers/specs/2026-09-02-o3-corrected-apparatus-repro-bias-design.md`.
+    #[serde(default)]
+    pub repro_biased_learning: bool,
     /// Opt-in unilateral (one-sided) exchange: when no mutually-beneficial
     /// barter swap exists, an agent may gift one `TRADE_UNIT` of a good it
     /// holds above `STOCK_TARGET + TRADE_UNIT` to a partner that still wants
@@ -723,6 +732,7 @@ impl Scenario {
         w.knowledge_enabled = self.knowledge_enabled;
         w.practices_enabled = self.practices_enabled;
         w.payoff_biased_learning = self.payoff_biased_learning;
+        w.repro_biased_learning = self.repro_biased_learning;
         w.unilateral_trade = self.unilateral_trade;
         w.anthro_race_enabled = self.anthro_race_enabled;
         w.disasters_enabled = self.disasters_enabled;
