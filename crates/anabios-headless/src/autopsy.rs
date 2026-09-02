@@ -67,8 +67,18 @@ pub fn run(
                 let mut hold = [0u32; anabios_core::practice::PRACTICE_COUNT];
                 let mut bok = 0u64;
                 let mut bfail = 0u64;
+                // Invention-gate decomposition for the era-climb autopsy:
+                // among apes — IQ clears the era-1 gate / materials cover
+                // Stone Tools / any invention channel level > 0 / held.
+                let mut ape_iq1 = 0u32;
+                let mut ape_mat = 0u32;
+                let mut ape_chan = 0u32;
+                let mut n_held_any = 0u32;
                 for id in world.agents.iter_alive() {
                     let i = id as usize;
+                    if anabios_core::invention::held_mask(&world.agents.meme_vector[i]) != 0 {
+                        n_held_any += 1;
+                    }
                     if !anabios_core::module::has(
                         &world.agents.modules[i],
                         anabios_core::module::ModuleType::Communicator,
@@ -81,6 +91,21 @@ pub fn run(
                         &world.agents.modules[i],
                     ) {
                         n_comm_ape += 1;
+                        if world.agents.iq[i] >= anabios_core::invention::IQ_REQ_BY_ERA[0] {
+                            ape_iq1 += 1;
+                        }
+                        if anabios_core::invention::materials_permit(
+                            &world.agents.inventory[i],
+                            0,
+                            world.resources_enabled,
+                        ) {
+                            ape_mat += 1;
+                        }
+                        if (0..anabios_core::invention::INVENTION_COUNT).any(|k| {
+                            world.agents.meme_vector[i][anabios_core::invention::channel(k)] > 0.0
+                        }) {
+                            ape_chan += 1;
+                        }
                     }
                     bok += world.agents.births_ok[i] as u64;
                     bfail += world.agents.births_failed[i] as u64;
@@ -91,10 +116,14 @@ pub fn run(
                     }
                 }
                 eprintln!(
-                    "[o3diag] t={} comm={} comm_ape={} hold={:?} births_ok={} births_failed={}",
+                    "[o3diag] t={} comm={} comm_ape={} ape_iq1={} ape_mat={} ape_chan={} held_any={} hold={:?} births_ok={} births_failed={}",
                     t + 1,
                     n_comm,
                     n_comm_ape,
+                    ape_iq1,
+                    ape_mat,
+                    ape_chan,
+                    n_held_any,
                     hold,
                     bok,
                     bfail
