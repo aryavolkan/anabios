@@ -45,15 +45,20 @@ fn novel_runs_are_copied_to_novel_dir() {
     let tmp = tempfile::tempdir().unwrap();
     let out = tmp.path().join("swp");
     let scenario = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scenarios/biome-trade.toml");
+    // The mechanism under test is the novel/ copy, not the sweep length — and
+    // the spawned binary is instrumented under cargo llvm-cov, where every tick
+    // is ~10x slower (this test was a 13.5-minute single pole in the coverage
+    // job). Shorten under cfg(coverage), mirroring record_schema.rs.
+    let (seeds, ticks) = if cfg!(coverage) { ("2", "300") } else { ("4", "1500") };
     let status = Command::new(env!("CARGO_BIN_EXE_anabios-headless"))
         .args([
             "sweep",
             "--scenario",
             scenario,
             "--seeds",
-            "4",
+            seeds,
             "--ticks",
-            "1500",
+            ticks,
             "--out",
             out.to_str().unwrap(),
         ])
@@ -62,10 +67,19 @@ fn novel_runs_are_copied_to_novel_dir() {
     assert!(status.success());
 
     let csv = std::fs::read_to_string(out.join("summary.csv")).unwrap();
-    let any_novel = csv.lines().skip(1).any(|r| {
-        // novel_events is field index 65: 5 prefix + 59 event counts + emergence_score.
-        r.split(',').nth(65).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) > 0
-    });
+    // Resolve the column by name — the per-event block grows as the codex adds
+    // event types, so a hardcoded index silently goes stale (it did: it read
+    // emergence_score for a while, parse::<u64> fails on the float, and the
+    // assertions below were vacuously skipped).
+    let header = csv.lines().next().unwrap();
+    let novel_idx = header
+        .split(',')
+        .position(|c| c == "novel_events")
+        .expect("summary.csv has a novel_events column");
+    let any_novel = csv
+        .lines()
+        .skip(1)
+        .any(|r| r.split(',').nth(novel_idx).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) > 0);
     if any_novel {
         let novel = out.join("novel");
         assert!(novel.is_dir(), "novel/ dir missing though a run had novel_events>0");

@@ -55,13 +55,17 @@ jobs:
   # by binary so the two biggest detectors never share a runner:
   #   - `predation`:    predator_prey_emergence alone (the tallest pole, ~7 min).
   #   - `cooperation`:  cooperation_emergence + dimorphism.
-  #   - `rest`:         everything else — the remaining detectors (domestication,
-  #     knowledge, …) + the whole lib/integration suite.
-  # The three filtersets are a complete, disjoint partition (the third is the
-  # negation of the first two), so every test still runs exactly once; all shards
-  # must pass. The `emergence (release)` job below fans them in so the gate keeps
-  # its single check name. (Unconditionally-#[ignore]d experiment harnesses in
-  # gene_culture.rs / dit_boundary.rs stay skipped — analysis tools, not gates.)
+  #   - `rest-1/2`:     everything else — the remaining detectors (domestication,
+  #     knowledge, …) + the whole lib/integration suite — count-partitioned in
+  #     two. The remainder has no single tall pole (max ~100s) but ~740 tests,
+  #     so the wall is total-work/cores; splitting it doubles the cores on it
+  #     (was ~12-13 min as one shard, 2026-09).
+  # The four filtersets are a complete, disjoint partition (the rest pair is the
+  # negation of the first two, split by count), so every test still runs exactly
+  # once; all shards must pass. The `emergence (release)` job below fans them in
+  # so the gate keeps its single check name. (Unconditionally-#[ignore]d
+  # experiment harnesses in gene_culture.rs / dit_boundary.rs stay skipped —
+  # analysis tools, not gates.)
   emergence-shard:
     name: emergence shard (${{ matrix.id }})
     runs-on: ubuntu-latest
@@ -71,17 +75,23 @@ jobs:
         include:
           - id: predation
             filter: "binary(=predator_prey_emergence)"
+            partition: ""
           - id: cooperation
             filter: "binary(=cooperation_emergence) | binary(=dimorphism)"
-          - id: rest
+            partition: ""
+          - id: rest-1
             filter: "not (binary(=predator_prey_emergence) | binary(=cooperation_emergence) | binary(=dimorphism))"
+            partition: "--partition count:1/2"
+          - id: rest-2
+            filter: "not (binary(=predator_prey_emergence) | binary(=cooperation_emergence) | binary(=dimorphism))"
+            partition: "--partition count:2/2"
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
       - name: test (release) — shard ${{ matrix.id }}
-        run: cargo nextest run --workspace --release -E "${{ matrix.filter }}"
+        run: cargo nextest run --workspace --release -E "${{ matrix.filter }}" ${{ matrix.partition }}
 
   # Fan-in: keeps a single `emergence (release)` status check (matching the name
   # branch protection may require) and fails if any shard failed. `if: always()`
@@ -109,16 +119,19 @@ jobs:
   #     back-to-back and is a tall pole (~6.5 min even by itself).
   #   - `behavioral`: `traditions` (one ~250s test) + `invariants` (many mid-
   #     weight tests that parallelize) — ~8 min.
-  #   - `sweep`:      `sweep_csv` alone — the tallest pole. Its one heavyweight
-  #     test spawns the instrumented headless binary for a 4-seed × 1500-tick
-  #     sweep (~810s on main, worse on sim-heavier branches); count-partitioned
-  #     into a bulk shard it dragged that shard to 24-46 min.
-  #   - `trade`:      the `trade` suite — three ~340-375s geographic/turnover
-  #     sims plus mid-weight tests; clustered they overloaded one bulk shard.
+  #   - `headless`:   `package(=anabios-headless)` — the CLI crate's tests spawn
+  #     the instrumented binary as a subprocess; `sweep_csv`'s instrumented sweep
+  #     was a 13.5-min single-test pole in `bulk-1` before the test was
+  #     cfg(coverage)-shortened (2026-09). Keeping the crate separate stops it
+  #     distorting the bulk split.
+  #   - `trade`:      the `trade` suite — the turnover sims keep full horizons
+  #     (~340s+ instrumented each); clustered they overloaded one bulk shard.
   #   - `bulk-1..3`:  everything else + the whole lib/unit suite, count-partitioned
-  #     3 ways (nextest -E <filter> --partition). Once the tall poles above are
-  #     carved out, the remainder is uniform enough that round-robin balances it
-  #     (~5-7 min each) instead of piling into one 16-min shard.
+  #     3 ways (nextest -E <filter> --partition). The worst remaining sim tests
+  #     (trade determinism checks, earth round-trip, save_load_roundtrip) shorten
+  #     their tick counts under cfg(coverage) — see the comments in those tests —
+  #     so the remainder is uniform enough that round-robin balances it (~5-7 min
+  #     each) instead of piling into one 16-min shard.
   # The seven filtersets are a complete, disjoint partition (the three bulk shards
   # exhaust the negation of the four carved filtersets), so their union is the
   # full workspace coverage. If a binary is renamed it just falls into `bulk` —
@@ -138,20 +151,20 @@ jobs:
           - id: behavioral
             filter: "binary(=traditions) | binary(=invariants)"
             partition: ""
-          - id: sweep
-            filter: "binary(=sweep_csv)"
+          - id: headless
+            filter: "package(=anabios-headless)"
             partition: ""
           - id: trade
             filter: "binary(=trade)"
             partition: ""
           - id: bulk-1
-            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants) | binary(=sweep_csv) | binary(=trade))"
+            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants) | package(=anabios-headless) | binary(=trade))"
             partition: "--partition count:1/3"
           - id: bulk-2
-            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants) | binary(=sweep_csv) | binary(=trade))"
+            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants) | package(=anabios-headless) | binary(=trade))"
             partition: "--partition count:2/3"
           - id: bulk-3
-            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants) | binary(=sweep_csv) | binary(=trade))"
+            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants) | package(=anabios-headless) | binary(=trade))"
             partition: "--partition count:3/3"
     steps:
       - uses: actions/checkout@v7
