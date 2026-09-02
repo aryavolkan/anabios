@@ -76,9 +76,24 @@ pub fn husbandry_step(world: &mut World) {
     alive_ids.clear();
     alive_ids.extend(world.agents.iter_alive());
 
-    // Pass 1: orphan sweep (dead owner → wild again) + per-owner herd counts.
+    // Three ordered passes over the same alive set: the orphan sweep must
+    // settle ownership before yields are paid on it, and both must settle
+    // before taming adds new bindings this tick.
+    let mut herd_counts = release_orphans_and_count_herds(world, &alive_ids);
+    pay_milk_yields(world, &alive_ids);
+    tame_livestock(world, &alive_ids, &mut herd_counts);
+
+    world.agents.scratch_ids = alive_ids;
+}
+
+/// Pass 1: a livestock whose owner died goes wild again; surviving bindings
+/// are tallied into per-owner herd sizes for the taming cap.
+fn release_orphans_and_count_herds(
+    world: &mut World,
+    alive_ids: &[AgentId],
+) -> BTreeMap<AgentId, u32> {
     let mut herd_counts: BTreeMap<AgentId, u32> = BTreeMap::new();
-    for &id in &alive_ids {
+    for &id in alive_ids {
         let owner = world.agents.livestock_of[id as usize];
         if owner == AGENT_NULL {
             continue;
@@ -89,9 +104,13 @@ pub fn husbandry_step(world: &mut World) {
             *herd_counts.entry(owner).or_insert(0) += 1;
         }
     }
+    herd_counts
+}
 
-    // Pass 2: milk yields — adult livestock with surplus pays its owner.
-    for &id in &alive_ids {
+/// Pass 2: milk yields — adult livestock with surplus energy pays its owner,
+/// at a size-scaled rate and a multiplied cost to itself.
+fn pay_milk_yields(world: &mut World, alive_ids: &[AgentId]) {
+    for &id in alive_ids {
         let i = id as usize;
         let owner = world.agents.livestock_of[i];
         if owner == AGENT_NULL || world.agents.age[i] < MILK_MIN_AGE {
@@ -105,10 +124,16 @@ pub fn husbandry_step(world: &mut World) {
         world.agents.energy[i] -= amount * MILK_COST_MULT;
         world.agents.energy[owner as usize] += amount;
     }
+}
 
-    // Pass 3: taming — each Husbandry holder under its herd cap reaches for
-    // the nearest eligible juvenile herbivore and rolls.
-    for &id in &alive_ids {
+/// Pass 3: each Husbandry holder under its herd cap reaches for the nearest
+/// eligible juvenile herbivore and rolls for the tame.
+fn tame_livestock(
+    world: &mut World,
+    alive_ids: &[AgentId],
+    herd_counts: &mut BTreeMap<AgentId, u32>,
+) {
+    for &id in alive_ids {
         let i = id as usize;
         if herd_counts.get(&id).copied().unwrap_or(0) >= MAX_LIVESTOCK_PER_OWNER {
             continue;
@@ -117,29 +142,7 @@ pub fn husbandry_step(world: &mut World) {
         if held & crate::invention::bit(crate::invention::HUSBANDRY) == 0 {
             continue;
         }
-        let pos = world.agents.position[i];
-        let species = world.agents.species_id[i];
-        // Nearest eligible candidate: min distance, tie-break lowest id —
-        // independent of spatial bucket traversal order, so deterministic.
-        let mut best: Option<(u32, f32)> = None;
-        world.spatial.query(pos, TAME_RANGE, |other_id| {
-            let j = other_id as usize;
-            if !world.agents.is_alive(other_id) || !is_tame_candidate(&world.agents, j, species) {
-                return;
-            }
-            let d = crate::spatial::torus_distance(pos, world.agents.position[j], world.world_size);
-            if d > TAME_RANGE {
-                return;
-            }
-            match best {
-                None => best = Some((other_id, d)),
-                Some((cur, cd)) if d < cd || (d == cd && other_id < cur) => {
-                    best = Some((other_id, d));
-                }
-                _ => {}
-            }
-        });
-        let Some((candidate, _)) = best else { continue };
+        let Some(candidate) = nearest_tame_candidate(world, i) else { continue };
         if world.rng.f32_unit() >= TAME_CHANCE {
             continue;
         }
@@ -149,22 +152,52 @@ pub fn husbandry_step(world: &mut World) {
         // release orphaned herds. Only reachable with the feature on.
         world.agents.track_livestock = true;
         herd_counts.insert(id, herd_counts.get(&id).copied().unwrap_or(0) + 1);
-        // First tame of this livestock species anywhere → codex event.
-        let livestock_species = world.agents.species_id[candidate as usize];
-        if world.codex.domesticated_species.insert(livestock_species) {
-            let p = world.agents.position[candidate as usize];
-            world.codex.push_event(crate::codex::CodexEvent {
-                event_type: crate::codex::EventType::AnimalDomesticated,
-                tick: world.tick,
-                species_id: livestock_species,
-                value: species as f32,
-                loc_x: p.x,
-                loc_y: p.y,
-            });
-        }
+        record_first_domestication(world, i, candidate);
     }
+}
 
-    world.agents.scratch_ids = alive_ids;
+/// The nearest eligible tame candidate to agent `i`: min distance, tie-broken
+/// by lowest id — independent of spatial bucket traversal order, so
+/// deterministic.
+fn nearest_tame_candidate(world: &World, i: usize) -> Option<AgentId> {
+    let pos = world.agents.position[i];
+    let species = world.agents.species_id[i];
+    let mut best: Option<(u32, f32)> = None;
+    world.spatial.query(pos, TAME_RANGE, |other_id| {
+        let j = other_id as usize;
+        if !world.agents.is_alive(other_id) || !is_tame_candidate(&world.agents, j, species) {
+            return;
+        }
+        let d = crate::spatial::torus_distance(pos, world.agents.position[j], world.world_size);
+        if d > TAME_RANGE {
+            return;
+        }
+        match best {
+            None => best = Some((other_id, d)),
+            Some((cur, cd)) if d < cd || (d == cd && other_id < cur) => {
+                best = Some((other_id, d));
+            }
+            _ => {}
+        }
+    });
+    best.map(|(id, _)| id)
+}
+
+/// Fire `AnimalDomesticated` the first time this livestock species is tamed
+/// anywhere in the world; repeat tames of the same species are silent.
+fn record_first_domestication(world: &mut World, owner_i: usize, candidate: AgentId) {
+    let livestock_species = world.agents.species_id[candidate as usize];
+    if world.codex.domesticated_species.insert(livestock_species) {
+        let p = world.agents.position[candidate as usize];
+        world.codex.push_event(crate::codex::CodexEvent {
+            event_type: crate::codex::EventType::AnimalDomesticated,
+            tick: world.tick,
+            species_id: livestock_species,
+            value: world.agents.species_id[owner_i] as f32,
+            loc_x: p.x,
+            loc_y: p.y,
+        });
+    }
 }
 
 #[cfg(test)]

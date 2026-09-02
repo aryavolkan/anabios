@@ -79,9 +79,30 @@ impl RootAgg {
 /// but never drops an existing pair — and are pruned only when a lineage
 /// goes extinct. Roots are never reused, so a pruned pair cannot re-form.
 pub(super) fn detect_hunted_adaptation(world: &mut World, agg: &SpeciesAggTable) {
-    // Candidate hunter/hunted pairs from the war substrate: exactly one root
-    // culture-tagged, with enough kills in the current hostility episode to
-    // call it hunting.
+    let pairs = candidate_pairs(world);
+    // Roots we must fold this tick: candidate pairs plus every baselined pair
+    // (baselines are sticky across war episodes — a cooled feud pauses
+    // qualification, not the race).
+    let wanted = roots_of_interest(world, &pairs);
+    let roots = fold_lineage_roots(world, agg, &wanted);
+
+    qualify_new_pairs(world, &pairs, &roots);
+    let events = check_divergence(world, &roots);
+    prune_extinct_pairs(world, &wanted, &roots);
+    for ev in events {
+        world.codex.push_event(ev);
+    }
+}
+
+/// True while `root` still has alive members in this tick's fold.
+fn alive(roots: &BTreeMap<u32, RootAgg>, root: u32) -> bool {
+    roots.get(&root).is_some_and(|r| r.count > 0)
+}
+
+/// Candidate `(culture, prey)` pairs from the war substrate: exactly one root
+/// culture-tagged, with enough kills in the current hostility episode to call
+/// it hunting.
+fn candidate_pairs(world: &World) -> Vec<(u32, u32)> {
     let mut pairs: Vec<(u32, u32)> = Vec::new();
     for (&(lo, hi), rec) in world.codex.hostility.iter() {
         if rec.kills < HUNTED_MIN_KILLS {
@@ -95,12 +116,14 @@ pub(super) fn detect_hunted_adaptation(world: &mut World, agg: &SpeciesAggTable)
             _ => {}
         }
     }
+    pairs
+}
 
-    // Roots we must fold this tick: candidate pairs plus every baselined
-    // pair (baselines are sticky across war episodes — a cooled feud pauses
-    // qualification, not the race).
+/// Every root taking part in a candidate or already-baselined pair — the set
+/// the fold below is restricted to.
+fn roots_of_interest(world: &World, pairs: &[(u32, u32)]) -> BTreeSet<u32> {
     let mut wanted: BTreeSet<u32> = BTreeSet::new();
-    for &(culture, prey) in &pairs {
+    for &(culture, prey) in pairs {
         wanted.insert(culture);
         wanted.insert(prey);
     }
@@ -108,6 +131,16 @@ pub(super) fn detect_hunted_adaptation(world: &mut World, agg: &SpeciesAggTable)
         wanted.insert(culture);
         wanted.insert(prey);
     }
+    wanted
+}
+
+/// Fold the per-species aggregates of every wanted root into one entry per
+/// lineage, so splinters of a lineage count as the lineage.
+fn fold_lineage_roots(
+    world: &World,
+    agg: &SpeciesAggTable,
+    wanted: &BTreeSet<u32>,
+) -> BTreeMap<u32, RootAgg> {
     let mut roots: BTreeMap<u32, RootAgg> = BTreeMap::new();
     for &sid in agg.active() {
         let root = war::lineage_root(world, sid);
@@ -129,11 +162,14 @@ pub(super) fn detect_hunted_adaptation(world: &mut World, agg: &SpeciesAggTable)
             *dst += e.invention_counts[k];
         }
     }
-    let alive = |root: u32| roots.get(&root).is_some_and(|r| r.count > 0);
+    roots
+}
 
-    // Qualify new pairs: latch both sides' indices as the baseline.
-    for &(culture, prey) in &pairs {
-        if alive(culture) && alive(prey) {
+/// Qualify new pairs: latch both sides' current indices as the baseline the
+/// divergence check measures against. Existing baselines are never rewritten.
+fn qualify_new_pairs(world: &mut World, pairs: &[(u32, u32)], roots: &BTreeMap<u32, RootAgg>) {
+    for &(culture, prey) in pairs {
+        if alive(roots, culture) && alive(roots, prey) {
             let c = &roots[&culture];
             let p = &roots[&prey];
             let (armor, speed, vig) = p.defense_channels();
@@ -145,10 +181,13 @@ pub(super) fn detect_hunted_adaptation(world: &mut World, agg: &SpeciesAggTable)
             ));
         }
     }
+}
 
-    // Every baselined pair with both lineages alive checks its divergence —
-    // including pairs whose hostility record has cooled (the race continues
-    // between episodes).
+/// Every baselined pair with both lineages alive checks its divergence from
+/// the latched baseline — including pairs whose hostility record has cooled
+/// (the race continues between episodes). Latches the pair on firing so each
+/// pair reports once.
+fn check_divergence(world: &mut World, roots: &BTreeMap<u32, RootAgg>) -> Vec<CodexEvent> {
     let tick = world.tick;
     let mut events: Vec<CodexEvent> = Vec::new();
     let baselined: Vec<(u32, u32)> = world.codex.hunted_baselines.keys().copied().collect();
@@ -156,7 +195,7 @@ pub(super) fn detect_hunted_adaptation(world: &mut World, agg: &SpeciesAggTable)
         if world.codex.hunted_active.contains(&(culture, prey)) {
             continue;
         }
-        if !alive(culture) || !alive(prey) {
+        if !alive(roots, culture) || !alive(roots, prey) {
             continue;
         }
         let base = world.codex.hunted_baselines[&(culture, prey)];
@@ -164,6 +203,8 @@ pub(super) fn detect_hunted_adaptation(world: &mut World, agg: &SpeciesAggTable)
         let p = &roots[&prey];
         let culture_delta = c.culture_index() - base.0;
         let (armor_now, speed_now, vig_now) = p.defense_channels();
+        // Per-channel max, not a sum: a hunted herd answers with ONE channel,
+        // so summing lets a declining channel mask the rising one.
         let prey_delta = (armor_now - base.1).max(speed_now - base.2).max(vig_now - base.3);
         if culture_delta >= HUNTED_MIN_CULTURE_DELTA && prey_delta >= HUNTED_MIN_PREY_DELTA {
             world.codex.hunted_active.insert((culture, prey));
@@ -178,20 +219,18 @@ pub(super) fn detect_hunted_adaptation(world: &mut World, agg: &SpeciesAggTable)
             });
         }
     }
-    // Prune only on extinction: a root with no alive members is gone for
-    // good (roots are never reused), so its baselines/latches are dead
-    // state. Cooled-but-alive pairs keep their baselines (sticky, above).
-    world
-        .codex
-        .hunted_baselines
-        .retain(|&(c, p), _| wanted.contains(&c) && wanted.contains(&p) && alive(c) && alive(p));
-    world
-        .codex
-        .hunted_active
-        .retain(|&(c, p)| wanted.contains(&c) && wanted.contains(&p) && alive(c) && alive(p));
-    for ev in events {
-        world.codex.push_event(ev);
-    }
+    events
+}
+
+/// Prune only on extinction: a root with no alive members is gone for good
+/// (roots are never reused), so its baselines/latches are dead state.
+/// Cooled-but-alive pairs keep their baselines (sticky, see `qualify_new_pairs`).
+fn prune_extinct_pairs(world: &mut World, wanted: &BTreeSet<u32>, roots: &BTreeMap<u32, RootAgg>) {
+    let keep = |c: u32, p: u32| {
+        wanted.contains(&c) && wanted.contains(&p) && alive(roots, c) && alive(roots, p)
+    };
+    world.codex.hunted_baselines.retain(|&(c, p), _| keep(c, p));
+    world.codex.hunted_active.retain(|&(c, p)| keep(c, p));
 }
 
 #[cfg(test)]

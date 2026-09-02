@@ -159,6 +159,109 @@ impl SpeciesAgg {
         self.high_panic = 0;
     }
 
+    /// Head count, centroid accumulators and the ascending member index list.
+    fn absorb_membership(&mut self, world: &World, i: usize) {
+        self.count += 1;
+        let pos = world.agents.position[i];
+        self.sum_x += pos.x as f64;
+        self.sum_y += pos.y as f64;
+        self.member_idx.push(i);
+        if world.agents.sex.get(i).map(|b| *b).unwrap_or(false) {
+            self.male_count += 1;
+        }
+        if world.agents.livestock_of[i] != crate::agent::AGENT_NULL {
+            self.livestock_count += 1;
+        }
+    }
+
+    /// Body plan: which modules and program nodes the lineage carries, and the
+    /// continuous morphology sums the detectors compare across species.
+    fn absorb_morphology(&mut self, world: &World, i: usize) {
+        use crate::module::{self, ModuleType};
+        let modules = &world.agents.modules[i];
+        if !self.has_comm && module::has(modules, ModuleType::Communicator) {
+            self.has_comm = true;
+        }
+        if !self.has_pheromone && module::has(modules, ModuleType::Pheromone) {
+            self.has_pheromone = true;
+        }
+        for m in modules.iter() {
+            self.module_mask |= 1u16 << (m.module_type() as u8);
+        }
+        for node in world.agents.program[i].nodes.iter().copied() {
+            self.node_mask |= 1u64 << crate::program::Program::node_kind(node);
+        }
+        self.diet_sum += module::effective_diet_carnivory(modules) as f64;
+        self.speed_sum += module::effective_speed_max(modules) as f64;
+        self.weapon_sum +=
+            module::effective_weapon(modules).map(|w| w.damage).unwrap_or(0.0) as f64;
+        self.armor_sum += module::effective_armor_protection(modules) as f64;
+    }
+
+    /// Where the lineage lives: per-terrain member counts and the occupied
+    /// biome cells (deduplicated once the pass completes).
+    fn absorb_habitat(&mut self, world: &World, i: usize) {
+        let pos = world.agents.position[i];
+        let (col, row) = world.biome.cell_coords(pos);
+        let terrain = world.biome.at(col, row).terrain as usize;
+        self.terrain_counts[terrain.min(TERRAIN_SLOTS - 1)] += 1.0;
+        self.occ_cells.push(world.biome.cell_index(col, row) as u32);
+    }
+
+    /// Per-slot genome sums and sums-of-squares (mean and variance on read).
+    fn absorb_genome(&mut self, world: &World, i: usize) {
+        for (slot, gv) in world.agents.genome[i].as_slice().iter().enumerate() {
+            let x = *gv as f64;
+            self.genome_sums[slot] += x;
+            self.genome_sumsq[slot] += x * x;
+        }
+    }
+
+    /// Meme channel sums plus the held-invention and held-practice head counts.
+    /// The two counts are flag-gated, so a scenario with the trees off leaves
+    /// them at zero exactly as before those trees existed.
+    fn absorb_culture(&mut self, world: &World, i: usize) {
+        for (ch, s) in self.meme_sums.iter_mut().enumerate() {
+            *s += world.agents.meme_vector[i][ch] as f64;
+        }
+        if world.inventions_enabled {
+            let inv_mask = crate::invention::held_mask(&world.agents.meme_vector[i]);
+            crate::invention::for_each_set_bit(inv_mask, |k| self.invention_counts[k] += 1);
+        }
+        if world.cognition_enabled {
+            for (p, c) in self.practice_counts.iter_mut().enumerate() {
+                if crate::practice::has(&world.agents.meme_vector[i], p) {
+                    *c += 1;
+                }
+            }
+        }
+    }
+
+    /// Affect-layer sums and the four "how many members are running hot"
+    /// counters the mass-emotion detectors threshold on.
+    fn absorb_affect(&mut self, world: &World, i: usize) {
+        if !world.affect_enabled || world.agents.affect.len() <= i {
+            return;
+        }
+        use crate::affect::{FEAR, PANIC, RAGE, SEEK};
+        let af = &world.agents.affect[i];
+        for (k, s) in self.affect_sum.iter_mut().enumerate() {
+            *s += af[k] as f64;
+        }
+        if af[FEAR] >= HIGH_FEAR {
+            self.high_fear += 1;
+        }
+        if af[SEEK] >= HIGH_SEEK {
+            self.high_seek += 1;
+        }
+        if af[RAGE] >= HIGH_RAGE {
+            self.high_rage += 1;
+        }
+        if af[PANIC] >= HIGH_PANIC {
+            self.high_panic += 1;
+        }
+    }
+
     /// This tick's centroid (mean alive position), `(0,0)` when empty.
     /// f64 accumulator divided by member count — identical to the former
     /// `compute_centroids`.
@@ -183,14 +286,21 @@ impl SpeciesAggTable {
     }
 
     /// Rebuild from current world state. One `iter_alive` pass.
+    ///
+    /// The per-agent work is split into `absorb_*` groups by concern below.
+    /// They are pure additions into disjoint fields of one entry, so the
+    /// grouping is order-independent — but the *outer* pass still visits
+    /// agents in ascending id order, which is what keeps every f32/f64 sum
+    /// bit-identical to the per-detector scans this replaced.
     pub fn build(&mut self, world: &World) {
-        use crate::module::{self, ModuleType};
         for &sid in &self.active {
             if let Some(e) = self.entries.get_mut(sid as usize) {
                 e.reset();
             }
         }
         self.active.clear();
+        // The sensors scratch is undersized on standalone `observe_all` calls
+        // made outside the tick; crowding is simply not accumulated then.
         let sensors_ok = world.sensors.len() >= world.agents.capacity();
         for id in world.agents.iter_alive() {
             let i = id as usize;
@@ -203,79 +313,14 @@ impl SpeciesAggTable {
             if e.count == 0 {
                 self.active.push(sid);
             }
-            e.count += 1;
-            let pos = world.agents.position[i];
-            e.sum_x += pos.x as f64;
-            e.sum_y += pos.y as f64;
-            e.member_idx.push(i);
-            let modules = &world.agents.modules[i];
-            if !e.has_comm && module::has(modules, ModuleType::Communicator) {
-                e.has_comm = true;
-            }
-            if !e.has_pheromone && module::has(modules, ModuleType::Pheromone) {
-                e.has_pheromone = true;
-            }
-            for m in modules.iter() {
-                e.module_mask |= 1u16 << (m.module_type() as u8);
-            }
-            for node in world.agents.program[i].nodes.iter().copied() {
-                e.node_mask |= 1u64 << crate::program::Program::node_kind(node);
-            }
-            let (col, row) = world.biome.cell_coords(pos);
-            let terrain = world.biome.at(col, row).terrain as usize;
-            e.terrain_counts[terrain.min(TERRAIN_SLOTS - 1)] += 1.0;
-            e.occ_cells.push(world.biome.cell_index(col, row) as u32);
-            for (ch, s) in e.meme_sums.iter_mut().enumerate() {
-                *s += world.agents.meme_vector[i][ch] as f64;
-            }
+            e.absorb_membership(world, i);
+            e.absorb_morphology(world, i);
+            e.absorb_habitat(world, i);
+            e.absorb_genome(world, i);
+            e.absorb_culture(world, i);
+            e.absorb_affect(world, i);
             if sensors_ok {
                 e.crowding_sum += world.sensors[i].crowding as f64;
-            }
-            e.diet_sum += module::effective_diet_carnivory(modules) as f64;
-            e.speed_sum += module::effective_speed_max(modules) as f64;
-            for (slot, gv) in world.agents.genome[i].as_slice().iter().enumerate() {
-                let x = *gv as f64;
-                e.genome_sums[slot] += x;
-                e.genome_sumsq[slot] += x * x;
-            }
-            if world.inventions_enabled {
-                let inv_mask = crate::invention::held_mask(&world.agents.meme_vector[i]);
-                crate::invention::for_each_set_bit(inv_mask, |k| e.invention_counts[k] += 1);
-            }
-            if world.cognition_enabled {
-                for (p, c) in e.practice_counts.iter_mut().enumerate() {
-                    if crate::practice::has(&world.agents.meme_vector[i], p) {
-                        *c += 1;
-                    }
-                }
-            }
-            e.weapon_sum +=
-                module::effective_weapon(modules).map(|w| w.damage).unwrap_or(0.0) as f64;
-            e.armor_sum += module::effective_armor_protection(modules) as f64;
-            if world.agents.sex.get(i).map(|b| *b).unwrap_or(false) {
-                e.male_count += 1;
-            }
-            if world.agents.livestock_of[i] != crate::agent::AGENT_NULL {
-                e.livestock_count += 1;
-            }
-            if world.affect_enabled && world.agents.affect.len() > i {
-                let af = &world.agents.affect[i];
-                for (k, s) in e.affect_sum.iter_mut().enumerate() {
-                    *s += af[k] as f64;
-                }
-                use crate::affect::{FEAR, PANIC, RAGE, SEEK};
-                if af[FEAR] >= HIGH_FEAR {
-                    e.high_fear += 1;
-                }
-                if af[SEEK] >= HIGH_SEEK {
-                    e.high_seek += 1;
-                }
-                if af[RAGE] >= HIGH_RAGE {
-                    e.high_rage += 1;
-                }
-                if af[PANIC] >= HIGH_PANIC {
-                    e.high_panic += 1;
-                }
             }
         }
         // `occ_cells` was pushed once per member (with duplicates when members

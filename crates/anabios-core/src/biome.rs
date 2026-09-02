@@ -928,8 +928,137 @@ fn idx_wrap(row: usize, col: usize, res: usize) -> usize {
     (row % res) * res + (col % res)
 }
 
+/// Canonical ground colour of one cell as linear `[r, g, b]` in `0..1`:
+/// terrain base hue → lushness by live plant biomass → succession scar →
+/// industrial pollution smudge.
+///
+/// This is the single source of truth for the ground view. The Godot bridge
+/// and the headless recorder both render it (the bridge adds a river tint and
+/// packs elevation into alpha on top); they previously carried hand-synced
+/// copies of the whole mapping, which is exactly the kind of duplication that
+/// drifts the moment a terrain colour is retuned.
+///
+/// Lushness brightens each terrain within its OWN hue family, so desert stays
+/// sandy at full biomass instead of washing green.
+pub fn cell_color(cell: &BiomeCell) -> [f32; 3] {
+    let base = match cell.terrain {
+        TerrainType::Water => [0.09, 0.19, 0.44],
+        TerrainType::Grass => [0.21, 0.44, 0.19],
+        TerrainType::Forest => [0.07, 0.26, 0.11],
+        TerrainType::Desert => [0.68, 0.58, 0.33],
+        TerrainType::Rock => [0.42, 0.40, 0.45],
+        TerrainType::Savanna => [0.72, 0.66, 0.36],
+        TerrainType::Rainforest => [0.06, 0.34, 0.16],
+        TerrainType::Taiga => [0.16, 0.34, 0.26],
+        TerrainType::Tundra => [0.62, 0.66, 0.62],
+    };
+    let cap = cell.terrain.carrying_capacity();
+    let frac = if cap > 0.0 { (cell.plant_biomass / cap).clamp(0.0, 1.0) } else { 0.0 };
+    let mut c = match cell.terrain {
+        TerrainType::Grass => lerp_rgb(base, [0.42, 0.80, 0.33], frac * 0.55),
+        TerrainType::Forest => lerp_rgb(base, [0.20, 0.55, 0.24], frac * 0.55),
+        TerrainType::Desert => lerp_rgb(base, [0.86, 0.78, 0.52], frac * 0.45),
+        _ => base,
+    };
+    c = match cell.succession {
+        SUCCESSION_BARE => lerp_rgb(c, [0.36, 0.24, 0.13], 0.65),
+        SUCCESSION_PIONEER => lerp_rgb(c, [0.55, 0.82, 0.30], 0.45),
+        _ => c,
+    };
+    let pol = (cell.pollution / crate::invention::POLLUTION_CAP).clamp(0.0, 1.0);
+    if pol > 0.0 {
+        c = lerp_rgb(c, [0.32, 0.28, 0.24], pol * 0.55);
+    }
+    c
+}
+
+/// Component-wise linear interpolation between two linear RGB triples.
+pub fn lerp_rgb(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
+    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+}
+
 #[cfg(test)]
 mod tests {
+
+    fn colour_cell(
+        terrain: TerrainType,
+        biomass: f32,
+        succession: u8,
+        pollution: f32,
+    ) -> BiomeCell {
+        BiomeCell {
+            terrain,
+            plant_biomass: biomass,
+            env: 0.0,
+            moisture: 0.0,
+            pollution,
+            succession,
+            nutrient_quality: 0.0,
+            fertility: 0.0,
+            elevation: 0.5,
+            river_flow: 0.0,
+        }
+    }
+
+    /// Locks the ground-view colour mapping that both the Godot bridge and the
+    /// headless recorder render: fixed terrain base colours, and every cell
+    /// moving toward the industrial grey as pollution rises.
+    #[test]
+    fn cell_colour_holds_base_colours_and_pollution_direction() {
+        // Pristine water: exact base colour, no biomass/succession/pollution terms.
+        assert_eq!(cell_color(&colour_cell(TerrainType::Water, 0.0, 0, 0.0)), [0.09, 0.19, 0.44]);
+        // Rock is a flat base too (no lushness branch).
+        assert_eq!(cell_color(&colour_cell(TerrainType::Rock, 0.0, 0, 0.0)), [0.42, 0.40, 0.45]);
+        // Pollution pulls any cell toward the industrial grey-brown.
+        let clean = cell_color(&colour_cell(TerrainType::Grass, 0.0, 0, 0.0));
+        let dirty =
+            cell_color(&colour_cell(TerrainType::Grass, 0.0, 0, crate::invention::POLLUTION_CAP));
+        let dist = |c: [f32; 3]| (c[0] - 0.32).abs() + (c[1] - 0.28).abs() + (c[2] - 0.24).abs();
+        assert!(dist(dirty) < dist(clean), "pollution should approach the grey");
+        // Every channel stays in gamut.
+        for c in [clean, dirty] {
+            for ch in c {
+                assert!((0.0..=1.0).contains(&ch), "channel {ch} out of gamut");
+            }
+        }
+    }
+
+    /// Lushness must brighten each terrain inside its own hue family: a fully
+    /// grown desert cell stays sandier (red-dominant) than grass, rather than
+    /// washing green.
+    #[test]
+    fn lushness_keeps_each_terrain_in_its_hue_family() {
+        let cap = TerrainType::Desert.carrying_capacity();
+        let desert = cell_color(&colour_cell(TerrainType::Desert, cap, 0, 0.0));
+        assert!(desert[0] > desert[1] && desert[1] > desert[2], "desert went off-hue: {desert:?}");
+        let cap = TerrainType::Grass.carrying_capacity();
+        let grass = cell_color(&colour_cell(TerrainType::Grass, cap, 0, 0.0));
+        assert!(grass[1] > grass[0] && grass[1] > grass[2], "grass went off-hue: {grass:?}");
+    }
+
+    /// The succession scars are distinct from the unscarred cell and from each
+    /// other — the bare-earth scar is browner, the pioneer flush greener.
+    #[test]
+    fn succession_scars_are_distinct() {
+        let plain = cell_color(&colour_cell(TerrainType::Grass, 0.0, 0, 0.0));
+        let bare = cell_color(&colour_cell(TerrainType::Grass, 0.0, SUCCESSION_BARE, 0.0));
+        let pioneer = cell_color(&colour_cell(TerrainType::Grass, 0.0, SUCCESSION_PIONEER, 0.0));
+        assert_ne!(plain, bare);
+        assert_ne!(plain, pioneer);
+        assert_ne!(bare, pioneer);
+        // Each scar moves the cell toward its own target tint (the scar is a
+        // lerp, so it need not dominate the terrain's own hue outright).
+        let toward = |c: [f32; 3], t: [f32; 3]| {
+            (c[0] - t[0]).abs() + (c[1] - t[1]).abs() + (c[2] - t[2]).abs()
+        };
+        let brown = [0.36, 0.24, 0.13];
+        let flush = [0.55, 0.82, 0.30];
+        assert!(toward(bare, brown) < toward(plain, brown), "bare scar not browner: {bare:?}");
+        assert!(
+            toward(pioneer, flush) < toward(plain, flush),
+            "pioneer scar not greener: {pioneer:?}"
+        );
+    }
     use super::*;
 
     #[test]
