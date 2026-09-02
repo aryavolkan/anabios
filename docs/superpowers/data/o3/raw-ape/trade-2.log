@@ -3,3 +3,4 @@
 [o3diag] t=6000 comm=2520 comm_ape=75 ape_iq1=75 ape_mat=19 ape_chan=75 held_any=0 hold=[2515, 95] births_ok=1898 births_failed=59
 [o3diag] t=8000 comm=2869 comm_ape=60 ape_iq1=59 ape_mat=3 ape_chan=60 held_any=0 hold=[2869, 104] births_ok=3158 births_failed=80
 [o3diag] t=10000 comm=2924 comm_ape=69 ape_iq1=69 ape_mat=6 ape_chan=69 held_any=7 hold=[2924, 112] births_ok=3006 births_failed=51
+[o3diag] t=12000 comm=2936 comm_ape=83 ape_iq1=83 ape_mat=7 ape_chan=83 held_any=7 hold=[2932, 110] births_ok=3215 births_failed=108
