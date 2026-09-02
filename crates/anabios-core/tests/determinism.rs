@@ -304,7 +304,12 @@ const GOLDEN: &[(u64, u64)] =
     // mutation pool only under the flag). Flag off in minimal ⇒ culture mask
     // empty, threat sense 0.0, detector skipped — trajectory byte-identical,
     // only the serialized layout grew.
-    &[(0, 0xbcad52d25106fb41), (100, 0x0430f898c2b8c7ec), (1000, 0x1757cc043524a13a)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): AgentBuffers
+    // gains thirst/fatigue/asleep columns + World.basic_needs_enabled +
+    // EventType::Dehydration + genome slots 8/9 renamed in place. Flag off in
+    // minimal ⇒ needs_step no-ops (zero RNG), all hooks exact identity —
+    // trajectory byte-identical, only the serialized layout grew.
+    &[(0, 0xe4d87518f742cbca), (100, 0x9ac1fef880c5d604), (1000, 0x54b2176b0bffb548)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

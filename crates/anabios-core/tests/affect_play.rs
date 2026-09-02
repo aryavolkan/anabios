@@ -39,7 +39,10 @@ fn affect_play_scenario_is_self_consistent() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const PLAY_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xd8a4de59de20074d), (100, 0x974e75172a768610), (200, 0x07cf4ecda2d1c721)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
+    // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
+    // Flag off here ⇒ layout growth only, trajectory byte-identical.
+    &[(0, 0xde19c2b632e61ff3), (100, 0xf7a829d7a452fd0a), (200, 0x04fa334259ecaa3c)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

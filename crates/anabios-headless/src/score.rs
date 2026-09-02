@@ -243,6 +243,7 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::TerritorialRage => "territorial_rage",
         EventType::MassGrief => "mass_grief",
         EventType::HuntedAdaptation => "hunted_adaptation",
+        EventType::Dehydration => "dehydration",
     }
 }
 

@@ -148,7 +148,16 @@ use crate::world::World;
 ///     `CodexState.hunted_baselines`/`hunted_active` (anthropogenic arms race).
 ///     Flag off in every golden scenario ⇒ trajectories byte-identical;
 ///     only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 34;
+/// 35: basic needs (thirst + sleep) — AgentBuffers.{thirst, fatigue, asleep}
+///     columns + World.basic_needs_enabled flag + EventType::Dehydration
+///     (appended) + genome slots 8/9 renamed in place
+///     (ThirstTolerance/SleepNeed; indices/values unchanged). Flag off in
+///     every golden scenario ⇒ needs_step no-ops (zero RNG), the columns stay
+///     0/false, and every read-side hook is exact identity — behavior
+///     byte-identical; only the serialized layout grew. NOTE: chosen while
+///     PR #145 (repro_biased_learning) also claims v35 on its branch;
+///     whichever merges second re-bumps (the v31/v32 protocol).
+pub const FORMAT_VERSION: u32 = 35;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

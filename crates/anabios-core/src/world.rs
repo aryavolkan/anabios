@@ -202,6 +202,17 @@ pub struct World {
     /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
     #[serde(default)]
     pub payoff_biased_learning: bool,
+    /// When true, the basic-needs subsystem is active (thirst + sleep as
+    /// Layer-0 drives, `needs.rs`): `needs::needs_step` accumulates per-agent
+    /// thirst/fatigue, agents drink at water/river cells and sleep on a
+    /// fatigue hysteresis, dehydration raises basal metabolic drain, and a
+    /// water-seeking movement bias applies. Off by default; opt-in per
+    /// scenario. When false the stage is a strict no-op (zero RNG), the
+    /// columns stay 0/false, and every read-side hook is exact identity, so a
+    /// flag-off world is byte-identical. Same bincode/`FORMAT_VERSION` caveat
+    /// as `env_period`.
+    #[serde(default)]
+    pub basic_needs_enabled: bool,
     /// Opt-in unilateral (one-sided) exchange: when a bilateral barter swap
     /// fails, `interact::trade_pass` falls back to a surplus GIFT — A gives
     /// one `TRADE_UNIT` of a good it holds above `STOCK_TARGET + TRADE_UNIT`
@@ -430,6 +441,7 @@ impl World {
             // behavior before this flag existed; set false to disable discovery.
             practices_enabled: true,
             payoff_biased_learning: false,
+            basic_needs_enabled: false,
             unilateral_trade: false,
             anthro_race_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),

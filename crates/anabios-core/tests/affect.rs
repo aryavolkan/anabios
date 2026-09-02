@@ -84,7 +84,10 @@ fn affect_scenario_survives_save_load_step() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x2f157297acad8a90), (100, 0xfe9e0ccb943f77d7), (300, 0xf77a6f2f21755bfa)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
+    // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
+    // Flag off here ⇒ layout growth only, trajectory byte-identical.
+    &[(0, 0xeb2cf5372469a09d), (100, 0x312c0d6d7b7400cf), (300, 0x2ab8a770e57ec6f1)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -198,7 +201,9 @@ fn affect_threat_emits_mass_fright() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xf0f9b8bcfe974584), (100, 0x47599113ba6cbd6f), (300, 0x8da9e3314ed4b02f)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): layout
+    // growth only (flag off here), trajectory byte-identical.
+    &[(0, 0x46674715253ad7c8), (100, 0x032538f89cc30044), (300, 0x437436e1881efd81)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

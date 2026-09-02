@@ -648,6 +648,12 @@ impl Simulation {
         // 0.0 for every agent otherwise, since the affect column is all-zero).
         d.set("affect_enabled", w.affect_enabled);
         d.set("arousal", anabios_core::affect::arousal(&w.agents.affect[i]));
+        // Basic needs: thirst/fatigue/asleep, with the world flag so the
+        // inspector only renders the lines when the subsystem is active.
+        d.set("basic_needs_enabled", w.basic_needs_enabled);
+        d.set("thirst", w.agents.thirst[i]);
+        d.set("fatigue", w.agents.fatigue[i]);
+        d.set("asleep", w.agents.asleep.get(i).map(|b| *b).unwrap_or(false));
         d.set("dialect_hue", dialect_hue(meme));
         let mut names = PackedStringArray::new();
         for m in w.agents.modules[i].iter() {

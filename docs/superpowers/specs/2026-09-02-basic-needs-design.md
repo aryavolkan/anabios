@@ -36,9 +36,9 @@ helix-panel-safe): slot 8 `_BodyReserved8` → `ThirstTolerance`, slot 9
 Read only when the flag is on; both count toward speciation distance
 (adaptive, non-personality).
 
-CodexState: `dehydration_fired: BTreeSet<u32>` (once-per-species latch).
-
-No new `#[serde(skip)]` fields anywhere.
+No new CodexState fields (the detector is latch-free, see §4) and no new
+`#[serde(skip)]` fields anywhere — the three agent columns are the entire
+serialized-layout growth.
 
 ## 3. Mechanics
 
@@ -75,10 +75,11 @@ thresholds prevent flapping.
 ## 4. Observability
 
 - `EventType::Dehydration = 60` (appended; append-only invariant respected).
-  Detector `codex/needs.rs`: fires once per species (latched via
-  `dehydration_fired`) when the species' mean thirst ≥
-  `DEHYDRATION_EVENT_MIN` (0.8) with ≥ `DEHYDRATION_MIN_COUNT` live members.
-  Inert unless the flag is on.
+  Detector `codex/needs.rs`: fires when a species' mean thirst ≥
+  `DEHYDRATION_EVENT_MIN` (0.8) with ≥ `DEHYDRATION_MIN_MEMBERS` live
+  members. Latch-free (the `MassFright` pattern): re-fires suppressed by an
+  event-ring cooldown, so no new serialized codex state. Inert unless the
+  flag is on.
 - Viewer: `codex_panel.gd` `CHAPTER_NAMES`/`CHAPTER_COLORS` gain the
   Dehydration row (boot assert keeps them in lockstep with
   `EVENT_TYPE_COUNT`); `agent_detail` exposes thirst/fatigue/asleep.

@@ -49,12 +49,14 @@ pub fn integrate_all(
         meme_vector,
         iq,
         affect,
+        thirst,
+        asleep,
         sex,
         alive,
         ..
     } = agents;
-    let (modules, genome, meme_vector, iq, affect, sex, alive) =
-        (&*modules, &*genome, &*meme_vector, &*iq, &*affect, &*sex, &*alive);
+    let (modules, genome, meme_vector, iq, affect, thirst, asleep, sex, alive) =
+        (&*modules, &*genome, &*meme_vector, &*iq, &*affect, &*thirst, &*asleep, &*sex, &*alive);
     position[..cap]
         .par_iter_mut()
         .zip(velocity[..cap].par_iter_mut())
@@ -71,6 +73,26 @@ pub fn integrate_all(
             // below (and on both the moving and non-moving paths). Compute it
             // once — it was previously recomputed per call site.
             let inv_mask = crate::invention::held_mask(&meme_vector[i]);
+            // Basic-needs dehydration factor on basal drain. Exactly 1.0 at
+            // thirst 0.0 (the flag-off state), so disabled worlds stay
+            // byte-identical — the same identity contract as `affect_speed`.
+            let needs_basal = crate::needs::dehydration_metabolism_multiplier(thirst[i]);
+
+            // Asleep (basic needs): movement fully suppressed (no move cost),
+            // basal metabolism discounted. `asleep` is all-false when the flag
+            // is off, so this branch never runs there.
+            if asleep[i] {
+                *vel = Vec2::ZERO;
+                let basal = BASAL_METABOLISM_COST
+                    * genome[i].get(GenomeSlot::BasalMetabolism)
+                    * crate::invention::metabolism_multiplier(inv_mask)
+                    * crate::iq::metabolism_multiplier(iq[i])
+                    * dimorph_basal
+                    * needs_basal
+                    * crate::needs::SLEEP_METABOLISM_FACTOR;
+                *en -= basal;
+                return;
+            }
 
             // Action gating: no Locomotor → no motion.
             if !crate::module::has(&modules[i], crate::module::ModuleType::Locomotor) {
@@ -80,7 +102,8 @@ pub fn integrate_all(
                     * genome[i].get(GenomeSlot::BasalMetabolism)
                     * crate::invention::metabolism_multiplier(inv_mask)
                     * crate::iq::metabolism_multiplier(iq[i])
-                    * dimorph_basal;
+                    * dimorph_basal
+                    * needs_basal;
                 *en -= basal;
                 return;
             }
@@ -112,7 +135,8 @@ pub fn integrate_all(
                 * genome[i].get(GenomeSlot::BasalMetabolism)
                 * crate::invention::metabolism_multiplier(inv_mask)
                 * crate::iq::metabolism_multiplier(iq[i])
-                * dimorph_basal;
+                * dimorph_basal
+                * needs_basal;
             *en -= move_cost + basal;
         });
 }
@@ -255,6 +279,62 @@ mod tests {
         let new_pos = w.agents.position[id as usize];
         // Moved roughly SPEED_MAX_CAP × 1.0 = 4.0 in +x.
         assert!((new_pos.x - 504.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn dehydration_raises_basal_drain() {
+        // Basic-needs hook: thirst multiplies basal metabolism (never adds
+        // energy), so dehydration kills via the existing starvation path.
+        let drain = |thirst: f32| -> f32 {
+            let mut w = World::new(1);
+            let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+            w.agents.thirst[id as usize] = thirst;
+            let desired = vec![Vec2::ZERO; w.agents.capacity()];
+            let before = w.agents.energy[id as usize];
+            integrate_all(&mut w.agents, &desired, w.world_size, false, false);
+            before - w.agents.energy[id as usize]
+        };
+        let hydrated = drain(0.0);
+        let parched = drain(1.0);
+        let ratio = parched / hydrated;
+        assert!(
+            (ratio - crate::needs::dehydration_metabolism_multiplier(1.0)).abs() < 1e-3,
+            "thirst=1 basal ≈ neutral × (1 + DEHYDRATION_DRAIN): ratio={ratio}"
+        );
+    }
+
+    #[test]
+    fn asleep_suppresses_movement_and_discounts_basal() {
+        let run = |asleep: bool| -> (f32, f32) {
+            let mut w = World::new(1);
+            let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+            for m in w.agents.modules[id as usize].iter_mut() {
+                if let crate::module::Module::Locomotor { max_speed, .. } = m {
+                    *max_speed = 1.0;
+                }
+            }
+            w.agents.asleep.set(id as usize, asleep);
+            let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
+            desired[id as usize] = Vec2::new(1.0, 0.0);
+            let before_pos = w.agents.position[id as usize];
+            let before_en = w.agents.energy[id as usize];
+            integrate_all(&mut w.agents, &desired, w.world_size, false, false);
+            (
+                (w.agents.position[id as usize] - before_pos).length(),
+                before_en - w.agents.energy[id as usize],
+            )
+        };
+        let (moved_awake, drain_awake) = run(false);
+        let (moved_asleep, drain_asleep) = run(true);
+        assert!(moved_awake > 3.0, "awake agent moves");
+        assert_eq!(moved_asleep, 0.0, "asleep agent does not move");
+        assert!(drain_asleep < drain_awake, "sleep is metabolically cheaper");
+        // No move cost + discounted basal: exactly basal × SLEEP_METABOLISM_FACTOR.
+        let expected = BASAL_METABOLISM_COST * 0.5 * crate::needs::SLEEP_METABOLISM_FACTOR;
+        assert!(
+            (drain_asleep - expected).abs() < 1e-5,
+            "asleep drain = discounted basal only: {drain_asleep} vs {expected}"
+        );
     }
 
     #[test]
