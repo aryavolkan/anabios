@@ -1,0 +1,3 @@
+invasion_fitness mutant=cultural r=0.14695 INVADES
+invasion_fitness_share mutant=cultural r=0.14728 INVADES
+ledger written: runs/o3-matched/practoff-9.csv

@@ -1,0 +1,3 @@
+invasion_fitness mutant=cultural r=-0.25541 EXCLUDED
+invasion_fitness_share mutant=cultural r=-0.25128 EXCLUDED
+ledger written: runs/o3-matched/reprobias-1.csv

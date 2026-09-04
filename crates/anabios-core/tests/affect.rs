@@ -87,7 +87,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
     // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
     // Flag off here ⇒ layout growth only, trajectory byte-identical.
-    &[(0, 0xeb2cf5372469a09d), (100, 0x312c0d6d7b7400cf), (300, 0x2ab8a770e57ec6f1)];
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0xe173b544fff92915), (100, 0x04c7896b7209ced9), (300, 0x0eb2586e61e9719b)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -203,7 +207,11 @@ fn affect_threat_emits_mass_fright() {
 const THREAT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): layout
     // growth only (flag off here), trajectory byte-identical.
-    &[(0, 0x46674715253ad7c8), (100, 0x032538f89cc30044), (300, 0x437436e1881efd81)];
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x54e0d1ff9bbd36ee), (100, 0xeb0e7c1cfd2ff152), (300, 0x6c825c4abf9a8fab)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

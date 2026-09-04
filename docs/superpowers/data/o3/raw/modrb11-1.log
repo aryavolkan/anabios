@@ -1,0 +1,3 @@
+invasion_fitness mutant=cultural r=0.73962 INVADES
+invasion_fitness_share mutant=cultural r=0.73918 INVADES
+ledger written: runs/o3-matched/modrb11-1.csv

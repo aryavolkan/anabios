@@ -123,7 +123,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
     // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
     // Flag off here ⇒ layout growth only, trajectory byte-identical.
-    &[(0, 0xc169e01b90765821), (100, 0x558a11489a898307), (300, 0x45029177f237cc3d)];
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x3d6628973833919d), (100, 0xa5ba85707447189d), (300, 0xc93892297f73a713)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

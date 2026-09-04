@@ -1,0 +1,7 @@
+[o3diag] t=2000 comm=1089 comm_ape=241 hold=[398, 395] births_ok=706 births_failed=231
+[o3diag] t=4000 comm=1832 comm_ape=80 hold=[164, 174] births_ok=3407 births_failed=149
+[o3diag] t=6000 comm=1579 comm_ape=6 hold=[38, 32] births_ok=3649 births_failed=60
+[o3diag] t=8000 comm=1145 comm_ape=2 hold=[9, 27] births_ok=2761 births_failed=40
+[o3diag] t=10000 comm=1006 comm_ape=1 hold=[1002, 12] births_ok=2660 births_failed=43
+[o3diag] t=12000 comm=1212 comm_ape=0 hold=[1212, 10] births_ok=3497 births_failed=38
+[o3diag] t=14000 comm=1412 comm_ape=1 hold=[1412, 20] births_ok=4317 births_failed=64

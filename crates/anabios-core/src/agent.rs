@@ -113,6 +113,16 @@ pub struct AgentBuffers {
     /// Biological sex (E12): `false` = female, `true` = male. Read only when
     /// `World::sexual_dimorphism_enabled`; all-female and unread otherwise.
     pub sex: BitVec,
+    /// O3 repro-biased learning: surviving offspring credited to each parent.
+    /// Incremented at birth ONLY when `World::repro_biased_learning` is on
+    /// (all-zero and unread otherwise, so flag-off behavior is unchanged).
+    /// Serialized — an accumulator feeding transmission decisions must
+    /// round-trip (still-ticks v13 footgun).
+    pub births_ok: Vec<u16>,
+    /// O3 repro-biased learning: offspring lost at birth to a maladaptive-
+    /// practice cost (Inbreeding stillbirth / Child-Sacrifice cull), credited
+    /// to both parents. Same gating and serialization contract as `births_ok`.
+    pub births_failed: Vec<u16>,
     /// Livestock ownership (E13): the owning herder's agent id, or
     /// `AGENT_NULL` when wild. Set by `domestication::husbandry_step` (taming)
     /// and at birth (born-domesticated); cleared eagerly in `kill` when the
@@ -215,6 +225,8 @@ impl AgentBuffers {
         self.thirst[i] = 0.0;
         self.fatigue[i] = 0.0;
         self.asleep.set(i, false);
+        self.births_ok[i] = 0;
+        self.births_failed[i] = 0;
         self.sex.set(i, sex);
         self.livestock_of[i] = AGENT_NULL;
         self.alive.set(i, true);
@@ -253,6 +265,8 @@ impl AgentBuffers {
         self.thirst.push(0.0);
         self.fatigue.push(0.0);
         self.asleep.push(false);
+        self.births_ok.push(0);
+        self.births_failed.push(0);
         self.sex.push(false);
         self.livestock_of.push(AGENT_NULL);
         self.alive.push(false);

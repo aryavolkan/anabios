@@ -1,0 +1,67 @@
+name = "o3-lever-practices-off-matched"
+seed = 318
+
+# O3 lever: suppress maladaptive-practice discovery (O1 §6 antagonist) on
+# the diet-matched apparatus.
+practices_enabled = false
+
+# O3 NICHE CONSTRUCTION — corrected invasion apparatus (diet-matched).
+#
+# The O1 companion (o1-invasion-cultural-into-asocial.toml) stopped being
+# one-variable-apart when the apes-only invention gate reclassed
+# cultural_forager as an omnivore (commit 8dd9239): its mutant now differs
+# from the herbivore asocial_forager resident by BOTH diet and the
+# Communicator, so "cultural persistence" there can be trophic-niche
+# separation rather than culture. This scenario restores the one-variable
+# contrast: the resident is omnivore_forager (same kit + make_omnivore, no
+# Communicator), so the rare cultural_forager mutant differs from the
+# resident by the Communicator module alone.
+#
+# Everything else — flags, placement, counts, traits — is copied verbatim
+# from o1-invasion-cultural-into-asocial.toml.
+#
+# Run with: anabios-headless autopsy --scenario <this file> --mutant cultural --tag founder
+
+max_population = 3000
+
+env_period = 400
+climate_drift_rate = 0.00005
+season_period = 2000
+biome_adaptation = true
+living_biome = true
+nutrient_variation = true
+soil_fertility = true
+disasters_enabled = true
+terrain_habitat = true
+resources_enabled = true
+settlement_enabled = true
+inventions_enabled = true
+gene_tech_coupling = true
+cognition_enabled = true
+war_enabled = true
+sexual_dimorphism_enabled = true
+domestication_enabled = true
+
+# ---------------------------------------------------------------------------
+# MIXED CRADLE CLUSTER — resident omnivore_forager population (diet-matched
+# asocial control).
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 1000
+archetype = "omnivore_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 100.0 }
+[agents.traits]
+reproduction_threshold = 0.2
+
+# ---------------------------------------------------------------------------
+# RARE MUTANT — cultural_forager, ~1.96% start frequency, same cluster
+# (overlapping radius so it genuinely mixes with the resident).
+# ---------------------------------------------------------------------------
+
+[[agents]]
+count = 20
+archetype = "cultural_forager"
+placement = { kind = "cluster", center_x = 150.0, center_y = 440.0, radius = 90.0 }
+[agents.traits]
+reproduction_threshold = 0.2

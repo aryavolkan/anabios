@@ -1179,7 +1179,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
     // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
     // Flag off here ⇒ layout growth only, trajectory byte-identical.
-    &[(0, 0x92407b155f4aa449), (100, 0xc26ff97bf3467a60), (300, 0x6abd2385dc07ca16)];
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x903a12dea006d575), (100, 0xbc4e1ffb7f6b2ebc), (300, 0x6fd3872501a7ea46)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

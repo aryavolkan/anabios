@@ -88,6 +88,8 @@ roundtrip_tests! {
         "../../../scenarios/experiments/o1-lever-practices-off.toml", 300, |w: &World| !w.practices_enabled && w.cognition_enabled, "practices_enabled(off variant)";
     payoff_biased_learning_roundtrip:
         "../../../scenarios/experiments/o2-payoff-biased-learning.toml", 300, |w: &World| w.payoff_biased_learning, "payoff_biased_learning";
+    repro_biased_learning_roundtrip:
+        "../../../scenarios/experiments/o3-repro-biased-learning.toml", 300, |w: &World| w.repro_biased_learning, "repro_biased_learning";
     unilateral_trade_roundtrip:
         "../../../scenarios/unilateral-trade.toml", 400, |w: &World| w.unilateral_trade && w.conserve_goods_on_death, "unilateral_trade+conserve_goods_on_death";
     basic_needs_roundtrip:

@@ -75,7 +75,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
     // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
     // Flag off here ⇒ layout growth only, trajectory byte-identical.
-    &[(0, 0x57e11605f32530e4), (100, 0xd59a924d7ddf0ebc), (300, 0x42bc19b7dab743f8)];
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0xcaa4eb350b6e83aa), (100, 0xfadf42b6c9b77e48), (300, 0x93738f863dc1a444)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

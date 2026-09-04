@@ -42,7 +42,11 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
     // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
     // Flag off here ⇒ layout growth only, trajectory byte-identical.
-    &[(0, 0xde19c2b632e61ff3), (100, 0xf7a829d7a452fd0a), (200, 0x04fa334259ecaa3c)];
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0xc30c76422bdd2e9b), (100, 0xc677ef42fe0aaace), (200, 0x2f88c0c67d5b96b2)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

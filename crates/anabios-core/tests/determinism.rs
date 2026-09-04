@@ -309,7 +309,11 @@ const GOLDEN: &[(u64, u64)] =
     // EventType::Dehydration + genome slots 8/9 renamed in place. Flag off in
     // minimal ⇒ needs_step no-ops (zero RNG), all hooks exact identity —
     // trajectory byte-identical, only the serialized layout grew.
-    &[(0, 0xe4d87518f742cbca), (100, 0x9ac1fef880c5d604), (1000, 0x54b2176b0bffb548)];
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x13ec213ad32bf84c), (100, 0x6e48cc9874db5cb2), (1000, 0x24ccceb5492cf8e0)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
