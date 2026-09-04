@@ -86,7 +86,11 @@ fn curated_decks_declare_resolvable_pins() {
             .unwrap_or_else(|e| panic!("parse {}: {e}", toml_path.display()));
         scenario.seed = seed; // run the pin, not the scenario's default seed
         let mut w = scenario.instantiate();
-        w.max_population = w.max_population.min(500);
+        // Honor the scenario's own max_population: it is pinned state the
+        // recording ran under. Clamping it to 500 made the saga world (1184
+        // founders, cap 3000) birth-free for the whole smoke — a pure
+        // attrition trajectory the recorded asset never enters, so the test
+        // wasn't exercising the pin it documents.
 
         for _ in 0..200 {
             step(&mut w);
@@ -98,8 +102,12 @@ fn curated_decks_declare_resolvable_pins() {
             assert!(
                 p.x.is_finite()
                     && p.y.is_finite()
-                    && (0.0..world_size).contains(&p.x)
-                    && (0.0..world_size).contains(&p.y),
+                    // Inclusive upper bound: f32 rem_euclid can land exactly
+                    // on world_size for a tiny negative coordinate, and the
+                    // sim tolerates it (cell_coords clamps) — a legal state,
+                    // not an escape.
+                    && (0.0..=world_size).contains(&p.x)
+                    && (0.0..=world_size).contains(&p.y),
                 "{stem}: agent {id} left world bounds at {p:?}"
             );
         }

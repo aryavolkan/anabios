@@ -313,7 +313,10 @@ const GOLDEN: &[(u64, u64)] =
     // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
     // columns now both serialized. All flags off here ⇒ layout growth only,
     // trajectory byte-identical.
-    &[(0, 0x13ec213ad32bf84c), (100, 0x6e48cc9874db5cb2), (1000, 0x24ccceb5492cf8e0)];
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0xaeda6f91f71ae7ea), (100, 0x7bdc885a1cc9763d), (1000, 0x673bb88eec6cd403)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

@@ -46,7 +46,7 @@ codex detector → tests → determinism rehash), mirroring the knowledge-ratche
    density is high — the classic epidemiological story, and it ties outbreaks
    to the *emergent* population boom rather than a scripted injector. No RNG
    is drawn for uncrowded agents.
-4. **Medicine counters at both edges.** Holders transmit less (susceptibility
+4. **Medicine counters at both edges.** Holders are less susceptible (susceptibility
    down) and recover faster — so the containment arc (outbreak → adoption →
    resolution) is actually reachable, not just detectable.
 5. **Inventions not required.** `disease_enabled` stands alone (outbreaks work
@@ -78,7 +78,7 @@ Order per tick, flag-gated early return with **zero RNG draws when off**:
 3. **Transmission** (two-pass, order-independent): for each shedding agent
    (`infection >= SHED_MIN`), query neighbors within `TRANSMISSION_RADIUS`;
    each *uninfected* neighbor is a candidate with
-   `p = TRANSMIT_P * (neighbor has Medicine ? MEDICINE_TRANSMIT_MULT : 1)`.
+   `p = TRANSMIT_P * (target has Medicine ? MEDICINE_SUSCEPT_MULT : 1)`.
    Candidates are collected into a `BTreeMap<target, best_p>` (dedup keeps the
    strongest source), then resolved in ascending-target order with one
    `world.rng` draw each: hit ⇒ `infection = INFECTION_SEED`.
@@ -137,7 +137,7 @@ optional (not added in v1); the scenario is smoke-covered by
 | `RECOVERY_RATE` | 0.01 | per-tick deterministic recovery |
 | `DISEASE_DRAIN` | 0.02 | per-tick energy drain at intensity 1.0 |
 | `MEDICINE_RECOVERY_MULT` | 3.0 | recovery multiplier for Medicine holders |
-| `MEDICINE_TRANSMIT_MULT` | 0.25 | susceptibility multiplier for Medicine holders |
+| `MEDICINE_SUSCEPT_MULT` | 0.25 | susceptibility multiplier for Medicine holders |
 | `OUTBREAK_MIN_POP` | 20 | minimum species count to outbreak-detect |
 | `OUTBREAK_FRACTION` | 0.25 | infected-fraction outbreak threshold |
 | `OUTBREAK_REARM` | 0.125 | re-arm/containment resolution threshold |

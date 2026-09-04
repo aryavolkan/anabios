@@ -46,7 +46,10 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
     // columns now both serialized. All flags off here ⇒ layout growth only,
     // trajectory byte-identical.
-    &[(0, 0xc30c76422bdd2e9b), (100, 0xc677ef42fe0aaace), (200, 0x2f88c0c67d5b96b2)];
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0x1b6a33d7c1a000ef), (100, 0xb424ba197b20a5c5), (200, 0x8d08e0ed7dbd0e03)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

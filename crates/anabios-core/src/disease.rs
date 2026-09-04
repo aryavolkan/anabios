@@ -3,7 +3,7 @@
 //! proximity, and drains energy per tick — mortality funnels through the
 //! existing `age::age_and_starve` path (carcasses, scavenging, war attribution
 //! all keep working untouched). Medicine finally has a pressure to counter:
-//! holders transmit less and recover faster.
+//! holders are less susceptible and recover faster.
 //!
 //! Everything here is gated on `World::disease_enabled`: with the flag off the
 //! stage early-returns with zero state change and zero RNG draws, so every
@@ -11,7 +11,6 @@
 //! `docs/superpowers/specs/2026-09-01-disease-epidemiology-design.md`.
 
 use crate::world::World;
-use std::collections::BTreeMap;
 
 /// Crowding probe radius for zoonotic spillover.
 pub const SPILLOVER_RADIUS: f32 = 8.0;
@@ -21,7 +20,10 @@ pub const SPILLOVER_MIN_NEIGHBORS: u32 = 6;
 pub const SPILLOVER_P: f32 = 0.0002;
 /// Contact radius for agent-to-agent transmission.
 pub const TRANSMISSION_RADIUS: f32 = 4.0;
-/// Per-contact per-tick transmission probability (before medicine adjustment).
+/// Per-tick infection probability for a susceptible with >=1 shedding contact
+/// (before medicine adjustment). Deliberately contact-count-independent: the
+/// gather pass dedups by target and one draw resolves it, so ten shedders
+/// infect no faster than one — tune accordingly.
 pub const TRANSMIT_P: f32 = 0.05;
 /// Infection intensity a freshly infected agent starts at.
 pub const INFECTION_SEED: f32 = 0.3;
@@ -33,8 +35,9 @@ pub const RECOVERY_RATE: f32 = 0.01;
 pub const DISEASE_DRAIN: f32 = 0.02;
 /// Recovery-rate multiplier for Medicine holders.
 pub const MEDICINE_RECOVERY_MULT: f32 = 3.0;
-/// Susceptibility multiplier for Medicine holders.
-pub const MEDICINE_TRANSMIT_MULT: f32 = 0.25;
+/// Susceptibility multiplier for Medicine holders (applied to the exposed
+/// TARGET's infection probability — an infected holder sheds at full rate).
+pub const MEDICINE_SUSCEPT_MULT: f32 = 0.25;
 /// Minimum live members of a species for the outbreak detector to engage.
 pub const OUTBREAK_MIN_POP: u32 = 20;
 /// Infected-fraction threshold at which `EpidemicOutbreak` fires.
@@ -42,6 +45,9 @@ pub const OUTBREAK_FRACTION: f32 = 0.25;
 /// Infected-fraction threshold below which an outbreak latch re-arms (and a
 /// medicine-bearing species resolving its wave fires `MedicineContainment`).
 pub const OUTBREAK_REARM: f32 = 0.125;
+/// Medicine adoption fraction a latched species must hold at wave resolution
+/// for `MedicineContainment` to fire (else the latch merely re-arms).
+pub const CONTAINMENT_ADOPTION: f32 = 0.5;
 
 /// Tick stage 6g (after knowledge 6f, before age+starve 7). Flag-gated
 /// early return with zero RNG draws when off. All iteration is ascending id /
@@ -81,9 +87,15 @@ pub fn disease_step(world: &mut World) {
     }
 
     // 2. Spillover: crowded susceptibles develop infection spontaneously. One
-    //    `world.rng` draw per crowded susceptible, in ascending id order. No
-    //    draws for uncrowded agents.
-    let mut crowded: Vec<u32> = Vec::new();
+    //    `world.rng` draw per crowded susceptible, in ascending id order (the
+    //    `&&` short-circuit skips the draw for uncrowded agents). Drawing
+    //    inline is byte-identical to a collect-then-draw two-pass: crowding
+    //    counts ignore infection state and each agent only writes its OWN
+    //    infection, so no earlier write can affect a later agent's count or
+    //    susceptibility. The closure early-returns once the threshold is met —
+    //    `count` is only ever compared with `>=`, so capping it at the
+    //    threshold is a provable identity that skips the distance math for
+    //    the rest of a dense ring.
     for &id in &alive_ids {
         let i = id as usize;
         if world.agents.infection[i] > 0.0 {
@@ -92,6 +104,9 @@ pub fn disease_step(world: &mut World) {
         let pos = world.agents.position[i];
         let mut count: u32 = 0;
         world.spatial.query(pos, SPILLOVER_RADIUS, |other| {
+            if count >= SPILLOVER_MIN_NEIGHBORS {
+                return;
+            }
             let o = other as usize;
             if o != i
                 && world.agents.alive[o]
@@ -101,21 +116,19 @@ pub fn disease_step(world: &mut World) {
                 count += 1;
             }
         });
-        if count >= SPILLOVER_MIN_NEIGHBORS {
-            crowded.push(id);
-        }
-    }
-    for id in crowded {
-        if world.rng.f32_unit() < SPILLOVER_P {
-            world.agents.infection[id as usize] = INFECTION_SEED;
+        if count >= SPILLOVER_MIN_NEIGHBORS && world.rng.f32_unit() < SPILLOVER_P {
+            world.agents.infection[i] = INFECTION_SEED;
         }
     }
 
     // 3. Transmission: shedders expose nearby susceptibles. Two-pass so the
-    //    result is order-independent: collect candidates keyed by target
-    //    (dedup keeps the strongest source's probability), then resolve in
-    //    ascending-target order with one draw each.
-    let mut candidates: BTreeMap<u32, f32> = BTreeMap::new();
+    //    result is order-independent: gather the unique exposed targets, then
+    //    resolve in ascending-target order with one draw each. The infection
+    //    probability is a pure function of the TARGET (medicine held or not),
+    //    so it is computed once per unique target at resolve time — a
+    //    sort+dedup Vec replaces the old BTreeMap whose per-pair max() only
+    //    ever compared equal values.
+    let mut targets: Vec<u32> = Vec::new();
     for &id in &alive_ids {
         let i = id as usize;
         if world.agents.infection[i] < SHED_MIN {
@@ -132,18 +145,18 @@ pub fn disease_step(world: &mut World) {
             {
                 return;
             }
-            let held = crate::invention::held_mask(&world.agents.meme_vector[o]);
-            let p = if held & medicine_bit != 0 {
-                TRANSMIT_P * MEDICINE_TRANSMIT_MULT
-            } else {
-                TRANSMIT_P
-            };
-            candidates.entry(other).and_modify(|best| *best = best.max(p)).or_insert(p);
+            targets.push(other);
         });
     }
-    for (target, p) in candidates {
+    targets.sort_unstable();
+    targets.dedup();
+    for target in targets {
+        let o = target as usize;
+        let held = crate::invention::held_mask(&world.agents.meme_vector[o]);
+        let p =
+            if held & medicine_bit != 0 { TRANSMIT_P * MEDICINE_SUSCEPT_MULT } else { TRANSMIT_P };
         if world.rng.f32_unit() < p {
-            world.agents.infection[target as usize] = INFECTION_SEED;
+            world.agents.infection[o] = INFECTION_SEED;
         }
     }
 
