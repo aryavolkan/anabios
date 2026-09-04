@@ -1183,7 +1183,10 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
     // columns now both serialized. All flags off here ⇒ layout growth only,
     // trajectory byte-identical.
-    &[(0, 0x903a12dea006d575), (100, 0xbc4e1ffb7f6b2ebc), (300, 0x6fd3872501a7ea46)];
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0xa135a8ace74c4a39), (100, 0x83f7e449e8c33434), (300, 0xdbbce9b60c474fb7)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

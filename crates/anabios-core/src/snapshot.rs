@@ -157,9 +157,16 @@ use crate::world::World;
 ///     every golden scenario ⇒ needs_step no-ops (zero RNG), the columns stay
 ///     0/false, and every read-side hook is exact identity — behavior
 ///     byte-identical; only the serialized layout grew. Re-bumped from 35 at
-///     merge time (v31/v32 protocol). ⚠ The parallel disease branch (PR #143)
-///     also claims v35 — it must re-bump to 37 when it merges.
-pub const FORMAT_VERSION: u32 = 36;
+///     merge time (v31/v32 protocol).
+/// 37: disease subsystem — `AgentBuffers.infection` column,
+///     `World.disease_enabled` flag, `CodexState.epidemic_latched`,
+///     EventType::{EpidemicOutbreak, MedicineContainment} (renumbered 61/62
+///     after Dehydration=60 landed in #147). Flag off ⇒ the tick stage
+///     early-returns with zero RNG draws and the detector never fires;
+///     trajectories byte-identical; only the serialized layout grew.
+///     Re-bumped from 35 at merge time (v31/v32 protocol) — third bump of
+///     the #143/#145/#147 v35 collision.
+pub const FORMAT_VERSION: u32 = 37;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

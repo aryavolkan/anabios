@@ -104,6 +104,12 @@ pub fn step(world: &mut World) {
     // draws when `knowledge_enabled` is false).
     crate::knowledge::knowledge_step(world);
 
+    // Stage 6g: disease — crowding-seeded SIS pathogen (spillover, proximity
+    // spread, energy drain). Opt-in; no-op and zero RNG draws when
+    // `disease_enabled` is false. Runs before age+starve so infection deaths
+    // funnel through the existing carcass/starve path.
+    crate::disease::disease_step(world);
+
     // Keep scratch sized to the post-reproduce capacity so end-of-tick detectors
     // (AlarmCall) that read actions/sensors/desired_direction see every agent —
     // reproduce (stage 6) can grow capacity past the top-of-tick resize.

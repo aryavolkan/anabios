@@ -127,7 +127,10 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
     // columns now both serialized. All flags off here ⇒ layout growth only,
     // trajectory byte-identical.
-    &[(0, 0x3d6628973833919d), (100, 0xa5ba85707447189d), (300, 0xc93892297f73a713)];
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0x182b860abf46eea1), (100, 0xa0444186c81db503), (300, 0x0f5546bd0280313a)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

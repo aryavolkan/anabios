@@ -91,7 +91,10 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
     // columns now both serialized. All flags off here ⇒ layout growth only,
     // trajectory byte-identical.
-    &[(0, 0xe173b544fff92915), (100, 0x04c7896b7209ced9), (300, 0x0eb2586e61e9719b)];
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0xfd75157a55abe365), (100, 0x6dfa371019775a14), (300, 0x2e44756b0c74d92d)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -211,7 +214,10 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
     // columns now both serialized. All flags off here ⇒ layout growth only,
     // trajectory byte-identical.
-    &[(0, 0x54e0d1ff9bbd36ee), (100, 0xeb0e7c1cfd2ff152), (300, 0x6c825c4abf9a8fab)];
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0x63731135b1c55970), (100, 0x0c5d1b351037fbcb), (300, 0x8b2467110b6876fa)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

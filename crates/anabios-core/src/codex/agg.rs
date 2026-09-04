@@ -63,6 +63,10 @@ pub struct SpeciesAgg {
     /// Per-practice count of members holding each maladaptive practice (for
     /// `PracticeAdopted`). All zero when cognition is inactive.
     pub practice_counts: [u32; crate::practice::PRACTICE_COUNT],
+    /// Count of clinically sick members (infection ≥ `disease::SHED_MIN`) —
+    /// the disease detectors' "infected fraction" numerator. Zero when
+    /// `disease_enabled` is off.
+    pub infected_count: u32,
     /// Distinct biome cells occupied by members this tick (scratch for the
     /// E4 spatial detectors). Cell index = row * res + col. Held as a
     /// capacity-retaining `Vec` (cleared, not freed, each tick) that `build`
@@ -114,6 +118,7 @@ impl Default for SpeciesAgg {
             diet_sum: 0.0,
             invention_counts: [0; crate::invention::INVENTION_COUNT],
             practice_counts: [0; crate::practice::PRACTICE_COUNT],
+            infected_count: 0,
             occ_cells: Vec::new(),
             genome_sums: [0.0; 50],
             genome_sumsq: [0.0; 50],
@@ -147,6 +152,7 @@ impl SpeciesAgg {
         self.diet_sum = 0.0;
         self.invention_counts = [0; crate::invention::INVENTION_COUNT];
         self.practice_counts = [0; crate::practice::PRACTICE_COUNT];
+        self.infected_count = 0;
         self.occ_cells.clear();
         self.genome_sums = [0.0; 50];
         self.genome_sumsq = [0.0; 50];
@@ -171,6 +177,9 @@ impl SpeciesAgg {
         }
         if world.agents.livestock_of[i] != crate::agent::AGENT_NULL {
             self.livestock_count += 1;
+        }
+        if world.disease_enabled && world.agents.infection[i] >= crate::disease::SHED_MIN {
+            self.infected_count += 1;
         }
     }
 
