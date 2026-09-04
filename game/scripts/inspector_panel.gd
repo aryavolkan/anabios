@@ -135,6 +135,13 @@ func _process(_delta: float) -> void:
 	if info.get("domestication_enabled", false):
 		var owner: int = info["livestock_of"]
 		lines.append("livestock of agent %d" % owner if owner >= 0 else "wild (not livestock)")
+	if info.get("basic_needs_enabled", false):
+		lines.append(
+			(
+				"thirst %.2f   fatigue %.2f%s"
+				% [info["thirst"], info["fatigue"], "   asleep" if info["asleep"] else ""]
+			)
+		)
 	var held: Array = info.get("inventions", [])
 	if not held.is_empty():
 		lines.append(

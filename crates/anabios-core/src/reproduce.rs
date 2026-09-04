@@ -333,6 +333,12 @@ fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
     if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Reproductive) {
         return false;
     }
+    // Basic needs: sleepers neither seek nor accept mates — lost mating time
+    // is part of the cost of sleep (design doc §3). All-false when the flag
+    // is off, so flag-off worlds are untouched.
+    if agents.asleep[i] {
+        return false;
+    }
     // Conscientiousness raises the effective breeding threshold.
     let threshold = SPAWN_ENERGY
         * agents.genome[i].get(GenomeSlot::ReproductionThreshold)
@@ -464,6 +470,28 @@ mod tests {
         g.set(GenomeSlot::Size, 0.4);
         g.set(GenomeSlot::BasalMetabolism, 0.4);
         g
+    }
+
+    /// Basic needs: a sleeping agent is not mate-eligible — lost mating time
+    /// is part of the cost of sleep. Wake it and the same pair reproduces.
+    #[test]
+    fn sleeping_agents_do_not_mate() {
+        let mut w = World::new(1000);
+        w.basic_needs_enabled = true;
+        let pos = find_grass_cell_center(&w);
+        let a = w.spawn_agent(pos, fertile_genome());
+        let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+        w.agents.energy[a as usize] = SPAWN_ENERGY * 2.0;
+        w.agents.energy[b as usize] = SPAWN_ENERGY * 2.0;
+        w.agents.asleep.set(a as usize, true);
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "sleeper must not mate (either side)");
+
+        w.agents.asleep.set(a as usize, false);
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 3, "awake pair reproduces");
     }
 
     #[test]

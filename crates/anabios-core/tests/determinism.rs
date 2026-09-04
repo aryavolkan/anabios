@@ -304,11 +304,16 @@ const GOLDEN: &[(u64, u64)] =
     // mutation pool only under the flag). Flag off in minimal ⇒ culture mask
     // empty, threat sense 0.0, detector skipped — trajectory byte-identical,
     // only the serialized layout grew.
-    // Refreshed 2026-09-02 (O3 repro-biased learning, FORMAT_VERSION →35):
-    // World.repro_biased_learning + AgentBuffers.{births_ok,births_failed}.
-    // Flag off in minimal ⇒ counters all-zero and unread, transmission
-    // unchanged — trajectory byte-identical, only the serialized layout grew.
-    &[(0, 0x978d83b9fd5401c1), (100, 0xd41537a3b1f924ba), (1000, 0x6bab0710e8622486)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): AgentBuffers
+    // gains thirst/fatigue/asleep columns + World.basic_needs_enabled +
+    // EventType::Dehydration + genome slots 8/9 renamed in place. Flag off in
+    // minimal ⇒ needs_step no-ops (zero RNG), all hooks exact identity —
+    // trajectory byte-identical, only the serialized layout grew.
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x13ec213ad32bf84c), (100, 0x6e48cc9874db5cb2), (1000, 0x24ccceb5492cf8e0)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

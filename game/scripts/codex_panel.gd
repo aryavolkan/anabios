@@ -61,7 +61,8 @@ const CHAPTER_NAMES: PackedStringArray = [
 	"FeedingFrenzy",
 	"TerritorialRage",
 	"MassGrief",
-	"HuntedAdapt"
+	"HuntedAdapt",
+	"Dehydration"
 ]
 # One color per event type so the timeline is scannable at a glance (matches
 # the co-evolution chart's marker hues where they overlap).
@@ -126,6 +127,7 @@ const CHAPTER_COLORS: PackedColorArray = [
 	Color(0.9, 0.3, 0.2),  # 57 TerritorialRage    — furious rust
 	Color(0.5, 0.55, 0.75),  # 58 MassGrief        — mourning slate
 	Color(1.0, 0.85, 0.45),  # 59 HuntedAdaptation — hunted gold
+	Color(0.4, 0.8, 0.9),  # 60 Dehydration       — parched aqua
 ]
 const MAX_RECENT: int = 30
 # Chapters listed in the running tally. A long run fires 20+ distinct event
