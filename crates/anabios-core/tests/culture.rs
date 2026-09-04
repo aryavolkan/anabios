@@ -219,6 +219,126 @@ fn payoff_biased_model_bias_copies_from_highest_energy_model() {
     );
 }
 
+// --- O3 repro-biased social learning (opt-in flag) --------------------------
+
+/// Like `payoff_world`, but arming the reproductive-success bias instead of
+/// the energy-proxy one.
+fn repro_world(seed: u64, flag: bool) -> (World, u32) {
+    let mut w = World::new(seed);
+    w.cognition_enabled = true;
+    w.repro_biased_learning = flag;
+    let receiver = w.spawn_agent(Vec2::new(501.0, 500.0), Genome::neutral());
+    w.agents.modules[receiver as usize] = communicator_kit();
+    w.agents.iq[receiver as usize] = 0.5;
+    w.agents.energy[receiver as usize] = 50.0;
+    let cap = w.agents.capacity();
+    w.actions.resize(cap, Default::default());
+    (w, receiver)
+}
+
+/// Set a neighbour's observed birth outcomes.
+fn set_births(w: &mut World, id: u32, ok: u16, failed: u16) {
+    w.agents.births_ok[id as usize] = ok;
+    w.agents.births_failed[id as usize] = failed;
+}
+
+/// Content bias declines a practice whose holders demonstrably bury more
+/// infants — even though the holders are the higher-ENERGY group (so the O2b
+/// energy proxy would have kept it; this is exactly the signal energy cannot
+/// see).
+#[test]
+fn repro_biased_declines_practice_whose_holders_bury_more_infants() {
+    let pch = anabios_core::practice::channel(0);
+    let setup = |w: &mut World| {
+        let h1 = add_neighbour(w, 503.0, 500.0, 100.0, 1.0, 0.0); // rich holder
+        let h2 = add_neighbour(w, 497.0, 500.0, 95.0, 1.0, 0.0); // rich holder
+        let n1 = add_neighbour(w, 500.0, 503.0, 20.0, 0.0, 0.0); // poor non-holder
+        let n2 = add_neighbour(w, 500.0, 497.0, 20.0, 0.0, 0.0); // poor non-holder
+        set_births(w, h1, 2, 3); // holders: 6/10 births lost
+        set_births(w, h2, 2, 3);
+        set_births(w, n1, 5, 0); // non-holders: 0/10 lost
+        set_births(w, n2, 5, 0);
+    };
+    let (mut won, r) = repro_world(31, true);
+    setup(&mut won);
+    run_culture_step(&mut won);
+    assert_eq!(
+        won.agents.meme_vector[r as usize][pch], 0.0,
+        "repro content bias must decline the practice whose holders bury more infants"
+    );
+
+    let (mut woff, r) = repro_world(31, false);
+    setup(&mut woff);
+    run_culture_step(&mut woff);
+    assert!(
+        woff.agents.meme_vector[r as usize][pch] > 0.0,
+        "flag off: payoff-blind transmission copies the practice (control)"
+    );
+}
+
+/// No birth evidence (no group has observed outcomes) → no decline. The bias
+/// acts only on evidence of harm, never categorically.
+#[test]
+fn repro_biased_keeps_practice_without_birth_evidence() {
+    let pch = anabios_core::practice::channel(0);
+    let (mut w, r) = repro_world(32, true);
+    add_neighbour(&mut w, 503.0, 500.0, 100.0, 1.0, 0.0);
+    add_neighbour(&mut w, 497.0, 500.0, 95.0, 1.0, 0.0);
+    add_neighbour(&mut w, 500.0, 503.0, 90.0, 0.0, 0.0);
+    add_neighbour(&mut w, 500.0, 497.0, 90.0, 0.0, 0.0);
+    // all counters zero — no observed births anywhere
+    run_culture_step(&mut w);
+    assert!(
+        w.agents.meme_vector[r as usize][pch] > 0.0,
+        "no birth evidence → the practice still transmits"
+    );
+}
+
+/// Holders whose birth outcomes are no worse than non-holders' keep
+/// transmitting the trait.
+#[test]
+fn repro_biased_keeps_practice_when_holders_do_no_worse() {
+    let pch = anabios_core::practice::channel(0);
+    let (mut w, r) = repro_world(33, true);
+    let h1 = add_neighbour(&mut w, 503.0, 500.0, 100.0, 1.0, 0.0);
+    let h2 = add_neighbour(&mut w, 497.0, 500.0, 95.0, 1.0, 0.0);
+    let n1 = add_neighbour(&mut w, 500.0, 503.0, 90.0, 0.0, 0.0);
+    let n2 = add_neighbour(&mut w, 500.0, 497.0, 90.0, 0.0, 0.0);
+    set_births(&mut w, h1, 4, 1); // holders: 2/10 lost
+    set_births(&mut w, h2, 4, 1);
+    set_births(&mut w, n1, 4, 1); // non-holders: 2/10 lost — equal
+    set_births(&mut w, n2, 4, 1);
+    run_culture_step(&mut w);
+    assert!(w.agents.meme_vector[r as usize][pch] > 0.0, "equal birth outcomes → no decline");
+}
+
+/// The repro bias is content-bias-only, scoped to practice channels: skill
+/// transmission is untouched (no model bias — the O2b regression guard).
+#[test]
+fn repro_biased_leaves_skill_transmission_untouched() {
+    let setup = |w: &mut World| {
+        let h = add_neighbour(w, 503.0, 500.0, 10.0, 1.0, 1.0); // skill expert, holds practice
+        add_neighbour(w, 497.0, 500.0, 100.0, 0.0, 0.2);
+        set_births(w, h, 0, 5); // holder's births all fail
+    };
+    let (mut won, r) = repro_world(34, true);
+    setup(&mut won);
+    run_culture_step(&mut won);
+    let on_skill = won.agents.meme_vector[r as usize][anabios_core::culture::SKILL_CHANNEL];
+
+    let (mut woff, r) = repro_world(34, false);
+    setup(&mut woff);
+    run_culture_step(&mut woff);
+    let off_skill = woff.agents.meme_vector[r as usize][anabios_core::culture::SKILL_CHANNEL];
+
+    assert_eq!(
+        on_skill.to_bits(),
+        off_skill.to_bits(),
+        "skill copies identically with the flag on — content bias never touches the skill channel"
+    );
+    assert!(on_skill > 0.0, "skill actually transmitted in the setup");
+}
+
 #[test]
 fn dialect_formed_fires_for_two_divergent_halves() {
     use anabios_core::codex::{observe_all, EventType, DIALECT_WINDOW};

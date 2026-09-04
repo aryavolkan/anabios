@@ -59,6 +59,47 @@ pub fn run(
             t.observe(&world);
         }
         if (t + 1) % window == 0 {
+            // O3 diagnostic (env-gated, observability only): practice burden
+            // and birth-outcome evidence among Communicator agents.
+            if std::env::var("ANABIOS_O3_DIAG").is_ok() {
+                let mut n_comm = 0u32;
+                let mut n_comm_ape = 0u32;
+                let mut hold = [0u32; anabios_core::practice::PRACTICE_COUNT];
+                let mut bok = 0u64;
+                let mut bfail = 0u64;
+                for id in world.agents.iter_alive() {
+                    let i = id as usize;
+                    if !anabios_core::module::has(
+                        &world.agents.modules[i],
+                        anabios_core::module::ModuleType::Communicator,
+                    ) {
+                        continue;
+                    }
+                    n_comm += 1;
+                    if anabios_core::invention::is_ape(
+                        &world.agents.genome[i],
+                        &world.agents.modules[i],
+                    ) {
+                        n_comm_ape += 1;
+                    }
+                    bok += world.agents.births_ok[i] as u64;
+                    bfail += world.agents.births_failed[i] as u64;
+                    for (p, h) in hold.iter_mut().enumerate() {
+                        if anabios_core::practice::has(&world.agents.meme_vector[i], p) {
+                            *h += 1;
+                        }
+                    }
+                }
+                eprintln!(
+                    "[o3diag] t={} comm={} comm_ape={} hold={:?} births_ok={} births_failed={}",
+                    t + 1,
+                    n_comm,
+                    n_comm_ape,
+                    hold,
+                    bok,
+                    bfail
+                );
+            }
             let stats = match &tracker {
                 Some(t) => founder::sample_by_founder(&world, t),
                 None => sample_strategies(&world),

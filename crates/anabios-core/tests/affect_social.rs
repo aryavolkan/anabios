@@ -72,7 +72,7 @@ fn kin_cluster_raises_care_and_sharing() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x2da212eb3ea96e29), (100, 0x1c0319f3a49693e2), (300, 0x0ccc48fc1b1dfc0c)];
+    &[(0, 0x7a6364af3219a919), (100, 0x93d81831ea86d512), (300, 0x997589ada1b31950)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

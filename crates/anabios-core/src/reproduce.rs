@@ -200,7 +200,20 @@ pub fn reproduce_all(world: &mut World) {
         inherit_child_meme(world, child_id, i, j);
 
         // Maladaptive-practice fitness costs (cognition-gated; may cull the child).
-        apply_practice_fitness_costs(world, child_id, i, j, &a_genome, &b_genome, a_species);
+        let child_lost =
+            apply_practice_fitness_costs(world, child_id, i, j, &a_genome, &b_genome, a_species);
+        // O3 repro-biased learning: record the birth outcome on both parents.
+        // Flag-gated so flag-off worlds keep all-zero counters (byte-identical
+        // serialized state modulo the layout growth).
+        if world.repro_biased_learning {
+            if child_lost {
+                world.agents.births_failed[i] = world.agents.births_failed[i].saturating_add(1);
+                world.agents.births_failed[j] = world.agents.births_failed[j].saturating_add(1);
+            } else {
+                world.agents.births_ok[i] = world.agents.births_ok[i].saturating_add(1);
+                world.agents.births_ok[j] = world.agents.births_ok[j].saturating_add(1);
+            }
+        }
     }
     world.agents.scratch_ids = alive_ids;
 }
@@ -248,6 +261,20 @@ fn inherit_child_meme(world: &mut World, child_id: u32, i: usize, j: usize) {
         &world.agents.modules[ci],
         world.inventions_enabled,
     );
+    // O3 repro-biased learning: vertical content bias — a child of a family
+    // whose observed births fail at least as often as they succeed declines
+    // the inherited practice channels (the custom dies with the grieving
+    // family). Zero-only and AFTER inherit_meme, so RNG draw counts are
+    // unchanged; flag off ⇒ byte-identical inheritance.
+    if world.repro_biased_learning {
+        let fail = world.agents.births_failed[i] as u32 + world.agents.births_failed[j] as u32;
+        let ok = world.agents.births_ok[i] as u32 + world.agents.births_ok[j] as u32;
+        if fail > 0 && fail >= ok {
+            for p in 0..crate::practice::PRACTICE_COUNT {
+                world.agents.meme_vector[ci][crate::practice::channel(p)] = 0.0;
+            }
+        }
+    }
     // E9 lineage: the newborn's per-channel variants descend from its parents'
     // variants (band-matched) or are freshly minted.
     crate::codex::traditions::assign_birth_variants(world, child_id as usize, i, j);
@@ -256,7 +283,9 @@ fn inherit_child_meme(world: &mut World, child_id: u32, i: usize, j: usize) {
 /// Maladaptive-practice fitness costs (cognition-gated). A parent's held
 /// practice damages the offspring's reproductive/genetic fitness. `a_genome`/
 /// `b_genome` are the parents' pre-spawn genome snapshots; `a_species` is the
-/// child's species (for the removal bookkeeping on a cull).
+/// child's species (for the removal bookkeeping on a cull). Returns `true`
+/// when the child was removed (stillborn or sacrificed) — the birth-outcome
+/// signal for O3 repro-biased learning.
 fn apply_practice_fitness_costs(
     world: &mut World,
     child_id: u32,
@@ -265,9 +294,9 @@ fn apply_practice_fitness_costs(
     a_genome: &Genome,
     b_genome: &Genome,
     a_species: crate::agent::SpeciesId,
-) {
+) -> bool {
     if !world.cognition_enabled {
-        return;
+        return false;
     }
     use crate::practice::{self, CHILD_SACRIFICE, INBREEDING};
     let inbred = practice::has(&world.agents.meme_vector[i], INBREEDING)
@@ -292,6 +321,7 @@ fn apply_practice_fitness_costs(
         world.agents.kill(child_id);
         world.remove_from_species(a_species);
     }
+    stillborn || sacrificed
 }
 
 fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
@@ -533,6 +563,46 @@ mod tests {
         assert!(
             (inbred - SPAWN_ENERGY * (1.0 - practice::INBREEDING_DEPRESSION)).abs() < 1e-3,
             "identical-parent inbreeding halves a surviving child's starting energy: {inbred}"
+        );
+    }
+
+    #[test]
+    fn repro_bias_vertical_filter_blocks_practice_inheritance() {
+        use crate::practice;
+        // A Communicator pair holding Child Sacrifice, whose observed births
+        // have all failed. Returns the surviving child's inherited practice
+        // level (None when the sacrifice roll culled the child at this seed).
+        let child_practice = |seed: u64, flag: bool| -> Option<f32> {
+            let mut w = World::new(seed);
+            w.cognition_enabled = true;
+            w.repro_biased_learning = flag;
+            let pos = find_grass_cell_center(&w);
+            let a = w.spawn_agent(pos, fertile_genome());
+            let b = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+            for id in [a, b] {
+                let i = id as usize;
+                w.agents.modules[i]
+                    .push(crate::module::Module::Communicator { range: 8.0, channel_id: 0 });
+                w.agents.energy[i] = SPAWN_ENERGY * 2.0;
+                w.agents.meme_vector[i][practice::channel(practice::CHILD_SACRIFICE)] = 1.0;
+                w.agents.births_failed[i] = 3; // the family buries its children
+            }
+            w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+            reproduce_all(&mut w);
+            (w.agents.live_count() == 3)
+                .then(|| w.agents.meme_vector[2][practice::channel(practice::CHILD_SACRIFICE)])
+        };
+        // Find a seed where the flag-off child survives, carries a
+        // Communicator, and inherits the practice — the control.
+        let seed = (0..64u64)
+            .find(|&s| child_practice(s, false).is_some_and(|v| v > 0.5))
+            .expect("some seed yields a surviving communicator child inheriting the practice");
+        // Same seed, flag on: identical RNG stream (the filter draws none), so
+        // the same child is born — but declines the family's fatal custom.
+        assert_eq!(
+            child_practice(seed, true),
+            Some(0.0),
+            "vertical filter zeroes the inherited practice channel"
         );
     }
 

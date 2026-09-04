@@ -148,7 +148,13 @@ use crate::world::World;
 ///     `CodexState.hunted_baselines`/`hunted_active` (anthropogenic arms race).
 ///     Flag off in every golden scenario ⇒ trajectories byte-identical;
 ///     only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 34;
+/// 35 (this branch): O3 repro-biased learning — `World.repro_biased_learning`
+///     flag + `AgentBuffers.births_ok`/`births_failed` columns. Flag off in
+///     every golden scenario ⇒ trajectories byte-identical; only the
+///     serialized layout grew. ⚠ The parallel disease branch (PR #143) also
+///     claims v35 — whichever merges second must re-bump (the PR #107
+///     multi-branch collision lesson).
+pub const FORMAT_VERSION: u32 = 35;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

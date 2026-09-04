@@ -151,6 +151,15 @@ pub struct Scenario {
     /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
     #[serde(default)]
     pub payoff_biased_learning: bool,
+    /// Opt-in O3 reproductive-success payoff bias: cultural transmission
+    /// declines a maladaptive-practice channel when its local holders show a
+    /// higher observed birth-failure fraction than non-holders (content bias
+    /// only — no model bias, which O2b measured as skill-suppressing). The
+    /// only fitness proxy that can see a stillbirth/cull cost. Off by
+    /// default ⇒ byte-identical transmission and no birth-outcome counting.
+    /// See `docs/superpowers/specs/2026-09-02-o3-corrected-apparatus-repro-bias-design.md`.
+    #[serde(default)]
+    pub repro_biased_learning: bool,
     /// Opt-in unilateral (one-sided) exchange: when no mutually-beneficial
     /// barter swap exists, an agent may gift one `TRADE_UNIT` of a good it
     /// holds above `STOCK_TARGET + TRADE_UNIT` to a partner that still wants
@@ -277,7 +286,9 @@ pub struct AgentSpec {
     /// `communicator`, `cooperator`, `cultural_cooperator`, `asocial_forager`,
     /// `culture_prey`, `asocial_prey`, `skilled_forager`, `fast_hunter`,
     /// `slow_hunter`, `innate_forager`, `individual_learner`, `pure_imitator`,
-    /// `critical_learner`, `cultural_forager`, `innovator`, `traditionalist`,
+    /// `critical_learner`, `cultural_forager`, `omnivore_forager` (the
+    /// diet-matched asocial control for `cultural_forager`), `innovator`,
+    /// `traditionalist`,
     /// `grazer`, `ape_hunter` (armed culture-bearer for the anthropogenic
     /// arms race), and the vertebrate classes `mammal_grazer`,
     /// `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`. Unknown names
@@ -465,6 +476,16 @@ fn archetype_kit(name: &str) -> (crate::module::ModuleList, crate::program::Prog
             let mut m = starter_kit();
             make_omnivore(&mut m); // reclass to ape (primate) diet
             m.push(crate::module::Module::Communicator { range: 12.0, channel_id: 0 });
+            (m, starter_asocial_forager())
+        }
+        // O3 diet-matched control: the omnivore forager WITHOUT the
+        // Communicator. `cultural_forager` differs from this archetype by
+        // culture alone, so invasion contrasts against it isolate the
+        // Communicator (the ape reclass above made `asocial_forager` a
+        // diet-confounded control — omnivory, not culture, separated them).
+        "omnivore_forager" => {
+            let mut m = starter_kit();
+            make_omnivore(&mut m);
             (m, starter_asocial_forager())
         }
         // Invention-tree demo strategies: culture-bearing (starter_kit +
@@ -711,6 +732,7 @@ impl Scenario {
         w.knowledge_enabled = self.knowledge_enabled;
         w.practices_enabled = self.practices_enabled;
         w.payoff_biased_learning = self.payoff_biased_learning;
+        w.repro_biased_learning = self.repro_biased_learning;
         w.unilateral_trade = self.unilateral_trade;
         w.anthro_race_enabled = self.anthro_race_enabled;
         w.disasters_enabled = self.disasters_enabled;
