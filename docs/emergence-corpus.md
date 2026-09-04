@@ -111,10 +111,12 @@ interesting before opening the CSV.
 ## 3. Triage
 
 1. Open `<out>/summary.csv`. Columns: `seed, ticks, final_alive,
-   final_biomass, state_hash`, then one count column per event type (59
-   columns, in `score::ALL_EVENT_NAMES` order), then `emergence_score,
-   novel_events, coverage, total_trades, novel_types` — 69 columns total,
-   `novel_types` last.
+   final_biomass, state_hash`, then one count column per event type
+   (`EVENT_TYPE_COUNT` columns — 63 as of the disease events — in
+   `score::ALL_EVENT_NAMES` order), then `emergence_score, novel_events,
+   coverage, total_trades, novel_types` — `5 + EVENT_TYPE_COUNT + 5`
+   columns total, `novel_types` last. (Stated by reference because this
+   line went stale twice when literals were used.)
 2. Sort by `emergence_score` descending.
 3. For any row with `novel_events > 0`, read its `novel_types` column
    (semicolon-joined event-type names, persisted directly in the CSV — no

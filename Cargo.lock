@@ -26,6 +26,7 @@ dependencies = [
  "rand_xoshiro",
  "rayon",
  "serde",
+ "serde_json",
  "smallvec",
  "thiserror",
  "toml",

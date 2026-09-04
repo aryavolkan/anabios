@@ -185,6 +185,12 @@ pub struct Scenario {
     /// (default) keeps the world byte-identical.
     #[serde(default)]
     pub anthro_race_enabled: bool,
+    /// Opt-in disease subsystem: crowding-seeded SIS pathogen — spillover in crowded
+    /// populations, proximity spread, energy-drain mortality via the existing starve
+    /// path; `EpidemicOutbreak`/`MedicineContainment` codex events. `false` (default) keeps the
+    /// world byte-identical.
+    #[serde(default)]
+    pub disease_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -760,6 +766,7 @@ impl Scenario {
         w.repro_biased_learning = self.repro_biased_learning;
         w.unilateral_trade = self.unilateral_trade;
         w.anthro_race_enabled = self.anthro_race_enabled;
+        w.disease_enabled = self.disease_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);

@@ -79,7 +79,10 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
     // columns now both serialized. All flags off here ⇒ layout growth only,
     // trajectory byte-identical.
-    &[(0, 0xcaa4eb350b6e83aa), (100, 0xfadf42b6c9b77e48), (300, 0x93738f863dc1a444)];
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0xce3c78827c288df4), (100, 0x3a506c04b5d70dc1), (300, 0xd20460e2b9e1cb4d)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

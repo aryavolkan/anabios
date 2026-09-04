@@ -239,6 +239,12 @@ pub struct World {
     /// byte-identical with the flag off.
     #[serde(default)]
     pub anthro_race_enabled: bool,
+    /// When true, the disease subsystem is active: `disease::disease_step` (tick stage 6g) spills
+    /// over, spreads, and drains per-agent `infection` (crowding-seeded SIS) and the
+    /// `EpidemicOutbreak`/`MedicineContainment` detectors run. Off by default — zero state
+    /// written and byte-identical with the flag off.
+    #[serde(default)]
+    pub disease_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -452,6 +458,7 @@ impl World {
             repro_biased_learning: false,
             unilateral_trade: false,
             anthro_race_enabled: false,
+            disease_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),

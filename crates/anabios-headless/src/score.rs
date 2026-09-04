@@ -44,7 +44,7 @@ pub fn idf_weight(n_t: u64) -> f64 {
 }
 
 /// Every scorable event name, in summary-CSV column order.
-pub const ALL_EVENT_NAMES: [&str; 61] = [
+pub const ALL_EVENT_NAMES: [&str; 63] = [
     "extinction",
     "pop_crash",
     "speciation",
@@ -106,6 +106,8 @@ pub const ALL_EVENT_NAMES: [&str; 61] = [
     "mass_grief",
     "hunted_adaptation",
     "dehydration",
+    "epidemic_outbreak",
+    "medicine_containment",
 ];
 
 /// Per-type corpus run counts from the reference sweep (see module docs):
@@ -120,7 +122,7 @@ pub const ALL_EVENT_NAMES: [&str; 61] = [
 /// novel until a corpus regen observes them. Weights
 /// are derived via [`idf_weight`], so this table is the *only* thing to
 /// update on a regen.
-pub const DEFAULT_CORPUS_NT: [(&str, u64); 61] = [
+pub const DEFAULT_CORPUS_NT: [(&str, u64); 63] = [
     ("extinction", 168),
     ("pop_crash", 157),
     ("speciation", 167),
@@ -182,6 +184,8 @@ pub const DEFAULT_CORPUS_NT: [(&str, u64); 61] = [
     ("mass_grief", 1),
     ("hunted_adaptation", 0),
     ("dehydration", 0),
+    ("epidemic_outbreak", 0),
+    ("medicine_containment", 0),
 ];
 
 pub fn event_name(t: EventType) -> &'static str {
@@ -247,6 +251,8 @@ pub fn event_name(t: EventType) -> &'static str {
         EventType::MassGrief => "mass_grief",
         EventType::HuntedAdaptation => "hunted_adaptation",
         EventType::Dehydration => "dehydration",
+        EventType::EpidemicOutbreak => "epidemic_outbreak",
+        EventType::MedicineContainment => "medicine_containment",
     }
 }
 
