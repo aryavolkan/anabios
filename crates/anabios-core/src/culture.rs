@@ -241,8 +241,11 @@ fn transmit_to_receiver(world: &mut World, id: u32) {
         apply_payoff_bias(world, &mut scan);
     }
     // O3 repro-biased learning (opt-in): decline practices whose local
-    // holders demonstrably bury more infants. Runs after the energy-proxy
-    // bias (both only ever zero practice targets, so order is benign).
+    // holders demonstrably bury more infants. Must run AFTER the payoff
+    // bias: payoff's model-bias half can SET practice targets from the
+    // chosen model, while repro bias only ever zeroes them — this order
+    // guarantees a repro-declined practice stays declined. Reordering
+    // would let model bias resurrect a declined practice.
     if world.repro_biased_learning {
         apply_repro_bias(&mut scan);
     }

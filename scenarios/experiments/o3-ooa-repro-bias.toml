@@ -48,19 +48,14 @@ seed = 318
 # InventionDiscovered / AnimalDomesticated for the technology arc, and
 # SexualSelection on the hominid lineages.
 #
-# Honest expectations (measured on this build): with births ungated the
-# world TEEMS and churns — population crests the cap early, then the sea and
-# the stressors hold it ~1.9k at 4k ticks, with thousands of migrations,
-# speciations, and extinctions along the way. Settlements and markets
-# crystallize on both continents by ~400. The exodus fires early and often:
-# CorridorUse lands north of the sea from tick ~1000 through BOTH crossings
-# (west x~80-235, east x~805-950), with 600+ corridor events over 4k ticks.
-# The technology arc is economic: Stone Tools is discovered at the QUARRY at
-# tick 797 and species-adopted 18 ticks later; Fire follows at 2086 — and
-# every one of the 203 adoptions by 4k is paid for in goods
-# (MaterialLearning). Which lineage holds Eurasia longest, and whether the
-# archaics persist or are absorbed, plays out inside the churn. Run 2-4k
-# ticks for the full theater.
+# Honest expectations: the prose above describes the FLAG-OFF base run
+# (out-of-africa.toml); its measured milestones (Stone Tools @797, Fire
+# @2086, 203 adoptions, ~1.9k pop, 600+ corridor events) do NOT reproduce
+# here — repro_biased_learning substantially reshapes the trajectory
+# (0/6 -> 3/6 seeds culture-dominant, up to 94% share, per the O3 findings
+# doc). Treat this file as the one-variable rb arm of that contrast, not a
+# scenario with its own pinned milestones; the regime is bistable, so only
+# distributional reads across n~10 seeds count.
 
 max_population = 3000
 
