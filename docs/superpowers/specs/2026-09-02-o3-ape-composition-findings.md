@@ -68,10 +68,29 @@ distributionally).
 
 ## What this branch carries
 
-Probe scaffolding (env-gated, identity-off, goldens verified green):
-`ANABIOS_O3_APE_TIER`, `ANABIOS_O3_APE_DIET`; the extended `[o3diag]`
-gate-decomposition instrument; `scenarios/experiments/o3-ooa-rb-trade.toml`
-(committed flags only); the raw ledgers. The probes stay in-tree so every
-number here reproduces from this branch; none of them is a shipped
-mechanism, and the next cycle decides what graduates to a real scenario
-flag.
+The extended `[o3diag]` gate-decomposition instrument;
+`scenarios/experiments/o3-ooa-rb-trade.toml` (committed flags only); the raw
+ledgers.
+
+The `ANABIOS_O3_APE_TIER` / `ANABIOS_O3_APE_DIET` probe knobs were **removed
+after measurement** (repo convention: measure, commit findings, tear out the
+scaffolding). Review found they crossed lines the earlier probes hadn't:
+APE_TIER changed hot-loop behavior without being recorded in snapshots or
+events (a replay/golden-regen poisoning hazard from ambient shell state),
+values were unvalidated (an out-of-band diet or a locale-comma typo silently
+ran a different experiment), and the OnceLock latched the first value
+process-wide. The diet/tier arms in the tables above therefore do **not**
+reproduce from this tree — their raw logs are committed beside this doc, and
+the `o3-ooa-rb-trade.toml` arm (the headline: 7/11 culture-dominant, first
+era-2 event) reproduces from committed flags alone. If a future cycle needs
+the tier/diet levers, they graduate to `#[serde(default)]` scenario flags
+(self-recording, validated at parse), not env vars.
+
+Post-measurement `[o3diag]` fixes (same review): all four gate counters now
+share the communicator-ape denominator (`held_any` → `ape_held`; it
+previously counted ALL alive agents against the "among apes" label),
+`ape_iq1` goes through the real `iq_permits` (a cognition-off world reads
+open, not blocked), and `ape_mat` documents that an agent that already PAID
+the Stone Tools basket reads false — 'never afforded' and 'already paid'
+are indistinguishable in that column. Old committed logs use the previous
+keys/semantics; compare by key, not position.

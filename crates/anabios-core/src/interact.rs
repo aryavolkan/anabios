@@ -112,25 +112,6 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
             let m = crate::culture::env_affinity_match(affinity, env);
             desired_bite *= 1.0 + crate::culture::ENV_AFFINITY_BONUS * m;
         }
-        // O3 ape-composition probe P1 (THROWAWAY, env-gated; identity when
-        // unset): an ape-only foraging tier — is_ape agents reach food others
-        // cannot, compensating the omnivore/large tax that eliminates ape
-        // cultural lineages from the winning communicator population.
-        {
-            use std::sync::OnceLock;
-            static APE_TIER: OnceLock<f32> = OnceLock::new();
-            let m = *APE_TIER.get_or_init(|| {
-                std::env::var("ANABIOS_O3_APE_TIER")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or(0.0)
-            });
-            if m > 0.0
-                && crate::invention::is_ape(&world.agents.genome[i], &world.agents.modules[i])
-            {
-                desired_bite *= 1.0 + m;
-            }
-        }
         // Invention buffs (Stone Tools / Farming / Machinery). Identity when
         // the agent holds nothing (flag-off masks are always 0).
         let inv_mask = crate::invention::held_mask(&world.agents.meme_vector[i]);

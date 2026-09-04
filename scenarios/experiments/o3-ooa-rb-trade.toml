@@ -82,7 +82,10 @@ war_enabled = true
 sexual_dimorphism_enabled = true
 domestication_enabled = true
 
-# O3 era-climb probe: the one-variable repro-bias variant of the grand run.
+# O3 era-climb probe: the THREE-flag variant of the grand run — repro-biased
+# learning + unilateral trade + conserve-goods-on-death (the trade-freeze fix
+# pair). Contrast against o3-ooa-repro-bias.toml (rb alone) and
+# out-of-africa.toml (base) to attribute effects.
 repro_biased_learning = true
 unilateral_trade = true
 conserve_goods_on_death = true

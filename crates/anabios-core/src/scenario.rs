@@ -442,18 +442,13 @@ impl Default for Placement {
 /// Retune the kit's Mouth to the primate omnivore band so the lineage renders
 /// as (and counts as) an ape — the only archetype allowed to carry inventions.
 fn make_omnivore(modules: &mut crate::module::ModuleList) {
-    // O3 ape-composition probe P2 (THROWAWAY, env-gated; identity when
-    // unset): place ape founders at a configurable point of the ape diet
-    // band (e.g. 0.34, the herbivorous edge) instead of the 0.5 midpoint,
-    // halving the plant-intake tax that eliminates ape cultural cohorts.
-    use std::sync::OnceLock;
-    static APE_DIET: OnceLock<f32> = OnceLock::new();
-    let diet = *APE_DIET.get_or_init(|| {
-        std::env::var("ANABIOS_O3_APE_DIET").ok().and_then(|v| v.parse().ok()).unwrap_or(0.5)
-    });
+    // Probe scaffolding removed post-measurement (the O3 ape-composition
+    // sweep varied this via ANABIOS_O3_APE_DIET; findings + raw arms are in
+    // docs/superpowers/specs/2026-09-02-o3-ape-composition-findings.md).
+    // 0.5 = ape-band midpoint, the sole supported value in-tree.
     for m in modules.iter_mut() {
         if let crate::module::Module::Mouth { diet_affinity, .. } = m {
-            *diet_affinity = diet;
+            *diet_affinity = 0.5;
         }
     }
 }
