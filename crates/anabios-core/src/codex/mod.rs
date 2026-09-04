@@ -34,6 +34,7 @@ mod event;
 mod invention;
 mod knowledge;
 mod metrics;
+mod needs;
 mod params;
 mod population;
 mod practice;
@@ -392,6 +393,7 @@ pub fn observe_all(world: &mut World) {
     dimorphism::detect_sex_ratio_collapse(world, &agg);
     domestication::detect_livestock_herd(world, &agg);
     knowledge::detect_knowledge_ratchet(world, &agg);
+    needs::detect_dehydration(world, &agg);
     signatures::detect_ambush_and_tool(world, &agg);
     signatures::detect_flight(world, &agg);
     signatures::detect_structured_signaling(world);

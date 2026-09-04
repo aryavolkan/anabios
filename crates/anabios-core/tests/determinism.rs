@@ -297,13 +297,23 @@ const GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-07 (O2 payoff-biased learning, FORMAT_VERSION 29→30):
     // added World.payoff_biased_learning flag; off in minimal ⇒ transmission
     // byte-identical — layout growth only, so all hashes moved once.
-    // Refreshed 2026-09-01 (disease subsystem, FORMAT_VERSION →35):
-    // AgentBuffers.infection column + World.disease_enabled +
-    // CodexState.epidemic_latched + EventType::{EpidemicOutbreak,
-    // MedicineContainment}. Flag off in minimal ⇒ the stage early-returns
-    // (zero RNG draws) and the detector never fires — trajectory
-    // byte-identical, only the serialized layout grew.
-    &[(0, 0x19cf3996cf7f68a9), (100, 0x17f44b2164499dd3), (1000, 0x41fcb445ce43490d)];
+    // Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
+    // World.{anthro_race_enabled,culture_roots} + CodexState.{hunted_baselines,
+    // hunted_active} + genome slot 43 renamed Vigilance (same index, same
+    // [0,1] semantics) + Node::SenseCultureThreat (appended; joins the
+    // mutation pool only under the flag). Flag off in minimal ⇒ culture mask
+    // empty, threat sense 0.0, detector skipped — trajectory byte-identical,
+    // only the serialized layout grew.
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): AgentBuffers
+    // gains thirst/fatigue/asleep columns + World.basic_needs_enabled +
+    // EventType::Dehydration + genome slots 8/9 renamed in place. Flag off in
+    // minimal ⇒ needs_step no-ops (zero RNG), all hooks exact identity —
+    // trajectory byte-identical, only the serialized layout grew.
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x13ec213ad32bf84c), (100, 0x6e48cc9874db5cb2), (1000, 0x24ccceb5492cf8e0)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

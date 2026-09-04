@@ -120,7 +120,14 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
     // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
     // layout growth only (off here).
-    &[(0, 0xa0a6a8182d92db14), (100, 0x11e596568ecf14bb), (300, 0xc6ff87ea62cddd5f)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
+    // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
+    // Flag off here ⇒ layout growth only, trajectory byte-identical.
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x3d6628973833919d), (100, 0xa5ba85707447189d), (300, 0xc93892297f73a713)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

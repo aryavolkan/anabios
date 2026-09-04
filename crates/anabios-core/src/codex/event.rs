@@ -251,19 +251,25 @@ pub enum EventType {
     /// `value` = the largest per-channel prey rise; species = prey lineage's
     /// lowest active species id; loc = prey centroid.
     HuntedAdaptation = 59,
+    /// A species is collectively dehydrating (basic needs): mean thirst
+    /// across its live members reached `DEHYDRATION_EVENT_MIN` with at least
+    /// `DEHYDRATION_MIN_MEMBERS` alive (`value` = mean thirst; loc = species
+    /// centroid). Latch-free: re-fires are suppressed by an event-ring
+    /// cooldown, like `MassFright`. Inert unless `basic_needs_enabled`.
+    Dehydration = 60,
     /// A pathogen outbreak took hold in a species: its infected fraction
     /// crossed `OUTBREAK_FRACTION` (with `count >= OUTBREAK_MIN_POP`) while
     /// `disease_enabled`. Edge-triggered with a re-arm below `OUTBREAK_REARM`,
     /// so successive epidemic waves re-fire. `value` = infected fraction;
     /// species = the stricken species; loc = its centroid.
-    EpidemicOutbreak = 60,
+    EpidemicOutbreak = 61,
     /// An outbreak was resolved by a medicine-bearing culture: the species
     /// was outbreak-latched, its infected fraction fell below
     /// `OUTBREAK_REARM`, and ≥50% of its members hold Medicine. The
     /// counter-pressure receipt — disease gave the invention a selective
     /// raison d'être. `value` = Medicine adoption fraction; species = the
     /// recovering species; loc = its centroid.
-    MedicineContainment = 61,
+    MedicineContainment = 62,
 }
 
 /// Number of `EventType` variants. Derived from the last variant so it stays
@@ -338,8 +344,9 @@ mod affect_event_tests {
         assert_eq!(EventType::TerritorialRage as u8, 57);
         assert_eq!(EventType::MassGrief as u8, 58);
         assert_eq!(EventType::HuntedAdaptation as u8, 59);
-        assert_eq!(EventType::EpidemicOutbreak as u8, 60);
-        assert_eq!(EventType::MedicineContainment as u8, 61);
+        assert_eq!(EventType::Dehydration as u8, 60);
+        assert_eq!(EventType::EpidemicOutbreak as u8, 61);
+        assert_eq!(EventType::MedicineContainment as u8, 62);
         assert_eq!(EVENT_TYPE_COUNT, EventType::MedicineContainment as usize + 1);
     }
 }

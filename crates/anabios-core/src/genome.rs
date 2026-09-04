@@ -42,8 +42,18 @@ pub enum GenomeSlot {
     MutationRate = 6,
     /// Declared; not yet read by behavior. Reserved: future disease-resistance modifier.
     ImmuneStrength = 7,
-    _BodyReserved8 = 8,
-    _BodyReserved9 = 9,
+    /// Heritable thirst tolerance in `[0,1]` (basic needs): scales thirst
+    /// accumulation by `1.5 − v` (neutral 0.5 ⇒ exactly ×1.0). Renamed in
+    /// place from `_BodyReserved8`. Read only when
+    /// `World::basic_needs_enabled`; inert otherwise. Counts toward
+    /// speciation distance (adaptive, non-personality).
+    ThirstTolerance = 8,
+    /// Heritable sleep need in `[0,1]` (basic needs): scales fatigue
+    /// accumulation by `0.5 + v` (neutral 0.5 ⇒ exactly ×1.0). Renamed in
+    /// place from `_BodyReserved9`. Read only when
+    /// `World::basic_needs_enabled`; inert otherwise. Counts toward
+    /// speciation distance.
+    SleepNeed = 9,
 
     // Drive levels (10..20). Slots 10-13 and 21 are the Big Five (OCEAN)
     // personality traits (signed `[-1,+1]` via `2*g - 1`); renamed in place
@@ -166,8 +176,8 @@ pub const SLOT_NAMES: [&str; GENOME_LEN] = [
     "BasalMetabolism",
     "MutationRate",
     "ImmuneStrength",
-    "reserved_8",
-    "reserved_9",
+    "ThirstTolerance",
+    "SleepNeed",
     "Agreeableness",
     "Neuroticism",
     "Openness",
@@ -490,8 +500,11 @@ mod tests {
         assert_eq!(SLOT_NAMES[GenomeSlot::EnvAffinity.idx()], "EnvAffinity");
         assert_eq!(SLOT_NAMES[GenomeSlot::TerrainAffinity.idx()], "TerrainAffinity");
         assert_eq!(SLOT_NAMES[GenomeSlot::SexualDimorphism.idx()], "SexualDimorphism");
+        // Basic-needs slots (renamed in place from _BodyReserved8/9).
+        assert_eq!(SLOT_NAMES[GenomeSlot::ThirstTolerance.idx()], "ThirstTolerance");
+        assert_eq!(SLOT_NAMES[GenomeSlot::SleepNeed.idx()], "SleepNeed");
         // Reserved slots stay visibly reserved.
-        assert!(SLOT_NAMES[8].starts_with("reserved_"));
+        assert!(SLOT_NAMES[36].starts_with("reserved_"));
         assert!(SLOT_NAMES[49].starts_with("reserved_"));
     }
 

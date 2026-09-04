@@ -30,10 +30,13 @@ fn summary_csv_has_novel_types_column() {
         header.ends_with(",emergence_score,novel_events,coverage,total_trades,novel_types"),
         "header was: {header}"
     );
-    // every data row must have exactly 72 fields (5 prefix + EVENT_TYPE_COUNT=62
-    // per-event columns + emergence_score,novel_events,coverage,total_trades,novel_types).
+    // every data row must have exactly 5 prefix + EVENT_TYPE_COUNT per-event
+    // columns + emergence_score,novel_events,coverage,total_trades,novel_types
+    // fields. Derived from EVENT_TYPE_COUNT so appending an event type can't
+    // silently stale this count (it sat hardcoded at 70 until Dehydration).
+    let expected = 5 + anabios_core::codex::EVENT_TYPE_COUNT + 5;
     for row in lines {
-        assert_eq!(row.split(',').count(), 72, "row: {row}");
+        assert_eq!(row.split(',').count(), expected, "row: {row}");
     }
 }
 

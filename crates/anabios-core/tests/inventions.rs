@@ -1176,7 +1176,14 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-08-19 (anthropogenic arms race, FORMAT_VERSION →34):
     // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
     // layout growth only (off here).
-    &[(0, 0x069e2f4d569b6097), (100, 0x1f8f685bb8180fc3), (300, 0xc117e1bef70b3462)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
+    // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
+    // Flag off here ⇒ layout growth only, trajectory byte-identical.
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x903a12dea006d575), (100, 0xbc4e1ffb7f6b2ebc), (300, 0x6fd3872501a7ea46)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

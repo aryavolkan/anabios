@@ -72,7 +72,14 @@ fn kin_cluster_raises_care_and_sharing() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xf5d20d11e57b5d01), (100, 0x563936353526c90f), (300, 0xbfcab13b5e1e847d)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
+    // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
+    // Flag off here ⇒ layout growth only, trajectory byte-identical.
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0xcaa4eb350b6e83aa), (100, 0xfadf42b6c9b77e48), (300, 0x93738f863dc1a444)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

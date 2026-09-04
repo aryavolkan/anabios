@@ -95,9 +95,34 @@ pub struct AgentBuffers {
     /// (0 = untracked). Assigned at birth (communicator children) and on
     /// band transitions.
     pub meme_lineage: Vec<[u32; crate::program::MEME_CHANNELS]>,
+    /// Thirst drive in `[0,1]` (basic needs): rises each tick, falls while
+    /// drinking at a water/river cell. Mutated only by `needs::needs_step`
+    /// when `World::basic_needs_enabled`; stays `0.0` otherwise, so the
+    /// dehydration metabolic multiplier is exact identity. Serialized — a
+    /// path-dependent accumulator feeding hashed movement/energy, so it must
+    /// NOT be `#[serde(skip)]` (still-ticks v13 footgun).
+    pub thirst: Vec<f32>,
+    /// Fatigue drive in `[0,1]` (basic needs): rises with activity, falls
+    /// while asleep. Same gating/serialization story as `thirst`.
+    pub fatigue: Vec<f32>,
+    /// Hysteresis sleep state (basic needs): set at `fatigue >= SLEEP_ONSET`,
+    /// cleared at `fatigue <= WAKE_AT`. While set, integrate suppresses
+    /// movement and discounts basal metabolism, and `feed_pass` skips the
+    /// agent. All-false and unread when `basic_needs_enabled` is off.
+    pub asleep: BitVec,
     /// Biological sex (E12): `false` = female, `true` = male. Read only when
     /// `World::sexual_dimorphism_enabled`; all-female and unread otherwise.
     pub sex: BitVec,
+    /// O3 repro-biased learning: surviving offspring credited to each parent.
+    /// Incremented at birth ONLY when `World::repro_biased_learning` is on
+    /// (all-zero and unread otherwise, so flag-off behavior is unchanged).
+    /// Serialized — an accumulator feeding transmission decisions must
+    /// round-trip (still-ticks v13 footgun).
+    pub births_ok: Vec<u16>,
+    /// O3 repro-biased learning: offspring lost at birth to a maladaptive-
+    /// practice cost (Inbreeding stillbirth / Child-Sacrifice cull), credited
+    /// to both parents. Same gating and serialization contract as `births_ok`.
+    pub births_failed: Vec<u16>,
     /// Livestock ownership (E13): the owning herder's agent id, or
     /// `AGENT_NULL` when wild. Set by `domestication::husbandry_step` (taming)
     /// and at birth (born-domesticated); cleared eagerly in `kill` when the
@@ -203,6 +228,11 @@ impl AgentBuffers {
         self.anchor[i] = position;
         self.harvest_exp[i] = [0.0; crate::resource::GOOD_COUNT];
         self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
+        self.thirst[i] = 0.0;
+        self.fatigue[i] = 0.0;
+        self.asleep.set(i, false);
+        self.births_ok[i] = 0;
+        self.births_failed[i] = 0;
         self.sex.set(i, sex);
         self.livestock_of[i] = AGENT_NULL;
         self.infection[i] = 0.0;
@@ -239,6 +269,11 @@ impl AgentBuffers {
         self.anchor.push(Vec2::ZERO);
         self.harvest_exp.push([0.0; crate::resource::GOOD_COUNT]);
         self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
+        self.thirst.push(0.0);
+        self.fatigue.push(0.0);
+        self.asleep.push(false);
+        self.births_ok.push(0);
+        self.births_failed.push(0);
         self.sex.push(false);
         self.livestock_of.push(AGENT_NULL);
         self.infection.push(0.0);
@@ -265,6 +300,9 @@ impl AgentBuffers {
         self.energy[i] = 0.0;
         self.affect_prev_crowding[i] = 0.0;
         self.infection[i] = 0.0;
+        self.thirst[i] = 0.0;
+        self.fatigue[i] = 0.0;
+        self.asleep.set(i, false);
         self.free_list.push(id);
         self.live_count -= 1;
 
@@ -516,6 +554,55 @@ mod tests {
             [0.0; crate::affect::AFFECT_SYSTEMS],
             "reused (dead) slot resets affect to neutral"
         );
+    }
+
+    #[test]
+    fn spawn_zeroes_needs_and_kill_resets() {
+        let mut a = AgentBuffers::new();
+        let id = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            1,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        let i = id as usize;
+        // Present, zeroed, and sized to capacity on spawn.
+        assert_eq!(a.thirst[i], 0.0);
+        assert_eq!(a.fatigue[i], 0.0);
+        assert!(!a.asleep[i]);
+        assert_eq!(a.thirst.len(), a.capacity());
+        assert_eq!(a.fatigue.len(), a.capacity());
+        assert_eq!(a.asleep.len(), a.capacity());
+        // Stale values are cleared on death (dead-slot reset)...
+        a.thirst[i] = 0.7;
+        a.fatigue[i] = 0.9;
+        a.asleep.set(i, true);
+        a.kill(id);
+        assert_eq!(a.thirst[i], 0.0, "dead slot thirst reset");
+        assert_eq!(a.fatigue[i], 0.0, "dead slot fatigue reset");
+        assert!(!a.asleep[i], "dead slot asleep reset");
+        // ...and a reused slot re-initializes to neutral.
+        a.thirst[i] = 0.3;
+        a.fatigue[i] = 0.4;
+        a.asleep.set(i, true);
+        let id2 = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            2,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        assert_eq!(id2, id, "slot reused");
+        assert_eq!(a.thirst[i], 0.0, "reuse re-init thirst");
+        assert_eq!(a.fatigue[i], 0.0, "reuse re-init fatigue");
+        assert!(!a.asleep[i], "reuse re-init asleep");
     }
 
     #[test]
