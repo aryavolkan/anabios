@@ -41,6 +41,7 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 | `inventions.toml` / `cognitive-coevolution.toml` / `knowledge-ratchet.toml` | Invention tree, cognition, writing |
 | `dimorphism.toml` / `domestication.toml` | Sexual selection, livestock |
 | `anthro-race.toml` | Human-vs-animal arms race (`HuntedAdaptation`) |
+| `basic-needs.toml` | Thirst + sleep drives, rivers, dehydration |
 | `mammals-vs-reptiles.toml` | Vertebrate-class archetypes |
 | `out-of-africa.toml` / `out-of-africa-saga.toml` | The flagship every-feature-on arc |
 | `grand-theater.toml` / `sandbox-large.toml` | Staged & freeform large worlds |

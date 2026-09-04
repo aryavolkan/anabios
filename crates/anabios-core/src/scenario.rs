@@ -151,6 +151,15 @@ pub struct Scenario {
     /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
     #[serde(default)]
     pub payoff_biased_learning: bool,
+    /// Opt-in basic needs (thirst + sleep as Layer-0 drives): agents
+    /// accumulate thirst (drink at water/river cells; dehydration raises
+    /// basal drain) and fatigue (sleep on a hysteresis: movement + feeding
+    /// suppressed, discounted metabolism, fatigue recovers). `false`
+    /// (default) keeps the world byte-identical — zero RNG, no state.
+    /// A scenario with no drinkable cells (no Water terrain and
+    /// `river_threshold` 0) will dehydrate everyone; pair the flag with water.
+    #[serde(default)]
+    pub basic_needs_enabled: bool,
     /// Opt-in O3 reproductive-success payoff bias: cultural transmission
     /// declines a maladaptive-practice channel when its local holders show a
     /// higher observed birth-failure fraction than non-holders (content bias
@@ -397,6 +406,12 @@ trait_overrides! {
     /// Heritable wariness (`GenomeSlot::Vigilance`; read only with
     /// `anthro_race_enabled`).
     vigilance => Vigilance,
+    /// Heritable thirst tolerance (`GenomeSlot::ThirstTolerance`; read only
+    /// with `basic_needs_enabled`).
+    thirst_tolerance => ThirstTolerance,
+    /// Heritable sleep need (`GenomeSlot::SleepNeed`; read only with
+    /// `basic_needs_enabled`).
+    sleep_need => SleepNeed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -732,6 +747,7 @@ impl Scenario {
         w.knowledge_enabled = self.knowledge_enabled;
         w.practices_enabled = self.practices_enabled;
         w.payoff_biased_learning = self.payoff_biased_learning;
+        w.basic_needs_enabled = self.basic_needs_enabled;
         w.repro_biased_learning = self.repro_biased_learning;
         w.unilateral_trade = self.unilateral_trade;
         w.anthro_race_enabled = self.anthro_race_enabled;

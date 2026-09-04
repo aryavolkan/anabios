@@ -59,6 +59,11 @@ pub fn interact_all(world: &mut World) {
 fn feed_pass(world: &mut World, alive_ids: &[u32]) {
     for &id in alive_ids {
         let i = id as usize;
+        // Basic needs: sleeping agents don't graze (the point of sleep being
+        // a real tradeoff). `asleep` is all-false when the flag is off.
+        if world.agents.asleep[i] {
+            continue;
+        }
         if !module::has(&world.agents.modules[i], ModuleType::Mouth) {
             continue;
         }
