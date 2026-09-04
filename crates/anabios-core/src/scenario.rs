@@ -442,6 +442,10 @@ impl Default for Placement {
 /// Retune the kit's Mouth to the primate omnivore band so the lineage renders
 /// as (and counts as) an ape — the only archetype allowed to carry inventions.
 fn make_omnivore(modules: &mut crate::module::ModuleList) {
+    // Probe scaffolding removed post-measurement (the O3 ape-composition
+    // sweep varied this via ANABIOS_O3_APE_DIET; findings + raw arms are in
+    // docs/superpowers/specs/2026-09-02-o3-ape-composition-findings.md).
+    // 0.5 = ape-band midpoint, the sole supported value in-tree.
     for m in modules.iter_mut() {
         if let crate::module::Module::Mouth { diet_affinity, .. } = m {
             *diet_affinity = 0.5;
