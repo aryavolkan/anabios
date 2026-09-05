@@ -223,6 +223,12 @@ const SCENARIOS: Array[Dictionary] = [
 		"body": 2
 	},
 	{
+		"label": "Behavior — Grazers & wolves (moods)",
+		"path": "res://../scenarios/grazers-and-wolves.toml",
+		"ground": 0,
+		"body": 5
+	},
+	{
 		"label": "Cognitive — Knowledge ratchet (writing)",
 		"path": "res://../scenarios/knowledge-ratchet.toml",
 		"ground": 0,
