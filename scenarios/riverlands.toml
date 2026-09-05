@@ -73,15 +73,27 @@ size = 0.45
 mutation_rate = 0.3
 lifespan_bias = 1.0
 
-# Predators: seeded onto the herds themselves. 560:80 is 7:1, inside the 6-7.5
-# band that cycles rather than collapsing. `mammal_pursuer` (not `stalker`)
-# because the founder `predator_kit` carries no Reproductive module and so
-# dies out sterile; the pursuer kit breeds, and its 0.95 top speed is set
-# against the grazer's 0.55 so a chase can actually close.
+# Predators: seeded onto the herds themselves. `mammal_pursuer` (not
+# `stalker`) because the founder `predator_kit` carries no Reproductive
+# module and so dies out sterile; the pursuer kit breeds, and its 0.95 top
+# speed is set against the grazer's 0.55 so a chase can actually close.
+#
+# The three numbers below were swept, not guessed (35 runs over seeds 7, 11,
+# 23). The pack has an Allee floor near ten hunters: below it, even with
+# mate seeking, the survivors sit further apart than the 96-unit scan and
+# the lineage fades. A founder pack of 80 at radius 90 dipped under that
+# floor on two of three seeds. 120 at radius 50 starts dense enough to clear
+# the founder dip on every seed. `max_share = 0.15` then caps the pack at
+# 375: without a ceiling it booms past what the herds can feed (200+ by
+# t500), starves back to ~15, and fades. With it the pack saturates and
+# holds — 372-375 on all three seeds at t6000, still there at t9000.
+# Raising `reproduction_threshold` to damp the boom instead was the one
+# change that reliably killed the pack (it pushed seed 11 under the floor).
 [[agents]]
-count = 80
+count = 120
 archetype = "mammal_pursuer"
-placement = { kind = "near_spec", spec = 0, radius = 90.0 }
+placement = { kind = "near_spec", spec = 0, radius = 50.0 }
+max_share = 0.15
 [agents.traits]
 size = 0.65
 # Ranging hunters drink less often than the herds they follow.
