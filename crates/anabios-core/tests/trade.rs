@@ -9,6 +9,18 @@ const TRADE: &str = include_str!("../../../scenarios/biome-trade.toml");
 const GEO: &str = include_str!("../../../scenarios/geographic-trade.toml");
 const UNI: &str = include_str!("../../../scenarios/unilateral-trade.toml");
 
+/// Determinism checks replay the same seed twice — the comparison works at any
+/// tick count, so under coverage instrumentation (where each tick is ~5-10x
+/// slower) we trade horizon for wall-time. The turnover/evidence tests below
+/// keep their full horizons.
+fn det_ticks() -> u64 {
+    if cfg!(coverage) {
+        60
+    } else {
+        300
+    }
+}
+
 /// The `unilateral_trade` flag parses from TOML and wires through to `World`.
 #[test]
 fn unilateral_trade_flag_parses_and_wires() {
@@ -25,7 +37,7 @@ fn unilateral_trade_flag_parses_and_wires() {
 fn unilateral_trade_scenario_is_deterministic() {
     let run = || {
         let mut w = Scenario::parse_toml(UNI).expect("parse").instantiate();
-        for _ in 0..300 {
+        for _ in 0..det_ticks() {
             step(&mut w);
         }
         state_hash(&w)
@@ -58,7 +70,7 @@ fn unilateral_trade_scenario_produces_trades() {
 fn trade_scenario_is_deterministic() {
     let run = || {
         let mut w = Scenario::parse_toml(TRADE).expect("parse").instantiate();
-        for _ in 0..300 {
+        for _ in 0..det_ticks() {
             step(&mut w);
         }
         state_hash(&w)
@@ -120,7 +132,7 @@ fn sorted_fraction(w: &anabios_core::world::World) -> f32 {
 fn geographic_trade_scenario_is_deterministic() {
     let run = || {
         let mut w = Scenario::parse_toml(GEO).expect("parse").instantiate();
-        for _ in 0..300 {
+        for _ in 0..det_ticks() {
             step(&mut w);
         }
         state_hash(&w)

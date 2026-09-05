@@ -15,6 +15,10 @@ use anabios_core::tick::step;
 use anabios_core::world::World;
 
 fn roundtrip(src: &str, warm: u64, flag: fn(&World) -> bool, flag_name: &str) {
+    // Under coverage instrumentation (cargo llvm-cov sets --cfg coverage) every
+    // tick is ~5-10x slower, so clamp the warm-up — the save→load→step
+    // round-trip semantics (the thing under test) don't depend on warm length.
+    let warm = if cfg!(coverage) { warm.min(100) } else { warm };
     let mut world = Scenario::parse_toml(src).expect("parse").instantiate();
     assert!(flag(&world), "scenario must enable {flag_name}");
     for _ in 0..warm {
