@@ -330,11 +330,25 @@ jobs:
       - name: sprite module tests
         run: |
           rc=0
-          for t in test_building_sprites test_mammal_sprites; do
+          for t in test_building_sprites test_mammal_sprites test_event_fx; do
             echo "== $t =="
+            log=$(mktemp)
             if ! godot --headless --rendering-driver dummy --path game \
-                 -s "res://scripts/$t.gd"; then
+                 -s "res://scripts/$t.gd" >"$log" 2>&1; then
+              cat "$log"
               echo "::error::$t failed"
+              rc=1
+              continue
+            fi
+            cat "$log"
+            # A script that fails to parse/compile still exits 0, so the exit
+            # code alone can green-light a broken test; require the script's
+            # own success line and the absence of script errors.
+            if grep -qE "SCRIPT ERROR|Parse Error" "$log"; then
+              echo "::error::$t emitted script errors"
+              rc=1
+            elif ! grep -q "$t: all passed" "$log"; then
+              echo "::error::$t never reported success"
               rc=1
             fi
           done

@@ -10,6 +10,9 @@ extends Node2D
 
 const FIRE_LIGHT_TTL: float = 4.0
 
+const EventFx = preload("res://scripts/event_fx.gd")
+const FxRing = preload("res://scripts/fx_ring.gd")
+
 var _sim = null
 var _cam: Camera2D = null
 var _climate: CanvasModulate = null
@@ -24,6 +27,10 @@ var _snow: GPUParticles2D = null
 var _weather_t: float = 999.0
 var _dust: Array[GPUParticles2D] = []
 var _dust_idx: int = 0
+var _rings: Array = []
+var _ring_idx: int = 0
+var _sparks: Array[GPUParticles2D] = []
+var _spark_idx: int = 0
 var _event_cursor: int = 0
 
 
@@ -38,6 +45,8 @@ func setup(sim, cam: Camera2D, climate: CanvasModulate, disc: Texture2D) -> void
 	_make_ember_pool()
 	_make_dust_pool()
 	_make_fire_light_pool()
+	_make_ring_pool()
+	_make_spark_pool()
 	_make_weather()
 
 
@@ -47,6 +56,7 @@ func setup(sim, cam: Camera2D, climate: CanvasModulate, disc: Texture2D) -> void
 func update(delta: float, moving_sample: PackedVector2Array, is_paused: bool) -> void:
 	watch_events()
 	update_fire_lights(delta)
+	update_rings(delta)
 	update_weather(delta)
 	update_dust(moving_sample, is_paused)
 
@@ -168,6 +178,83 @@ func spawn_dust(pos: Vector2) -> void:
 	var p := _dust[_dust_idx]
 	_dust_idx = (_dust_idx + 1) % _dust.size()
 	p.position = pos + Vector2(0, 2.0)
+	p.restart()
+
+
+# Pooled expanding ring pulses marking codex events in the world; hue comes
+# from the event's spec so the world echoes the codex timeline's colors.
+func _make_ring_pool() -> void:
+	for i in 10:
+		var r: Node2D = FxRing.new()
+		r.name = "FxRing%d" % i
+		r.z_index = 6
+		r.visible = false
+		add_child(r)
+		_rings.append(r)
+
+
+func spawn_ring(pos: Vector2, color: Color, dur: float, radius: float) -> void:
+	if _rings.is_empty():
+		return
+	var r: Node2D = _rings[_ring_idx]
+	_ring_idx = (_ring_idx + 1) % _rings.size()
+	r.start(pos, color, dur, radius)
+
+
+func update_rings(delta: float) -> void:
+	for r in _rings:
+		if r.active:
+			r.step(delta)
+
+
+func rings() -> Array:
+	return _rings
+
+
+# Pooled tinted spark bursts: the embers' shape with a neutral ramp, tinted
+# per spawn via modulate so one pool serves every event hue.
+func _make_spark_pool() -> void:
+	for i in 6:
+		var p := GPUParticles2D.new()
+		p.name = "Sparks%d" % i
+		p.amount = 16
+		p.lifetime = 1.1
+		p.one_shot = true
+		p.explosiveness = 0.85
+		p.z_index = 6
+		p.visibility_rect = Rect2(-200, -200, 400, 400)
+		p.texture = _disc
+		var m := ParticleProcessMaterial.new()
+		m.direction = Vector3(0, -1, 0)
+		m.spread = 48.0
+		m.initial_velocity_min = 12.0
+		m.initial_velocity_max = 32.0
+		m.gravity = Vector3(0, -14, 0)
+		m.damping_min = 5.0
+		m.damping_max = 12.0
+		m.scale_min = 0.6
+		m.scale_max = 1.3
+		var grad := Gradient.new()
+		grad.set_color(0, Color(1.0, 1.0, 1.0))
+		grad.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+		var gt := GradientTexture1D.new()
+		gt.gradient = grad
+		m.color_ramp = gt
+		p.process_material = m
+		var add := CanvasItemMaterial.new()
+		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		p.material = add
+		add_child(p)
+		_sparks.append(p)
+
+
+func spawn_motes(pos: Vector2, color: Color) -> void:
+	if _sparks.is_empty():
+		return
+	var p := _sparks[_spark_idx]
+	_spark_idx = (_spark_idx + 1) % _sparks.size()
+	p.position = pos
+	p.modulate = color
 	p.restart()
 
 
@@ -300,8 +387,8 @@ func update_weather(delta: float) -> void:
 	_snow.emitting = tundra or (opt >= 0.0 and opt < 0.2)
 
 
-# Codex-driven effects: fire-kind events light up and throw embers; war-kind
-# events kick the camera. The cursor mirrors codex_panel's so a reload resets.
+# Codex-driven effects, dispatched through event_fx's spec table. The cursor
+# mirrors codex_panel's so a reload resets.
 func watch_events() -> void:
 	var count: int = int(_sim.codex_event_count())
 	if count < _event_cursor:
@@ -311,13 +398,24 @@ func watch_events() -> void:
 	for ev in _sim.codex_events_since(_event_cursor).slice(-10):
 		# (slice caps effects at the batch tail: a flood from scenario load or
 		# a tick jump is history, not news — don't light up ancient events.)
-		var t: int = int(ev["type"])
-		var loc: Vector2 = ev.get("loc", Vector2.ZERO)
-		match t:
-			4, 17, 35, 42, 43:  # NovelModule, Discovery, ToolUse, Settlement, Market
+		apply_event_fx(int(ev["type"]), ev.get("loc", Vector2.ZERO))
+	_event_cursor = count
+
+
+# Apply one event's effects. Positional kinds need a real location (ZERO is
+# the sim's "no location" sentinel); trauma is global and always lands.
+func apply_event_fx(event_type: int, loc: Vector2) -> void:
+	for s in EventFx.spec(event_type):
+		match s["kind"]:
+			"fire":
 				if loc != Vector2.ZERO:
 					spawn_embers(loc)
 					_spawn_fire_light(loc)
-			7, 38:  # CombatRaid, War
-				_cam.add_trauma(0.25)
-	_event_cursor = count
+			"ring":
+				if loc != Vector2.ZERO:
+					spawn_ring(loc, s["color"], s["dur"], s["radius"])
+			"motes":
+				if loc != Vector2.ZERO:
+					spawn_motes(loc, s["color"])
+			"trauma":
+				_cam.add_trauma(s["amount"])
