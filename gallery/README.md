@@ -238,3 +238,31 @@ Reproduce: `ANABIOS_HELIX=1` / `ANABIOS_COEVO=1` with
 | sandbox-large-t1200.png | 1201 | The 2048-world mega-sandbox at its 6k cap: 1,653 (!) species logged, herds streaming across the map. |
 | dialects-t800.png | 861 | Two isolated populations in dialect coloring after four `MemeSweep` events — same species, different cultures. |
 | coevo-t3000-chart.png | 3001 | `cognitive-coevolution` with the [Y] co-evolution chart: gene-culture, dialect divergence, invention adoption, and cognition curves over 3k ticks. |
+
+## mood overlay (grazers & wolves)
+
+The `grazers-and-wolves` scenario exists to show off the new mood body-color
+mode: every agent is tinted by its current winner-take-all drive. Grazers spend
+most of their time green (`seek food`) or purple (`sleep`), then flare yellow
+(`flee`) the instant a wolf pack closes; the wolves themselves render red
+(`fight`). Affect + basic needs + cognition are all on, so the full palette is
+alive.
+
+| File | Tick | What you're seeing |
+|---|---|---|
+| wolves-t000-grazing.png | 181 | `grazers-and-wolves` seed 0, mood mode, full-world overview: the 80-grazer herd (green `seek food`, occasional purple `sleep`) covers the central grass patch while the 14-wolf pack (red `fight`) holds north of them. Tally already shows `Predation: 1` at t=113 and the first `AlarmCall` at t=158. |
+| wolves-t150-hunt.png | 331 | The same run a few hundred ticks later: a hunt is in progress — grazers are visibly yellow (`flee`) and the wolves are red (`fight`) as the pack scatters the herd. Tally reads `MassFright: 198`, `PanicCascade: 2`, and founder lineages are both still present (sp1 grazer n=982, sp2 wolf n=15). |
+
+Reproduce from `game/` (windowed, `--headless` hangs on `frame_post_draw`):
+
+```
+ANABIOS_BODY=5 ANABIOS_CAM_FIT=1 \
+  ANABIOS_SCENARIO="res://../scenarios/grazers-and-wolves.toml" \
+  ANABIOS_SHOT=wolves-t000-grazing.png \
+  godot --path . res://scenes/main.tscn
+
+ANABIOS_BODY=5 ANABIOS_CAM_FIT=1 \
+  ANABIOS_SCENARIO="res://../scenarios/grazers-and-wolves.toml" \
+  ANABIOS_SHOT_TICKS=150 ANABIOS_SHOT=wolves-t150-hunt.png \
+  godot --path . res://scenes/main.tscn
+```

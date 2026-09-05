@@ -1,0 +1,44 @@
+name = "grazers-and-wolves"
+seed = 0
+# Cap living agents so the viewer stays fluent; prey need room to graze and
+# wolves need enough prey to keep the pack from starving out.
+max_population = 1000
+
+# The point of the demo is the new mood overlay: affect makes the wolves
+# flare red (fight) when closing on the herd, while grazers flip between
+# green (seek food), purple (sleep), and yellow (flee). Basic needs add the
+# thirst/sleep drives; cognition powers the mammal archetype's paid-for IQ.
+affect_enabled = true
+basic_needs_enabled = true
+cognition_enabled = true
+
+[climate]
+moisture_bias = -0.05
+
+# --- Prey: herd grazers -----------------------------------------------------
+# Social, communicative endotherm prey. Low mutation keeps the species
+# coherent enough to keep breeding; a fragmented prey species stops mating,
+# grows fat (energy = HP), and becomes unkillable, starving every predator.
+[[agents]]
+count = 80
+archetype = "mammal_grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 140.0 }
+[agents.traits]
+size = 0.4
+lifespan_bias = 1.0
+env_affinity = 0.5
+reproduction_threshold = 0.5
+mutation_rate = 0.3
+
+# --- Predators: pursuit-pack wolves -----------------------------------------
+# Stalk-pounce canids. Bold (suppresses the FEAR aura of big prey), fast,
+# coordinated; a lowered reproduction gate lets the pack replace losses.
+[[agents]]
+count = 14
+archetype = "mammal_pursuer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 300.0, radius = 90.0 }
+[agents.traits]
+size = 0.65
+lifespan_bias = 1.0
+env_affinity = 0.5
+reproduction_threshold = 0.4
