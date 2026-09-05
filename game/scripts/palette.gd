@@ -42,6 +42,31 @@ const RAMP_DIET: Array = [[0.33, 0.70, 0.85], [0.00, 0.75, 0.95]]  # herb → ca
 const RAMP_ENERGY: Array = [[0.62, 0.70, 0.80], [0.14, 0.85, 0.98]]  # low → high
 const RAMP_AROUSAL: Array = [[0.55, 0.25, 0.70], [0.03, 0.80, 1.00]]  # calm → aroused
 
+# --- Discrete mood colors ---------------------------------------------------
+# Indexed by the mood discriminant from `alive_moods()` (mood.rs: 0 content,
+# 1 seek food, 2 seek water, 3 sleep, 4 flee, 5 fight, 6 seek mate, 7 mate).
+# Shared by the body overlay (main.gd) and the legend color key.
+const MOOD_COLORS: PackedColorArray = [
+	Color(0.65, 0.65, 0.65),  # 0 content
+	Color(0.35, 0.85, 0.35),  # 1 seek food
+	Color(0.30, 0.55, 1.00),  # 2 seek water
+	Color(0.45, 0.40, 0.70),  # 3 sleep
+	Color(1.00, 0.85, 0.20),  # 4 flee
+	Color(1.00, 0.25, 0.20),  # 5 fight
+	Color(1.00, 0.50, 0.80),  # 6 seek mate
+	Color(0.90, 0.20, 0.60),  # 7 mate
+]
+const MOOD_NAMES: PackedStringArray = [
+	"content",
+	"seek food",
+	"seek water",
+	"sleep",
+	"flee",
+	"fight",
+	"seek mate",
+	"mate",
+]
+
 
 # Sample a ramp at t in [0,1]. Hue takes the short way around the wheel, so a
 # ramp never detours through the far side of the colour circle.

@@ -94,7 +94,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
     // column + epidemic_latched + the two disease events. Flag off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xfd75157a55abe365), (100, 0x6dfa371019775a14), (300, 0x2e44756b0c74d92d)];
+    // Refreshed 2026-09-04 (mood arbiter, FORMAT_VERSION 37→38):
+    // AgentBuffers.mood column. affect_enabled is ON here, so the mood layer
+    // genuinely arbitrates — a real flag-on trajectory change layered on the
+    // layout growth.
+    &[(0, 0x3090260d9177d28d), (100, 0xcda79e1a210e6840), (300, 0x3ee654c3f31a30cf)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -217,7 +221,11 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
     // column + epidemic_latched + the two disease events. Flag off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0x63731135b1c55970), (100, 0x0c5d1b351037fbcb), (300, 0x8b2467110b6876fa)];
+    // Refreshed 2026-09-04 (mood arbiter, FORMAT_VERSION 37→38):
+    // AgentBuffers.mood column. affect_enabled is ON here, so the mood layer
+    // genuinely arbitrates — a real flag-on trajectory change layered on the
+    // layout growth.
+    &[(0, 0x31412bd130015f00), (100, 0x0b9ab052351fc8a2), (300, 0x0900620d9a946a6d)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

@@ -14,7 +14,8 @@ const BODY_DIALECT := 1
 const BODY_DIET := 2
 const BODY_ENERGY := 3
 const BODY_AFFECT := 4
-const BODY_MAX := 5
+const BODY_MOOD := 5
+const BODY_MAX := 6
 
 var ground_mode: int = GROUND_BIOME
 var body_mode: int = BODY_SPECIES
@@ -75,3 +76,6 @@ func _cycle_ground() -> void:
 
 func _cycle_body() -> void:
 	body_mode = (body_mode + 1) % BODY_MAX
+	# Skip MOOD when the affect layer is disabled — every agent reads content.
+	if body_mode == BODY_MOOD and not bool(sim.affect_active()):
+		body_mode = (body_mode + 1) % BODY_MAX

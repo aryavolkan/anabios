@@ -316,7 +316,11 @@ const GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
     // column + epidemic_latched + the two disease events. Flag off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xaeda6f91f71ae7ea), (100, 0x7bdc885a1cc9763d), (1000, 0x673bb88eec6cd403)];
+    // Refreshed 2026-09-04 (mood arbiter, FORMAT_VERSION 37→38):
+    // AgentBuffers.mood column. affect_enabled is off here ⇒ the column stays
+    // CONTENT and apply_mood is exact identity — layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x5e3d9169703d7632), (100, 0xf7f9d676ea2c57de), (1000, 0xcce54fa42fcfed40)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

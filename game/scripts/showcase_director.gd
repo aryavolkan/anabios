@@ -46,7 +46,7 @@ const GROUND_MODES := {
 	"succession": 6,
 	"markets": 7,
 }
-const BODY_MODES := {"species": 0, "dialect": 1, "diet": 2, "energy": 3}
+const BODY_MODES := {"species": 0, "dialect": 1, "diet": 2, "energy": 3, "arousal": 4, "mood": 5}
 const PANEL_NODES := {
 	"evo": "EvolutionPanel",
 	"coevo": "CoevolutionPanel",

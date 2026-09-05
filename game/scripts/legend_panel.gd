@@ -6,7 +6,7 @@ const Palette = preload("res://scripts/palette.gd")
 const GROUND_NAMES := [
 	"biome", "phero-0", "phero-1", "phero-2", "phero-3", "env-optimum", "succession", "markets"
 ]
-const BODY_NAMES := ["species", "dialect", "diet", "energy", "arousal"]
+const BODY_NAMES := ["species", "dialect", "diet", "energy", "arousal", "mood"]
 
 # Key bindings, pre-broken to lines that fit the panel's 370px slot at font 13.
 # (One long "panels" line used to overflow the panel and bleed through the codex
@@ -87,6 +87,9 @@ func _rebuild_key(body_mode: int) -> void:
 		4:
 			_key_box.add_child(_header("body: arousal (fear/rage/panic)"))
 			_key_box.add_child(_ramp_row(Palette.RAMP_AROUSAL, "calm", "aroused"))
+		5:
+			_key_box.add_child(_header("body: mood"))
+			_key_box.add_child(_swatch_wrap(Palette.MOOD_COLORS, Palette.MOOD_NAMES))
 		_:
 			_key_box.add_child(_header("body: species — each animal in its own coat colours"))
 

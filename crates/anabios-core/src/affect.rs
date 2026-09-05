@@ -300,6 +300,9 @@ pub fn panic_trigger(crowding: f32, prev_crowding: f32, sociality: f32) -> f32 {
 /// template): each agent writes only its own slot and reads only shared columns
 /// by `&`, so the parallel loop is bit-identical to a serial ascending-id loop.
 /// Runs post-sense / pre-decide so THIS tick's decision reads fresh affect.
+/// Also writes the per-agent mood column (mood.rs) from the fresh affect +
+/// the needs columns, so `mood::apply_mood` in `decide_all` arbitrates on
+/// this tick's state.
 pub fn develop_all(world: &mut World) {
     if !world.affect_enabled {
         return;
@@ -312,14 +315,25 @@ pub fn develop_all(world: &mut World) {
     // off (weight 0.0 skips the term; gain 1.0 multiplies out).
     let anthro = world.anthro_race_enabled;
     let crate::agent::AgentBuffers {
-        affect, affect_prev_crowding, energy, age, genome, alive, ..
+        affect,
+        affect_prev_crowding,
+        mood,
+        energy,
+        age,
+        genome,
+        thirst,
+        asleep,
+        alive,
+        ..
     } = &mut world.agents;
-    let (energy, age, genome, alive) = (&*energy, &*age, &*genome, &*alive);
+    let (energy, age, genome, thirst, asleep, alive) =
+        (&*energy, &*age, &*genome, &*thirst, &*asleep, &*alive);
     affect[..cap]
         .par_iter_mut()
         .zip(affect_prev_crowding[..cap].par_iter_mut())
+        .zip(mood[..cap].par_iter_mut())
         .enumerate()
-        .for_each(|(i, (a, prev))| {
+        .for_each(|(i, ((a, prev), m))| {
             if !alive[i] {
                 return;
             }
@@ -396,6 +410,14 @@ pub fn develop_all(world: &mut World) {
                 // M-D: record this tick's crowding for next tick's PANIC.
                 *prev = sensors[i].crowding as f32;
             }
+
+            // Mood (needs → behavior arbiter): the winner-take-all state over
+            // the freshly-updated affect + the needs columns. Reads one-tick-
+            // stale thirst/asleep (needs_step runs later in the tick) — the
+            // same staleness every needs read has. Index-local; ZERO RNG.
+            let nearest_same_dist =
+                if i < sensors.len() { sensors[i].nearest_same_dist } else { f32::INFINITY };
+            *m = crate::mood::compute_mood(asleep[i], thirst[i], energy[i], a, nearest_same_dist);
         });
 }
 

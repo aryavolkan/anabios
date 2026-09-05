@@ -233,6 +233,11 @@ fn decide_all(world: &mut World) {
                 &sensors[i],
                 agents.energy[i],
             );
+            // Mood arbiter (mood.rs): the winner-take-all needs/affect state
+            // sharpens the action for the dominant drive (suppresses competing
+            // appetitive intents, amplifies the matching steer). The column is
+            // all-CONTENT when affect_enabled is off ⇒ exact identity.
+            crate::mood::apply_mood(&mut action, agents.mood[i], &sensors[i], &agents.affect[i]);
             // Habitat selection (opt-in): bias movement toward the nearby cell whose
             // climate best matches this agent's EnvAffinity, so lineages sort into
             // their preferred zone. Gated on the flag so flag-off stays byte-identical.

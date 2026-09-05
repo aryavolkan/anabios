@@ -770,6 +770,13 @@ func _body_colors(n: int) -> PackedColorArray:
 			for i in n:
 				out5[i] = Palette.ramp(Palette.RAMP_AROUSAL, ar[i])
 			return out5
+		overlay.BODY_MOOD:
+			var moods: PackedInt32Array = sim.alive_moods()
+			var out6 := PackedColorArray()
+			out6.resize(n)
+			for i in n:
+				out6[i] = Palette.MOOD_COLORS[clampi(moods[i], 0, Palette.MOOD_COLORS.size() - 1)]
+			return out6
 		_:
 			# Species mode: Primate atlases carry their own coat/skin colours, so
 			# white; quadruped atlases are neutral grayscale, so each agent gets
