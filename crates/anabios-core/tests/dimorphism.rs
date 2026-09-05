@@ -5,7 +5,6 @@
 use anabios_core::codex::EventType;
 use anabios_core::genome::GenomeSlot;
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
 use anabios_core::tick::step;
 
 const SCENARIO: &str = include_str!("../../../scenarios/dimorphism.toml");
@@ -54,24 +53,6 @@ fn both_sexes_persist_through_generations() {
     let (male, female) = sex_counts(&w);
     assert!(male > 0 && female > 0, "both sexes persist at tick 800: {male}M/{female}F");
     assert!(w.agents.live_count() > 0, "population alive at tick 800");
-}
-
-#[test]
-fn dimorphism_state_survives_save_load_step() {
-    let mut world = Scenario::parse_toml(SCENARIO).expect("parse dimorphism").instantiate();
-    for _ in 0..200 {
-        step(&mut world);
-    }
-    let bytes = save_to_bytes(&world).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(state_hash(&world), state_hash(&reloaded), "load restores identical state");
-    step(&mut world);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&world),
-        state_hash(&reloaded),
-        "dimorphic world diverged after save→load→step (hidden non-serialized state?)",
-    );
 }
 
 #[test]

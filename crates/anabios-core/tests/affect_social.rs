@@ -5,9 +5,10 @@ use anabios_core::culture::{ALARM_MEME_CHANNEL, MEME_BROADCAST_THRESHOLD};
 use anabios_core::genome::{Genome, GenomeSlot};
 use anabios_core::prelude_test::Vec2;
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 use anabios_core::world::World;
+
+mod common;
 
 const AFFECT_SOCIAL: &str = include_str!("../../../scenarios/affect-social.toml");
 
@@ -99,21 +100,5 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
 
 #[test]
 fn affect_social_matches_golden_hashes() {
-    let mut w = Scenario::parse_toml(AFFECT_SOCIAL).expect("parse affect-social").instantiate();
-    let max_tick = AFFECT_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
-    let mut idx = 0;
-    let mut observed: Vec<(u64, u64)> = Vec::new();
-    while w.tick <= max_tick {
-        while idx < AFFECT_GOLDEN.len() && AFFECT_GOLDEN[idx].0 == w.tick {
-            observed.push((w.tick, state_hash(&w)));
-            idx += 1;
-        }
-        step(&mut w);
-    }
-    if std::env::var("UPDATE_HASHES").is_ok() {
-        for (t, h) in &observed {
-            println!("({t}, {h:#018x}),");
-        }
-    }
-    assert_eq!(observed, AFFECT_GOLDEN.to_vec(), "affect flag-on trajectory changed");
+    common::assert_golden("affect-social", AFFECT_SOCIAL, AFFECT_GOLDEN);
 }

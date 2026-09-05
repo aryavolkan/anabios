@@ -3,8 +3,10 @@
 //! so all three PLAY touchpoints are exercised. Models `cognition.rs`.
 
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
+use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
+
+mod common;
 
 const SCENARIO: &str = include_str!("../../../scenarios/affect-play.toml");
 
@@ -69,39 +71,5 @@ const PLAY_GOLDEN: &[(u64, u64)] =
 
 #[test]
 fn affect_play_matches_golden_hashes() {
-    let mut w = Scenario::parse_toml(SCENARIO).expect("parse").instantiate();
-    let max_tick = PLAY_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
-    let mut idx = 0;
-    let mut observed: Vec<(u64, u64)> = Vec::new();
-    while w.tick <= max_tick {
-        while idx < PLAY_GOLDEN.len() && PLAY_GOLDEN[idx].0 == w.tick {
-            observed.push((w.tick, state_hash(&w)));
-            idx += 1;
-        }
-        step(&mut w);
-    }
-    if std::env::var("UPDATE_HASHES").is_ok() {
-        for (t, h) in &observed {
-            println!("({t}, {h:#018x}),");
-        }
-    }
-    assert_eq!(observed, PLAY_GOLDEN.to_vec(), "affect-play flag-on trajectory changed");
-}
-
-#[test]
-fn affect_play_survives_save_load_step() {
-    let mut world = Scenario::parse_toml(SCENARIO).expect("parse").instantiate();
-    for _ in 0..80 {
-        step(&mut world); // warm juveniles so PLAY activations + enrichment accumulate
-    }
-    let bytes = save_to_bytes(&world).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(state_hash(&world), state_hash(&reloaded), "load must restore identical state");
-    step(&mut world);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&world),
-        state_hash(&reloaded),
-        "affect-play world diverged after save→load→step (hidden non-serialized PLAY state?)",
-    );
+    common::assert_golden("affect-play", SCENARIO, PLAY_GOLDEN);
 }

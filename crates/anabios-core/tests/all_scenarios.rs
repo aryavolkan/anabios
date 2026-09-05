@@ -5,9 +5,10 @@
 //! or the DIT env mechanism).
 
 use anabios_core::scenario::Scenario;
-use anabios_core::tick::step;
 use std::fs;
 use std::path::PathBuf;
+
+mod common;
 
 fn scenarios_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scenarios")
@@ -47,9 +48,11 @@ fn every_scenario_parses_instantiates_and_runs() {
         // fast (the default 10k cap made 200-tick runs minutes-slow).
         w.max_population = w.max_population.min(500);
 
-        for _ in 0..200 {
-            step(&mut w);
-        }
+        // Instrumented ticks run ~5-10x slower, and this test tick-loops EVERY
+        // scenario back-to-back — the tallest pole in the coverage job. The
+        // claim (parses, runs, stays in bounds) doesn't need the full horizon,
+        // so halve it there.
+        common::run(&mut w, common::ticks(200));
 
         // Every alive agent must remain within the (toroidal) world bounds — a cheap
         // catch-all that a scenario didn't drive the sim into a bad state. Uses this

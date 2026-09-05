@@ -862,6 +862,8 @@ fn spread_respects_the_gene_gate() {
 
 use anabios_core::resource::Good;
 
+mod common;
+
 #[test]
 fn materials_permit_checks_the_basket_and_respects_the_flag() {
     use invention::{consume_materials, materials_permit, STONE_TOOLS};
@@ -1209,39 +1211,7 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
-    let scenario = Scenario::parse_toml(INVENTIONS_SCENARIO).expect("parse inventions scenario");
-    let mut w = scenario.instantiate();
-
-    let max_tick = INVENTIONS_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
-    let mut idx = 0;
-    let mut observed: Vec<(u64, u64)> = Vec::new();
-    while w.tick <= max_tick {
-        while idx < INVENTIONS_GOLDEN.len() && INVENTIONS_GOLDEN[idx].0 == w.tick {
-            observed.push((w.tick, state_hash(&w)));
-            idx += 1;
-        }
-        if w.tick == max_tick {
-            break;
-        }
-        step(&mut w);
-    }
-
-    if std::env::var("UPDATE_HASHES").is_ok() {
-        println!("// regenerated inventions hashes:");
-        for (t, h) in &observed {
-            println!("    ({t}, 0x{h:016x}),");
-        }
-        return;
-    }
-
-    for ((exp_tick, exp_hash), (got_tick, got_hash)) in INVENTIONS_GOLDEN.iter().zip(&observed) {
-        assert_eq!(exp_tick, got_tick, "tick mismatch");
-        assert_eq!(
-            *exp_hash, *got_hash,
-            "invention hash drift at tick {exp_tick}: expected 0x{exp_hash:016x}, got 0x{got_hash:016x}.\n\
-             If intentional, rerun with UPDATE_HASHES=1 and copy the printed values.",
-        );
-    }
+    common::assert_golden("inventions", INVENTIONS_SCENARIO, INVENTIONS_GOLDEN);
 }
 
 #[test]

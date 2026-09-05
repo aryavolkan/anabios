@@ -9,6 +9,8 @@ use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 
+mod common;
+
 const SCENARIO: &str = include_str!("../../../scenarios/cognitive-coevolution.toml");
 
 #[test]
@@ -142,36 +144,7 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {
-    let s = Scenario::parse_toml(SCENARIO).expect("parse cognitive scenario");
-    let mut w = s.instantiate();
-    let max_tick = COGNITIVE_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
-    let mut idx = 0;
-    let mut observed: Vec<(u64, u64)> = Vec::new();
-    while w.tick <= max_tick {
-        while idx < COGNITIVE_GOLDEN.len() && COGNITIVE_GOLDEN[idx].0 == w.tick {
-            observed.push((w.tick, state_hash(&w)));
-            idx += 1;
-        }
-        if w.tick == max_tick {
-            break;
-        }
-        step(&mut w);
-    }
-    if std::env::var("UPDATE_HASHES").is_ok() {
-        println!("// regenerated cognitive hashes:");
-        for (t, h) in &observed {
-            println!("    ({t}, 0x{h:016x}),");
-        }
-        return;
-    }
-    for ((exp_tick, exp_hash), (got_tick, got_hash)) in COGNITIVE_GOLDEN.iter().zip(&observed) {
-        assert_eq!(exp_tick, got_tick, "tick mismatch");
-        assert_eq!(
-            *exp_hash, *got_hash,
-            "cognitive hash drift at tick {exp_tick}: expected 0x{exp_hash:016x}, got 0x{got_hash:016x}.\n\
-             If intentional, rerun with UPDATE_HASHES=1 and copy the printed values.",
-        );
-    }
+    common::assert_golden("cognitive", SCENARIO, COGNITIVE_GOLDEN);
 }
 
 /// The demo's promise: with cognition on, both beneficial tech and maladaptive
@@ -199,4 +172,17 @@ fn cognitive_scenario_produces_invention_and_practice_events() {
     }
     assert!(saw_invention, "cognitive scenario should climb the tech tree");
     assert!(saw_practice, "cognitive scenario should surface a maladaptive practice");
+}
+
+/// Realized IQ actually develops above zero in the cognitive scenario. This is
+/// the non-triviality precondition that keeps `cognition_roundtrip` (in
+/// `save_load_roundtrip.rs`) honest — a round-trip over an all-zero IQ column
+/// would pass vacuously.
+#[test]
+fn realized_iq_develops_above_zero() {
+    let w = common::world_after(SCENARIO, 150);
+    assert!(
+        w.agents.iter_alive().any(|id| w.agents.iq[id as usize] > 0.0),
+        "realized IQ should have developed above zero",
+    );
 }

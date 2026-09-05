@@ -9,36 +9,10 @@
 //! These assert *self-consistency*, not pinned values — no golden hashes.
 //! See `docs/determinism-contract.md` for the skip rules this suite enforces.
 
-use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
-use anabios_core::tick::step;
 use anabios_core::world::World;
 
-fn roundtrip(src: &str, warm: u64, flag: fn(&World) -> bool, flag_name: &str) {
-    // Under coverage instrumentation (cargo llvm-cov sets --cfg coverage) every
-    // tick is ~5-10x slower, so clamp the warm-up — the save→load→step
-    // round-trip semantics (the thing under test) don't depend on warm length.
-    let warm = if cfg!(coverage) { warm.min(100) } else { warm };
-    let mut world = Scenario::parse_toml(src).expect("parse").instantiate();
-    assert!(flag(&world), "scenario must enable {flag_name}");
-    for _ in 0..warm {
-        step(&mut world);
-    }
-    let bytes = save_to_bytes(&world).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(
-        state_hash(&world),
-        state_hash(&reloaded),
-        "{flag_name}: load must restore identical state"
-    );
-    step(&mut world);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&world),
-        state_hash(&reloaded),
-        "{flag_name}: diverged after save→load→step — hidden non-serialized state feeding the sim?"
-    );
-}
+mod common;
+use common::assert_roundtrip as roundtrip;
 
 macro_rules! roundtrip_tests {
     ($($name:ident: $file:literal, $warm:literal, $flag:expr, $flag_name:literal;)*) => {
@@ -104,6 +78,20 @@ roundtrip_tests! {
         "../../../scenarios/disease.toml", 400, |w: &World| w.disease_enabled, "disease_enabled";
     basic_needs_roundtrip:
         "../../../scenarios/basic-needs.toml", 600, |w: &World| w.basic_needs_enabled, "basic_needs_enabled";
+    gene_tech_coupling_roundtrip:
+        "../../../scenarios/tech-gene-coupling.toml", 300, |w: &World| w.gene_tech_coupling, "gene_tech_coupling";
+    affect_seeking_roundtrip:
+        "../../../scenarios/affect-seeking.toml", 300, |w: &World| w.affect_enabled, "affect(seeking)";
+    affect_threat_roundtrip:
+        "../../../scenarios/affect-threat.toml", 300, |w: &World| w.affect_enabled, "affect(threat)";
+    affect_play_roundtrip:
+        "../../../scenarios/affect-play.toml", 80, |w: &World| w.affect_enabled, "affect(play)";
+    affect_showcase_roundtrip:
+        "../../../scenarios/affect-showcase.toml", 800, |w: &World| w.affect_enabled, "affect(showcase, past detector windows)";
+    anthro_race_roundtrip:
+        "../../../scenarios/anthro-race.toml", 400, |w: &World| w.anthro_race_enabled && !w.culture_roots.is_empty(), "anthro_race_enabled+culture_roots";
+    out_of_africa_earth_roundtrip:
+        "../../../scenarios/out-of-africa-earth.toml", 300, |w: &World| w.biome.res == 256, "out-of-africa-earth (from_earth field + every opt-in)";
 }
 
 /// The strongest single guard: grand-theater warms every subsystem at once.
