@@ -11,6 +11,7 @@ extends Node2D
 const FIRE_LIGHT_TTL: float = 4.0
 
 const EventFx = preload("res://scripts/event_fx.gd")
+const FxMath = preload("res://scripts/fx_math.gd")
 const FxRing = preload("res://scripts/fx_ring.gd")
 
 var _sim = null
@@ -261,7 +262,7 @@ func spawn_motes(pos: Vector2, color: Color) -> void:
 # Pooled flickering fire lights: a warm PointLight2D (additive, so it can only
 # brighten) that breathes for a few seconds where a fire-kind event fired.
 func _make_fire_light_pool() -> void:
-	var tex := _radial_texture(64)
+	var tex := FxMath.radial_texture(64)
 	for i in 6:
 		var l := PointLight2D.new()
 		l.name = "FireLight%d" % i
@@ -298,18 +299,6 @@ func update_fire_lights(delta: float) -> void:
 			continue
 		var fade := 1.0 - t / FIRE_LIGHT_TTL
 		l.energy = (0.85 + 0.3 * sin(t * 23.0) * sin(t * 7.3)) * fade
-
-
-# Radial falloff texture for the fire lights (bright core, soft edge).
-func _radial_texture(res: int) -> ImageTexture:
-	var img := Image.create(res, res, false, Image.FORMAT_RGBA8)
-	var c := (res - 1) * 0.5
-	for y in res:
-		for x in res:
-			var d := Vector2(x - c, y - c).length() / c
-			var a := clampf(1.0 - d * d, 0.0, 1.0)
-			img.set_pixel(x, y, Color(a, a, a, 1.0))
-	return ImageTexture.create_from_image(img)
 
 
 # Ambient weather: faint drifting motes everywhere (depth cue), snow when the

@@ -5,6 +5,7 @@ extends SceneTree
 # Exits 0 on success, 1 on the first failed assertion.
 
 const EventFx = preload("res://scripts/event_fx.gd")
+const FxMath = preload("res://scripts/fx_math.gd")
 const FxRing = preload("res://scripts/fx_ring.gd")
 const ViewerEffects = preload("res://scripts/viewer_effects.gd")
 const CodexPanel = preload("res://scripts/codex_panel.gd")
@@ -35,8 +36,48 @@ func _init() -> void:
 	_check_spec_table()
 	_check_ring_math()
 	_check_apply_all()
+	_check_pop_scale()
+	_check_flow_pulse()
 	print("test_event_fx: all passed")
 	quit(0)
+
+
+func _check_pop_scale() -> void:
+	_check(absf(FxMath.pop_scale(0.0)) < 0.01, "pop starts at zero scale")
+	_check(absf(FxMath.pop_scale(1.0) - 1.0) < 0.01, "pop settles at full scale")
+	_check(FxMath.pop_scale(-0.5) == FxMath.pop_scale(0.0), "pop clamps below")
+	_check(FxMath.pop_scale(2.0) == FxMath.pop_scale(1.0), "pop clamps above")
+	var peak := 0.0
+	for i in 101:
+		peak = maxf(peak, FxMath.pop_scale(i / 100.0))
+	_check(peak > 1.02 and peak < 1.25, "pop overshoots a little, not wildly (peak %f)" % peak)
+
+
+func _check_flow_pulse() -> void:
+	# Brightness stays within its band across the phase space.
+	for i in 40:
+		var v := FxMath.flow_pulse(i * 13.7, i * 0.31)
+		_check(v >= 0.6 and v <= 1.001, "flow pulse in band (got %f)" % v)
+	# The bright spot travels: at a fixed point, brightness changes over time...
+	var a := FxMath.flow_pulse(10.0, 0.0)
+	var b := FxMath.flow_pulse(10.0, 0.15)
+	_check(absf(a - b) > 0.01, "flow pulse animates over time")
+	# ...and at a fixed time the pulse is periodic along the route.
+	var w := FxMath.FLOW_WAVELEN
+	var c := FxMath.flow_pulse(3.0, 0.4)
+	var d := FxMath.flow_pulse(3.0 + w, 0.4)
+	_check(absf(c - d) < 0.001, "flow pulse periodic along the route")
+	_check_radial_texture()
+
+
+func _check_radial_texture() -> void:
+	var tex := FxMath.radial_texture(16)
+	_check(tex.get_width() == 16 and tex.get_height() == 16, "radial texture sized to request")
+	var img := tex.get_image()
+	var center := img.get_pixel(8, 8).r
+	var edge := img.get_pixel(0, 8).r
+	_check(center > 0.9, "radial texture bright at center (got %f)" % center)
+	_check(edge < 0.15, "radial texture dark at edge (got %f)" % edge)
 
 
 func _check_spec_table() -> void:

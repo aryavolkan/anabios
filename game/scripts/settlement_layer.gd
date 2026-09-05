@@ -9,6 +9,7 @@ extends Node2D
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const Buildings = preload("res://scripts/building_sprites.gd")
+const FxMath = preload("res://scripts/fx_math.gd")
 
 const REDRAW_EVERY := 20
 # Huts are deliberately oversized next to agents (BODY_MIN ~6) so a village
@@ -29,8 +30,13 @@ const LANDMARK2_MIN_MEMBERS := 32
 # (keeps tiny splinter species from littering the map).
 const INVENTION_MIN_MEMBERS := 25
 
+# Chimney-smoke plume pool, assigned each redraw to the largest live villages.
+const SMOKE_POOL := 8
+const HUT_POP_SECS := 0.5
+
 var _huts: MultiMeshInstance2D
 var _farms: MultiMeshInstance2D
+var _smoke: Array[GPUParticles2D] = []
 var _building_mmis: Array[MultiMeshInstance2D] = []
 var _era_of: Dictionary = {}  # invention key -> era, cached once
 var _frame: int = REDRAW_EVERY - 1  # redraw on the very first frame
@@ -67,6 +73,7 @@ func _ready() -> void:
 		_building_mmis.append(mmi)
 	for inv in sim.invention_catalog():
 		_era_of[String(inv["key"])] = int(inv["era"])
+	_make_smoke_pool()
 	_make_wrap_clones()
 
 
@@ -170,13 +177,21 @@ func _redraw() -> void:
 		var tint := Color(1, 1, 1).lerp(coat, 0.18)
 		tint.a = fade
 		var huts: int = clampi(members / 8, 1, MAX_HUTS)
+		# Each hut remembers when it first appeared, so huts added as the
+		# village grows get their own construction pop instead of snapping in.
+		var hut_born: Array = v.get("hut_born", [])
+		while hut_born.size() < huts:
+			hut_born.append(_now)
+		if hut_born.size() > huts:
+			hut_born.resize(huts)
+		v["hut_born"] = hut_born
 		for i in huts:
 			# Deterministic ring layout per species: golden-angle step keeps
 			# huts scattered without churn as membership changes the count.
 			var ang: float = sid * 2.39996 + i * 2.39996
 			var r: float = 8.0 + float(i % 3) * 4.5
 			var hp := pos + Vector2.from_angle(ang) * r
-			var s := HUT_SCALE * ease
+			var s := HUT_SCALE * FxMath.pop_scale((_now - float(hut_born[i])) / HUT_POP_SECS)
 			hut_xf.append(Transform2D(0.0, Vector2(s, s), 0.0, hp))
 			hut_col.append(tint)
 		if members >= FARM_MIN_MEMBERS:
@@ -201,10 +216,11 @@ func _redraw() -> void:
 				var tkind := Buildings.trade_kind(market_field[ci].r, members)
 				if tkind >= 0:
 					var tp := pos + Vector2(0.0, -26.0)
-					var ts := BUILDING_SCALE * ease
+					var ts := BUILDING_SCALE * FxMath.pop_scale(grow)
 					build_xf[tkind].append(Transform2D(0.0, Vector2(ts, ts), 0.0, tp))
 					build_col[tkind].append(Color(1, 1, 1, fade))
 	_place_invention_landmarks(stats_by_sid, build_xf, build_col)
+	_assign_smoke()
 	_write(_huts.multimesh, hut_xf, hut_col)
 	_write_farms(farm_xf)
 	for k in Buildings.KIND_COUNT:
@@ -262,8 +278,7 @@ func _place_invention_landmarks(
 			continue
 		var fade: float = clampf((LINGER - stale) / FADE, 0.0, 1.0)
 		var grow: float = clampf((_now - float(m["born"])) / 0.6, 0.0, 1.0)
-		var ease := 1.0 - pow(1.0 - grow, 3.0)
-		var lscale := BUILDING_SCALE * ease
+		var lscale := BUILDING_SCALE * FxMath.pop_scale(grow)
 		var lcol := Color(1, 1, 1, fade)
 		var pos: Vector2 = m["pos"]
 		var msig: PackedInt32Array = m["sig"]
@@ -273,6 +288,61 @@ func _place_invention_landmarks(
 			var lp := pos + Vector2.from_angle(ang) * 22.0
 			build_xf[kind].append(Transform2D(0.0, Vector2(lscale, lscale), 0.0, lp))
 			build_col[kind].append(lcol)
+
+
+# Looping gray plumes so villages read as inhabited, not just built. A fixed
+# pool keeps the cost flat; each redraw points the emitters at the largest
+# still-fresh villages. Not wrap-cloned (particle emitters can't share the
+# MultiMesh trick; same tradeoff as the ember/dust effects).
+func _make_smoke_pool() -> void:
+	var tex := FxMath.radial_texture(16)
+	for i in SMOKE_POOL:
+		var p := GPUParticles2D.new()
+		p.name = "Smoke%d" % i
+		p.amount = 12
+		p.lifetime = 3.0
+		p.emitting = false
+		p.z_index = 2
+		p.visibility_rect = Rect2(-100, -160, 200, 220)
+		p.texture = tex
+		var m := ParticleProcessMaterial.new()
+		m.direction = Vector3(0, -1, 0)
+		m.spread = 10.0
+		m.initial_velocity_min = 5.0
+		m.initial_velocity_max = 9.0
+		# A touch of sideways gravity gives every plume the same gentle wind.
+		m.gravity = Vector3(1.5, -5.0, 0)
+		m.scale_min = 1.1
+		m.scale_max = 2.0
+		var grad := Gradient.new()
+		grad.set_color(0, Color(0.62, 0.58, 0.55, 0.28))
+		grad.set_color(1, Color(0.55, 0.55, 0.58, 0.0))
+		var gt := GradientTexture1D.new()
+		gt.gradient = grad
+		m.color_ramp = gt
+		p.process_material = m
+		add_child(p)
+		_smoke.append(p)
+
+
+func _assign_smoke() -> void:
+	if _smoke.is_empty():
+		return
+	var live: Array = []
+	for sid in _villages.keys():
+		var v: Dictionary = _villages[sid]
+		# Only villages not yet fading: a plume over a ghost town reads wrong.
+		if _now - float(v["seen"]) <= LINGER - FADE:
+			live.append([int(v["members"]), v["pos"] as Vector2])
+	live.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	for i in _smoke.size():
+		var p := _smoke[i]
+		if i < live.size():
+			# Offset to sit over a hut roof rather than the bare anchor.
+			p.position = (live[i][1] as Vector2) + Vector2(3.0, -12.0)
+			p.emitting = true
+		else:
+			p.emitting = false
 
 
 func _write(mm: MultiMesh, xfs: Array, cols: Array) -> void:
