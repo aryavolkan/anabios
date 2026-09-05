@@ -25,11 +25,16 @@ const KINDS := ["fire", "ring", "motes", "trauma"]
 const FIRE_IDS := [4, 17, 35, 42, 43]
 const TRAUMA_IDS := [7, 38]
 
+# quit() only REQUESTS an exit — _init keeps running and a later quit(0)
+# would override quit(1) — so failures set a flag and the verdict is issued
+# exactly once, at the end.
+var _failed := false
+
 
 func _check(cond: bool, msg: String) -> void:
 	if not cond:
 		push_error("FAIL: " + msg)
-		quit(1)
+		_failed = true
 
 
 func _init() -> void:
@@ -38,6 +43,10 @@ func _init() -> void:
 	_check_apply_all()
 	_check_pop_scale()
 	_check_flow_pulse()
+	_check_radial_texture()
+	if _failed:
+		quit(1)
+		return
 	print("test_event_fx: all passed")
 	quit(0)
 
@@ -67,7 +76,6 @@ func _check_flow_pulse() -> void:
 	var c := FxMath.flow_pulse(3.0, 0.4)
 	var d := FxMath.flow_pulse(3.0 + w, 0.4)
 	_check(absf(c - d) < 0.001, "flow pulse periodic along the route")
-	_check_radial_texture()
 
 
 func _check_radial_texture() -> void:
@@ -101,6 +109,9 @@ func _check_spec_table() -> void:
 		_check(_has_kind(EventFx.spec(t), "fire"), "id %d still fire-kind" % t)
 	for t in TRAUMA_IDS:
 		_check(_has_kind(EventFx.spec(t), "trauma"), "id %d still shakes the camera" % t)
+		for s in EventFx.spec(t):
+			if s["kind"] == "trauma":
+				_check(s["amount"] == 0.25, "id %d keeps its original 0.25 trauma" % t)
 
 
 func _has_kind(specs: Array, kind: String) -> bool:

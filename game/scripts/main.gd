@@ -910,8 +910,9 @@ func _update_segment_trail(
 		c.a = max_alpha * float(trail[i][2]) / float(ttl)
 		if flow:
 			# Directional pulses: project the midpoint onto the segment's own
-			# axis so the bright spots march from `from` toward `to`, and
-			# neighbouring segments of one route stay phase-continuous.
+			# axis so the bright spots march from `from` toward `to`. Collinear
+			# neighbours of one route stay phase-continuous; bends and torus
+			# seams introduce a small phase jump (invisible in practice).
 			c.a *= FxMath.flow_pulse(mid.dot(d / len), flow_t)
 		mm.set_instance_color(i, c)
 

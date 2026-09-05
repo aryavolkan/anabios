@@ -344,7 +344,7 @@ jobs:
             # A script that fails to parse/compile still exits 0, so the exit
             # code alone can green-light a broken test; require the script's
             # own success line and the absence of script errors.
-            if grep -qE "SCRIPT ERROR|Parse Error" "$log"; then
+            if grep -qE "SCRIPT ERROR|Parse Error|FAIL:" "$log"; then
               echo "::error::$t emitted script errors"
               rc=1
             elif ! grep -q "$t: all passed" "$log"; then

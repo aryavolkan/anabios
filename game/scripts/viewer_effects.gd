@@ -184,6 +184,8 @@ func spawn_dust(pos: Vector2) -> void:
 
 # Pooled expanding ring pulses marking codex events in the world; hue comes
 # from the event's spec so the world echoes the codex timeline's colors.
+# Like the embers/dust, rings and sparks are not wrap-cloned: an effect at the
+# torus seam won't show its continuation on the far tile (accepted tradeoff).
 func _make_ring_pool() -> void:
 	for i in 10:
 		var r: Node2D = FxRing.new()

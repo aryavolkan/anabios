@@ -32,7 +32,9 @@ const INVENTION_MIN_MEMBERS := 25
 
 # Chimney-smoke plume pool, assigned each redraw to the largest live villages.
 const SMOKE_POOL := 8
-const HUT_POP_SECS := 0.5
+# Construction pops are only sampled on the throttled redraw (~3/s), so the
+# window must span several samples for the ease-out-back arc to actually show.
+const POP_SECS := 1.5
 
 var _huts: MultiMeshInstance2D
 var _farms: MultiMeshInstance2D
@@ -191,7 +193,7 @@ func _redraw() -> void:
 			var ang: float = sid * 2.39996 + i * 2.39996
 			var r: float = 8.0 + float(i % 3) * 4.5
 			var hp := pos + Vector2.from_angle(ang) * r
-			var s := HUT_SCALE * FxMath.pop_scale((_now - float(hut_born[i])) / HUT_POP_SECS)
+			var s := HUT_SCALE * FxMath.pop_scale((_now - float(hut_born[i])) / POP_SECS)
 			hut_xf.append(Transform2D(0.0, Vector2(s, s), 0.0, hp))
 			hut_col.append(tint)
 		if members >= FARM_MIN_MEMBERS:
@@ -216,7 +218,8 @@ func _redraw() -> void:
 				var tkind := Buildings.trade_kind(market_field[ci].r, members)
 				if tkind >= 0:
 					var tp := pos + Vector2(0.0, -26.0)
-					var ts := BUILDING_SCALE * FxMath.pop_scale(grow)
+					var pop_grow := clampf((_now - float(v["born"])) / POP_SECS, 0.0, 1.0)
+					var ts := BUILDING_SCALE * FxMath.pop_scale(pop_grow)
 					build_xf[tkind].append(Transform2D(0.0, Vector2(ts, ts), 0.0, tp))
 					build_col[tkind].append(Color(1, 1, 1, fade))
 	_place_invention_landmarks(stats_by_sid, build_xf, build_col)
@@ -277,7 +280,7 @@ func _place_invention_landmarks(
 			_lineage_marks.erase(s)
 			continue
 		var fade: float = clampf((LINGER - stale) / FADE, 0.0, 1.0)
-		var grow: float = clampf((_now - float(m["born"])) / 0.6, 0.0, 1.0)
+		var grow: float = clampf((_now - float(m["born"])) / POP_SECS, 0.0, 1.0)
 		var lscale := BUILDING_SCALE * FxMath.pop_scale(grow)
 		var lcol := Color(1, 1, 1, fade)
 		var pos: Vector2 = m["pos"]
@@ -333,13 +336,17 @@ func _assign_smoke() -> void:
 		var v: Dictionary = _villages[sid]
 		# Only villages not yet fading: a plume over a ghost town reads wrong.
 		if _now - float(v["seen"]) <= LINGER - FADE:
-			live.append([int(v["members"]), v["pos"] as Vector2])
-	live.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+			live.append([int(v["members"]), int(sid), v["pos"] as Vector2])
+	# Deterministic tiebreak on species id: sort_custom is not stable, and
+	# equal-membership ties would otherwise swap emitters every redraw.
+	live.sort_custom(
+		func(a: Array, b: Array) -> bool: return a[0] > b[0] if a[0] != b[0] else a[1] < b[1]
+	)
 	for i in _smoke.size():
 		var p := _smoke[i]
 		if i < live.size():
 			# Offset to sit over a hut roof rather than the bare anchor.
-			p.position = (live[i][1] as Vector2) + Vector2(3.0, -12.0)
+			p.position = (live[i][2] as Vector2) + Vector2(3.0, -12.0)
 			p.emitting = true
 		else:
 			p.emitting = false

@@ -6,11 +6,14 @@ extends SceneTree
 
 const M = preload("res://scripts/mammal_sprites.gd")
 
+var _failed := false
+
 
 func _check(cond: bool, msg: String) -> void:
 	if not cond:
 		push_error("FAIL: " + msg)
-		quit(1)
+		# quit() only REQUESTS an exit; the flag keeps a later quit(0) honest.
+		_failed = true
 
 
 func _init() -> void:
@@ -30,5 +33,8 @@ func _init() -> void:
 	_check(M.archetype_for(0.1, M.SIZE_SPLIT, false) == M.DEER, "size split = large")
 	_check(M.archetype_for(M.HERB_MAX, 0.8, false) == M.BOAR, "diet 0.34 = omnivore")
 	_check(M.archetype_for(M.CARN_MIN, 0.8, false) == M.FOX, "diet 0.66 = carnivore")
+	if _failed:
+		quit(1)
+		return
 	print("test_mammal_sprites: all passed")
 	quit(0)
