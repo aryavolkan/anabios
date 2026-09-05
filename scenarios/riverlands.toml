@@ -1,0 +1,76 @@
+# A continent-scale grazing world that sites itself.
+#
+# Geography: `continentality` pulls the land into a few masses, `mountain_uplift`
+# raises ridged ranges, `rain_shadow` dries their lee slopes, and the hydrology
+# pass carves a river network down the elevation field (`river_threshold`).
+#
+# CAUTION on `river_threshold`: it thresholds a flow accumulation counted in
+# *upstream cells*, so it is meaningless without its `biome_res`. 150 at
+# biome_res 512 (here, and in continental.toml) carves ~1% of the map into
+# river; the same 150 at biome_res 128 carves five cells in the whole world.
+# Run `cargo run --release -p anabios-core --example river_scaling` before
+# copying this block into a world of a different scale.
+#
+# Population: unlike continental.toml — whose founder cluster center is a pair
+# of coordinates recovered by a manual densest-patch scout, and therefore only
+# correct for its one seed — the herds here are placed by `kind = "habitat"`,
+# which reads the generated field and anchors them on vegetated ground within
+# reach of drinkable water. The predators then take `kind = "near_spec"` to
+# find the herds wherever the terrain put them. Nothing here is seed-specific,
+# so re-seeding relocates the whole ecology instead of breaking it.
+name = "riverlands"
+seed = 7
+world_size = 4096.0
+biome_res = 512
+hash_res = 256
+# Tick cost tracks live agent count far more than grid size, so a big world
+# with a moderate cap stays cheap: this runs faster per tick than the default
+# 1024² predator-prey scenario, which caps at 2000.
+max_population = 2500
+living_biome = true
+season_period = 3000
+# Thirst is on, which is what makes the water-aware siting load-bearing:
+# `habitat` anchors are chosen with the same `drinkable_cell` predicate the
+# thirst drive uses, so a herd starts where it can actually drink. A cohort
+# stranded beyond the 96-unit water scan never finds water and pays up to 4x
+# basal metabolism until it starves.
+basic_needs_enabled = true
+
+[climate]
+continentality = 0.85
+mountain_uplift = 0.6
+rain_shadow = 0.4
+river_threshold = 150.0
+sea_level = 0.45
+
+# Grazers: eight herds auto-sited on watered forage. `max_water_dist = 48`
+# keeps every anchor inside the thirst drive's 96-unit water scan even after
+# the 110-unit scatter pulls a straggler off the anchor.
+[[agents]]
+count = 560
+archetype = "mammal_grazer"
+placement = { kind = "habitat", herds = 8, radius = 110.0, max_water_dist = 48.0 }
+[agents.traits]
+size = 0.45
+# Low mutation keeps the prey species coherent enough to keep interbreeding.
+# Hyper-speciated prey stop mating, grow fat, and — since energy is hit points
+# — become unkillable, which starves every predator in the world.
+mutation_rate = 0.3
+lifespan_bias = 1.0
+
+# Predators: seeded onto the herds themselves. 560:80 is 7:1, inside the 6-7.5
+# band that cycles rather than collapsing. `mammal_pursuer` (not `stalker`)
+# because the founder `predator_kit` carries no Reproductive module and so
+# dies out sterile; the pursuer kit breeds, and its 0.95 top speed is set
+# against the grazer's 0.55 so a chase can actually close.
+[[agents]]
+count = 80
+archetype = "mammal_pursuer"
+placement = { kind = "near_spec", spec = 0, radius = 90.0 }
+[agents.traits]
+size = 0.65
+# Ranging hunters drink less often than the herds they follow.
+thirst_tolerance = 0.7
+# Lower than the grazers' default so the pack can replace combat losses.
+reproduction_threshold = 0.4
+lifespan_bias = 1.0

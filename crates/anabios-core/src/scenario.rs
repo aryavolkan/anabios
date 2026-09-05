@@ -421,7 +421,11 @@ trait_overrides! {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+// Reject unknown keys for the same reason `Scenario` does: a misspelled
+// `radus`/`center_X` inside a `placement = {...}` table used to be silently
+// dropped, leaving the variant on its serde default and quietly relocating a
+// founder cohort. Now it fails at load.
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Placement {
     /// Uniform random across the world bounds.
     Uniform,
@@ -430,6 +434,51 @@ pub enum Placement {
     /// Cluster around a real-world lat/lon (equirectangular → sim coords),
     /// spread within `radius`. For real-map (`world_map`) scenarios.
     Geo { lat: f32, lon: f32, radius: f32 },
+    /// Auto-sited herds on liveable ground: anchors are drawn from the cells
+    /// of the *generated* biome that carry forage and sit within
+    /// `max_water_dist` of drinkable water, then agents scatter within
+    /// `radius` of an anchor.
+    ///
+    /// This is the terrain-aware answer to hand-scouted coordinates. A
+    /// `Cluster` center is a fixed pair of numbers, so it silently rots the
+    /// moment the seed, `biome_res`, or a climate knob moves the rivers —
+    /// `continental.toml` documents a manual "densest-patch scout" run to
+    /// find one such pair. `Habitat` re-derives the sites per seed instead,
+    /// so a scenario stays valid across the whole seed space.
+    Habitat {
+        /// Number of distinct anchor sites. Agents are dealt round-robin
+        /// across them, so `herds = 4` seeds four separate bands.
+        #[serde(default = "one_u32")]
+        herds: u32,
+        /// Scatter radius (world units) about each anchor.
+        radius: f32,
+        /// Maximum distance (world units) from an anchor cell to a drinkable
+        /// cell, measured by 4-neighbour hops over the biome grid. Absent =
+        /// `HABITAT_WATER_CELLS` cells' worth, scaled to the field.
+        #[serde(default)]
+        max_water_dist: Option<f32>,
+        /// Minimum terrain carrying capacity an anchor cell must support.
+        /// Absent = any cell that grows anything at all (capacity > 0, which
+        /// already excludes Water and Rock).
+        #[serde(default)]
+        min_forage: Option<f32>,
+    },
+    /// Scatter around the agents an *earlier* `[[agents]]` spec already
+    /// placed: each agent picks one host uniformly and offsets within
+    /// `radius`. Predators seeded this way find their prey wherever the
+    /// terrain put it, with no shared hardcoded center.
+    NearSpec {
+        /// Index of the host spec in the `[[agents]]` array. Must be strictly
+        /// less than this spec's own index — validated at parse.
+        spec: usize,
+        /// Scatter radius (world units) about the chosen host agent.
+        radius: f32,
+    },
+}
+
+/// serde default for `Habitat::herds` (a single band unless asked otherwise).
+fn one_u32() -> u32 {
+    1
 }
 
 #[allow(clippy::derivable_impls)]
@@ -437,6 +486,136 @@ impl Default for Placement {
     fn default() -> Self {
         Placement::Uniform
     }
+}
+
+/// Default `Habitat` water reach, in biome cells. Two cells keeps an anchor
+/// inside the riparian moisture bump `carve_rivers` applies to river cells and
+/// their 4-neighbours, so a sited herd starts on greened ground.
+pub const HABITAT_WATER_CELLS: f32 = 2.0;
+/// Rejection budget when spacing `Habitat` anchors apart. After this many
+/// rejected draws the current candidate is accepted regardless, so siting
+/// always terminates (and draws a bounded number of RNG values) even when the
+/// liveable band is too small to hold `herds` separated sites.
+const HABITAT_ANCHOR_TRIES: usize = 16;
+
+/// Per-cell 4-neighbour hop distance to the nearest drinkable cell, by
+/// multi-source BFS over the (toroidal) biome grid. `u32::MAX` marks cells no
+/// water reaches. Pure function of the field — draws no RNG, so it cannot
+/// perturb any trajectory.
+///
+/// "Drinkable" is `needs::drinkable_cell`, the same predicate the thirst drive
+/// uses, so a herd sited by this function lands where `basic_needs_enabled`
+/// agents can actually drink.
+fn water_hop_distance(biome: &crate::biome::BiomeField) -> Vec<u32> {
+    let res = biome.res;
+    let mut dist = vec![u32::MAX; res * res];
+    let mut queue = std::collections::VecDeque::new();
+    for row in 0..res {
+        for col in 0..res {
+            if crate::needs::drinkable_cell(biome, col, row) {
+                let i = biome.cell_index(col, row);
+                dist[i] = 0;
+                queue.push_back(i);
+            }
+        }
+    }
+    while let Some(i) = queue.pop_front() {
+        let d = dist[i];
+        let (col, row) = (i % res, i / res);
+        for (dc, dr) in [(1i32, 0i32), (-1, 0), (0, 1), (0, -1)] {
+            let nc = (col as i32 + dc).rem_euclid(res as i32) as usize;
+            let nr = (row as i32 + dr).rem_euclid(res as i32) as usize;
+            let ni = biome.cell_index(nc, nr);
+            if dist[ni] == u32::MAX {
+                dist[ni] = d + 1;
+                queue.push_back(ni);
+            }
+        }
+    }
+    dist
+}
+
+/// Cell indices liveable enough to anchor a herd: forage at or above
+/// `min_forage` and drinkable water within `max_water_dist`.
+///
+/// Relaxes rather than fails, because the constraint is checked against a
+/// *generated* field that the scenario author cannot see: a seed whose rivers
+/// all miss the grassland would otherwise abort a run. First fallback drops
+/// the water requirement (forage-only); if the world grows nothing at all the
+/// result is empty and the caller falls back to uniform placement.
+fn habitat_candidates(
+    biome: &crate::biome::BiomeField,
+    max_water_dist: f32,
+    min_forage: f32,
+) -> Vec<usize> {
+    let hops = water_hop_distance(biome);
+    // floor(): a cell is "within reach" only if its whole hop count fits, so
+    // `max_water_dist` never silently rounds up to an extra cell.
+    let max_hops = (max_water_dist / biome.cell_size).floor();
+    let max_hops = if max_hops < 0.0 { 0 } else { max_hops.min(u32::MAX as f32) as u32 };
+    let forage_ok = |i: usize| {
+        let cap = biome.cells[i].terrain.carrying_capacity();
+        cap > 0.0 && cap >= min_forage
+    };
+    let near: Vec<usize> = (0..biome.cells.len())
+        .filter(|&i| forage_ok(i) && hops[i] != u32::MAX && hops[i] <= max_hops)
+        .collect();
+    if !near.is_empty() {
+        return near;
+    }
+    (0..biome.cells.len()).filter(|&i| forage_ok(i)).collect()
+}
+
+/// World-space center of a biome cell.
+fn cell_center(biome: &crate::biome::BiomeField, i: usize) -> Vec2 {
+    let (col, row) = (i % biome.res, i / biome.res);
+    Vec2::new((col as f32 + 0.5) * biome.cell_size, (row as f32 + 0.5) * biome.cell_size)
+}
+
+/// Draw `herds` anchor points from `candidates`, preferring sites at least
+/// `radius` apart so several herds spread over the liveable band instead of
+/// stacking on the single best river bend. Empty `candidates` yields no
+/// anchors and the caller falls back to uniform.
+fn habitat_anchors(
+    biome: &crate::biome::BiomeField,
+    rng: &mut crate::rng::Rng,
+    candidates: &[usize],
+    herds: u32,
+    radius: f32,
+    world_size: f32,
+) -> Vec<Vec2> {
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+    let mut anchors: Vec<Vec2> = Vec::with_capacity(herds as usize);
+    for _ in 0..herds {
+        let mut pick = cell_center(biome, candidates[rng.index(candidates.len())]);
+        for _ in 0..HABITAT_ANCHOR_TRIES {
+            let clear = anchors
+                .iter()
+                .all(|a| crate::spatial::torus_distance(*a, pick, world_size) >= radius);
+            if clear {
+                break;
+            }
+            pick = cell_center(biome, candidates[rng.index(candidates.len())]);
+        }
+        anchors.push(pick);
+    }
+    anchors
+}
+
+/// Scatter a point uniformly-by-angle within `radius` of `center`. Shared by
+/// every clustered placement so they all consume the same two draws in the
+/// same order (theta, then r).
+fn scatter(rng: &mut crate::rng::Rng, center: Vec2, radius: f32) -> Vec2 {
+    // A zero/negative radius is a degenerate but legible way to say "exactly
+    // here"; `f32_range` would trip its `low < high` debug assert on it.
+    if radius <= 0.0 {
+        return center;
+    }
+    let theta = rng.f32_range(0.0, std::f32::consts::TAU);
+    let r = rng.f32_range(0.0, radius);
+    Vec2::new(center.x + r * crate::mathf::cosf(theta), center.y + r * crate::mathf::sinf(theta))
 }
 
 /// Retune the kit's Mouth to the primate omnivore band so the lineage renders
@@ -684,6 +863,17 @@ pub enum ScenarioError {
          double-counts neighbours"
     )]
     InvalidHashRes(usize),
+    #[error(
+        "agents[{spec}] uses `placement = {{ kind = \"near_spec\", spec = {host} }}`, which \
+         is not an earlier spec — specs are placed in `[[agents]]` order, so a host must \
+         have index < {spec} (and exist) for its positions to be known yet"
+    )]
+    NearSpecForwardReference { spec: usize, host: usize },
+    #[error(
+        "agents[{0}] uses `placement = {{ kind = \"habitat\", herds = 0 }}` — a habitat \
+         placement needs at least one anchor site to deal its agents across"
+    )]
+    HabitatNeedsHerds(usize),
 }
 
 impl Scenario {
@@ -713,6 +903,22 @@ impl Scenario {
         if let Some(hr) = scenario.hash_res {
             if hr < 3 {
                 return Err(ScenarioError::InvalidHashRes(hr));
+            }
+        }
+        // Terrain-aware placement preconditions. `instantiate` degrades
+        // gracefully on both of these (uniform fallback / `max(1)`), but a
+        // scenario that hits either is an authoring mistake, and silently
+        // relocating a cohort is exactly the failure this file's
+        // `deny_unknown_fields` comments exist to prevent — so fail at load.
+        for (i, spec) in scenario.agents.iter().enumerate() {
+            match spec.placement {
+                Placement::NearSpec { spec: host, .. } if host >= i => {
+                    return Err(ScenarioError::NearSpecForwardReference { spec: i, host });
+                }
+                Placement::Habitat { herds: 0, .. } => {
+                    return Err(ScenarioError::HabitatNeedsHerds(i));
+                }
+                _ => {}
             }
         }
         Ok(scenario)
@@ -799,6 +1005,9 @@ impl Scenario {
         // The trajectory then diverges only through actual personality-driven
         // behavior, not through init draw-shifting.
         let mut personality_rng = crate::rng::Rng::from_seed(self.seed ^ 0x9E37_79B9_7F4A_7C15);
+        // Where each spec put its agents, in `[[agents]]` order, so a later
+        // spec can place relative to an earlier one (`Placement::NearSpec`).
+        let mut spec_positions: Vec<Vec<Vec2>> = Vec::with_capacity(self.agents.len());
         for spec in self.agents.iter() {
             // Each archetype spec gets a FRESH species id from `next_species_id`,
             // reserving species 0 strictly for archetype-free (legacy) specs.
@@ -832,32 +1041,77 @@ impl Scenario {
                     crate::invention::channel(inv)
                 })
                 .collect();
-            for _ in 0..spec.count {
-                let position = match spec.placement {
+            // Terrain-aware placements resolve their sites ONCE per spec,
+            // before any agent of it is drawn. `Uniform`/`Cluster`/`Geo`
+            // compute nothing here and draw no RNG, so every pre-existing
+            // scenario keeps its exact draw order and stays byte-identical.
+            let sites: Option<Vec<Vec2>> = match &spec.placement {
+                Placement::Habitat { herds, radius, max_water_dist, min_forage } => {
+                    let reach = max_water_dist.unwrap_or(HABITAT_WATER_CELLS * w.biome.cell_size);
+                    let candidates = habitat_candidates(&w.biome, reach, min_forage.unwrap_or(0.0));
+                    let world_size = w.world_size;
+                    Some(habitat_anchors(
+                        &w.biome,
+                        &mut w.rng,
+                        &candidates,
+                        (*herds).max(1),
+                        *radius,
+                        world_size,
+                    ))
+                }
+                // Host positions are copied out so this spec can keep pushing
+                // into `spec_positions` while placing against them.
+                Placement::NearSpec { spec: host, .. } => {
+                    Some(spec_positions.get(*host).cloned().unwrap_or_default())
+                }
+                Placement::Uniform | Placement::Cluster { .. } | Placement::Geo { .. } => None,
+            };
+            let mut placed_positions: Vec<Vec2> = Vec::with_capacity(spec.count as usize);
+            for n in 0..spec.count {
+                let position = match &spec.placement {
                     Placement::Uniform => {
                         let x = w.rng.f32_range(0.0, w.world_size);
                         let y = w.rng.f32_range(0.0, w.world_size);
                         Vec2::new(x, y)
                     }
                     Placement::Cluster { center_x, center_y, radius } => {
-                        let theta = w.rng.f32_range(0.0, std::f32::consts::TAU);
-                        let r = w.rng.f32_range(0.0, radius);
-                        Vec2::new(
-                            center_x + r * crate::mathf::cosf(theta),
-                            center_y + r * crate::mathf::sinf(theta),
-                        )
+                        scatter(&mut w.rng, Vec2::new(*center_x, *center_y), *radius)
                     }
                     Placement::Geo { lat, lon, radius } => {
                         let center_x = (lon + 180.0) / 360.0 * w.world_size;
                         let center_y = (90.0 - lat) / 180.0 * w.world_size;
-                        let theta = w.rng.f32_range(0.0, std::f32::consts::TAU);
-                        let r = w.rng.f32_range(0.0, radius);
-                        Vec2::new(
-                            center_x + r * crate::mathf::cosf(theta),
-                            center_y + r * crate::mathf::sinf(theta),
-                        )
+                        scatter(&mut w.rng, Vec2::new(center_x, center_y), *radius)
+                    }
+                    // Deal agents round-robin across the sited anchors, so
+                    // `herds = 4` splits the cohort into four bands rather
+                    // than leaving the tail of the count on one anchor.
+                    Placement::Habitat { radius, .. } => {
+                        let anchors = sites.as_deref().unwrap_or_default();
+                        if anchors.is_empty() {
+                            // Nothing in this world grows: fall back to
+                            // uniform rather than aborting the run.
+                            let x = w.rng.f32_range(0.0, w.world_size);
+                            let y = w.rng.f32_range(0.0, w.world_size);
+                            Vec2::new(x, y)
+                        } else {
+                            let anchor = anchors[n as usize % anchors.len()];
+                            scatter(&mut w.rng, anchor, *radius)
+                        }
+                    }
+                    Placement::NearSpec { radius, .. } => {
+                        let hosts = sites.as_deref().unwrap_or_default();
+                        if hosts.is_empty() {
+                            // Host spec seeded nobody (count = 0).
+                            let x = w.rng.f32_range(0.0, w.world_size);
+                            let y = w.rng.f32_range(0.0, w.world_size);
+                            Vec2::new(x, y)
+                        } else {
+                            let host = hosts[w.rng.index(hosts.len())];
+                            scatter(&mut w.rng, host, *radius)
+                        }
                     }
                 };
+                placed_positions.push(position);
                 let mut g = Genome::neutral();
                 // Normally-distributed Big Five personality (heritable, evolves).
                 // Sampled from the dedicated substream, before archetype/trait
@@ -890,6 +1144,7 @@ impl Scenario {
                     w.inventions_enabled,
                 );
             }
+            spec_positions.push(placed_positions);
         }
         w
     }
@@ -898,6 +1153,168 @@ impl Scenario {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A grazer spec placed by `Habitat`, followed by whatever `extra` adds.
+    fn habitat_toml(extra: &str) -> String {
+        format!(
+            r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 4
+archetype = "mammal_grazer"
+placement = {{ kind = "habitat", herds = 2, radius = 40.0 }}
+{extra}
+"#
+        )
+    }
+
+    #[test]
+    fn parse_toml_accepts_habitat_and_near_spec() {
+        let s = Scenario::parse_toml(&habitat_toml(
+            r#"
+[[agents]]
+count = 2
+archetype = "mammal_pursuer"
+placement = { kind = "near_spec", spec = 0, radius = 90.0 }
+"#,
+        ))
+        .expect("parse");
+        match s.agents[0].placement {
+            Placement::Habitat { herds, radius, max_water_dist, min_forage } => {
+                assert_eq!(herds, 2);
+                assert_eq!(radius, 40.0);
+                assert_eq!(max_water_dist, None, "absent means auto-scale to the field");
+                assert_eq!(min_forage, None);
+            }
+            ref other => panic!("expected habitat, got {other:?}"),
+        }
+        match s.agents[1].placement {
+            Placement::NearSpec { spec, radius } => {
+                assert_eq!(spec, 0);
+                assert_eq!(radius, 90.0);
+            }
+            ref other => panic!("expected near_spec, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn habitat_herds_defaults_to_one() {
+        let s = Scenario::parse_toml(
+            r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 2
+placement = { kind = "habitat", radius = 10.0 }
+"#,
+        )
+        .expect("parse");
+        assert!(matches!(s.agents[0].placement, Placement::Habitat { herds: 1, .. }));
+    }
+
+    #[test]
+    fn parse_toml_rejects_near_spec_forward_reference() {
+        // Spec 0 cannot cluster around spec 1: specs are placed in order, so
+        // spec 1's positions do not exist yet.
+        let err = Scenario::parse_toml(
+            r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 2
+placement = { kind = "near_spec", spec = 1, radius = 10.0 }
+
+[[agents]]
+count = 2
+"#,
+        )
+        .expect_err("forward reference must be rejected");
+        assert!(
+            matches!(err, ScenarioError::NearSpecForwardReference { spec: 0, host: 1 }),
+            "got {err}"
+        );
+    }
+
+    #[test]
+    fn parse_toml_rejects_near_spec_self_reference() {
+        let err = Scenario::parse_toml(
+            r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 2
+placement = { kind = "near_spec", spec = 0, radius = 10.0 }
+"#,
+        )
+        .expect_err("self reference must be rejected");
+        assert!(matches!(err, ScenarioError::NearSpecForwardReference { spec: 0, host: 0 }));
+    }
+
+    #[test]
+    fn parse_toml_rejects_zero_herds() {
+        let err = Scenario::parse_toml(
+            r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 2
+placement = { kind = "habitat", herds = 0, radius = 10.0 }
+"#,
+        )
+        .expect_err("zero herds must be rejected");
+        assert!(matches!(err, ScenarioError::HabitatNeedsHerds(0)), "got {err}");
+    }
+
+    #[test]
+    fn parse_toml_rejects_misspelled_placement_field() {
+        // `deny_unknown_fields` on `Placement`: before it, `radus` was
+        // silently dropped and the cohort landed on serde defaults.
+        let err = Scenario::parse_toml(
+            r#"
+name = "t"
+seed = 1
+[[agents]]
+count = 2
+placement = { kind = "cluster", center_x = 1.0, center_y = 2.0, radus = 3.0 }
+"#,
+        )
+        .expect_err("a misspelled placement field must fail at load");
+        assert!(matches!(err, ScenarioError::Toml(_)), "got {err}");
+    }
+
+    #[test]
+    fn terrain_aware_placement_does_not_perturb_other_specs() {
+        // The byte-identity contract: a spec using a new placement variant
+        // must not shift the RNG draws of an ordinary spec that precedes it.
+        let base = r#"
+name = "t"
+seed = 9
+[[agents]]
+count = 12
+placement = { kind = "uniform" }
+"#;
+        let with_habitat = r#"
+name = "t"
+seed = 9
+[[agents]]
+count = 12
+placement = { kind = "uniform" }
+
+[[agents]]
+count = 6
+archetype = "mammal_grazer"
+placement = { kind = "habitat", herds = 2, radius = 40.0 }
+"#;
+        let a = Scenario::parse_toml(base).expect("parse").instantiate();
+        let b = Scenario::parse_toml(with_habitat).expect("parse").instantiate();
+        for id in 0..12u32 {
+            assert_eq!(
+                a.agents.position[id as usize], b.agents.position[id as usize],
+                "agent {id} of the leading uniform spec moved when a habitat spec was appended"
+            );
+        }
+    }
 
     #[test]
     fn parse_minimal_toml() {
