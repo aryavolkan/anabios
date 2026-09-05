@@ -14,7 +14,8 @@ const BODY_DIALECT := 1
 const BODY_DIET := 2
 const BODY_ENERGY := 3
 const BODY_AFFECT := 4
-const BODY_MAX := 5
+const BODY_MOOD := 5
+const BODY_MAX := 6
 
 var ground_mode: int = GROUND_BIOME
 var body_mode: int = BODY_SPECIES
@@ -25,6 +26,10 @@ var body_mode: int = BODY_SPECIES
 func _ready() -> void:
 	ground_mode = GameConfig.default_ground
 	body_mode = GameConfig.default_body
+	# Deferred: Main._ready loads the scenario after this node readies, and
+	# the affect gate reads the loaded world's flag. Catches a saved/env
+	# default_body pointing at an affect-dependent mode in a flag-off world.
+	call_deferred("_validate_body_mode")
 
 
 func ground_is_biome() -> bool:
@@ -75,3 +80,14 @@ func _cycle_ground() -> void:
 
 func _cycle_body() -> void:
 	body_mode = (body_mode + 1) % BODY_MAX
+	_validate_body_mode()
+
+
+# Skip the affect-dependent modes when the affect layer is disabled — arousal
+# reads all-calm and mood reads all-content there. Resets to the base mode,
+# same convention as _cycle_ground's gated skips.
+func _validate_body_mode() -> void:
+	if body_mode == BODY_AFFECT and not bool(sim.affect_active()):
+		body_mode = BODY_SPECIES
+	if body_mode == BODY_MOOD and not bool(sim.affect_active()):
+		body_mode = BODY_SPECIES

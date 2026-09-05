@@ -574,6 +574,21 @@ impl Simulation {
         out
     }
 
+    /// Mood discriminant (mood.rs: 0 content, 1 seek food, 2 seek water,
+    /// 3 sleep, 4 flee, 5 fight, 6 seek mate, 7 mate) per alive agent, same
+    /// order as `alive_positions`. All-zero (content) when `affect_enabled`
+    /// is off.
+    #[func]
+    fn alive_moods(&self) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(w.agents.mood[id as usize] as i32);
+            }
+        }
+        out
+    }
+
     /// Look up one alive agent by id. Returns a Dictionary; empty if dead.
     #[func]
     fn get_agent_info(&self, id: i64) -> VarDictionary {
@@ -648,6 +663,7 @@ impl Simulation {
         // 0.0 for every agent otherwise, since the affect column is all-zero).
         d.set("affect_enabled", w.affect_enabled);
         d.set("arousal", anabios_core::affect::arousal(&w.agents.affect[i]));
+        d.set("mood", anabios_core::mood::name(w.agents.mood[i]));
         // Basic needs: thirst/fatigue/asleep, with the world flag so the
         // inspector only renders the lines when the subsystem is active.
         d.set("basic_needs_enabled", w.basic_needs_enabled);
@@ -756,6 +772,18 @@ impl Simulation {
         }
         for p in anabios_core::practice::PRACTICES.iter() {
             out.push(p.key);
+        }
+        out
+    }
+
+    /// All mood display names, indexed by the mood discriminant (static) —
+    /// the single source of truth for the legend's mood color key, so the
+    /// labels can never diverge from `mood::name` in the inspector.
+    #[func]
+    fn mood_name_catalog(&self) -> PackedStringArray {
+        let mut out = PackedStringArray::new();
+        for m in 0..anabios_core::mood::MOOD_COUNT as u8 {
+            out.push(anabios_core::mood::name(m));
         }
         out
     }
@@ -946,6 +974,13 @@ impl Simulation {
     #[func]
     fn resources_active(&self) -> bool {
         self.inner.as_ref().map(|w| w.resources_enabled).unwrap_or(false)
+    }
+
+    /// Whether the affect layer (and with it the mood column) is enabled —
+    /// gates the mood body-color mode in the mode cycle.
+    #[func]
+    fn affect_active(&self) -> bool {
+        self.inner.as_ref().map(|w| w.affect_enabled).unwrap_or(false)
     }
 
     /// Per-cell market-density tint for the E8 markets overlay: amber heat

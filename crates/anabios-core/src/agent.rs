@@ -105,6 +105,13 @@ pub struct AgentBuffers {
     /// Fatigue drive in `[0,1]` (basic needs): rises with activity, falls
     /// while asleep. Same gating/serialization story as `thirst`.
     pub fatigue: Vec<f32>,
+    /// Discrete mood (mood.rs): the winner-take-all state derived from the
+    /// needs columns + affect activations each tick by `affect::develop_all`,
+    /// arbitrating the sub-acute behavior regime (seek food / seek water /
+    /// sleep / flee / fight / seek mate / mate / content). Stays `CONTENT`
+    /// (0) for every agent when `World::affect_enabled` is false, so
+    /// `mood::apply_mood` is exact identity there. Serialized (persistent).
+    pub mood: Vec<u8>,
     /// Hysteresis sleep state (basic needs): set at `fatigue >= SLEEP_ONSET`,
     /// cleared at `fatigue <= WAKE_AT`. While set, integrate suppresses
     /// movement and discounts basal metabolism, and `feed_pass` skips the
@@ -230,6 +237,7 @@ impl AgentBuffers {
         self.meme_lineage[i] = [0; crate::program::MEME_CHANNELS];
         self.thirst[i] = 0.0;
         self.fatigue[i] = 0.0;
+        self.mood[i] = crate::mood::CONTENT;
         self.asleep.set(i, false);
         self.births_ok[i] = 0;
         self.births_failed[i] = 0;
@@ -271,6 +279,7 @@ impl AgentBuffers {
         self.meme_lineage.push([0; crate::program::MEME_CHANNELS]);
         self.thirst.push(0.0);
         self.fatigue.push(0.0);
+        self.mood.push(crate::mood::CONTENT);
         self.asleep.push(false);
         self.births_ok.push(0);
         self.births_failed.push(0);
@@ -302,6 +311,7 @@ impl AgentBuffers {
         self.infection[i] = 0.0;
         self.thirst[i] = 0.0;
         self.fatigue[i] = 0.0;
+        self.mood[i] = crate::mood::CONTENT;
         self.asleep.set(i, false);
         self.free_list.push(id);
         self.live_count -= 1;
@@ -574,21 +584,26 @@ mod tests {
         assert_eq!(a.thirst[i], 0.0);
         assert_eq!(a.fatigue[i], 0.0);
         assert!(!a.asleep[i]);
+        assert_eq!(a.mood[i], crate::mood::CONTENT);
         assert_eq!(a.thirst.len(), a.capacity());
         assert_eq!(a.fatigue.len(), a.capacity());
         assert_eq!(a.asleep.len(), a.capacity());
+        assert_eq!(a.mood.len(), a.capacity());
         // Stale values are cleared on death (dead-slot reset)...
         a.thirst[i] = 0.7;
         a.fatigue[i] = 0.9;
         a.asleep.set(i, true);
+        a.mood[i] = crate::mood::FLEE;
         a.kill(id);
         assert_eq!(a.thirst[i], 0.0, "dead slot thirst reset");
         assert_eq!(a.fatigue[i], 0.0, "dead slot fatigue reset");
         assert!(!a.asleep[i], "dead slot asleep reset");
+        assert_eq!(a.mood[i], crate::mood::CONTENT, "dead slot mood reset");
         // ...and a reused slot re-initializes to neutral.
         a.thirst[i] = 0.3;
         a.fatigue[i] = 0.4;
         a.asleep.set(i, true);
+        a.mood[i] = crate::mood::FIGHT;
         let id2 = a.spawn(
             Vec2::ZERO,
             neutral(),
@@ -603,6 +618,7 @@ mod tests {
         assert_eq!(a.thirst[i], 0.0, "reuse re-init thirst");
         assert_eq!(a.fatigue[i], 0.0, "reuse re-init fatigue");
         assert!(!a.asleep[i], "reuse re-init asleep");
+        assert_eq!(a.mood[i], crate::mood::CONTENT, "reuse re-init mood");
     }
 
     #[test]

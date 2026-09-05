@@ -166,7 +166,15 @@ use crate::world::World;
 ///     trajectories byte-identical; only the serialized layout grew.
 ///     Re-bumped from 35 at merge time (v31/v32 protocol) — third bump of
 ///     the #143/#145/#147 v35 collision.
-pub const FORMAT_VERSION: u32 = 37;
+/// 38: mood arbiter — `AgentBuffers.mood` column (one serialized u8 per
+///     agent; the winner-take-all needs/affect state: seek food / seek water /
+///     sleep / flee / fight / seek mate / mate / content). Written only by
+///     `affect::develop_all`; with `affect_enabled` off (every flag-off golden
+///     scenario) the column stays CONTENT and `mood::apply_mood` is exact
+///     identity — behavior byte-identical; only the serialized layout grew.
+///     Flag-on affect scenarios additionally change trajectory: the mood
+///     layer biases the action register in `decide_all`.
+pub const FORMAT_VERSION: u32 = 38;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

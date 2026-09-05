@@ -23,7 +23,7 @@ extends Node
 #   {"title": {"chapter": "THE HERD", "subtitle": "domestication", "dur": 3.0}}
 #   {"lower_third": {"text": "t=1234 AnimalDomesticated", "dur": 4.0}}
 #   {"ground": "markets"}  # biome|pheromone0..3|env|succession|markets (or int)
-#   {"body": "dialect"}    # species|dialect|diet|energy (or int)
+#   {"body": "dialect"}    # species|dialect|diet|energy|arousal|mood (or int)
 #   {"panel": {"name": "tech", "visible": true}}
 #   {"highlight": {"x": 250, "y": 445}}  or  {"highlight": "event"}
 #   {"clear_highlight": true}
@@ -46,7 +46,7 @@ const GROUND_MODES := {
 	"succession": 6,
 	"markets": 7,
 }
-const BODY_MODES := {"species": 0, "dialect": 1, "diet": 2, "energy": 3}
+const BODY_MODES := {"species": 0, "dialect": 1, "diet": 2, "energy": 3, "arousal": 4, "mood": 5}
 const PANEL_NODES := {
 	"evo": "EvolutionPanel",
 	"coevo": "CoevolutionPanel",

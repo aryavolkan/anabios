@@ -27,6 +27,7 @@ pub mod knowledge;
 pub mod mathf;
 pub mod metrics;
 pub mod module;
+pub mod mood;
 pub mod needs;
 mod noise;
 pub mod personality;

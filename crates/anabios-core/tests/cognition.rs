@@ -130,7 +130,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
     // column + epidemic_latched + the two disease events. Flag off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0x182b860abf46eea1), (100, 0xa0444186c81db503), (300, 0x0f5546bd0280313a)];
+    // Refreshed 2026-09-04 (mood arbiter, FORMAT_VERSION 37→38):
+    // AgentBuffers.mood column. affect_enabled is off here ⇒ the column stays
+    // CONTENT and apply_mood is exact identity — layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x32383088c5165a51), (100, 0xe80d9bb723cba7af), (300, 0x49b2c4bb15875b99)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

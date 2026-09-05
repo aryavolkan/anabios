@@ -306,6 +306,15 @@ fn decide_all(world: &mut World) {
                     action.move_y += crate::needs::WATER_PULL * thirst * pull.y;
                 }
             }
+            // Mood arbiter (mood.rs): the winner-take-all needs/affect state
+            // sharpens the action for the dominant drive (suppresses competing
+            // appetitive intents, amplifies the matching steer). Runs after the
+            // whole movement-bias stack above so MATE's hold-position damping
+            // covers the habitat/terrain/hub/anchor/water pulls too — only the
+            // livestock pen override and the survival hijack below still win
+            // outright. The column is all-CONTENT when affect_enabled is off
+            // ⇒ exact identity.
+            crate::mood::apply_mood(&mut action, agents.mood[i], &sensors[i], &agents.affect[i]);
             // Livestock pen override (E13, opt-in): a tamed animal with a
             // living owner ignores its program's movement entirely — it is
             // pulled back beyond the pen radius and stands to graze inside

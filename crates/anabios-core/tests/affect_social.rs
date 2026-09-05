@@ -82,7 +82,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
     // column + epidemic_latched + the two disease events. Flag off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xce3c78827c288df4), (100, 0x3a506c04b5d70dc1), (300, 0xd20460e2b9e1cb4d)];
+    // Refreshed 2026-09-04 (mood arbiter, FORMAT_VERSION 37→38):
+    // AgentBuffers.mood column. affect_enabled is ON here, so the mood layer
+    // genuinely arbitrates — a real flag-on trajectory change layered on the
+    // layout growth.
+    &[(0, 0x48f6213722c4c87c), (100, 0xc4e7ced76ae6a26e), (300, 0x7b006f53323418f0)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {
