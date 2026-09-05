@@ -4,6 +4,7 @@ const UiTheme = preload("res://scripts/ui_theme.gd")
 const Palette = preload("res://scripts/palette.gd")
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
+const FxMath = preload("res://scripts/fx_math.gd")
 const FieldAgentShader = preload("res://shaders/field_agent.gdshader")
 
 # Number of sim ticks to run per rendered frame. Speeds: 1, 4, 16, 64.
@@ -456,7 +457,15 @@ func _process(delta: float) -> void:
 		_streak_trail, streaks.multimesh, streak_segs, streak_cols, STREAK_TTL, 1.0, 0.85, world
 	)
 	_update_segment_trail(
-		_trade_trail, trade_routes.multimesh, trade_segs, trade_cols, TRADE_TTL, 0.5, 0.6, world
+		_trade_trail,
+		trade_routes.multimesh,
+		trade_segs,
+		trade_cols,
+		TRADE_TTL,
+		0.5,
+		0.6,
+		world,
+		true
 	)
 	_effects.update(delta, _moving_sample, paused)
 	_update_tracks(delta)
@@ -863,7 +872,8 @@ func _update_segment_trail(
 	ttl: int,
 	width: float,
 	max_alpha: float,
-	world: float
+	world: float,
+	flow: bool = false
 ) -> void:
 	for i in segs.size() / 2:
 		trail.append([segs[2 * i], segs[2 * i + 1], ttl, cols[i]])
@@ -881,6 +891,7 @@ func _update_segment_trail(
 	trail.resize(write)
 	var m: int = mini(trail.size(), mm.instance_count)
 	mm.visible_instance_count = m
+	var flow_t: float = Time.get_ticks_msec() / 1000.0
 	for i in m:
 		var from: Vector2 = trail[i][0]
 		var d: Vector2 = trail[i][1] - from
@@ -897,6 +908,12 @@ func _update_segment_trail(
 		mm.set_instance_transform_2d(i, Transform2D(d.angle(), Vector2(len, width), 0.0, mid))
 		var c: Color = trail[i][3]
 		c.a = max_alpha * float(trail[i][2]) / float(ttl)
+		if flow:
+			# Directional pulses: project the midpoint onto the segment's own
+			# axis so the bright spots march from `from` toward `to`. Collinear
+			# neighbours of one route stay phase-continuous; bends and torus
+			# seams introduce a small phase jump (invisible in practice).
+			c.a *= FxMath.flow_pulse(mid.dot(d / len), flow_t)
 		mm.set_instance_color(i, c)
 
 

@@ -18,11 +18,14 @@ const INV_KEYS := [
 	"nuclear_power"
 ]
 
+var _failed := false
+
 
 func _check(cond: bool, msg: String) -> void:
 	if not cond:
 		push_error("FAIL: " + msg)
-		quit(1)
+		# quit() only REQUESTS an exit; the flag keeps a later quit(0) honest.
+		_failed = true
 
 
 func _init() -> void:
@@ -127,5 +130,8 @@ func _init() -> void:
 				cart_opaque += 1
 	_check(cart_opaque >= 8, "cart has a visible figure")
 
+	if _failed:
+		quit(1)
+		return
 	print("test_building_sprites: all passed")
 	quit(0)
