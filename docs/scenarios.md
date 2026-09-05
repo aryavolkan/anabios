@@ -39,7 +39,7 @@ the curated root set. Run any of these with
 | `living-sandbox-coevolution.toml` | Living biome + seasonal regrowth at scale | living_biome, season_period |
 | `sandbox-coevolution.toml` | Freeform coevolution sandbox | living_biome, season_period, inventions |
 | `sandbox-large.toml` | 2048² world (custom dims; save/load round-trip pin) | living_biome, season_period |
-| `riverlands.toml` | 4096² world with mountains + a river network; herds auto-sited on watered forage, predators seeded onto the herds (terrain-aware placement) | living_biome, season_period, basic_needs |
+| `riverlands.toml` | 4096² world with mountains + a river network; herds auto-sited on watered forage, predators seeded onto the herds (terrain-aware placement); a predator pack that persists (`max_share` + mate seeking) | living_biome, season_period, basic_needs, mate_seeking |
 | `biome-trade.toml` | Biome trade-goods economy (freezes ~t10k — the baseline) | resources, living_biome |
 | `geographic-trade.toml` | Terrain-sorted trade (sputters, never fully freezes) | terrain_habitat, resources |
 | `unilateral-trade.toml` | The O2.6 freeze fix: surplus gifts + goods conserved on death | resources, conserve_goods_on_death, unilateral_trade, living_biome |
