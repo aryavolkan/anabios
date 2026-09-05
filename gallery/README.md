@@ -242,18 +242,27 @@ Reproduce: `ANABIOS_HELIX=1` / `ANABIOS_COEVO=1` with
 ## mood overlay (grazers & wolves)
 
 The `grazers-and-wolves` scenario exists to show off the new mood body-color
-mode: every agent is tinted by its current winner-take-all drive. Grazers spend
-most of their time green (`seek food`) or purple (`sleep`), then flare yellow
-(`flee`) the instant a wolf pack closes; the wolves themselves render red
-(`fight`). Affect + basic needs + cognition are all on, so the full palette is
-alive.
+mode: every agent is tinted by its current winner-take-all drive. Affect +
+basic needs + cognition are all on, so most of the palette is alive at once —
+the herd runs green (`seek food`), blue (`seek water`), purple (`sleep`) and
+pink/magenta (`seek mate`/`mate`), and flares yellow (`flee`) when a wolf pack
+closes. Red (`fight`) is the one color this scenario does *not* deliver: over
+2,000 ticks at the capture seed the wolves never enter it once (the herd totals
+7 agent-ticks of it), because `mood::compute_mood` puts FLEE ahead of FIGHT and
+the pack's FEAR keeps winning — the wolves themselves spend ~14% of their time
+yellow. Tuning the pack toward RAGE is open work; these stills are honest about
+what the current scenario shows.
 
 | File | Tick | What you're seeing |
 |---|---|---|
-| wolves-t000-grazing.png | 181 | `grazers-and-wolves` seed 0, mood mode, full-world overview: the 80-grazer herd (green `seek food`, occasional purple `sleep`) covers the central grass patch while the 14-wolf pack (red `fight`) holds north of them. Tally already shows `Predation: 1` at t=113 and the first `AlarmCall` at t=158. |
-| wolves-t150-hunt.png | 331 | The same run a few hundred ticks later: a hunt is in progress — grazers are visibly yellow (`flee`) and the wolves are red (`fight`) as the pack scatters the herd. Tally reads `MassFright: 198`, `PanicCascade: 2`, and founder lineages are both still present (sp1 grazer n=982, sp2 wolf n=15). |
+| wolves-t000-grazing.png | 181 | `grazers-and-wolves` at the viewer's default seed 12345 — the viewer overrides the scenario's own `seed = 0`, see the repro note below — in mood mode, full-world overview: the herd has already grown from its 80 founders to the 1,000-agent cap and covers the central grass patch, ~51% of it green (`seek food`) and ~30% pink/magenta (`seek mate`/`mate`), while the 14-wolf pack (grey `content`) holds north of it. Tally reads `AlarmCall: 1` (t=158) and `HerdCohesion: 1`; the pack's first `Predation` lands at t=191, just after this frame. |
+| wolves-t150-hunt.png | 331 | The same run 150 ticks later, mid-hunt: `MassFright: 198` and `PanicCascade: 2` in the tally, blue (`seek water`) now mixed through the herd (~6%), and the yellow (`flee`) agents are mostly the wolves themselves — 10 of the 15 — plus a dozen scattered grazers. Founder lineages are both still present (sp1 grazer n=982, sp2 wolf n=15). |
 
-Reproduce from `game/` (windowed, `--headless` hangs on `frame_post_draw`):
+Reproduce from `game/` (windowed, `--headless` hangs on `frame_post_draw`).
+No `ANABIOS_SEED` here on purpose: the viewer always loads a scenario through
+`load_scenario_with_seed(text, GameConfig.seed)`, so the TOML's `seed = 0` is
+replaced by the viewer default 12345 — which is the seed both stills were
+captured on.
 
 ```
 ANABIOS_BODY=5 ANABIOS_CAM_FIT=1 \
