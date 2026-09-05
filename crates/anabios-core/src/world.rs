@@ -213,6 +213,12 @@ pub struct World {
     /// as `env_period`.
     #[serde(default)]
     pub basic_needs_enabled: bool,
+    /// Opt-in mate seeking: an agent asking to mate with no same-species
+    /// neighbour in perception steers toward the nearest one within
+    /// `reproduce::MATE_SEEK_REACH`. Off by default ⇒ `decide_all` adds no
+    /// pull and flag-off worlds are byte-identical. Serialized (v39).
+    #[serde(default)]
+    pub mate_seeking_enabled: bool,
     /// Opt-in O3 reproductive-success payoff bias: content-bias-only practice
     /// rejection keyed on observed neighbour birth outcomes
     /// (`AgentBuffers::births_ok`/`births_failed`, counted only under this
@@ -269,6 +275,12 @@ pub struct World {
     /// as `env_period`.
     #[serde(default = "default_max_population")]
     pub max_population: u32,
+    /// Per-founder-lineage birth caps: `(founder species id, absolute cap)`,
+    /// set from `[[agents]].max_share` at instantiate. Empty (the default and
+    /// every pre-existing scenario) ⇒ `reproduce_all` does no per-lineage
+    /// work at all. See `reproduce::LineageRoom`. Serialized (v39).
+    #[serde(default)]
+    pub lineage_caps: Vec<(u32, u32)>,
     /// World extent per axis (torus size). Defaults to `WORLD_SIZE_DEFAULT`
     /// (1024). Larger values opt a scenario into a bigger sandbox. Defaulted
     /// so old snapshots without this field still deserialize.
@@ -455,6 +467,7 @@ impl World {
             practices_enabled: true,
             payoff_biased_learning: false,
             basic_needs_enabled: false,
+            mate_seeking_enabled: false,
             repro_biased_learning: false,
             unilateral_trade: false,
             anthro_race_enabled: false,
@@ -464,6 +477,7 @@ impl World {
             trade_hubs: Vec::new(),
             disasters: crate::disaster::DisasterState::default(),
             max_population: crate::reproduce::MAX_POPULATION,
+            lineage_caps: Vec::new(),
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
             biome_res: crate::biome::BIOME_RES_DEFAULT,
             hash_res: crate::spatial::HASH_RES_DEFAULT,

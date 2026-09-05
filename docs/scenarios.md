@@ -81,6 +81,24 @@ Both are demonstrated by `riverlands.toml` and covered by
 `crates/anabios-core/tests/habitat_placement.rs`, which asserts the siting
 properties across a span of seeds rather than one.
 
+## Keeping a sparse lineage alive
+
+Two more opt-ins exist because a predator pack on a large world died out in
+every configuration tried — measured, not assumed (`examples/predator_probe.rs`
+prints a lineage's count, energy, thirst, births and kill-rate proxy over time):
+
+- `max_share = 0.8` on an `[[agents]]` spec caps that founder lineage (and
+  its speciation splinters) at that fraction of `max_population`. The cap is
+  otherwise one global first-come number, and a dense herd fills it within a
+  few hundred ticks, after which no other lineage can be born at all.
+- `mate_seeking_enabled = true` makes an agent whose program asks to mate
+  steer toward the nearest same-species agent within
+  `reproduce::MATE_SEEK_REACH` (96 units). Mating is contact-range, and the
+  `Mate` node alone moves nobody, so without this a fed pack with free room
+  under the cap still produced zero births once its founders spread out.
+
+Both default off and are byte-identical when absent.
+
 A caution that outlives this feature: `river_threshold` in a `[climate]`
 block thresholds a flow accumulation counted in *upstream grid cells*, so it
 is meaningless without its `biome_res`. Roughly 1% of the map becomes river

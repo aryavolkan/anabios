@@ -276,3 +276,136 @@ placement = { kind = "habitat", herds = 3, radius = 50.0 }
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Sparse-lineage breeding: `max_share` and `mate_seeking_enabled`.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn max_share_reserves_room_under_the_cap() {
+    // Two founder lineages; the first breeds far faster (dense grazers).
+    // Without a share the first fills the whole cap; with one it stops at
+    // its share and the count never exceeds it.
+    let toml = r#"
+name = "share"
+seed = 4
+max_population = 300
+
+[[agents]]
+count = 120
+archetype = "mammal_grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 30.0 }
+max_share = 0.6
+
+[[agents]]
+count = 20
+archetype = "mammal_grazer"
+placement = { kind = "cluster", center_x = 200.0, center_y = 200.0, radius = 30.0 }
+"#;
+    let mut w = instantiate(toml);
+    assert_eq!(w.lineage_caps, vec![(1, 180)], "60% of 300, keyed by founder species");
+    for _ in 0..1500 {
+        anabios_core::tick::step(&mut w);
+        let first =
+            w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 1).count();
+        assert!(first <= 180, "lineage 1 exceeded its share: {first} > 180 at tick {}", w.tick);
+    }
+}
+
+#[test]
+fn max_share_is_keyed_by_founder_lineage_not_species() {
+    // A splinter species minted by speciation keeps counting against its
+    // founder's share: the caps table is keyed by lineage root.
+    let toml = r#"
+name = "share-root"
+seed = 4
+max_population = 200
+
+[[agents]]
+count = 40
+archetype = "mammal_grazer"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 30.0 }
+max_share = 0.5
+[agents.traits]
+mutation_rate = 1.0
+"#;
+    let mut w = instantiate(toml);
+    for _ in 0..3000 {
+        anabios_core::tick::step(&mut w);
+    }
+    // Everyone alive descends from founder species 1, whatever their current
+    // species id, so the whole population is bounded by that one share.
+    let alive = w.agents.iter_alive().count();
+    assert!(alive <= 100, "founder lineage exceeded its 50% share via splinters: {alive}");
+}
+
+#[test]
+fn mate_seeking_lets_a_sparse_lineage_breed() {
+    // Two agents of one species placed 40 units apart on an otherwise empty
+    // map: beyond perception, inside MATE_SEEK_REACH. Without the flag they
+    // never meet; with it they close to contact and breed.
+    let base = |flag: bool| {
+        format!(
+            r#"
+name = "sparse"
+seed = 3
+max_population = 50
+mate_seeking_enabled = {flag}
+
+[[agents]]
+count = 1
+archetype = "mammal_grazer"
+placement = {{ kind = "cluster", center_x = 500.0, center_y = 500.0, radius = 0.0 }}
+
+[[agents]]
+count = 1
+archetype = "mammal_grazer"
+placement = {{ kind = "cluster", center_x = 540.0, center_y = 500.0, radius = 0.0 }}
+"#
+        )
+    };
+    let run = |flag: bool| {
+        let mut w = instantiate(&base(flag));
+        // Both founders are the same archetype; give them one species so they
+        // are mates, and enough energy to clear the breeding bar.
+        for id in w.agents.iter_alive().collect::<Vec<_>>() {
+            w.agents.species_id[id as usize] = 1;
+            w.agents.energy[id as usize] = 200.0;
+        }
+        for _ in 0..600 {
+            anabios_core::tick::step(&mut w);
+        }
+        w.agents.iter_alive().count()
+    };
+    assert_eq!(run(false), 2, "flag off: two hunters 40 units apart never meet");
+    assert!(run(true) > 2, "flag on: they close to contact and breed");
+}
+
+#[test]
+fn mate_seeking_off_is_byte_identical() {
+    let toml = watered_world(
+        5,
+        r#"
+[[agents]]
+count = 30
+archetype = "mammal_grazer"
+placement = { kind = "habitat", herds = 3, radius = 60.0 }
+"#,
+    );
+    let a = {
+        let mut w = instantiate(&toml);
+        for _ in 0..200 {
+            anabios_core::tick::step(&mut w);
+        }
+        state_hash(&w)
+    };
+    let b = {
+        let mut w = instantiate(&toml);
+        assert!(!w.mate_seeking_enabled && w.lineage_caps.is_empty());
+        for _ in 0..200 {
+            anabios_core::tick::step(&mut w);
+        }
+        state_hash(&w)
+    };
+    assert_eq!(a, b);
+}

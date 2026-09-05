@@ -258,6 +258,9 @@ fn anthro_race_survives_save_load_step() {
 // world has (replay gate caught the divergence). Behavior changes only when a
 // newborn reuses a dead slot between sense/decide and observe — ticks 0/100 are
 // unchanged, tick 1000 moved.
+// Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39): added
+// World.lineage_caps + World.mate_seeking_enabled. Both absent/off in
+// minimal.toml ⇒ layout growth only, trajectory byte-identical.
 const GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-07-27 (climate worldgen merged onto E13, FORMAT_VERSION 22):
     // the gradient-noise + Whittaker generator changes every world's terrain — a
@@ -320,7 +323,7 @@ const GOLDEN: &[(u64, u64)] =
     // AgentBuffers.mood column. affect_enabled is off here ⇒ the column stays
     // CONTENT and apply_mood is exact identity — layout growth only,
     // trajectory byte-identical.
-    &[(0, 0x5e3d9169703d7632), (100, 0xf7f9d676ea2c57de), (1000, 0xcce54fa42fcfed40)];
+    &[(0, 0x9d272b5983e4fa64), (100, 0x209e6aa538367618), (1000, 0xbe51a0cf8bf65ea8)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

@@ -35,6 +35,12 @@ season_period = 3000
 # stranded beyond the 96-unit water scan never finds water and pays up to 4x
 # basal metabolism until it starves.
 basic_needs_enabled = true
+# The pack is sparse: 80 hunters over a 4096² map. Mating is contact-range
+# and `Mate` alone moves nobody, so without this a fed pack with room under
+# the cap still never breeds (measured: births stop once the founders leave
+# their seeding cluster). A mating hunter that sees no pack-mate steers
+# toward the nearest one within 96 units.
+mate_seeking_enabled = true
 
 [climate]
 continentality = 0.85
@@ -46,10 +52,19 @@ sea_level = 0.45
 # Grazers: eight herds auto-sited on watered forage. `max_water_dist = 48`
 # keeps every anchor inside the thirst drive's 96-unit water scan even after
 # the 110-unit scatter pulls a straggler off the anchor.
+#
+# `max_share` is what keeps the predators alive. The population cap is one
+# global number, and the herds breed fast enough to fill it by tick ~200 —
+# after which no predator can be born, and the pack simply ages out. Measured
+# without the share: predators 80 → 73 → 55 → 29 → 6 → 0 by tick 4000, on
+# every seed and at every cap size tried up to 30000 (bigger caps just let
+# the herds eat the biome to zero instead). Reserving 80% for the herds
+# leaves the pack the rest.
 [[agents]]
 count = 560
 archetype = "mammal_grazer"
 placement = { kind = "habitat", herds = 8, radius = 110.0, max_water_dist = 48.0 }
+max_share = 0.8
 [agents.traits]
 size = 0.45
 # Low mutation keeps the prey species coherent enough to keep interbreeding.

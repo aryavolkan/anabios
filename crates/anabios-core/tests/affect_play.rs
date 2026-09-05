@@ -53,7 +53,10 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // AgentBuffers.mood column. affect_enabled is ON here, so the mood layer
     // genuinely arbitrates — a real flag-on trajectory change layered on the
     // layout growth.
-    &[(0, 0x07634983de39679b), (100, 0x1fde248458814dd8), (200, 0x10b24182a0c956ee)];
+    // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
+    // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0xc8e460e2eaf40bf3), (100, 0xd2c7291732465a2e), (200, 0x4c55cf151be5b56a)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

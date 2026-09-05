@@ -98,7 +98,10 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // AgentBuffers.mood column. affect_enabled is ON here, so the mood layer
     // genuinely arbitrates — a real flag-on trajectory change layered on the
     // layout growth.
-    &[(0, 0x3090260d9177d28d), (100, 0xcda79e1a210e6840), (300, 0x3ee654c3f31a30cf)];
+    // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
+    // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0xa76752c7d6fa1185), (100, 0x964ccbc2512fed6e), (300, 0x1c193fdd5d526589)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -225,7 +228,10 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // AgentBuffers.mood column. affect_enabled is ON here, so the mood layer
     // genuinely arbitrates — a real flag-on trajectory change layered on the
     // layout growth.
-    &[(0, 0x31412bd130015f00), (100, 0x0b9ab052351fc8a2), (300, 0x0900620d9a946a6d)];
+    // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
+    // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0xd87eef0798a99516), (100, 0xa202aca49e0ac388), (300, 0x18f9b5d487c5f215)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

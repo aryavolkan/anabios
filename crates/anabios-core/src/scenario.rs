@@ -160,6 +160,14 @@ pub struct Scenario {
     /// `river_threshold` 0) will dehydrate everyone; pair the flag with water.
     #[serde(default)]
     pub basic_needs_enabled: bool,
+    /// Opt-in mate seeking: an agent whose program asks to mate but has no
+    /// same-species neighbour in perception steers toward the nearest one
+    /// within `reproduce::MATE_SEEK_REACH`. Mating itself is contact-range,
+    /// so without this a sparse lineage (a predator pack spread over a large
+    /// world) can be fed, have room under the cap, and still never breed.
+    /// `false` (default) keeps the world byte-identical.
+    #[serde(default)]
+    pub mate_seeking_enabled: bool,
     /// Opt-in O3 reproductive-success payoff bias: cultural transmission
     /// declines a maladaptive-practice channel when its local holders show a
     /// higher observed birth-failure fraction than non-holders (content bias
@@ -328,6 +336,19 @@ pub struct AgentSpec {
     /// `anthro_race_enabled = true` (validated at parse).
     #[serde(default)]
     pub culture_bearer: bool,
+    /// Opt-in share of `max_population` this spec's founder lineage may
+    /// occupy, in `(0, 1]`. Absent (the default) = no per-lineage cap, the
+    /// byte-identical behavior every pre-existing scenario has.
+    ///
+    /// Without it, the global cap is first-come: the fastest breeder fills
+    /// it and no other lineage is ever born again, which is why the shipped
+    /// predator/prey scenarios all decay to a single lineage. Set a share on
+    /// the prey (e.g. `0.8`) to leave the predators room. The share is
+    /// keyed by founder lineage, so speciation splinters keep counting
+    /// against it. Specs without an `archetype` all share species 0, and so
+    /// share one cap.
+    #[serde(default)]
+    pub max_share: Option<f32>,
 }
 
 /// Declares the scenario `[traits]` table: one line per override, binding the
@@ -884,6 +905,11 @@ pub enum ScenarioError {
          placement needs at least one anchor site to deal its agents across"
     )]
     HabitatNeedsHerds(usize),
+    #[error(
+        "agents[{spec}] has `max_share = {share}` — a lineage's share of max_population \
+         must be in (0, 1]"
+    )]
+    InvalidMaxShare { spec: usize, share: f32 },
 }
 
 impl Scenario {
@@ -932,6 +958,11 @@ impl Scenario {
         // relocating a cohort is exactly the failure this file's
         // `deny_unknown_fields` comments exist to prevent — so fail at load.
         for (i, spec) in scenario.agents.iter().enumerate() {
+            if let Some(share) = spec.max_share {
+                if !(share > 0.0 && share <= 1.0) {
+                    return Err(ScenarioError::InvalidMaxShare { spec: i, share });
+                }
+            }
             match spec.placement {
                 Placement::NearSpec { spec: host, .. } if host >= i => {
                     return Err(ScenarioError::NearSpecForwardReference { spec: i, host });
@@ -985,6 +1016,7 @@ impl Scenario {
         w.practices_enabled = self.practices_enabled;
         w.payoff_biased_learning = self.payoff_biased_learning;
         w.basic_needs_enabled = self.basic_needs_enabled;
+        w.mate_seeking_enabled = self.mate_seeking_enabled;
         w.repro_biased_learning = self.repro_biased_learning;
         w.unilateral_trade = self.unilateral_trade;
         w.anthro_race_enabled = self.anthro_race_enabled;
@@ -1049,6 +1081,16 @@ impl Scenario {
             // nothing per-member is stored.
             if spec.culture_bearer {
                 w.culture_roots.insert(species_id);
+            }
+            // Per-lineage share of the cap. Rounded, and at least one slot so
+            // a tiny share on a small cap cannot silently sterilize a lineage.
+            // Two specs on the same species (both archetype-free ⇒ species 0)
+            // keep the first cap rather than stacking.
+            if let Some(share) = spec.max_share {
+                let cap = ((share * w.max_population as f32).round() as u32).max(1);
+                if !w.lineage_caps.iter().any(|(root, _)| *root == species_id) {
+                    w.lineage_caps.push((species_id, cap));
+                }
             }
             // Resolve any starting inventions to meme channels once per spec.
             // `parse_toml` already rejects unknown names; this panic guards
@@ -1290,6 +1332,29 @@ placement = { kind = "near_spec", spec = 0, radius = 10.0 }
                 .unwrap_or_else(|| panic!("world_size = {bad} must be rejected"));
             assert!(matches!(err, ScenarioError::InvalidWorldSize(_)), "{bad}: got {err}");
         }
+    }
+
+    #[test]
+    fn parse_toml_rejects_max_share_outside_unit_interval() {
+        for bad in ["0.0", "-0.5", "1.5"] {
+            let toml = format!(
+                "name = \"t\"\nseed = 1\n[[agents]]\ncount = 2\narchetype = \"grazer\"\nmax_share = {bad}\n"
+            );
+            let err = Scenario::parse_toml(&toml)
+                .err()
+                .unwrap_or_else(|| panic!("max_share = {bad} must be rejected"));
+            assert!(matches!(err, ScenarioError::InvalidMaxShare { spec: 0, .. }), "{bad}: {err}");
+        }
+    }
+
+    #[test]
+    fn max_share_becomes_an_absolute_lineage_cap_at_instantiate() {
+        let s = Scenario::parse_toml(
+            "name = \"t\"\nseed = 1\nmax_population = 1000\n[[agents]]\ncount = 2\narchetype = \"grazer\"\nmax_share = 0.25\n[[agents]]\ncount = 2\narchetype = \"stalker\"\n",
+        )
+        .expect("parse");
+        let w = s.instantiate();
+        assert_eq!(w.lineage_caps, vec![(1, 250)], "25% of 1000 keyed by the grazer's species");
     }
 
     #[test]
