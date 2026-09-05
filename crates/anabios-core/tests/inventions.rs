@@ -341,6 +341,7 @@ fn metalworking_raises_combat_damage() {
             &mut w.sensors,
             w.world_size,
             false,
+            w.cognition_enabled,
         );
         w.actions[attacker as usize].fire_intent = 1.0;
         let before = w.agents.energy[target as usize];
@@ -407,7 +408,15 @@ fn fire_holder_pays_extra_metabolism() {
         }
         let desired = vec![Vec2::ZERO; w.agents.capacity()];
         let before = w.agents.energy[id as usize];
-        anabios_core::integrate::integrate_all(&mut w.agents, &desired, w.world_size, false, false);
+        anabios_core::integrate::integrate_all(
+            &mut w.agents,
+            &desired,
+            w.world_size,
+            false,
+            false,
+            w.cognition_enabled,
+            w.spatial.perception_max_radius(),
+        );
         before - w.agents.energy[id as usize]
     };
     let plain = drain_with(None);
@@ -1193,7 +1202,10 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0x59e1557f20c1f1a5), (100, 0xc7a6c58f60dcdf04), (300, 0x621311ae5131b192)];
+    // Refreshed 2026-09-05 (removed PerceptionRadius gene + other non-functional
+    // slots; non-cognition perception now uses a hardcoded neutral modulator).
+    // Inventions scenario is cognition-off, so sensory radii shift.
+    &[(0, 0x59e1557f20c1f1a5), (100, 0x8efb484fc606d424), (300, 0xfe41796da5da773b)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

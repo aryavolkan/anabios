@@ -101,7 +101,16 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xa76752c7d6fa1185), (100, 0x964ccbc2512fed6e), (300, 0x1c193fdd5d526589)];
+    // Refreshed 2026-09-05 (removed PerceptionRadius gene + other non-functional
+    // slots; non-cognition perception now uses a hardcoded neutral modulator).
+    // Affect scenario is cognition-off, so sensory radii shift.
+    // Refreshed 2026-09-05 (affective temperament unified onto the Big Five):
+    // boldness/aggressiveness/nurturance/sociality/reactivity are now derived
+    // from Neuroticism/Agreeableness/Extraversion instead of dedicated genome
+    // slots, and archetypes DO set those OCEAN slots — so temperament now
+    // actually varies by archetype. Behaviour-only change: tick 0 is
+    // byte-identical, later ticks move.
+    &[(0, 0xa76752c7d6fa1185), (100, 0x9984c982be049ccb), (300, 0xb1b82363bfb63ba8)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -231,7 +240,16 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xd87eef0798a99516), (100, 0xa202aca49e0ac388), (300, 0x18f9b5d487c5f215)];
+    // Refreshed 2026-09-05 (removed PerceptionRadius gene + other non-functional
+    // slots; non-cognition perception now uses a hardcoded neutral modulator).
+    // Affect-threat is cognition-off, so sensory radii shift.
+    // Refreshed 2026-09-05 (affective temperament unified onto the Big Five):
+    // boldness/aggressiveness/nurturance/sociality/reactivity are now derived
+    // from Neuroticism/Agreeableness/Extraversion instead of dedicated genome
+    // slots, and archetypes DO set those OCEAN slots — so temperament now
+    // actually varies by archetype. Behaviour-only change: tick 0 is
+    // byte-identical, later ticks move.
+    &[(0, 0xd87eef0798a99516), (100, 0xa7c2fc3a42fb0851), (300, 0xe582ec6e46395fc7)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {
@@ -276,7 +294,7 @@ fn frustration_raises_fire_intent() {
     w.affect_enabled = true;
     // A frustrated agent surrounded by an other-species crowd.
     let mut g = Genome::neutral();
-    g.set(GenomeSlot::Aggressiveness, 1.0);
+    g.set(GenomeSlot::Agreeableness, 0.0); // aggressiveness() == +1.0
     let me = w.spawn_agent(Vec2::new(500.0, 500.0), g) as usize;
     w.agents.energy[me] = 0.05 * SPAWN_ENERGY; // deep deficit → high drive
                                                // Ring of other-species neighbours to create crowding + an other target.

@@ -323,7 +323,11 @@ const GOLDEN: &[(u64, u64)] =
     // AgentBuffers.mood column. affect_enabled is off here ⇒ the column stays
     // CONTENT and apply_mood is exact identity — layout growth only,
     // trajectory byte-identical.
-    &[(0, 0x9d272b5983e4fa64), (100, 0x209e6aa538367618), (1000, 0xbe51a0cf8bf65ea8)];
+    // Refreshed 2026-09-05 (removed PerceptionRadius gene + other non-functional
+    // slots; non-cognition perception now uses a hardcoded neutral modulator).
+    // The minimal scenario is cognition-off, so its sensory radii and the
+    // resulting ecological trajectory shift.
+    &[(0, 0x9d272b5983e4fa64), (100, 0x6481c1e84ac4e20f), (1000, 0x1d0dc30003aa8675)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

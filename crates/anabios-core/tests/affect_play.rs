@@ -56,7 +56,16 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xc8e460e2eaf40bf3), (100, 0xd2c7291732465a2e), (200, 0x4c55cf151be5b56a)];
+    // Refreshed 2026-09-05 (tuned PERCEPTION_ENERGY_COST to 0.005 so the
+    // radius-scaled IQ cost is strong enough to matter but not strong enough
+    // to drown the PLAY enrichment signal).
+    // Refreshed 2026-09-05 (affective temperament unified onto the Big Five):
+    // boldness/aggressiveness/nurturance/sociality/reactivity are now derived
+    // from Neuroticism/Agreeableness/Extraversion instead of dedicated genome
+    // slots, and archetypes DO set those OCEAN slots — so temperament now
+    // actually varies by archetype. Behaviour-only change: tick 0 is
+    // byte-identical, later ticks move.
+    &[(0, 0xc8e460e2eaf40bf3), (100, 0xbfaf1eabd9737b78), (200, 0xb72c3480b32fa4c1)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

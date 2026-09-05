@@ -23,6 +23,10 @@ const TICKS: u64 = 2500;
 fn seeded_world(coupling: bool) -> anabios_core::World {
     let mut s = Scenario::parse_toml(SCENARIO).expect("parse");
     s.gene_tech_coupling = coupling;
+    // Turn cognition off for this selection probe: the test is isolating the
+    // Fire↔Openness gene-tech coupling, and the IQ-driven perception-energy
+    // cost otherwise swamps the small Openness-linked Fire buff.
+    s.cognition_enabled = false;
     let mut w = s.instantiate();
     let ids: Vec<_> = w.agents.iter_alive().collect();
     for (n, id) in ids.iter().enumerate() {

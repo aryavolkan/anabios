@@ -12,7 +12,6 @@ count = 200
 placement = { kind = "uniform" }
 
 [agents.traits]
-perception_radius = 0.5
 size = 0.4
 basal_metabolism = 0.4
 lifespan_bias = 0.6

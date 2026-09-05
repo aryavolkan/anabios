@@ -137,7 +137,8 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xd3071f8a5965eb0d), (100, 0xacd2b26406801c15), (300, 0x9878c4e79eaeb2d7)];
+    // Refreshed 2026-09-05 (tuned PERCEPTION_ENERGY_COST to 0.005).
+    &[(0, 0xd3071f8a5965eb0d), (100, 0x03854a95a4ad7883), (300, 0x1e8ae08aff671f0f)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

@@ -3,9 +3,8 @@
 //! Every value is clamped to `[0, 1]`. Slot meanings are hardcoded; values
 //! mutate. Roughly twenty slots drive live behavior (body, metabolism,
 //! lifespan, mutation rate, the Big Five personality, Altruism,
-//! PerceptionRadius, ReproductionThreshold, the DIT learning propensities,
-//! EnvAffinity); the rest are documented as reserved — see the per-slot
-//! notes on `GenomeSlot`.
+//! ReproductionThreshold, the DIT learning propensities, EnvAffinity); the
+//! rest are documented as reserved — see the per-slot notes on `GenomeSlot`.
 
 use serde::de::{SeqAccess, Visitor};
 use serde::ser::SerializeTuple;
@@ -40,8 +39,8 @@ pub enum GenomeSlot {
     LifespanBias = 4,
     BasalMetabolism = 5,
     MutationRate = 6,
-    /// Declared; not yet read by behavior. Reserved: future disease-resistance modifier.
-    ImmuneStrength = 7,
+    /// Reserved; formerly `ImmuneStrength`. No live behavior reads this slot.
+    _Reserved7 = 7,
     /// Heritable thirst tolerance in `[0,1]` (basic needs): scales thirst
     /// accumulation by `1.5 − v` (neutral 0.5 ⇒ exactly ×1.0). Renamed in
     /// place from `_BodyReserved8`. Read only when
@@ -66,8 +65,8 @@ pub enum GenomeSlot {
     Openness = 12,
     /// Extraversion: +1 social/seeking, −1 solitary (was SocialAffinity).
     Extraversion = 13,
-    /// Declared; not yet read by behavior. Reserved: future kin-biased cooperation drive.
-    KinPreference = 14,
+    /// Reserved; formerly `KinPreference`. No live behavior reads this slot.
+    _Reserved14 = 14,
     /// Read by the invention tree's gene-tech coupling: Metalworking's
     /// affinity/requirement slot (`invention::INVENTIONS`), so it gates and
     /// scales that tech under `gene_tech_coupling`/`gene_requirements`.
@@ -78,14 +77,15 @@ pub enum GenomeSlot {
     /// toward speciation distance (it is adaptive). Read only when
     /// `World::cognition_enabled`; inert otherwise.
     CognitivePotential = 16,
-    /// Boldness (temperament, signed via accessor): +1 bold (low FEAR setpoint /
-    /// high freeze threshold), −1 timid. Read by the affect layer. Counts toward
-    /// speciation distance. Inert when `World::affect_enabled` is false.
-    Boldness = 17,
-    /// Aggressiveness (temperament): +1 high RAGE gain, −1 placid.
-    Aggressiveness = 18,
-    /// Nurturance (temperament): +1 high CARE gain, −1 neglectful.
-    Nurturance = 19,
+    /// Reserved; formerly `Boldness`. Affective boldness is now derived from
+    /// low Neuroticism (see `Genome::boldness`). No live behavior reads this slot.
+    _Reserved17 = 17,
+    /// Reserved; formerly `Aggressiveness`. Affective aggressiveness is now
+    /// derived from low Agreeableness (see `Genome::aggressiveness`).
+    _Reserved18 = 18,
+    /// Reserved; formerly `Nurturance`. Affective nurturance is now derived from
+    /// high Agreeableness (see `Genome::nurturance`).
+    _Reserved19 = 19,
 
     // Behavioral biases (20..30)
     /// Read by the invention tree's gene-tech coupling: Machinery's affinity
@@ -94,21 +94,23 @@ pub enum GenomeSlot {
     ExploreVsExploit = 20,
     /// Conscientiousness: +1 prudent/careful, −1 impulsive (was RiskTolerance).
     Conscientiousness = 21,
-    /// Declared; not yet read by behavior. Reserved: future ambush-vs-pursuit hunting bias.
-    AmbushPreference = 22,
+    /// Reserved; formerly `AmbushPreference`. No live behavior reads this slot.
+    _Reserved22 = 22,
     /// Read by the invention tree's gene-tech coupling: Writing's
     /// affinity/requirement slot, gating and scaling its spread under
     /// `gene_tech_coupling`/`gene_requirements`. Inert with both flags off.
     /// The Communicator module itself does not read it.
     CommunicationStrength = 23,
     Altruism = 24,
-    /// Declared; not yet read by behavior (speed is set by Locomotor modules).
-    /// Kept for serde index stability; reserved: future genome-level speed cap.
-    SpeedMax = 25,
-    PerceptionRadius = 26,
-    /// Declared; not yet read by behavior (diet is set by Mouth module params).
-    /// Kept for serde index stability; reserved: future genome-level diet bias.
-    DietCarnivory = 27,
+    /// Reserved; formerly `SpeedMax`. No live behavior reads this slot.
+    _Reserved25 = 25,
+    /// Reserved; formerly `PerceptionRadius`. Effective perception radius is
+    /// now driven by realized IQ when `World::cognition_enabled` is true, and
+    /// falls back to a hardcoded neutral modulator when cognition is off. No
+    /// live behavior reads this slot.
+    _Reserved26 = 26,
+    /// Reserved; formerly `DietCarnivory`. No live behavior reads this slot.
+    _Reserved27 = 27,
     /// Propensity (`> 0.5`) to individually *learn* the foraging technique by
     /// doing (learning-by-doing toward the current environmental optimum).
     /// Only active in DIT env mode (`World.env_period > 0`).
@@ -119,8 +121,8 @@ pub enum GenomeSlot {
 
     // Reproductive (30..40)
     ReproductionThreshold = 30,
-    /// Declared; not yet read by behavior. Reserved: future per-offspring energy-investment knob.
-    OffspringInvestment = 31,
+    /// Reserved; formerly `OffspringInvestment`. No live behavior reads this slot.
+    _Reserved31 = 31,
     /// Female mate-choice bar (E12): the female partner accepts a male iff his
     /// display quality ≥ `dimorphism::CHOOSINESS_QUALITY_SCALE × choosiness`.
     /// Read only when `World::sexual_dimorphism_enabled`; inert otherwise.
@@ -130,12 +132,12 @@ pub enum GenomeSlot {
     /// Counts toward speciation distance (non-personality slot). Read only
     /// when `World::sexual_dimorphism_enabled`; inert otherwise.
     SexualDimorphism = 33,
-    /// Sociality (temperament): +1 strongly bonded (PANIC/PLAY/CARE bond weight),
-    /// −1 solitary. Read by the affect layer; counts toward speciation distance.
-    Sociality = 34,
-    /// Reactivity (temperament): +1 high arousal gain / low hijack threshold /
-    /// slow decay, −1 phlegmatic. Read by the affect layer.
-    Reactivity = 35,
+    /// Reserved; formerly `Sociality`. Affective sociality is now derived from
+    /// high Extraversion (see `Genome::sociality`). No live behavior reads this slot.
+    _Reserved34 = 34,
+    /// Reserved; formerly `Reactivity`. Affective reactivity is now derived from
+    /// high Neuroticism (see `Genome::reactivity`). No live behavior reads this slot.
+    _Reserved35 = 35,
     _ReproReserved36 = 36,
     _ReproReserved37 = 37,
     _ReproReserved38 = 38,
@@ -183,35 +185,35 @@ pub const SLOT_NAMES: [&str; GENOME_LEN] = [
     "LifespanBias",
     "BasalMetabolism",
     "MutationRate",
-    "ImmuneStrength",
+    "reserved_7",
     "ThirstTolerance",
     "SleepNeed",
     "Agreeableness",
     "Neuroticism",
     "Openness",
     "Extraversion",
-    "KinPreference",
+    "reserved_14",
     "Territoriality",
     "CognitivePotential",
-    "Boldness",
-    "Aggressiveness",
-    "Nurturance",
+    "reserved_17",
+    "reserved_18",
+    "reserved_19",
     "ExploreVsExploit",
     "Conscientiousness",
-    "AmbushPreference",
+    "reserved_22",
     "CommunicationStrength",
     "Altruism",
-    "SpeedMax",
-    "PerceptionRadius",
-    "DietCarnivory",
+    "reserved_25",
+    "reserved_26",
+    "reserved_27",
     "IndividualLearning",
     "SocialLearning",
     "ReproductionThreshold",
-    "OffspringInvestment",
+    "reserved_31",
     "MateChoosiness",
     "SexualDimorphism",
-    "Sociality",
-    "Reactivity",
+    "reserved_34",
+    "reserved_35",
     "reserved_36",
     "reserved_37",
     "reserved_38",
@@ -370,25 +372,30 @@ impl Genome {
         self.get(GenomeSlot::CognitivePotential)
     }
 
-    /// Boldness in `[-1,+1]` (`2·slot − 1`). +1 bold, −1 timid. Neutral `0.5`→`0.0`.
+    /// Derived affective boldness in `[-1,+1]`: low Neuroticism reads as bold
+    /// (+1), high Neuroticism reads as timid (−1). Neutral Neuroticism (0.5) ⇒ 0.0.
     pub fn boldness(&self) -> f32 {
-        2.0 * self.get(GenomeSlot::Boldness) - 1.0
+        -self.neuroticism()
     }
-    /// Aggressiveness in `[-1,+1]`. +1 aggressive (high RAGE gain), −1 placid.
+    /// Derived affective aggressiveness in `[-1,+1]`: low Agreeableness reads as
+    /// aggressive (+1), high Agreeableness reads as placid (−1).
     pub fn aggressiveness(&self) -> f32 {
-        2.0 * self.get(GenomeSlot::Aggressiveness) - 1.0
+        -self.agreeableness()
     }
-    /// Nurturance in `[-1,+1]`. +1 nurturing (high CARE gain), −1 neglectful.
+    /// Derived affective nurturance in `[-1,+1]`: high Agreeableness reads as
+    /// nurturing (+1), low Agreeableness reads as neglectful (−1).
     pub fn nurturance(&self) -> f32 {
-        2.0 * self.get(GenomeSlot::Nurturance) - 1.0
+        self.agreeableness()
     }
-    /// Sociality in `[-1,+1]`. +1 bonded, −1 solitary.
+    /// Derived affective sociality in `[-1,+1]`: high Extraversion reads as
+    /// bonded (+1), low Extraversion reads as solitary (−1).
     pub fn sociality(&self) -> f32 {
-        2.0 * self.get(GenomeSlot::Sociality) - 1.0
+        self.extraversion()
     }
-    /// Reactivity in `[-1,+1]`. +1 reactive (high arousal gain), −1 phlegmatic.
+    /// Derived affective reactivity in `[-1,+1]`: high Neuroticism reads as
+    /// reactive (+1), low Neuroticism reads as phlegmatic (−1).
     pub fn reactivity(&self) -> f32 {
-        2.0 * self.get(GenomeSlot::Reactivity) - 1.0
+        self.neuroticism()
     }
 
     /// Overwrite the 5 OCEAN slots with `N(0.5, INIT_SIGMA)` clamped to `[0,1]`,
@@ -545,11 +552,11 @@ mod tests {
     #[test]
     fn get_and_set_use_named_slots() {
         let mut g = Genome::neutral();
-        g.set(GenomeSlot::SpeedMax, 0.9);
-        g.set(GenomeSlot::PerceptionRadius, 0.3);
-        assert!((g.get(GenomeSlot::SpeedMax) - 0.9).abs() < 1e-6);
-        assert!((g.get(GenomeSlot::PerceptionRadius) - 0.3).abs() < 1e-6);
-        assert_eq!(g.get(GenomeSlot::Size), 0.5);
+        g.set(GenomeSlot::Size, 0.9);
+        g.set(GenomeSlot::Openness, 0.3);
+        assert!((g.get(GenomeSlot::Size) - 0.9).abs() < 1e-6);
+        assert!((g.get(GenomeSlot::Openness) - 0.3).abs() < 1e-6);
+        assert_eq!(g.get(GenomeSlot::BasalMetabolism), 0.5);
     }
 
     #[test]
@@ -607,8 +614,8 @@ mod tests {
     fn distance_is_symmetric() {
         let mut a = Genome::neutral();
         let mut b = Genome::neutral();
-        a.set(GenomeSlot::SpeedMax, 0.9);
-        b.set(GenomeSlot::SpeedMax, 0.1);
+        a.set(GenomeSlot::Size, 0.9);
+        b.set(GenomeSlot::Size, 0.1);
         assert!((a.distance(&b) - b.distance(&a)).abs() < 1e-6);
     }
 
@@ -658,7 +665,7 @@ mod tests {
     fn crossover_is_deterministic() {
         let a = Genome::neutral();
         let mut b = Genome::neutral();
-        b.set(GenomeSlot::SpeedMax, 0.9);
+        b.set(GenomeSlot::Size, 0.9);
 
         let mut rng1 = Rng::from_seed(42);
         let mut rng2 = Rng::from_seed(42);
@@ -681,36 +688,39 @@ mod tests {
     }
 
     #[test]
-    fn temperament_slot_names_align_with_the_enum() {
-        assert_eq!(SLOT_NAMES[GenomeSlot::Boldness.idx()], "Boldness");
-        assert_eq!(SLOT_NAMES[GenomeSlot::Aggressiveness.idx()], "Aggressiveness");
-        assert_eq!(SLOT_NAMES[GenomeSlot::Nurturance.idx()], "Nurturance");
-        assert_eq!(SLOT_NAMES[GenomeSlot::Sociality.idx()], "Sociality");
-        assert_eq!(SLOT_NAMES[GenomeSlot::Reactivity.idx()], "Reactivity");
-    }
-
-    #[test]
-    fn temperament_accessors_are_signed_minus1_to_plus1() {
-        let mut g = Genome::neutral(); // all 0.5 → 0.0 signed
+    fn big_five_derived_temperament_accessors_are_signed_minus1_to_plus1() {
+        let mut g = Genome::neutral(); // all 0.5 → derived temperament == 0.0
         assert!(g.boldness().abs() < 1e-6);
         assert!(g.reactivity().abs() < 1e-6);
-        g.set(GenomeSlot::Reactivity, 1.0);
+        assert!(g.aggressiveness().abs() < 1e-6);
+        assert!(g.nurturance().abs() < 1e-6);
+        assert!(g.sociality().abs() < 1e-6);
+
+        // High Neuroticism ⇒ timid (negative boldness) and reactive (positive reactivity).
+        g.set(GenomeSlot::Neuroticism, 1.0);
+        assert!((g.boldness() - (-1.0)).abs() < 1e-6);
         assert!((g.reactivity() - 1.0).abs() < 1e-6);
-        g.set(GenomeSlot::Aggressiveness, 0.0);
-        assert!((g.aggressiveness() + 1.0).abs() < 1e-6);
+
+        // Low Agreeableness ⇒ aggressive (+1); high Agreeableness ⇒ nurturing (+1).
+        let mut antagonistic = Genome::neutral();
+        antagonistic.set(GenomeSlot::Agreeableness, 0.0);
+        assert!((antagonistic.aggressiveness() - 1.0).abs() < 1e-6);
+        assert!((antagonistic.nurturance() - (-1.0)).abs() < 1e-6);
+
+        // High Extraversion ⇒ bonded/social (+1).
+        let mut extrovert = Genome::neutral();
+        extrovert.set(GenomeSlot::Extraversion, 1.0);
+        assert!((extrovert.sociality() - 1.0).abs() < 1e-6);
     }
 
     #[test]
-    fn temperament_counts_toward_speciation_distance() {
-        // Recorded M-A decision: temperament is adaptive → it counts toward
-        // distance (unlike the OCEAN personality slots, which are masked out).
+    fn personality_slots_stay_excluded_from_speciation_distance() {
+        // The Big Five are masked out of speciation distance. Because the former
+        // temperament slots are now derived from the Big Five, they are also
+        // implicitly excluded (no dedicated slot is read).
         let a = Genome::neutral();
         let mut b = Genome::neutral();
-        b.set(GenomeSlot::Boldness, 1.0);
-        assert!(a.distance(&b) > 0.0, "temperament (Boldness) must count toward distance");
-        // A pure personality change still contributes nothing.
-        let mut c = Genome::neutral();
-        c.set(GenomeSlot::Openness, 1.0);
-        assert_eq!(a.distance(&c), 0.0, "personality (Openness) stays excluded from distance");
+        b.set(GenomeSlot::Neuroticism, 1.0); // drives boldness/reactivity
+        assert_eq!(a.distance(&b), 0.0, "Big Five stays excluded from distance");
     }
 }

@@ -30,7 +30,7 @@ fn isolated_social_agent_broadcasts_distress() {
     let mut w = World::new(11);
     w.affect_enabled = true;
     let mut g = Genome::neutral();
-    g.set(GenomeSlot::Sociality, 1.0); // sociality() == +1.0 → panic gain 1.0
+    g.set(GenomeSlot::Extraversion, 1.0); // sociality() == +1.0 → panic gain 1.0
     let id = w.spawn_agent(Vec2::new(500.0, 500.0), g);
     for _ in 0..10 {
         step(&mut w);
@@ -89,7 +89,13 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0x5a7120e216c04232), (100, 0xe5f805f418d8923e), (300, 0x9e0d0ef231445c44)];
+    // Refreshed 2026-09-05 (affective temperament unified onto the Big Five):
+    // boldness/aggressiveness/nurturance/sociality/reactivity are now derived
+    // from Neuroticism/Agreeableness/Extraversion instead of dedicated genome
+    // slots, and archetypes DO set those OCEAN slots — so temperament now
+    // actually varies by archetype. Behaviour-only change: tick 0 is
+    // byte-identical, later ticks move.
+    &[(0, 0x5a7120e216c04232), (100, 0x5ea4eeb8ab976661), (300, 0xadedef3d70b95cfe)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

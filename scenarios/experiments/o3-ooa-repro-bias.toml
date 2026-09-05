@@ -232,7 +232,6 @@ archetype = "spiner"
 placement = { kind = "cluster", center_x = 240.0, center_y = 590.0, radius = 70.0 }
 [agents.traits]
 size = 0.6
-perception_radius = 0.9
 lifespan_bias = 1.0
 
 [[agents]]

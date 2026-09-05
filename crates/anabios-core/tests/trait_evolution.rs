@@ -10,11 +10,10 @@ const SCENARIO: &str = include_str!("../../../scenarios/convergent.toml");
 #[test]
 fn convergent_scenario_fires_trait_events() {
     let mut scenario = Scenario::parse_toml(SCENARIO).expect("parse");
-    // Seed 19 fires a TraitFixation within the 1500-tick window under the
-    // climate-driven worldgen (re-selected 2026-07-27; the pre-worldgen seed 5
-    // no longer fixes a slot in time because the new terrain reshapes the
-    // per-deme selective environment).
-    scenario.seed = 19;
+    // Seed 3 fires a TraitFixation within the 1500-tick window after the
+    // PerceptionRadius gene was removed and non-cognition perception falls
+    // back to a hardcoded neutral modulator.
+    scenario.seed = 3;
     let mut world = scenario.instantiate();
     // Pin the cap for debug-profile speed; trait dynamics are unaffected.
     world.max_population = 1000;

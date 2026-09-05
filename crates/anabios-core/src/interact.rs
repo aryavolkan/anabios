@@ -730,6 +730,7 @@ mod tests {
                 &mut w.sensors,
                 w.world_size,
                 false,
+                w.cognition_enabled,
             );
             let alive: Vec<u32> = w.agents.iter_alive().collect();
             w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
@@ -776,6 +777,7 @@ mod tests {
             &mut w.sensors,
             w.world_size,
             false,
+            w.cognition_enabled,
         );
 
         let total_salt_before: f32 =
@@ -826,6 +828,7 @@ mod tests {
             &mut w.sensors,
             w.world_size,
             false,
+            w.cognition_enabled,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
@@ -861,6 +864,7 @@ mod tests {
             &mut w.sensors,
             w.world_size,
             false,
+            w.cognition_enabled,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
@@ -895,6 +899,7 @@ mod tests {
             &mut w.sensors,
             w.world_size,
             false,
+            w.cognition_enabled,
         );
         w.actions[attacker as usize].fire_intent = 1.0;
         (attacker, target)
@@ -948,6 +953,7 @@ mod tests {
             &mut w.sensors,
             w.world_size,
             false,
+            w.cognition_enabled,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         trade_pass(&mut w, &alive);
@@ -987,6 +993,7 @@ mod tests {
             &mut w.sensors,
             w.world_size,
             false,
+            w.cognition_enabled,
         );
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         trade_pass(&mut w, &alive);
