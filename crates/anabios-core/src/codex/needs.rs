@@ -20,6 +20,11 @@ pub const DEHYDRATION_COOLDOWN: u64 = 200;
 /// `DEHYDRATION_EVENT_MIN` — the population is failing to find water (drought,
 /// range collapse, or a dry scenario). Re-fires only after
 /// `DEHYDRATION_COOLDOWN` ticks, via the event-ring dedup.
+///
+/// The cooldown is best-effort: it scans the shared `codex.events` ring,
+/// which holds `CODEX_EVENT_CAPACITY` events across every detector. A run
+/// busy enough to evict this species' last `Dehydration` within the window
+/// re-fires early. Accepted in exchange for zero serialized state.
 pub(super) fn detect_dehydration(world: &mut World, agg: &SpeciesAggTable) {
     if !world.basic_needs_enabled {
         return;

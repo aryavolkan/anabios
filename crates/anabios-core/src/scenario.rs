@@ -864,6 +864,16 @@ pub enum ScenarioError {
     )]
     InvalidHashRes(usize),
     #[error(
+        "biome_res must be >= 1 (got 0): an empty biome grid parses and instantiates \
+         cleanly, then panics on the first cell lookup (`res - 1` underflows)"
+    )]
+    InvalidBiomeRes,
+    #[error(
+        "world_size must be a finite value > 0 (got {0}): placement draws uniform \
+         positions in [0, world_size) and every torus wrap divides by it"
+    )]
+    InvalidWorldSize(f32),
+    #[error(
         "agents[{spec}] uses `placement = {{ kind = \"near_spec\", spec = {host} }}`, which \
          is not an earlier spec — specs are placed in `[[agents]]` order, so a host must \
          have index < {spec} (and exist) for its positions to be known yet"
@@ -903,6 +913,17 @@ impl Scenario {
         if let Some(hr) = scenario.hash_res {
             if hr < 3 {
                 return Err(ScenarioError::InvalidHashRes(hr));
+            }
+        }
+        // The two sibling dimension knobs get the same treatment as
+        // `hash_res`: each has a value that parses and instantiates cleanly
+        // and then panics on the first tick.
+        if scenario.biome_res == Some(0) {
+            return Err(ScenarioError::InvalidBiomeRes);
+        }
+        if let Some(ws) = scenario.world_size {
+            if !(ws.is_finite() && ws > 0.0) {
+                return Err(ScenarioError::InvalidWorldSize(ws));
             }
         }
         // Terrain-aware placement preconditions. `instantiate` degrades
@@ -1249,6 +1270,26 @@ placement = { kind = "near_spec", spec = 0, radius = 10.0 }
         )
         .expect_err("self reference must be rejected");
         assert!(matches!(err, ScenarioError::NearSpecForwardReference { spec: 0, host: 0 }));
+    }
+
+    #[test]
+    fn parse_toml_rejects_zero_biome_res() {
+        // biome_res = 0 used to parse and instantiate, then panic on the
+        // first `cell_coords` call (`res - 1` underflow).
+        let err = Scenario::parse_toml("name = \"t\"\nseed = 1\nbiome_res = 0\n")
+            .expect_err("biome_res = 0 must be rejected");
+        assert!(matches!(err, ScenarioError::InvalidBiomeRes), "got {err}");
+    }
+
+    #[test]
+    fn parse_toml_rejects_non_positive_world_size() {
+        for bad in ["0.0", "-100.0", "nan", "inf"] {
+            let toml = format!("name = \"t\"\nseed = 1\nworld_size = {bad}\n");
+            let err = Scenario::parse_toml(&toml)
+                .err()
+                .unwrap_or_else(|| panic!("world_size = {bad} must be rejected"));
+            assert!(matches!(err, ScenarioError::InvalidWorldSize(_)), "{bad}: got {err}");
+        }
     }
 
     #[test]
