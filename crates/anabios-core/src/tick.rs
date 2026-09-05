@@ -53,6 +53,12 @@ pub fn step(world: &mut World) {
         world.gene_tech_coupling,
     );
 
+    // Stage 4a': basic needs — thirst/fatigue accumulation, drinking, and the
+    // sleep hysteresis (opt-in; no-op and zero RNG draws when
+    // `basic_needs_enabled` is false). Runs directly after integrate so the
+    // activity components read this tick's velocity.
+    crate::needs::needs_step(world);
+
     // Stage 4b: E6 ambush instrumentation — consecutive still ticks per
     // agent, read by `combat_pass` in the interact stage. Observability only.
     crate::codex::signatures::update_still_ticks(world);
@@ -97,6 +103,12 @@ pub fn step(world: &mut World) {
     // any member holds Writing, decays otherwise (opt-in; no-op and zero RNG
     // draws when `knowledge_enabled` is false).
     crate::knowledge::knowledge_step(world);
+
+    // Stage 6g: disease — crowding-seeded SIS pathogen (spillover, proximity
+    // spread, energy drain). Opt-in; no-op and zero RNG draws when
+    // `disease_enabled` is false. Runs before age+starve so infection deaths
+    // funnel through the existing carcass/starve path.
+    crate::disease::disease_step(world);
 
     // Keep scratch sized to the post-reproduce capacity so end-of-tick detectors
     // (AlarmCall) that read actions/sensors/desired_direction see every agent —
@@ -170,6 +182,7 @@ fn decide_all(world: &mut World) {
     let settlement_enabled = world.settlement_enabled;
     let domestication_enabled = world.domestication_enabled;
     let affect_enabled = world.affect_enabled;
+    let basic_needs_enabled = world.basic_needs_enabled;
     let ws = world.world_size;
     let cap = world.agents.capacity();
     world
@@ -276,6 +289,22 @@ fn decide_all(world: &mut World) {
                 );
                 action.move_x += pull.x;
                 action.move_y += pull.y;
+            }
+            // Water-seeking (basic needs, opt-in): a thirsty agent gets an
+            // additive pull toward the nearest drinkable cell, scaled by its
+            // thirst — the same bias pattern as the habitat/anchor/hub pulls.
+            // Gated so flag-off stays byte-identical (thirst is 0.0 there).
+            if basic_needs_enabled {
+                let thirst = agents.thirst[i];
+                if thirst > crate::needs::WATER_SEEK_MIN {
+                    let pull = crate::needs::best_water_direction(
+                        biome,
+                        agents.position[i],
+                        crate::needs::WATER_SEEK_REACH,
+                    );
+                    action.move_x += crate::needs::WATER_PULL * thirst * pull.x;
+                    action.move_y += crate::needs::WATER_PULL * thirst * pull.y;
+                }
             }
             // Livestock pen override (E13, opt-in): a tamed animal with a
             // living owner ignores its program's movement entirely — it is

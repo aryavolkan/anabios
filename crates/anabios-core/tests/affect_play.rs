@@ -39,7 +39,17 @@ fn affect_play_scenario_is_self_consistent() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const PLAY_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xd8a4de59de20074d), (100, 0x974e75172a768610), (200, 0x07cf4ecda2d1c721)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
+    // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
+    // Flag off here ⇒ layout growth only, trajectory byte-identical.
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0x1b6a33d7c1a000ef), (100, 0xb424ba197b20a5c5), (200, 0x8d08e0ed7dbd0e03)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

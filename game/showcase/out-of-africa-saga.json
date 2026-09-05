@@ -1,4 +1,6 @@
 {
+  "_comment": "the flagship every-feature-on arc — cradle, tools, exodus, settlement, writing, husbandry, war; scenario=out-of-africa-saga seed=318",
+  "seed": 318,
   "beats": [
     { "do": [
       { "letterbox": true },

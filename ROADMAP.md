@@ -87,6 +87,36 @@ the invasion margin or gets honestly closed.*
   ledger showing why. *If wrong:* if no niche-construction mechanism moves the margin,
   pivot the same levers to O5's co-evolving environment (Horizon 2 pulls forward) and record
   the pivot.
+  **Status 2026-09-02** (`2026-09-02-o3-repro-bias-findings.md`): the O1
+  apparatus was diet-confounded at HEAD (apes-only reclass) — corrected via
+  the `omnivore_forager` control + diet-matched scenario. Both canonical
+  niche-construction levers (fertility enrichment, culture-only tier)
+  measured **null with a mechanism**: energy doesn't bind founder share at
+  the cap; the margin lives on the birth ledger (practice birth tax).
+  Shipped `repro_biased_learning` (birth-outcome content bias, horizontal +
+  vertical): cultural *strategy* share roughly doubles under selection with
+  practices present (module-tag share-r +0.469 vs +0.321, 9/10 seeds,
+  paired), practice burden collapses ~4×, skill control clean — but the
+  *founder-lineage* bar (share-r > 0 majority) is honestly **missed**
+  (mutational inflow, not founder descent, captures the win).
+  **Era-climb probe (same date):** the grand run's ecological exclusion is
+  **breakable** — 0/6 → 3/6 seeds end culture-dominant (up to 94% share at
+  t20000) under the flag — but the era climb still does not start: the
+  winning culture is **non-ape** (`comm_ape` → 0; `is_ape` gates the tech
+  tree), so the binding constraint has moved to **ape-composition of the
+  surviving culture**. That is the next O3 lever; era progression is not
+  testable until an ape lineage is among the winners.
+  **Ape-composition + material-gate probes (same date,
+  `2026-09-02-o3-ape-composition-findings.md`):** ape-survival levers work;
+  the era gate decomposes to **materials** (95% of apes clear the era-1 IQ
+  gate, ~0% hold the basket — the trade freeze operating on the invention
+  economy). rb + trade fixes + ape tier: **7/11 seeds culture-dominant**
+  (best condition yet) and **the first era-2 event in project history**
+  (seed 4, emergent, unseeded). Remaining gap, named: cultural dominance
+  and invention activity anti-correlate — **inventions don't pay
+  demographically**; the next mechanism cycle must make invention-holding
+  lineages win the intra-cultural contest (buff economics /
+  invention-gated tier), success = dominant AND era-active in one world.
 - **[E, M] O4 — Transmission fidelity at demographic scale.** The collective-brain
   mechanism: fidelity/teaching scaling with effective population size so large
   populations hold more culture than small ones. *Depends:* O3 instrumentation
@@ -102,18 +132,25 @@ the invasion margin or gets honestly closed.*
   `docs/showcase-plan.md` records the final honest framing with the measured
   margin. *If wrong:* the saga keeps `starting_inventions` and the showcase
   narrative says so — that outcome is already priced in.
-- **[E, M] Disease/epidemiology subsystem.** The 3.1 runner-up from Q3 (knowledge ratchet won the
-  pick; this is the leading remaining candidate — Medicine gains a real
+- **[E, M] Disease/epidemiology subsystem.** ~~The 3.1 runner-up from Q3 (knowledge ratchet won the
+  pick; this is the leading remaining candidate) — Medicine gains a real
   counter-pressure. Opt-in flag, off by default; new codex events appended per the
-  `event.rs` append-only convention; climate-refugia is deferred to ride O5's drifting climate.
-  *Depends:* scorecard-corpus gap analysis (which coverage hole it fills).
-  *Done when:* flag off-by-default, integration test + goldens + round-trip, new event
-  types observed firing in a corpus sweep. *If wrong:* if the scorecard shows
-  disease doesn't close a real coverage gap, substitute the corpus's top gap.
-- **[V, S] Scenario garden.** A `scenarios/decks/` tier pinned to showcase
-  assets, distinct from the test-pinned core set — as decks accumulate beyond the
-  current four. *Depends:* none. *Done when:* the tier exists with its own smoke
-  coverage, and `docs/scenarios.md` maps it.
+  `event.rs` append-only convention; climate-refugia is deferred to ride O5's drifting climate.~~
+  **Done 2026-09-01:** `disease_enabled` (off by default) — crowding-seeded SIS pathogen
+  (spillover → proximity spread → energy-drain mortality via the starve path), Medicine
+  counter-pressure (0.25× susceptibility, 3× recovery), `EpidemicOutbreak`/`MedicineContainment`
+  events (60/61), `scenarios/disease.toml` (susceptible herd + medicine band), integration +
+  round-trip + golden coverage (FORMAT_VERSION 35), emergence evidence 4/5 seeds
+  (spec: `docs/superpowers/specs/2026-09-01-disease-epidemiology-design.md`).
+  *Done when:* ~~flag off-by-default, integration test + goldens + round-trip, new event
+  types observed firing in a corpus sweep.~~ ✔ (4/5 seeds, ticks 25–71)
+- **[V, S] Scenario garden.** ~~A `scenarios/decks/` tier pinned to showcase assets, distinct from the test-pinned core set —
+  as decks accumulate beyond the current four.~~ **Done 2026-09-01:** `scenarios/decks/README.md` documents the
+  tier (pinned to a *recording*, not a phenomenon claim), the pin convention, and the current deck →
+  scenario · seed · asset registry; `tests/deck_scenarios.rs` enforces the pin contract (curated deck
+  `_comment`/`seed` → `scenario=<name>` pins resolve and run 200 ticks at the pinned seed); the saga deck now declares
+  its pin in-JSON (was script-only). *Done when:* ~~the tier exists with its own smoke coverage, and
+  `docs/scenarios.md` maps it.~~ ✔
 
 **Horizon-1 exit:** the era-3 climb is either emergent on the Earth map or closed
 with a named, measured blocker; O4's demographic claim is adjudicated; one new

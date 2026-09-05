@@ -84,7 +84,17 @@ fn affect_scenario_survives_save_load_step() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const AFFECT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x2f157297acad8a90), (100, 0xfe9e0ccb943f77d7), (300, 0xf77a6f2f21755bfa)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): thirst/
+    // fatigue/asleep columns + basic_needs_enabled + EventType::Dehydration.
+    // Flag off here ⇒ layout growth only, trajectory byte-identical.
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0xfd75157a55abe365), (100, 0x6dfa371019775a14), (300, 0x2e44756b0c74d92d)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -198,7 +208,16 @@ fn affect_threat_emits_mass_fright() {
 // World.{anthro_race_enabled,culture_roots} + CodexState hunted fields —
 // layout growth only (off here).
 const THREAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xf0f9b8bcfe974584), (100, 0x47599113ba6cbd6f), (300, 0x8da9e3314ed4b02f)];
+    // Refreshed 2026-09-02 (basic needs, FORMAT_VERSION 34→35): layout
+    // growth only (flag off here), trajectory byte-identical.
+    // Refreshed 2026-09-04 (merge of main incl. repro_biased_learning #145,
+    // FORMAT_VERSION 35→36): births_ok/births_failed + thirst/fatigue/asleep
+    // columns now both serialized. All flags off here ⇒ layout growth only,
+    // trajectory byte-identical.
+    // Refreshed 2026-09-04 (disease merge, FORMAT_VERSION 36→37): infection
+    // column + epidemic_latched + the two disease events. Flag off here ⇒
+    // layout growth only, trajectory byte-identical.
+    &[(0, 0x63731135b1c55970), (100, 0x0c5d1b351037fbcb), (300, 0x8b2467110b6876fa)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

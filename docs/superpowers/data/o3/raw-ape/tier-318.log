@@ -1,0 +1,43 @@
+[o3diag] t=500 comm=1097 comm_ape=704 hold=[456, 169] births_ok=1316 births_failed=87
+[o3diag] t=1000 comm=1722 comm_ape=917 hold=[1650, 223] births_ok=1780 births_failed=81
+[o3diag] t=1500 comm=2191 comm_ape=913 hold=[2188, 311] births_ok=1812 births_failed=63
+[o3diag] t=2000 comm=2380 comm_ape=781 hold=[2379, 264] births_ok=1701 births_failed=50
+[o3diag] t=2500 comm=2462 comm_ape=696 hold=[2461, 247] births_ok=1787 births_failed=44
+[o3diag] t=3000 comm=2528 comm_ape=708 hold=[2527, 267] births_ok=1908 births_failed=41
+[o3diag] t=3500 comm=2586 comm_ape=550 hold=[2585, 251] births_ok=2305 births_failed=46
+[o3diag] t=4000 comm=2594 comm_ape=418 hold=[2594, 365] births_ok=3534 births_failed=46
+[o3diag] t=4500 comm=2613 comm_ape=295 hold=[2613, 290] births_ok=5317 births_failed=64
+[o3diag] t=5000 comm=2675 comm_ape=210 hold=[2675, 205] births_ok=7838 births_failed=158
+[o3diag] t=5500 comm=2887 comm_ape=150 hold=[2887, 140] births_ok=11190 births_failed=286
+[o3diag] t=6000 comm=2947 comm_ape=107 hold=[2947, 115] births_ok=14045 births_failed=398
+[o3diag] t=6500 comm=2973 comm_ape=82 hold=[2973, 109] births_ok=15761 births_failed=537
+[o3diag] t=7000 comm=2977 comm_ape=48 hold=[2977, 112] births_ok=17234 births_failed=658
+[o3diag] t=7500 comm=2981 comm_ape=47 hold=[2981, 97] births_ok=16770 births_failed=701
+[o3diag] t=8000 comm=2991 comm_ape=48 hold=[2990, 104] births_ok=16210 births_failed=829
+[o3diag] t=8500 comm=2989 comm_ape=66 hold=[2989, 115] births_ok=15622 births_failed=946
+[o3diag] t=9000 comm=2974 comm_ape=74 hold=[2974, 120] births_ok=16305 births_failed=974
+[o3diag] t=9500 comm=2985 comm_ape=72 hold=[2985, 124] births_ok=15370 births_failed=986
+[o3diag] t=10000 comm=2985 comm_ape=51 hold=[2985, 123] births_ok=15104 births_failed=951
+[o3diag] t=10500 comm=2976 comm_ape=50 hold=[2976, 142] births_ok=15897 births_failed=1118
+[o3diag] t=11000 comm=2985 comm_ape=55 hold=[2985, 141] births_ok=17323 births_failed=1297
+[o3diag] t=11500 comm=2990 comm_ape=45 hold=[2990, 135] births_ok=16345 births_failed=1123
+[o3diag] t=12000 comm=2980 comm_ape=49 hold=[2980, 130] births_ok=16349 births_failed=1142
+[o3diag] t=12500 comm=2981 comm_ape=30 hold=[2981, 119] births_ok=15847 births_failed=1036
+[o3diag] t=13000 comm=2980 comm_ape=31 hold=[2980, 122] births_ok=16046 births_failed=995
+[o3diag] t=13500 comm=2985 comm_ape=29 hold=[2985, 115] births_ok=15912 births_failed=940
+[o3diag] t=14000 comm=2989 comm_ape=30 hold=[2989, 108] births_ok=16262 births_failed=919
+[o3diag] t=14500 comm=2991 comm_ape=16 hold=[2991, 97] births_ok=16982 births_failed=936
+[o3diag] t=15000 comm=2987 comm_ape=19 hold=[2987, 89] births_ok=17597 births_failed=983
+[o3diag] t=15500 comm=2986 comm_ape=15 hold=[2986, 87] births_ok=17356 births_failed=944
+[o3diag] t=16000 comm=2988 comm_ape=14 hold=[2988, 91] births_ok=17951 births_failed=1007
+[o3diag] t=16500 comm=2981 comm_ape=6 hold=[2981, 89] births_ok=16240 births_failed=863
+[o3diag] t=17000 comm=2981 comm_ape=8 hold=[2981, 92] births_ok=17090 births_failed=809
+[o3diag] t=17500 comm=2983 comm_ape=10 hold=[2983, 95] births_ok=17041 births_failed=720
+[o3diag] t=18000 comm=2981 comm_ape=6 hold=[2981, 82] births_ok=16302 births_failed=677
+[o3diag] t=18500 comm=2978 comm_ape=12 hold=[2978, 87] births_ok=18498 births_failed=836
+[o3diag] t=19000 comm=2967 comm_ape=13 hold=[2967, 99] births_ok=17618 births_failed=937
+[o3diag] t=19500 comm=2964 comm_ape=7 hold=[2964, 111] births_ok=17569 births_failed=1057
+[o3diag] t=20000 comm=2947 comm_ape=3 hold=[2947, 127] births_ok=17452 births_failed=1154
+invasion_fitness mutant=cultural r=none (no rare-phase data)
+invasion_fitness_share mutant=cultural r=none (no rare-phase data)
+ledger written: runs/o3-ape/tier-318.csv

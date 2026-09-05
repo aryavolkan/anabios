@@ -29,3 +29,29 @@ fn population_sustains_past_one_lifespan() {
         "population should sustain past one lifespan; initial={initial_alive}, final={final_alive}",
     );
 }
+
+/// O3 repro-biased learning: birth outcomes are counted iff the flag is on.
+/// Same scenario, same seed, flag toggled — the flag-off world must keep every
+/// counter at zero (the byte-identity contract), the flag-on world must have
+/// credited surviving births to parents.
+#[test]
+fn birth_outcome_counters_are_flag_gated() {
+    let scenario = Scenario::parse_toml(SCENARIO).expect("parse");
+
+    let mut on = scenario.instantiate();
+    on.repro_biased_learning = true;
+    on.max_population = 500;
+    let mut off = scenario.instantiate();
+    off.max_population = 500;
+
+    for _ in 0..2_000 {
+        step(&mut on);
+        step(&mut off);
+    }
+
+    let sum_ok: u32 = on.agents.births_ok.iter().map(|&b| b as u32).sum();
+    assert!(sum_ok > 0, "flag on: surviving births must be credited to parents");
+    let off_total: u32 =
+        off.agents.births_ok.iter().chain(off.agents.births_failed.iter()).map(|&b| b as u32).sum();
+    assert_eq!(off_total, 0, "flag off: no birth-outcome counting at all");
+}

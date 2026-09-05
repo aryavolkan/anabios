@@ -1,0 +1,21 @@
+# Basic-needs demo (thirst + sleep): grazers must balance foraging against
+# finding water and paying sleep downtime. Rivers are carved
+# (`river_threshold`) so inland foragers have drinkable cells beyond the
+# default map's lakes/seas; dehydrated lineages that fail to route back to
+# water drain out through the metabolic penalty. Watch the codex for
+# `Dehydration` and the inspector for thirst/fatigue/asleep.
+name = "basic-needs"
+seed = 3
+basic_needs_enabled = true
+# Keep the world below carrying-capacity saturation (the demo-scenario norm)
+# so the water-vs-food tension is visible rather than crowd-starved.
+max_population = 400
+
+[climate]
+river_threshold = 60.0
+
+[[agents]]
+count = 150
+placement = { kind = "uniform" }
+[agents.traits]
+lifespan_bias = 0.8

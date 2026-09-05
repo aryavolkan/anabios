@@ -1,0 +1,3 @@
+invasion_fitness mutant=cultural r=0.05579 INVADES
+invasion_fitness_share mutant=cultural r=0.05537 INVADES
+ledger written: runs/o3-probe/tierB-6.csv

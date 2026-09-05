@@ -202,6 +202,24 @@ pub struct World {
     /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
     #[serde(default)]
     pub payoff_biased_learning: bool,
+    /// When true, the basic-needs subsystem is active (thirst + sleep as
+    /// Layer-0 drives, `needs.rs`): `needs::needs_step` accumulates per-agent
+    /// thirst/fatigue, agents drink at water/river cells and sleep on a
+    /// fatigue hysteresis, dehydration raises basal metabolic drain, and a
+    /// water-seeking movement bias applies. Off by default; opt-in per
+    /// scenario. When false the stage is a strict no-op (zero RNG), the
+    /// columns stay 0/false, and every read-side hook is exact identity, so a
+    /// flag-off world is byte-identical. Same bincode/`FORMAT_VERSION` caveat
+    /// as `env_period`.
+    #[serde(default)]
+    pub basic_needs_enabled: bool,
+    /// Opt-in O3 reproductive-success payoff bias: content-bias-only practice
+    /// rejection keyed on observed neighbour birth outcomes
+    /// (`AgentBuffers::births_ok`/`births_failed`, counted only under this
+    /// flag). Off ⇒ byte-identical transmission and all-zero counters. See
+    /// `docs/superpowers/specs/2026-09-02-o3-corrected-apparatus-repro-bias-design.md`.
+    #[serde(default)]
+    pub repro_biased_learning: bool,
     /// Opt-in unilateral (one-sided) exchange: when a bilateral barter swap
     /// fails, `interact::trade_pass` falls back to a surplus GIFT — A gives
     /// one `TRADE_UNIT` of a good it holds above `STOCK_TARGET + TRADE_UNIT`
@@ -221,6 +239,12 @@ pub struct World {
     /// byte-identical with the flag off.
     #[serde(default)]
     pub anthro_race_enabled: bool,
+    /// When true, the disease subsystem is active: `disease::disease_step` (tick stage 6g) spills
+    /// over, spreads, and drains per-agent `infection` (crowding-seeded SIS) and the
+    /// `EpidemicOutbreak`/`MedicineContainment` detectors run. Off by default — zero state
+    /// written and byte-identical with the flag off.
+    #[serde(default)]
+    pub disease_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -430,8 +454,11 @@ impl World {
             // behavior before this flag existed; set false to disable discovery.
             practices_enabled: true,
             payoff_biased_learning: false,
+            basic_needs_enabled: false,
+            repro_biased_learning: false,
             unilateral_trade: false,
             anthro_race_enabled: false,
+            disease_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
