@@ -20,10 +20,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
       # fmt and doc are OS-independent by construction (source formatting +
       # rustdoc), so run them once on ubuntu rather than duplicating on the
       # scarcer macOS runner. clippy/test stay on both to catch platform cfg.
@@ -49,49 +48,29 @@ jobs:
 
   # The integration + behavioural gate, in release so the emergence detectors
   # (M11-M15) — `#[cfg_attr(debug_assertions, ignore)]`, hence skipped in any
-  # debug run — actually execute. A handful of those detectors each run a
-  # multi-seed simulation and dominate wall-time (predator_prey ~405s,
-  # cooperation ~326s, dimorphism ~177s), so a single job ran ~16 min. We shard
-  # by binary so the two biggest detectors never share a runner:
-  #   - `predation`:    predator_prey_emergence alone (the tallest pole, ~7 min).
-  #   - `cooperation`:  cooperation_emergence + dimorphism.
-  #   - `rest-1/2`:     everything else — the remaining detectors (domestication,
-  #     knowledge, …) + the whole lib/integration suite — count-partitioned in
-  #     two. The remainder has no single tall pole (max ~100s) but ~740 tests,
-  #     so the wall is total-work/cores; splitting it doubles the cores on it
-  #     (was ~12-13 min as one shard, 2026-09).
-  # The four filtersets are a complete, disjoint partition (the rest pair is the
-  # negation of the first two, split by count), so every test still runs exactly
-  # once; all shards must pass. The `emergence (release)` job below fans them in
-  # so the gate keeps its single check name. (Unconditionally-#[ignore]d
-  # experiment harnesses in gene_culture.rs / dit_boundary.rs stay skipped —
-  # analysis tools, not gates.)
+  # debug run — actually execute. A few detectors run multi-seed simulations and
+  # dominate wall-time, so the suite is sharded. Balancing is left to nextest's
+  # round-robin `--partition count`: shard wall-time is bounded below by the
+  # single longest test either way, so hand-packing filtersets bought little
+  # over simply using more shards, and every rename or new heavyweight test
+  # meant re-tuning them by hand. Shards are a complete, disjoint partition, so
+  # every test runs exactly once and all shards must pass. (Unconditionally
+  # #[ignore]d experiment harnesses in gene_culture.rs / dit_boundary.rs stay
+  # skipped — analysis tools, not gates.)
   emergence-shard:
-    name: emergence shard (${{ matrix.id }})
+    name: emergence shard (${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - id: predation
-            filter: "binary(=predator_prey_emergence)"
-            partition: ""
-          - id: cooperation
-            filter: "binary(=cooperation_emergence) | binary(=dimorphism)"
-            partition: ""
-          - id: rest-1
-            filter: "not (binary(=predator_prey_emergence) | binary(=cooperation_emergence) | binary(=dimorphism))"
-            partition: "--partition count:1/2"
-          - id: rest-2
-            filter: "not (binary(=predator_prey_emergence) | binary(=cooperation_emergence) | binary(=dimorphism))"
-            partition: "--partition count:2/2"
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@nextest
-      - uses: Swatinem/rust-cache@v2
-      - name: test (release) — shard ${{ matrix.id }}
-        run: cargo nextest run --workspace --release -E "${{ matrix.filter }}" ${{ matrix.partition }}
+      - uses: ./.github/actions/setup-rust
+        with:
+          nextest: "true"
+      - name: test (release) — shard ${{ matrix.shard }}/6
+        run: cargo nextest run --workspace --release --partition count:${{ matrix.shard }}/6
 
   # Fan-in: keeps a single `emergence (release)` status check (matching the name
   # branch protection may require) and fails if any shard failed. `if: always()`
@@ -108,86 +87,43 @@ jobs:
           echo "emergence-shard matrix result: $result"
           [ "$result" = "success" ] || { echo "::error::an emergence shard did not pass"; exit 1; }
 
-  # Coverage is collected in parallel shards, then unioned in the `coverage` job
-  # below. Instrumented execution of the full suite had grown to ~20 min in a
-  # single job. The cost is NOT spread evenly across tests: a handful of
-  # simulation-heavy integration tests explode under LLVM instrumentation (the
-  # same tests stay fast in release — see the `emergence` job), and they
-  # parallelize poorly (long CPU-bound sims with serial tails), so a naive
-  # count split just clusters them into one unlucky shard. We bin-pack instead:
-  #   - `scenarios`:  `all_scenarios` alone — its one test runs every scenario
-  #     back-to-back and is a tall pole (~6.5 min even by itself).
-  #   - `behavioral`: `traditions` (one ~250s test) + `invariants` (many mid-
-  #     weight tests that parallelize) — ~8 min.
-  #   - `headless`:   `package(=anabios-headless)` — the CLI crate's tests spawn
-  #     the instrumented binary as a subprocess; `sweep_csv`'s instrumented sweep
-  #     was a 13.5-min single-test pole in `bulk-1` before the test was
-  #     cfg(coverage)-shortened (2026-09). Keeping the crate separate stops it
-  #     distorting the bulk split.
-  #   - `trade`:      the `trade` suite — the turnover sims keep full horizons
-  #     (~340s+ instrumented each); clustered they overloaded one bulk shard.
-  #   - `bulk-1..3`:  everything else + the whole lib/unit suite, count-partitioned
-  #     3 ways (nextest -E <filter> --partition). The worst remaining sim tests
-  #     (trade determinism checks, earth round-trip, save_load_roundtrip) shorten
-  #     their tick counts under cfg(coverage) — see the comments in those tests —
-  #     so the remainder is uniform enough that round-robin balances it (~5-7 min
-  #     each) instead of piling into one 16-min shard.
-  # The seven filtersets are a complete, disjoint partition (the three bulk shards
-  # exhaust the negation of the four carved filtersets), so their union is the
-  # full workspace coverage. If a binary is renamed it just falls into `bulk` —
-  # coverage stays correct, only the balance drifts (and the gate catches any real
-  # coverage loss).
-  # Rebalance if a new heavyweight lands: give it its own shard like the poles.
+  # Coverage is collected in parallel shards, then unioned in the `coverage` job.
+  # Instrumented execution is ~5-10x slower per tick. The tests whose claim does
+  # not depend on horizon length shorten under `cfg(coverage)` (see
+  # `common::ticks`) — notably `all_scenarios`, which tick-loops every scenario
+  # back-to-back and was this job's tallest pole. Behavioural tests that need
+  # their full horizon to observe the emergence they assert (`traditions`, the
+  # `trade` turnover sims) keep it, so shards are not perfectly even; more
+  # shards absorbs that, which is cheaper to maintain than the bin-packed
+  # filtersets this job used to carry and re-tune on every rename.
+  # `--lcov` emits a SELF-CONTAINED tracefile per shard (that shard's own
+  # binaries + profile), so the report job can union them WITHOUT any
+  # cross-machine profraw/binary matching. Coverage reflects the always-on lib +
+  # integration suite; doctests aren't measured (nextest doesn't run them) and
+  # the emergence detectors run in debug here, where they're #[ignore]d.
   coverage-collect:
-    name: coverage shard (${{ matrix.id }})
+    name: coverage shard (${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - id: scenarios
-            filter: "binary(=all_scenarios)"
-            partition: ""
-          - id: behavioral
-            filter: "binary(=traditions) | binary(=invariants)"
-            partition: ""
-          - id: headless
-            filter: "package(=anabios-headless)"
-            partition: ""
-          - id: trade
-            filter: "binary(=trade)"
-            partition: ""
-          - id: bulk-1
-            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants) | package(=anabios-headless) | binary(=trade))"
-            partition: "--partition count:1/3"
-          - id: bulk-2
-            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants) | package(=anabios-headless) | binary(=trade))"
-            partition: "--partition count:2/3"
-          - id: bulk-3
-            filter: "not (binary(=all_scenarios) | binary(=traditions) | binary(=invariants) | package(=anabios-headless) | binary(=trade))"
-            partition: "--partition count:3/3"
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
         with:
-          components: llvm-tools-preview
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: taiki-e/install-action@nextest
-      - uses: Swatinem/rust-cache@v2
-      # Instrument the workspace once (build is cached), then run only this
-      # shard's slice of the test set (nextest -E filterset, optionally count-
-      # partitioned). --lcov emits a SELF-CONTAINED tracefile (this shard's own
-      # binaries + profile), so the report job can union the shards WITHOUT any
-      # cross-machine profraw/binary matching. Coverage reflects the always-on
-      # lib + integration suite; doctests aren't measured (nextest doesn't run
-      # them) and the emergence detectors run in debug here, where #[ignore]d.
-      - name: collect coverage (shard ${{ matrix.id }})
-        run: cargo llvm-cov nextest --workspace -E "${{ matrix.filter }}" ${{ matrix.partition }} --lcov --output-path lcov-${{ matrix.id }}.info
+          nextest: "true"
+          coverage: "true"
+      - name: collect coverage (shard ${{ matrix.shard }}/6)
+        run: >
+          cargo llvm-cov nextest --workspace
+          --partition count:${{ matrix.shard }}/6
+          --lcov --output-path lcov-${{ matrix.shard }}.info
       - name: upload shard tracefile
         uses: actions/upload-artifact@v7
         with:
-          name: lcov-shard-${{ matrix.id }}
-          path: lcov-${{ matrix.id }}.info
+          name: lcov-shard-${{ matrix.shard }}
+          path: lcov-${{ matrix.shard }}.info
           if-no-files-found: error
 
   coverage:
@@ -202,12 +138,10 @@ jobs:
           pattern: lcov-shard-*
           path: shards
           merge-multiple: true
-      # Union the partitions' per-line hits and enforce the floors in one pass.
-      # A line counts as covered if ANY shard executed it. Pure awk over the lcov
-      # DA records — no lcov CLI — so the gate is independent of tool version. The
-      # two floors mirror the previous single-job gates (workspace >= 82%, core
-      # >= 95% excluding the Godot/CLI crates). Raise these floors when coverage
-      # climbs; never lower them silently.
+      # Union the shards' per-line hits and enforce the floors in one pass. A
+      # line counts as covered if ANY shard executed it. Pure awk over the lcov
+      # DA records — no lcov CLI — so the gate is independent of tool version.
+      # Raise these floors when coverage climbs; never lower them silently.
       - name: gate — line coverage floors (workspace >= 82%, anabios-core >= 95%)
         run: awk -v wmin=82 -v cmin=95 -f .github/scripts/lcov-line-gate.awk shards/*.info
       # Machine-readable tracefiles for humans/tools (Codecov, editors). Not a
@@ -230,8 +164,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-rust
       # The golden state hashes are pinned to bit-identical values across OSes
       # (transcendentals are routed through libm/mathf precisely so macOS and
       # Linux agree). That claim is only meaningful if it is actually run on
@@ -257,21 +190,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-rust
       # The Godot viewer is a gdextension backed by the `anabios-godot` crate.
       # Nothing else in CI actually builds or loads it — clippy only
       # compile-checks the crate and the coverage job excludes it — so a broken
-      # gdext binding or a scene/script regression ships undetected today. Build
+      # gdext binding or a scene/script regression would ship undetected. Build
       # the cdylib the `.gdextension` loads (its linux entry points at
       # target/debug/libanabios_godot.so), then load the scenes headless.
       - name: build gdext cdylib
         run: cargo build -p anabios-godot
-      # Headless `godot` binary on PATH, downloaded straight from the official
-      # godotengine release — replaces lihop/setup-godot, which still declares
-      # the node20 runtime GitHub is deprecating (forced-node24 annotation on
-      # every run). Keep the version aligned with the viewer's target engine
-      # (game/project.godot / compatibility_minimum).
+      # Headless `godot` from the official release — replaces lihop/setup-godot,
+      # which still declares the node20 runtime GitHub is deprecating. Keep the
+      # version aligned with the viewer's target engine (game/project.godot).
       - name: install Godot
         run: |
           curl -fsSL -o /tmp/godot.zip \
@@ -293,71 +223,18 @@ jobs:
           grep -q 'anabios.gdextension' game/.godot/extension_list.cfg 2>/dev/null \
             || echo 'res://anabios.gdextension' > game/.godot/extension_list.cfg
           echo "extension_list.cfg:"; cat game/.godot/extension_list.cfg
-      # Scene-load smoke: open each scene headless for a few frames and fail on
-      # any script error or a gdextension load failure. The `dummy` rendering
-      # driver avoids creating a Vulkan device (so no llvmpipe crash on the
-      # runner); the gdextension still loads from extension_list.cfg. Validated
-      # locally against Godot 4.7.1 — both scenes load with godot-rust
-      # initialized and zero SCRIPT ERROR.
+      # Both smoke modes live in scripts/godot-smoke.sh — they assert on log
+      # *content* because Godot exits 0 on a script that fails to parse.
       - name: scene-load smoke (menu + sim)
-        run: |
-          rc=0
-          for scene in res://scenes/menu.tscn res://scenes/main.tscn; do
-            echo "== smoke: $scene =="
-            log=$(mktemp)
-            if ! godot --headless --rendering-driver dummy --path game "$scene" --quit-after 120 >"$log" 2>&1; then
-              echo "::error::godot exited non-zero loading $scene"
-              rc=1
-            fi
-            cat "$log"
-            if grep -qE "SCRIPT ERROR|Can't open dynamic library|Failed to load GDExtension|Cannot open library" "$log"; then
-              echo "::error::viewer smoke found errors loading $scene"
-              rc=1
-            fi
-            # Positive check: the gdextension must actually initialize, else a
-            # silently-unloaded extension (e.g. on a scene that doesn't call
-            # into Rust) would pass on absence-of-errors alone.
-            if ! grep -q "Initialize godot-rust" "$log"; then
-              echo "::error::gdextension did not initialize for $scene"
-              rc=1
-            fi
-          done
-          exit $rc
-      # Sprite-module unit tests. These SceneTree harnesses already existed but
-      # nothing ran them, so a bad edit to the block-art tables (building/goods/
-      # cart sprites, the mammal archetype registry) reached the viewer
-      # unchallenged. `dummy` driver: they only build Images, never render.
+        run: scripts/godot-smoke.sh scenes res://scenes/menu.tscn res://scenes/main.tscn
+      # Sprite-module unit tests: SceneTree harnesses over the block-art tables
+      # (building/goods/cart sprites, the mammal archetype registry, event FX).
       - name: sprite module tests
-        run: |
-          rc=0
-          for t in test_building_sprites test_mammal_sprites test_event_fx; do
-            echo "== $t =="
-            log=$(mktemp)
-            if ! godot --headless --rendering-driver dummy --path game \
-                 -s "res://scripts/$t.gd" >"$log" 2>&1; then
-              cat "$log"
-              echo "::error::$t failed"
-              rc=1
-              continue
-            fi
-            cat "$log"
-            # A script that fails to parse/compile still exits 0, so the exit
-            # code alone can green-light a broken test; require the script's
-            # own success line and the absence of script errors.
-            if grep -qE "SCRIPT ERROR|Parse Error|FAIL:" "$log"; then
-              echo "::error::$t emitted script errors"
-              rc=1
-            elif ! grep -q "$t: all passed" "$log"; then
-              echo "::error::$t never reported success"
-              rc=1
-            fi
-          done
-          exit $rc
+        run: scripts/godot-smoke.sh scripts test_building_sprites test_mammal_sprites test_event_fx
       # GDScript lint/format gate (gdtoolkit — the clippy/rustfmt analog for
       # GDScript). `gdformat --check` enforces formatting/width; `gdlint`
       # enforces the substantive rules (two stylistic rules are disabled in
-      # .gdlintrc, documented there). Both are blocking: the viewer was brought
-      # gdformat-clean and gdlint-clean in this change.
+      # .gdlintrc, documented there). Both are blocking.
       - name: gdtoolkit lint (gdformat + gdlint)
         run: |
           pipx install "gdtoolkit==4.*"
