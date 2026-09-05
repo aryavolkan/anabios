@@ -20,6 +20,7 @@ WASD/drag pan · wheel zoom · click inspect"""
 
 @onready var overlay = get_node("/root/Main/OverlayManager")
 @onready var module_layers = get_node("/root/Main/ModuleLayers")
+@onready var sim = get_node("/root/Main/Simulation")
 
 var _controls: Label
 var _key_box: VBoxContainer
@@ -89,7 +90,15 @@ func _rebuild_key(body_mode: int) -> void:
 			_key_box.add_child(_ramp_row(Palette.RAMP_AROUSAL, "calm", "aroused"))
 		5:
 			_key_box.add_child(_header("body: mood"))
-			_key_box.add_child(_swatch_wrap(Palette.MOOD_COLORS, Palette.MOOD_NAMES))
+			# Names come from core (mood.rs::name) so the legend can never
+			# diverge from the inspector; the color/name pair is a hard
+			# invariant we control, so assert it (codex_panel convention).
+			var mood_names: PackedStringArray = sim.mood_name_catalog()
+			assert(
+				Palette.MOOD_COLORS.size() == mood_names.size(),
+				"mood color/name tables out of sync"
+			)
+			_key_box.add_child(_swatch_wrap(Palette.MOOD_COLORS, mood_names))
 		_:
 			_key_box.add_child(_header("body: species — each animal in its own coat colours"))
 

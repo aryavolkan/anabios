@@ -776,6 +776,18 @@ impl Simulation {
         out
     }
 
+    /// All mood display names, indexed by the mood discriminant (static) —
+    /// the single source of truth for the legend's mood color key, so the
+    /// labels can never diverge from `mood::name` in the inspector.
+    #[func]
+    fn mood_name_catalog(&self) -> PackedStringArray {
+        let mut out = PackedStringArray::new();
+        for m in 0..anabios_core::mood::MOOD_COUNT as u8 {
+            out.push(anabios_core::mood::name(m));
+        }
+        out
+    }
+
     /// Live dual-inheritance snapshot for the helix panel (view-only):
     /// `{ gene_means: PackedFloat32Array(50) — population mean per genome
     /// slot, meme_means: PackedFloat32Array(20) — population mean per meme

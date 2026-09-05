@@ -45,7 +45,10 @@ const RAMP_AROUSAL: Array = [[0.55, 0.25, 0.70], [0.03, 0.80, 1.00]]  # calm →
 # --- Discrete mood colors ---------------------------------------------------
 # Indexed by the mood discriminant from `alive_moods()` (mood.rs: 0 content,
 # 1 seek food, 2 seek water, 3 sleep, 4 flee, 5 fight, 6 seek mate, 7 mate).
-# Shared by the body overlay (main.gd) and the legend color key.
+# Shared by the body overlay (main.gd) and the legend color key. The names
+# come from `Simulation.mood_name_catalog()` (mood.rs::name) — one source of
+# truth — and this array's size must match mood.rs::MOOD_COUNT (the legend
+# asserts the pairing).
 const MOOD_COLORS: PackedColorArray = [
 	Color(0.65, 0.65, 0.65),  # 0 content
 	Color(0.35, 0.85, 0.35),  # 1 seek food
@@ -55,16 +58,6 @@ const MOOD_COLORS: PackedColorArray = [
 	Color(1.00, 0.25, 0.20),  # 5 fight
 	Color(1.00, 0.50, 0.80),  # 6 seek mate
 	Color(0.90, 0.20, 0.60),  # 7 mate
-]
-const MOOD_NAMES: PackedStringArray = [
-	"content",
-	"seek food",
-	"seek water",
-	"sleep",
-	"flee",
-	"fight",
-	"seek mate",
-	"mate",
 ]
 
 

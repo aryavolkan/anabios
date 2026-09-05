@@ -23,7 +23,7 @@ extends Node
 #   {"title": {"chapter": "THE HERD", "subtitle": "domestication", "dur": 3.0}}
 #   {"lower_third": {"text": "t=1234 AnimalDomesticated", "dur": 4.0}}
 #   {"ground": "markets"}  # biome|pheromone0..3|env|succession|markets (or int)
-#   {"body": "dialect"}    # species|dialect|diet|energy (or int)
+#   {"body": "dialect"}    # species|dialect|diet|energy|arousal|mood (or int)
 #   {"panel": {"name": "tech", "visible": true}}
 #   {"highlight": {"x": 250, "y": 445}}  or  {"highlight": "event"}
 #   {"clear_highlight": true}

@@ -111,7 +111,9 @@ pub fn compute_mood(
     if rage >= MOOD_RAGE_MIN && energy >= affect::FIGHT_ENERGY_MIN {
         return FIGHT;
     }
-    if thirst >= crate::needs::WATER_SEEK_MIN {
+    // Strict `>`: must match decide_all's water-pull gate exactly, so the
+    // mood never suppresses feeding without the pull being active.
+    if thirst > crate::needs::WATER_SEEK_MIN {
         return SEEK_WATER;
     }
     if affect::homeostatic_drive(energy) >= MOOD_HUNGER_MIN {
@@ -128,8 +130,10 @@ pub fn compute_mood(
     CONTENT
 }
 
-/// Read-side arbiter hook, called in `decide_all` right after
-/// `affect::apply_affect` (and before the water pull / survival hijack).
+/// Read-side arbiter hook, called in `decide_all` after the full movement-
+/// bias stack (affect bias + habitat/terrain/hub/anchor/water pulls), so
+/// MATE's hold-position damping covers the additive pulls too; only the
+/// livestock pen override and the survival hijack run later and win.
 /// Sharpens the action register for the dominant drive: amplifies the
 /// matching steer, suppresses competing appetitive intents. Exact identity
 /// on `CONTENT` (the flag-off state of the whole column). ZERO RNG.
@@ -191,9 +195,11 @@ pub fn apply_mood(
         }
         MATE => {
             // In reach: hold position so the pair stays inside MATING_RANGE
-            // for `reproduce_all`, and assert the (otherwise latent)
-            // mate_intent for observability. The reproduction gate itself is
-            // untouched — proximity + energy still decide.
+            // for `reproduce_all` (the damp covers the additive pulls too —
+            // safe, since MATE outranks nothing thirsty: SEEK_WATER wins the
+            // ladder first), and assert the (otherwise latent) mate_intent
+            // for observability. The reproduction gate itself is untouched —
+            // proximity + energy still decide.
             action.move_x *= MOOD_MATE_HOLD;
             action.move_y *= MOOD_MATE_HOLD;
             action.fire_intent = 0.0;
