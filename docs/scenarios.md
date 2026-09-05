@@ -49,6 +49,7 @@ the curated root set. Run any of these with
 | `affect-play.toml` | Juvenile PLAY enrichment | affect, cognition |
 | `affect-showcase.toml` | M-F observability: panic cascades, feeding frenzies | affect |
 | `mammals-vs-reptiles.toml` | Vertebrate-class archetypes (endotherm vs ectotherm profiles) | affect, cognition, biome_adaptation |
+| `grazers-and-wolves.toml` | Mood overlay demo: a mammal grazer herd vs a wolf pack, drives (`seek food`/`sleep`/`flee`/`fight`) readable as body color | affect, basic_needs, cognition |
 | `grand-theater.toml` | Everything-on staged world (strongest round-trip guard) | env_period, climate_drift_rate, season_period, biome_adaptation, living_biome, nutrient_variation, soil_fertility, disasters, terrain_habitat, resources, settlement, inventions, gene_tech_coupling, cognition, war |
 | `out-of-africa.toml` | The flagship grand arc — measured to stall at era 1 (see `docs/showcase-plan.md`) | same set as grand-theater + sexual_dimorphism, domestication |
 | `out-of-africa-saga.toml` | The showcase cut: era-3 tech seeded at t0, downstream tech emerges | same set as `out-of-africa` |

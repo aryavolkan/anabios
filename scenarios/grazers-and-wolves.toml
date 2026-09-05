@@ -4,10 +4,14 @@ seed = 0
 # wolves need enough prey to keep the pack from starving out.
 max_population = 1000
 
-# The point of the demo is the new mood overlay: affect makes the wolves
-# flare red (fight) when closing on the herd, while grazers flip between
-# green (seek food), purple (sleep), and yellow (flee). Basic needs add the
-# thirst/sleep drives; cognition powers the mammal archetype's paid-for IQ.
+# The point of the demo is the new mood overlay: every agent is tinted by its
+# winner-take-all drive, and with all three flags on the herd cycles through
+# green (seek food), blue (seek water), purple (sleep), pink/magenta (seek
+# mate/mate) and yellow (flee). Basic needs add the thirst/sleep drives;
+# cognition powers the mammal archetype's paid-for IQ. Measured caveat (seed
+# 12345, 2000 ticks): red (fight) never fires for the wolves — FLEE wins the
+# arbiter ahead of FIGHT (mood::compute_mood) and the pack itself reads yellow
+# for ~14% of its time. Tuning the pack toward RAGE is open work.
 affect_enabled = true
 basic_needs_enabled = true
 cognition_enabled = true

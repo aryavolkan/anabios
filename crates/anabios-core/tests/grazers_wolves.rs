@@ -68,3 +68,44 @@ fn grazers_and_wolves_sustain_predation() {
          (floor {PERSIST_FLOOR})"
     );
 }
+
+/// The scenario's *other* job is the mood body-color overlay: it is the demo
+/// the viewer menu opens on body mode 5, and `gallery/README.md` documents the
+/// palette it is supposed to show. Pin that claim so a tuning change can't
+/// quietly collapse the demo to one or two colors.
+///
+/// Measured over 600 ticks: seeds 0-3 reach 8/7/7/7 distinct moods — every one
+/// except `fight`, which needs RAGE to beat FEAR in `mood::compute_mood` and
+/// only fires on some seeds (never for the wolves; see the scenario header).
+/// The floor sits below that so unrelated drift can't flake the test.
+#[cfg_attr(debug_assertions, ignore = "release-only emergence test")]
+#[test]
+fn grazers_and_wolves_paint_the_mood_palette() {
+    const OVERLAY_SEEDS: u64 = 4;
+    const OVERLAY_TICKS: u32 = 600;
+    const DISTINCT_MOOD_FLOOR: usize = 6;
+    for seed in 0..OVERLAY_SEEDS {
+        let mut s = Scenario::parse_toml(SCENARIO).expect("parse grazers-and-wolves");
+        s.seed = seed;
+        let mut w = s.instantiate();
+        let mut seen = [false; anabios_core::mood::MOOD_COUNT];
+        for _ in 0..OVERLAY_TICKS {
+            step(&mut w);
+            for id in w.agents.iter_alive() {
+                seen[w.agents.mood[id as usize] as usize] = true;
+            }
+        }
+        let observed: Vec<&str> = seen
+            .iter()
+            .enumerate()
+            .filter(|(_, &s)| s)
+            .map(|(m, _)| anabios_core::mood::name(m as u8))
+            .collect();
+        assert!(
+            observed.len() >= DISTINCT_MOOD_FLOOR,
+            "seed {seed}: only {} distinct moods in {OVERLAY_TICKS} ticks \
+             (floor {DISTINCT_MOOD_FLOOR}): {observed:?}",
+            observed.len()
+        );
+    }
+}
