@@ -175,6 +175,18 @@ mod tests {
     use crate::genome::Genome;
     use crate::world::World;
 
+    /// Spawn one agent with its locomotor pinned to `max_speed = 1.0`, so a
+    /// movement test's step length is exactly the desired vector.
+    fn spawn_at_unit_speed(w: &mut World, pos: Vec2) -> u32 {
+        let id = w.spawn_agent(pos, Genome::neutral());
+        for m in w.agents.modules[id as usize].iter_mut() {
+            if let crate::module::Module::Locomotor { max_speed, .. } = m {
+                *max_speed = 1.0;
+            }
+        }
+        id
+    }
+
     #[test]
     fn position_wraps_on_torus() {
         let mut w = World::new(1);
@@ -207,12 +219,7 @@ mod tests {
     #[test]
     fn motion_drains_energy_proportionally() {
         let mut w = World::new(1);
-        let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
-        for m in w.agents.modules[id as usize].iter_mut() {
-            if let crate::module::Module::Locomotor { max_speed, .. } = m {
-                *max_speed = 1.0;
-            }
-        }
+        let id = spawn_at_unit_speed(&mut w, Vec2::new(500.0, 500.0));
         let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
         desired[id as usize] = Vec2::new(1.0, 0.0);
         let before = w.agents.energy[id as usize];
@@ -406,12 +413,7 @@ mod tests {
     fn asleep_suppresses_movement_and_discounts_basal() {
         let run = |asleep: bool| -> (f32, f32) {
             let mut w = World::new(1);
-            let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
-            for m in w.agents.modules[id as usize].iter_mut() {
-                if let crate::module::Module::Locomotor { max_speed, .. } = m {
-                    *max_speed = 1.0;
-                }
-            }
+            let id = spawn_at_unit_speed(&mut w, Vec2::new(500.0, 500.0));
             w.agents.asleep.set(id as usize, asleep);
             let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
             desired[id as usize] = Vec2::new(1.0, 0.0);
@@ -450,12 +452,7 @@ mod tests {
         // travel farther under the same unit direction.
         let displacement = |seek: f32| -> f32 {
             let mut w = World::new(1);
-            let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
-            for m in w.agents.modules[id as usize].iter_mut() {
-                if let crate::module::Module::Locomotor { max_speed, .. } = m {
-                    *max_speed = 1.0;
-                }
-            }
+            let id = spawn_at_unit_speed(&mut w, Vec2::new(500.0, 500.0));
             w.agents.affect[id as usize][crate::affect::SEEK] = seek;
             let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
             desired[id as usize] = Vec2::new(1.0, 0.0);

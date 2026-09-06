@@ -502,6 +502,27 @@ mod tests {
     use crate::genome::GenomeSlot;
     use crate::world::World;
 
+    /// Rebuild the spatial index and run `sense_all` over `w`, returning the
+    /// per-agent registers. Every test below needs this exact 14-line wiring,
+    /// so it lives here once instead of at each call site.
+    fn sense(w: &mut World) -> Vec<SensorRegister> {
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
+        sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &w.culture_mask,
+            &mut regs,
+            w.world_size,
+            false,
+            w.cognition_enabled,
+        );
+        regs
+    }
+
     #[test]
     fn agent_on_grass_sees_local_biomass() {
         let mut w = World::new(7);
@@ -517,20 +538,7 @@ mod tests {
             }
         }
         let _ = w.spawn_agent(spawn, Genome::neutral());
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut regs,
-            w.world_size,
-            false,
-            w.cognition_enabled,
-        );
+        let regs = sense(&mut w);
         assert!(regs[0].local_plant_biomass > 0.0);
     }
 
@@ -541,20 +549,7 @@ mod tests {
         let pos_b = Vec2::new(104.0, 100.0);
         let _ = w.spawn_agent(pos_a, Genome::neutral());
         let _ = w.spawn_agent(pos_b, Genome::neutral());
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut regs,
-            w.world_size,
-            false,
-            w.cognition_enabled,
-        );
+        let regs = sense(&mut w);
         assert!(regs[0].has_neighbor);
         assert!((regs[0].nearest_neighbor_dist - 4.0).abs() < 1e-3);
         assert!(regs[0].nearest_neighbor_dir.x > 0.9);
@@ -615,20 +610,7 @@ mod tests {
         let id = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
         w.agents.modules[id as usize]
             .retain(|m| !matches!(m, crate::module::Module::Sensor { .. }));
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut regs,
-            w.world_size,
-            false,
-            w.cognition_enabled,
-        );
+        let regs = sense(&mut w);
         assert_eq!(regs[id as usize].local_plant_biomass, 0.0);
         assert!(!regs[id as usize].has_neighbor);
     }
@@ -641,20 +623,9 @@ mod tests {
         let mut w = World::new(1);
         let a = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
         let b = w.spawn_agent(Vec2::new(502.0, 500.0), Genome::neutral());
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut regs,
-            w.world_size,
-            false,
-            w.cognition_enabled,
-        );
+        // `mut` because the second pass below deliberately re-senses into this
+        // same buffer — clearing the dead slot in place is the thing under test.
+        let mut regs = sense(&mut w);
         assert!(regs[a as usize].crowding > 0, "neighbour seen while both alive");
 
         w.agents.kill(a);
@@ -683,20 +654,7 @@ mod tests {
     fn isolated_agent_has_no_neighbor() {
         let mut w = World::new(1);
         let _ = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut regs,
-            w.world_size,
-            false,
-            w.cognition_enabled,
-        );
+        let regs = sense(&mut w);
         assert!(!regs[0].has_neighbor);
         assert_eq!(regs[0].nearest_neighbor_dist, f32::INFINITY);
         assert_eq!(regs[0].nearest_neighbor_species, NO_NEIGHBOR_SPECIES);
@@ -713,20 +671,7 @@ mod tests {
         let kin = w.spawn_agent(Vec2::new(106.0, 100.0), Genome::neutral()); // same species 0
         let foe = w.spawn_agent(Vec2::new(103.0, 100.0), Genome::neutral());
         w.agents.species_id[foe as usize] = 1; // make foe another species
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut regs,
-            w.world_size,
-            false,
-            w.cognition_enabled,
-        );
+        let regs = sense(&mut w);
         let r = regs[me as usize];
         assert_eq!(r.nearest_same_id, kin);
         assert!((r.nearest_same_dist - 6.0).abs() < 1e-3);
@@ -749,20 +694,7 @@ mod tests {
         let other = w.spawn_agent(Vec2::new(204.0, 200.0), big);
         w.agents.energy[me as usize] = 20.0;
         w.agents.energy[other as usize] = 40.0;
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut regs,
-            w.world_size,
-            false,
-            w.cognition_enabled,
-        );
+        let regs = sense(&mut w);
         let r = regs[me as usize];
         assert!(
             (r.nearest_rel_size - 2.0).abs() < 1e-3,
@@ -782,20 +714,7 @@ mod tests {
         let me = w.spawn_agent(Vec2::new(300.0, 300.0), Genome::neutral());
         let _ = w.spawn_agent(Vec2::new(303.0, 300.0), Genome::neutral());
         let _ = w.spawn_agent(Vec2::new(300.0, 303.0), Genome::neutral());
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        let mut regs = vec![SensorRegister::default(); w.agents.capacity()];
-        sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut regs,
-            w.world_size,
-            false,
-            w.cognition_enabled,
-        );
+        let regs = sense(&mut w);
         assert_eq!(regs[me as usize].crowding, 2);
     }
 }
