@@ -21,6 +21,10 @@ pub const FRIGHT_COOLDOWN: u64 = 50;
 /// `CodexState` latch set, re-fires are suppressed by scanning the existing
 /// `world.codex.events` ring for a same-species `MassFright` within
 /// `FRIGHT_COOLDOWN` ticks — no new serialized state.
+///
+/// Best-effort: the ring holds `CODEX_EVENT_CAPACITY` events across every
+/// detector, so a run busy enough to evict this species' last `MassFright`
+/// within the window re-fires early. Accepted for the zero-state property.
 pub(super) fn detect_mass_fright(world: &mut World, agg: &SpeciesAggTable) {
     // Cheap, provable no-op when the layer is off (affect is all-zero anyway).
     if !world.affect_enabled {

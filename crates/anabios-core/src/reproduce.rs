@@ -15,7 +15,7 @@
 use crate::agent::{AgentBuffers, SPAWN_ENERGY};
 use crate::genome::{Genome, GenomeSlot};
 use crate::prelude::Vec2;
-use crate::spatial::{torus_distance, UniformSpatialHash};
+use crate::spatial::{torus_delta, torus_distance, UniformSpatialHash};
 use crate::world::World;
 
 /// Maximum distance between two parents at the moment of mating, in world units.
@@ -36,6 +36,111 @@ pub const REPRO_ENERGY_MULT: f32 = 1.5;
 /// `tick_bench` 10k case seeds founders directly to exercise that scale).
 pub const MAX_POPULATION: u32 = 10_000;
 
+/// Mate seeking (opt-in via `World::mate_seeking_enabled`): an agent whose
+/// program asks to mate (`mate_intent` above this) but has no same-species
+/// neighbour in perception steers toward the nearest one within
+/// `MATE_SEEK_REACH`.
+///
+/// Without it `Node::Mate` moved nobody: mating was pure `MATING_RANGE`
+/// contact, which a dense herd gets for free and a sparse lineage never
+/// does. Measured on a 4096² world, a pack of 80 pursuers with mean energy
+/// well above its breeding bar, free room under the cap, and prey to spare
+/// produced 5 births while still bunched at seeding and none after — and
+/// aged out. The reach matches `needs::WATER_SEEK_REACH` so the two long-
+/// range pulls share one scale.
+pub const MATE_SEEK_MIN: f32 = 0.5;
+pub const MATE_SEEK_REACH: f32 = 96.0;
+pub const MATE_PULL: f32 = 2.0;
+
+/// Unit direction (torus-wrapped) toward the nearest alive same-species
+/// agent other than `self_id` within `radius`, or `Vec2::ZERO` when none.
+/// Deterministic: strict `<` on squared distance keeps the first candidate
+/// in the hash's row-major ring order on ties.
+#[allow(clippy::too_many_arguments)]
+pub fn best_mate_direction(
+    spatial: &UniformSpatialHash,
+    agents: &AgentBuffers,
+    self_id: u32,
+    pos: Vec2,
+    species: u32,
+    radius: f32,
+    world_size: f32,
+) -> Vec2 {
+    let mut best: Option<(f32, Vec2)> = None;
+    let r2 = radius * radius;
+    spatial.query_wide(pos, radius, |other| {
+        if other == self_id || !agents.is_alive(other) {
+            return;
+        }
+        let j = other as usize;
+        if agents.species_id[j] != species {
+            return;
+        }
+        let off = torus_delta(agents.position[j], pos, world_size);
+        let d2 = off.length_squared();
+        if d2 <= r2 && best.is_none_or(|(bd, _)| d2 < bd) {
+            best = Some((d2, off));
+        }
+    });
+    best.map(|(_, off)| off.normalize_or_zero()).unwrap_or(Vec2::ZERO)
+}
+
+/// Per-founder-lineage headroom under `max_population`, built once per tick
+/// from `World::lineage_caps` (see `Scenario`'s `max_share`).
+///
+/// The global cap alone lets whichever lineage breeds fastest take every
+/// birth slot: grazers saturate it within a few hundred ticks and no
+/// predator is ever born again, so every predator/prey scenario decays to
+/// one lineage. A per-lineage share reserves room. Lineages are keyed by
+/// founder root (`codex::war::lineage_root`), so speciation splinters keep
+/// counting against their founder's share instead of escaping it.
+struct LineageRoom {
+    /// Founder root for every species id (index = species id).
+    roots: Vec<u32>,
+    /// `(root, cap, live)` per capped lineage, in `lineage_caps` order.
+    rows: Vec<(u32, u32, u32)>,
+}
+
+impl LineageRoom {
+    /// `None` unless the world carries lineage caps — the only draw-free,
+    /// allocation-free path for every scenario that never set `max_share`.
+    fn new(world: &World) -> Option<Self> {
+        if world.lineage_caps.is_empty() {
+            return None;
+        }
+        let roots: Vec<u32> = (0..world.species_member_counts.len() as u32)
+            .map(|sid| crate::codex::war::lineage_root(world, sid))
+            .collect();
+        let mut rows: Vec<(u32, u32, u32)> =
+            world.lineage_caps.iter().map(|&(root, cap)| (root, cap, 0)).collect();
+        for (sid, &n) in world.species_member_counts.iter().enumerate() {
+            if let Some(row) = rows.iter_mut().find(|r| r.0 == roots[sid]) {
+                row.2 += n;
+            }
+        }
+        Some(Self { roots, rows })
+    }
+
+    fn row(&self, species: u32) -> Option<&(u32, u32, u32)> {
+        // A species minted by `species_step` after this table was built has
+        // no root entry; it is a splinter of an existing lineage, but this
+        // tick it is uncapped rather than mis-keyed.
+        let root = *self.roots.get(species as usize)?;
+        self.rows.iter().find(|r| r.0 == root)
+    }
+
+    fn has_room(&self, species: u32) -> bool {
+        self.row(species).is_none_or(|r| r.2 < r.1)
+    }
+
+    fn note_birth(&mut self, species: u32) {
+        let Some(root) = self.roots.get(species as usize).copied() else { return };
+        if let Some(row) = self.rows.iter_mut().find(|r| r.0 == root) {
+            row.2 += 1;
+        }
+    }
+}
+
 /// Run the reproduce stage. Each alive agent at most mates once per tick.
 /// Order: ascending agent id. Each agent A checks its same-cell neighbours
 /// in ascending id order and mates with the first eligible B such that
@@ -55,6 +160,10 @@ pub fn reproduce_all(world: &mut World) {
     alive_ids.clear();
     alive_ids.extend(world.agents.iter_alive());
 
+    // Per-lineage room under the cap (opt-in; `None` when no scenario spec
+    // set `max_share`, which is also the flag-off zero-cost path).
+    let mut lineage_room = LineageRoom::new(world);
+
     for &a_id in &alive_ids {
         if world.agents.live_count() >= world.max_population {
             // Backstop: stop producing offspring above the cap. Iteration
@@ -64,6 +173,13 @@ pub fn reproduce_all(world: &mut World) {
         let i = a_id as usize;
         if world.reproduced_this_tick[i] {
             continue;
+        }
+        // A lineage at its own share of the cap skips (does not `break`):
+        // other lineages may still have room this tick.
+        if let Some(room) = lineage_room.as_ref() {
+            if !room.has_room(world.agents.species_id[i]) {
+                continue;
+            }
         }
         if !is_eligible(&world.agents, a_id) {
             continue;
@@ -157,6 +273,9 @@ pub fn reproduce_all(world: &mut World) {
             child_sex,
         );
         world.add_to_species(a_species);
+        if let Some(room) = lineage_room.as_mut() {
+            room.note_birth(a_species);
+        }
 
         // Born domesticated (E13): a child of two livestock of the SAME
         // living owner is born tamed. No RNG; gated on the flag.

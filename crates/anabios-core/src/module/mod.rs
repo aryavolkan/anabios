@@ -75,9 +75,14 @@ pub fn effective_spines_range(range: f32) -> f32 {
     SPINES_MIN_RANGE + (SPINES_MAX_RANGE - SPINES_MIN_RANGE) * range.clamp(0.0, 1.0)
 }
 
-/// Sensor channel type. Vision sees plants and other agents; Smell gates
-/// pheromone perception (`has_smell` → `SensePheromone` reads). Heat and
-/// Sound remain reserved with no effect yet.
+/// Sensor channel type. Every variant contributes its `radius` to
+/// `effective_perception_radius`, and the generic senses (plant direction,
+/// the neighbour scan, kinship, hostility, culture threat) read that radius
+/// without checking the type — so a lone `Heat` or `Sound` sensor perceives
+/// exactly as a `Vision` one does. The only type-specific channel today is
+/// `Smell`, which additionally gates pheromone perception (`has_smell` →
+/// `SensePheromone` reads). Heat and Sound have no channel of their own yet;
+/// they are distinct names, not distinct senses.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SensorType {

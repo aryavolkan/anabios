@@ -49,6 +49,10 @@ Every `#[serde(skip)]` field must be justifiable in exactly one of:
 | `sense::SensorRegister` | (a) rewritten by `sense_all` |
 | `pheromones.nonzero` | (c) re-derived by `refresh_nonzero()` at load |
 | `codex::SpeciesAggTable` | (a) see `codex_agg` |
+| `culture_mask` | (a) rebuilt by `World::refresh_culture_mask` before `sense_all` reads it; self-heals from empty on load (`next_species_id` is serialized) |
+| `hub_trade_tally` | (b) viewer-only per-hub tally; re-lengthens itself in `trade_pass` |
+| `agents.deaths_scratch` | (a) drained every tick by `resource::conserve_goods_step` |
+| `biome.recolonize_scratch` | (a) cleared and resized at the top of every `recolonize_step` |
 
 `CodexState` has **zero** skips — detector state is always serialized.
 `still_ticks` and `prev_desired_direction` are path-dependent accumulators

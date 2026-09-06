@@ -39,6 +39,7 @@ the curated root set. Run any of these with
 | `living-sandbox-coevolution.toml` | Living biome + seasonal regrowth at scale | living_biome, season_period |
 | `sandbox-coevolution.toml` | Freeform coevolution sandbox | living_biome, season_period, inventions |
 | `sandbox-large.toml` | 2048² world (custom dims; save/load round-trip pin) | living_biome, season_period |
+| `riverlands.toml` | 4096² world with mountains + a river network; herds auto-sited on watered forage, predators seeded onto the herds (terrain-aware placement); a predator pack that persists (`max_share` + mate seeking) | living_biome, season_period, basic_needs, mate_seeking |
 | `biome-trade.toml` | Biome trade-goods economy (freezes ~t10k — the baseline) | resources, living_biome |
 | `geographic-trade.toml` | Terrain-sorted trade (sputters, never fully freezes) | terrain_habitat, resources |
 | `unilateral-trade.toml` | The O2.6 freeze fix: surplus gifts + goods conserved on death | resources, conserve_goods_on_death, unilateral_trade, living_biome |
@@ -53,6 +54,59 @@ the curated root set. Run any of these with
 | `grand-theater.toml` | Everything-on staged world (strongest round-trip guard) | env_period, climate_drift_rate, season_period, biome_adaptation, living_biome, nutrient_variation, soil_fertility, disasters, terrain_habitat, resources, settlement, inventions, gene_tech_coupling, cognition, war |
 | `out-of-africa.toml` | The flagship grand arc — measured to stall at era 1 (see `docs/showcase-plan.md`) | same set as grand-theater + sexual_dimorphism, domestication |
 | `out-of-africa-saga.toml` | The showcase cut: era-3 tech seeded at t0, downstream tech emerges | same set as `out-of-africa` |
+
+## Terrain-aware placement
+
+Most scenarios place founders with `kind = "cluster"` and a literal
+`center_x`/`center_y`. Those coordinates are only correct for the seed they
+were scouted against — `continental.toml` documents the manual densest-patch
+scout run that produced its pair — so re-seeding such a scenario can drop the
+cohort in the ocean.
+
+Two placements re-derive their sites from the generated world instead, which
+is what makes a large procedural world seedable at all:
+
+- `kind = "habitat"` — anchors `herds` sites on cells that carry forage and
+  sit within `max_water_dist` of a drinkable cell (`needs::drinkable_cell`,
+  the same predicate the thirst drive uses), then scatters agents within
+  `radius`. Absent `max_water_dist` defaults to two cells of the actual
+  field. Anchors are spread apart best-effort. If the world grows nothing at
+  all, it falls back to uniform rather than failing the run.
+- `kind = "near_spec"` — scatters within `radius` of the agents an *earlier*
+  `[[agents]]` spec already placed, so predators find their prey wherever the
+  terrain put it. `spec` is an index into the `[[agents]]` array and must be
+  strictly less than the spec's own index (specs are placed in file order);
+  a forward or self reference is rejected at load.
+
+Both are demonstrated by `riverlands.toml` and covered by
+`crates/anabios-core/tests/habitat_placement.rs`, which asserts the siting
+properties across a span of seeds rather than one.
+
+## Keeping a sparse lineage alive
+
+Two more opt-ins exist because a predator pack on a large world died out in
+every configuration tried — measured, not assumed (`examples/predator_probe.rs`
+prints a lineage's count, energy, thirst, births and kill-rate proxy over time):
+
+- `max_share = 0.8` on an `[[agents]]` spec caps that founder lineage (and
+  its speciation splinters) at that fraction of `max_population`. The cap is
+  otherwise one global first-come number, and a dense herd fills it within a
+  few hundred ticks, after which no other lineage can be born at all.
+- `mate_seeking_enabled = true` makes an agent whose program asks to mate
+  steer toward the nearest same-species agent within
+  `reproduce::MATE_SEEK_REACH` (96 units). Mating is contact-range, and the
+  `Mate` node alone moves nobody, so without this a fed pack with free room
+  under the cap still produced zero births once its founders spread out.
+
+Both default off and are byte-identical when absent.
+
+A caution that outlives this feature: `river_threshold` in a `[climate]`
+block thresholds a flow accumulation counted in *upstream grid cells*, so it
+is meaningless without its `biome_res`. Roughly 1% of the map becomes river
+at threshold ~40 (res 128), ~80 (256), ~150 (512), ~220 (1024) — the same
+150 that works at 512 carves five cells in a whole 128-res world. Run
+`cargo run --release -p anabios-core --example river_scaling` before copying a
+`[climate]` block between worlds of different scale.
 
 Notes:
 

@@ -183,6 +183,8 @@ fn decide_all(world: &mut World) {
     let domestication_enabled = world.domestication_enabled;
     let affect_enabled = world.affect_enabled;
     let basic_needs_enabled = world.basic_needs_enabled;
+    let mate_seeking_enabled = world.mate_seeking_enabled;
+    let spatial = &world.spatial;
     let ws = world.world_size;
     let cap = world.agents.capacity();
     world
@@ -305,6 +307,26 @@ fn decide_all(world: &mut World) {
                     action.move_x += crate::needs::WATER_PULL * thirst * pull.x;
                     action.move_y += crate::needs::WATER_PULL * thirst * pull.y;
                 }
+            }
+            // Mate seeking (opt-in): an agent that wants to mate steers toward
+            // the nearest same-species agent in a wide scan, scaled by its
+            // intent — the water pull's shape. Not gated on perception: it has
+            // to carry the pair the last stretch to `MATING_RANGE` contact too,
+            // which a program without herd cohesion never does on its own.
+            // Gated on the flag so flag-off stays byte-identical.
+            if mate_seeking_enabled && action.mate_intent > crate::reproduce::MATE_SEEK_MIN {
+                let pull = crate::reproduce::best_mate_direction(
+                    spatial,
+                    agents,
+                    i as u32,
+                    agents.position[i],
+                    agents.species_id[i],
+                    crate::reproduce::MATE_SEEK_REACH,
+                    ws,
+                );
+                let gain = crate::reproduce::MATE_PULL * action.mate_intent.min(1.0);
+                action.move_x += gain * pull.x;
+                action.move_y += gain * pull.y;
             }
             // Mood arbiter (mood.rs): the winner-take-all needs/affect state
             // sharpens the action for the dominant drive (suppresses competing

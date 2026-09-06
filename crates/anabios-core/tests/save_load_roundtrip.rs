@@ -52,6 +52,10 @@ macro_rules! roundtrip_tests {
 }
 
 roundtrip_tests! {
+    lineage_caps_and_mate_seeking_roundtrip:
+        "../../../scenarios/riverlands.toml", 200,
+        |w: &World| w.mate_seeking_enabled && !w.lineage_caps.is_empty(),
+        "mate_seeking_enabled + max_share";
     env_period_roundtrip:
         "../../../scenarios/experiments/dit-env-slow.toml", 300, |w: &World| w.env_period > 0, "env_period";
     biome_adaptation_roundtrip:

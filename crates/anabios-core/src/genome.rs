@@ -68,7 +68,10 @@ pub enum GenomeSlot {
     Extraversion = 13,
     /// Declared; not yet read by behavior. Reserved: future kin-biased cooperation drive.
     KinPreference = 14,
-    /// Declared; not yet read by behavior. Reserved: future territory-defense drive.
+    /// Read by the invention tree's gene-tech coupling: Metalworking's
+    /// affinity/requirement slot (`invention::INVENTIONS`), so it gates and
+    /// scales that tech under `gene_tech_coupling`/`gene_requirements`.
+    /// Inert with both flags off. No behavior reads it directly.
     Territoriality = 15,
     /// Heritable cognitive potential in `[0,1]` — the *nature* baseline for an
     /// agent's realized IQ (`iq.rs`). Unlike the personality slots this counts
@@ -85,13 +88,18 @@ pub enum GenomeSlot {
     Nurturance = 19,
 
     // Behavioral biases (20..30)
-    /// Declared; not yet read by behavior. Reserved: future foraging explore-vs-exploit bias.
+    /// Read by the invention tree's gene-tech coupling: Machinery's affinity
+    /// slot, scaling its buff under `gene_tech_coupling`. Inert with the
+    /// flag off. No foraging behavior reads it directly.
     ExploreVsExploit = 20,
     /// Conscientiousness: +1 prudent/careful, −1 impulsive (was RiskTolerance).
     Conscientiousness = 21,
     /// Declared; not yet read by behavior. Reserved: future ambush-vs-pursuit hunting bias.
     AmbushPreference = 22,
-    /// Declared; not yet read by behavior. Reserved: future Communicator-module effectiveness gain.
+    /// Read by the invention tree's gene-tech coupling: Writing's
+    /// affinity/requirement slot, gating and scaling its spread under
+    /// `gene_tech_coupling`/`gene_requirements`. Inert with both flags off.
+    /// The Communicator module itself does not read it.
     CommunicationStrength = 23,
     Altruism = 24,
     /// Declared; not yet read by behavior (speed is set by Locomotor modules).

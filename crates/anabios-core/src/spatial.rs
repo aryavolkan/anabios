@@ -146,6 +146,31 @@ impl UniformSpatialHash {
         }
     }
 
+    /// Visit every agent in the wrap-aware bounding box of a position +
+    /// radius, for radii BEYOND the one-ring guarantee: walks
+    /// `ceil(radius / cell_size)` rings. Deterministic (row-major, rings
+    /// centred on the query cell). The caller does the exact distance check.
+    /// Cost grows with the ring count, so this is for occasional wide scans
+    /// (mate seeking), not the per-tick perception path.
+    pub fn query_wide<F: FnMut(u32)>(&self, pos: Vec2, radius: f32, mut f: F) {
+        let rings = ((radius / self.cell_size).ceil() as usize).max(1);
+        let (cx, cy) = self.cell_coords(pos);
+        // A wide enough radius covers the whole torus; never visit a cell twice.
+        let span = (2 * rings + 1).min(self.res);
+        for dy in 0..span {
+            let row = (cy + self.res + dy - rings.min(self.res / 2)) % self.res;
+            for dx in 0..span {
+                let col = (cx + self.res + dx - rings.min(self.res / 2)) % self.res;
+                let cell = row * self.res + col;
+                let off = self.bucket_offsets[cell] as usize;
+                let len = self.bucket_lens[cell] as usize;
+                for id in &self.flat[off..off + len] {
+                    f(*id);
+                }
+            }
+        }
+    }
+
     #[inline]
     fn cell_coords(&self, pos: Vec2) -> (usize, usize) {
         let x = pos.x.rem_euclid(self.world_size);
@@ -287,5 +312,40 @@ mod tests {
         let a = Vec2::new(2.0, 0.0);
         let b = Vec2::new(WORLD_SIZE - 2.0, 0.0);
         assert!((torus_distance(a, b, WORLD_SIZE) - 4.0).abs() < 1e-3);
+    }
+}
+
+#[cfg(test)]
+mod wide_query_tests {
+    use super::*;
+
+    #[test]
+    fn query_wide_reaches_beyond_one_ring_and_wraps() {
+        let h_size = 1024.0;
+        let mut hash = UniformSpatialHash::with_dims(h_size, 64); // cell 16
+                                                                  // Agent 0 at the origin corner, agent 1 five cells away, agent 2 on
+                                                                  // the far side of the wrap (one cell "behind" the origin).
+        let positions = vec![Vec2::new(8.0, 8.0), Vec2::new(88.0, 8.0), Vec2::new(1016.0, 8.0)];
+        hash.rebuild(&positions, |_| true);
+        let mut seen = Vec::new();
+        hash.query(positions[0], 16.0, |id| seen.push(id));
+        assert!(!seen.contains(&1), "one-ring query must not reach five cells out");
+        let mut wide = Vec::new();
+        hash.query_wide(positions[0], 96.0, |id| wide.push(id));
+        wide.sort_unstable();
+        assert_eq!(wide, vec![0, 1, 2], "wide query reaches five cells out and across the wrap");
+    }
+
+    #[test]
+    fn query_wide_covering_the_whole_torus_visits_each_agent_once() {
+        let mut hash = UniformSpatialHash::with_dims(64.0, 4); // cell 16, 4x4 grid
+        let positions: Vec<Vec2> = (0..16)
+            .map(|i| Vec2::new((i % 4) as f32 * 16.0 + 1.0, (i / 4) as f32 * 16.0 + 1.0))
+            .collect();
+        hash.rebuild(&positions, |_| true);
+        let mut seen = Vec::new();
+        hash.query_wide(Vec2::new(1.0, 1.0), 1000.0, |id| seen.push(id));
+        seen.sort_unstable();
+        assert_eq!(seen, (0..16).collect::<Vec<u32>>());
     }
 }

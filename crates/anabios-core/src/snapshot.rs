@@ -174,7 +174,15 @@ use crate::world::World;
 ///     identity — behavior byte-identical; only the serialized layout grew.
 ///     Flag-on affect scenarios additionally change trajectory: the mood
 ///     layer biases the action register in `decide_all`.
-pub const FORMAT_VERSION: u32 = 38;
+/// 39: sparse-lineage breeding — `World.lineage_caps` (founder species id →
+///     absolute cap, from `[[agents]].max_share`; `reproduce_all` skips a
+///     parent whose founder lineage is at its cap) + `World.mate_seeking_
+///     enabled` (a mating agent with no same-species neighbour in
+///     perception steers toward the nearest within `MATE_SEEK_REACH`).
+///     Both absent/off in every pre-existing scenario ⇒ zero draws, zero
+///     allocation, trajectories byte-identical; only the serialized layout
+///     grew.
+pub const FORMAT_VERSION: u32 = 39;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

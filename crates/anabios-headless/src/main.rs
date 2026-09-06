@@ -10,12 +10,14 @@ mod score;
 mod soak;
 mod sweep;
 
+use std::collections::BTreeMap;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
+use anabios_core::world::World;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ledger::StrategyKind;
@@ -77,6 +79,12 @@ enum Command {
         /// every tick.
         #[arg(long)]
         events_jsonl: Option<PathBuf>,
+        /// Also report the surviving population broken down by founder
+        /// lineage, and where it sits on the map. `alive=` alone cannot tell
+        /// a healthy two-species ecology from a herd that ate the world after
+        /// its predators died out.
+        #[arg(long)]
+        lineages: bool,
     },
     /// Print summary of a scenario without running it.
     Info {
@@ -218,8 +226,8 @@ enum Command {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Run { scenario, ticks, seed, events_jsonl } => {
-            run(scenario, ticks, seed, events_jsonl)
+        Command::Run { scenario, ticks, seed, events_jsonl, lineages } => {
+            run(scenario, ticks, seed, events_jsonl, lineages)
         }
         Command::Info { scenario } => info(scenario),
         Command::Sweep { scenario, seeds, ticks, out, threads, archive } => {
@@ -270,6 +278,7 @@ fn run(
     ticks: u64,
     seed: Option<u64>,
     events_jsonl: Option<PathBuf>,
+    lineages: bool,
 ) -> Result<()> {
     let text = std::fs::read_to_string(&scenario_path)
         .with_context(|| format!("reading scenario file {}", scenario_path.display()))?;
@@ -320,8 +329,55 @@ fn run(
         world.alive_energy_total(),
         hash
     );
+    if lineages {
+        print_lineages(&world);
+    }
 
     Ok(())
+}
+
+/// Walk `species_parents` to the founder root, stopping above the universal
+/// placeholder root 0. Mirrors the core's own lineage walk: every archetype
+/// founder is created with parent `Some(0)`, so descending into 0 would
+/// collapse all founders into a single "lineage" and hide exactly the
+/// predator/prey split this report exists to show.
+fn lineage_root(world: &World, sid: u32) -> u32 {
+    let mut cur = sid;
+    for _ in 0..64 {
+        match world.species_parents.get(cur as usize).copied().flatten() {
+            Some(p) if p != cur && p != 0 => cur = p,
+            _ => break,
+        }
+    }
+    cur
+}
+
+/// Report survivors per founder lineage, with the mean distance to drinkable
+/// water and the share standing on vegetated ground — the two properties
+/// terrain-aware seeding is supposed to establish and the run is supposed to
+/// preserve.
+fn print_lineages(world: &World) {
+    let mut counts: BTreeMap<u32, (u32, f32, u32)> = BTreeMap::new();
+    for id in world.agents.iter_alive() {
+        let i = id as usize;
+        let root = lineage_root(world, world.agents.species_id[i]);
+        let pos = world.agents.position[i];
+        let (col, row) = world.biome.cell_coords(pos);
+        let on_forage = u32::from(world.biome.at(col, row).terrain.carrying_capacity() > 0.0);
+        let watered = f32::from(anabios_core::needs::drinkable_near(&world.biome, pos));
+        let e = counts.entry(root).or_insert((0, 0.0, 0));
+        e.0 += 1;
+        e.1 += watered;
+        e.2 += on_forage;
+    }
+    for (root, (n, watered, on_forage)) in counts {
+        let pct = |v: f32| v / n as f32 * 100.0;
+        println!(
+            "  lineage={root} alive={n} at_water={:.0}% on_forage={:.0}%",
+            pct(watered),
+            pct(on_forage as f32)
+        );
+    }
 }
 
 fn info(scenario_path: PathBuf) -> Result<()> {
