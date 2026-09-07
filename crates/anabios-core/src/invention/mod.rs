@@ -32,7 +32,7 @@ mod params;
 pub use params::*;
 
 /// Number of inventions in the tree.
-pub const INVENTION_COUNT: usize = 10;
+pub const INVENTION_COUNT: usize = 14;
 
 /// First meme channel owned by the invention tree. Channels below this keep
 /// their pre-existing meanings (alarm, dialects, cooperation norm, hunt
@@ -53,6 +53,13 @@ pub const HUSBANDRY: usize = 6;
 pub const MACHINERY: usize = 7;
 pub const ELECTRICITY: usize = 8;
 pub const NUCLEAR_POWER: usize = 9;
+// The military branch (appended 2026-09; ids are append-only, so the branch
+// sits after Nuclear even though its eras are 1-3).
+pub const HAFTED_SPEARS: usize = 10;
+pub const ARCHERY: usize = 11;
+pub const FORTIFICATIONS: usize = 12;
+pub const STEEL_ARMS: usize = 13;
+
 
 /// Adoption level at/above which an invention is functionally held (buffs and
 /// debuffs apply, prereqs count as satisfied, codex counts it).
@@ -287,6 +294,62 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         affinity: Some(GeneAffinity { slot: GenomeSlot::MutationRate, coeff: 0.8 }),
         gene_req: Some(GeneReq { slot: GenomeSlot::CognitivePotential, min: 0.65 }),
     },
+    Invention {
+        name: "Hafted Spears",
+        key: "hafted_spears",
+        era: 1,
+        prereqs: bit(STONE_TOOLS),
+        // A knapped point lashed to a shaft with resin.
+        materials: [0.0, 1.0, 1.0, 0.0],
+        buff: "+25% weapon damage, hunt spoils",
+        debuff: "none",
+        // Hunting weapons pay off for lineages that hold and contest ground:
+        // shares Metalworking's Territoriality slot.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Territoriality, coeff: 0.8 }),
+        // Era-1 entry tech stays genetically free (matches Stone Tools).
+        gene_req: None,
+    },
+    Invention {
+        name: "Archery",
+        key: "archery",
+        era: 2,
+        prereqs: bit(HAFTED_SPEARS),
+        // Bow stave + string sinew and fletching resin.
+        materials: [0.0, 1.0, 2.0, 0.0],
+        buff: "+50% weapon range, +15% damage",
+        debuff: "small upkeep",
+        // Band hunting is social coordination: wires the previously
+        // tree-unused Extraversion slot into the coevolution loop.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Extraversion, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Extraversion, min: 0.40 }),
+    },
+    Invention {
+        name: "Fortifications",
+        key: "fortifications",
+        era: 3,
+        prereqs: bit(FARMING) | bit(HAFTED_SPEARS),
+        // Rampart timber, quarry stone, and provisioning salt.
+        materials: [1.0, 1.0, 0.0, 1.0],
+        buff: "-25% incoming damage, easier births",
+        debuff: "-10% speed",
+        // Walls reward prudent planners: shares Farming's Conscientiousness
+        // slot. The birth subsidy is the branch's demographic payoff — the
+        // O3-measured margin lives on the birth ledger, not energy.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Conscientiousness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Conscientiousness, min: 0.45 }),
+    },
+    Invention {
+        name: "Steel Arms",
+        key: "steel_arms",
+        era: 3,
+        prereqs: bit(METALWORKING) | bit(ARCHERY),
+        // Ore, forge fuel, and quench media — the Metalworking line escalated.
+        materials: [1.0, 2.0, 1.0, 0.0],
+        buff: "+60% weapon damage, richer spoils",
+        debuff: "+10% module upkeep",
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Territoriality, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Territoriality, min: 0.50 }),
+    },
 ];
 
 /// The meme channel carrying invention `inv`'s adoption level.
@@ -371,7 +434,8 @@ pub fn for_each_set_bit(mask: u32, mut f: impl FnMut(usize)) {
 }
 
 /// Inventions the holder of `mask` could work on next: not yet held, with all
-/// prereqs satisfied. Visits ids ascending (era order).
+/// prereqs satisfied. Visits ids ascending (ids 0-9 are era-ordered; the
+/// appended military branch sits after them).
 fn candidates(mask: u32, mut f: impl FnMut(usize)) {
     for (k, inv) in INVENTIONS.iter().enumerate() {
         if mask & bit(k) != 0 {
@@ -909,6 +973,8 @@ mod tests {
         assert_eq!(id_from_name("stone_tools"), Some(STONE_TOOLS));
         assert_eq!(id_from_name("Husbandry"), Some(HUSBANDRY));
         assert_eq!(id_from_name("  writing  "), Some(WRITING));
+        assert_eq!(id_from_name("hafted_spears"), Some(HAFTED_SPEARS));
+        assert_eq!(id_from_name("Steel_Arms"), Some(STEEL_ARMS));
         assert_eq!(id_from_name("wheel"), None);
         assert_eq!(id_from_name(""), None);
     }
@@ -1145,14 +1211,16 @@ mod tests {
         assert_eq!(got, vec![STONE_TOOLS]);
         got.clear();
         candidates(bit(STONE_TOOLS), |k| got.push(k));
-        assert_eq!(got, vec![FIRE]);
+        assert_eq!(got, vec![FIRE, HAFTED_SPEARS]);
         got.clear();
         candidates(bit(STONE_TOOLS) | bit(FIRE), |k| got.push(k));
-        assert_eq!(got, vec![FARMING, METALWORKING]);
+        assert_eq!(got, vec![FARMING, METALWORKING, HAFTED_SPEARS]);
         got.clear();
-        // Machinery needs BOTH metalworking and writing.
-        candidates(bit(STONE_TOOLS) | bit(FIRE) | bit(METALWORKING), |k| got.push(k));
-        assert_eq!(got, vec![FARMING]);
+        // Machinery needs BOTH metalworking and writing; Archery needs Spears.
+        candidates(bit(STONE_TOOLS) | bit(FIRE) | bit(METALWORKING) | bit(HAFTED_SPEARS), |k| {
+            got.push(k)
+        });
+        assert_eq!(got, vec![FARMING, ARCHERY]);
     }
 
     #[test]
@@ -1215,10 +1283,10 @@ mod tests {
     fn is_invention_channel_covers_exactly_the_tree() {
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE - 1));
         assert!(is_invention_channel(INVENTION_CHANNEL_BASE));
-        assert!(is_invention_channel(channel(NUCLEAR_POWER)));
+        assert!(is_invention_channel(channel(STEEL_ARMS)));
         // The last invention channel is the top of the tree block; the practice
         // channels above it (`PRACTICE_CHANNEL_BASE..`) are NOT invention channels.
-        assert_eq!(channel(NUCLEAR_POWER), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
+        assert_eq!(channel(STEEL_ARMS), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE + INVENTION_COUNT));
         assert!(!is_invention_channel(MEME_CHANNELS));
     }
