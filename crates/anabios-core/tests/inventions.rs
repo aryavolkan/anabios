@@ -387,11 +387,15 @@ fn flat_upkeep_and_nuclear_income_apply_in_invention_step() {
     let e0 = w.agents.energy[nuke as usize];
     invention::invention_step(&mut w);
     let gained = w.agents.energy[nuke as usize] - e0;
+    // `nuke` holds every invention (`0..INVENTION_COUNT`), including the
+    // military-branch ARCHERY, whose upkeep `flat_upkeep_coupled` also
+    // charges — spec-correct per Task 2, so the expectation must include it.
     let expected = invention::NUCLEAR_INCOME
         - invention::WRITING_UPKEEP
         - invention::MEDICINE_UPKEEP
         - invention::ELECTRICITY_UPKEEP
-        - invention::NUCLEAR_UPKEEP;
+        - invention::NUCLEAR_UPKEEP
+        - invention::ARCHERY_UPKEEP;
     assert!(
         (gained - expected).abs() < 1e-4,
         "full tree nets Nuclear income minus upkeeps: {gained} vs {expected}"
@@ -1348,6 +1352,8 @@ fn spoils_never_exceed_target_loss() {
 #[test]
 fn fortifications_blunt_incoming_damage() {
     use anabios_core::prelude_test::reassign_to_new_species;
+
+    // World A: prey holds FORTIFICATIONS.
     let mut w = World::new(13);
     w.inventions_enabled = true;
     let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
@@ -1364,18 +1370,41 @@ fn fortifications_blunt_incoming_damage() {
     step(&mut w);
     // net = (10 - 3) * (1 - FORT_DEFENSE) = 5.25 (< the unfortified 7.0).
     let expected = (10.0 - 3.0) * (1.0 - invention::FORT_DEFENSE);
-    let loss = prey_e0 - w.agents.energy[prey as usize];
-    // `loss` spans the WHOLE tick, not just combat_pass: feed_pass (which
-    // runs before combat_pass in interact_all) lets the stationary prey graze
-    // a small amount every tick, netting against per-tick metabolism. That
-    // background delta is ~0.255-0.256 energy and is identical whether or not
-    // FORTIFICATIONS is held (measured independently against an unfortified
-    // control: raw net 7.0 vs actual baseline loss ~6.745, same ~0.255 gap).
-    // Widen the tolerance to absorb it — the combat-mechanism signal here is
-    // ~2.0 energy (4.99 fortified vs 6.74 unfortified), far larger than the
-    // confound, so this stays a real behavioral assertion, not a vacuous one.
-    assert!(loss >= expected - 0.3, "combat still lands: loss={loss} expected={expected}");
-    assert!(loss < 7.0, "fortifications must reduce the unfortified 7.0 net");
+    let loss_fortified = prey_e0 - w.agents.energy[prey as usize];
+
+    // World B: identical seed/kits/positions/programs, but the prey does NOT
+    // hold FORTIFICATIONS. Same-seed pairing cancels the background
+    // feed_pass-vs-metabolism confound (feed_pass runs before combat_pass in
+    // interact_all, so a stationary agent nets a small per-tick gain from
+    // grazing regardless of combat outcome) — a paired comparison is immune
+    // to it even though a lone lower-bound assertion is not (an unfortified
+    // control already loses ~6.745 < the unfortified-net 7.0 from that same
+    // confound, so a stubbed defense_multiplier that never blunts anything
+    // would still slip past a bare `loss < 7.0` check).
+    let mut w2 = World::new(13);
+    w2.inventions_enabled = true;
+    let pred2 = w2.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey2 = w2.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w2, prey2);
+    w2.agents.modules[pred2 as usize] = armed_kit(10.0, 2.0, 0.0);
+    w2.agents.modules[prey2 as usize] = armed_kit(0.0, 0.0, 3.0);
+    w2.agents.program[pred2 as usize] = always_fire();
+    let prey2_e0 = w2.agents.energy[prey2 as usize];
+    step(&mut w2);
+    let loss_unfortified = prey2_e0 - w2.agents.energy[prey2 as usize];
+
+    assert!(
+        loss_fortified >= expected - 0.3,
+        "combat still lands: loss_fortified={loss_fortified} expected={expected}"
+    );
+    // Fortifications remove (10-3)*FORT_DEFENSE = 1.75 of net damage; a 1.0
+    // margin is robust to the ~0.255 confound (which is common to both worlds
+    // and cancels in the difference) while a broken/stubbed defense
+    // multiplier would make the two losses equal and fail this assertion.
+    assert!(
+        loss_fortified < loss_unfortified - 1.0,
+        "fortifications must reduce the unfortified net: fortified={loss_fortified} unfortified={loss_unfortified}"
+    );
 }
 
 #[test]
