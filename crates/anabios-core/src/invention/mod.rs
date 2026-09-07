@@ -1456,7 +1456,7 @@ mod tests {
                 < 1e-6
         );
         // Spoils can never exceed 1.0 (transfer, not creation) for any mask.
-        for mask in [both, u32::MAX & ((1u32 << INVENTION_COUNT) - 1)] {
+        for mask in [both, (1u32 << INVENTION_COUNT) - 1] {
             assert!(spoils_fraction_coupled(mask, &territorial, true) <= 1.0);
         }
     }
