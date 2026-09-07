@@ -1434,3 +1434,42 @@ fn archery_extends_weapon_reach() {
     step(&mut w2);
     assert!(w2.combat_damaged[prey2 as usize], "archery reach covers 2.5");
 }
+
+// --- Military branch: birth-ledger subsidy ----------------------------------
+
+#[test]
+fn fortifications_lower_the_breeding_threshold() {
+    use anabios_core::agent::SPAWN_ENERGY;
+    use anabios_core::reproduce::REPRO_ENERGY_MULT;
+    // Base threshold for a neutral genome (ReproductionThreshold = 0.5,
+    // neutral personality/affect factors are exactly 1.0).
+    let base = SPAWN_ENERGY * 0.5 * REPRO_ENERGY_MULT;
+    let subsidized = base * (1.0 - invention::FORT_BIRTH_SUBSIDY);
+    // Energy between the two thresholds: eligible ONLY with Fortifications.
+    let energy = (base + subsidized) / 2.0;
+
+    let count_births = |hold_fort: bool| -> usize {
+        let mut w = World::new(23);
+        w.inventions_enabled = true;
+        let mut ids = Vec::new();
+        for n in 0..2 {
+            let id = w.spawn_agent(Vec2::new(500.0 + n as f32, 500.0), ape_genome());
+            let mut m = comm_kit();
+            m.push(Module::Reproductive { viability: 0.6, brood_size_bias: 0.5 });
+            w.agents.modules[id as usize] = m;
+            w.agents.energy[id as usize] = energy;
+            if hold_fort {
+                set_held(&mut w, id, invention::FORTIFICATIONS);
+            }
+            ids.push(id);
+        }
+        let pop0 = w.agents.iter_alive().count();
+        for _ in 0..5 {
+            step(&mut w);
+        }
+        w.agents.iter_alive().count().saturating_sub(pop0)
+    };
+
+    assert_eq!(count_births(false), 0, "below the unsubsidized threshold: no births");
+    assert!(count_births(true) > 0, "the subsidy makes the same energy eligible");
+}
