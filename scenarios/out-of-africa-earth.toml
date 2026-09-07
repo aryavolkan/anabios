@@ -228,7 +228,6 @@ archetype = "spiner"
 placement = { kind = "geo", lat = -2.0, lon = 35.5, radius = 70.0 }
 [agents.traits]
 size = 0.6
-perception_radius = 0.9
 lifespan_bias = 1.0
 
 [[agents]]

@@ -379,7 +379,6 @@ macro_rules! trait_overrides {
 }
 
 trait_overrides! {
-    perception_radius => PerceptionRadius,
     size => Size,
     basal_metabolism => BasalMetabolism,
     lifespan_bias => LifespanBias,
@@ -410,16 +409,10 @@ trait_overrides! {
     /// Heritable cognitive baseline (`GenomeSlot::CognitivePotential`; read
     /// only with `cognition_enabled`).
     cognitive_potential => CognitivePotential,
-    /// Affect-layer temperament genes (read only with `affect_enabled`):
-    /// Boldness scales the FEAR response down; Aggressiveness sets RAGE gain;
-    /// Reactivity raises survival-reflex hijack sensitivity. Nurturance and
-    /// Sociality are declared for the (not yet wired) CARE/PANIC/PLAY systems
-    /// and count toward speciation distance.
-    boldness => Boldness,
-    aggressiveness => Aggressiveness,
-    reactivity => Reactivity,
-    nurturance => Nurturance,
-    sociality => Sociality,
+    /// Affective temperament is now derived from the Big Five (OCEAN) slots:
+    /// boldness ↔ low Neuroticism, aggressiveness ↔ low Agreeableness,
+    /// nurturance ↔ high Agreeableness, sociality ↔ high Extraversion,
+    /// reactivity ↔ high Neuroticism. No dedicated genome slots remain.
     /// Render-color genes (HSV); picked up by the Godot bridge.
     color_hue => ColorHue,
     color_sat => ColorSat,
@@ -780,22 +773,17 @@ fn archetype_genome(name: &str, g: &mut Genome) {
             g.set(GenomeSlot::SocialLearning, 0.8);
         }
         // Mammal class defaults: the endotherm profile — a high basal
-        // metabolism (the warm-blooded tax) buying a big brain, sociality,
-        // and boldness. Cognitive potential is high; temperament leans
-        // affiliative (high Agreeableness/Extraversion) with a measured
-        // threat response (mild Boldness, low Reactivity).
+        // metabolism (the warm-blooded tax) buying a big brain and an
+        // affiliative Big-Five profile: high Extraversion/Agreeableness,
+        // low Neuroticism (bold + steady under threat).
         "mammal_grazer" => {
             g.set(GenomeSlot::BasalMetabolism, 0.8);
             g.set(GenomeSlot::CognitivePotential, 0.8);
             g.set(GenomeSlot::IndividualLearning, 0.8);
             g.set(GenomeSlot::SocialLearning, 0.9);
-            g.set(GenomeSlot::Extraversion, 0.8);
-            g.set(GenomeSlot::Agreeableness, 0.7);
-            g.set(GenomeSlot::Boldness, 0.65);
-            g.set(GenomeSlot::Aggressiveness, 0.3);
-            g.set(GenomeSlot::Reactivity, 0.45);
-            g.set(GenomeSlot::Nurturance, 0.8);
-            g.set(GenomeSlot::Sociality, 0.8);
+            g.set(GenomeSlot::Extraversion, 0.85);
+            g.set(GenomeSlot::Agreeableness, 0.85);
+            g.set(GenomeSlot::Neuroticism, 0.3);
             g.set(GenomeSlot::ColorHue, 0.08); // warm brown
         }
         "mammal_pursuer" => {
@@ -803,32 +791,24 @@ fn archetype_genome(name: &str, g: &mut Genome) {
             g.set(GenomeSlot::CognitivePotential, 0.75);
             g.set(GenomeSlot::IndividualLearning, 0.7);
             g.set(GenomeSlot::SocialLearning, 0.85);
-            g.set(GenomeSlot::Extraversion, 0.75);
-            g.set(GenomeSlot::Agreeableness, 0.55);
-            g.set(GenomeSlot::Boldness, 0.95);
-            g.set(GenomeSlot::Aggressiveness, 0.75);
-            g.set(GenomeSlot::Reactivity, 0.4);
-            g.set(GenomeSlot::Nurturance, 0.6);
-            g.set(GenomeSlot::Sociality, 0.75);
+            g.set(GenomeSlot::Extraversion, 0.8);
+            g.set(GenomeSlot::Agreeableness, 0.4);
+            g.set(GenomeSlot::Neuroticism, 0.15);
             g.set(GenomeSlot::ColorHue, 0.0); // red-brown
         }
         // Reptile class defaults: the ectotherm profile — low basal metabolism
         // (the cold-blooded edge: cheap idle, no internal furnace), modest
-        // cognition, asocial temperament, and a hair-trigger affect layer
-        // (high Reactivity → fast freeze/fight/flight hijack) with high
-        // Aggressiveness for the ambush strike.
+        // cognition, asocial temperament, and high Neuroticism (fast
+        // freeze/fight/flight hijack, low boldness) with low Agreeableness for
+        // the ambush strike.
         "reptile_ambusher" => {
             g.set(GenomeSlot::BasalMetabolism, 0.2);
             g.set(GenomeSlot::CognitivePotential, 0.35);
             g.set(GenomeSlot::IndividualLearning, 0.3);
             g.set(GenomeSlot::SocialLearning, 0.2);
             g.set(GenomeSlot::Extraversion, 0.2);
-            g.set(GenomeSlot::Agreeableness, 0.3);
-            g.set(GenomeSlot::Boldness, 0.35);
-            g.set(GenomeSlot::Aggressiveness, 0.8);
-            g.set(GenomeSlot::Reactivity, 0.85);
-            g.set(GenomeSlot::Nurturance, 0.15);
-            g.set(GenomeSlot::Sociality, 0.2);
+            g.set(GenomeSlot::Agreeableness, 0.2);
+            g.set(GenomeSlot::Neuroticism, 0.8);
             g.set(GenomeSlot::ColorHue, 0.33); // scaled green
         }
         "reptile_basker" => {
@@ -837,12 +817,8 @@ fn archetype_genome(name: &str, g: &mut Genome) {
             g.set(GenomeSlot::IndividualLearning, 0.25);
             g.set(GenomeSlot::SocialLearning, 0.15);
             g.set(GenomeSlot::Extraversion, 0.2);
-            g.set(GenomeSlot::Agreeableness, 0.45);
-            g.set(GenomeSlot::Boldness, 0.3);
-            g.set(GenomeSlot::Aggressiveness, 0.2);
-            g.set(GenomeSlot::Reactivity, 0.7);
-            g.set(GenomeSlot::Nurturance, 0.1);
-            g.set(GenomeSlot::Sociality, 0.25);
+            g.set(GenomeSlot::Agreeableness, 0.55);
+            g.set(GenomeSlot::Neuroticism, 0.7);
             g.set(GenomeSlot::ColorHue, 0.25); // olive
         }
         _ => {}
@@ -1743,12 +1719,13 @@ terrain_affinity = 0.87
         archetype_genome("mammal_grazer", &mut g);
         assert_eq!(g.get(GenomeSlot::BasalMetabolism), 0.8, "endotherm tax");
         assert_eq!(g.get(GenomeSlot::CognitivePotential), 0.8, "big-brained");
-        assert_eq!(g.get(GenomeSlot::Nurturance), 0.8, "parental investment");
+        assert_eq!(g.get(GenomeSlot::Agreeableness), 0.85, "parental investment");
+        assert_eq!(g.get(GenomeSlot::Neuroticism), 0.3, "measured threat response");
         let mut g = Genome::neutral();
         archetype_genome("reptile_ambusher", &mut g);
         assert_eq!(g.get(GenomeSlot::BasalMetabolism), 0.2, "ectotherm edge");
-        assert_eq!(g.get(GenomeSlot::Reactivity), 0.85, "hair-trigger hijack");
-        assert_eq!(g.get(GenomeSlot::Aggressiveness), 0.8, "ambush strike");
+        assert_eq!(g.get(GenomeSlot::Neuroticism), 0.8, "hair-trigger hijack");
+        assert_eq!(g.get(GenomeSlot::Agreeableness), 0.2, "ambush strike");
     }
 
     #[test]
@@ -1763,8 +1740,7 @@ count = 2
 archetype = "reptile_ambusher"
 placement = { kind = "uniform" }
 [agents.traits]
-boldness = 0.9
-reactivity = 0.1
+neuroticism = 0.1
 cognitive_potential = 0.77
 color_hue = 0.5
 env_affinity = 0.42
@@ -1774,9 +1750,12 @@ env_affinity = 0.42
         let id = w.agents.iter_alive().next().expect("one agent");
         let g = &w.agents.genome[id as usize];
         // Explicit trait overrides win over the archetype genome defaults
-        // (reptile_ambusher would otherwise pin Reactivity to 0.85).
-        assert_eq!(g.get(GenomeSlot::Boldness), 0.9);
-        assert_eq!(g.get(GenomeSlot::Reactivity), 0.1, "override beats archetype default");
+        // (reptile_ambusher would otherwise pin Neuroticism to 0.8).
+        assert_eq!(g.get(GenomeSlot::Neuroticism), 0.1, "override beats archetype default");
+        // Affective temperament now reads through the Big Five: low Neuroticism
+        // ⇒ bold (+0.8) and phlegmatic (−0.8).
+        assert_eq!(g.boldness(), 0.8);
+        assert_eq!(g.reactivity(), -0.8);
         assert_eq!(g.get(GenomeSlot::CognitivePotential), 0.77);
         assert_eq!(g.get(GenomeSlot::ColorHue), 0.5);
         assert_eq!(g.get(GenomeSlot::EnvAffinity), 0.42);

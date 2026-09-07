@@ -5,9 +5,10 @@
 //! or the DIT env mechanism).
 
 use anabios_core::scenario::Scenario;
-use anabios_core::tick::step;
 use std::fs;
 use std::path::PathBuf;
+
+mod common;
 
 fn scenarios_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scenarios")
@@ -38,6 +39,12 @@ fn every_scenario_parses_instantiates_and_runs() {
     let files = scenario_files();
     assert!(!files.is_empty(), "found no scenario TOMLs to validate");
 
+    // Instrumented ticks run ~5-10x slower, and this test tick-loops EVERY
+    // scenario back-to-back — the tallest pole in the coverage job. The claim
+    // (parses, runs, stays in bounds) doesn't need the full horizon, so halve
+    // it there. Bound once: the tick assertion below must use the same number.
+    let horizon = common::ticks(200);
+
     for path in &files {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("read {name}: {e}"));
@@ -47,9 +54,7 @@ fn every_scenario_parses_instantiates_and_runs() {
         // fast (the default 10k cap made 200-tick runs minutes-slow).
         w.max_population = w.max_population.min(500);
 
-        for _ in 0..200 {
-            step(&mut w);
-        }
+        common::run(&mut w, horizon);
 
         // Every alive agent must remain within the (toroidal) world bounds — a cheap
         // catch-all that a scenario didn't drive the sim into a bad state. Uses this
@@ -67,7 +72,7 @@ fn every_scenario_parses_instantiates_and_runs() {
                 "{name}: agent {id} left world bounds at {p:?}"
             );
         }
-        assert_eq!(w.tick, 200, "{name}: expected 200 ticks");
+        assert_eq!(w.tick, horizon, "{name}: expected {horizon} ticks");
         eprintln!("ok: {name} ({} agents alive)", w.agents.live_count());
     }
     eprintln!("validated {} scenarios", files.len());

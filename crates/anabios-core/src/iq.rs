@@ -1,8 +1,8 @@
 //! Cognitive layer: a per-agent **realized IQ** that develops from a heritable
-//! gene modulated by the juvenile environment (nature + nurture), costs basal
-//! metabolism, and gates which cultural traits an agent can acquire — high-era
-//! inventions and the maladaptive practices each require a minimum realized IQ
-//! (`invention::iq_permits` / `practice::iq_permits`).
+//! `CognitivePotential` gene modulated by the juvenile environment (nature + nurture),
+//! drives the agent's sensory perception radius, and gates which cultural traits
+//! an agent can acquire — high-era inventions and the maladaptive practices each
+//! require a minimum realized IQ (`invention::iq_permits` / `practice::iq_permits`).
 //!
 //! Realized IQ is a *phenotype*, not a gene. It starts at 0 and, during a
 //! juvenile window, is refined each tick toward a blend of the heritable
@@ -12,8 +12,9 @@
 //! raised starving underperforms an average one raised rich.
 //!
 //! The whole layer is gated on `World::cognition_enabled`: with the flag off,
-//! IQ stays `0.0` for every agent (metabolic multiplier is exact identity, no
-//! gating) and `develop_all` is a strict no-op that consumes no RNG.
+//! IQ stays `0.0` for every agent (perception uses a hardcoded neutral
+//! modulator and pays no IQ-driven cost) and `develop_all` is a strict no-op
+//! that consumes no RNG.
 
 use crate::world::World;
 
@@ -24,10 +25,6 @@ pub const IQ_MATURATION_AGE: u32 = 100;
 /// enrichment): `iq = lerp(gene, enrichment, IQ_PLASTICITY)`. `0.5` = half
 /// heritable, half developmental.
 pub const IQ_PLASTICITY: f32 = 0.5;
-/// Basal-metabolism surcharge at `iq = 1` (brains are expensive). This cost is
-/// what keeps IQ from freely maxing out — it makes cognition an evolvable
-/// tradeoff rather than a free lunch.
-pub const IQ_METABOLIC_COST: f32 = 0.25;
 /// Neighbour count that saturates the social-enrichment signal.
 pub const IQ_SOCIAL_REF: f32 = 8.0;
 /// Bounded PLAY contribution to a juvenile's social-enrichment signal, per unit
@@ -35,13 +32,6 @@ pub const IQ_SOCIAL_REF: f32 = 8.0;
 /// which is re-clamped to `[0,1]` so realized IQ stays bounded. Read only when
 /// both `cognition_enabled` and `affect_enabled` are on.
 pub const PLAY_ENRICH_WEIGHT: f32 = 0.25;
-
-/// Basal-metabolism multiplier from realized IQ. Exact identity at `iq == 0`,
-/// so a flag-off world (where IQ stays 0) pays no cost and stays byte-identical.
-#[inline]
-pub fn metabolism_multiplier(iq: f32) -> f32 {
-    1.0 + IQ_METABOLIC_COST * iq
-}
 
 /// Per-tick cognitive development (tick stage). For each juvenile
 /// (`age < IQ_MATURATION_AGE`) fold this tick's nutrition (local biome food) +
@@ -166,13 +156,6 @@ mod tests {
         w.sensors[i].crowding = crowding;
         develop_all(&mut w);
         w.agents.iq[i]
-    }
-
-    #[test]
-    fn metabolism_multiplier_is_identity_at_zero() {
-        assert_eq!(metabolism_multiplier(0.0), 1.0);
-        assert_eq!(metabolism_multiplier(1.0), 1.0 + IQ_METABOLIC_COST);
-        assert_eq!(metabolism_multiplier(0.5), 1.0 + 0.5 * IQ_METABOLIC_COST);
     }
 
     #[test]

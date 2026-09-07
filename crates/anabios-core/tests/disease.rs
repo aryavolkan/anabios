@@ -8,9 +8,10 @@ use anabios_core::codex::EventType;
 use anabios_core::genome::Genome;
 use anabios_core::prelude_test::Vec2;
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
 use anabios_core::tick::step;
 use anabios_core::world::World;
+
+mod common;
 
 const SCENARIO: &str = include_str!("../../../scenarios/disease.toml");
 
@@ -41,10 +42,6 @@ fn total_infection(w: &World) -> f32 {
     w.agents.iter_alive().map(|id| w.agents.infection[id as usize]).sum()
 }
 
-fn count_events(w: &World, t: EventType) -> usize {
-    w.codex.events.iter().filter(|e| e.event_type == t).count()
-}
-
 #[test]
 fn scenario_instantiates_with_flags_and_medicine_held() {
     use anabios_core::invention::{has, MEDICINE};
@@ -72,7 +69,7 @@ fn outbreak_fires_end_to_end_in_crowded_world() {
         step(&mut w);
     }
     assert!(
-        count_events(&w, EventType::EpidemicOutbreak) >= 1,
+        common::count_events(&w, EventType::EpidemicOutbreak) >= 1,
         "crowded infected world must fire EpidemicOutbreak"
     );
 }
@@ -85,8 +82,8 @@ fn flag_off_is_noop() {
         step(&mut w);
     }
     assert_eq!(
-        count_events(&w, EventType::EpidemicOutbreak)
-            + count_events(&w, EventType::MedicineContainment),
+        common::count_events(&w, EventType::EpidemicOutbreak)
+            + common::count_events(&w, EventType::MedicineContainment),
         0,
         "flag off: no disease events"
     );
@@ -133,8 +130,8 @@ fn sparse_world_no_spillover_no_events() {
     }
     assert_eq!(total_infection(&w), 0.0, "sparse world: no spillover");
     assert_eq!(
-        count_events(&w, EventType::EpidemicOutbreak)
-            + count_events(&w, EventType::MedicineContainment),
+        common::count_events(&w, EventType::EpidemicOutbreak)
+            + common::count_events(&w, EventType::MedicineContainment),
         0,
         "sparse world: no disease events"
     );
@@ -148,16 +145,7 @@ fn disease_state_survives_save_load_step() {
         step(&mut w);
     }
     assert!(total_infection(&w) > 0.0, "infection should be non-trivial after 100 ticks");
-    let bytes = save_to_bytes(&w).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(state_hash(&w), state_hash(&reloaded), "load restores identical state");
-    step(&mut w);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&w),
-        state_hash(&reloaded),
-        "disease world diverged after save→load→step",
-    );
+    common::assert_roundtrip_world(&mut w, "disease");
 }
 
 /// Emergence: the dense seeded medicine culture spills over, outbreaks, and

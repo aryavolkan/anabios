@@ -128,6 +128,7 @@ fn culture_threat_sense_is_aimed_and_flag_gated() {
             &mut w.sensors,
             w.world_size,
             false,
+            w.cognition_enabled,
         );
         w.sensors[prey as usize].culture_threat
     };

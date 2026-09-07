@@ -616,6 +616,25 @@ mod tests {
     use crate::prelude::Vec2;
     use crate::world::World;
 
+    /// Rebuild the spatial index, resize scratch, and refill `w.sensors` — the
+    /// exact preamble every interaction test needs before driving a pass.
+    fn refresh_sensors(w: &mut World) {
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        w.resize_scratch();
+        crate::sense::sense_all(
+            &w.agents,
+            &w.biome,
+            &w.pheromones,
+            &w.spatial,
+            &w.codex.hostility,
+            &w.culture_mask,
+            &mut w.sensors,
+            w.world_size,
+            false,
+            w.cognition_enabled,
+        );
+    }
+
     #[test]
     fn harvest_fills_inventory_and_depletes_node() {
         use crate::resource::{Good, Resource, HARVEST_RATE};
@@ -718,19 +737,7 @@ mod tests {
             // Hoarder vs empty: bilateral pick_swap can never fire.
             w.agents.inventory[a as usize][Good::Salt.index()] = STOCK_TARGET + TRADE_UNIT + 2.0;
 
-            w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-            w.resize_scratch();
-            crate::sense::sense_all(
-                &w.agents,
-                &w.biome,
-                &w.pheromones,
-                &w.spatial,
-                &w.codex.hostility,
-                &w.culture_mask,
-                &mut w.sensors,
-                w.world_size,
-                false,
-            );
+            refresh_sensors(&mut w);
             let alive: Vec<u32> = w.agents.iter_alive().collect();
             w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
             trade_pass(&mut w, &alive);
@@ -764,19 +771,7 @@ mod tests {
         w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
 
         // Sense fills nearest_other_id/dist (trade_pass reads those, like combat_pass).
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        w.resize_scratch();
-        crate::sense::sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut w.sensors,
-            w.world_size,
-            false,
-        );
+        refresh_sensors(&mut w);
 
         let total_salt_before: f32 =
             (0..2).map(|id| w.agents.inventory[id][Good::Salt.index()]).sum();
@@ -814,19 +809,7 @@ mod tests {
         // SAME species (both 0).
         w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
         w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        w.resize_scratch();
-        crate::sense::sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut w.sensors,
-            w.world_size,
-            false,
-        );
+        refresh_sensors(&mut w);
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
         trade_pass(&mut w, &alive);
@@ -849,19 +832,7 @@ mod tests {
         w.agents.species_id[b as usize] = 1;
         w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
         w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        w.resize_scratch();
-        crate::sense::sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut w.sensors,
-            w.world_size,
-            false,
-        );
+        refresh_sensors(&mut w);
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         w.trade_hubs = vec![crate::hub::TradeHub { pos, cell: 0, goods: vec![] }];
         trade_pass(&mut w, &alive);
@@ -883,19 +854,7 @@ mod tests {
         let target = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), Genome::neutral());
         w.agents.modules[attacker as usize] = crate::module::predator_kit();
         w.agents.species_id[target as usize] = 1;
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        w.resize_scratch();
-        crate::sense::sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut w.sensors,
-            w.world_size,
-            false,
-        );
+        refresh_sensors(w);
         w.actions[attacker as usize].fire_intent = 1.0;
         (attacker, target)
     }
@@ -936,19 +895,7 @@ mod tests {
         w.agents.inventory[a as usize][Good::Salt.index()] = 5.0;
         w.agents.inventory[b as usize][Good::Obsidian.index()] = 5.0;
         w.trade_hubs = vec![TradeHub { pos, cell: 0, goods: vec![] }];
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        w.resize_scratch();
-        crate::sense::sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut w.sensors,
-            w.world_size,
-            false,
-        );
+        refresh_sensors(&mut w);
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         trade_pass(&mut w, &alive);
         // A bilateral Salt<->Obsidian swap moves both goods; both counters at hub 0 rise.
@@ -975,19 +922,7 @@ mod tests {
             TradeHub { pos: far, cell: 0, goods: vec![] },
             TradeHub { pos: near, cell: 1, goods: vec![] },
         ];
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
-        w.resize_scratch();
-        crate::sense::sense_all(
-            &w.agents,
-            &w.biome,
-            &w.pheromones,
-            &w.spatial,
-            &w.codex.hostility,
-            &w.culture_mask,
-            &mut w.sensors,
-            w.world_size,
-            false,
-        );
+        refresh_sensors(&mut w);
         let alive: Vec<u32> = w.agents.iter_alive().collect();
         trade_pass(&mut w, &alive);
         // The swap is attributed to hub 1 (nearest), leaving the far hub 0 untouched.

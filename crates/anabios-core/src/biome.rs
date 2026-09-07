@@ -614,6 +614,23 @@ impl BiomeField {
         (col.min(self.res - 1), row.min(self.res - 1))
     }
 
+    /// Torus-shortest offset from `pos` to the center of cell `(col, row)`.
+    ///
+    /// The neighbourhood scans (`best_affinity_direction`,
+    /// `best_terrain_direction`, `needs::best_water_direction`) all need this
+    /// and each used to inline the same nine lines. The arithmetic is
+    /// unchanged — it must stay bit-identical, since these offsets feed
+    /// movement and therefore `state_hash`.
+    #[inline]
+    pub fn cell_offset_from(&self, col: usize, row: usize, pos: Vec2) -> Vec2 {
+        let cell_center =
+            Vec2::new((col as f32 + 0.5) * self.cell_size, (row as f32 + 0.5) * self.cell_size);
+        crate::prelude::wrap_torus(
+            cell_center - pos + Vec2::splat(self.world_size * 0.5),
+            Vec2::splat(self.world_size),
+        ) - Vec2::splat(self.world_size * 0.5)
+    }
+
     #[inline]
     pub fn cell_index(&self, col: usize, row: usize) -> usize {
         row * self.res + col
@@ -820,14 +837,7 @@ pub fn best_env_direction(biome: &BiomeField, pos: Vec2, affinity: f32, radius: 
             let col = ((cx as i32 + dx).rem_euclid(biome.res as i32)) as usize;
             let row = ((cy as i32 + dy).rem_euclid(biome.res as i32)) as usize;
             let cell = biome.at(col, row);
-            let cell_center = Vec2::new(
-                (col as f32 + 0.5) * biome.cell_size,
-                (row as f32 + 0.5) * biome.cell_size,
-            );
-            let offset = crate::prelude::wrap_torus(
-                cell_center - pos + Vec2::splat(biome.world_size * 0.5),
-                Vec2::splat(biome.world_size),
-            ) - Vec2::splat(biome.world_size * 0.5);
+            let offset = biome.cell_offset_from(col, row, pos);
             if offset.length() > radius {
                 continue;
             }
@@ -889,14 +899,7 @@ pub fn best_terrain_direction(
             if biome.at(col, row).terrain != target {
                 continue;
             }
-            let cell_center = Vec2::new(
-                (col as f32 + 0.5) * biome.cell_size,
-                (row as f32 + 0.5) * biome.cell_size,
-            );
-            let offset = crate::prelude::wrap_torus(
-                cell_center - pos + Vec2::splat(biome.world_size * 0.5),
-                Vec2::splat(biome.world_size),
-            ) - Vec2::splat(biome.world_size * 0.5);
+            let offset = biome.cell_offset_from(col, row, pos);
             let d2 = offset.length_squared();
             if d2 > radius * radius {
                 continue;

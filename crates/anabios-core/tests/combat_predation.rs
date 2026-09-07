@@ -224,10 +224,7 @@ fn carcass_out_of_scavenge_range_is_not_eaten() {
 
 use anabios_core::codex::EventType;
 
-/// Count events of a given type currently in the codex ring buffer.
-fn count_events(w: &World, t: EventType) -> usize {
-    w.codex.events.iter().filter(|e| e.event_type == t).count()
-}
+mod common;
 
 /// Build a lethal predator (huge damage) that always fires, adjacent to prey.
 fn spawn_lethal_duel(seed: u64) -> (World, u32, u32) {
@@ -251,12 +248,12 @@ fn predation_event_fires_once_on_a_combat_kill() {
         }
     }
     assert!(!w.agents.is_alive(prey), "prey should be killed by combat");
-    assert_eq!(count_events(&w, EventType::Predation), 1, "Predation fires exactly once");
+    assert_eq!(common::count_events(&w, EventType::Predation), 1, "Predation fires exactly once");
     // Keep stepping — it must not fire again (latched).
     for _ in 0..20 {
         step(&mut w);
     }
-    assert_eq!(count_events(&w, EventType::Predation), 1, "Predation stays latched");
+    assert_eq!(common::count_events(&w, EventType::Predation), 1, "Predation stays latched");
 }
 
 #[test]
@@ -276,7 +273,7 @@ fn starvation_death_does_not_fire_predation() {
         }
     }
     assert!(!w.agents.is_alive(id), "agent starved");
-    assert_eq!(count_events(&w, EventType::Predation), 0, "starvation is not predation");
+    assert_eq!(common::count_events(&w, EventType::Predation), 0, "starvation is not predation");
 }
 
 #[test]
@@ -287,13 +284,17 @@ fn combat_raid_fires_on_sustained_conflict_not_a_single_kill() {
     // A single death: below threshold → no raid.
     w.codex.record_combat_death(w.tick, 1, 0, 10.0, 10.0);
     anabios_core::codex::observe_all(&mut w);
-    assert_eq!(count_events(&w, EventType::CombatRaid), 0, "one kill is not a raid");
+    assert_eq!(common::count_events(&w, EventType::CombatRaid), 0, "one kill is not a raid");
     // Push up to threshold within the window.
     for _ in 1..COMBAT_RAID_THRESHOLD {
         w.codex.record_combat_death(w.tick, 1, 0, 10.0, 10.0);
     }
     anabios_core::codex::observe_all(&mut w);
-    assert_eq!(count_events(&w, EventType::CombatRaid), 1, "sustained conflict → one CombatRaid");
+    assert_eq!(
+        common::count_events(&w, EventType::CombatRaid),
+        1,
+        "sustained conflict → one CombatRaid"
+    );
 }
 
 #[test]

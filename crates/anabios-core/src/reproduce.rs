@@ -567,6 +567,18 @@ mod tests {
     use crate::genome::Genome;
     use crate::world::World;
 
+    /// A well-fed, adjacent, fertile pair on grass, with the spatial hash built
+    /// so `find_mate` can see them — the fixture every mating test starts from.
+    fn spawn_fertile_pair(w: &mut World) -> (u32, u32) {
+        let pos = find_grass_cell_center(w);
+        let id0 = w.spawn_agent(pos, fertile_genome());
+        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
+        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
+        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        (id0, id1)
+    }
+
     fn find_grass_cell_center(w: &World) -> Vec2 {
         let res = w.biome.res;
         let cell_size = w.biome.cell_size;
@@ -616,16 +628,7 @@ mod tests {
     #[test]
     fn two_adjacent_well_fed_agents_produce_offspring() {
         let mut w = World::new(13);
-        let pos = find_grass_cell_center(&w);
-        let id0 = w.spawn_agent(pos, fertile_genome());
-        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
-
-        // Give both ample energy.
-        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
-        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
-
-        // Build the spatial hash so find_mate can see them.
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let (id0, id1) = spawn_fertile_pair(&mut w);
 
         let before = w.agents.live_count();
         reproduce_all(&mut w);
@@ -659,12 +662,7 @@ mod tests {
     #[test]
     fn population_cap_blocks_reproduction() {
         let mut w = World::new(13);
-        let pos = find_grass_cell_center(&w);
-        let id0 = w.spawn_agent(pos, fertile_genome());
-        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
-        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
-        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let _ = spawn_fertile_pair(&mut w);
 
         // At the cap: no offspring.
         w.max_population = 2;
@@ -1049,12 +1047,7 @@ mod tests {
         // not touch inventory.
         let mut w = World::new(13);
         w.resources_enabled = true;
-        let pos = find_grass_cell_center(&w);
-        let id0 = w.spawn_agent(pos, fertile_genome());
-        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
-        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
-        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let (id0, id1) = spawn_fertile_pair(&mut w);
 
         let before = w.agents.live_count();
         reproduce_all(&mut w);
@@ -1076,12 +1069,7 @@ mod tests {
     fn reproduction_is_unaffected_when_resources_disabled() {
         // With resources off, reproduction ignores inventory entirely (byte-identical path).
         let mut w = World::new(13);
-        let pos = find_grass_cell_center(&w);
-        let id0 = w.spawn_agent(pos, fertile_genome());
-        let id1 = w.spawn_agent(Vec2::new(pos.x + 0.5, pos.y), fertile_genome());
-        w.agents.energy[id0 as usize] = SPAWN_ENERGY * 2.0;
-        w.agents.energy[id1 as usize] = SPAWN_ENERGY * 2.0;
-        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let _ = spawn_fertile_pair(&mut w);
         let before = w.agents.live_count();
         reproduce_all(&mut w);
         assert_eq!(w.agents.live_count(), before + 1, "flag off: reproduction unaffected");

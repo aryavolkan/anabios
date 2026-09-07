@@ -45,13 +45,6 @@ impl PheromoneField {
         Self::with_dims(BIOME_RES_DEFAULT, WORLD_SIZE_DEFAULT)
     }
 
-    /// Build an empty pheromone grid at the given resolution per axis.
-    /// Assumes the default world size (`WORLD_SIZE_DEFAULT`); use
-    /// `with_dims` when the torus extent differs.
-    pub fn with_res(res: usize) -> Self {
-        Self::with_dims(res, WORLD_SIZE_DEFAULT)
-    }
-
     /// Build an empty pheromone grid at the given resolution per axis and
     /// world extent per axis.
     pub fn with_dims(res: usize, world_size: f32) -> Self {

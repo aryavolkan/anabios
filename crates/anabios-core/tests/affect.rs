@@ -9,9 +9,11 @@ use anabios_core::codex::EventType;
 use anabios_core::genome::{Genome, GenomeSlot};
 use anabios_core::prelude_test::{reassign_to_new_species, Vec2};
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
+use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 use anabios_core::world::World;
+
+mod common;
 
 const SCENARIO: &str = include_str!("../../../scenarios/affect-seeking.toml");
 
@@ -32,30 +34,6 @@ fn affect_scenario_is_self_consistent() {
         state_hash(&w)
     };
     assert_eq!(run(300), run(300), "same seed + flag on → bit-identical");
-}
-
-#[test]
-fn affect_scenario_survives_save_load_step() {
-    let mut world = Scenario::parse_toml(SCENARIO).expect("parse").instantiate();
-    assert!(world.affect_enabled);
-    // Warm the world so SEEKING activations accumulate before the snapshot.
-    for _ in 0..300 {
-        step(&mut world);
-    }
-    let bytes = save_to_bytes(&world).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(
-        state_hash(&world),
-        state_hash(&reloaded),
-        "load must restore identical state (affect column persisted)"
-    );
-    step(&mut world);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&world),
-        state_hash(&reloaded),
-        "affect world diverged after save→load→step (non-serialized affect state?)"
-    );
 }
 
 /// Pinned flag-ON golden. Generated once with `UPDATE_HASHES=1` after the
@@ -101,40 +79,20 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xa76752c7d6fa1185), (100, 0x964ccbc2512fed6e), (300, 0x1c193fdd5d526589)];
+    // Refreshed 2026-09-05 (removed PerceptionRadius gene + other non-functional
+    // slots; non-cognition perception now uses a hardcoded neutral modulator).
+    // Affect scenario is cognition-off, so sensory radii shift.
+    // Refreshed 2026-09-05 (affective temperament unified onto the Big Five):
+    // boldness/aggressiveness/nurturance/sociality/reactivity are now derived
+    // from Neuroticism/Agreeableness/Extraversion instead of dedicated genome
+    // slots, and archetypes DO set those OCEAN slots — so temperament now
+    // actually varies by archetype. Behaviour-only change: tick 0 is
+    // byte-identical, later ticks move.
+    &[(0, 0xa76752c7d6fa1185), (100, 0x9984c982be049ccb), (300, 0xb1b82363bfb63ba8)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
-    let s = Scenario::parse_toml(SCENARIO).expect("parse affect scenario");
-    let mut w = s.instantiate();
-    let max_tick = AFFECT_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
-    let mut idx = 0;
-    let mut observed: Vec<(u64, u64)> = Vec::new();
-    while w.tick <= max_tick {
-        while idx < AFFECT_GOLDEN.len() && AFFECT_GOLDEN[idx].0 == w.tick {
-            observed.push((w.tick, state_hash(&w)));
-            idx += 1;
-        }
-        if w.tick == max_tick {
-            break;
-        }
-        step(&mut w);
-    }
-    if std::env::var("UPDATE_HASHES").is_ok() {
-        println!("// regenerated affect hashes:");
-        for (t, h) in &observed {
-            println!("    ({t}, 0x{h:016x}),");
-        }
-        return;
-    }
-    for ((exp_tick, exp_hash), (got_tick, got_hash)) in AFFECT_GOLDEN.iter().zip(&observed) {
-        assert_eq!(exp_tick, got_tick, "tick mismatch");
-        assert_eq!(
-            *exp_hash, *got_hash,
-            "affect hash drift at tick {exp_tick}: expected 0x{exp_hash:016x}, got 0x{got_hash:016x}.\n\
-             If intentional, rerun with UPDATE_HASHES=1 and copy the printed values.",
-        );
-    }
+    common::assert_golden("affect", SCENARIO, AFFECT_GOLDEN);
 }
 
 // --- M-B: FEAR / hijack flag-on tests (affect-threat scenario) ---
@@ -158,25 +116,6 @@ fn affect_threat_is_self_consistent() {
         state_hash(&w)
     };
     assert_eq!(run(), run(), "same seed + flag on ⇒ bit-identical");
-}
-
-#[test]
-fn affect_threat_survives_save_load_step() {
-    let s = Scenario::parse_toml(THREAT_SCENARIO).expect("parse affect-threat");
-    let mut world = s.instantiate();
-    for _ in 0..300 {
-        step(&mut world);
-    }
-    let bytes = save_to_bytes(&world).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(state_hash(&world), state_hash(&reloaded), "load must restore identical state");
-    step(&mut world);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&world),
-        state_hash(&reloaded),
-        "affect world diverged after save→load→step (hidden non-serialized affect state?)",
-    );
 }
 
 #[test]
@@ -231,39 +170,20 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xd87eef0798a99516), (100, 0xa202aca49e0ac388), (300, 0x18f9b5d487c5f215)];
+    // Refreshed 2026-09-05 (removed PerceptionRadius gene + other non-functional
+    // slots; non-cognition perception now uses a hardcoded neutral modulator).
+    // Affect-threat is cognition-off, so sensory radii shift.
+    // Refreshed 2026-09-05 (affective temperament unified onto the Big Five):
+    // boldness/aggressiveness/nurturance/sociality/reactivity are now derived
+    // from Neuroticism/Agreeableness/Extraversion instead of dedicated genome
+    // slots, and archetypes DO set those OCEAN slots — so temperament now
+    // actually varies by archetype. Behaviour-only change: tick 0 is
+    // byte-identical, later ticks move.
+    &[(0, 0xd87eef0798a99516), (100, 0xa7c2fc3a42fb0851), (300, 0xe582ec6e46395fc7)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {
-    let s = Scenario::parse_toml(THREAT_SCENARIO).expect("parse affect-threat");
-    let mut w = s.instantiate();
-    let max_tick = THREAT_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
-    let mut idx = 0;
-    let mut observed: Vec<(u64, u64)> = Vec::new();
-    while w.tick <= max_tick {
-        while idx < THREAT_GOLDEN.len() && THREAT_GOLDEN[idx].0 == w.tick {
-            observed.push((w.tick, state_hash(&w)));
-            idx += 1;
-        }
-        if w.tick == max_tick {
-            break;
-        }
-        step(&mut w);
-    }
-    if std::env::var("UPDATE_HASHES").is_ok() {
-        println!("// regenerated affect-threat hashes:");
-        for (t, h) in &observed {
-            println!("    ({t}, 0x{h:016x}),");
-        }
-        return;
-    }
-    for ((et, eh), (gt, gh)) in THREAT_GOLDEN.iter().zip(&observed) {
-        assert_eq!(et, gt, "tick mismatch");
-        assert_eq!(
-            *eh, *gh,
-            "affect-threat hash drift at tick {et}: expected 0x{eh:016x}, got 0x{gh:016x}"
-        );
-    }
+    common::assert_golden("affect-threat", THREAT_SCENARIO, THREAT_GOLDEN);
 }
 
 // --- M-C: RAGE / LUST behavior + determinism tests ---
@@ -276,7 +196,7 @@ fn frustration_raises_fire_intent() {
     w.affect_enabled = true;
     // A frustrated agent surrounded by an other-species crowd.
     let mut g = Genome::neutral();
-    g.set(GenomeSlot::Aggressiveness, 1.0);
+    g.set(GenomeSlot::Agreeableness, 0.0); // aggressiveness() == +1.0
     let me = w.spawn_agent(Vec2::new(500.0, 500.0), g) as usize;
     w.agents.energy[me] = 0.05 * SPAWN_ENERGY; // deep deficit → high drive
                                                // Ring of other-species neighbours to create crowding + an other target.
@@ -314,14 +234,5 @@ fn affect_survives_save_load_step() {
     for _ in 0..50 {
         step(&mut w);
     }
-    let bytes = save_to_bytes(&w).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(state_hash(&w), state_hash(&reloaded), "load restores identical state");
-    step(&mut w);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&w),
-        state_hash(&reloaded),
-        "affect world diverged after save→load→step (hidden non-serialized affect state?)",
-    );
+    common::assert_roundtrip_world(&mut w, "affect (RAGE/LUST column)");
 }

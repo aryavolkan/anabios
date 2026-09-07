@@ -8,9 +8,10 @@ use anabios_core::codex::EventType;
 use anabios_core::genome::Genome;
 use anabios_core::prelude_test::Vec2;
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
 use anabios_core::tick::step;
 use anabios_core::world::World;
+
+mod common;
 
 const SCENARIO: &str = include_str!("../../../scenarios/domestication.toml");
 
@@ -75,16 +76,7 @@ fn livestock_state_survives_save_load_step() {
     for _ in 0..200 {
         step(&mut w);
     }
-    let bytes = save_to_bytes(&w).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(state_hash(&w), state_hash(&reloaded), "load restores identical state");
-    step(&mut w);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&w),
-        state_hash(&reloaded),
-        "domestication world diverged after save→load→step",
-    );
+    common::assert_roundtrip_world(&mut w, "domestication livestock");
 }
 
 #[test]

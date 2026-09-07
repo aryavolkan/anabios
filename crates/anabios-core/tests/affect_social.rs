@@ -5,9 +5,10 @@ use anabios_core::culture::{ALARM_MEME_CHANNEL, MEME_BROADCAST_THRESHOLD};
 use anabios_core::genome::{Genome, GenomeSlot};
 use anabios_core::prelude_test::Vec2;
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 use anabios_core::world::World;
+
+mod common;
 
 const AFFECT_SOCIAL: &str = include_str!("../../../scenarios/affect-social.toml");
 
@@ -30,7 +31,7 @@ fn isolated_social_agent_broadcasts_distress() {
     let mut w = World::new(11);
     w.affect_enabled = true;
     let mut g = Genome::neutral();
-    g.set(GenomeSlot::Sociality, 1.0); // sociality() == +1.0 → panic gain 1.0
+    g.set(GenomeSlot::Extraversion, 1.0); // sociality() == +1.0 → panic gain 1.0
     let id = w.spawn_agent(Vec2::new(500.0, 500.0), g);
     for _ in 0..10 {
         step(&mut w);
@@ -89,25 +90,15 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0x5a7120e216c04232), (100, 0xe5f805f418d8923e), (300, 0x9e0d0ef231445c44)];
+    // Refreshed 2026-09-05 (affective temperament unified onto the Big Five):
+    // boldness/aggressiveness/nurturance/sociality/reactivity are now derived
+    // from Neuroticism/Agreeableness/Extraversion instead of dedicated genome
+    // slots, and archetypes DO set those OCEAN slots — so temperament now
+    // actually varies by archetype. Behaviour-only change: tick 0 is
+    // byte-identical, later ticks move.
+    &[(0, 0x5a7120e216c04232), (100, 0x5ea4eeb8ab976661), (300, 0xadedef3d70b95cfe)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {
-    let mut w = Scenario::parse_toml(AFFECT_SOCIAL).expect("parse affect-social").instantiate();
-    let max_tick = AFFECT_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
-    let mut idx = 0;
-    let mut observed: Vec<(u64, u64)> = Vec::new();
-    while w.tick <= max_tick {
-        while idx < AFFECT_GOLDEN.len() && AFFECT_GOLDEN[idx].0 == w.tick {
-            observed.push((w.tick, state_hash(&w)));
-            idx += 1;
-        }
-        step(&mut w);
-    }
-    if std::env::var("UPDATE_HASHES").is_ok() {
-        for (t, h) in &observed {
-            println!("({t}, {h:#018x}),");
-        }
-    }
-    assert_eq!(observed, AFFECT_GOLDEN.to_vec(), "affect flag-on trajectory changed");
+    common::assert_golden("affect-social", AFFECT_SOCIAL, AFFECT_GOLDEN);
 }

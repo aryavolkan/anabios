@@ -3,8 +3,10 @@
 //! so all three PLAY touchpoints are exercised. Models `cognition.rs`.
 
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
+use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
+
+mod common;
 
 const SCENARIO: &str = include_str!("../../../scenarios/affect-play.toml");
 
@@ -56,43 +58,18 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (sparse-lineage breeding, FORMAT_VERSION 38→39):
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
-    &[(0, 0xc8e460e2eaf40bf3), (100, 0xd2c7291732465a2e), (200, 0x4c55cf151be5b56a)];
+    // Refreshed 2026-09-05 (tuned PERCEPTION_ENERGY_COST to 0.005 so the
+    // radius-scaled IQ cost is strong enough to matter but not strong enough
+    // to drown the PLAY enrichment signal).
+    // Refreshed 2026-09-05 (affective temperament unified onto the Big Five):
+    // boldness/aggressiveness/nurturance/sociality/reactivity are now derived
+    // from Neuroticism/Agreeableness/Extraversion instead of dedicated genome
+    // slots, and archetypes DO set those OCEAN slots — so temperament now
+    // actually varies by archetype. Behaviour-only change: tick 0 is
+    // byte-identical, later ticks move.
+    &[(0, 0xc8e460e2eaf40bf3), (100, 0xbfaf1eabd9737b78), (200, 0xb72c3480b32fa4c1)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {
-    let mut w = Scenario::parse_toml(SCENARIO).expect("parse").instantiate();
-    let max_tick = PLAY_GOLDEN.iter().map(|(t, _)| *t).max().unwrap_or(0);
-    let mut idx = 0;
-    let mut observed: Vec<(u64, u64)> = Vec::new();
-    while w.tick <= max_tick {
-        while idx < PLAY_GOLDEN.len() && PLAY_GOLDEN[idx].0 == w.tick {
-            observed.push((w.tick, state_hash(&w)));
-            idx += 1;
-        }
-        step(&mut w);
-    }
-    if std::env::var("UPDATE_HASHES").is_ok() {
-        for (t, h) in &observed {
-            println!("({t}, {h:#018x}),");
-        }
-    }
-    assert_eq!(observed, PLAY_GOLDEN.to_vec(), "affect-play flag-on trajectory changed");
-}
-
-#[test]
-fn affect_play_survives_save_load_step() {
-    let mut world = Scenario::parse_toml(SCENARIO).expect("parse").instantiate();
-    for _ in 0..80 {
-        step(&mut world); // warm juveniles so PLAY activations + enrichment accumulate
-    }
-    let bytes = save_to_bytes(&world).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(state_hash(&world), state_hash(&reloaded), "load must restore identical state");
-    step(&mut world);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&world),
-        state_hash(&reloaded),
-        "affect-play world diverged after save→load→step (hidden non-serialized PLAY state?)",
-    );
+    common::assert_golden("affect-play", SCENARIO, PLAY_GOLDEN);
 }

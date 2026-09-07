@@ -47,7 +47,6 @@ archetype = "spiner"
 placement = { kind = "cluster", center_x = 700.0, center_y = 340.0, radius = 120.0 }
 [agents.traits]
 size = 0.6
-perception_radius = 0.9
 lifespan_bias = 1.0
 
 # Armored bruisers southwest: slow, point-blank Jaws, but the hardest hit

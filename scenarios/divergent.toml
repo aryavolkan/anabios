@@ -13,7 +13,6 @@ center_x = 100.0
 center_y = 100.0
 radius = 30.0
 [agents.traits]
-perception_radius = 0.1
 size = 0.2
 basal_metabolism = 0.2
 lifespan_bias = 0.7
@@ -29,7 +28,6 @@ center_x = 900.0
 center_y = 900.0
 radius = 30.0
 [agents.traits]
-perception_radius = 0.95
 size = 0.8
 basal_metabolism = 0.8
 lifespan_bias = 0.7

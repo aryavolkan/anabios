@@ -1,5 +1,6 @@
 name = "predator-prey"
 seed = 0
+cognition_enabled = true
 # Cap living agents so the windowed viewer stays fluent (default is 10000).
 max_population = 2000
 

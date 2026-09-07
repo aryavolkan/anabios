@@ -33,6 +33,7 @@ pub fn step(world: &mut World) {
         &mut world.sensors,
         world.world_size,
         world.gene_tech_coupling,
+        world.cognition_enabled,
     );
 
     // Stage 2b: subcortical affect — update per-agent Panksepp activations from
@@ -51,6 +52,8 @@ pub fn step(world: &mut World) {
         world.world_size,
         world.sexual_dimorphism_enabled,
         world.gene_tech_coupling,
+        world.cognition_enabled,
+        world.spatial.perception_max_radius(),
     );
 
     // Stage 4a': basic needs — thirst/fatigue accumulation, drinking, and the
@@ -416,7 +419,6 @@ mod tests {
             }
         }
         let mut g = Genome::neutral();
-        g.set(GenomeSlot::DietCarnivory, 0.0);
         g.set(GenomeSlot::LifespanBias, 1.0);
         let id = w.spawn_agent(spawn, g);
         for _ in 0..200 {

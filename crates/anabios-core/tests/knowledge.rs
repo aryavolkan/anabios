@@ -6,8 +6,9 @@
 
 use anabios_core::codex::EventType;
 use anabios_core::scenario::Scenario;
-use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
 use anabios_core::tick::step;
+
+mod common;
 
 const SCENARIO: &str = include_str!("../../../scenarios/knowledge-ratchet.toml");
 
@@ -54,27 +55,15 @@ fn flag_off_scenario_has_no_knowledge_ratchet() {
     assert!(w.codex.knowledge_by_species.is_empty(), "flag off: no knowledge state tracked");
 }
 
-/// Round-trip: save→load→step keeps knowledge state (and everything else)
-/// byte-identical (mirrors `domestication.rs`'s round-trip test).
+/// Knowledge actually accrues per species over a normal run — the
+/// non-triviality precondition behind `knowledge_roundtrip` in
+/// `save_load_roundtrip.rs`, which would otherwise round-trip an empty map.
 #[test]
-fn knowledge_state_survives_save_load_step() {
-    let mut w = Scenario::parse_toml(SCENARIO).expect("parse knowledge-ratchet").instantiate();
-    for _ in 0..300 {
-        step(&mut w);
-    }
+fn knowledge_accrues_per_species() {
+    let w = common::world_after(SCENARIO, 300);
     assert!(
         !w.codex.knowledge_by_species.is_empty(),
         "knowledge state should be non-trivial after 300 ticks"
-    );
-    let bytes = save_to_bytes(&w).expect("save");
-    let mut reloaded = load_from_bytes(&bytes).expect("load");
-    assert_eq!(state_hash(&w), state_hash(&reloaded), "load restores identical state");
-    step(&mut w);
-    step(&mut reloaded);
-    assert_eq!(
-        state_hash(&w),
-        state_hash(&reloaded),
-        "knowledge world diverged after save→load→step",
     );
 }
 

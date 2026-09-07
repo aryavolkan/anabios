@@ -740,7 +740,7 @@ mod tests {
         let mut w3 = World::new(3);
         w3.affect_enabled = true;
         let mut g = Genome::neutral();
-        g.set(GenomeSlot::Sociality, 0.0); // signed sociality() = -1 → no panic
+        g.set(GenomeSlot::Extraversion, 0.0); // signed sociality() = -1 → no panic
         let asoc = w3.spawn_agent(Vec2::new(500.0, 500.0), g);
         crate::tick::step(&mut w3);
         assert_eq!(
@@ -837,16 +837,16 @@ mod tests {
             "expected moderate unsaturated fear, got {neutral}"
         );
 
-        // A bold genome (Boldness = 1.0 ⇒ boldness() = +1.0) feels measurably LESS fear.
+        // A bold genome (Neuroticism = 0.0 ⇒ boldness() = +1.0) feels measurably LESS fear.
         let mut bold = Genome::neutral();
-        bold.set(GenomeSlot::Boldness, 1.0);
+        bold.set(GenomeSlot::Neuroticism, 0.0);
         let brave = fear_trigger(&s, &bold, 0.0);
         assert!(brave < neutral - 0.1, "boldness must scale fear down: {brave} vs {neutral}");
 
         // Invariant: zero threat ⇒ zero fear for EVERY temperament, including timid
-        // (Boldness slot 0.0 ⇒ boldness() = -1.0). Guards against phantom baseline fear.
+        // (Neuroticism slot 1.0 ⇒ boldness() = -1.0). Guards against phantom baseline fear.
         let mut timid = Genome::neutral();
-        timid.set(GenomeSlot::Boldness, 0.0);
+        timid.set(GenomeSlot::Neuroticism, 1.0);
         assert_eq!(
             fear_trigger(&SensorRegister::default(), &timid, 0.0),
             0.0,
@@ -1029,9 +1029,9 @@ mod tests {
         use crate::sense::SensorRegister;
         let crowded = SensorRegister { crowding: RAGE_CROWD_REF as u32, ..Default::default() };
         let mut calm = Genome::neutral();
-        calm.set(GenomeSlot::Aggressiveness, 0.0); // aggressiveness() == -1.0 → gain 0.0
+        calm.set(GenomeSlot::Agreeableness, 1.0); // aggressiveness() == -1.0 → gain 0.0
         let mut fierce = Genome::neutral();
-        fierce.set(GenomeSlot::Aggressiveness, 1.0); // aggressiveness() == +1.0 → gain 1.0
+        fierce.set(GenomeSlot::Agreeableness, 0.0); // aggressiveness() == +1.0 → gain 1.0
         assert!(trigger_rage(1.0, &fierce, &crowded) > trigger_rage(1.0, &calm, &crowded));
     }
 

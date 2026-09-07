@@ -101,14 +101,7 @@ pub fn best_water_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 
             if !drinkable_cell(biome, col, row) {
                 continue;
             }
-            let cell_center = Vec2::new(
-                (col as f32 + 0.5) * biome.cell_size,
-                (row as f32 + 0.5) * biome.cell_size,
-            );
-            let offset = crate::prelude::wrap_torus(
-                cell_center - pos + Vec2::splat(biome.world_size * 0.5),
-                Vec2::splat(biome.world_size),
-            ) - Vec2::splat(biome.world_size * 0.5);
+            let offset = biome.cell_offset_from(col, row, pos);
             let d2 = offset.length_squared();
             if d2 > radius * radius {
                 continue;

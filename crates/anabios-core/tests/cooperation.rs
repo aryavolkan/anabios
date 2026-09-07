@@ -12,7 +12,7 @@ fn kinship_high_for_siblings_low_for_unrelated() {
     let mut far = Genome::neutral();
     far.set(GenomeSlot::Size, 1.0);
     far.set(GenomeSlot::BasalMetabolism, 1.0);
-    far.set(GenomeSlot::PerceptionRadius, 1.0);
+    far.set(GenomeSlot::LifespanBias, 1.0);
     let unrel = kinship(10, &[2, 3], &g, 99, &[50, 51], &far);
     assert!(sib > 0.7, "siblings with identical genome are highly related ({sib})");
     assert!(unrel < sib, "unrelated distant-genome pair is less related ({unrel} < {sib})");
