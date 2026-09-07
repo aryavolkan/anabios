@@ -1243,3 +1243,165 @@ fn innovators_discover_before_traditionalists_in_demo_scenario() {
     let t = first_discovery_tick.unwrap();
     assert!(t > 0 && t < 1500, "first discovery reasonably early, got tick {t}");
 }
+
+// --- Military branch: combat hooks ------------------------------------------
+
+/// Armed omnivore kit (diet 0.5 keeps the holder inside the ape band so
+/// enforce_ape_only never strips the seeded invention channels).
+fn armed_kit(weapon_damage: f32, weapon_cost: f32, armor: f32) -> anabios_core::module::ModuleList {
+    let mut m = anabios_core::module::ModuleList::new();
+    m.push(Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 });
+    m.push(Module::Sensor {
+        sensor_type: anabios_core::module::SensorType::Vision,
+        radius: 0.6,
+        acuity: 0.6,
+    });
+    m.push(Module::Mouth { bite_size: 0.6, diet_affinity: 0.5 });
+    if weapon_damage > 0.0 {
+        m.push(Module::Weapon { damage: weapon_damage, energy_cost: weapon_cost });
+    }
+    if armor > 0.0 {
+        m.push(Module::Armor { protection: armor, mass_penalty: 0.1 });
+    }
+    m
+}
+
+/// A program that always fires (fire_intent = 1.0 > FIRE_THRESHOLD).
+fn always_fire() -> Program {
+    Program::from_slice(&[Node::Const(1.0), Node::FireWeapon])
+}
+
+/// Ape-sized genome (Size >= APE_SIZE_MIN) so is_ape holds for armed kits.
+fn ape_genome() -> Genome {
+    let mut g = Genome::neutral();
+    g.set(GenomeSlot::Size, 0.5);
+    g
+}
+
+#[test]
+fn spears_add_damage_and_recover_spoils() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+    let mut w = World::new(7);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 3.0);
+    w.agents.program[pred as usize] = always_fire();
+    set_held(&mut w, pred, invention::HAFTED_SPEARS);
+    let pred_e0 = w.agents.energy[pred as usize];
+    let prey_e0 = w.agents.energy[prey as usize];
+    step(&mut w);
+    // net = damage*(1+SPEARS_DAMAGE) - armor = 10*1.25 - 3 = 9.5.
+    let net = 10.0 * (1.0 + invention::SPEARS_DAMAGE) - 3.0;
+    // As in `fortifications_blunt_incoming_damage`, the measured loss spans
+    // the whole tick: feed_pass runs before combat_pass in interact_all, so
+    // the stationary prey nets a small background gain (~0.255 energy,
+    // consistent across scenarios in this file) from grazing against
+    // metabolism. Widen the tolerance to absorb it; the combat delta being
+    // asserted (9.5) is over an order of magnitude larger.
+    assert!(w.agents.energy[prey as usize] <= prey_e0 - net + 0.3);
+    // Spoils: attacker recovered SPEARS_SPOILS * net = 2.85, net of the 2.0
+    // weapon cost and metabolism the tick cost strictly less than the
+    // no-spoils baseline below.
+    let mut w2 = World::new(7);
+    w2.inventions_enabled = true;
+    let pred2 = w2.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey2 = w2.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w2, prey2);
+    w2.agents.modules[pred2 as usize] = armed_kit(10.0, 2.0, 0.0);
+    w2.agents.modules[prey2 as usize] = armed_kit(0.0, 0.0, 3.0);
+    w2.agents.program[pred2 as usize] = always_fire();
+    // No spears in w2: same seed, same layout -> spoils are the only delta
+    // on the attacker beyond the (larger) damage they dealt.
+    step(&mut w2);
+    let gain = w.agents.energy[pred as usize] - pred_e0;
+    let gain_baseline = w2.agents.energy[pred2 as usize] - pred_e0;
+    assert!(
+        gain > gain_baseline + invention::SPEARS_SPOILS * net - 1.0,
+        "spoils must lift the attacker's energy over the no-spears baseline"
+    );
+}
+
+#[test]
+fn spoils_never_exceed_target_loss() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+    let mut w = World::new(11);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(16.0, 0.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 0.0);
+    w.agents.program[pred as usize] = always_fire();
+    set_held(&mut w, pred, invention::HAFTED_SPEARS);
+    set_held(&mut w, pred, invention::STEEL_ARMS);
+    let pred_e0 = w.agents.energy[pred as usize];
+    let prey_e0 = w.agents.energy[prey as usize];
+    step(&mut w);
+    let target_loss = prey_e0 - w.agents.energy[prey as usize];
+    let attacker_gain = w.agents.energy[pred as usize] - pred_e0;
+    assert!(attacker_gain <= target_loss + 1e-3, "spoils are a transfer, not creation");
+}
+
+#[test]
+fn fortifications_blunt_incoming_damage() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+    let mut w = World::new(13);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 3.0);
+    w.agents.program[pred as usize] = always_fire();
+    // Fortifications need a Communicator to be held legitimately, but the
+    // combat read only consults the meme channel; seed it directly. The prey
+    // is ape-band (omnivore + large) so enforce_ape_only keeps it.
+    set_held(&mut w, prey, invention::FORTIFICATIONS);
+    let prey_e0 = w.agents.energy[prey as usize];
+    step(&mut w);
+    // net = (10 - 3) * (1 - FORT_DEFENSE) = 5.25 (< the unfortified 7.0).
+    let expected = (10.0 - 3.0) * (1.0 - invention::FORT_DEFENSE);
+    let loss = prey_e0 - w.agents.energy[prey as usize];
+    // `loss` spans the WHOLE tick, not just combat_pass: feed_pass (which
+    // runs before combat_pass in interact_all) lets the stationary prey graze
+    // a small amount every tick, netting against per-tick metabolism. That
+    // background delta is ~0.255-0.256 energy and is identical whether or not
+    // FORTIFICATIONS is held (measured independently against an unfortified
+    // control: raw net 7.0 vs actual baseline loss ~6.745, same ~0.255 gap).
+    // Widen the tolerance to absorb it — the combat-mechanism signal here is
+    // ~2.0 energy (4.99 fortified vs 6.74 unfortified), far larger than the
+    // confound, so this stays a real behavioral assertion, not a vacuous one.
+    assert!(loss >= expected - 0.3, "combat still lands: loss={loss} expected={expected}");
+    assert!(loss < 7.0, "fortifications must reduce the unfortified 7.0 net");
+}
+
+#[test]
+fn archery_extends_weapon_reach() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+    // 2.5 apart: outside the Weapon module's 2.0 reach, inside 2.0 * 1.5.
+    let mut w = World::new(17);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(502.5, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 0.0);
+    w.agents.program[pred as usize] = always_fire();
+    step(&mut w);
+    assert!(!w.combat_damaged[prey as usize], "out of bare-module range");
+
+    let mut w2 = World::new(17);
+    w2.inventions_enabled = true;
+    let pred2 = w2.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey2 = w2.spawn_agent(Vec2::new(502.5, 500.0), ape_genome());
+    reassign_to_new_species(&mut w2, prey2);
+    w2.agents.modules[pred2 as usize] = armed_kit(10.0, 2.0, 0.0);
+    w2.agents.modules[prey2 as usize] = armed_kit(0.0, 0.0, 0.0);
+    w2.agents.program[pred2 as usize] = always_fire();
+    set_held(&mut w2, pred2, invention::ARCHERY);
+    step(&mut w2);
+    assert!(w2.combat_damaged[prey2 as usize], "archery reach covers 2.5");
+}
