@@ -88,7 +88,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // slots, and archetypes DO set those OCEAN slots — so temperament now
     // actually varies by archetype. Behaviour-only change: tick 0 is
     // byte-identical, later ticks move.
-    &[(0, 0xa76752c7d6fa1185), (100, 0x9984c982be049ccb), (300, 0xb1b82363bfb63ba8)];
+    // Refreshed 2026-09-07 (military branch, FORMAT_VERSION 39→40): the meme
+    // vector widened and four inventions were appended. inventions_enabled is
+    // off here ⇒ the new candidates are never consulted — layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0xf58eec136bfac185), (100, 0x90198b3c238cf68b), (300, 0xdd0cc6cc14b6cea8)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -179,7 +183,11 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // slots, and archetypes DO set those OCEAN slots — so temperament now
     // actually varies by archetype. Behaviour-only change: tick 0 is
     // byte-identical, later ticks move.
-    &[(0, 0xd87eef0798a99516), (100, 0xa7c2fc3a42fb0851), (300, 0xe582ec6e46395fc7)];
+    // Refreshed 2026-09-07 (military branch, FORMAT_VERSION 39→40): the meme
+    // vector widened and four inventions were appended. inventions_enabled is
+    // off here ⇒ the new candidates are never consulted — layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0x2361e2ebc7880516), (100, 0xe2a450c0eb98ced1), (300, 0x235a604d3e3aed07)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

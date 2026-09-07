@@ -1211,7 +1211,12 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (removed PerceptionRadius gene + other non-functional
     // slots; non-cognition perception now uses a hardcoded neutral modulator).
     // Inventions scenario is cognition-off, so sensory radii shift.
-    &[(0, 0x59e1557f20c1f1a5), (100, 0x8efb484fc606d424), (300, 0xfe41796da5da773b)];
+    // Refreshed 2026-09-07 (military branch, FORMAT_VERSION 39→40): the meme
+    // vector widened and four inventions were appended, so the discovery
+    // probability table genuinely gains new candidates in this inventions_
+    // enabled scenario — a real trajectory change from tick 0 on, not pure
+    // layout growth.
+    &[(0, 0x1e759e5a7ebfb1a5), (100, 0x14f0b5277d793833), (300, 0x7c5ec58288e725df)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

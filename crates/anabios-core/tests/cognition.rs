@@ -140,7 +140,12 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // World.lineage_caps + World.mate_seeking_enabled. Both absent/off here ⇒
     // layout growth only, trajectory byte-identical.
     // Refreshed 2026-09-05 (tuned PERCEPTION_ENERGY_COST to 0.005).
-    &[(0, 0xd3071f8a5965eb0d), (100, 0x03854a95a4ad7883), (300, 0x1e8ae08aff671f0f)];
+    // Refreshed 2026-09-07 (military branch, FORMAT_VERSION 39→40): the meme
+    // vector widened and four inventions were appended, growing the discovery
+    // probability table layout for every scenario. inventions_enabled is on
+    // here, so the wider candidate pool genuinely reshapes discovery/copy
+    // draws — a real trajectory change, not pure layout growth.
+    &[(0, 0x53347826cb8d6f0d), (100, 0x87a11e0b2fda2f92), (300, 0xc232bdefcec39343)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {
