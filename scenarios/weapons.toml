@@ -1,0 +1,43 @@
+name = "weapons"
+seed = 0
+inventions_enabled = true
+# Keep the world below saturation so the armed-vs-plain contest — not
+# Malthusian collapse — dominates the dynamics.
+max_population = 400
+
+# Military-branch probe: an armed culture-bearing lineage (seeded with the
+# spear line) shares a range with an unarmed cultural lineage and an acultural
+# control. Watch whether the armed lineage's spoils + (once Fortifications
+# arrive) birth subsidy convert tech-holding into a demographic edge — the O3
+# "make inventions pay" question in scenario form.
+
+# Armed innovators: seeded with the entry weapons line.
+[[agents]]
+count = 24
+archetype = "innovator"
+starting_inventions = ["stone_tools", "hafted_spears"]
+placement = { kind = "cluster", center_x = 300.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Unarmed cultural lineage: same temperament, no head start.
+[[agents]]
+count = 24
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 724.0, center_y = 512.0, radius = 80.0 }
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+# Acultural control: no Communicator, era 0 forever.
+[[agents]]
+count = 16
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 280.0, radius = 60.0 }
+[agents.traits]
+altruism = 0.0
+basal_metabolism = 0.6
+lifespan_bias = 1.0
