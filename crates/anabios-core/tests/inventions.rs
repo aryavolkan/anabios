@@ -1413,6 +1413,69 @@ fn fortifications_blunt_incoming_damage() {
 }
 
 #[test]
+fn spoils_use_the_post_defense_net() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+
+    // World A: attacker holds HAFTED_SPEARS, prey holds FORTIFICATIONS.
+    let mut w = World::new(19);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 3.0);
+    w.agents.program[pred as usize] = always_fire();
+    set_held(&mut w, pred, invention::HAFTED_SPEARS);
+    set_held(&mut w, prey, invention::FORTIFICATIONS);
+    let pred_e0 = w.agents.energy[pred as usize];
+    let prey_e0 = w.agents.energy[prey as usize];
+    step(&mut w);
+    let gain_a = w.agents.energy[pred as usize] - pred_e0;
+    let loss_a = prey_e0 - w.agents.energy[prey as usize];
+
+    // World B: identical seed/kits/positions/programs, but the prey does NOT
+    // hold FORTIFICATIONS.
+    let mut w2 = World::new(19);
+    w2.inventions_enabled = true;
+    let pred2 = w2.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey2 = w2.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w2, prey2);
+    w2.agents.modules[pred2 as usize] = armed_kit(10.0, 2.0, 0.0);
+    w2.agents.modules[prey2 as usize] = armed_kit(0.0, 0.0, 3.0);
+    w2.agents.program[pred2 as usize] = always_fire();
+    set_held(&mut w2, pred2, invention::HAFTED_SPEARS);
+    let pred2_e0 = w2.agents.energy[pred2 as usize];
+    step(&mut w2);
+    let gain_b = w2.agents.energy[pred2 as usize] - pred2_e0;
+
+    // damage = 10 * (1 + SPEARS_DAMAGE) = 12.5.
+    let damage = 10.0 * (1.0 + invention::SPEARS_DAMAGE);
+    // net_fortified = (12.5 - 3) * (1 - FORT_DEFENSE) = 7.125.
+    let net_fortified = (damage - 3.0) * (1.0 - invention::FORT_DEFENSE);
+    // net_unfortified = 12.5 - 3 = 9.5.
+    let net_unfortified = damage - 3.0;
+    // Correct (post-defense) spoils differ between worlds by
+    // SPEARS_SPOILS * (net_unfortified - net_fortified) = 0.3 * 2.375 = 0.7125.
+    // A bug that computed spoils from the PRE-defense net would use the same
+    // net (9.5) in both worlds, making gain_a and gain_b equal and this
+    // assertion fail — same-seed pairing cancels the ~0.26 background
+    // feed_pass-vs-metabolism confound (identical in both worlds), so the
+    // 0.4 margin is well clear of the 0.7125 true delta.
+    assert!(
+        gain_a < gain_b - 0.4,
+        "fortified target must cost the attacker more spoils than unfortified: gain_a={gain_a} gain_b={gain_b}"
+    );
+    let expected_delta = -(invention::SPEARS_SPOILS * (net_unfortified - net_fortified));
+    assert!(
+        (gain_a - gain_b - expected_delta).abs() < 0.2,
+        "spoils delta must track the post-defense net gap: gain_a-gain_b={} expected={expected_delta}",
+        gain_a - gain_b
+    );
+    // Conservation: spoils are a transfer, never creation.
+    assert!(gain_a <= loss_a + 1e-3, "spoils are a transfer, not creation");
+}
+
+#[test]
 fn archery_extends_weapon_reach() {
     use anabios_core::prelude_test::reassign_to_new_species;
     // 2.5 apart: outside the Weapon module's 2.0 reach, inside 2.0 * 1.5.
