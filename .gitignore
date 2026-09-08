@@ -42,6 +42,9 @@ trace-*.json
 # Claude Code (worktrees, session state)
 .claude/
 
+# Fennara MCP scratch (runtime probes, screenshot workers, tool logs)
+/game/.fennara/
+
 # Godot resource UID caches (regenerated on import)
 *.gd.uid
 *.gdshader.uid
