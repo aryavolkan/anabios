@@ -458,12 +458,17 @@ fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
     if agents.asleep[i] {
         return false;
     }
-    // Conscientiousness raises the effective breeding threshold.
+    // Conscientiousness raises the effective breeding threshold;
+    // Fortifications lower it (the invention tree's birth-ledger subsidy —
+    // exactly ×1.0 when unheld, so inventions-off worlds are byte-identical).
     let threshold = SPAWN_ENERGY
         * agents.genome[i].get(GenomeSlot::ReproductionThreshold)
         * REPRO_ENERGY_MULT
         * crate::personality::personality_reproduction_factor(&agents.genome[i])
-        * crate::affect::affect_reproduction_factor(&agents.affect[i]);
+        * crate::affect::affect_reproduction_factor(&agents.affect[i])
+        * crate::invention::repro_threshold_multiplier(crate::invention::held_mask(
+            &agents.meme_vector[i],
+        ));
     agents.energy[i] >= threshold
 }
 

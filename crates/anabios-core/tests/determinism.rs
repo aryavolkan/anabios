@@ -190,7 +190,12 @@ const GOLDEN: &[(u64, u64)] =
     // slots; non-cognition perception now uses a hardcoded neutral modulator).
     // The minimal scenario is cognition-off, so its sensory radii and the
     // resulting ecological trajectory shift.
-    &[(0, 0x9d272b5983e4fa64), (100, 0x6481c1e84ac4e20f), (1000, 0x1d0dc30003aa8675)];
+    // Refreshed 2026-09-07 (military branch, FORMAT_VERSION 39→40): the meme
+    // vector widened and four inventions were appended, growing the discovery
+    // probability table layout for every scenario. Flag off in minimal ⇒
+    // military mechanics never run, trajectory byte-identical — tick 0 moves
+    // from layout growth alone.
+    &[(0, 0xeb4ec4a518e5aa64), (100, 0x21ebe0482fed030f), (1000, 0x402becc24ea9f675)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

@@ -51,6 +51,12 @@ const INVENTION_BUILDING := {
 	"machinery": MACHINERY,
 	"electricity": ELECTRICITY,
 	"nuclear_power": NUCLEAR,
+	# Military branch (2026-09): mapped to the nearest existing sprite kind
+	# until the branch gets its own pixel art.
+	"hafted_spears": STONE_TOOLS,
+	"archery": STONE_TOOLS,
+	"fortifications": FARMING,
+	"steel_arms": METALWORKING,
 }
 
 # 16x16 block lists per kind, indexed by the enum.

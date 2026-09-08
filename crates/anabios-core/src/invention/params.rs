@@ -43,6 +43,26 @@ pub const ELECTRICITY_UPKEEP: f32 = 0.005;
 pub const NUCLEAR_INCOME: f32 = 0.06;
 pub const NUCLEAR_MUTATION: f32 = 1.5;
 pub const NUCLEAR_UPKEEP: f32 = 0.012;
+/// Hafted Spears: weapon-damage bonus; fraction of the final net damage the
+/// attacker recovers as energy (hunt spoils — a transfer, never creation).
+pub const SPEARS_DAMAGE: f32 = 0.25;
+pub const SPEARS_SPOILS: f32 = 0.30;
+/// Archery: weapon-reach multiplier bonus; weapon-damage bonus; small flat
+/// per-tick upkeep (fletching and staves).
+pub const ARCHERY_RANGE: f32 = 0.50;
+pub const ARCHERY_DAMAGE: f32 = 0.15;
+pub const ARCHERY_UPKEEP: f32 = 0.003;
+/// Fortifications: incoming net-damage reduction; effective breeding-threshold
+/// reduction (the birth-ledger subsidy — practices tax births, walls subsidize
+/// them); locomotor speed penalty (sedentary).
+pub const FORT_DEFENSE: f32 = 0.25;
+pub const FORT_BIRTH_SUBSIDY: f32 = 0.15;
+pub const FORT_SPEED_PENALTY: f32 = 0.10;
+/// Steel Arms: weapon-damage bonus (stacks additively with Metalworking's
+/// inside the same multiplier); added spoils fraction; extra module upkeep.
+pub const STEEL_DAMAGE: f32 = 0.60;
+pub const STEEL_SPOILS: f32 = 0.20;
+pub const STEEL_UPKEEP: f32 = 0.10;
 
 /// Biome pollution: per-cell cap, regrowth-penalty cap, and per-biome-step
 /// decay. Regrowth is multiplied by `1 - min(pollution, POLLUTION_MAX_EFFECT)`.

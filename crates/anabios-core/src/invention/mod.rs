@@ -32,7 +32,7 @@ mod params;
 pub use params::*;
 
 /// Number of inventions in the tree.
-pub const INVENTION_COUNT: usize = 10;
+pub const INVENTION_COUNT: usize = 14;
 
 /// First meme channel owned by the invention tree. Channels below this keep
 /// their pre-existing meanings (alarm, dialects, cooperation norm, hunt
@@ -53,6 +53,12 @@ pub const HUSBANDRY: usize = 6;
 pub const MACHINERY: usize = 7;
 pub const ELECTRICITY: usize = 8;
 pub const NUCLEAR_POWER: usize = 9;
+// The military branch (appended 2026-09; ids are append-only, so the branch
+// sits after Nuclear even though its eras are 1-3).
+pub const HAFTED_SPEARS: usize = 10;
+pub const ARCHERY: usize = 11;
+pub const FORTIFICATIONS: usize = 12;
+pub const STEEL_ARMS: usize = 13;
 
 /// Adoption level at/above which an invention is functionally held (buffs and
 /// debuffs apply, prereqs count as satisfied, codex counts it).
@@ -287,6 +293,62 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         affinity: Some(GeneAffinity { slot: GenomeSlot::MutationRate, coeff: 0.8 }),
         gene_req: Some(GeneReq { slot: GenomeSlot::CognitivePotential, min: 0.65 }),
     },
+    Invention {
+        name: "Hafted Spears",
+        key: "hafted_spears",
+        era: 1,
+        prereqs: bit(STONE_TOOLS),
+        // A knapped point lashed to a shaft with resin.
+        materials: [0.0, 1.0, 1.0, 0.0],
+        buff: "+25% weapon damage, hunt spoils",
+        debuff: "none",
+        // Hunting weapons pay off for lineages that hold and contest ground:
+        // shares Metalworking's Territoriality slot.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Territoriality, coeff: 0.8 }),
+        // Era-1 entry tech stays genetically free (matches Stone Tools).
+        gene_req: None,
+    },
+    Invention {
+        name: "Archery",
+        key: "archery",
+        era: 2,
+        prereqs: bit(HAFTED_SPEARS),
+        // Bow stave + string sinew and fletching resin.
+        materials: [0.0, 1.0, 2.0, 0.0],
+        buff: "+50% weapon range, +15% damage",
+        debuff: "small upkeep",
+        // Band hunting is social coordination: wires the previously
+        // tree-unused Extraversion slot into the coevolution loop.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Extraversion, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Extraversion, min: 0.40 }),
+    },
+    Invention {
+        name: "Fortifications",
+        key: "fortifications",
+        era: 3,
+        prereqs: bit(FARMING) | bit(HAFTED_SPEARS),
+        // Rampart timber, quarry stone, and provisioning salt.
+        materials: [1.0, 1.0, 0.0, 1.0],
+        buff: "-25% incoming damage, easier births",
+        debuff: "-10% speed",
+        // Walls reward prudent planners: shares Farming's Conscientiousness
+        // slot. The birth subsidy is the branch's demographic payoff — the
+        // O3-measured margin lives on the birth ledger, not energy.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Conscientiousness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Conscientiousness, min: 0.45 }),
+    },
+    Invention {
+        name: "Steel Arms",
+        key: "steel_arms",
+        era: 3,
+        prereqs: bit(METALWORKING) | bit(ARCHERY),
+        // Ore, forge fuel, and quench media — the Metalworking line escalated.
+        materials: [1.0, 2.0, 1.0, 0.0],
+        buff: "+60% weapon damage, richer spoils",
+        debuff: "+10% module upkeep",
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Territoriality, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Territoriality, min: 0.50 }),
+    },
 ];
 
 /// The meme channel carrying invention `inv`'s adoption level.
@@ -371,7 +433,8 @@ pub fn for_each_set_bit(mask: u32, mut f: impl FnMut(usize)) {
 }
 
 /// Inventions the holder of `mask` could work on next: not yet held, with all
-/// prereqs satisfied. Visits ids ascending (era order).
+/// prereqs satisfied. Visits ids ascending (ids 0-9 are era-ordered; the
+/// appended military branch sits after them).
 fn candidates(mask: u32, mut f: impl FnMut(usize)) {
     for (k, inv) in INVENTIONS.iter().enumerate() {
         if mask & bit(k) != 0 {
@@ -522,10 +585,14 @@ pub fn food_energy_multiplier(mask: u32) -> f32 {
     1.0 + FIRE_ENERGY * held_f32(mask, FIRE)
 }
 
-/// Weapon-damage multiplier (Metalworking) — `interact::combat_pass`.
+/// Weapon-damage multiplier (Metalworking, Spears, Archery, Steel Arms) —
+/// `interact::combat_pass`.
 #[inline]
 pub fn weapon_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
     1.0 + METALWORKING_DAMAGE * coupled_held_genome(mask, METALWORKING, genome, coupling)
+        + SPEARS_DAMAGE * coupled_held_genome(mask, HAFTED_SPEARS, genome, coupling)
+        + ARCHERY_DAMAGE * coupled_held_genome(mask, ARCHERY, genome, coupling)
+        + STEEL_DAMAGE * coupled_held_genome(mask, STEEL_ARMS, genome, coupling)
 }
 
 /// Weapon-damage multiplier with coupling off. Test-only oracle for
@@ -534,6 +601,45 @@ pub fn weapon_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> 
 #[inline]
 pub fn weapon_multiplier(mask: u32) -> f32 {
     1.0 + METALWORKING_DAMAGE * held_f32(mask, METALWORKING)
+        + SPEARS_DAMAGE * held_f32(mask, HAFTED_SPEARS)
+        + ARCHERY_DAMAGE * held_f32(mask, ARCHERY)
+        + STEEL_DAMAGE * held_f32(mask, STEEL_ARMS)
+}
+
+/// Fraction of the FINAL net combat damage (post-armor, post-defense) the
+/// attacker recovers as energy (Hafted Spears, Steel Arms) —
+/// `interact::combat_pass`. A transfer bounded by what the target lost, never
+/// creation; `0.0` with neither tech held. With `coupling` on, each term
+/// scales with its invention's affinity gene.
+#[inline]
+pub fn spoils_fraction_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
+    (SPEARS_SPOILS * coupled_held_genome(mask, HAFTED_SPEARS, genome, coupling)
+        + STEEL_SPOILS * coupled_held_genome(mask, STEEL_ARMS, genome, coupling))
+    .min(1.0)
+}
+
+/// Incoming net-damage multiplier read on the TARGET side of
+/// `interact::combat_pass` (Fortifications) — the tree's first defensive read.
+#[inline]
+pub fn defense_multiplier(mask: u32) -> f32 {
+    1.0 - FORT_DEFENSE * held_f32(mask, FORTIFICATIONS)
+}
+
+/// Weapon-reach multiplier (Archery) — `interact::combat_pass` range check
+/// only; sense radii and the anthro-race threat register are untouched.
+#[inline]
+pub fn range_multiplier(mask: u32) -> f32 {
+    1.0 + ARCHERY_RANGE * held_f32(mask, ARCHERY)
+}
+
+/// Effective breeding-threshold multiplier (Fortifications) —
+/// `reproduce::is_eligible`. Below 1.0 the holder breeds earlier and more
+/// often: the branch's demographic payoff, symmetric with the practices'
+/// birth tax. Exactly 1.0 at mask 0, so inventions-off worlds need no flag
+/// plumbing. Uncoupled in v1 (one moving part for the O3 measurement).
+#[inline]
+pub fn repro_threshold_multiplier(mask: u32) -> f32 {
+    1.0 - FORT_BIRTH_SUBSIDY * held_f32(mask, FORTIFICATIONS)
 }
 
 /// Scavenge-energy multiplier (Husbandry) — `interact::scavenge_pass` payout.
@@ -550,10 +656,12 @@ pub fn scavenge_multiplier(mask: u32) -> f32 {
     1.0 + HUSBANDRY_SCAVENGE * held_f32(mask, HUSBANDRY)
 }
 
-/// Locomotor speed multiplier (Machinery) — `integrate::integrate_all`.
+/// Locomotor speed multiplier (Machinery buff, Fortifications penalty) —
+/// `integrate::integrate_all`.
 #[inline]
 pub fn speed_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
     1.0 + MACHINERY_SPEED * coupled_held_genome(mask, MACHINERY, genome, coupling)
+        - FORT_SPEED_PENALTY * held_f32(mask, FORTIFICATIONS)
 }
 
 /// Locomotor speed multiplier with coupling off. Test-only oracle for
@@ -562,6 +670,7 @@ pub fn speed_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f
 #[inline]
 pub fn speed_multiplier(mask: u32) -> f32 {
     1.0 + MACHINERY_SPEED * held_f32(mask, MACHINERY)
+        - FORT_SPEED_PENALTY * held_f32(mask, FORTIFICATIONS)
 }
 
 /// Basal-metabolism multiplier (Fire, Husbandry) — `integrate::integrate_all`.
@@ -570,10 +679,11 @@ pub fn metabolism_multiplier(mask: u32) -> f32 {
     1.0 + FIRE_METABOLISM * held_f32(mask, FIRE) + HUSBANDRY_METABOLISM * held_f32(mask, HUSBANDRY)
 }
 
-/// Module-upkeep multiplier (Metalworking) — `module::upkeep_all`.
+/// Module-upkeep multiplier (Metalworking, Steel Arms) — `module::upkeep_all`.
 #[inline]
 pub fn module_upkeep_multiplier(mask: u32) -> f32 {
     1.0 + METALWORKING_UPKEEP * held_f32(mask, METALWORKING)
+        + STEEL_UPKEEP * held_f32(mask, STEEL_ARMS)
 }
 
 /// Lifespan multiplier (Medicine) — `age::age_and_starve`.
@@ -666,13 +776,14 @@ pub fn discovery_multiplier(mask: u32) -> f32 {
 }
 
 /// Per-tick flat upkeep minus income from held inventions (Writing, Medicine,
-/// Electricity, Nuclear upkeep; Nuclear income). Positive = net drain. Test-only
+/// Archery, Electricity, Nuclear upkeep; Nuclear income). Positive = net drain. Test-only
 /// oracle for `flat_upkeep_coupled` at `coupling = false`.
 #[cfg(test)]
 pub fn flat_upkeep(mask: u32) -> f32 {
     let mut cost = 0.0;
     cost += WRITING_UPKEEP * held_f32(mask, WRITING);
     cost += MEDICINE_UPKEEP * held_f32(mask, MEDICINE);
+    cost += ARCHERY_UPKEEP * held_f32(mask, ARCHERY);
     cost += ELECTRICITY_UPKEEP * held_f32(mask, ELECTRICITY);
     cost += NUCLEAR_UPKEEP * held_f32(mask, NUCLEAR_POWER);
     cost - NUCLEAR_INCOME * held_f32(mask, NUCLEAR_POWER)
@@ -685,6 +796,7 @@ pub fn flat_upkeep_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
     let mut cost = 0.0;
     cost += WRITING_UPKEEP * held_f32(mask, WRITING);
     cost += MEDICINE_UPKEEP * held_f32(mask, MEDICINE);
+    cost += ARCHERY_UPKEEP * held_f32(mask, ARCHERY);
     cost += ELECTRICITY_UPKEEP * held_f32(mask, ELECTRICITY);
     cost += NUCLEAR_UPKEEP * held_f32(mask, NUCLEAR_POWER);
     cost - NUCLEAR_INCOME * coupled_held_genome(mask, NUCLEAR_POWER, genome, coupling)
@@ -909,6 +1021,8 @@ mod tests {
         assert_eq!(id_from_name("stone_tools"), Some(STONE_TOOLS));
         assert_eq!(id_from_name("Husbandry"), Some(HUSBANDRY));
         assert_eq!(id_from_name("  writing  "), Some(WRITING));
+        assert_eq!(id_from_name("hafted_spears"), Some(HAFTED_SPEARS));
+        assert_eq!(id_from_name("Steel_Arms"), Some(STEEL_ARMS));
         assert_eq!(id_from_name("wheel"), None);
         assert_eq!(id_from_name(""), None);
     }
@@ -1145,14 +1259,16 @@ mod tests {
         assert_eq!(got, vec![STONE_TOOLS]);
         got.clear();
         candidates(bit(STONE_TOOLS), |k| got.push(k));
-        assert_eq!(got, vec![FIRE]);
+        assert_eq!(got, vec![FIRE, HAFTED_SPEARS]);
         got.clear();
         candidates(bit(STONE_TOOLS) | bit(FIRE), |k| got.push(k));
-        assert_eq!(got, vec![FARMING, METALWORKING]);
+        assert_eq!(got, vec![FARMING, METALWORKING, HAFTED_SPEARS]);
         got.clear();
-        // Machinery needs BOTH metalworking and writing.
-        candidates(bit(STONE_TOOLS) | bit(FIRE) | bit(METALWORKING), |k| got.push(k));
-        assert_eq!(got, vec![FARMING]);
+        // Machinery needs BOTH metalworking and writing; Archery needs Spears.
+        candidates(bit(STONE_TOOLS) | bit(FIRE) | bit(METALWORKING) | bit(HAFTED_SPEARS), |k| {
+            got.push(k)
+        });
+        assert_eq!(got, vec![FARMING, ARCHERY]);
     }
 
     #[test]
@@ -1215,10 +1331,10 @@ mod tests {
     fn is_invention_channel_covers_exactly_the_tree() {
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE - 1));
         assert!(is_invention_channel(INVENTION_CHANNEL_BASE));
-        assert!(is_invention_channel(channel(NUCLEAR_POWER)));
+        assert!(is_invention_channel(channel(STEEL_ARMS)));
         // The last invention channel is the top of the tree block; the practice
         // channels above it (`PRACTICE_CHANNEL_BASE..`) are NOT invention channels.
-        assert_eq!(channel(NUCLEAR_POWER), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
+        assert_eq!(channel(STEEL_ARMS), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE + INVENTION_COUNT));
         assert!(!is_invention_channel(MEME_CHANNELS));
     }
@@ -1302,5 +1418,69 @@ mod tests {
         let expected =
             WRITING_UPKEEP + MEDICINE_UPKEEP + ELECTRICITY_UPKEEP + NUCLEAR_UPKEEP - NUCLEAR_INCOME;
         assert!((flat_upkeep(full) - expected).abs() < 1e-7);
+    }
+
+    #[test]
+    fn military_multipliers_are_identity_at_mask_zero() {
+        let neutral = Genome::neutral();
+        assert_eq!(spoils_fraction_coupled(0, &neutral, false), 0.0);
+        assert_eq!(spoils_fraction_coupled(0, &neutral, true), 0.0);
+        assert_eq!(defense_multiplier(0), 1.0);
+        assert_eq!(range_multiplier(0), 1.0);
+        assert_eq!(repro_threshold_multiplier(0), 1.0);
+        // Held values move each one the right direction.
+        let spears = bit(HAFTED_SPEARS);
+        assert!((spoils_fraction_coupled(spears, &neutral, false) - SPEARS_SPOILS).abs() < 1e-6);
+        let both = spears | bit(STEEL_ARMS);
+        assert!(
+            (spoils_fraction_coupled(both, &neutral, false) - (SPEARS_SPOILS + STEEL_SPOILS)).abs()
+                < 1e-6
+        );
+        assert!((defense_multiplier(bit(FORTIFICATIONS)) - (1.0 - FORT_DEFENSE)).abs() < 1e-6);
+        assert!((range_multiplier(bit(ARCHERY)) - (1.0 + ARCHERY_RANGE)).abs() < 1e-6);
+        assert!(
+            (repro_threshold_multiplier(bit(FORTIFICATIONS)) - (1.0 - FORT_BIRTH_SUBSIDY)).abs()
+                < 1e-6
+        );
+        // Spoils coupling scales with Territoriality; neutral genome = base.
+        let mut territorial = Genome::neutral();
+        territorial.set(GenomeSlot::Territoriality, 1.0);
+        assert!(
+            spoils_fraction_coupled(spears, &territorial, true)
+                > spoils_fraction_coupled(spears, &neutral, true)
+        );
+        assert!(
+            (spoils_fraction_coupled(spears, &neutral, true)
+                - spoils_fraction_coupled(spears, &neutral, false))
+            .abs()
+                < 1e-6
+        );
+        // Spoils can never exceed 1.0 (transfer, not creation) for any mask.
+        for mask in [both, (1u32 << INVENTION_COUNT) - 1] {
+            assert!(spoils_fraction_coupled(mask, &territorial, true) <= 1.0);
+        }
+    }
+
+    #[test]
+    fn military_terms_extend_the_existing_multipliers() {
+        let neutral = Genome::neutral();
+        // Weapon damage stacks additively: Metalworking + Spears + Archery + Steel.
+        let all = bit(METALWORKING) | bit(HAFTED_SPEARS) | bit(ARCHERY) | bit(STEEL_ARMS);
+        let expect = 1.0 + METALWORKING_DAMAGE + SPEARS_DAMAGE + ARCHERY_DAMAGE + STEEL_DAMAGE;
+        assert!((weapon_multiplier(all) - expect).abs() < 1e-6);
+        assert_eq!(weapon_multiplier_coupled(all, &neutral, false), weapon_multiplier(all));
+        // Fortifications slow their holder (uncoupled debuff, like metabolism).
+        let fort = bit(FORTIFICATIONS);
+        assert!((speed_multiplier(fort) - (1.0 - FORT_SPEED_PENALTY)).abs() < 1e-6);
+        assert!(speed_multiplier(fort) > 0.0);
+        // Steel Arms upkeep stacks with Metalworking's.
+        let heavy = bit(METALWORKING) | bit(STEEL_ARMS);
+        assert!(
+            (module_upkeep_multiplier(heavy) - (1.0 + METALWORKING_UPKEEP + STEEL_UPKEEP)).abs()
+                < 1e-6
+        );
+        // Archery pays flat upkeep.
+        assert!((flat_upkeep(bit(ARCHERY)) - ARCHERY_UPKEEP).abs() < 1e-6);
+        assert_eq!(flat_upkeep_coupled(bit(ARCHERY), &neutral, false), flat_upkeep(bit(ARCHERY)));
     }
 }

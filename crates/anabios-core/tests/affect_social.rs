@@ -96,7 +96,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // slots, and archetypes DO set those OCEAN slots — so temperament now
     // actually varies by archetype. Behaviour-only change: tick 0 is
     // byte-identical, later ticks move.
-    &[(0, 0x5a7120e216c04232), (100, 0x5ea4eeb8ab976661), (300, 0xadedef3d70b95cfe)];
+    // Refreshed 2026-09-07 (military branch, FORMAT_VERSION 39→40): the meme
+    // vector widened and four inventions were appended. inventions_enabled is
+    // off here ⇒ the new candidates are never consulted — layout growth only,
+    // trajectory byte-identical.
+    &[(0, 0xaefdb933a2d60632), (100, 0x69a6cdb3b10d1ce1), (300, 0xcdfe0f036a8dc8be)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

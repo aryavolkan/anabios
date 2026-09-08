@@ -387,11 +387,15 @@ fn flat_upkeep_and_nuclear_income_apply_in_invention_step() {
     let e0 = w.agents.energy[nuke as usize];
     invention::invention_step(&mut w);
     let gained = w.agents.energy[nuke as usize] - e0;
+    // `nuke` holds every invention (`0..INVENTION_COUNT`), including the
+    // military-branch ARCHERY, whose upkeep `flat_upkeep_coupled` also
+    // charges — spec-correct per Task 2, so the expectation must include it.
     let expected = invention::NUCLEAR_INCOME
         - invention::WRITING_UPKEEP
         - invention::MEDICINE_UPKEEP
         - invention::ELECTRICITY_UPKEEP
-        - invention::NUCLEAR_UPKEEP;
+        - invention::NUCLEAR_UPKEEP
+        - invention::ARCHERY_UPKEEP;
     assert!(
         (gained - expected).abs() < 1e-4,
         "full tree nets Nuclear income minus upkeeps: {gained} vs {expected}"
@@ -1207,7 +1211,12 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-05 (removed PerceptionRadius gene + other non-functional
     // slots; non-cognition perception now uses a hardcoded neutral modulator).
     // Inventions scenario is cognition-off, so sensory radii shift.
-    &[(0, 0x59e1557f20c1f1a5), (100, 0x8efb484fc606d424), (300, 0xfe41796da5da773b)];
+    // Refreshed 2026-09-07 (military branch, FORMAT_VERSION 39→40): the meme
+    // vector widened and four inventions were appended, so the discovery
+    // probability table genuinely gains new candidates in this inventions_
+    // enabled scenario — a real trajectory change from tick 0 on, not pure
+    // layout growth.
+    &[(0, 0x1e759e5a7ebfb1a5), (100, 0x14f0b5277d793833), (300, 0x7c5ec58288e725df)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
@@ -1242,4 +1251,293 @@ fn innovators_discover_before_traditionalists_in_demo_scenario() {
     assert!(stone_seen, "Stone Tools should be discovered within 2000 ticks");
     let t = first_discovery_tick.unwrap();
     assert!(t > 0 && t < 1500, "first discovery reasonably early, got tick {t}");
+}
+
+// --- Military branch: combat hooks ------------------------------------------
+
+/// Armed omnivore kit (diet 0.5 keeps the holder inside the ape band so
+/// enforce_ape_only never strips the seeded invention channels).
+fn armed_kit(weapon_damage: f32, weapon_cost: f32, armor: f32) -> anabios_core::module::ModuleList {
+    let mut m = anabios_core::module::ModuleList::new();
+    m.push(Module::Locomotor { max_speed: 0.6, terrain_affinity: 0.5 });
+    m.push(Module::Sensor {
+        sensor_type: anabios_core::module::SensorType::Vision,
+        radius: 0.6,
+        acuity: 0.6,
+    });
+    m.push(Module::Mouth { bite_size: 0.6, diet_affinity: 0.5 });
+    if weapon_damage > 0.0 {
+        m.push(Module::Weapon { damage: weapon_damage, energy_cost: weapon_cost });
+    }
+    if armor > 0.0 {
+        m.push(Module::Armor { protection: armor, mass_penalty: 0.1 });
+    }
+    m
+}
+
+/// A program that always fires (fire_intent = 1.0 > FIRE_THRESHOLD).
+fn always_fire() -> Program {
+    Program::from_slice(&[Node::Const(1.0), Node::FireWeapon])
+}
+
+/// Ape-sized genome (Size >= APE_SIZE_MIN) so is_ape holds for armed kits.
+fn ape_genome() -> Genome {
+    let mut g = Genome::neutral();
+    g.set(GenomeSlot::Size, 0.5);
+    g
+}
+
+#[test]
+fn spears_add_damage_and_recover_spoils() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+    let mut w = World::new(7);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 3.0);
+    w.agents.program[pred as usize] = always_fire();
+    set_held(&mut w, pred, invention::HAFTED_SPEARS);
+    let pred_e0 = w.agents.energy[pred as usize];
+    let prey_e0 = w.agents.energy[prey as usize];
+    step(&mut w);
+    // net = damage*(1+SPEARS_DAMAGE) - armor = 10*1.25 - 3 = 9.5.
+    let net = 10.0 * (1.0 + invention::SPEARS_DAMAGE) - 3.0;
+    // As in `fortifications_blunt_incoming_damage`, the measured loss spans
+    // the whole tick: feed_pass runs before combat_pass in interact_all, so
+    // the stationary prey nets a small background gain (~0.255 energy,
+    // consistent across scenarios in this file) from grazing against
+    // metabolism. Widen the tolerance to absorb it; the combat delta being
+    // asserted (9.5) is over an order of magnitude larger.
+    assert!(w.agents.energy[prey as usize] <= prey_e0 - net + 0.3);
+    // Spoils: attacker recovered SPEARS_SPOILS * net = 2.85, net of the 2.0
+    // weapon cost and metabolism the tick cost strictly less than the
+    // no-spoils baseline below.
+    let mut w2 = World::new(7);
+    w2.inventions_enabled = true;
+    let pred2 = w2.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey2 = w2.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w2, prey2);
+    w2.agents.modules[pred2 as usize] = armed_kit(10.0, 2.0, 0.0);
+    w2.agents.modules[prey2 as usize] = armed_kit(0.0, 0.0, 3.0);
+    w2.agents.program[pred2 as usize] = always_fire();
+    // No spears in w2: same seed, same layout -> spoils are the only delta
+    // on the attacker beyond the (larger) damage they dealt.
+    step(&mut w2);
+    let gain = w.agents.energy[pred as usize] - pred_e0;
+    let gain_baseline = w2.agents.energy[pred2 as usize] - pred_e0;
+    assert!(
+        gain > gain_baseline + invention::SPEARS_SPOILS * net - 1.0,
+        "spoils must lift the attacker's energy over the no-spears baseline"
+    );
+}
+
+#[test]
+fn spoils_never_exceed_target_loss() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+    let mut w = World::new(11);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(16.0, 0.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 0.0);
+    w.agents.program[pred as usize] = always_fire();
+    set_held(&mut w, pred, invention::HAFTED_SPEARS);
+    set_held(&mut w, pred, invention::STEEL_ARMS);
+    let pred_e0 = w.agents.energy[pred as usize];
+    let prey_e0 = w.agents.energy[prey as usize];
+    step(&mut w);
+    let target_loss = prey_e0 - w.agents.energy[prey as usize];
+    let attacker_gain = w.agents.energy[pred as usize] - pred_e0;
+    assert!(attacker_gain <= target_loss + 1e-3, "spoils are a transfer, not creation");
+}
+
+#[test]
+fn fortifications_blunt_incoming_damage() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+
+    // World A: prey holds FORTIFICATIONS.
+    let mut w = World::new(13);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 3.0);
+    w.agents.program[pred as usize] = always_fire();
+    // Fortifications need a Communicator to be held legitimately, but the
+    // combat read only consults the meme channel; seed it directly. The prey
+    // is ape-band (omnivore + large) so enforce_ape_only keeps it.
+    set_held(&mut w, prey, invention::FORTIFICATIONS);
+    let prey_e0 = w.agents.energy[prey as usize];
+    step(&mut w);
+    // net = (10 - 3) * (1 - FORT_DEFENSE) = 5.25 (< the unfortified 7.0).
+    let expected = (10.0 - 3.0) * (1.0 - invention::FORT_DEFENSE);
+    let loss_fortified = prey_e0 - w.agents.energy[prey as usize];
+
+    // World B: identical seed/kits/positions/programs, but the prey does NOT
+    // hold FORTIFICATIONS. Same-seed pairing cancels the background
+    // feed_pass-vs-metabolism confound (feed_pass runs before combat_pass in
+    // interact_all, so a stationary agent nets a small per-tick gain from
+    // grazing regardless of combat outcome) — a paired comparison is immune
+    // to it even though a lone lower-bound assertion is not (an unfortified
+    // control already loses ~6.745 < the unfortified-net 7.0 from that same
+    // confound, so a stubbed defense_multiplier that never blunts anything
+    // would still slip past a bare `loss < 7.0` check).
+    let mut w2 = World::new(13);
+    w2.inventions_enabled = true;
+    let pred2 = w2.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey2 = w2.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w2, prey2);
+    w2.agents.modules[pred2 as usize] = armed_kit(10.0, 2.0, 0.0);
+    w2.agents.modules[prey2 as usize] = armed_kit(0.0, 0.0, 3.0);
+    w2.agents.program[pred2 as usize] = always_fire();
+    let prey2_e0 = w2.agents.energy[prey2 as usize];
+    step(&mut w2);
+    let loss_unfortified = prey2_e0 - w2.agents.energy[prey2 as usize];
+
+    assert!(
+        loss_fortified >= expected - 0.3,
+        "combat still lands: loss_fortified={loss_fortified} expected={expected}"
+    );
+    // Fortifications remove (10-3)*FORT_DEFENSE = 1.75 of net damage; a 1.0
+    // margin is robust to the ~0.255 confound (which is common to both worlds
+    // and cancels in the difference) while a broken/stubbed defense
+    // multiplier would make the two losses equal and fail this assertion.
+    assert!(
+        loss_fortified < loss_unfortified - 1.0,
+        "fortifications must reduce the unfortified net: fortified={loss_fortified} unfortified={loss_unfortified}"
+    );
+}
+
+#[test]
+fn spoils_use_the_post_defense_net() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+
+    // World A: attacker holds HAFTED_SPEARS, prey holds FORTIFICATIONS.
+    let mut w = World::new(19);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 3.0);
+    w.agents.program[pred as usize] = always_fire();
+    set_held(&mut w, pred, invention::HAFTED_SPEARS);
+    set_held(&mut w, prey, invention::FORTIFICATIONS);
+    let pred_e0 = w.agents.energy[pred as usize];
+    let prey_e0 = w.agents.energy[prey as usize];
+    step(&mut w);
+    let gain_a = w.agents.energy[pred as usize] - pred_e0;
+    let loss_a = prey_e0 - w.agents.energy[prey as usize];
+
+    // World B: identical seed/kits/positions/programs, but the prey does NOT
+    // hold FORTIFICATIONS.
+    let mut w2 = World::new(19);
+    w2.inventions_enabled = true;
+    let pred2 = w2.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey2 = w2.spawn_agent(Vec2::new(501.0, 500.0), ape_genome());
+    reassign_to_new_species(&mut w2, prey2);
+    w2.agents.modules[pred2 as usize] = armed_kit(10.0, 2.0, 0.0);
+    w2.agents.modules[prey2 as usize] = armed_kit(0.0, 0.0, 3.0);
+    w2.agents.program[pred2 as usize] = always_fire();
+    set_held(&mut w2, pred2, invention::HAFTED_SPEARS);
+    let pred2_e0 = w2.agents.energy[pred2 as usize];
+    step(&mut w2);
+    let gain_b = w2.agents.energy[pred2 as usize] - pred2_e0;
+
+    // damage = 10 * (1 + SPEARS_DAMAGE) = 12.5.
+    let damage = 10.0 * (1.0 + invention::SPEARS_DAMAGE);
+    // net_fortified = (12.5 - 3) * (1 - FORT_DEFENSE) = 7.125.
+    let net_fortified = (damage - 3.0) * (1.0 - invention::FORT_DEFENSE);
+    // net_unfortified = 12.5 - 3 = 9.5.
+    let net_unfortified = damage - 3.0;
+    // Correct (post-defense) spoils differ between worlds by
+    // SPEARS_SPOILS * (net_unfortified - net_fortified) = 0.3 * 2.375 = 0.7125.
+    // A bug that computed spoils from the PRE-defense net would use the same
+    // net (9.5) in both worlds, making gain_a and gain_b equal and this
+    // assertion fail — same-seed pairing cancels the ~0.26 background
+    // feed_pass-vs-metabolism confound (identical in both worlds), so the
+    // 0.4 margin is well clear of the 0.7125 true delta.
+    assert!(
+        gain_a < gain_b - 0.4,
+        "fortified target must cost the attacker more spoils than unfortified: gain_a={gain_a} gain_b={gain_b}"
+    );
+    let expected_delta = -(invention::SPEARS_SPOILS * (net_unfortified - net_fortified));
+    assert!(
+        (gain_a - gain_b - expected_delta).abs() < 0.2,
+        "spoils delta must track the post-defense net gap: gain_a-gain_b={} expected={expected_delta}",
+        gain_a - gain_b
+    );
+    // Conservation: spoils are a transfer, never creation.
+    assert!(gain_a <= loss_a + 1e-3, "spoils are a transfer, not creation");
+}
+
+#[test]
+fn archery_extends_weapon_reach() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+    // 2.5 apart: outside the Weapon module's 2.0 reach, inside 2.0 * 1.5.
+    let mut w = World::new(17);
+    w.inventions_enabled = true;
+    let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey = w.spawn_agent(Vec2::new(502.5, 500.0), ape_genome());
+    reassign_to_new_species(&mut w, prey);
+    w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+    w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 0.0);
+    w.agents.program[pred as usize] = always_fire();
+    step(&mut w);
+    assert!(!w.combat_damaged[prey as usize], "out of bare-module range");
+
+    let mut w2 = World::new(17);
+    w2.inventions_enabled = true;
+    let pred2 = w2.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    let prey2 = w2.spawn_agent(Vec2::new(502.5, 500.0), ape_genome());
+    reassign_to_new_species(&mut w2, prey2);
+    w2.agents.modules[pred2 as usize] = armed_kit(10.0, 2.0, 0.0);
+    w2.agents.modules[prey2 as usize] = armed_kit(0.0, 0.0, 0.0);
+    w2.agents.program[pred2 as usize] = always_fire();
+    set_held(&mut w2, pred2, invention::ARCHERY);
+    step(&mut w2);
+    assert!(w2.combat_damaged[prey2 as usize], "archery reach covers 2.5");
+}
+
+// --- Military branch: birth-ledger subsidy ----------------------------------
+
+#[test]
+fn fortifications_lower_the_breeding_threshold() {
+    use anabios_core::agent::SPAWN_ENERGY;
+    use anabios_core::reproduce::REPRO_ENERGY_MULT;
+    // Base threshold for a neutral genome (ReproductionThreshold = 0.5,
+    // neutral personality/affect factors are exactly 1.0).
+    let base = SPAWN_ENERGY * 0.5 * REPRO_ENERGY_MULT;
+    let subsidized = base * (1.0 - invention::FORT_BIRTH_SUBSIDY);
+    // Energy between the two thresholds: eligible ONLY with Fortifications.
+    let energy = (base + subsidized) / 2.0;
+
+    let count_births = |hold_fort: bool| -> usize {
+        let mut w = World::new(23);
+        w.inventions_enabled = true;
+        let mut ids = Vec::new();
+        for n in 0..2 {
+            let id = w.spawn_agent(Vec2::new(500.0 + n as f32, 500.0), ape_genome());
+            let mut m = comm_kit();
+            m.push(Module::Reproductive { viability: 0.6, brood_size_bias: 0.5 });
+            w.agents.modules[id as usize] = m;
+            w.agents.energy[id as usize] = energy;
+            if hold_fort {
+                set_held(&mut w, id, invention::FORTIFICATIONS);
+            }
+            ids.push(id);
+        }
+        let pop0 = w.agents.iter_alive().count();
+        for _ in 0..5 {
+            step(&mut w);
+        }
+        w.agents.iter_alive().count().saturating_sub(pop0)
+    };
+
+    assert_eq!(count_births(false), 0, "below the unsubsidized threshold: no births");
+    assert!(count_births(true) > 0, "the subsidy makes the same energy eligible");
 }

@@ -15,7 +15,11 @@ const INV_KEYS := [
 	"husbandry",
 	"machinery",
 	"electricity",
-	"nuclear_power"
+	"nuclear_power",
+	"hafted_spears",
+	"archery",
+	"fortifications",
+	"steel_arms"
 ]
 
 var _failed := false

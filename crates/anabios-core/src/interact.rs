@@ -180,7 +180,12 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         if tgt == crate::sense::NO_NEIGHBOR_ID {
             continue;
         }
-        if world.sensors[i].nearest_other_dist >= weapon.range {
+        // Archery buff: reach extends past the bare module range (identity
+        // multiplier when unheld, so pre-branch behavior is bit-identical).
+        let mask_i = crate::invention::held_mask(&world.agents.meme_vector[i]);
+        if world.sensors[i].nearest_other_dist
+            >= weapon.range * crate::invention::range_multiplier(mask_i)
+        {
             continue;
         }
         let t = tgt as usize;
@@ -192,9 +197,9 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         if world.domestication_enabled && world.agents.livestock_of[t] == id {
             continue;
         }
-        // Metalworking buff: better weapons deal more damage.
+        // Metalworking / military-branch buffs: better weapons deal more damage.
         let inv_weapon_mult = crate::invention::weapon_multiplier_coupled(
-            crate::invention::held_mask(&world.agents.meme_vector[i]),
+            mask_i,
             &world.agents.genome[i],
             world.gene_tech_coupling,
         );
@@ -207,8 +212,22 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         );
         let damage = weapon.damage * inv_weapon_mult * dimorph_mult;
         let armor = module::effective_armor_protection(&world.agents.modules[t]);
-        let net = (damage - armor).max(0.0);
+        // Fortifications blunt the blow on the TARGET side (×1.0 when unheld).
+        let mask_t = crate::invention::held_mask(&world.agents.meme_vector[t]);
+        let net = (damage - armor).max(0.0) * crate::invention::defense_multiplier(mask_t);
         world.agents.energy[t] -= net;
+        // Hunt spoils: the attacker recovers a fraction of the FINAL net (what
+        // the target actually lost — a transfer, never creation). Guarded so
+        // spoils-free combat never adds +0.0 to energy (-0.0 + 0.0 flips the
+        // sign bit and would break flag-off byte-identity).
+        let spoils = crate::invention::spoils_fraction_coupled(
+            mask_i,
+            &world.agents.genome[i],
+            world.gene_tech_coupling,
+        );
+        if spoils > 0.0 {
+            world.agents.energy[i] += spoils * net;
+        }
         world.agents.energy[i] -= weapon.energy_cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];

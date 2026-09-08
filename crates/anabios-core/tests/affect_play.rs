@@ -67,7 +67,11 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // slots, and archetypes DO set those OCEAN slots — so temperament now
     // actually varies by archetype. Behaviour-only change: tick 0 is
     // byte-identical, later ticks move.
-    &[(0, 0xc8e460e2eaf40bf3), (100, 0xbfaf1eabd9737b78), (200, 0xb72c3480b32fa4c1)];
+    // Refreshed 2026-09-07 (military branch, FORMAT_VERSION 39→40): the meme
+    // vector widened and four inventions were appended. inventions_enabled is
+    // off here (cognition_enabled alone is on) ⇒ the new candidates are never
+    // consulted — layout growth only, trajectory byte-identical.
+    &[(0, 0x91b1efa8c82a7bf3), (100, 0x9dbd4a6649acaab8), (200, 0x0737750a526c15c1)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

@@ -182,7 +182,9 @@ use crate::world::World;
 ///     Both absent/off in every pre-existing scenario ⇒ zero draws, zero
 ///     allocation, trajectories byte-identical; only the serialized layout
 ///     grew.
-pub const FORMAT_VERSION: u32 = 39;
+/// 40: meme vector widened 20->24; military invention branch appended
+///     (hafted_spears/archery/fortifications/steel_arms, ids 10-13).
+pub const FORMAT_VERSION: u32 = 40;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

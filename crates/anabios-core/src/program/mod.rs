@@ -36,10 +36,10 @@ pub const CONST_SIGMA: f32 = 0.1;
 pub const PHEROMONE_CHANNELS: usize = 4;
 /// Number of meme/broadcast channels (design §3.1). Wired by M14. Channels
 /// 0..8 carry the original culture (alarm, dialects, cooperation norm, hunt
-/// technique, skill, DIT technique); channels 8..18 carry the invention
+/// technique, skill, DIT technique); channels 8..22 carry the invention
 /// tree's adoption levels (`invention::INVENTION_CHANNEL_BASE`); channels
-/// 18..20 carry the maladaptive cultural practices (`practice::PRACTICE_CHANNEL_BASE`).
-pub const MEME_CHANNELS: usize = 20;
+/// 22..24 carry the maladaptive cultural practices (`practice::PRACTICE_CHANNEL_BASE`).
+pub const MEME_CHANNELS: usize = 24;
 /// Sentinel in `ActionRegister.target_id` meaning "no action target".
 pub const NO_TARGET: u32 = u32::MAX;
 
