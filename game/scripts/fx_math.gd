@@ -119,7 +119,7 @@ static func advance_gait(phase: float, step: float, stride: float) -> float:
 static func step_locomotion(st: Vector2, raw_moving: bool, delta: float) -> Vector2:
 	var hold: float = WALK_HOLD if raw_moving else maxf(st.x - delta, 0.0)
 	var target: float = 1.0 if hold > 0.0 else 0.0
-	return Vector2(hold, lerpf(st.y, target, minf(1.0, delta * WALK_BLEND)))
+	return Vector2(hold, lerpf(st.y, target, 1.0 - exp(-WALK_BLEND * delta)))
 
 
 # Advance one agent's facing. `st` is (committed side 0 right / 1 left, eased
@@ -127,13 +127,13 @@ static func step_locomotion(st: Vector2, raw_moving: bool, delta: float) -> Vect
 # collapses the shader's UV mix to the centre column, so a turn reads as a
 # flip-squash. `heading_x` is cos(heading); a stopped body holds everything.
 static func step_facing(st: Vector3, heading_x: float, walking: bool, delta: float) -> Vector3:
-	var hx: float = lerpf(st.z, heading_x, minf(1.0, delta * FACE_TRACK)) if walking else st.z
+	var hx: float = lerpf(st.z, heading_x, 1.0 - exp(-FACE_TRACK * delta)) if walking else st.z
 	var side: float = st.x
 	if hx > FACE_DEADBAND:
 		side = 0.0
 	elif hx < -FACE_DEADBAND:
 		side = 1.0
-	return Vector3(side, lerpf(st.y, side, minf(1.0, delta * FACE_EASE)), hx)
+	return Vector3(side, lerpf(st.y, side, 1.0 - exp(-FACE_EASE * delta)), hx)
 
 
 # Smooth a 0..1 triangle wave (Godot's `pingpong`) into simple harmonic

@@ -276,6 +276,21 @@ func _check_shuttle_and_ease() -> void:
 	_check(FxMath.ease_factor(100.0, tau) < 1.0001, "approach never overshoots the target")
 	_check(FxMath.ease_factor(1.0, 0.0) <= 1.0, "a zero time constant stays bounded")
 
+	# The eases inside step_locomotion / step_facing use the same exponential
+	# form. A bare `delta * rate` weight degenerates to an instant snap once the
+	# frame time exceeds 1/rate, so check a slow frame still eases rather than
+	# jumping, and that equal elapsed time converges alike however it is chopped.
+	var slow := FxMath.step_locomotion(Vector2.ZERO, true, 0.25)
+	_check(slow.y > 0.0 and slow.y < 1.0, "a 4 fps frame still eases the walk weight (%f)" % slow.y)
+	var coarse := FxMath.step_facing(Vector3(0.0, 0.0, 1.0), -1.0, true, 0.2)
+	var fine := Vector3(0.0, 0.0, 1.0)
+	for _i in 12:
+		fine = FxMath.step_facing(fine, -1.0, true, 0.2 / 12.0)
+	_check(
+		absf(coarse.z - fine.z) < 0.02,
+		"facing low-pass converges alike coarse or fine (%f vs %f)" % [coarse.z, fine.z]
+	)
+
 
 func _check_radial_texture() -> void:
 	var tex := FxMath.radial_texture(16)
