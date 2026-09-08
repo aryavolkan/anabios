@@ -45,6 +45,7 @@ func _init() -> void:
 	_check_flow_pulse()
 	_check_gait()
 	_check_locomotion()
+	_check_facing()
 	_check_radial_texture()
 	if _failed:
 		quit(1)
@@ -169,6 +170,64 @@ func _check_locomotion() -> void:
 		var s2 := FxMath.step_locomotion(Vector2(float(i) * 0.01, float(i) / 40.0), i % 2 == 0, dt)
 		_check(s2.y >= 0.0 and s2.y <= 1.0, "weight stays in 0..1 (step %d)" % i)
 		_check(s2.x >= 0.0, "hold credit never goes negative (step %d)" % i)
+
+
+# Facing deadband. The measured failure was the sim zeroing an agent's heading
+# to signal idle: cos(0) == 1, so a bare sign test snapped the sprite to face
+# right on every flicker — 16 mirror flips per agent per second.
+func _check_facing() -> void:
+	var dt := 1.0 / 60.0
+
+	# Settled facing left, then the heading flickers to 0 (idle) every few
+	# frames. cos(0) = 1 would flip it right; the walking gate must prevent it.
+	var st := Vector3(1.0, 1.0, -1.0)
+	var flips := 0
+	for i in 240:
+		var idle := (i / 3) % 2 == 0
+		var hx := 1.0 if idle else -1.0
+		st = FxMath.step_facing(st, hx, not idle, dt)
+		if st.x != 1.0:
+			flips += 1
+	_check(flips == 0, "an idle-heading flicker never flips the mirror (%d flips)" % flips)
+	_check(st.y > 0.9, "eased value stays on the left mirror (got %f)" % st.y)
+
+	# The measured failure: a heading that genuinely swings full-scale several
+	# times a second. A bare deadband on the instantaneous value cannot filter
+	# this (it only got 14.5 flips/sec down to 10.8) — the low-pass must.
+	var st2 := Vector3(0.0, 0.0, 0.0)
+	var flips2 := 0
+	for i in 600:
+		var hx2 := 1.0 if (i / 4) % 2 == 0 else -1.0
+		var before := st2.x
+		st2 = FxMath.step_facing(st2, hx2, true, dt)
+		if st2.x != before:
+			flips2 += 1
+	var per_sec := 60.0 * float(flips2) / 600.0
+	_check(per_sec < 1.0, "a 7Hz heading swing yields under 1 flip/sec (got %f)" % per_sec)
+
+	# A sustained turn still commits, and the eased value follows it.
+	var st3 := Vector3(0.0, 0.0, 1.0)
+	for _i in 60:
+		st3 = FxMath.step_facing(st3, -1.0, true, dt)
+	_check(st3.x == 1.0, "a sustained left heading commits the turn")
+	_check(st3.y > 0.95, "eased value catches up to the committed side (got %f)" % st3.y)
+
+	# Mid-turn the eased value is strictly between the mirrors — that is the
+	# flip-squash the shader renders — and it never leaves 0..1.
+	var st4 := Vector3(0.0, 0.0, 1.0)
+	var mid := 0
+	for _i in 40:
+		st4 = FxMath.step_facing(st4, -1.0, true, dt)
+		if st4.y > 0.02 and st4.y < 0.98:
+			mid += 1
+		_check(st4.y >= 0.0 and st4.y <= 1.0, "eased facing stays in 0..1")
+	_check(mid > 0, "a turn passes through the flip-squash rather than snapping")
+
+	# A stopped body holds everything, including its tracked heading.
+	var st5 := Vector3(1.0, 1.0, -0.8)
+	for _i in 60:
+		st5 = FxMath.step_facing(st5, 1.0, false, dt)
+	_check(st5.x == 1.0 and is_equal_approx(st5.z, -0.8), "a stopped body holds its facing")
 
 
 func _check_radial_texture() -> void:

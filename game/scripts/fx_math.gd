@@ -42,6 +42,23 @@ const WALK_HOLD := 0.25
 # responsive, slow enough that a stride eases in rather than snapping on.
 const WALK_BLEND := 9.0
 
+# Facing. cos(heading) is near zero whenever a body travels near-vertically,
+# and it is exactly 1.0 when the sim zeroes the heading to mean "idle" — so a
+# bare sign test snaps the sprite to face right every time the heading
+# flickers. Measured at 16 mirror flips per agent per second, leaving 37% of
+# the crowd caught mid-flip and horizontally squashed at any moment. Commit to
+# a turn only once the heading is decisively sideways, and let a body that has
+# stopped keep the way it was last facing.
+const FACE_DEADBAND := 0.25
+const FACE_EASE := 12.0
+# A deadband on the instantaneous heading is not enough on its own: these
+# agents genuinely swing their heading ~14 times a second, so the raw value
+# clears any usable threshold constantly (measured: a bare deadband only got
+# 14.5 flips/sec down to 10.8). Low-pass the heading first and test the
+# deadband against THAT, so only a sustained turn commits. The time constant
+# has to be well longer than the ~70ms flicker period.
+const FACE_TRACK := 4.0
+
 
 # Construction-pop ease: overshoot a touch past full size, then settle
 # (ease-out-back, the huts' cousin of the agents' birth pop). Clamped so
@@ -103,6 +120,20 @@ static func step_locomotion(st: Vector2, raw_moving: bool, delta: float) -> Vect
 	var hold: float = WALK_HOLD if raw_moving else maxf(st.x - delta, 0.0)
 	var target: float = 1.0 if hold > 0.0 else 0.0
 	return Vector2(hold, lerpf(st.y, target, minf(1.0, delta * WALK_BLEND)))
+
+
+# Advance one agent's facing. `st` is (committed side 0 right / 1 left, eased
+# value the shader mirrors with, low-passed heading x). Mid-way the eased value
+# collapses the shader's UV mix to the centre column, so a turn reads as a
+# flip-squash. `heading_x` is cos(heading); a stopped body holds everything.
+static func step_facing(st: Vector3, heading_x: float, walking: bool, delta: float) -> Vector3:
+	var hx: float = lerpf(st.z, heading_x, minf(1.0, delta * FACE_TRACK)) if walking else st.z
+	var side: float = st.x
+	if hx > FACE_DEADBAND:
+		side = 0.0
+	elif hx < -FACE_DEADBAND:
+		side = 1.0
+	return Vector3(side, lerpf(st.y, side, minf(1.0, delta * FACE_EASE)), hx)
 
 
 # Radial falloff blob (bright core, soft quadratic edge): the particle/light

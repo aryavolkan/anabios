@@ -38,15 +38,13 @@ var _body_mmis: Array[MultiMeshInstance2D] = []
 var _glyph_clones: Array[MultiMeshInstance2D] = []
 
 # Smooth-motion state. Agents teleport once per tick; rendering eases each
-# body toward its latest tick position so movement glides instead of
-# stepping. Identity is tracked by agent id (alive indices reshuffle as
-# agents die): both the previous and current id arrays are ascending, so a
-# two-pointer merge finds each agent's last smoothed position in O(n).
+# body toward its latest tick position so movement glides. Identity is by
+# agent id (alive indices reshuffle as agents die): both id arrays ascend, so
+# a two-pointer merge finds each agent's last smoothed position in O(n).
 # Only a seam crossing snaps: on a wrapped world a real displacement is at
-# most half the map per axis, so anything larger is the body reappearing on
-# the far side. SMOOTH is the approach at 60 fps, scaled by the frame delta
-# AND by ticks_per_frame — one frame of 64x covers 64 ticks of travel, so it
-# needs almost no easing, and time-lapse stays crisp instead of mushy.
+# most half the map per axis. SMOOTH is the approach at 60 fps, scaled by the
+# frame delta AND ticks_per_frame — one frame of 64x covers 64 ticks, so it
+# needs almost no easing and time-lapse stays crisp instead of mushy.
 const SMOOTH: float = 0.35
 const DEATH_TTL: float = 1.4
 # Seconds for a death ghost to topple from tilted to flat (ease-out-back, so
@@ -65,8 +63,8 @@ var _prev_color: PackedColorArray = PackedColorArray()
 var _death_mmis: Array[MultiMeshInstance2D] = []
 var _death_effects: Array = []
 var _birth_times: Dictionary = {}
-# Smoothed per-id facing (0 = right, 1 = left) so turns ease through a brief
-# horizontal squash in the shader instead of snapping the mirror.
+# Per-id facing: (committed side 0 right / 1 left, eased value, low-passed
+# heading x). Turns ease through a horizontal squash, not a snap. See FxMath.
 var _facing: Dictionary = {}
 # Per-id gait cycle position (0..1 = one contact -> passing -> contact ->
 # passing loop), advanced by the distance a body actually covers on screen so
@@ -118,15 +116,12 @@ func _ready() -> void:
 	carcasses.texture = disc
 	flashes.texture = disc
 	# The agents are the apes of DIT: render each as an 8-bit hominin in its
-	# species' own colours (zone-painted coat / skin / accent) instead of a
-	# plain disc. Each species gets its own MultiMesh + 4-pose walk atlas; the
-	# figure is drawn full-colour, and the [C] overlays (dialect / diet /
-	# energy) multiply on top as a tint when cycling away from the default
-	# species view. Agents animate: the shader reads per-instance data
-	# (phase / moving / facing) written each tick in _refresh_bodies.
-	# Texture + material are set BEFORE _make_wrap_clones() so the 8 torus
-	# wrap clones inherit them; use_custom_data exposes INSTANCE_CUSTOM to
-	# the shader (and is shared by the clones via the same MultiMesh).
+	# species' own colours instead of a plain disc, one MultiMesh + pose atlas
+	# per bucket, with the [C] overlays multiplying on top as a tint. The
+	# shader reads per-instance animation state written each tick in
+	# _refresh_bodies. Texture + material are set BEFORE _make_wrap_clones() so
+	# the 8 torus wrap clones inherit them; use_custom_data exposes
+	# INSTANCE_CUSTOM (shared by the clones via the same MultiMesh).
 	# Per-bucket gait cadence and rig kind come from the archetype registry
 	# (bucket_gait_fps reads ApeSprites.WALK_FPS for the hominin buckets).
 	_body_mmis.append(bodies)
@@ -664,13 +659,17 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			if walking and _moving_sample.size() < 8:
 				_moving_sample.append(smooth[i])
 			# Ease the facing mirror per id: the shader's fractional mix turns
-			# the transition into a quick flip-squash rather than a snap.
-			var face_left := 1.0 if cos(rot) < 0.0 else 0.0
+			# the transition into a quick flip-squash rather than a snap. The
+			# side is deadbanded and held while stopped (see FxMath), so a
+			# flickering heading cannot strobe the sprite.
+			var cx: float = cos(rot)
+			var face_left := 1.0 if cx < 0.0 else 0.0
 			if have_ids:
-				face_left = lerpf(
-					float(_facing.get(ids[i], face_left)), face_left, minf(1.0, delta * 12.0)
+				var face: Vector3 = FxMath.step_facing(
+					_facing.get(ids[i], Vector3(face_left, face_left, cx)), cx, walking, delta
 				)
-				_facing[ids[i]] = face_left
+				_facing[ids[i]] = face
+				face_left = face.y
 			# Gait cycle position, paced by the distance this body covered on
 			# screen so the feet keep up with the ground (see FxMath).
 			var phase: float
@@ -716,7 +715,8 @@ func _on_agent_death(id: int, prev_idx: int) -> void:
 	_birth_times.erase(id)
 	_gait.erase(id)
 	_locomotion.erase(id)
-	var side: float = -1.0 if float(_facing.get(id, 0.0)) >= 0.5 else 1.0
+	var fv: Vector3 = _facing.get(id, Vector3.ZERO)
+	var side: float = -1.0 if fv.y >= 0.5 else 1.0
 	_facing.erase(id)
 	if _death_effects.size() >= DEATH_CAP:
 		_death_effects.pop_front()
