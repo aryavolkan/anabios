@@ -11,6 +11,10 @@ extends Control
 const BORDER := Color(0.8, 0.85, 0.9, 0.5)
 const VIEWRECT := Color(1.0, 1.0, 1.0, 0.9)
 const AGENT_DOT := Color(1.0, 0.75, 0.3, 0.85)
+# Infected agents' dots, the codex's EpidemicOutbreak chartreuse: an epidemic's
+# location and spread read at the world scale (dots self-clear as agents
+# recover, since SIS intensity decays to exactly 0).
+const INFECTED_DOT := Color(0.75, 0.95, 0.4, 0.9)
 
 
 func _ready() -> void:
@@ -44,9 +48,13 @@ func _draw() -> void:
 	# location and spread read at a glance. Overlapping dots brighten into a
 	# cluster (natural density cue). ≤ max_population draws, once per frame.
 	var positions: PackedVector2Array = sim.alive_positions()
-	for p in positions:
+	var diseased: bool = sim.disease_active()
+	var infection: PackedFloat32Array = sim.alive_infection() if diseased else PackedFloat32Array()
+	for i in positions.size():
+		var p := positions[i]
 		var mp := Vector2(fposmod(p.x, world), fposmod(p.y, world)) * scale
-		draw_rect(Rect2(mp - Vector2(1, 1), Vector2(2, 2)), AGENT_DOT)
+		var dot := INFECTED_DOT if diseased and infection[i] > 0.0 else AGENT_DOT
+		draw_rect(Rect2(mp - Vector2(1, 1), Vector2(2, 2)), dot)
 	_draw_view_rect(center * scale, (view_world * scale).min(ms), ms)
 	# Panel border.
 	draw_rect(Rect2(Vector2.ZERO, ms), BORDER, false, 1.0)
