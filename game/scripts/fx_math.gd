@@ -136,6 +136,24 @@ static func step_facing(st: Vector3, heading_x: float, walking: bool, delta: flo
 	return Vector3(side, lerpf(st.y, side, minf(1.0, delta * FACE_EASE)), hx)
 
 
+# Smooth a 0..1 triangle wave (Godot's `pingpong`) into simple harmonic
+# motion. Same endpoints and same period, but the speed falls to zero at each
+# turn instead of reversing instantaneously — a convoy shuttling a trade route
+# decelerates into the turn and accelerates out, the way a laden cart would,
+# rather than snapping from full speed one way to full speed the other.
+static func shuttle_ease(tri: float) -> float:
+	return 0.5 - 0.5 * cos(PI * clampf(tri, 0.0, 1.0))
+
+
+# Frame-rate-independent approach factor for an exponential ease: the fraction
+# to move toward the target after `dt` seconds, given a time constant `tau`
+# (the time to close ~63% of the remaining gap). Use this instead of a bare
+# per-update lerp weight whenever the update cadence is not a fixed wall-clock
+# interval, or the ease silently runs at a different speed on other hardware.
+static func ease_factor(dt: float, tau: float) -> float:
+	return 1.0 - exp(-maxf(dt, 0.0) / maxf(tau, 0.0001))
+
+
 # Radial falloff blob (bright core, soft quadratic edge): the particle/light
 # texture shared by the fire lights and the settlement smoke plumes.
 static func radial_texture(res: int) -> ImageTexture:

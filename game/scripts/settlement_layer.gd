@@ -54,6 +54,12 @@ var _villages: Dictionary = {}  # sid -> {pos, members, born, seen}
 var _lineage_marks: Dictionary = {}
 var _sites: Array = []  # last settlement_sites() result
 var _now: float = 0.0
+# Wall-clock time of the last redraw, so the village anchor ease can be made
+# independent of frame rate. ANCHOR_TAU is the exponential time constant: at
+# 60 fps a redraw lands every REDRAW_EVERY/60 s, which reproduces the original
+# 0.3-per-redraw drift.
+var _last_ease: float = 0.0
+const ANCHOR_TAU := 0.93
 
 @onready var sim = get_node("/root/Main/Simulation")
 
@@ -140,9 +146,15 @@ func _redraw() -> void:
 				"pos": site["pos"], "members": int(site["members"]), "born": _now, "seen": _now
 			}
 		else:
-			v["pos"] = (v["pos"] as Vector2).lerp(site["pos"], 0.3)
+			# Ease the village anchor toward the live site. _redraw runs on a
+			# frame count, not a wall-clock interval, so a bare 0.3 weight
+			# would drift at half speed on a 30 fps machine; go through the
+			# elapsed time instead. ANCHOR_TAU reproduces the old 60 fps feel.
+			var k: float = FxMath.ease_factor(_now - _last_ease, ANCHOR_TAU)
+			v["pos"] = (v["pos"] as Vector2).lerp(site["pos"], k)
 			v["members"] = int(site["members"])
 			v["seen"] = _now
+	_last_ease = _now
 	var hut_xf: Array = []
 	var hut_col: Array = []
 	var farm_xf: Array = []

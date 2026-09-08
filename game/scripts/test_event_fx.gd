@@ -46,6 +46,7 @@ func _init() -> void:
 	_check_gait()
 	_check_locomotion()
 	_check_facing()
+	_check_shuttle_and_ease()
 	_check_radial_texture()
 	if _failed:
 		quit(1)
@@ -228,6 +229,52 @@ func _check_facing() -> void:
 	for _i in 60:
 		st5 = FxMath.step_facing(st5, 1.0, false, dt)
 	_check(st5.x == 1.0 and is_equal_approx(st5.z, -0.8), "a stopped body holds its facing")
+
+
+# Convoy turnaround easing, and the frame-rate-independent approach factor.
+func _check_shuttle_and_ease() -> void:
+	# Endpoints and midpoint are preserved, so the route span is unchanged.
+	_check(absf(FxMath.shuttle_ease(0.0)) < 0.0001, "shuttle starts at 0")
+	_check(absf(FxMath.shuttle_ease(1.0) - 1.0) < 0.0001, "shuttle ends at 1")
+	_check(absf(FxMath.shuttle_ease(0.5) - 0.5) < 0.0001, "shuttle is centred at the midpoint")
+	_check(FxMath.shuttle_ease(-1.0) == FxMath.shuttle_ease(0.0), "shuttle clamps below")
+	_check(FxMath.shuttle_ease(2.0) == FxMath.shuttle_ease(1.0), "shuttle clamps above")
+
+	# Monotonic, stays in range, and — the point of it — the speed falls to
+	# near zero at each turn instead of reversing at full tilt.
+	var prev := FxMath.shuttle_ease(0.0)
+	var end_speed := 0.0
+	var mid_speed := 0.0
+	for i in range(1, 101):
+		var v := FxMath.shuttle_ease(i / 100.0)
+		_check(v >= prev - 0.0001, "shuttle is monotonic (step %d)" % i)
+		_check(v >= 0.0 and v <= 1.0, "shuttle stays in 0..1 (step %d)" % i)
+		var speed := v - prev
+		if i <= 2 or i >= 100:
+			end_speed = maxf(end_speed, speed)
+		if i == 50:
+			mid_speed = speed
+		prev = v
+	_check(
+		end_speed < mid_speed * 0.2,
+		"speed at the turn is a fraction of mid-route (%f vs %f)" % [end_speed, mid_speed]
+	)
+
+	# ease_factor: same elapsed time gives the same approach however it is
+	# chopped up, which is exactly what a per-update lerp weight gets wrong.
+	var tau := 0.93
+	var one_step := FxMath.ease_factor(0.5, tau)
+	var remaining := 1.0
+	for _i in 30:
+		remaining *= 1.0 - FxMath.ease_factor(0.5 / 30.0, tau)
+	_check(
+		absf((1.0 - remaining) - one_step) < 0.001,
+		"ease_factor is frame-rate independent (%f vs %f)" % [1.0 - remaining, one_step]
+	)
+	_check(FxMath.ease_factor(0.0, tau) == 0.0, "no elapsed time means no movement")
+	_check(FxMath.ease_factor(-1.0, tau) == 0.0, "negative elapsed time is clamped")
+	_check(FxMath.ease_factor(100.0, tau) < 1.0001, "approach never overshoots the target")
+	_check(FxMath.ease_factor(1.0, 0.0) <= 1.0, "a zero time constant stays bounded")
 
 
 func _check_radial_texture() -> void:
