@@ -10,7 +10,8 @@ shader_type canvas_item;
 //       covers on screen, so the stride paces with the ground instead of
 //       ticking on a clock; frozen while an agent stands still, where it
 //       doubles as that agent's stable idle-bob offset.
-//   g = moving (1 walking, 0 idle)
+//   g = walk weight (1 walking, 0 idle, blended across the transition so the
+//       secondary motion eases in; the pose index thresholds it at 0.5)
 //   b = face_left (smoothed 0..1; mid-flip the mirror mix squashes the sprite
 //       horizontally, so turns read as a weight shift instead of a snap)
 //   a = action / 4 (0 none, 1 eat, 2 fight, 3 trade, 4 flee — sim signals)
@@ -143,7 +144,10 @@ void fragment() {
 		// Crowds de-sync because each agent seeds and accumulates its own
 		// cycle, not because of a clock offset.
 		float s = mod(floor(anim.r * 4.0), 4.0);
-		fr = mix(0.0, 1.0 + min(s, 4.0 - s), anim.g);
+		// anim.g is a blended walk weight, but the pose index has to stay a
+		// whole number — a fractional `fr` would sample between atlas cells.
+		// Threshold it here and let the vertex stage use the blend.
+		fr = mix(0.0, 1.0 + min(s, 4.0 - s), step(0.5, anim.g));
 	}
 	// Frames live in a 64x64 grid, ATLAS_COLS per row; cells are pre-flipped
 	// (the QuadMesh V axis is flipped in the 2D canvas), so a plain sample

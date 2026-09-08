@@ -44,6 +44,7 @@ func _init() -> void:
 	_check_pop_scale()
 	_check_flow_pulse()
 	_check_gait()
+	_check_locomotion()
 	_check_radial_texture()
 	if _failed:
 		quit(1)
@@ -120,6 +121,54 @@ func _check_gait() -> void:
 	for i in 20:
 		var p := FxMath.advance_gait(0.9, stride * i * 0.03, stride)
 		_check(p >= 0.0 and p < 1.0, "cycle wraps into range (step %d)" % i)
+
+
+# Locomotion debounce. The sim's heading flickers to exactly 0 every few
+# frames; the hold credit has to bridge those gaps so the pose does not pop,
+# while a real stop still settles to idle.
+func _check_locomotion() -> void:
+	var dt := 1.0 / 60.0
+	var st := Vector2.ZERO
+
+	# Walking steadily -> weight saturates and stays walking.
+	for _i in 60:
+		st = FxMath.step_locomotion(st, true, dt)
+	_check(st.x > 0.0, "steady walking holds the walk state")
+	_check(st.y > 0.95, "walk weight saturates near 1 (got %f)" % st.y)
+
+	# The measured failure case: heading present ~half the frames, flipping
+	# every ~4. This must NOT drop the pose state even once.
+	var drops := 0
+	for i in 240:
+		var raw := (i / 4) % 2 == 0
+		st = FxMath.step_locomotion(st, raw, dt)
+		if st.x <= 0.0:
+			drops += 1
+	_check(drops == 0, "4-frame heading flicker never drops the walk state (%d drops)" % drops)
+	_check(st.y > 0.9, "weight stays high through the flicker (got %f)" % st.y)
+
+	# A real stop still settles: hold expires, then the weight falls away.
+	# Top the credit up first — the flicker loop above ends on non-moving
+	# frames, so it leaves the hold already part-spent.
+	st = FxMath.step_locomotion(st, true, dt)
+	var held := 0
+	for _i in 120:
+		st = FxMath.step_locomotion(st, false, dt)
+		if st.x > 0.0:
+			held += 1
+	_check(st.x == 0.0, "a real stop expires the hold credit")
+	_check(st.y < 0.05, "a real stop settles the weight to idle (got %f)" % st.y)
+	var held_secs := float(held) * dt
+	_check(
+		absf(held_secs - FxMath.WALK_HOLD) < 0.03,
+		"hold lasts about WALK_HOLD seconds (got %f)" % held_secs
+	)
+
+	# Weight stays in range from any starting state.
+	for i in 40:
+		var s2 := FxMath.step_locomotion(Vector2(float(i) * 0.01, float(i) / 40.0), i % 2 == 0, dt)
+		_check(s2.y >= 0.0 and s2.y <= 1.0, "weight stays in 0..1 (step %d)" % i)
+		_check(s2.x >= 0.0, "hold credit never goes negative (step %d)" % i)
 
 
 func _check_radial_texture() -> void:

@@ -73,6 +73,8 @@ var _facing: Dictionary = {}
 # the cadence tracks real speed instead of a fixed frame rate. Frozen while an
 # agent stands still, where it doubles as that agent's stable idle-bob offset.
 var _gait: Dictionary = {}
+# Per-id locomotion state (hold credit, blended walk weight) — see FxMath.
+var _locomotion: Dictionary = {}
 # Distance each body moved on screen this frame, parallel to the alive arrays;
 # feeds the gait accumulator above. Filled in the smoothing pass.
 var _step_dist: PackedFloat32Array = PackedFloat32Array()
@@ -636,7 +638,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			if have_ids:
 				var age: float = now - float(_birth_times.get(ids[i], now - 1.0))
 				if age < BIRTH_POP:
-					sz *= _birth_scale(age / BIRTH_POP)
+					sz *= FxMath.birth_scale(age / BIRTH_POP)
 			# Upright: the hominin stands, not spins — heading drives the
 			# walk shader (moving flag + facing), not the transform rotation.
 			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
@@ -646,8 +648,20 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			# reports heading exactly 0.0 when velocity ≈ 0, which doubles as
 			# the idle flag; facing is the heading's x-sign.
 			var rot: float = rots[i] if have_rots else 0.0
-			var moving: float = 1.0 if rot != 0.0 else 0.0
-			if moving != 0.0 and _moving_sample.size() < 8:
+			# `moving` is the blended 0..1 walk weight the shader mixes its
+			# secondary motion with; `walking` is the debounced state picking
+			# the pose and driving the gait. Splitting them stops the sprite
+			# popping on the sim's flickering heading (~3.5 times a second).
+			var walking: bool = rot != 0.0
+			var moving: float = 1.0 if walking else 0.0
+			if have_ids:
+				var loco: Vector2 = FxMath.step_locomotion(
+					_locomotion.get(ids[i], Vector2.ZERO), walking, delta
+				)
+				_locomotion[ids[i]] = loco
+				walking = loco.x > 0.0
+				moving = loco.y
+			if walking and _moving_sample.size() < 8:
 				_moving_sample.append(smooth[i])
 			# Ease the facing mirror per id: the shader's fractional mix turns
 			# the transition into a quick flip-squash rather than a snap.
@@ -663,7 +677,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			if have_ids:
 				var gid: int = ids[i]
 				phase = float(_gait.get(gid, FxMath.seed_gait(gid)))
-				if moving != 0.0:
+				if walking:
 					var stride: float = FxMath.stride_len(sizes[i], gait_fps)
 					phase = FxMath.advance_gait(phase, _step_dist[i], stride)
 				_gait[gid] = phase
@@ -676,14 +690,14 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			var act := 0.0
 			for fp in _fight_pts:
 				if smooth[i].distance_squared_to(fp) < 36.0:
-					act = 2.0 if moving == 0.0 else 4.0
+					act = 4.0 if walking else 2.0
 					break
 			if act == 0.0:
 				for tp in _trade_pts:
 					if smooth[i].distance_squared_to(tp) < 36.0:
 						act = 3.0
 						break
-			if act == 0.0 and moving == 0.0 and have_en:
+			if act == 0.0 and not walking and have_en:
 				var pi: int = _match_prev[i] if i < _match_prev.size() else -1
 				if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
 					act = 1.0
@@ -701,6 +715,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 func _on_agent_death(id: int, prev_idx: int) -> void:
 	_birth_times.erase(id)
 	_gait.erase(id)
+	_locomotion.erase(id)
 	var side: float = -1.0 if float(_facing.get(id, 0.0)) >= 0.5 else 1.0
 	_facing.erase(id)
 	if _death_effects.size() >= DEATH_CAP:
@@ -750,27 +765,12 @@ func _refresh_death_effects(delta: float) -> void:
 			# Topple: the ghost starts tilted and eases flat with a slight
 			# bounce, dipping vertically mid-fall (the impact squash).
 			var ft: float = clampf(float(e[1]) / DEATH_FALL, 0.0, 1.0)
-			var ang: float = float(e[4]) * 0.55 * (1.0 - _ease_out_back(ft))
+			var ang: float = float(e[4]) * 0.55 * (1.0 - FxMath.ease_out_back(ft))
 			var sy: float = float(e[3]) * (1.0 - 0.18 * sin(ft * PI))
 			mm.set_instance_transform_2d(j, Transform2D(ang, Vector2(e[3], sy), 0.0, e[0]))
 			var c: Color = e[5]
 			c.a = 0.85 * life * life
 			mm.set_instance_color(j, c)
-
-
-# Birth scale: a quick anticipation squash (grow 0.3 -> 0.8), then an
-# ease-out-back spring to 1.0 with overshoot.
-func _birth_scale(t: float) -> float:
-	const ANTICIPATE := 0.3
-	if t < ANTICIPATE:
-		return lerpf(0.3, 0.8, t / ANTICIPATE)
-	return 0.8 + 0.2 * _ease_out_back((t - ANTICIPATE) / (1.0 - ANTICIPATE))
-
-
-func _ease_out_back(t: float) -> float:
-	const C1 := 1.70158
-	const C3 := C1 + 1.0
-	return 1.0 + C3 * pow(t - 1.0, 3) + C1 * pow(t - 1.0, 2)
 
 
 func _body_colors(n: int) -> PackedColorArray:
