@@ -42,12 +42,12 @@ var _glyph_clones: Array[MultiMeshInstance2D] = []
 # stepping. Identity is tracked by agent id (alive indices reshuffle as
 # agents die): both the previous and current id arrays are ascending, so a
 # two-pointer merge finds each agent's last smoothed position in O(n).
-# A jump larger than SNAP_DIST (torus seam crossing, or many ticks per
-# frame at high speed) snaps straight to the target — time-lapse stays crisp.
-# SMOOTH is the per-frame approach at 60 fps; _refresh_bodies scales it by
-# the real frame delta so the glide looks identical at any frame rate.
+# Only a seam crossing snaps: on a wrapped world a real displacement is at
+# most half the map per axis, so anything larger is the body reappearing on
+# the far side. SMOOTH is the approach at 60 fps, scaled by the frame delta
+# AND by ticks_per_frame — one frame of 64x covers 64 ticks of travel, so it
+# needs almost no easing, and time-lapse stays crisp instead of mushy.
 const SMOOTH: float = 0.35
-const SNAP_DIST: float = 4.0
 const DEATH_TTL: float = 1.4
 # Seconds for a death ghost to topple from tilted to flat (ease-out-back, so
 # it rolls a hair past flat and settles — a body hitting the ground).
@@ -533,7 +533,9 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	# then ease toward the new tick position. Becomes next frame's prev.
 	# The approach rate is scaled to the frame delta: at 60 fps this is
 	# exactly SMOOTH per frame, at 30 fps twice that — the same glide.
-	var k: float = 1.0 - pow(1.0 - SMOOTH, delta * 60.0)
+	var tick_rate: float = maxf(float(ticks_per_frame), 1.0)
+	var k: float = 1.0 - pow(1.0 - SMOOTH, delta * 60.0 * tick_rate)
+	var half_world: float = maxf(float(sim.world_size()) * 0.5, 1.0)
 	var now: float = Time.get_ticks_msec() / 1000.0
 	var smooth: PackedVector2Array = positions
 	_match_prev = PackedInt32Array()
@@ -557,7 +559,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			if p < pn and _prev_ids[p] == id:
 				_match_prev[i] = p
 				var from: Vector2 = _prev_smooth[p]
-				if from.distance_squared_to(target) <= SNAP_DIST * SNAP_DIST:
+				var d: Vector2 = target - from
+				if absf(d.x) < half_world and absf(d.y) < half_world:
 					smooth[i] = from.lerp(target, k)
 					# Measure the *rendered* step, not the sim step: the feet
 					# have to keep pace with the glide the viewer actually
@@ -566,10 +569,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				else:
 					smooth[i] = target
 				# Consume the matched entry: without this the next id's catch-up
-				# loop walks over this very agent and reports it dead while it
-				# is still alive — one phantom death per living agent per frame,
-				# which wiped the per-id animation state (facing, birth pop,
-				# gait) and kept the ghost pool full of corpses that never were.
+				# loop reports this very agent dead while it is still alive.
 				p += 1
 			else:
 				smooth[i] = target

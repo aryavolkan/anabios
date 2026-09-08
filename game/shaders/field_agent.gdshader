@@ -83,8 +83,17 @@ void vertex() {
 	float sq = sin(phase * 2.0) * anim.g;
 	VERTEX.y *= 1.0 - 0.05 * sq;
 	VERTEX.x *= 1.0 + 0.04 * sq;
+	// Eat (act 1): the atlas alternates reach-down and chomp, which on its own
+	// reads as a flat two-frame flicker. Press the body down into each chomp
+	// and let it spring back, so the bite has somewhere to land.
+	if (act > 0.5 && act < 1.5) {
+		float c = fract(TIME * action_fps * 0.5 + anim.r * 2.0);
+		float chew = pow(max(sin(c * 6.2831853), 0.0), 0.7);
+		VERTEX.y -= chew * 0.05;
+		VERTEX.y *= 1.0 - chew * action_squash * 0.8;
+		VERTEX.x *= 1.0 + chew * action_squash * 0.5;
 	// Fight/attack (act 2): primate lunges; predators add a forward pounce arc.
-	if (act > 1.5 && act < 2.5) {
+	} else if (act > 1.5 && act < 2.5) {
 		float c = fract(TIME * action_fps * 0.5 + anim.r * 2.0);
 		float lunge = pow(max(sin(c * 3.14159265), 0.0), 1.5);
 		float dir = mix(1.0, -1.0, step(0.5, anim.b));
@@ -98,6 +107,15 @@ void vertex() {
 			VERTEX.y += lunge * 0.12;
 			VERTEX.x += dir * lunge * 0.06;
 		}
+	// Trade (act 3): one reach per loop, leaning out toward the partner the
+	// figure is facing and settling back, so the offer carries across rather
+	// than the arm just twitching in place.
+	} else if (act > 2.5 && act < 3.5) {
+		float c = fract(TIME * action_fps * 0.5 + anim.r * 2.0);
+		float reach = sin(c * 3.14159265);
+		float dir = mix(1.0, -1.0, step(0.5, anim.b));
+		VERTEX.x += dir * reach * 0.06;
+		VERTEX.y += reach * 0.02;
 	} else if (act > 3.5) {           // Flee/gallop (act 4)
 		if (rig_kind == 0 || rig_kind == 1) {
 			// Quadruped gallop: stretch the body along travel + a bounding hop
