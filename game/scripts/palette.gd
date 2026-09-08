@@ -41,6 +41,9 @@ const MODULE_NAMES: PackedStringArray = [
 const RAMP_DIET: Array = [[0.33, 0.70, 0.85], [0.00, 0.75, 0.95]]  # herb → carn
 const RAMP_ENERGY: Array = [[0.62, 0.70, 0.80], [0.14, 0.85, 0.98]]  # low → high
 const RAMP_AROUSAL: Array = [[0.55, 0.25, 0.70], [0.03, 0.80, 1.00]]  # calm → aroused
+# Healthy → feverish; the sick end lands on the codex's EpidemicOutbreak
+# chartreuse (event color 61) so the field reads as the same phenomenon.
+const RAMP_INFECTION: Array = [[0.23, 0.05, 0.55], [0.23, 0.60, 0.95]]
 
 # --- Discrete mood colors ---------------------------------------------------
 # Indexed by the mood discriminant from `alive_moods()` (mood.rs: 0 content,
