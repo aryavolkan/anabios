@@ -640,7 +640,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				if age < BIRTH_POP:
 					sz *= FxMath.birth_scale(age / BIRTH_POP)
 			# Upright: the hominin stands, not spins — heading drives the
-			# walk shader (moving flag + facing), not the transform rotation.
+			# walk shader (walk weight + facing), not the transform rotation.
 			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
 			mm.set_instance_transform_2d(j, t)
 			mm.set_instance_color(j, body_colors[i])

@@ -53,17 +53,16 @@ void vertex() {
 	anim = INSTANCE_CUSTOM;
 	float phase = anim.r * 6.2831853;
 	float act = anim.a * 4.0;
-	// Walking: the bob is baked into the passing pose, so only a small bounce
-	// here. Idle: slow breath-like bob with a hint of lateral sway. The
-	// QuadMesh is a 3D mesh, so its local +Y points up-screen in the 2D
-	// canvas: +VERTEX.y lifts the figure.
-	// The quad mesh is 1x1 in local space; the per-instance transform scales it
-	// to world size, so a local-unit offset scales with the body.
+	// The QuadMesh is a 3D mesh, so its local +Y points up-screen in the 2D
+	// canvas: +VERTEX.y lifts the figure. The mesh is 1x1 in local space and
+	// the per-instance transform scales it to world size, so a local-unit
+	// offset scales with the body.
 	// Idle: a slow breath-like bob on the clock, offset by the (frozen) cycle
 	// position so a settled cluster doesn't breathe in unison, plus a hint of
-	// lateral sway. Walking: the bounce rides the stride itself — two contacts
-	// per loop, body at its lowest as a foot plants — so it stays locked to the
-	// feet at whatever speed the agent happens to be travelling.
+	// lateral sway. Walking: the bob is mostly baked into the passing pose, so
+	// only a small bounce here — and it rides the stride itself (two contacts
+	// per loop, body lowest as a foot plants) rather than the clock, so it
+	// stays locked to the feet at whatever speed the agent is travelling.
 	float idle_y = sin(TIME * 6.2831853 * bob_hz + phase) * bob_amp;
 	float walk_y = -sin(phase * 2.0) * bob_amp * 0.5;
 	VERTEX.y += mix(idle_y, walk_y, anim.g);
