@@ -886,45 +886,45 @@ func _refresh_flashes() -> int:
 # lanes draw at ground level, under bodies and huts (z=-2 in the scene) — over
 # a busy market they used to pile up into bright coloured scribbles across the
 # village roofs instead of reading as paths worn between settlements.
-const STREAK_TTL: int = 8
-const TRADE_TTL: int = 24
-var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
-var _trade_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
+# Seconds, not frames: as integer per-frame counts a streak lived twice as long
+# in wall-clock at 30 fps. Values match the old 8 and 24 frames at 60 fps.
+const STREAK_TTL: float = 0.133
+const TRADE_TTL: float = 0.4
+var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, expiry: float, color]
+var _trade_trail: Array = []  # entries: [from: Vector2, to: Vector2, expiry: float, color]
 
 
-# Append this tick's segments to the trail, age it, then draw each survivor
-# as a tinted quad stretched from→to. Segments are unwrapped with the
-# shortest-path torus delta: a hop across the seam (|delta| near world size)
-# is really a short step the other way, and drawing it with the wrapped delta
-# lets the wrap clones render its continuation past the world edge.
+# Append this tick's segments, age the trail, then draw each survivor as a
+# tinted quad. Segments use the shortest-path torus delta: a hop across the
+# seam is really a short step the other way, and the wrap clones continue it.
 func _update_segment_trail(
 	trail: Array,
 	mm: MultiMesh,
 	segs: PackedVector2Array,
 	cols: PackedColorArray,
-	ttl: int,
+	ttl: float,
 	width: float,
 	max_alpha: float,
 	world: float,
 	flow: bool = false
 ) -> void:
+	# Absolute expiry, so ageing is wall-clock with no delta threaded through.
+	var now: float = Time.get_ticks_msec() / 1000.0
 	for i in segs.size() / 2:
-		trail.append([segs[2 * i], segs[2 * i + 1], ttl, cols[i]])
+		trail.append([segs[2 * i], segs[2 * i + 1], now + ttl, cols[i]])
 	# Perf: cap the trail at the multimesh budget, dropping the oldest first.
 	while trail.size() > mm.instance_count:
 		trail.pop_front()
-	# Age in place and compact out the expired.
+	# Compact out the expired.
 	var write := 0
 	for read_i in trail.size():
 		var s: Array = trail[read_i]
-		s[2] -= 1
-		if s[2] > 0:
+		if s[2] > now:
 			trail[write] = s
 			write += 1
 	trail.resize(write)
 	var m: int = mini(trail.size(), mm.instance_count)
 	mm.visible_instance_count = m
-	var flow_t: float = Time.get_ticks_msec() / 1000.0
 	for i in m:
 		var from: Vector2 = trail[i][0]
 		var d: Vector2 = trail[i][1] - from
@@ -940,13 +940,13 @@ func _update_segment_trail(
 		var mid: Vector2 = from + d * 0.5
 		mm.set_instance_transform_2d(i, Transform2D(d.angle(), Vector2(len, width), 0.0, mid))
 		var c: Color = trail[i][3]
-		c.a = max_alpha * float(trail[i][2]) / float(ttl)
+		c.a = max_alpha * clampf((float(trail[i][2]) - now) / ttl, 0.0, 1.0)
 		if flow:
 			# Directional pulses: project the midpoint onto the segment's own
 			# axis so the bright spots march from `from` toward `to`. Collinear
 			# neighbours of one route stay phase-continuous; bends and torus
 			# seams introduce a small phase jump (invisible in practice).
-			c.a *= FxMath.flow_pulse(mid.dot(d / len), flow_t)
+			c.a *= FxMath.flow_pulse(mid.dot(d / len), now)
 		mm.set_instance_color(i, c)
 
 
