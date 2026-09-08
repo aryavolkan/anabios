@@ -6,7 +6,7 @@ const Palette = preload("res://scripts/palette.gd")
 const GROUND_NAMES := [
 	"biome", "phero-0", "phero-1", "phero-2", "phero-3", "env-optimum", "succession", "markets"
 ]
-const BODY_NAMES := ["species", "dialect", "diet", "energy", "arousal", "mood"]
+const BODY_NAMES := ["species", "dialect", "diet", "energy", "arousal", "mood", "infection"]
 
 # Key bindings, pre-broken to lines that fit the panel's 370px slot at font 13.
 # (One long "panels" line used to overflow the panel and bleed through the codex
@@ -99,6 +99,9 @@ func _rebuild_key(body_mode: int) -> void:
 				"mood color/name tables out of sync"
 			)
 			_key_box.add_child(_swatch_wrap(Palette.MOOD_COLORS, mood_names))
+		6:
+			_key_box.add_child(_header("body: infection"))
+			_key_box.add_child(_ramp_row(Palette.RAMP_INFECTION, "healthy", "feverish"))
 		_:
 			_key_box.add_child(_header("body: species — each animal in its own coat colours"))
 

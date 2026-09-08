@@ -15,7 +15,8 @@ const BODY_DIET := 2
 const BODY_ENERGY := 3
 const BODY_AFFECT := 4
 const BODY_MOOD := 5
-const BODY_MAX := 6
+const BODY_INFECTION := 6
+const BODY_MAX := 7
 
 var ground_mode: int = GROUND_BIOME
 var body_mode: int = BODY_SPECIES
@@ -90,4 +91,6 @@ func _validate_body_mode() -> void:
 	if body_mode == BODY_AFFECT and not bool(sim.affect_active()):
 		body_mode = BODY_SPECIES
 	if body_mode == BODY_MOOD and not bool(sim.affect_active()):
+		body_mode = BODY_SPECIES
+	if body_mode == BODY_INFECTION and not bool(sim.disease_active()):
 		body_mode = BODY_SPECIES

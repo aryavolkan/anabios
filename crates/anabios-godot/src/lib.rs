@@ -574,6 +574,20 @@ impl Simulation {
         out
     }
 
+    /// Pathogen infection intensity per alive agent in `[0,1]` (0 = healthy),
+    /// same order as `alive_positions`. All-zero when `disease_enabled` is
+    /// off — the infection column is never written then.
+    #[func]
+    fn alive_infection(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(w.agents.infection[id as usize]);
+            }
+        }
+        out
+    }
+
     /// Mood discriminant (mood.rs: 0 content, 1 seek food, 2 seek water,
     /// 3 sleep, 4 flee, 5 fight, 6 seek mate, 7 mate) per alive agent, same
     /// order as `alive_positions`. All-zero (content) when `affect_enabled`
@@ -664,6 +678,10 @@ impl Simulation {
         d.set("affect_enabled", w.affect_enabled);
         d.set("arousal", anabios_core::affect::arousal(&w.agents.affect[i]));
         d.set("mood", anabios_core::mood::name(w.agents.mood[i]));
+        // H1: pathogen infection intensity, with the world flag so the
+        // inspector only renders the line in disease scenarios.
+        d.set("disease_enabled", w.disease_enabled);
+        d.set("infection", w.agents.infection[i]);
         // Basic needs: thirst/fatigue/asleep, with the world flag so the
         // inspector only renders the lines when the subsystem is active.
         d.set("basic_needs_enabled", w.basic_needs_enabled);
@@ -981,6 +999,13 @@ impl Simulation {
     #[func]
     fn affect_active(&self) -> bool {
         self.inner.as_ref().map(|w| w.affect_enabled).unwrap_or(false)
+    }
+
+    /// Whether the H1 disease subsystem is enabled — gates the infection
+    /// body-color mode in the mode cycle.
+    #[func]
+    fn disease_active(&self) -> bool {
+        self.inner.as_ref().map(|w| w.disease_enabled).unwrap_or(false)
     }
 
     /// Per-cell market-density tint for the E8 markets overlay: amber heat

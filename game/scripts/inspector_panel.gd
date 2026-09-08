@@ -144,6 +144,9 @@ func _process(_delta: float) -> void:
 		)
 	if info.get("affect_enabled", false):
 		lines.append("mood %s   arousal %.2f" % [info.get("mood", "content"), info["arousal"]])
+	if info.get("disease_enabled", false):
+		var infection: float = info.get("infection", 0.0)
+		lines.append("infection %.2f" % infection if infection > 0.0 else "healthy")
 	var held: Array = info.get("inventions", [])
 	if not held.is_empty():
 		lines.append(

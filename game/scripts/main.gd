@@ -741,57 +741,50 @@ func _ease_out_back(t: float) -> float:
 
 
 func _body_colors(n: int) -> PackedColorArray:
+	var out := PackedColorArray()
+	out.resize(n)
 	match overlay.body_mode:
 		overlay.BODY_DIALECT:
 			var hues: PackedFloat32Array = sim.alive_dialect_hue()
-			var out := PackedColorArray()
-			out.resize(n)
 			for i in n:
 				out[i] = Color.from_hsv(hues[i], 0.7, 0.95)
-			return out
 		overlay.BODY_DIET:
-			var diet: PackedFloat32Array = sim.alive_diet()
-			var out2 := PackedColorArray()
-			out2.resize(n)
-			for i in n:
-				out2[i] = Palette.ramp(Palette.RAMP_DIET, diet[i])
-			return out2
+			out = _ramp_body_colors(n, Palette.RAMP_DIET, sim.alive_diet(), 1.0)
 		overlay.BODY_ENERGY:
-			var en: PackedFloat32Array = sim.alive_energy()
-			var out3 := PackedColorArray()
-			out3.resize(n)
-			for i in n:
-				out3[i] = Palette.ramp(Palette.RAMP_ENERGY, en[i] / 50.0)
-			return out3
+			out = _ramp_body_colors(n, Palette.RAMP_ENERGY, sim.alive_energy(), 50.0)
 		overlay.BODY_AFFECT:
-			var ar: PackedFloat32Array = sim.alive_arousal()
-			var out5 := PackedColorArray()
-			out5.resize(n)
-			for i in n:
-				out5[i] = Palette.ramp(Palette.RAMP_AROUSAL, ar[i])
-			return out5
+			out = _ramp_body_colors(n, Palette.RAMP_AROUSAL, sim.alive_arousal(), 1.0)
+		overlay.BODY_INFECTION:
+			out = _ramp_body_colors(n, Palette.RAMP_INFECTION, sim.alive_infection(), 1.0)
 		overlay.BODY_MOOD:
 			var moods: PackedInt32Array = sim.alive_moods()
-			var out6 := PackedColorArray()
-			out6.resize(n)
 			for i in n:
-				out6[i] = Palette.MOOD_COLORS[clampi(moods[i], 0, Palette.MOOD_COLORS.size() - 1)]
-			return out6
+				out[i] = Palette.MOOD_COLORS[clampi(moods[i], 0, Palette.MOOD_COLORS.size() - 1)]
 		_:
 			# Species mode: Primate atlases carry their own coat/skin colours, so
 			# white; quadruped atlases are neutral grayscale, so each agent gets
 			# its per-species coat hue here. Diet/size come from the same batches
 			# _refresh_bodies already fetched.
-			var out4 := PackedColorArray()
-			out4.resize(n)
 			var diet: PackedFloat32Array = sim.alive_diet()
 			var sizes: PackedFloat32Array = sim.alive_sizes()
 			var sp_ids: PackedInt32Array = sim.alive_species_ids()
 			var live: PackedInt32Array = _livestock_flags(n)
 			for i in n:
 				var arch := MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0)
-				out4[i] = MammalSprites.coat_hue(arch, sp_ids[i])
-			return out4
+				out[i] = MammalSprites.coat_hue(arch, sp_ids[i])
+	return out
+
+
+# One body colour per agent from a Palette ramp over a per-agent scalar,
+# normalized by `scale` (energy runs 0..~50; the rest are already 0..1).
+func _ramp_body_colors(
+	n: int, ramp: Array, values: PackedFloat32Array, scale: float
+) -> PackedColorArray:
+	var out := PackedColorArray()
+	out.resize(n)
+	for i in n:
+		out[i] = Palette.ramp(ramp, values[i] / scale)
+	return out
 
 
 func _livestock_flags(n: int) -> PackedInt32Array:
