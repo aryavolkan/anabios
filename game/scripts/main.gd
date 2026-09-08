@@ -68,6 +68,14 @@ var _birth_times: Dictionary = {}
 # Smoothed per-id facing (0 = right, 1 = left) so turns ease through a brief
 # horizontal squash in the shader instead of snapping the mirror.
 var _facing: Dictionary = {}
+# Per-id gait cycle position (0..1 = one contact -> passing -> contact ->
+# passing loop), advanced by the distance a body actually covers on screen so
+# the cadence tracks real speed instead of a fixed frame rate. Frozen while an
+# agent stands still, where it doubles as that agent's stable idle-bob offset.
+var _gait: Dictionary = {}
+# Distance each body moved on screen this frame, parallel to the alive arrays;
+# feeds the gait accumulator above. Filled in the smoothing pass.
+var _step_dist: PackedFloat32Array = PackedFloat32Array()
 
 # Tier 2 effects (embers, firelight, ambient weather, bloom, codex-event
 # watcher) live in viewer_effects.gd, created as a child in _ready.
@@ -527,6 +535,10 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	var now: float = Time.get_ticks_msec() / 1000.0
 	var smooth: PackedVector2Array = positions
 	_match_prev = PackedInt32Array()
+	# Reset the per-frame gait input; a body with no previous position (born
+	# this frame, or snapped across the torus seam) contributes no stride.
+	_step_dist.resize(n)
+	_step_dist.fill(0.0)
 	if have_ids:
 		smooth = PackedVector2Array()
 		smooth.resize(n)
@@ -545,8 +557,18 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				var from: Vector2 = _prev_smooth[p]
 				if from.distance_squared_to(target) <= SNAP_DIST * SNAP_DIST:
 					smooth[i] = from.lerp(target, k)
+					# Measure the *rendered* step, not the sim step: the feet
+					# have to keep pace with the glide the viewer actually
+					# draws, which lags the tick position.
+					_step_dist[i] = from.distance_to(smooth[i])
 				else:
 					smooth[i] = target
+				# Consume the matched entry: without this the next id's catch-up
+				# loop walks over this very agent and reports it dead while it
+				# is still alive — one phantom death per living agent per frame,
+				# which wiped the per-id animation state (facing, birth pop,
+				# gait) and kept the ghost pool full of corpses that never were.
+				p += 1
 			else:
 				smooth[i] = target
 				if not _birth_times.has(id):
@@ -601,6 +623,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		var mm: MultiMesh = _body_mmis[b].multimesh
 		var idx: PackedInt32Array = buckets[b]
 		var m: int = idx.size()
+		var gait_fps: float = MammalSprites.bucket_gait_fps(b)
 		if m > mm.instance_count:
 			mm.instance_count = m
 		mm.visible_instance_count = m
@@ -619,11 +642,9 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
 			mm.set_instance_transform_2d(j, t)
 			mm.set_instance_color(j, body_colors[i])
-			# Per-instance animation state for the field_agent shader. Phase
-			# is hashed from position (stable enough across alive-index
-			# reshuffles); the sim reports heading exactly 0.0 when
-			# velocity ≈ 0, which doubles as the idle flag; facing is the
-			# heading's x-sign.
+			# Per-instance animation state for the field_agent shader. The sim
+			# reports heading exactly 0.0 when velocity ≈ 0, which doubles as
+			# the idle flag; facing is the heading's x-sign.
 			var rot: float = rots[i] if have_rots else 0.0
 			var moving: float = 1.0 if rot != 0.0 else 0.0
 			if moving != 0.0 and _moving_sample.size() < 8:
@@ -636,7 +657,18 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 					float(_facing.get(ids[i], face_left)), face_left, minf(1.0, delta * 12.0)
 				)
 				_facing[ids[i]] = face_left
-			var phase: float = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
+			# Gait cycle position, paced by the distance this body covered on
+			# screen so the feet keep up with the ground (see FxMath).
+			var phase: float
+			if have_ids:
+				var gid: int = ids[i]
+				phase = float(_gait.get(gid, FxMath.seed_gait(gid)))
+				if moving != 0.0:
+					var stride: float = FxMath.stride_len(sizes[i], gait_fps)
+					phase = FxMath.advance_gait(phase, _step_dist[i], stride)
+				_gait[gid] = phase
+			else:
+				phase = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
 			# Action pose from sim signals: near a combat streak's attacker
 			# end -> fight if standing to strike, flee if running; near a
 			# trade route's trader end -> trade; idle with rising energy ->
@@ -668,6 +700,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 # recycled id would pop in fresh.
 func _on_agent_death(id: int, prev_idx: int) -> void:
 	_birth_times.erase(id)
+	_gait.erase(id)
 	var side: float = -1.0 if float(_facing.get(id, 0.0)) >= 0.5 else 1.0
 	_facing.erase(id)
 	if _death_effects.size() >= DEATH_CAP:
@@ -950,7 +983,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			inspector.pin(hit_id)
 	elif event is InputEventKey:
 		var k := event as InputEventKey
-		if k.pressed and not k.echo and k.keycode == KEY_M:
+		if k.pressed and not k.echo and k.keycode == KEY_F11:
+			# Keep windowed mode as the default, but make fullscreen a reversible
+			# presentation choice for demos and screenshots.
+			var mode := DisplayServer.window_get_mode()
+			DisplayServer.window_set_mode(
+				(
+					DisplayServer.WINDOW_MODE_WINDOWED
+					if mode == DisplayServer.WINDOW_MODE_FULLSCREEN
+					else DisplayServer.WINDOW_MODE_FULLSCREEN
+				)
+			)
+		elif k.pressed and not k.echo and k.keycode == KEY_M:
 			module_layers.visible = not module_layers.visible
 			for clone in _glyph_clones:
 				clone.visible = module_layers.visible

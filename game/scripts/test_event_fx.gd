@@ -43,6 +43,7 @@ func _init() -> void:
 	_check_apply_all()
 	_check_pop_scale()
 	_check_flow_pulse()
+	_check_gait()
 	_check_radial_texture()
 	if _failed:
 		quit(1)
@@ -76,6 +77,49 @@ func _check_flow_pulse() -> void:
 	var c := FxMath.flow_pulse(3.0, 0.4)
 	var d := FxMath.flow_pulse(3.0 + w, 0.4)
 	_check(absf(c - d) < 0.001, "flow pulse periodic along the route")
+
+
+# Distance-driven gait. The cycle must be a function of ground covered — not of
+# frame count, frame rate, or heading — which is exactly what the old
+# position-hashed phase got wrong.
+func _check_gait() -> void:
+	var stride := FxMath.stride_len(1.0, FxMath.GAIT_FPS_REF)
+	_check(absf(stride - FxMath.STRIDE_WORLD) < 0.001, "reference size/cadence = base stride")
+	_check(FxMath.stride_len(2.0, FxMath.GAIT_FPS_REF) > stride, "a bigger body strides further")
+	_check(
+		FxMath.stride_len(1.0, FxMath.GAIT_FPS_REF * 0.5) > stride,
+		"a slower authored cadence covers more ground per cycle"
+	)
+	_check(FxMath.stride_len(0.0, 0.0) > 0.0, "stride guards a zero size/cadence")
+
+	# Seeds spread a fresh crowd around the loop, and are stable per id.
+	var octants := {}
+	for id in 64:
+		var s := FxMath.seed_gait(id)
+		_check(s >= 0.0 and s < 1.0, "seed %d stays inside the cycle" % id)
+		_check(s == FxMath.seed_gait(id), "seed %d is stable" % id)
+		octants[int(s * 8.0)] = true
+	_check(octants.size() >= 6, "seeds spread across the loop (%d/8 octants)" % octants.size())
+
+	# Two strides of ground, chopped coarsely or finely, land on the same pose.
+	# A clocked or frame-rate-dependent cycle fails this.
+	var coarse := 0.25
+	for _c in 8:
+		coarse = FxMath.advance_gait(coarse, stride * 0.25, stride)
+	var fine := 0.25
+	for _f in 40:
+		fine = FxMath.advance_gait(fine, stride * 0.05, stride)
+	_check(
+		absf(coarse - fine) < 0.001, "cycle tracks distance, not frames (%f/%f)" % [coarse, fine]
+	)
+	_check(absf(coarse - 0.25) < 0.001, "a whole number of strides returns to the same pose")
+
+	# The per-frame ceiling holds, and the cycle never leaves [0, 1).
+	var capped := FxMath.advance_gait(0.0, stride * 100.0, stride)
+	_check(absf(capped - FxMath.GAIT_MAX_STEP) < 0.001, "a huge step is capped, not strobed")
+	for i in 20:
+		var p := FxMath.advance_gait(0.9, stride * i * 0.03, stride)
+		_check(p >= 0.0 and p < 1.0, "cycle wraps into range (step %d)" % i)
 
 
 func _check_radial_texture() -> void:

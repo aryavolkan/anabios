@@ -5,16 +5,21 @@ shader_type canvas_item;
 // figure: 4 gait rows, then TWO frames per action — eat/fight/trade/flee) and
 // passes per-instance state via INSTANCE_CUSTOM, written each tick in
 // main.gd::_refresh_bodies:
-//   r = phase (0..1, derived from position so alive-index reshuffles don't pop)
+//   r = gait cycle position (0..1 = one contact -> passing -> contact ->
+//       passing loop). Advanced CPU-side by the distance the body actually
+//       covers on screen, so the stride paces with the ground instead of
+//       ticking on a clock; frozen while an agent stands still, where it
+//       doubles as that agent's stable idle-bob offset.
 //   g = moving (1 walking, 0 idle)
 //   b = face_left (smoothed 0..1; mid-flip the mirror mix squashes the sprite
 //       horizontally, so turns read as a weight shift instead of a snap)
 //   a = action / 4 (0 none, 1 eat, 2 fight, 3 trade, 4 flee — sim signals)
 // Moving agents cycle contact -> passing -> counter-contact -> passing (a
-// step-lift-step gait with the bob baked into the passing pose); idle agents
-// hold the neutral pose and get a gentle procedural bob, so even a settled
-// cluster breathes. An acting agent loops its two action frames instead, and
-// the vertex stage adds a fight lunge / flee tremble on top.
+// step-lift-step gait with the bob baked into the passing pose), paced by the
+// distance travelled so feet don't slide; idle agents hold the neutral pose
+// and get a gentle procedural bob, so even a settled cluster breathes. An
+// acting agent loops its two action frames instead, and the vertex stage adds
+// a fight lunge / flee tremble on top.
 
 uniform int frames = 12;
 // Atlas layout: poses live in a SQUARE 64x64 grid, ATLAS_COLS per row (see
@@ -23,12 +28,20 @@ uniform int frames = 12;
 const float ATLAS_COLS = 4.0;
 const float ATLAS_PX = 64.0;
 const float CELL_PX = 16.0;
-// Walk cadence (frames/sec) and idle bob (Hz, amplitude in sprite heights).
+// Authored walk cadence (frames/sec). The walk cycle itself is now paced by
+// distance travelled (see anim.r above), so this only sets the flee gallop's
+// bounding rate; main.gd reuses the same per-bucket value to scale stride
+// length, which is where the authored per-species character now lives.
 uniform float walk_fps = 5.0;
+// Idle bob (Hz, amplitude in sprite heights).
 uniform float bob_hz = 1.4;
 uniform float bob_amp = 0.04;
 // Action loop cadence: each action's A/B frames swap at this rate.
 uniform float action_fps = 4.0;
+// Small physical accents layered over the pixel poses. Keeping these in the
+// vertex stage preserves the crisp atlas while making a crowd feel alive.
+uniform float action_breath_amp = 0.035;
+uniform float action_squash = 0.06;
 // Signature-move family (mammal_sprites.RigKind): 0 prey, 1 predator,
 // 2 primate (default = today's apes, all new branches off), 3 livestock.
 uniform int rig_kind = 2;
@@ -43,15 +56,30 @@ void vertex() {
 	// here. Idle: slow breath-like bob with a hint of lateral sway. The
 	// QuadMesh is a 3D mesh, so its local +Y points up-screen in the 2D
 	// canvas: +VERTEX.y lifts the figure.
-	float hz = mix(bob_hz, walk_fps * 0.5, anim.g);
-	float amp = mix(bob_amp, bob_amp * 0.5, anim.g);
 	// The quad mesh is 1x1 in local space; the per-instance transform scales it
 	// to world size, so a local-unit offset scales with the body.
-	VERTEX.y += sin(TIME * 6.2831853 * hz + phase) * amp;
-	VERTEX.x += cos(TIME * 6.2831853 * hz * 0.5 + phase) * amp * 0.4 * (1.0 - anim.g);
+	// Idle: a slow breath-like bob on the clock, offset by the (frozen) cycle
+	// position so a settled cluster doesn't breathe in unison, plus a hint of
+	// lateral sway. Walking: the bounce rides the stride itself — two contacts
+	// per loop, body at its lowest as a foot plants — so it stays locked to the
+	// feet at whatever speed the agent happens to be travelling.
+	float idle_y = sin(TIME * 6.2831853 * bob_hz + phase) * bob_amp;
+	float walk_y = -sin(phase * 2.0) * bob_amp * 0.5;
+	VERTEX.y += mix(idle_y, walk_y, anim.g);
+	VERTEX.x += cos(TIME * 6.2831853 * bob_hz * 0.5 + phase) * bob_amp * 0.4 * (1.0 - anim.g);
+	// Action poses get a slow, offset weight shift instead of freezing between
+	// their two atlas frames. The phase keeps nearby agents from breathing in
+	// perfect lockstep, while the action id changes the character of the motion.
+	if (act > 0.5) {
+		float action_wave = sin(TIME * 6.2831853 * (action_fps * 0.5) + phase);
+		VERTEX.y += action_wave * action_breath_amp;
+		VERTEX.x += cos(TIME * 6.2831853 * (action_fps * 0.25) + phase) * action_breath_amp * 0.35;
+	}
 	// Squash & stretch synced to the stride: compress at the contact poses,
-	// stretch through the passing pose, so the gait has weight.
-	float sq = sin(TIME * 6.2831853 * walk_fps * 0.5 + phase) * anim.g;
+	// stretch through the passing pose, so the gait has weight. Driven by the
+	// same cycle position as the frame index, so the weight lands with the
+	// feet however fast the body is moving.
+	float sq = sin(phase * 2.0) * anim.g;
 	VERTEX.y *= 1.0 - 0.05 * sq;
 	VERTEX.x *= 1.0 + 0.04 * sq;
 	// Fight/attack (act 2): primate lunges; predators add a forward pounce arc.
@@ -59,6 +87,11 @@ void vertex() {
 		float c = fract(TIME * action_fps * 0.5 + anim.r * 2.0);
 		float lunge = pow(max(sin(c * 3.14159265), 0.0), 1.5);
 		float dir = mix(1.0, -1.0, step(0.5, anim.b));
+		// A brief compression before the strike gives the lunge a readable
+		// anticipation beat without needing another atlas pose.
+		float prep = smoothstep(0.0, 0.22, c) * (1.0 - smoothstep(0.22, 0.42, c));
+		VERTEX.x *= 1.0 - prep * action_squash;
+		VERTEX.y *= 1.0 + prep * action_squash;
 		VERTEX.x += dir * lunge * 0.10;
 		if (rig_kind == 1) {          // PREDATOR pounce: lift through the leap
 			VERTEX.y += lunge * 0.12;
@@ -104,10 +137,12 @@ void fragment() {
 		float a2 = floor(mod(TIME * action_fps + anim.r * 2.0, 2.0));
 		fr = 2.0 + act * 2.0 + a2;
 	} else {
-		// Gait: s steps through 0..3 at walk_fps (phase-offset so a crowd
-		// doesn't march in lockstep); map to poses 1,2,3,2 = contact,
+		// Gait: anim.r is the distance-driven cycle position, so s steps
+		// through 0..3 once per stride; map to poses 1,2,3,2 = contact,
 		// passing, contact, passing. Idle agents hold pose 0 (neutral).
-		float s = mod(floor(TIME * walk_fps + anim.r * 4.0), 4.0);
+		// Crowds de-sync because each agent seeds and accumulates its own
+		// cycle, not because of a clock offset.
+		float s = mod(floor(anim.r * 4.0), 4.0);
 		fr = mix(0.0, 1.0 + min(s, 4.0 - s), anim.g);
 	}
 	// Frames live in a 64x64 grid, ATLAS_COLS per row; cells are pre-flipped
