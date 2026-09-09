@@ -7,6 +7,7 @@ extends Node2D
 # Salt. Pure presentation over read-only sim state; the sim is unchanged.
 
 const Buildings = preload("res://scripts/building_sprites.gd")
+const FxMath = preload("res://scripts/fx_math.gd")
 
 const CARAVAN_NEIGHBORS := 2  # edges added per hub (undirected, deduped)
 const CARTS_PER_ROUTE := 3
@@ -176,7 +177,11 @@ func _animate() -> void:
 	for g in Buildings.GOOD_COUNT:
 		good_xf.append([])
 	# Convoy centre travels within [CONVOY_HALF, 1-CONVOY_HALF] so all carts stay on-route.
-	var center := lerpf(CONVOY_HALF, 1.0 - CONVOY_HALF, pingpong(_t / TRAVERSE_PERIOD, 1.0))
+	# Ease the turnaround: a bare pingpong is a triangle wave, so the convoy
+	# reverses at full speed at each end of the route. shuttle_ease keeps the
+	# period but brings the carts to a stop before they turn.
+	var tri := pingpong(_t / TRAVERSE_PERIOD, 1.0)
+	var center := lerpf(CONVOY_HALF, 1.0 - CONVOY_HALF, FxMath.shuttle_ease(tri))
 	for r in _routes:
 		var pa: Vector2 = r["pa"]
 		var pb: Vector2 = r["pb"]

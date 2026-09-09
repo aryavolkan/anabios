@@ -38,16 +38,14 @@ var _body_mmis: Array[MultiMeshInstance2D] = []
 var _glyph_clones: Array[MultiMeshInstance2D] = []
 
 # Smooth-motion state. Agents teleport once per tick; rendering eases each
-# body toward its latest tick position so movement glides instead of
-# stepping. Identity is tracked by agent id (alive indices reshuffle as
-# agents die): both the previous and current id arrays are ascending, so a
-# two-pointer merge finds each agent's last smoothed position in O(n).
-# A jump larger than SNAP_DIST (torus seam crossing, or many ticks per
-# frame at high speed) snaps straight to the target — time-lapse stays crisp.
-# SMOOTH is the per-frame approach at 60 fps; _refresh_bodies scales it by
-# the real frame delta so the glide looks identical at any frame rate.
+# body toward its latest tick position so movement glides. Identity is by
+# agent id (alive indices reshuffle as agents die): both id arrays ascend, so
+# a two-pointer merge finds each agent's last smoothed position in O(n).
+# Only a seam crossing snaps: on a wrapped world a real displacement is at
+# most half the map per axis. SMOOTH is the approach at 60 fps, scaled by the
+# frame delta AND ticks_per_frame — one frame of 64x covers 64 ticks, so it
+# needs almost no easing and time-lapse stays crisp instead of mushy.
 const SMOOTH: float = 0.35
-const SNAP_DIST: float = 4.0
 const DEATH_TTL: float = 1.4
 # Seconds for a death ghost to topple from tilted to flat (ease-out-back, so
 # it rolls a hair past flat and settles — a body hitting the ground).
@@ -65,9 +63,19 @@ var _prev_color: PackedColorArray = PackedColorArray()
 var _death_mmis: Array[MultiMeshInstance2D] = []
 var _death_effects: Array = []
 var _birth_times: Dictionary = {}
-# Smoothed per-id facing (0 = right, 1 = left) so turns ease through a brief
-# horizontal squash in the shader instead of snapping the mirror.
+# Per-id facing: (committed side 0 right / 1 left, eased value, low-passed
+# heading x). Turns ease through a horizontal squash, not a snap. See FxMath.
 var _facing: Dictionary = {}
+# Per-id gait cycle position (0..1 = one contact -> passing -> contact ->
+# passing loop), advanced by the distance a body actually covers on screen so
+# the cadence tracks real speed instead of a fixed frame rate. Frozen while an
+# agent stands still, where it doubles as that agent's stable idle-bob offset.
+var _gait: Dictionary = {}
+# Per-id locomotion state (hold credit, blended walk weight) — see FxMath.
+var _locomotion: Dictionary = {}
+# Distance each body moved on screen this frame, parallel to the alive arrays;
+# feeds the gait accumulator above. Filled in the smoothing pass.
+var _step_dist: PackedFloat32Array = PackedFloat32Array()
 
 # Tier 2 effects (embers, firelight, ambient weather, bloom, codex-event
 # watcher) live in viewer_effects.gd, created as a child in _ready.
@@ -108,15 +116,12 @@ func _ready() -> void:
 	carcasses.texture = disc
 	flashes.texture = disc
 	# The agents are the apes of DIT: render each as an 8-bit hominin in its
-	# species' own colours (zone-painted coat / skin / accent) instead of a
-	# plain disc. Each species gets its own MultiMesh + 4-pose walk atlas; the
-	# figure is drawn full-colour, and the [C] overlays (dialect / diet /
-	# energy) multiply on top as a tint when cycling away from the default
-	# species view. Agents animate: the shader reads per-instance data
-	# (phase / moving / facing) written each tick in _refresh_bodies.
-	# Texture + material are set BEFORE _make_wrap_clones() so the 8 torus
-	# wrap clones inherit them; use_custom_data exposes INSTANCE_CUSTOM to
-	# the shader (and is shared by the clones via the same MultiMesh).
+	# species' own colours instead of a plain disc, one MultiMesh + pose atlas
+	# per bucket, with the [C] overlays multiplying on top as a tint. The
+	# shader reads per-instance animation state written each tick in
+	# _refresh_bodies. Texture + material are set BEFORE _make_wrap_clones() so
+	# the 8 torus wrap clones inherit them; use_custom_data exposes
+	# INSTANCE_CUSTOM (shared by the clones via the same MultiMesh).
 	# Per-bucket gait cadence and rig kind come from the archetype registry
 	# (bucket_gait_fps reads ApeSprites.WALK_FPS for the hominin buckets).
 	_body_mmis.append(bodies)
@@ -523,10 +528,16 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	# then ease toward the new tick position. Becomes next frame's prev.
 	# The approach rate is scaled to the frame delta: at 60 fps this is
 	# exactly SMOOTH per frame, at 30 fps twice that — the same glide.
-	var k: float = 1.0 - pow(1.0 - SMOOTH, delta * 60.0)
+	var tick_rate: float = maxf(float(ticks_per_frame), 1.0)
+	var k: float = 1.0 - pow(1.0 - SMOOTH, delta * 60.0 * tick_rate)
+	var half_world: float = maxf(float(sim.world_size()) * 0.5, 1.0)
 	var now: float = Time.get_ticks_msec() / 1000.0
 	var smooth: PackedVector2Array = positions
 	_match_prev = PackedInt32Array()
+	# Reset the per-frame gait input; a body with no previous position (born
+	# this frame, or snapped across the torus seam) contributes no stride.
+	_step_dist.resize(n)
+	_step_dist.fill(0.0)
 	if have_ids:
 		smooth = PackedVector2Array()
 		smooth.resize(n)
@@ -543,10 +554,18 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			if p < pn and _prev_ids[p] == id:
 				_match_prev[i] = p
 				var from: Vector2 = _prev_smooth[p]
-				if from.distance_squared_to(target) <= SNAP_DIST * SNAP_DIST:
+				var d: Vector2 = target - from
+				if absf(d.x) < half_world and absf(d.y) < half_world:
 					smooth[i] = from.lerp(target, k)
+					# Measure the *rendered* step, not the sim step: the feet
+					# have to keep pace with the glide the viewer actually
+					# draws, which lags the tick position.
+					_step_dist[i] = from.distance_to(smooth[i])
 				else:
 					smooth[i] = target
+				# Consume the matched entry: without this the next id's catch-up
+				# loop reports this very agent dead while it is still alive.
+				p += 1
 			else:
 				smooth[i] = target
 				if not _birth_times.has(id):
@@ -601,6 +620,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		var mm: MultiMesh = _body_mmis[b].multimesh
 		var idx: PackedInt32Array = buckets[b]
 		var m: int = idx.size()
+		var gait_fps: float = MammalSprites.bucket_gait_fps(b)
 		if m > mm.instance_count:
 			mm.instance_count = m
 		mm.visible_instance_count = m
@@ -613,30 +633,55 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			if have_ids:
 				var age: float = now - float(_birth_times.get(ids[i], now - 1.0))
 				if age < BIRTH_POP:
-					sz *= _birth_scale(age / BIRTH_POP)
+					sz *= FxMath.birth_scale(age / BIRTH_POP)
 			# Upright: the hominin stands, not spins — heading drives the
-			# walk shader (moving flag + facing), not the transform rotation.
+			# walk shader (walk weight + facing), not the transform rotation.
 			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
 			mm.set_instance_transform_2d(j, t)
 			mm.set_instance_color(j, body_colors[i])
-			# Per-instance animation state for the field_agent shader. Phase
-			# is hashed from position (stable enough across alive-index
-			# reshuffles); the sim reports heading exactly 0.0 when
-			# velocity ≈ 0, which doubles as the idle flag; facing is the
-			# heading's x-sign.
+			# Per-instance animation state for the field_agent shader. The sim
+			# reports heading exactly 0.0 when velocity ≈ 0, which doubles as
+			# the idle flag; facing is the heading's x-sign.
 			var rot: float = rots[i] if have_rots else 0.0
-			var moving: float = 1.0 if rot != 0.0 else 0.0
-			if moving != 0.0 and _moving_sample.size() < 8:
+			# `moving` is the blended 0..1 walk weight the shader mixes its
+			# secondary motion with; `walking` is the debounced state picking
+			# the pose and driving the gait. Splitting them stops the sprite
+			# popping on the sim's flickering heading (~3.5 times a second).
+			var walking: bool = rot != 0.0
+			var moving: float = 1.0 if walking else 0.0
+			if have_ids:
+				var loco: Vector2 = FxMath.step_locomotion(
+					_locomotion.get(ids[i], Vector2.ZERO), walking, delta
+				)
+				_locomotion[ids[i]] = loco
+				walking = loco.x > 0.0
+				moving = loco.y
+			if walking and _moving_sample.size() < 8:
 				_moving_sample.append(smooth[i])
 			# Ease the facing mirror per id: the shader's fractional mix turns
-			# the transition into a quick flip-squash rather than a snap.
-			var face_left := 1.0 if cos(rot) < 0.0 else 0.0
+			# the transition into a quick flip-squash rather than a snap. The
+			# side is deadbanded and held while stopped (see FxMath), so a
+			# flickering heading cannot strobe the sprite.
+			var cx: float = cos(rot)
+			var face_left := 1.0 if cx < 0.0 else 0.0
 			if have_ids:
-				face_left = lerpf(
-					float(_facing.get(ids[i], face_left)), face_left, minf(1.0, delta * 12.0)
+				var face: Vector3 = FxMath.step_facing(
+					_facing.get(ids[i], Vector3(face_left, face_left, cx)), cx, walking, delta
 				)
-				_facing[ids[i]] = face_left
-			var phase: float = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
+				_facing[ids[i]] = face
+				face_left = face.y
+			# Gait cycle position, paced by the distance this body covered on
+			# screen so the feet keep up with the ground (see FxMath).
+			var phase: float
+			if have_ids:
+				var gid: int = ids[i]
+				phase = float(_gait.get(gid, FxMath.seed_gait(gid)))
+				if walking:
+					var stride: float = FxMath.stride_len(sizes[i], gait_fps)
+					phase = FxMath.advance_gait(phase, _step_dist[i], stride)
+				_gait[gid] = phase
+			else:
+				phase = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
 			# Action pose from sim signals: near a combat streak's attacker
 			# end -> fight if standing to strike, flee if running; near a
 			# trade route's trader end -> trade; idle with rising energy ->
@@ -644,14 +689,14 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			var act := 0.0
 			for fp in _fight_pts:
 				if smooth[i].distance_squared_to(fp) < 36.0:
-					act = 2.0 if moving == 0.0 else 4.0
+					act = 4.0 if walking else 2.0
 					break
 			if act == 0.0:
 				for tp in _trade_pts:
 					if smooth[i].distance_squared_to(tp) < 36.0:
 						act = 3.0
 						break
-			if act == 0.0 and moving == 0.0 and have_en:
+			if act == 0.0 and not walking and have_en:
 				var pi: int = _match_prev[i] if i < _match_prev.size() else -1
 				if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
 					act = 1.0
@@ -668,7 +713,10 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 # recycled id would pop in fresh.
 func _on_agent_death(id: int, prev_idx: int) -> void:
 	_birth_times.erase(id)
-	var side: float = -1.0 if float(_facing.get(id, 0.0)) >= 0.5 else 1.0
+	_gait.erase(id)
+	_locomotion.erase(id)
+	var fv: Vector3 = _facing.get(id, Vector3.ZERO)
+	var side: float = -1.0 if fv.y >= 0.5 else 1.0
 	_facing.erase(id)
 	if _death_effects.size() >= DEATH_CAP:
 		_death_effects.pop_front()
@@ -717,27 +765,12 @@ func _refresh_death_effects(delta: float) -> void:
 			# Topple: the ghost starts tilted and eases flat with a slight
 			# bounce, dipping vertically mid-fall (the impact squash).
 			var ft: float = clampf(float(e[1]) / DEATH_FALL, 0.0, 1.0)
-			var ang: float = float(e[4]) * 0.55 * (1.0 - _ease_out_back(ft))
+			var ang: float = float(e[4]) * 0.55 * (1.0 - FxMath.ease_out_back(ft))
 			var sy: float = float(e[3]) * (1.0 - 0.18 * sin(ft * PI))
 			mm.set_instance_transform_2d(j, Transform2D(ang, Vector2(e[3], sy), 0.0, e[0]))
 			var c: Color = e[5]
 			c.a = 0.85 * life * life
 			mm.set_instance_color(j, c)
-
-
-# Birth scale: a quick anticipation squash (grow 0.3 -> 0.8), then an
-# ease-out-back spring to 1.0 with overshoot.
-func _birth_scale(t: float) -> float:
-	const ANTICIPATE := 0.3
-	if t < ANTICIPATE:
-		return lerpf(0.3, 0.8, t / ANTICIPATE)
-	return 0.8 + 0.2 * _ease_out_back((t - ANTICIPATE) / (1.0 - ANTICIPATE))
-
-
-func _ease_out_back(t: float) -> float:
-	const C1 := 1.70158
-	const C3 := C1 + 1.0
-	return 1.0 + C3 * pow(t - 1.0, 3) + C1 * pow(t - 1.0, 2)
 
 
 func _body_colors(n: int) -> PackedColorArray:
@@ -853,45 +886,45 @@ func _refresh_flashes() -> int:
 # lanes draw at ground level, under bodies and huts (z=-2 in the scene) — over
 # a busy market they used to pile up into bright coloured scribbles across the
 # village roofs instead of reading as paths worn between settlements.
-const STREAK_TTL: int = 8
-const TRADE_TTL: int = 24
-var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
-var _trade_trail: Array = []  # entries: [from: Vector2, to: Vector2, ttl: int, color: Color]
+# Seconds, not frames: as integer per-frame counts a streak lived twice as long
+# in wall-clock at 30 fps. Values match the old 8 and 24 frames at 60 fps.
+const STREAK_TTL: float = 0.133
+const TRADE_TTL: float = 0.4
+var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, expiry: float, color]
+var _trade_trail: Array = []  # entries: [from: Vector2, to: Vector2, expiry: float, color]
 
 
-# Append this tick's segments to the trail, age it, then draw each survivor
-# as a tinted quad stretched from→to. Segments are unwrapped with the
-# shortest-path torus delta: a hop across the seam (|delta| near world size)
-# is really a short step the other way, and drawing it with the wrapped delta
-# lets the wrap clones render its continuation past the world edge.
+# Append this tick's segments, age the trail, then draw each survivor as a
+# tinted quad. Segments use the shortest-path torus delta: a hop across the
+# seam is really a short step the other way, and the wrap clones continue it.
 func _update_segment_trail(
 	trail: Array,
 	mm: MultiMesh,
 	segs: PackedVector2Array,
 	cols: PackedColorArray,
-	ttl: int,
+	ttl: float,
 	width: float,
 	max_alpha: float,
 	world: float,
 	flow: bool = false
 ) -> void:
+	# Absolute expiry, so ageing is wall-clock with no delta threaded through.
+	var now: float = Time.get_ticks_msec() / 1000.0
 	for i in segs.size() / 2:
-		trail.append([segs[2 * i], segs[2 * i + 1], ttl, cols[i]])
+		trail.append([segs[2 * i], segs[2 * i + 1], now + ttl, cols[i]])
 	# Perf: cap the trail at the multimesh budget, dropping the oldest first.
 	while trail.size() > mm.instance_count:
 		trail.pop_front()
-	# Age in place and compact out the expired.
+	# Compact out the expired.
 	var write := 0
 	for read_i in trail.size():
 		var s: Array = trail[read_i]
-		s[2] -= 1
-		if s[2] > 0:
+		if s[2] > now:
 			trail[write] = s
 			write += 1
 	trail.resize(write)
 	var m: int = mini(trail.size(), mm.instance_count)
 	mm.visible_instance_count = m
-	var flow_t: float = Time.get_ticks_msec() / 1000.0
 	for i in m:
 		var from: Vector2 = trail[i][0]
 		var d: Vector2 = trail[i][1] - from
@@ -907,13 +940,13 @@ func _update_segment_trail(
 		var mid: Vector2 = from + d * 0.5
 		mm.set_instance_transform_2d(i, Transform2D(d.angle(), Vector2(len, width), 0.0, mid))
 		var c: Color = trail[i][3]
-		c.a = max_alpha * float(trail[i][2]) / float(ttl)
+		c.a = max_alpha * clampf((float(trail[i][2]) - now) / ttl, 0.0, 1.0)
 		if flow:
 			# Directional pulses: project the midpoint onto the segment's own
 			# axis so the bright spots march from `from` toward `to`. Collinear
 			# neighbours of one route stay phase-continuous; bends and torus
 			# seams introduce a small phase jump (invisible in practice).
-			c.a *= FxMath.flow_pulse(mid.dot(d / len), flow_t)
+			c.a *= FxMath.flow_pulse(mid.dot(d / len), now)
 		mm.set_instance_color(i, c)
 
 
@@ -950,7 +983,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			inspector.pin(hit_id)
 	elif event is InputEventKey:
 		var k := event as InputEventKey
-		if k.pressed and not k.echo and k.keycode == KEY_M:
+		if k.pressed and not k.echo and k.keycode == KEY_F11:
+			# Keep windowed mode as the default, but make fullscreen a reversible
+			# presentation choice for demos and screenshots.
+			var mode := DisplayServer.window_get_mode()
+			DisplayServer.window_set_mode(
+				(
+					DisplayServer.WINDOW_MODE_WINDOWED
+					if mode == DisplayServer.WINDOW_MODE_FULLSCREEN
+					else DisplayServer.WINDOW_MODE_FULLSCREEN
+				)
+			)
+		elif k.pressed and not k.echo and k.keycode == KEY_M:
 			module_layers.visible = not module_layers.visible
 			for clone in _glyph_clones:
 				clone.visible = module_layers.visible

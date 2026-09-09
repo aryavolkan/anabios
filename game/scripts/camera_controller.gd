@@ -6,6 +6,9 @@ const ZOOM_MAX: float = 8.0
 const PAN_SPEED_KEYS: float = 600.0
 const ZOOM_DAMP: float = 12.0
 const PAN_INERTIA_DAMP: float = 5.0
+# How fast a held key ramps the pan up to PAN_SPEED_KEYS. Brisk enough not to
+# feel laggy, slow enough that the start of a pan is not a jolt.
+const PAN_ACCEL: float = 12.0
 const TRAUMA_DECAY: float = 1.8
 const TRAUMA_MAX: float = 0.6
 const SHAKE_MAX: float = 10.0
@@ -128,9 +131,14 @@ func _process(delta: float) -> void:
 		if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 			v.x += 1
 		if v != Vector2.ZERO:
-			position += v.normalized() * (PAN_SPEED_KEYS * delta) / zoom.x
-			_pan_vel = Vector2.ZERO
-		# Middle-drag fling: after release the pan glides to a stop.
+			# Keys drive the same velocity a drag does, ramping up to speed
+			# rather than starting at full tilt — and because the velocity
+			# survives the key release it falls into the glide below instead
+			# of dead-stopping. Both pan inputs now come to rest alike.
+			var target := v.normalized() * (PAN_SPEED_KEYS / zoom.x)
+			_pan_vel = _pan_vel.lerp(target, 1.0 - exp(-PAN_ACCEL * delta))
+			position += _pan_vel * delta
+		# Key release and middle-drag fling both glide to a stop from here.
 		elif not _dragging and _pan_vel != Vector2.ZERO:
 			position += _pan_vel * delta
 			_pan_vel = _pan_vel.lerp(Vector2.ZERO, 1.0 - exp(-PAN_INERTIA_DAMP * delta))
