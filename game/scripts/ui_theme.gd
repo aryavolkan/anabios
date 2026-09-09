@@ -5,6 +5,12 @@ extends RefCounted
 # a single cyan-green accent hairline down its left edge. One accent, applied
 # consistently — the panels read as one instrument, not stock Godot controls.
 
+# The world backdrop (rendering/environment/defaults/default_clear_color in
+# project.godot, visible past the 3x3 terrain wrap tiles and on a scenario that
+# fails to load) is deliberately a near-match for BG_PANEL: Godot's stock
+# mid-grey clashed hard with the near-black instrument HUD. Keep them in step.
+# This note lives here because project.godot cannot: Godot strips comments and
+# prunes default-valued entries whenever it re-saves the file.
 const BG_PANEL := Color(0.035, 0.055, 0.065, 0.88)
 const BG_ELEV := Color(0.08, 0.115, 0.13, 0.94)
 const BG_HOVER := Color(0.12, 0.17, 0.19, 0.96)
