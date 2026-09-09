@@ -1,5 +1,10 @@
 ; Engine configuration file.
-; Open in Godot 4.7+; do not edit manually.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
 
@@ -14,17 +19,17 @@ config/icon="res://icon.svg"
 
 GameConfig="*res://scripts/game_config.gd"
 DebugCapture="*res://scripts/debug_capture.gd"
+_fennara_game_capture="*res://addons/fennara/runtime/game_capture_helper.gd"
 
 [display]
 
 window/size/viewport_width=1280
 window/size/viewport_height=800
 window/stretch/mode="canvas_items"
+window/size/initial_width=1280
+window/size/initial_height=800
+window/initial_position_type=2
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
-; Backdrop behind the world (visible past the 3x3 terrain wrap tiles, and on a
-; scenario that fails to load). Godot's stock mid-grey clashed hard with the
-; near-black instrument HUD; this is the same deep teal-black the panels use.
 environment/defaults/default_clear_color=Color(0.027, 0.043, 0.055, 1)
