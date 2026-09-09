@@ -23,7 +23,7 @@ const _RIG_KIND: PackedInt32Array = [
 	RigKind.LIVESTOCK_RIG,  # LIVESTOCK
 ]
 
-# Pose strip is the same 12-slot layout as the apes so one shader serves all.
+# Pose strip is the same 14-slot layout as the apes so one shader serves all.
 const POSE_COUNT := ApeSprites.POSE_COUNT
 
 # Selection thresholds (tunable; validated in Task 9's capture pass).

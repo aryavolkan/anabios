@@ -1,9 +1,9 @@
 shader_type canvas_item;
 
 // Field-agent animation. One MultiMesh per species; each draws that species'
-// own 12-pose atlas (ape_sprites.build_species_atlas, full-colour zone-painted
-// figure: 4 gait rows, then TWO frames per action — eat/fight/trade/flee) and
-// passes per-instance state via INSTANCE_CUSTOM, written each tick in
+// own 14-pose atlas (ape_sprites.build_species_atlas, full-colour zone-painted
+// figure: 4 gait rows, then TWO frames per action — eat/fight/trade/flee and
+// sleep) and passes per-instance state via INSTANCE_CUSTOM, written each tick in
 // main.gd::_refresh_bodies:
 //   r = gait cycle position (0..1 = one contact -> passing -> contact ->
 //       passing loop). Advanced CPU-side by the distance the body actually
@@ -14,7 +14,8 @@ shader_type canvas_item;
 //       secondary motion eases in; the pose index thresholds it at 0.5)
 //   b = face_left (smoothed 0..1; mid-flip the mirror mix squashes the sprite
 //       horizontally, so turns read as a weight shift instead of a snap)
-//   a = action / 4 (0 none, 1 eat, 2 fight, 3 trade, 4 flee — sim signals)
+//   a = action / 8 (0 none, 1 eat, 2 fight, 3 trade, 4 flee, 5 sleep —
+//       sim signals: strike hotspots, fire_intent, the mood column)
 // Moving agents cycle contact -> passing -> counter-contact -> passing (a
 // step-lift-step gait with the bob baked into the passing pose), paced by the
 // distance travelled so feet don't slide; idle agents hold the neutral pose
@@ -22,7 +23,7 @@ shader_type canvas_item;
 // acting agent loops its two action frames instead, and the vertex stage adds
 // a fight lunge / flee tremble on top.
 
-uniform int frames = 12;
+uniform int frames = 14;
 // Atlas layout: poses live in a SQUARE 64x64 grid, ATLAS_COLS per row (see
 // ape_sprites.gd — a 16x192 strip corrupts on Metal's MultiMesh2D canvas
 // path). A pose index `fr` maps to cell (fr % ATLAS_COLS, fr / ATLAS_COLS).
@@ -52,7 +53,7 @@ varying flat vec4 anim;
 void vertex() {
 	anim = INSTANCE_CUSTOM;
 	float phase = anim.r * 6.2831853;
-	float act = anim.a * 4.0;
+	float act = anim.a * 8.0;
 	// The QuadMesh is a 3D mesh, so its local +Y points up-screen in the 2D
 	// canvas: +VERTEX.y lifts the figure. The mesh is 1x1 in local space and
 	// the per-instance transform scales it to world size, so a local-unit
@@ -115,7 +116,7 @@ void vertex() {
 		float dir = mix(1.0, -1.0, step(0.5, anim.b));
 		VERTEX.x += dir * reach * 0.06;
 		VERTEX.y += reach * 0.02;
-	} else if (act > 3.5) {           // Flee/gallop (act 4)
+	} else if (act > 3.5 && act < 4.5) {  // Flee/gallop (act 4)
 		if (rig_kind == 0 || rig_kind == 1) {
 			// Quadruped gallop: stretch the body along travel + a bounding hop
 			// (prey bound higher than predators chase).
@@ -128,6 +129,13 @@ void vertex() {
 			VERTEX.x += sin(TIME * 43.0 + phase) * 0.03;
 			VERTEX.y += cos(TIME * 37.0 + phase) * 0.02;
 		}
+	// Sleep (act 5): the lying pose carries the read; on top just a slow,
+	// deep breath — a gentle swell, about half the idle bob's rate, so a
+	// sleeping cluster sways out of phase instead of twitching.
+	} else if (act > 4.5 && act < 5.5) {
+		float s = sin(TIME * 6.2831853 * 0.35 + phase);
+		VERTEX.y *= 1.0 - max(s, 0.0) * 0.04;
+		VERTEX.x *= 1.0 + max(s, 0.0) * 0.05;
 	}
 	// Livestock idle: a slow chewing head-bob (only while standing).
 	if (rig_kind == 3 && anim.g < 0.5 && act < 0.5) {
@@ -146,12 +154,12 @@ void fragment() {
 	// Fractional facing eases the mirror; at b=0.5 (mid-flip) the UV mix
 	// collapses to the centre column — a free horizontal flip-squash.
 	float u = mix(UV.x, 1.0 - UV.x, anim.b);
-	float act = anim.a * 4.0;
+	float act = anim.a * 8.0;
 	float fr;
 	if (act > 0.5) {
 		// Action pairs live below the gait rows: eat 4/5, fight 6/7, trade
-		// 8/9, flee 10/11; swap A/B at action_fps, phase-offset so a trading
-		// cluster doesn't chomp in lockstep.
+		// 8/9, flee 10/11, sleep 12/13; swap A/B at action_fps, phase-offset
+		// so a trading cluster doesn't chomp in lockstep.
 		float a2 = floor(mod(TIME * action_fps + anim.r * 2.0, 2.0));
 		fr = 2.0 + act * 2.0 + a2;
 	} else {

@@ -46,6 +46,25 @@ var _glyph_clones: Array[MultiMeshInstance2D] = []
 # frame delta AND ticks_per_frame — one frame of 64x covers 64 ticks, so it
 # needs almost no easing and time-lapse stays crisp instead of mushy.
 const SMOOTH: float = 0.35
+# Action poses in the field atlases (two frames each after the four gait
+# poses), picked per agent from the sim signals in _refresh_bodies. Encoded
+# into instance custom data as act / ACT_SCALE — custom data clamps at 1.0,
+# so the scale leaves headroom for poses past 4.
+const ACT_EAT := 1.0
+const ACT_FIGHT := 2.0
+const ACT_TRADE := 3.0
+const ACT_FLEE := 4.0
+const ACT_SLEEP := 5.0
+const ACT_SCALE := 8.0
+# Mood discriminants from the sim's mood.rs (alive_moods) that drive poses.
+# All-CONTENT when the scenario's affect layer is off.
+const MOOD_CONTENT := 0
+const MOOD_SLEEP := 3
+const MOOD_FLEE := 4
+const MOOD_FIGHT := 5
+# Same band as the sim's interact::FIRE_THRESHOLD: fire_intent crosses 0.5 on
+# the strike, so the build-up above it is the visible hunt.
+const FIRE_POSE_THRESHOLD := 0.5
 const DEATH_TTL: float = 1.4
 # Seconds for a death ghost to topple from tilted to flat (ease-out-back, so
 # it rolls a hair past flat and settles — a body hitting the ground).
@@ -101,7 +120,7 @@ func _ready() -> void:
 		return
 	var text = f.get_as_text()
 	f.close()
-	if not sim.load_scenario_with_seed(text, GameConfig.seed):
+	if not sim.load_scenario_with_seed(text, GameConfig.rng_seed):
 		push_error("scenario load failed")
 	# Open framed on the living cluster so the agents (now little hominins) read
 	# immediately, instead of as dots in the whole-world view. [F] resets to the
@@ -364,10 +383,10 @@ func _update_tracks(delta: float) -> void:
 # z_index=0 layers stack at the seams the same way the origin copies do.
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
-	var wrap := Node2D.new()
-	wrap.name = "WrapClones"
-	add_child(wrap)
-	move_child(wrap, module_layers.get_index() + 1)
+	var wrap_box := Node2D.new()
+	wrap_box.name = "WrapClones"
+	add_child(wrap_box)
+	move_child(wrap_box, module_layers.get_index() + 1)
 	var sources: Array[MultiMeshInstance2D] = _body_mmis.duplicate()
 	sources.append_array(_death_mmis)
 	sources.append_array([carcasses, flashes, streaks, trade_routes, _tracks_mmi])
@@ -383,7 +402,7 @@ func _make_wrap_clones() -> void:
 				clone.texture_filter = src.texture_filter  # keep the crisp 8-bit body
 				clone.z_index = src.z_index
 				clone.position = Vector2(gx * world, gy * world)
-				wrap.add_child(clone)
+				wrap_box.add_child(clone)
 	# Glyph clones follow the [M] toggle so pips appear at the seams too.
 	for child in module_layers.get_children():
 		for gy in range(-1, 2):
@@ -395,7 +414,7 @@ func _make_wrap_clones() -> void:
 				clone.texture = (child as MultiMeshInstance2D).texture
 				clone.position = Vector2(gx * world, gy * world)
 				clone.visible = module_layers.visible
-				wrap.add_child(clone)
+				wrap_box.add_child(clone)
 				_glyph_clones.append(clone)
 
 
@@ -490,7 +509,7 @@ func _process(delta: float) -> void:
 # the body pass can flag nearby agents with the fight/trade action poses.
 func _hotspots(segs: PackedVector2Array, cap: int) -> PackedVector2Array:
 	var out := PackedVector2Array()
-	var m := mini(segs.size() / 2, cap)
+	var m := mini(int(segs.size() / 2.0), cap)
 	for i in m:
 		out.append(segs[2 * i])
 	return out
@@ -517,11 +536,21 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	var rots: PackedFloat32Array = sim.alive_rotations()
 	var sp_ids: PackedInt32Array = sim.alive_species_ids()
 	var energies: PackedFloat32Array = sim.alive_energy()
+	# Pose-driving intent channels: fire_intent is written for every agent
+	# every tick in any world (the hunt signal); the mood column is the
+	# affect layer's behavior label (fight/flee/sleep) and stays all-CONTENT
+	# in flag-off worlds.
+	var fire_intents: PackedFloat32Array = sim.alive_fire_intent()
+	var moods: PackedInt32Array = (
+		sim.alive_moods() if sim.affect_active() else PackedInt32Array()
+	)
 	var body_colors: PackedColorArray = _body_colors(n)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n
 	var have_ids: bool = ids.size() == n
 	var have_en: bool = energies.size() == n
+	var have_fire: bool = fire_intents.size() == n
+	var have_moods: bool = moods.size() == n
 
 	# Smoothed render positions: merge-join the current ascending id array
 	# against last frame's to find each agent's previous smoothed position,
@@ -682,25 +711,36 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				_gait[gid] = phase
 			else:
 				phase = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
-			# Action pose from sim signals: near a combat streak's attacker
-			# end -> fight if standing to strike, flee if running; near a
-			# trade route's trader end -> trade; idle with rising energy ->
-			# eat. Priority fight/flee > trade > eat.
+			# Action pose from sim signals. Priority: sleep (SLEEP mood while
+			# standing) > flee (FLEE mood — the mood is the behavior arbiter,
+			# so fear outranks even a high fire_intent) > hunt/fight (real
+			# fire_intent in any world, the FIGHT mood, or standing at a
+			# strike hotspot) > trade hotspot > idle-with-rising-energy eat.
+			# A pursuing predator fires while moving, so the hunt reads as a
+			# moving lunge instead of the old hotspot-only strike instant.
 			var act := 0.0
-			for fp in _fight_pts:
-				if smooth[i].distance_squared_to(fp) < 36.0:
-					act = 4.0 if walking else 2.0
-					break
+			var mood: int = moods[i] if have_moods else MOOD_CONTENT
+			if mood == MOOD_SLEEP and not walking:
+				act = ACT_SLEEP
+			elif mood == MOOD_FLEE:
+				act = ACT_FLEE
+			elif (have_fire and fire_intents[i] > FIRE_POSE_THRESHOLD) or mood == MOOD_FIGHT:
+				act = ACT_FIGHT
+			else:
+				for fp in _fight_pts:
+					if smooth[i].distance_squared_to(fp) < 36.0:
+						act = ACT_FLEE if walking else ACT_FIGHT
+						break
 			if act == 0.0:
 				for tp in _trade_pts:
 					if smooth[i].distance_squared_to(tp) < 36.0:
-						act = 3.0
+						act = ACT_TRADE
 						break
 			if act == 0.0 and not walking and have_en:
 				var pi: int = _match_prev[i] if i < _match_prev.size() else -1
 				if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
-					act = 1.0
-			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / 4.0))
+					act = ACT_EAT
+			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))
 
 	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
 	if module_layers.visible:
@@ -809,14 +849,14 @@ func _body_colors(n: int) -> PackedColorArray:
 
 
 # One body colour per agent from a Palette ramp over a per-agent scalar,
-# normalized by `scale` (energy runs 0..~50; the rest are already 0..1).
+# normalized by `value_scale` (energy runs 0..~50; the rest are already 0..1).
 func _ramp_body_colors(
-	n: int, ramp: Array, values: PackedFloat32Array, scale: float
+	n: int, ramp: Array, values: PackedFloat32Array, value_scale: float
 ) -> PackedColorArray:
 	var out := PackedColorArray()
 	out.resize(n)
 	for i in n:
-		out[i] = Palette.ramp(ramp, values[i] / scale)
+		out[i] = Palette.ramp(ramp, values[i] / value_scale)
 	return out
 
 
@@ -910,7 +950,7 @@ func _update_segment_trail(
 ) -> void:
 	# Absolute expiry, so ageing is wall-clock with no delta threaded through.
 	var now: float = Time.get_ticks_msec() / 1000.0
-	for i in segs.size() / 2:
+	for i in int(segs.size() / 2.0):
 		trail.append([segs[2 * i], segs[2 * i + 1], now + ttl, cols[i]])
 	# Perf: cap the trail at the multimesh budget, dropping the oldest first.
 	while trail.size() > mm.instance_count:
@@ -936,9 +976,9 @@ func _update_segment_trail(
 			d.y -= world
 		elif d.y < -world * 0.5:
 			d.y += world
-		var len: float = maxf(d.length(), 0.001)
+		var seg_len: float = maxf(d.length(), 0.001)
 		var mid: Vector2 = from + d * 0.5
-		mm.set_instance_transform_2d(i, Transform2D(d.angle(), Vector2(len, width), 0.0, mid))
+		mm.set_instance_transform_2d(i, Transform2D(d.angle(), Vector2(seg_len, width), 0.0, mid))
 		var c: Color = trail[i][3]
 		c.a = max_alpha * clampf((float(trail[i][2]) - now) / ttl, 0.0, 1.0)
 		if flow:
@@ -946,7 +986,7 @@ func _update_segment_trail(
 			# axis so the bright spots march from `from` toward `to`. Collinear
 			# neighbours of one route stay phase-continuous; bends and torus
 			# seams introduce a small phase jump (invisible in practice).
-			c.a *= FxMath.flow_pulse(mid.dot(d / len), now)
+			c.a *= FxMath.flow_pulse(mid.dot(d / seg_len), now)
 		mm.set_instance_color(i, c)
 
 

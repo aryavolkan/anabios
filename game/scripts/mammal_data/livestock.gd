@@ -3,10 +3,10 @@ extends RefCounted
 # 16x16, facing right. Deep barrel body, short sturdy legs, a blunt head with
 # two short down-horns and a broad muzzle, minimal tail. No gallop drama: the
 # flee poses are just a mild trot. Idle chewing head-bob is the shader's job
-# (rig_kind == 3), not baked into the art. Same 12-slot layout as Wolf: 0
+# (rig_kind == 3), not baked into the art. Same 14-slot layout as Wolf: 0
 # stand, 1/2/3 trot (contact-L / passing / contact-R), 4/5 graze, 6/7
-# headbutt, 8/9 alert, 10/11 mild trot. Blocks are [x, y, w, h, zone];
-# painted back-to-front, auto-outlined.
+# headbutt, 8/9 alert, 10/11 mild trot, 12/13 sleep. Blocks are [x, y, w, h,
+# zone]; painted back-to-front, auto-outlined.
 
 const POSES: Array = [
 	# 0 stand
@@ -188,5 +188,30 @@ const POSES: Array = [
 		[6, 10, 2, 4, "c"],
 		[8, 10, 2, 4, "c"],
 		[11, 11, 2, 3, "c"],
+	],
+	# 12 sleep — barrel body settled, head down with the muzzle to the ground,
+	# legs folded away, eye closed
+	[
+		[3, 7, 8, 5, "c"],  # barrel body settled
+		[4, 11, 6, 1, "u"],  # underbelly grounded
+		[10, 8, 4, 4, "c"],  # head down
+		[13, 11, 2, 2, "n"],  # muzzle to the ground
+		[10, 6, 1, 2, "c"],
+		[12, 6, 1, 2, "c"],  # horns
+		[2, 8, 1, 2, "c"],  # tail
+		[4, 12, 2, 1, "c"],
+		[9, 12, 2, 1, "c"],  # legs folded (hint)
+	],
+	# 13 sleep B — the inhale: back rises a pixel
+	[
+		[3, 6, 8, 5, "c"],
+		[4, 11, 6, 1, "u"],
+		[10, 8, 4, 4, "c"],
+		[13, 11, 2, 2, "n"],
+		[10, 6, 1, 2, "c"],
+		[12, 6, 1, 2, "c"],
+		[2, 8, 1, 2, "c"],
+		[4, 12, 2, 1, "c"],
+		[9, 12, 2, 1, "c"],
 	],
 ]

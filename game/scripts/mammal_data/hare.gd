@@ -2,10 +2,10 @@ extends RefCounted
 # Hare — prey/quadruped rig (mammal_sprites RigKind.PREY, small-bodied). 16x16,
 # facing right. Compact rounded body, very short fore legs, one big folded
 # hind haunch (the hop engine), two long ears laid back along the spine. Same
-# 12-slot layout as Wolf: 0 stand, 1/2/3 amble (contact-L / passing /
+# 14-slot layout as Wolf: 0 stand, 1/2/3 amble (contact-L / passing /
 # contact-R), 4/5 graze, 6/7 kick, 8/9 alert (ears prick up), 10/11 gallop
-# (the big prey hop). Blocks are [x, y, w, h, zone]; painted back-to-front,
-# auto-outlined.
+# (the big prey hop), 12/13 sleep. Blocks are [x, y, w, h, zone]; painted
+# back-to-front, auto-outlined.
 
 const POSES: Array = [
 	# 0 stand
@@ -173,5 +173,28 @@ const POSES: Array = [
 		[4, 7, 1, 1, "c"],
 		[5, 9, 3, 5, "c"],
 		[10, 10, 2, 3, "c"],
+	],
+	# 12 sleep — settled on the ground: legs tucked away, head low, ears laid
+	# flat along the back, eye closed
+	[
+		[4, 9, 7, 4, "c"],  # body settled
+		[5, 12, 5, 1, "u"],  # underbelly grounded
+		[10, 8, 3, 3, "c"],  # head low
+		[13, 10, 1, 1, "n"],  # muzzle to the ground
+		[5, 7, 5, 1, "c"],  # ears flat along the back
+		[2, 10, 1, 1, "c"],  # tail nub
+		[3, 10, 3, 3, "c"],  # haunch folded under
+		[9, 12, 2, 1, "c"],  # fore paws tucked
+	],
+	# 13 sleep B — the inhale: back rises a pixel
+	[
+		[4, 8, 7, 4, "c"],
+		[5, 12, 5, 1, "u"],
+		[10, 8, 3, 3, "c"],
+		[13, 10, 1, 1, "n"],
+		[5, 7, 5, 1, "c"],
+		[2, 10, 1, 1, "c"],
+		[3, 10, 3, 3, "c"],
+		[9, 12, 2, 1, "c"],
 	],
 ]

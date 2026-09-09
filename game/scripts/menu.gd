@@ -287,7 +287,7 @@ func _ready() -> void:
 	$VBox/Subtitle.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
 	for s in SCENARIOS:
 		scenario_pick.add_item(s["label"])
-	seed_spin.value = GameConfig.seed
+	seed_spin.value = GameConfig.rng_seed
 	scale_spin.value = GameConfig.ui_scale
 	start_btn.pressed.connect(_on_start)
 
@@ -298,7 +298,7 @@ func _on_start() -> void:
 		idx = 0
 	var s: Dictionary = SCENARIOS[idx]
 	GameConfig.scenario_path = s["path"]
-	GameConfig.seed = int(seed_spin.value)
+	GameConfig.rng_seed = int(seed_spin.value)
 	GameConfig.ui_scale = scale_spin.value
 	GameConfig.default_ground = int(s["ground"])
 	GameConfig.default_body = int(s["body"])

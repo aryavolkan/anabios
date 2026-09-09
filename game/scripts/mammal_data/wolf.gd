@@ -2,7 +2,8 @@ extends RefCounted
 # Wolf — the predator/quadruped reference rig (mammal_sprites RigKind.PREDATOR).
 # 16x16, facing right. Slot layout matches ape_sprites: 0 stand, 1/2/3 trot
 # (contact-L / passing / contact-R), 4/5 graze, 6/7 bite, 8/9 alert, 10/11
-# gallop. Blocks are [x, y, w, h, zone]; painted back-to-front, auto-outlined.
+# gallop, 12/13 sleep. Blocks are [x, y, w, h, zone]; painted back-to-front,
+# auto-outlined.
 
 const POSES: Array = [
 	# 0 stand
@@ -202,5 +203,32 @@ const POSES: Array = [
 		[7, 9, 2, 4, "c"],
 		[9, 9, 2, 4, "c"],
 		[11, 9, 2, 4, "c"],
+	],
+	# 12 sleep — torso on the ground, head lowered onto the paws, tail settled
+	# behind, eye closed
+	[
+		[0, 9, 4, 3, "c"],
+		[1, 8, 2, 2, "c"],  # tail settled behind
+		[3, 8, 8, 4, "c"],  # torso on the ground
+		[4, 11, 6, 1, "u"],  # underbelly grounded
+		[10, 7, 4, 4, "c"],
+		[14, 9, 2, 2, "n"],  # head + muzzle lowered
+		[10, 5, 1, 2, "c"],
+		[12, 5, 1, 2, "c"],  # ears relaxed
+		[9, 11, 2, 1, "c"],
+		[12, 11, 1, 1, "c"],  # paws tucked forward
+	],
+	# 13 sleep B — the inhale: back rises a pixel
+	[
+		[0, 9, 4, 3, "c"],
+		[1, 8, 2, 2, "c"],
+		[3, 7, 8, 4, "c"],
+		[4, 11, 6, 1, "u"],
+		[10, 7, 4, 4, "c"],
+		[14, 9, 2, 2, "n"],
+		[10, 5, 1, 2, "c"],
+		[12, 5, 1, 2, "c"],
+		[9, 11, 2, 1, "c"],
+		[12, 11, 1, 1, "c"],
 	],
 ]
