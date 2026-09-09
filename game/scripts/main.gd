@@ -541,9 +541,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	# affect layer's behavior label (fight/flee/sleep) and stays all-CONTENT
 	# in flag-off worlds.
 	var fire_intents: PackedFloat32Array = sim.alive_fire_intent()
-	var moods: PackedInt32Array = (
-		sim.alive_moods() if sim.affect_active() else PackedInt32Array()
-	)
+	var moods: PackedInt32Array = sim.alive_moods() if sim.affect_active() else PackedInt32Array()
 	var body_colors: PackedColorArray = _body_colors(n)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n

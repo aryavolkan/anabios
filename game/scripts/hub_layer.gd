@@ -20,7 +20,7 @@ var _good_mmis: Array[MultiMeshInstance2D] = []
 var _hubs: Array = []
 var _frame: int = REDRAW_EVERY - 1
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../Simulation")
 
 
 func _ready() -> void:

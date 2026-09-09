@@ -18,9 +18,9 @@ const CONTROLS_FMT := """[G] ground: %s
 [R] replay event · [U] run to event · [V] event cam
 WASD/drag pan · wheel zoom · click inspect"""
 
-@onready var overlay = get_node("/root/Main/OverlayManager")
-@onready var module_layers = get_node("/root/Main/ModuleLayers")
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var overlay = get_node("../../OverlayManager")
+@onready var module_layers = get_node("../../ModuleLayers")
+@onready var sim = get_node("../../Simulation")
 
 var _controls: Label
 var _key_box: VBoxContainer

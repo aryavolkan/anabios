@@ -21,7 +21,7 @@ const BODY_MAX := 7
 var ground_mode: int = GROUND_BIOME
 var body_mode: int = BODY_SPECIES
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../Simulation")
 
 
 func _ready() -> void:

@@ -61,7 +61,7 @@ var _now: float = 0.0
 var _last_ease: float = 0.0
 const ANCHOR_TAU := 0.93
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../Simulation")
 
 
 func _ready() -> void:

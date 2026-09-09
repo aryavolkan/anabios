@@ -5,7 +5,7 @@ extends Control
 # Toggle with [Y]. Click a legend label to hide/show a series; click a chart to
 # drop a scrub cursor with a value readout. (Read-only; no World mutation.)
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../../Simulation")
 
 # Series grouped into stacked sub-charts. Each entry: {key, label, color}.
 # unit "01" charts share a fixed [0,1] axis; "auto" charts self-scale.

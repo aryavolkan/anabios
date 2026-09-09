@@ -1,7 +1,7 @@
 extends Sprite2D
 
-@onready var sim = get_node("/root/Main/Simulation")
-@onready var overlay = get_node("/root/Main/OverlayManager")
+@onready var sim = get_node("../Simulation")
+@onready var overlay = get_node("../OverlayManager")
 
 var _img: Image
 var _tex: ImageTexture

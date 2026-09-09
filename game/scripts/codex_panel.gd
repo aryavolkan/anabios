@@ -146,8 +146,8 @@ var _counts: Array[int] = []
 var _recent: Array[Dictionary] = []
 var _cursor: int = 0
 
-@onready var sim = get_node("/root/Main/Simulation")
-@onready var camera: Camera2D = get_node("/root/Main/Camera2D")
+@onready var sim = get_node("../../Simulation")
+@onready var camera: Camera2D = get_node("../../Camera2D")
 @onready var counts_label: Label = $VBox/Counts
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
 

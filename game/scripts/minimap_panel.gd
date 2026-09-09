@@ -4,9 +4,9 @@ extends Control
 # scaled into this Control, overlays the current camera viewport as a rectangle,
 # and recenters the camera on click/drag. Pure viewer — no sim state touched.
 
-@onready var sim = get_node("/root/Main/Simulation")
-@onready var cam: Camera2D = get_node("/root/Main/Camera2D")
-@onready var biome = get_node("/root/Main/Biome")
+@onready var sim = get_node("../../Simulation")
+@onready var cam: Camera2D = get_node("../../Camera2D")
+@onready var biome = get_node("../../Biome")
 
 const BORDER := Color(0.8, 0.85, 0.9, 0.5)
 const VIEWRECT := Color(1.0, 1.0, 1.0, 0.9)

@@ -7,7 +7,7 @@ extends Control
 # dashed = hard genetic prerequisite, thin blue = DIT learning arm.
 # Toggle with [X]. Read-only.
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../../Simulation")
 
 # Curated genome slots (the coupling-relevant ones): the ten invention
 # affinity slots plus the DIT learning/climate slots.

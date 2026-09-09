@@ -29,7 +29,7 @@ func _ready() -> void:
 # Frame the whole world: fill the viewport (larger ratio wins, so there are no
 # empty gutters) and center on the world's midpoint.
 func _fit_to_world() -> void:
-	var sim = get_node_or_null("/root/Main/Simulation")
+	var sim = get_node_or_null("../Simulation")
 	if sim == null:
 		return
 	var world: float = float(sim.world_size())
@@ -49,7 +49,7 @@ func _fit_to_world() -> void:
 # full world for the overview. Called from Main._ready after the scenario loads
 # (the sim has no agents yet at this node's own _ready).
 func fit_to_agents() -> void:
-	var sim = get_node_or_null("/root/Main/Simulation")
+	var sim = get_node_or_null("../Simulation")
 	if sim == null:
 		return
 	var ps: PackedVector2Array = sim.alive_positions()

@@ -13,7 +13,7 @@ const MAX_GATED_NAMES: int = 3
 
 var pinned_id: int = -1
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../../Simulation")
 @onready var label: Label = $VBoxContainer/Label
 
 # Avatar header: the pinned agent rendered as its hominin (the agents ARE the
@@ -134,7 +134,9 @@ func _process(_delta: float) -> void:
 		)
 	if info.get("domestication_enabled", false):
 		var owner_id: int = info["livestock_of"]
-		lines.append("livestock of agent %d" % owner_id if owner_id >= 0 else "wild (not livestock)")
+		lines.append(
+			"livestock of agent %d" % owner_id if owner_id >= 0 else "wild (not livestock)"
+		)
 	if info.get("basic_needs_enabled", false):
 		lines.append(
 			(

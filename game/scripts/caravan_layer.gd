@@ -31,7 +31,7 @@ var _t: float = 0.0
 var _frame: int = 0
 var _built: bool = false  # route network built once (hubs are immutable at runtime)
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../Simulation")
 
 
 func _ready() -> void:

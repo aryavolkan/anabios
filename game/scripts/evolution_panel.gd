@@ -30,7 +30,7 @@ const MIN_SPAN := 0.02
 
 var _shown: bool = false
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../../Simulation")
 var _chart: Control
 var _phylo: Label
 var _title: Label

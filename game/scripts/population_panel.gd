@@ -7,7 +7,7 @@ const REFRESH_EVERY := 6
 # long tail of singleton species would otherwise spill onto its neighbours.
 const MAX_ROWS := 7
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../../Simulation")
 @onready var list: VBoxContainer = $VBox
 var _frame: int = 0
 

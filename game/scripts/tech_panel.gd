@@ -11,7 +11,7 @@ const MAX_ROWS := 6
 # Tighter cap while the DIT table is also up — the two share one rail slot.
 const SHARED_MAX_ROWS := 4
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../../Simulation")
 @onready var list: VBoxContainer = $VBox
 @onready var _dit: Control = get_parent().get_node_or_null("DitPanel")
 var _frame: int = 0
