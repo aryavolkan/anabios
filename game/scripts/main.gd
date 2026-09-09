@@ -708,15 +708,23 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			# Gait cycle position, paced by the distance this body covered on
 			# screen so the feet keep up with the ground (see FxMath).
 			var phase: float
+			var footfall := false
 			if have_ids:
 				var gid: int = ids[i]
-				phase = float(_gait.get(gid, FxMath.seed_gait(gid)))
+				var previous_phase: float = float(_gait.get(gid, FxMath.seed_gait(gid)))
+				phase = previous_phase
 				if walking:
 					var stride: float = FxMath.stride_len(sizes[i], gait_fps)
 					phase = FxMath.advance_gait(phase, _step_dist[i], stride)
+					# The four-pose cycle has two contact beats. Fire dust when
+					# crossing either half-cycle boundary, so the puff lands under
+					# a planted foot instead of appearing at a random frame.
+					footfall = int(floor(previous_phase * 2.0)) != int(floor(phase * 2.0))
 				_gait[gid] = phase
 			else:
 				phase = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
+			if footfall and _effects != null:
+				_effects.spawn_dust(smooth[i])
 			# Action pose from sim signals. Priority: sleep (SLEEP mood while
 			# standing) > flee (FLEE mood — the mood is the behavior arbiter,
 			# so fear outranks even a high fire_intent) > hunt/fight (real
