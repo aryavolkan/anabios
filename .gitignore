@@ -11,10 +11,9 @@ export_presets.cfg
 *.translation
 *.import
 
-# gdext built dylibs (built on demand)
-/game/addons/anabios/*.dylib
-/game/addons/anabios/*.so
-/game/addons/anabios/*.dll
+# Godot editor addons are local tooling (Fennara MCP), not viewer code —
+# the anabios gdextension loads its built lib from /target, not from here.
+/game/addons/
 
 # OS
 .DS_Store
@@ -42,7 +41,11 @@ trace-*.json
 # Claude Code (worktrees, session state)
 .claude/
 
-# Fennara MCP scratch (runtime probes, screenshot workers, tool logs)
+# Fennara MCP: per-machine setup artifacts (generated agent guidance + skills)
+# and scratch (runtime probes, screenshot workers, tool logs). The addon
+# itself is covered by /game/addons/ above.
+.agents/
+/game/AGENTS.md
 /game/.fennara/
 
 # Godot resource UID caches (regenerated on import)
