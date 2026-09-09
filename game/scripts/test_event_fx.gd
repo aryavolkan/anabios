@@ -142,7 +142,7 @@ func _check_locomotion() -> void:
 	# every ~4. This must NOT drop the pose state even once.
 	var drops := 0
 	for i in 240:
-		var raw := (i / 4) % 2 == 0
+		var raw := int(i / 4.0) % 2 == 0
 		st = FxMath.step_locomotion(st, raw, dt)
 		if st.x <= 0.0:
 			drops += 1
@@ -184,7 +184,7 @@ func _check_facing() -> void:
 	var st := Vector3(1.0, 1.0, -1.0)
 	var flips := 0
 	for i in 240:
-		var idle := (i / 3) % 2 == 0
+		var idle := int(i / 3.0) % 2 == 0
 		var hx := 1.0 if idle else -1.0
 		st = FxMath.step_facing(st, hx, not idle, dt)
 		if st.x != 1.0:
@@ -198,7 +198,7 @@ func _check_facing() -> void:
 	var st2 := Vector3(0.0, 0.0, 0.0)
 	var flips2 := 0
 	for i in 600:
-		var hx2 := 1.0 if (i / 4) % 2 == 0 else -1.0
+		var hx2 := 1.0 if int(i / 4.0) % 2 == 0 else -1.0
 		var before := st2.x
 		st2 = FxMath.step_facing(st2, hx2, true, dt)
 		if st2.x != before:

@@ -97,7 +97,7 @@ func _setup(res: int) -> void:
 			i += 1
 			tile.texture = _tex
 			tile.position = Vector2(gx * _res, gy * _res)
-	_redraw_interval = REDRAW_EVERY * maxi(1, _res / 128)
+	_redraw_interval = REDRAW_EVERY * maxi(1, int(_res / 128.0))
 	_last_mode = -999  # force an immediate redraw
 
 

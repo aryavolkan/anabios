@@ -87,11 +87,11 @@ func _process(_delta: float) -> void:
 	# per-species hue so a lineage keeps a recognizable colour.
 	var sp: int = int(info["species_id"])
 	var diet: float = info.get("diet_carnivory", 0.5)
-	var size: float = info.get("size", 1.0)
+	var body_size: float = info.get("size", 1.0)
 	var live: bool = (
 		bool(info.get("domestication_enabled", false)) and int(info.get("livestock_of", -1)) != -1
 	)
-	var arch: int = MammalSprites.archetype_for(diet, size, live)
+	var arch: int = MammalSprites.archetype_for(diet, body_size, live)
 	_hue.color = Color.from_hsv(fmod(float(sp) * 0.61803, 1.0), 0.5, 0.95)
 	if arch == MammalSprites.PRIMATE:
 		var ape: int = MammalSprites.primate_skin_for(sp)
@@ -133,8 +133,8 @@ func _process(_delta: float) -> void:
 			)
 		)
 	if info.get("domestication_enabled", false):
-		var owner: int = info["livestock_of"]
-		lines.append("livestock of agent %d" % owner if owner >= 0 else "wild (not livestock)")
+		var owner_id: int = info["livestock_of"]
+		lines.append("livestock of agent %d" % owner_id if owner_id >= 0 else "wild (not livestock)")
 	if info.get("basic_needs_enabled", false):
 		lines.append(
 			(

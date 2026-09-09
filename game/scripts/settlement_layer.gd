@@ -183,14 +183,14 @@ func _redraw() -> void:
 			continue
 		var fade: float = clampf((LINGER - stale) / FADE, 0.0, 1.0)
 		var grow: float = clampf((_now - float(v["born"])) / 0.6, 0.0, 1.0)
-		var ease := 1.0 - pow(1.0 - grow, 3.0)
+		var eased := 1.0 - pow(1.0 - grow, 3.0)
 		var members: int = v["members"]
 		var pos: Vector2 = v["pos"]
 		var sp: int = MammalSprites.primate_skin_for(sid)
 		var coat := Color(ApeSprites.PAL[ApeSprites.FIELD_ZONE_COLORS[sp]["c"]])
 		var tint := Color(1, 1, 1).lerp(coat, 0.18)
 		tint.a = fade
-		var huts: int = clampi(members / 8, 1, MAX_HUTS)
+		var huts: int = clampi(int(members / 8.0), 1, MAX_HUTS)
 		# Each hut remembers when it first appeared, so huts added as the
 		# village grows get their own construction pop instead of snapping in.
 		var hut_born: Array = v.get("hut_born", [])
@@ -209,11 +209,11 @@ func _redraw() -> void:
 			hut_xf.append(Transform2D(0.0, Vector2(s, s), 0.0, hp))
 			hut_col.append(tint)
 		if members >= FARM_MIN_MEMBERS:
-			var farms: int = mini(1 + members / 16, MAX_FARMS)
+			var farms: int = mini(1 + int(members / 16.0), MAX_FARMS)
 			for i in farms:
 				var ang2: float = sid * 1.7 + i * (TAU / farms)
 				var fp := pos + Vector2.from_angle(ang2) * (24.0 + float(i % 2) * 9.0)
-				var fs := FARM_SCALE * ease
+				var fs := FARM_SCALE * eased
 				# Quarter-turn steps, not the raw bearing: the plot sprite is
 				# 16x16 pixel art, and at an arbitrary angle its furrows aliased
 				# into a ragged brown lozenge. Snapping keeps the edges crisp

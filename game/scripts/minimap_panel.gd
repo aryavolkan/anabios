@@ -43,7 +43,7 @@ func _draw() -> void:
 	var vp: Vector2 = get_viewport_rect().size
 	var view_world := Vector2(vp.x / cam.zoom.x, vp.y / cam.zoom.y)
 	var center := Vector2(fposmod(cam.position.x, world), fposmod(cam.position.y, world))
-	var scale := ms / world
+	var px_per_unit := ms / world
 	# Agents: one small dot each at its world position, so the population's
 	# location and spread read at a glance. Overlapping dots brighten into a
 	# cluster (natural density cue). ≤ max_population draws, once per frame.
@@ -52,10 +52,10 @@ func _draw() -> void:
 	var infection: PackedFloat32Array = sim.alive_infection() if diseased else PackedFloat32Array()
 	for i in positions.size():
 		var p := positions[i]
-		var mp := Vector2(fposmod(p.x, world), fposmod(p.y, world)) * scale
+		var mp := Vector2(fposmod(p.x, world), fposmod(p.y, world)) * px_per_unit
 		var dot := INFECTED_DOT if diseased and infection[i] > 0.0 else AGENT_DOT
 		draw_rect(Rect2(mp - Vector2(1, 1), Vector2(2, 2)), dot)
-	_draw_view_rect(center * scale, (view_world * scale).min(ms), ms)
+	_draw_view_rect(center * px_per_unit, (view_world * px_per_unit).min(ms), ms)
 	# Panel border.
 	draw_rect(Rect2(Vector2.ZERO, ms), BORDER, false, 1.0)
 
