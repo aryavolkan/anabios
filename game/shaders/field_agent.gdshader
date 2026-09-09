@@ -119,13 +119,18 @@ void vertex() {
 	} else if (act > 3.5 && act < 4.5) {  // Flee/gallop (act 4)
 		if (rig_kind == 0 || rig_kind == 1) {
 			// Quadruped gallop: stretch the body along travel + a bounding hop
-			// (prey bound higher than predators chase).
-			float g = TIME * walk_fps * 0.9 + anim.r * 6.2831853;
+			// (prey bound higher than predators chase). Use the distance-driven
+			// gait phase so the hop stays locked to the feet at any sim speed.
+			float g = anim.r * 6.2831853;
 			VERTEX.x *= 1.0 + 0.10 * abs(sin(g));
 			float hop = (rig_kind == 0) ? 0.10 : 0.05;
 			VERTEX.y += max(sin(g), 0.0) * hop;
 		} else {
-			// Biped flee tremble (unchanged primate behaviour).
+			// Biped flee: a forward lean sells urgency, while the small tremble
+			// keeps the pose lively without making the sprite unreadable.
+			float dir = mix(1.0, -1.0, step(0.5, anim.b));
+			VERTEX.x += dir * 0.045;
+			VERTEX.y += max(sin(anim.r * 6.2831853), 0.0) * 0.035;
 			VERTEX.x += sin(TIME * 43.0 + phase) * 0.03;
 			VERTEX.y += cos(TIME * 37.0 + phase) * 0.02;
 		}
