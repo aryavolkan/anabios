@@ -58,7 +58,8 @@ const ACT_SLEEP := 5.0
 const ACT_DRINK := 6.0
 const ACT_MATE := 7.0
 const ACT_SCAN := 8.0
-const ACT_SCALE := 8.0
+const ACT_CELEBRATE := 9.0
+const ACT_SCALE := 10.0
 # Mood discriminants from the sim's mood.rs (alive_moods) that drive poses.
 # All-CONTENT when the scenario's affect layer is off.
 const MOOD_CONTENT := 0
@@ -752,7 +753,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			elif (have_fire and fire_intents[i] > FIRE_POSE_THRESHOLD) or mood == MOOD_FIGHT:
 				act = ACT_FIGHT
 			elif (mood == MOOD_MATE or mood == MOOD_SEEK_MATE) and not walking:
-				act = ACT_MATE
+				act = ACT_CELEBRATE if mood == MOOD_MATE else ACT_MATE
 			elif mood == MOOD_SEEK_WATER and not walking:
 				act = ACT_DRINK
 			elif mood == MOOD_SEEK_FOOD and not walking:

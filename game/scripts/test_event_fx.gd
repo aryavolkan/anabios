@@ -195,6 +195,7 @@ func _check_drink_action() -> void:
 	_check(FxMath.action_pose_base(6.0) == 4, "drink reuses the graze/eat frame pair")
 	_check(FxMath.action_pose_base(7.0) == 8, "courtship reuses the trade/alert frame pair")
 	_check(FxMath.action_pose_base(8.0) == 8, "foraging scan reuses the alert frame pair")
+	_check(FxMath.action_pose_base(9.0) == 14, "celebration selects the new pixel-art pair")
 	var state := FxMath.step_action(Vector2(-1.0, 0.0), 6.0, 0.05)
 	_check(state.x == 6.0, "drink action starts immediately")
 	_check(state.y > 0.0, "drink action receives recovery hold time")

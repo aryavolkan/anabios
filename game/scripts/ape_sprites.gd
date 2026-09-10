@@ -146,7 +146,7 @@ const WALK_FPS: PackedFloat32Array = [5.0, 4.2, 4.6, 4.8, 5.6]
 # (eat / fight / trade / flee / sleep) that main.gd derives from combat,
 # trade, fire-intent, mood and energy signals; the shader cycles each pair
 # when INSTANCE_CUSTOM.a != 0.
-const POSE_COUNT := 14
+const POSE_COUNT := 16
 const POSE_EAT := 4
 const POSE_FIGHT := 6
 const POSE_TRADE := 8
@@ -357,6 +357,34 @@ const FIELD_POSES: Array = [
 		[9, 13, 3, 1, "c"],
 		[11, 14, 2, 1, "s"],
 		[3, 13, 4, 2, "c"]
+	],
+	# 14 celebrate — arms raised after a successful mating bond
+	[
+		[6, 2, 4, 4, "c"],
+		[7, 4, 2, 2, "s"],
+		[7, 6, 2, 1, "c"],
+		[4, 6, 8, 5, "c"],
+		[7, 7, 2, 2, "a"],
+		[2, 3, 2, 5, "c"],
+		[2, 2, 2, 1, "s"],
+		[12, 3, 2, 5, "c"],
+		[12, 2, 2, 1, "s"],
+		[6, 11, 2, 4, "c"],
+		[9, 11, 2, 4, "c"]
+	],
+	# 15 celebrate B — a small upward bounce with the hands still aloft
+	[
+		[6, 1, 4, 4, "c"],
+		[7, 3, 2, 2, "s"],
+		[7, 5, 2, 1, "c"],
+		[4, 5, 8, 5, "c"],
+		[7, 6, 2, 2, "a"],
+		[2, 2, 2, 5, "c"],
+		[2, 1, 2, 1, "s"],
+		[12, 2, 2, 5, "c"],
+		[12, 1, 2, 1, "s"],
+		[6, 10, 2, 4, "c"],
+		[9, 10, 2, 4, "c"]
 	],
 ]
 

@@ -15,7 +15,7 @@ shader_type canvas_item;
 //   b = face_left (smoothed 0..1; mid-flip the mirror mix squashes the sprite
 //       horizontally, so turns read as a weight shift instead of a snap)
 //   a = action / 8 (0 none, 1 eat, 2 fight, 3 trade, 4 flee, 5 sleep,
-//       6 drink, 7 mate, 8 scan —
+//       6 drink, 7 mate, 8 scan, 9 celebrate —
 //       sim signals: strike hotspots, fire_intent, the mood column)
 // Moving agents cycle contact -> passing -> counter-contact -> passing (a
 // step-lift-step gait with the bob baked into the passing pose), paced by the
@@ -24,7 +24,7 @@ shader_type canvas_item;
 // acting agent loops its two action frames instead, and the vertex stage adds
 // a fight lunge / flee tremble on top.
 
-uniform int frames = 14;
+uniform int frames = 16;
 // Atlas layout: poses live in a SQUARE 64x64 grid, ATLAS_COLS per row (see
 // ape_sprites.gd — a 16x192 strip corrupts on Metal's MultiMesh2D canvas
 // path). A pose index `fr` maps to cell (fr % ATLAS_COLS, fr / ATLAS_COLS).
@@ -164,6 +164,12 @@ void vertex() {
 		VERTEX.x += scan * 0.035;
 		VERTEX.y += abs(scan) * 0.018;
 		VERTEX.x *= 1.0 + abs(scan) * 0.018;
+	// Celebrate (act 9): primates use the dedicated raised-hands pair;
+	// quadrupeds fall back to their alert pair and still get the bounce.
+	} else if (act > 8.5 && act < 9.5) {
+		float cheer = max(sin(fract(animation_time * action_fps * 0.5 + phase) * 6.2831853), 0.0);
+		VERTEX.y += cheer * 0.06;
+		VERTEX.x *= 1.0 - cheer * 0.035;
 	}
 	// Livestock idle: a slow chewing head-bob (only while standing).
 	if (rig_kind == 3 && anim.g < 0.5 && act < 0.5) {
@@ -194,6 +200,8 @@ void fragment() {
 		float pose_act = act;
 		if (act > 5.5 && act < 6.5) {
 			pose_act = 1.0;
+		} else if (act > 8.5) {
+			pose_act = (rig_kind == 2) ? 6.0 : 3.0;
 		} else if (act > 6.5) {
 			pose_act = 3.0;
 		}
