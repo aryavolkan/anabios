@@ -160,8 +160,9 @@ pub enum EventType {
     /// ≥30% of a species' weapon hits came from attackers lying in wait
     /// (≥40 still ticks before firing; `value` = ambush share).
     EvolvedAmbush = 34,
-    /// ≥30% of a species' weapon hits were invention-boosted (Metalworking;
-    /// `value` = boosted share).
+    /// ≥30% of a species' weapon hits were invention-boosted (any weapon
+    /// tech — Metalworking, Hafted Spears, Archery, Steel Arms; `value` =
+    /// boosted share).
     EvolvedTool = 35,
     /// A species repeatedly crosses barrier terrain at ≥70% of max speed
     /// (`value` = fast crossings in the window).

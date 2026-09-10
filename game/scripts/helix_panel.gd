@@ -9,11 +9,12 @@ extends Control
 
 @onready var sim = get_node("../../Simulation")
 
-# Curated genome slots (the coupling-relevant ones): the ten invention
-# affinity slots plus the DIT learning/climate slots.
+# Curated genome slots (the coupling-relevant ones): invention affinity
+# slots plus the DIT learning/climate slots. _ready appends any slot the
+# live invention catalog couples to (affinity or gene_req) that isn't listed
+# here, so a new invention's rung can't silently vanish from the helix — the
+# military branch's Extraversion (Archery) was dropped exactly that way.
 const GENE_SLOTS := [28, 12, 21, 15, 23, 16, 10, 20, 6, 29, 40, 41]
-# Curated meme channels: skill, DIT technique, the invention block, practices.
-const MEME_CHANNELS_LIST := [5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 const INVENTION_CHANNEL_BASE := 8
 
 const TOP := 64.0
@@ -38,6 +39,10 @@ var _snap: Dictionary = {}
 var _edges: Array[Dictionary] = []
 var _slot_names: PackedStringArray = []
 var _channel_names: PackedStringArray = []
+# Live node lists: GENE_SLOTS plus catalog-coupled slots; skill + DIT
+# technique plus every invention and practice channel (5, 6, 8..end).
+var _gene_slots: Array = []
+var _meme_channels: Array = []
 
 
 func _ready() -> void:
@@ -81,6 +86,14 @@ func _ready() -> void:
 	# couple the genome to the culturally-transmitted technique channel.
 	for slot in [40, 28, 29]:
 		_edges.append({"gene_slot": slot, "kind": "dit", "inv": -1})
+	_gene_slots = GENE_SLOTS.duplicate()
+	for e in _edges:
+		var slot: int = e["gene_slot"]
+		if slot >= 0 and not _gene_slots.has(slot):
+			_gene_slots.append(slot)
+	_meme_channels = [5, 6]
+	for ch in range(INVENTION_CHANNEL_BASE, _channel_names.size()):
+		_meme_channels.append(ch)
 
 
 func _slot_index_of(slot_name: String) -> int:
@@ -157,12 +170,12 @@ func _draw() -> void:
 
 	# Node positions: each list is spread across the shared helix parameter.
 	var gene_pos := {}
-	for i in range(GENE_SLOTS.size()):
-		gene_pos[GENE_SLOTS[i]] = _strand_point((float(i) + 0.5) / float(GENE_SLOTS.size()), -1.0)
+	for i in range(_gene_slots.size()):
+		gene_pos[_gene_slots[i]] = _strand_point((float(i) + 0.5) / float(_gene_slots.size()), -1.0)
 	var meme_pos := {}
-	for j in range(MEME_CHANNELS_LIST.size()):
-		meme_pos[MEME_CHANNELS_LIST[j]] = _strand_point(
-			(float(j) + 0.5) / float(MEME_CHANNELS_LIST.size()), 1.0
+	for j in range(_meme_channels.size()):
+		meme_pos[_meme_channels[j]] = _strand_point(
+			(float(j) + 0.5) / float(_meme_channels.size()), 1.0
 		)
 
 	# Rungs (under the nodes).
@@ -196,7 +209,7 @@ func _draw() -> void:
 	# Nodes + labels. Labels live in fixed side columns (never crossing the
 	# strands) with a thin connector to their node, so the winding backbone
 	# can't swing a node into its own label.
-	for slot in GENE_SLOTS:
+	for slot in _gene_slots:
 		var p: Vector2 = gene_pos[slot]
 		var v: float = gene_means[slot]
 		var r: float = 3.0 + 7.0 * clampf(v, 0.0, 1.0)
@@ -217,7 +230,7 @@ func _draw() -> void:
 			9,
 			Color(0.7, 0.85, 1.0)
 		)
-	for ch in MEME_CHANNELS_LIST:
+	for ch in _meme_channels:
 		var p: Vector2 = meme_pos[ch]
 		var v: float = meme_means[ch]
 		var r: float = 3.0 + 7.0 * clampf(v, 0.0, 1.0)
