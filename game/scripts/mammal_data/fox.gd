@@ -2,10 +2,10 @@ extends RefCounted
 # Fox — predator/quadruped rig (mammal_sprites RigKind.PREDATOR, small-bodied).
 # 16x16, facing right. Slim low body, a pointed head with large triangular
 # ears, a big bushy tail (its signature), slender legs with light "socks" at
-# the paws. Same 12-slot layout as Wolf: 0 stand, 1/2/3 trot (contact-L /
+# the paws. Same 14-slot layout as Wolf: 0 stand, 1/2/3 trot (contact-L /
 # passing / contact-R), 4/5 eat, 6/7 pounce (crouch + airborne lunge), 8/9
-# alert, 10/11 gallop. Blocks are [x, y, w, h, zone]; painted back-to-front,
-# auto-outlined.
+# alert, 10/11 gallop, 12/13 sleep. Blocks are [x, y, w, h, zone]; painted
+# back-to-front, auto-outlined.
 
 const POSES: Array = [
 	# 0 stand
@@ -205,5 +205,30 @@ const POSES: Array = [
 		[9, 10, 1, 4, "c"],
 		[11, 10, 1, 4, "c"],
 		[13, 10, 1, 4, "c"],
+	],
+	# 12 sleep — curled up: bushy tail wrapped around the settled body, head
+	# low, ears dropped, eye closed
+	[
+		[0, 10, 4, 3, "c"],  # bushy tail curled around
+		[0, 9, 2, 2, "u"],  # tail tip
+		[4, 9, 6, 3, "c"],  # slim body settled
+		[5, 11, 4, 1, "u"],  # underbelly grounded
+		[9, 8, 4, 3, "c"],  # head resting low
+		[13, 10, 2, 1, "n"],  # muzzle to the ground
+		[9, 6, 2, 2, "c"],
+		[11, 6, 2, 2, "c"],  # ears dropped
+		[9, 11, 2, 1, "c"],  # paws tucked
+	],
+	# 13 sleep B — the inhale: back rises a pixel
+	[
+		[0, 10, 4, 3, "c"],
+		[0, 9, 2, 2, "u"],
+		[4, 8, 6, 3, "c"],
+		[5, 11, 4, 1, "u"],
+		[9, 8, 4, 3, "c"],
+		[13, 10, 2, 1, "n"],
+		[9, 6, 2, 2, "c"],
+		[11, 6, 2, 2, "c"],
+		[9, 11, 2, 1, "c"],
 	],
 ]

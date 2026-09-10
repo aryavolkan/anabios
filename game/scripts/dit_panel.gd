@@ -10,7 +10,7 @@ const MAX_ROWS := 6
 # species panel and the bottom of the screen.
 const SHARED_MAX_ROWS := 4
 
-@onready var sim = get_node("/root/Main/Simulation")
+@onready var sim = get_node("../../Simulation")
 @onready var list: VBoxContainer = $VBox
 @onready var _tech: Control = get_parent().get_node_or_null("TechPanel")
 var _frame: int = 0

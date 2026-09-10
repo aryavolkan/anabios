@@ -21,6 +21,15 @@ class StubCam:
 		trauma_total += amount
 
 
+# Stand-in for biome_renderer.is_water_at: water wherever x < 0, an arbitrary
+# discriminator the sip-ripple test can place agents on either side of.
+class StubBiome:
+	extends Node
+
+	func is_water_at(world_pos: Vector2) -> bool:
+		return world_pos.x < 0.0
+
+
 const KINDS := ["fire", "ring", "motes", "trauma"]
 const FIRE_IDS := [4, 17, 35, 42, 43]
 const TRAUMA_IDS := [7, 38]
@@ -41,10 +50,14 @@ func _init() -> void:
 	_check_spec_table()
 	_check_ring_math()
 	_check_apply_all()
+	_check_sip_ripples()
 	_check_pop_scale()
 	_check_flow_pulse()
 	_check_gait()
 	_check_locomotion()
+	_check_action_transition()
+	_check_drink_action()
+	_check_animation_clock()
 	_check_facing()
 	_check_shuttle_and_ease()
 	_check_radial_texture()
@@ -142,7 +155,7 @@ func _check_locomotion() -> void:
 	# every ~4. This must NOT drop the pose state even once.
 	var drops := 0
 	for i in 240:
-		var raw := (i / 4) % 2 == 0
+		var raw := int(i / 4.0) % 2 == 0
 		st = FxMath.step_locomotion(st, raw, dt)
 		if st.x <= 0.0:
 			drops += 1
@@ -173,6 +186,42 @@ func _check_locomotion() -> void:
 		_check(s2.x >= 0.0, "hold credit never goes negative (step %d)" % i)
 
 
+# Behavior poses need a short recovery beat when their source signal clears;
+# otherwise a noisy threshold can cut the two-frame action off mid-motion.
+func _check_action_transition() -> void:
+	var dt := 1.0 / 60.0
+	var state := Vector2.ZERO
+	state = FxMath.step_action(state, 2.0, dt)
+	_check(state.x == 2.0, "a new action starts immediately")
+	_check(state.y > 0.0, "a new action receives recovery hold time")
+	var held := FxMath.step_action(state, 0.0, dt)
+	_check(held.x == 2.0, "clearing a signal does not cut the action immediately")
+	for _i in 30:
+		held = FxMath.step_action(held, 0.0, dt)
+	_check(held.x == 0.0, "a cleared action eventually returns to neutral")
+
+
+func _check_drink_action() -> void:
+	_check(FxMath.action_pose_base(6.0) == 4, "drink reuses the graze/eat frame pair")
+	_check(FxMath.action_pose_base(7.0) == 8, "courtship reuses the trade/alert frame pair")
+	_check(FxMath.action_pose_base(8.0) == 8, "foraging scan reuses the alert frame pair")
+	_check(FxMath.action_pose_base(9.0) == 14, "celebration selects the new pixel-art pair")
+	var state := FxMath.step_action(Vector2(-1.0, 0.0), 6.0, 0.05)
+	_check(state.x == 6.0, "drink action starts immediately")
+	_check(state.y > 0.0, "drink action receives recovery hold time")
+
+
+func _check_animation_clock() -> void:
+	_check(
+		absf(FxMath.advance_animation_time(1.5, 0.25, false) - 1.75) < 0.001,
+		"animation clock advances while running"
+	)
+	_check(
+		absf(FxMath.advance_animation_time(1.5, 0.25, true) - 1.5) < 0.001,
+		"animation clock freezes while paused"
+	)
+
+
 # Facing deadband. The measured failure was the sim zeroing an agent's heading
 # to signal idle: cos(0) == 1, so a bare sign test snapped the sprite to face
 # right on every flicker — 16 mirror flips per agent per second.
@@ -184,7 +233,7 @@ func _check_facing() -> void:
 	var st := Vector3(1.0, 1.0, -1.0)
 	var flips := 0
 	for i in 240:
-		var idle := (i / 3) % 2 == 0
+		var idle := int(i / 3.0) % 2 == 0
 		var hx := 1.0 if idle else -1.0
 		st = FxMath.step_facing(st, hx, not idle, dt)
 		if st.x != 1.0:
@@ -198,7 +247,7 @@ func _check_facing() -> void:
 	var st2 := Vector3(0.0, 0.0, 0.0)
 	var flips2 := 0
 	for i in 600:
-		var hx2 := 1.0 if (i / 4) % 2 == 0 else -1.0
+		var hx2 := 1.0 if int(i / 4.0) % 2 == 0 else -1.0
 		var before := st2.x
 		st2 = FxMath.step_facing(st2, hx2, true, dt)
 		if st2.x != before:
@@ -350,6 +399,46 @@ func _check_ring_math() -> void:
 	ring.step(0.2)
 	_check(not ring.active, "ring deactivates after its duration")
 	ring.free()
+
+
+# Drink ripples: fire only on water and only at close zoom — an immediate
+# splash when the sip starts, then at most one ring per SIP_PERIOD of real
+# time (the pose itself flickers with the walking debounce).
+func _check_sip_ripples() -> void:
+	var disc := ImageTexture.create_from_image(Image.create(8, 8, false, Image.FORMAT_RGBA8))
+	var biome := StubBiome.new()
+	var fx: Node2D = ViewerEffects.new()
+	var cam := StubCam.new()
+	cam.zoom = Vector2(4, 4)  # inside the close-up gate
+	fx.setup(null, cam, null, disc, biome)
+	for _i in 120:
+		fx.update_rings(1.0 / 60.0)
+		fx.tick_sip(7, Vector2(5.0, 5.0), 1.5)
+	_check(_ripples_live(fx) == 0, "no ripples on dry land")
+	fx.tick_sip(7, Vector2(-5.0, 5.0), 1.5)
+	_check(_ripples_live(fx) == 1, "sip on water splashes immediately")
+	fx.tick_sip(7, Vector2(-5.0, 5.0), 1.5)
+	_check(_ripples_live(fx) == 1, "second sip inside the period does not double-fire")
+	fx.free()
+	cam.free()
+	# Zoomed out past the gate, nothing fires even on water.
+	var far: Node2D = ViewerEffects.new()
+	var far_cam := StubCam.new()
+	far_cam.zoom = Vector2(1, 1)
+	far.setup(null, far_cam, null, disc, biome)
+	far.tick_sip(7, Vector2(-5.0, 5.0), 1.5)
+	_check(_ripples_live(far) == 0, "no ripples at census zoom")
+	far.free()
+	far_cam.free()
+	biome.free()
+
+
+func _ripples_live(fx: Node2D) -> int:
+	var live := 0
+	for r in fx._ripples:
+		if r.active:
+			live += 1
+	return live
 
 
 func _check_apply_all() -> void:

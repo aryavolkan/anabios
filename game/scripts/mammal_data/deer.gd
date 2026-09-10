@@ -1,10 +1,10 @@
 extends RefCounted
 # Deer — prey/quadruped rig (mammal_sprites RigKind.PREY, large-bodied). 16x16,
 # facing right. Tall thin legs, a long neck angled up toward a small head with
-# upright ears. Same 12-slot layout as Wolf: 0 stand, 1/2/3 trot (contact-L /
+# upright ears. Same 14-slot layout as Wolf: 0 stand, 1/2/3 trot (contact-L /
 # passing / contact-R), 4/5 graze (neck all the way to the ground), 6/7 charge,
-# 8/9 alert, 10/11 gallop (long bounding leap). Blocks are [x, y, w, h, zone];
-# painted back-to-front, auto-outlined.
+# 8/9 alert, 10/11 gallop (long bounding leap), 12/13 sleep. Blocks are
+# [x, y, w, h, zone]; painted back-to-front, auto-outlined.
 
 const POSES: Array = [
 	# 0 stand
@@ -188,5 +188,30 @@ const POSES: Array = [
 		[8, 10, 1, 5, "c"],
 		[10, 10, 1, 5, "c"],
 		[12, 10, 1, 5, "c"],
+	],
+	# 12 sleep — legs folded under, long neck lowered, head resting ahead on
+	# the ground, ears relaxed, eye closed
+	[
+		[1, 9, 2, 2, "c"],  # tail
+		[3, 9, 7, 4, "c"],  # torso on the ground
+		[4, 12, 4, 1, "u"],  # underbelly grounded
+		[8, 9, 4, 3, "c"],  # neck + head lowered forward
+		[12, 10, 2, 2, "n"],  # muzzle resting
+		[8, 8, 1, 1, "c"],
+		[10, 8, 1, 1, "c"],  # ears relaxed
+		[4, 12, 3, 1, "c"],
+		[8, 12, 3, 1, "c"],  # legs folded under (hint)
+	],
+	# 13 sleep B — the inhale: back rises a pixel
+	[
+		[1, 9, 2, 2, "c"],
+		[3, 8, 7, 4, "c"],
+		[4, 12, 4, 1, "u"],
+		[8, 9, 4, 3, "c"],
+		[12, 10, 2, 2, "n"],
+		[8, 8, 1, 1, "c"],
+		[10, 8, 1, 1, "c"],
+		[4, 12, 3, 1, "c"],
+		[8, 12, 3, 1, "c"],
 	],
 ]

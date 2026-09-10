@@ -2,7 +2,7 @@ extends Node
 
 # Selected scenario + seed, set by the menu and read by the viewer.
 var scenario_path: String = "res://../scenarios/minimal.toml"
-var seed: int = 12345
+var rng_seed: int = 12345
 # HUD scale from the menu, 0.5..1.0. Capped at 1.0 because the HUD is laid out
 # in absolute pixels for a 1280x800 viewport: scaling the UI layer up shrinks
 # the logical viewport below the design size, which pushed the species rail, the

@@ -45,9 +45,9 @@ func _apply_config_overrides() -> void:
 		GameConfig.scenario_path = OS.get_environment("ANABIOS_SCENARIO")
 	# Seed override: scenarios tuned around a specific biome field (e.g.
 	# geographic-trade's four-way junction hub) only show that behavior on
-	# their own seed, which the viewer's default GameConfig.seed would mask.
+	# their own seed, which the viewer's default GameConfig.rng_seed would mask.
 	if OS.has_environment("ANABIOS_SEED"):
-		GameConfig.seed = int(OS.get_environment("ANABIOS_SEED"))
+		GameConfig.rng_seed = int(OS.get_environment("ANABIOS_SEED"))
 	if OS.has_environment("ANABIOS_GROUND"):
 		GameConfig.default_ground = int(OS.get_environment("ANABIOS_GROUND"))
 	if OS.has_environment("ANABIOS_BODY"):

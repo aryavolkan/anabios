@@ -223,6 +223,12 @@ jobs:
           grep -q 'anabios.gdextension' game/.godot/extension_list.cfg 2>/dev/null \
             || echo 'res://anabios.gdextension' > game/.godot/extension_list.cfg
           echo "extension_list.cfg:"; cat game/.godot/extension_list.cfg
+          # Fennara is local editor tooling and is intentionally ignored by
+          # Git. Remove its optional runtime autoload on CI when the addon is
+          # absent, otherwise every smoke process emits a missing-script error.
+          if [ ! -f game/addons/fennara/runtime/game_capture_helper.gd ]; then
+            sed -i '/^_fennara_game_capture=/d' game/project.godot
+          fi
       # Both smoke modes live in scripts/godot-smoke.sh — they assert on log
       # *content* because Godot exits 0 on a script that fails to parse.
       - name: scene-load smoke (menu + sim)
@@ -230,7 +236,7 @@ jobs:
       # Sprite-module unit tests: SceneTree harnesses over the block-art tables
       # (building/goods/cart sprites, the mammal archetype registry, event FX).
       - name: sprite module tests
-        run: scripts/godot-smoke.sh scripts test_building_sprites test_mammal_sprites test_event_fx
+        run: scripts/godot-smoke.sh scripts test_building_sprites test_mammal_sprites test_event_fx test_emote_sprites
       # GDScript lint/format gate (gdtoolkit — the clippy/rustfmt analog for
       # GDScript). `gdformat --check` enforces formatting/width; `gdlint`
       # enforces the substantive rules (two stylistic rules are disabled in

@@ -2,7 +2,7 @@ extends HBoxContainer
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
-@onready var main: Node2D = get_node("/root/Main")
+@onready var main: Node2D = get_node("../..")
 
 var _speed_btns: Dictionary = {}
 

@@ -603,6 +603,23 @@ impl Simulation {
         out
     }
 
+    /// Attack urge (`ActionRegister::fire_intent`, 0..1) per alive agent, same
+    /// order as `alive_positions`. Written for every agent every tick by
+    /// `decide_all` regardless of scenario flags, so unlike mood/arousal this
+    /// reads live in flag-off worlds too; `interact::FIRE_THRESHOLD` (0.5) is
+    /// where the intent becomes a strike when a target is in range, and the
+    /// viewer drives its hunt pose from the same band.
+    #[func]
+    fn alive_fire_intent(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(w.actions[id as usize].fire_intent);
+            }
+        }
+        out
+    }
+
     /// Look up one alive agent by id. Returns a Dictionary; empty if dead.
     #[func]
     fn get_agent_info(&self, id: i64) -> VarDictionary {

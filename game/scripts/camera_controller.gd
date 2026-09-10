@@ -9,16 +9,11 @@ const PAN_INERTIA_DAMP: float = 5.0
 # How fast a held key ramps the pan up to PAN_SPEED_KEYS. Brisk enough not to
 # feel laggy, slow enough that the start of a pan is not a jolt.
 const PAN_ACCEL: float = 12.0
-const TRAUMA_DECAY: float = 1.8
-const TRAUMA_MAX: float = 0.6
-const SHAKE_MAX: float = 10.0
 
 var _dragging: bool = false
 var _target_zoom: float = 1.0
 var _zoom_easing: bool = false
 var _pan_vel: Vector2 = Vector2.ZERO
-var _trauma: float = 0.0
-var _shake_t: float = 0.0
 
 
 func _ready() -> void:
@@ -29,7 +24,7 @@ func _ready() -> void:
 # Frame the whole world: fill the viewport (larger ratio wins, so there are no
 # empty gutters) and center on the world's midpoint.
 func _fit_to_world() -> void:
-	var sim = get_node_or_null("/root/Main/Simulation")
+	var sim = get_node_or_null("../Simulation")
 	if sim == null:
 		return
 	var world: float = float(sim.world_size())
@@ -49,7 +44,7 @@ func _fit_to_world() -> void:
 # full world for the overview. Called from Main._ready after the scenario loads
 # (the sim has no agents yet at this node's own _ready).
 func fit_to_agents() -> void:
-	var sim = get_node_or_null("/root/Main/Simulation")
+	var sim = get_node_or_null("../Simulation")
 	if sim == null:
 		return
 	var ps: PackedVector2Array = sim.alive_positions()
@@ -73,12 +68,14 @@ func fit_to_agents() -> void:
 	position = c
 
 
-# Combat and other high-energy events feed trauma here; _process decays it and
-# turns the remainder into a screen-space shake via `offset`, so the camera's
-# position/zoom (and anything scripting them, like the showcase director) are
-# never disturbed.
-func add_trauma(amount: float) -> void:
-	_trauma = clampf(_trauma + amount, 0.0, TRAUMA_MAX)
+# Combat and other high-energy events feed trauma here. Camera shake is
+# deliberately DISABLED: chronic events (MassFright fires every tick in
+# panic-heavy scenarios) kept the screen juddering near-constantly at speed,
+# so the trauma sink is inert. The event-side doses (event_fx.gd, main.gd's
+# flash rumble) still flow in as a record of event intensity, and this stays
+# the single place to reinstate shake if it's ever wanted again.
+func add_trauma(_amount: float) -> void:
+	pass
 
 
 func _input(event: InputEvent) -> void:
@@ -156,18 +153,3 @@ func _process(delta: float) -> void:
 			position += anchor - get_global_mouse_position()
 		elif _zoom_easing:
 			_zoom_easing = false
-	# Trauma shake runs even under the showcase director: offset is pure
-	# presentation and leaves the scripted camera path untouched.
-	if _trauma > 0.0:
-		_trauma = maxf(0.0, _trauma - TRAUMA_DECAY * delta)
-		_shake_t += delta * 28.0
-		var mag := SHAKE_MAX * _trauma * _trauma
-		offset = (
-			Vector2(
-				sin(_shake_t * 1.3) * 0.6 + sin(_shake_t * 3.7) * 0.4,
-				cos(_shake_t * 1.7) * 0.6 + cos(_shake_t * 4.3) * 0.4
-			)
-			* mag
-		)
-	elif offset != Vector2.ZERO:
-		offset = Vector2.ZERO

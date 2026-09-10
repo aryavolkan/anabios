@@ -18,6 +18,9 @@ var _sim = null
 var _cam: Camera2D = null
 var _climate: CanvasModulate = null
 var _disc: Texture2D = null
+# Biome renderer (optional): lets the sip ripples ask whether an agent is
+# actually standing on water before disturbing it.
+var _biome: Node = null
 
 var _embers: Array[GPUParticles2D] = []
 var _ember_idx: int = 0
@@ -33,20 +36,36 @@ var _ring_idx: int = 0
 var _sparks: Array[GPUParticles2D] = []
 var _spark_idx: int = 0
 var _event_cursor: int = 0
+# Water ripples under drinking agents (own pool so a shoreline of sippers
+# can't starve the codex-event rings). _sip_last maps id -> the _fx_time of
+# that agent's previous ripple; _fx_time is this subsystem's own real-time
+# clock (advanced in update_rings) because the drink pose flickers with the
+# walking debounce — a pose-time cooldown would stretch the period ~8x.
+var _ripples: Array = []
+var _ripple_idx: int = 0
+var _sip_last: Dictionary = {}
+var _fx_time: float = 0.0
+
+const RIPPLE_COLOR := Color(0.7, 0.9, 1.0, 0.65)
+const SIP_PERIOD := 1.1
 
 
 # Wire up the sim/camera/climate references and the shared particle disc, then
 # build every pool. Called once from main._ready after the climate node exists.
-func setup(sim, cam: Camera2D, climate: CanvasModulate, disc: Texture2D) -> void:
+func setup(
+	sim, cam: Camera2D, climate: CanvasModulate, disc: Texture2D, biome: Node = null
+) -> void:
 	_sim = sim
 	_cam = cam
 	_climate = climate
 	_disc = disc
+	_biome = biome
 	_make_bloom()
 	_make_ember_pool()
 	_make_dust_pool()
 	_make_fire_light_pool()
 	_make_ring_pool()
+	_make_ripple_pool()
 	_make_spark_pool()
 	_make_weather()
 
@@ -205,13 +224,52 @@ func spawn_ring(pos: Vector2, color: Color, dur: float, radius: float) -> void:
 
 
 func update_rings(delta: float) -> void:
+	_fx_time += delta
 	for r in _rings:
+		if r.active:
+			r.step(delta)
+	for r in _ripples:
 		if r.active:
 			r.step(delta)
 
 
 func rings() -> Array:
 	return _rings
+
+
+# Small FxRing pool for the drink ripples, drawn UNDER the bodies (the codex
+# rings sit above at z 6) so the water reads as disturbed at the feet.
+func _make_ripple_pool() -> void:
+	for i in 12:
+		var r: Node2D = FxRing.new()
+		r.name = "FxRipple%d" % i
+		r.z_index = -2
+		r.visible = false
+		add_child(r)
+		_ripples.append(r)
+
+
+# Called from main's body pass for each agent holding the drink pose: a soft
+# expanding ripple at the agent's feet the moment a sip starts (the splash),
+# then once per SIP_PERIOD of real time while the pose recurs. Only actual
+# water ripples — the drink pose fires on the SEEK_WATER mood wherever the
+# agent pauses, and rings on dry grass would read as a rendering error.
+# Shares the dust pass's zoom gate: ripples are close-up garnish.
+func tick_sip(id: int, pos: Vector2, body_size: float) -> void:
+	if _ripples.is_empty() or _cam.zoom.x < 2.5:
+		return
+	if _biome == null or not _biome.is_water_at(pos):
+		return
+	# Bound the last-sip map: entries for agents that stopped drinking (or
+	# died) are never revisited, so reset wholesale rather than tracking them.
+	if _sip_last.size() > 1024:
+		_sip_last.clear()
+	if _fx_time - float(_sip_last.get(id, -SIP_PERIOD)) < SIP_PERIOD:
+		return
+	_sip_last[id] = _fx_time
+	var r: Node2D = _ripples[_ripple_idx]
+	_ripple_idx = (_ripple_idx + 1) % _ripples.size()
+	r.start(pos + Vector2(0.0, body_size * 0.4), RIPPLE_COLOR, 1.2, body_size * 1.5, 0.8)
 
 
 # Pooled tinted spark bursts: the embers' shape with a neutral ramp, tinted

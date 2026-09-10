@@ -23,7 +23,7 @@ const _RIG_KIND: PackedInt32Array = [
 	RigKind.LIVESTOCK_RIG,  # LIVESTOCK
 ]
 
-# Pose strip is the same 12-slot layout as the apes so one shader serves all.
+# Pose grid is the same 16-slot layout as the apes so one shader serves all.
 const POSE_COUNT := ApeSprites.POSE_COUNT
 
 # Selection thresholds (tunable; validated in Task 9's capture pass).
@@ -84,7 +84,7 @@ static func bucket_atlas(b: int) -> ImageTexture:
 		return ApeSprites.build_species_atlas(b)
 	var arch: int = QUAD_ORDER[b - SKIN_COUNT]
 	if _QUAD_DATA.has(arch):
-		return build_quad_atlas(_QUAD_DATA[arch].POSES)
+		return build_quad_atlas(_with_celebration_poses(_QUAD_DATA[arch].POSES))
 	return ApeSprites.build_species_atlas(0)  # fallback until the rig lands
 
 
@@ -156,13 +156,28 @@ static func coat_hue(archetype: int, species_id: int) -> Color:
 	return Color.from_hsv(hue, band[2], band[3])
 
 
-# One rig's 12 poses baked into the shared 64x64 grid atlas (pre-flipped for
+# One rig's poses baked into the shared 64x64 grid atlas (pre-flipped for
 # the QuadMesh's flipped V). QUAD_ZONES already maps each zone key to an
 # explicit neutral Colour, so ApeSprites._pack_grid resolves it the same way
 # the ape atlas resolves its PAL keys. Square-grid layout (not a 16x192 strip)
 # avoids the Metal MultiMesh2D texture corruption — see ApeSprites.ATLAS_PX.
 static func build_quad_atlas(poses: Array) -> ImageTexture:
 	return ApeSprites._pack_grid(poses, QUAD_ZONES)
+
+
+# Quadruped rigs share the 14 authored cells, but the celebration action needs
+# two additional cells to match the primate atlas. Generate those cells from
+# each rig's alert pair and add a tiny raised-tail flag; this keeps the animal's
+# authored silhouette and palette while giving the action a concrete 2D asset.
+static func _with_celebration_poses(poses: Array) -> Array:
+	if poses.size() >= ApeSprites.POSE_COUNT:
+		return poses
+	var out: Array = poses.duplicate(true)
+	for idx in [8, 9]:
+		var cheer: Array = poses[idx].duplicate(true)
+		cheer.append([0, 2 if idx == 8 else 1, 1, 2, "c"])
+		out.append(cheer)
+	return out
 
 
 # Fallen ghost: neutral pose rotated 90 CW, matching ApeSprites.build_fallen_texture.

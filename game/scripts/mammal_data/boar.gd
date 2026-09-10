@@ -2,10 +2,10 @@ extends RefCounted
 # Boar — prey-family/quadruped rig (mammal_sprites RigKind.PREY, small
 # omnivore). 16x16, facing right. Low stocky body, short thick legs, a big
 # wedge head with a down-pointing snout and a small tusk, a bristly back
-# ridge. Same 12-slot layout as Wolf: 0 stand, 1/2/3 trot (contact-L /
+# ridge. Same 14-slot layout as Wolf: 0 stand, 1/2/3 trot (contact-L /
 # passing / contact-R), 4/5 graze (snout roots at the ground), 6/7 charge,
-# 8/9 alert, 10/11 gallop. Blocks are [x, y, w, h, zone]; painted
-# back-to-front, auto-outlined.
+# 8/9 alert, 10/11 gallop, 12/13 sleep. Blocks are [x, y, w, h, zone];
+# painted back-to-front, auto-outlined.
 
 const POSES: Array = [
 	# 0 stand
@@ -229,5 +229,34 @@ const POSES: Array = [
 		[8, 10, 2, 4, "c"],
 		[10, 10, 2, 4, "c"],
 		[12, 10, 2, 4, "c"],
+	],
+	# 12 sleep — stocky body settled, wedge head down with the snout to the
+	# ground, back ridge settled, eye closed
+	[
+		[3, 8, 8, 5, "c"],  # body settled
+		[4, 12, 6, 1, "u"],  # underbelly grounded
+		[10, 8, 4, 4, "c"],  # wedge head down
+		[13, 11, 2, 2, "n"],  # snout to the ground
+		[14, 12, 1, 1, "u"],  # tusk
+		[10, 7, 1, 1, "c"],
+		[12, 7, 1, 1, "c"],  # ears flopped
+		[4, 7, 1, 1, "c"],
+		[6, 7, 1, 1, "c"],
+		[8, 7, 1, 1, "c"],  # back ridge settled
+		[2, 9, 1, 2, "c"],  # tail
+	],
+	# 13 sleep B — the inhale: back and ridge rise a pixel
+	[
+		[3, 7, 8, 5, "c"],
+		[4, 12, 6, 1, "u"],
+		[10, 8, 4, 4, "c"],
+		[13, 11, 2, 2, "n"],
+		[14, 12, 1, 1, "u"],
+		[10, 7, 1, 1, "c"],
+		[12, 7, 1, 1, "c"],
+		[4, 6, 1, 1, "c"],
+		[6, 6, 1, 1, "c"],
+		[8, 6, 1, 1, "c"],
+		[2, 9, 1, 2, "c"],
 	],
 ]

@@ -146,8 +146,8 @@ var _counts: Array[int] = []
 var _recent: Array[Dictionary] = []
 var _cursor: int = 0
 
-@onready var sim = get_node("/root/Main/Simulation")
-@onready var camera: Camera2D = get_node("/root/Main/Camera2D")
+@onready var sim = get_node("../../Simulation")
+@onready var camera: Camera2D = get_node("../../Camera2D")
 @onready var counts_label: Label = $VBox/Counts
 @onready var recent_list: VBoxContainer = $VBox/Scroll/RecentList
 
@@ -228,9 +228,9 @@ func _render() -> void:
 	for i in range(_recent.size() - 1, -1, -1):
 		var ev: Dictionary = _recent[i]
 		var t: int = int(ev["type"])
-		var name: String = CHAPTER_NAMES[t] if t < CHAPTER_NAMES.size() else "Event"
+		var title: String = CHAPTER_NAMES[t] if t < CHAPTER_NAMES.size() else "Event"
 		var btn := Button.new()
-		btn.text = "t=%d %s sp=%d" % [int(ev["tick"]), name, int(ev["species_id"])]
+		btn.text = "t=%d %s sp=%d" % [int(ev["tick"]), title, int(ev["species_id"])]
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.add_theme_font_size_override("font_size", 11)
 		if t >= 0 and t < CHAPTER_COLORS.size():

@@ -143,15 +143,17 @@ const WALK_FRAME_COUNT := 4
 # Per-hominin gait cadence (frames/sec), read by mammal_sprites.bucket_gait_fps.
 const WALK_FPS: PackedFloat32Array = [5.0, 4.2, 4.6, 4.8, 5.6]
 # The atlas stacks WALK_FRAME_COUNT gait poses, then TWO frames per action
-# (eat / fight / trade / flee) that main.gd derives from combat, trade and
-# energy signals; the shader cycles each pair when INSTANCE_CUSTOM.a != 0.
-const POSE_COUNT := 12
+# (eat / fight / trade / flee / sleep) that main.gd derives from combat,
+# trade, fire-intent, mood and energy signals; the shader cycles each pair
+# when INSTANCE_CUSTOM.a != 0.
+const POSE_COUNT := 16
 const POSE_EAT := 4
 const POSE_FIGHT := 6
 const POSE_TRADE := 8
 const POSE_FLEE := 10
-# Atlas layout: the 12 poses pack into a SQUARE 64x64 grid (4 cols x 4 rows,
-# last row unused), NOT a 16x192 vertical strip. On Metal (Apple GPUs) an
+const POSE_SLEEP := 12
+# Atlas layout: the 16 poses fill a SQUARE 64x64 grid (4 cols x 4 rows),
+# NOT a 16x192 vertical strip. On Metal (Apple GPUs) an
 # extreme-aspect texture sampled through a canvas_item ShaderMaterial on the
 # MultiMesh2D path corrupts into torn horizontal streaks — a near-square
 # power-of-two texture renders cleanly. The field_agent shader maps a pose
@@ -334,6 +336,56 @@ const FIELD_POSES: Array = [
 		[5, 12, 3, 3, "c"],
 		[9, 11, 3, 4, "c"]
 	],
+	# 12 sleep — curled up on the ground: torso horizontal along the ground
+	# line, head resting at the facing (right) end, arm folded under the
+	# cheek, legs drawn up. The shader swaps the idle bob for a slow breath.
+	[
+		[11, 9, 4, 4, "c"],
+		[12, 11, 2, 2, "s"],
+		[3, 11, 9, 4, "c"],
+		[8, 12, 2, 1, "a"],
+		[9, 13, 3, 1, "c"],
+		[11, 14, 2, 1, "s"],
+		[3, 13, 4, 2, "c"]
+	],
+	# 13 sleep B — the inhale: the back swells one pixel
+	[
+		[11, 9, 4, 4, "c"],
+		[12, 11, 2, 2, "s"],
+		[3, 10, 9, 5, "c"],
+		[8, 11, 2, 1, "a"],
+		[9, 13, 3, 1, "c"],
+		[11, 14, 2, 1, "s"],
+		[3, 13, 4, 2, "c"]
+	],
+	# 14 celebrate — arms raised after a successful mating bond
+	[
+		[6, 2, 4, 4, "c"],
+		[7, 4, 2, 2, "s"],
+		[7, 6, 2, 1, "c"],
+		[4, 6, 8, 5, "c"],
+		[7, 7, 2, 2, "a"],
+		[2, 3, 2, 5, "c"],
+		[2, 2, 2, 1, "s"],
+		[12, 3, 2, 5, "c"],
+		[12, 2, 2, 1, "s"],
+		[6, 11, 2, 4, "c"],
+		[9, 11, 2, 4, "c"]
+	],
+	# 15 celebrate B — a small upward bounce with the hands still aloft
+	[
+		[6, 1, 4, 4, "c"],
+		[7, 3, 2, 2, "s"],
+		[7, 5, 2, 1, "c"],
+		[4, 5, 8, 5, "c"],
+		[7, 6, 2, 2, "a"],
+		[2, 2, 2, 5, "c"],
+		[2, 1, 2, 1, "s"],
+		[12, 2, 2, 5, "c"],
+		[12, 1, 2, 1, "s"],
+		[6, 10, 2, 4, "c"],
+		[9, 10, 2, 4, "c"]
+	],
 ]
 
 # Zone colours per species, keyed into PAL — matched to the inspector avatars,
@@ -411,7 +463,7 @@ static func _pack_grid(poses: Array, zones: Dictionary) -> ImageTexture:
 		var cell := _build_pose(poses[fr], zones)
 		cell.flip_y()
 		var cx := (fr % ATLAS_COLS) * CELL_PX
-		var cy := int(fr / ATLAS_COLS) * CELL_PX
+		var cy := int(fr / float(ATLAS_COLS)) * CELL_PX
 		atlas.blit_rect(cell, Rect2i(0, 0, CELL_PX, CELL_PX), Vector2i(cx, cy))
 	return ImageTexture.create_from_image(atlas)
 
