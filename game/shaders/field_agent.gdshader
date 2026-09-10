@@ -15,7 +15,7 @@ shader_type canvas_item;
 //   b = face_left (smoothed 0..1; mid-flip the mirror mix squashes the sprite
 //       horizontally, so turns read as a weight shift instead of a snap)
 //   a = action / 8 (0 none, 1 eat, 2 fight, 3 trade, 4 flee, 5 sleep,
-//       6 drink —
+//       6 drink, 7 mate —
 //       sim signals: strike hotspots, fire_intent, the mood column)
 // Moving agents cycle contact -> passing -> counter-contact -> passing (a
 // step-lift-step gait with the bob baked into the passing pose), paced by the
@@ -150,6 +150,13 @@ void vertex() {
 		float sip = pow(max(sin(fract(animation_time * action_fps * 0.5 + phase) * 6.2831853), 0.0), 0.8);
 		VERTEX.y -= sip * 0.045;
 		VERTEX.x += cos(animation_time * 6.2831853 * (action_fps * 0.25) + phase) * 0.018;
+	// Mate (act 7): a compact courtship bow, with a soft rebound so a pair
+	// reads as acknowledging one another rather than idling in alert pose.
+	} else if (act > 6.5 && act < 7.5) {
+		float bow = pow(max(sin(fract(animation_time * action_fps * 0.35 + phase) * 6.2831853), 0.0), 1.2);
+		VERTEX.y -= bow * 0.055;
+		VERTEX.x += mix(1.0, -1.0, step(0.5, anim.b)) * bow * 0.025;
+		VERTEX.x *= 1.0 + bow * 0.025;
 	}
 	// Livestock idle: a slow chewing head-bob (only while standing).
 	if (rig_kind == 3 && anim.g < 0.5 && act < 0.5) {
@@ -176,8 +183,13 @@ void fragment() {
 		// so a trading cluster doesn't chomp in lockstep.
 		float a2 = floor(mod(animation_time * action_fps + anim.r * 2.0, 2.0));
 		// Drink has no dedicated atlas cells: frame 4/5 is the compatible
-		// eat/graze pair for primates and quadrupeds alike.
-		float pose_act = (act > 5.5 && act < 6.5) ? 1.0 : act;
+		// eat/graze pair; courtship uses frame 8/9, the trade/alert pair.
+		float pose_act = act;
+		if (act > 5.5 && act < 6.5) {
+			pose_act = 1.0;
+		} else if (act > 6.5 && act < 7.5) {
+			pose_act = 3.0;
+		}
 		fr = 2.0 + pose_act * 2.0 + a2;
 	} else {
 		// Gait: anim.r is the distance-driven cycle position, so s steps

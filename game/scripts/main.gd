@@ -56,6 +56,7 @@ const ACT_TRADE := 3.0
 const ACT_FLEE := 4.0
 const ACT_SLEEP := 5.0
 const ACT_DRINK := 6.0
+const ACT_MATE := 7.0
 const ACT_SCALE := 8.0
 # Mood discriminants from the sim's mood.rs (alive_moods) that drive poses.
 # All-CONTENT when the scenario's affect layer is off.
@@ -64,6 +65,8 @@ const MOOD_SEEK_WATER := 2
 const MOOD_SLEEP := 3
 const MOOD_FLEE := 4
 const MOOD_FIGHT := 5
+const MOOD_SEEK_MATE := 6
+const MOOD_MATE := 7
 # Same band as the sim's interact::FIRE_THRESHOLD: fire_intent crosses 0.5 on
 # the strike, so the build-up above it is the visible hunt.
 const FIRE_POSE_THRESHOLD := 0.5
@@ -734,8 +737,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			# standing) > flee (FLEE mood — the mood is the behavior arbiter,
 			# so fear outranks even a high fire_intent) > hunt/fight (real
 			# fire_intent in any world, the FIGHT mood, or standing at a
-			# strike hotspot) > water-seeking sip > trade hotspot
-			# > idle-with-rising-energy eat.
+			# strike hotspot) > courtship bow > water-seeking sip
+			# > trade hotspot > idle-with-rising-energy eat.
 			# A pursuing predator fires while moving, so the hunt reads as a
 			# moving lunge instead of the old hotspot-only strike instant.
 			var act := 0.0
@@ -746,6 +749,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				act = ACT_FLEE
 			elif (have_fire and fire_intents[i] > FIRE_POSE_THRESHOLD) or mood == MOOD_FIGHT:
 				act = ACT_FIGHT
+			elif (mood == MOOD_MATE or mood == MOOD_SEEK_MATE) and not walking:
+				act = ACT_MATE
 			elif mood == MOOD_SEEK_WATER and not walking:
 				act = ACT_DRINK
 			else:
