@@ -169,8 +169,10 @@ static func build_quad_atlas(poses: Array) -> ImageTexture:
 # two additional cells to match the primate atlas. Generate those cells from
 # each rig's alert pair and add a tiny raised-tail flag; this keeps the animal's
 # authored silhouette and palette while giving the action a concrete 2D asset.
+# A quad atlas is complete at POSE_SPEAR (16) cells: the weapon pairs beyond
+# it are ape-only art that quads deliberately never carry.
 static func _with_celebration_poses(poses: Array) -> Array:
-	if poses.size() >= ApeSprites.POSE_COUNT:
+	if poses.size() >= ApeSprites.POSE_SPEAR:
 		return poses
 	var out: Array = poses.duplicate(true)
 	for idx in [8, 9]:
