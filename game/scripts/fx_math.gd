@@ -42,6 +42,10 @@ const WALK_HOLD := 0.25
 # responsive, slow enough that a stride eases in rather than snapping on.
 const WALK_BLEND := 9.0
 
+# Action poses get a short recovery beat after their signal clears. The state
+# passed to step_action is (current action id, remaining hold seconds).
+const ACTION_HOLD := 0.16
+
 # Facing. cos(heading) is near zero whenever a body travels near-vertically,
 # and it is exactly 1.0 when the sim zeroes the heading to mean "idle" — so a
 # bare sign test snaps the sprite to face right every time the heading
@@ -120,6 +124,25 @@ static func step_locomotion(st: Vector2, raw_moving: bool, delta: float) -> Vect
 	var hold: float = WALK_HOLD if raw_moving else maxf(st.x - delta, 0.0)
 	var target: float = 1.0 if hold > 0.0 else 0.0
 	return Vector2(hold, lerpf(st.y, target, 1.0 - exp(-WALK_BLEND * delta)))
+
+
+# Debounce behavior changes so a noisy simulation threshold cannot cut a
+# two-frame eat/fight/trade/flee/sleep pose off at an arbitrary frame. New
+# actions start immediately; clearing one waits ACTION_HOLD before neutral.
+static func step_action(st: Vector2, target: float, delta: float) -> Vector2:
+	var current: float = st.x
+	var hold: float = st.y
+	if current < 0.0:
+		current = target
+		hold = ACTION_HOLD if target > 0.0 else 0.0
+	elif is_equal_approx(target, current):
+		hold = ACTION_HOLD if current > 0.0 else 0.0
+	else:
+		hold = maxf(hold - delta, 0.0)
+		if hold <= 0.0:
+			current = target
+			hold = ACTION_HOLD if target > 0.0 else 0.0
+	return Vector2(current, hold)
 
 
 # Advance one agent's facing. `st` is (committed side 0 right / 1 left, eased

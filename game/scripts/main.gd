@@ -71,10 +71,6 @@ const DEATH_TTL: float = 1.4
 const DEATH_FALL: float = 0.35
 const DEATH_CAP: int = 512
 const BIRTH_POP: float = 0.3
-# Keep a behavior pose alive briefly after its signal disappears. Simulation
-# intent channels can flicker around a threshold; an animation should finish
-# its beat instead of snapping back to neutral every frame.
-const ACTION_HOLD: float = 0.16
 var _prev_ids: PackedInt32Array = PackedInt32Array()
 var _prev_smooth: PackedVector2Array = PackedVector2Array()
 var _prev_sizes: PackedFloat32Array = PackedFloat32Array()
@@ -755,7 +751,11 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
 					act = ACT_EAT
 			if have_ids:
-				act = _stable_action(ids[i], act, delta)
+				var action_state := FxMath.step_action(
+					_actions.get(ids[i], Vector2(-1.0, 0.0)), act, delta
+				)
+				_actions[ids[i]] = action_state
+				act = action_state.x
 			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))
 
 	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
@@ -790,27 +790,6 @@ func _on_agent_death(id: int, prev_idx: int) -> void:
 	if prev_idx < _prev_color.size():
 		col = _prev_color[prev_idx]
 	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz, side, col])
-
-
-# Debounce action changes so a threshold crossing does not interrupt a pose at
-# an arbitrary atlas frame. New actions start immediately; clearing an action
-# waits ACTION_HOLD seconds so the final attack/chew/reach frame can land.
-func _stable_action(id: int, target: float, delta: float) -> float:
-	var state: Vector2 = _actions.get(id, Vector2(-1.0, 0.0))
-	var current: float = state.x
-	var hold: float = state.y
-	if current < -0.5:
-		current = target
-		hold = ACTION_HOLD if target > 0.0 else 0.0
-	elif is_equal_approx(target, current):
-		hold = ACTION_HOLD if current > 0.0 else 0.0
-	else:
-		hold = maxf(hold - delta, 0.0)
-		if hold <= 0.0:
-			current = target
-			hold = ACTION_HOLD if target > 0.0 else 0.0
-	_actions[id] = Vector2(current, hold)
-	return current
 
 
 # Age and draw the ghosts: fallen figures that fade out quadratically over

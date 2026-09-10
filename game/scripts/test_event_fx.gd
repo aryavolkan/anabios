@@ -45,6 +45,7 @@ func _init() -> void:
 	_check_flow_pulse()
 	_check_gait()
 	_check_locomotion()
+	_check_action_transition()
 	_check_facing()
 	_check_shuttle_and_ease()
 	_check_radial_texture()
@@ -171,6 +172,21 @@ func _check_locomotion() -> void:
 		var s2 := FxMath.step_locomotion(Vector2(float(i) * 0.01, float(i) / 40.0), i % 2 == 0, dt)
 		_check(s2.y >= 0.0 and s2.y <= 1.0, "weight stays in 0..1 (step %d)" % i)
 		_check(s2.x >= 0.0, "hold credit never goes negative (step %d)" % i)
+
+
+# Behavior poses need a short recovery beat when their source signal clears;
+# otherwise a noisy threshold can cut the two-frame action off mid-motion.
+func _check_action_transition() -> void:
+	var dt := 1.0 / 60.0
+	var state := Vector2.ZERO
+	state = FxMath.step_action(state, 2.0, dt)
+	_check(state.x == 2.0, "a new action starts immediately")
+	_check(state.y > 0.0, "a new action receives recovery hold time")
+	var held := FxMath.step_action(state, 0.0, dt)
+	_check(held.x == 2.0, "clearing a signal does not cut the action immediately")
+	for _i in 30:
+		held = FxMath.step_action(held, 0.0, dt)
+	_check(held.x == 0.0, "a cleared action eventually returns to neutral")
 
 
 # Facing deadband. The measured failure was the sim zeroing an agent's heading
