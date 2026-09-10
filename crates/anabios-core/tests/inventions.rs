@@ -1300,7 +1300,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // probability table genuinely gains new candidates in this inventions_
     // enabled scenario — a real trajectory change from tick 0 on, not pure
     // layout growth.
-    &[(0, 0x1e759e5a7ebfb1a5), (100, 0x14f0b5277d793833), (300, 0x7c5ec58288e725df)];
+    // Refreshed 2026-09-10 (X1 invention expansion, FORMAT_VERSION 40→41):
+    // meme channels widened 24->32 and six more inventions were appended
+    // (INVENTION_COUNT 14->20) — another real trajectory change from tick 0,
+    // same reason as the military-branch refresh above.
+    &[(0, 0x51ae2a582ebb31a5), (100, 0xd3f890861d9b1ea4), (300, 0x73f64923dddf6e88)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

@@ -71,7 +71,11 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // vector widened and four inventions were appended. inventions_enabled is
     // off here (cognition_enabled alone is on) ⇒ the new candidates are never
     // consulted — layout growth only, trajectory byte-identical.
-    &[(0, 0x91b1efa8c82a7bf3), (100, 0x9dbd4a6649acaab8), (200, 0x0737750a526c15c1)];
+    // Refreshed 2026-09-10 (X1 invention expansion, FORMAT_VERSION 40→41):
+    // meme channels widened 24->32 and INVENTION_COUNT grew 14->20.
+    // inventions_enabled is off here ⇒ layout growth only, trajectory
+    // byte-identical.
+    &[(0, 0x45e13db6a54b5bf3), (100, 0xd6ea2e81ae34efe5), (200, 0x8c2d8f987e10bae9)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

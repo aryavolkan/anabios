@@ -195,7 +195,12 @@ const GOLDEN: &[(u64, u64)] =
     // probability table layout for every scenario. Flag off in minimal ⇒
     // military mechanics never run, trajectory byte-identical — tick 0 moves
     // from layout growth alone.
-    &[(0, 0xeb4ec4a518e5aa64), (100, 0x21ebe0482fed030f), (1000, 0x402becc24ea9f675)];
+    // Refreshed 2026-09-10 (X1 invention expansion, FORMAT_VERSION 40→41):
+    // meme channels widened 24->32 and INVENTION_COUNT grew 14->20, again
+    // growing the discovery probability table layout for every scenario.
+    // Inventions off in minimal ⇒ trajectory byte-identical, layout growth
+    // only.
+    &[(0, 0x438e6837d64f0a64), (100, 0x8412ea7266832f0f), (1000, 0xf29196284c7a3407)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

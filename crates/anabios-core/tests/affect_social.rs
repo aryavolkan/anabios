@@ -100,7 +100,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // vector widened and four inventions were appended. inventions_enabled is
     // off here ⇒ the new candidates are never consulted — layout growth only,
     // trajectory byte-identical.
-    &[(0, 0xaefdb933a2d60632), (100, 0x69a6cdb3b10d1ce1), (300, 0xcdfe0f036a8dc8be)];
+    // Refreshed 2026-09-10 (X1 invention expansion, FORMAT_VERSION 40→41):
+    // meme channels widened 24->32 and INVENTION_COUNT grew 14->20.
+    // inventions_enabled is off here ⇒ layout growth only, trajectory
+    // byte-identical.
+    &[(0, 0xa4536f1935f98e32), (100, 0x3f9a2dcd4503b1e1), (300, 0x5e7bec3c3955993e)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {
