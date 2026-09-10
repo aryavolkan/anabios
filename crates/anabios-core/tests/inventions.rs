@@ -313,6 +313,85 @@ fn stone_tools_and_farming_and_fire_raise_grazing_gain() {
     assert!(fire > plain, "Fire increases energy per biomass: {plain} -> {fire}");
 }
 
+/// Like `graze_energy_with`, but also pins the found grass cell's biomass
+/// (as a fraction of carrying capacity) and moisture directly, isolating
+/// Pottery's depleted-cell bonus from Irrigation's dry-cell bonus (and both
+/// from the flat Stone-Tools/Farming/Machinery graze multiplier).
+fn graze_energy_with_cell(inv: Option<usize>, biomass_frac: f32, moisture: f32) -> f32 {
+    let mut w = World::new(29);
+    let mut pos = Vec2::ZERO;
+    let mut idx = None;
+    'outer: for row in 0..anabios_core::biome::BIOME_RES {
+        for col in 0..anabios_core::biome::BIOME_RES {
+            if w.biome.at(col, row).terrain == anabios_core::biome::TerrainType::Grass {
+                pos = Vec2::new(
+                    (col as f32 + 0.5) * anabios_core::biome::CELL_SIZE,
+                    (row as f32 + 0.5) * anabios_core::biome::CELL_SIZE,
+                );
+                idx = Some(w.biome.cell_index(col, row));
+                break 'outer;
+            }
+        }
+    }
+    let idx = idx.expect("grass cell exists");
+    let cap = w.biome.cells[idx].terrain.carrying_capacity();
+    w.biome.cells[idx].plant_biomass = cap * biomass_frac;
+    w.biome.cells[idx].moisture = moisture;
+    let id = w.spawn_agent(pos, Genome::neutral());
+    if let Some(k) = inv {
+        set_held(&mut w, id, k);
+    }
+    w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+    size_scratch(&mut w);
+    let before = w.agents.energy[id as usize];
+    anabios_core::interact::interact_all(&mut w);
+    w.agents.energy[id as usize] - before
+}
+
+#[test]
+fn pottery_bite_applies_only_on_a_depleted_cell() {
+    // Depleted cell (below POTTERY_LOW_BIOMASS), wet enough that Irrigation
+    // (not held here, but the cell condition still matters for clarity) never
+    // qualifies as dry.
+    let low = invention::POTTERY_LOW_BIOMASS - 0.1;
+    let wet = invention::IRRIGATION_DRY_MOISTURE + 0.3;
+    let plain = graze_energy_with_cell(None, low, wet);
+    let pottery = graze_energy_with_cell(Some(invention::POTTERY), low, wet);
+    assert!(pottery > plain, "Pottery raises the bite on a depleted cell: {plain} -> {pottery}");
+
+    // Same holder, but a well-stocked cell: the bonus must NOT apply.
+    let full = 1.0;
+    let plain_full = graze_energy_with_cell(None, full, wet);
+    let pottery_full = graze_energy_with_cell(Some(invention::POTTERY), full, wet);
+    assert!(
+        (pottery_full - plain_full).abs() < 1e-6,
+        "Pottery must be inert on a well-stocked cell: plain={plain_full} pottery={pottery_full}"
+    );
+}
+
+#[test]
+fn irrigation_bite_applies_only_on_a_dry_cell() {
+    // Well-stocked cell (never "depleted"), so Pottery's condition never
+    // qualifies even though it isn't held here.
+    let full = 1.0;
+    let dry = invention::IRRIGATION_DRY_MOISTURE - 0.1;
+    let plain = graze_energy_with_cell(None, full, dry);
+    let irrigation = graze_energy_with_cell(Some(invention::IRRIGATION), full, dry);
+    assert!(
+        irrigation > plain,
+        "Irrigation raises the bite on a dry cell: {plain} -> {irrigation}"
+    );
+
+    // Same holder, but a wet cell: the bonus must NOT apply.
+    let wet = invention::IRRIGATION_DRY_MOISTURE + 0.3;
+    let plain_wet = graze_energy_with_cell(None, full, wet);
+    let irrigation_wet = graze_energy_with_cell(Some(invention::IRRIGATION), full, wet);
+    assert!(
+        (irrigation_wet - plain_wet).abs() < 1e-6,
+        "Irrigation must be inert on a wet cell: plain={plain_wet} irrigation={irrigation_wet}"
+    );
+}
+
 #[test]
 fn metalworking_raises_combat_damage() {
     let damage_with = |inv: Option<usize>| -> f32 {
@@ -388,14 +467,19 @@ fn flat_upkeep_and_nuclear_income_apply_in_invention_step() {
     invention::invention_step(&mut w);
     let gained = w.agents.energy[nuke as usize] - e0;
     // `nuke` holds every invention (`0..INVENTION_COUNT`), including the
-    // military-branch ARCHERY, whose upkeep `flat_upkeep_coupled` also
-    // charges — spec-correct per Task 2, so the expectation must include it.
+    // military-branch ARCHERY and the X1 expansion's CURRENCY/PRINTING/
+    // SANITATION/GUNPOWDER, whose upkeep `flat_upkeep_coupled` also charges —
+    // spec-correct per Task 2, so the expectation must include all of them.
     let expected = invention::NUCLEAR_INCOME
         - invention::WRITING_UPKEEP
         - invention::MEDICINE_UPKEEP
         - invention::ELECTRICITY_UPKEEP
         - invention::NUCLEAR_UPKEEP
-        - invention::ARCHERY_UPKEEP;
+        - invention::ARCHERY_UPKEEP
+        - invention::CURRENCY_UPKEEP
+        - invention::PRINTING_UPKEEP
+        - invention::SANITATION_UPKEEP
+        - invention::GUNPOWDER_UPKEEP;
     assert!(
         (gained - expected).abs() < 1e-4,
         "full tree nets Nuclear income minus upkeeps: {gained} vs {expected}"

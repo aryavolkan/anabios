@@ -1419,21 +1419,24 @@ mod tests {
 
     #[test]
     fn candidates_respect_prereqs() {
+        // Pottery shares Stone Tools' prereq (none but itself), so it joins
+        // every candidate list below alongside the pre-X1 entries once Stone
+        // Tools is held.
         let mut got = Vec::new();
         candidates(0, |k| got.push(k));
         assert_eq!(got, vec![STONE_TOOLS]);
         got.clear();
         candidates(bit(STONE_TOOLS), |k| got.push(k));
-        assert_eq!(got, vec![FIRE, HAFTED_SPEARS]);
+        assert_eq!(got, vec![FIRE, HAFTED_SPEARS, POTTERY]);
         got.clear();
         candidates(bit(STONE_TOOLS) | bit(FIRE), |k| got.push(k));
-        assert_eq!(got, vec![FARMING, METALWORKING, HAFTED_SPEARS]);
+        assert_eq!(got, vec![FARMING, METALWORKING, HAFTED_SPEARS, POTTERY]);
         got.clear();
         // Machinery needs BOTH metalworking and writing; Archery needs Spears.
         candidates(bit(STONE_TOOLS) | bit(FIRE) | bit(METALWORKING) | bit(HAFTED_SPEARS), |k| {
             got.push(k)
         });
-        assert_eq!(got, vec![FARMING, ARCHERY]);
+        assert_eq!(got, vec![FARMING, ARCHERY, POTTERY]);
     }
 
     #[test]
@@ -1497,9 +1500,11 @@ mod tests {
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE - 1));
         assert!(is_invention_channel(INVENTION_CHANNEL_BASE));
         assert!(is_invention_channel(channel(STEEL_ARMS)));
-        // The last invention channel is the top of the tree block; the practice
-        // channels above it (`PRACTICE_CHANNEL_BASE..`) are NOT invention channels.
-        assert_eq!(channel(STEEL_ARMS), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
+        // The last invention channel is the top of the tree block — now
+        // Gunpowder, the X1 expansion's capstone (append-only ids moved this
+        // past the old Steel Arms top); the practice channels above it
+        // (`PRACTICE_CHANNEL_BASE..`) are NOT invention channels.
+        assert_eq!(channel(GUNPOWDER), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE + INVENTION_COUNT));
         assert!(!is_invention_channel(MEME_CHANNELS));
     }
@@ -1647,5 +1652,175 @@ mod tests {
         // Archery pays flat upkeep.
         assert!((flat_upkeep(bit(ARCHERY)) - ARCHERY_UPKEEP).abs() < 1e-6);
         assert_eq!(flat_upkeep_coupled(bit(ARCHERY), &neutral, false), flat_upkeep(bit(ARCHERY)));
+    }
+
+    // --- X1 expansion: Pottery, Irrigation, Currency, Printing, Sanitation,
+    // Gunpowder --------------------------------------------------------------
+
+    #[test]
+    fn pottery_bite_multiplier_shape() {
+        use crate::genome::{Genome, GenomeSlot};
+        let pot = bit(POTTERY);
+        // Not low-biomass: identity regardless of mask or coupling.
+        assert_eq!(pottery_bite_multiplier_coupled(pot, false, &Genome::neutral(), false), 1.0);
+        assert_eq!(pottery_bite_multiplier_coupled(pot, false, &Genome::neutral(), true), 1.0);
+        assert_eq!(pottery_bite_multiplier_coupled(0, false, &Genome::neutral(), false), 1.0);
+        // Low-biomass, mask 0: unheld, no bonus.
+        assert_eq!(pottery_bite_multiplier_coupled(0, true, &Genome::neutral(), false), 1.0);
+        // Low-biomass, held, coupling off: flat bonus.
+        let base = pottery_bite_multiplier_coupled(pot, true, &Genome::neutral(), false);
+        assert!((base - (1.0 + POTTERY_BITE)).abs() < 1e-6);
+        // Coupling scales with Conscientiousness like the other coupled fns:
+        // off = identity regardless of gene; on, neutral = base; high > base > low.
+        let mut lo = Genome::neutral();
+        lo.set(GenomeSlot::Conscientiousness, 0.0);
+        let mut hi = Genome::neutral();
+        hi.set(GenomeSlot::Conscientiousness, 1.0);
+        assert_eq!(pottery_bite_multiplier_coupled(pot, true, &lo, false), base);
+        assert_eq!(pottery_bite_multiplier_coupled(pot, true, &hi, false), base);
+        assert!(
+            (pottery_bite_multiplier_coupled(pot, true, &Genome::neutral(), true) - base).abs()
+                < 1e-6
+        );
+        let lo_m = pottery_bite_multiplier_coupled(pot, true, &lo, true);
+        let hi_m = pottery_bite_multiplier_coupled(pot, true, &hi, true);
+        assert!(hi_m > base && base > lo_m);
+        assert!(lo_m > 0.0, "buff must stay positive");
+    }
+
+    #[test]
+    fn irrigation_bite_multiplier_shape() {
+        use crate::genome::{Genome, GenomeSlot};
+        let irr = bit(IRRIGATION);
+        let wet = IRRIGATION_DRY_MOISTURE + 0.1;
+        let dry = IRRIGATION_DRY_MOISTURE - 0.1;
+        // Wet cell: identity regardless of mask/coupling.
+        assert_eq!(irrigation_bite_multiplier_coupled(irr, wet, &Genome::neutral(), false), 1.0);
+        assert_eq!(irrigation_bite_multiplier_coupled(irr, wet, &Genome::neutral(), true), 1.0);
+        // Dry cell, mask 0: unheld, no bonus.
+        assert_eq!(irrigation_bite_multiplier_coupled(0, dry, &Genome::neutral(), false), 1.0);
+        // Dry cell, held, coupling off: flat bonus.
+        let base = irrigation_bite_multiplier_coupled(irr, dry, &Genome::neutral(), false);
+        assert!((base - (1.0 + IRRIGATION_BITE)).abs() < 1e-6);
+        // Exactly at the threshold counts as NOT dry (matches feed_pass's `>=` check).
+        assert_eq!(
+            irrigation_bite_multiplier_coupled(
+                irr,
+                IRRIGATION_DRY_MOISTURE,
+                &Genome::neutral(),
+                false
+            ),
+            1.0
+        );
+        // Coupling scales with Conscientiousness.
+        let mut lo = Genome::neutral();
+        lo.set(GenomeSlot::Conscientiousness, 0.0);
+        let mut hi = Genome::neutral();
+        hi.set(GenomeSlot::Conscientiousness, 1.0);
+        assert_eq!(irrigation_bite_multiplier_coupled(irr, dry, &lo, false), base);
+        assert!(
+            (irrigation_bite_multiplier_coupled(irr, dry, &Genome::neutral(), true) - base).abs()
+                < 1e-6
+        );
+        let lo_m = irrigation_bite_multiplier_coupled(irr, dry, &lo, true);
+        let hi_m = irrigation_bite_multiplier_coupled(irr, dry, &hi, true);
+        assert!(hi_m > base && base > lo_m);
+        assert!(lo_m > 0.0);
+    }
+
+    #[test]
+    fn currency_functions_identity_and_value() {
+        assert_eq!(currency_range_multiplier(0), 1.0);
+        assert_eq!(currency_swap_dividend(0), 0.0);
+        let cur = bit(CURRENCY);
+        assert!((currency_range_multiplier(cur) - (1.0 + CURRENCY_RANGE)).abs() < 1e-6);
+        assert!((currency_swap_dividend(cur) - CURRENCY_SWAP_ENERGY).abs() < 1e-6);
+        // Unrelated bits don't trigger it.
+        assert_eq!(currency_range_multiplier(bit(WRITING)), 1.0);
+        assert_eq!(currency_swap_dividend(bit(WRITING)), 0.0);
+    }
+
+    #[test]
+    fn printing_extends_the_spread_stack_and_needs_no_writing_gate_of_its_own() {
+        // Printing stacks on top of Writing (the knowledge branch compounds).
+        let both = bit(WRITING) | bit(PRINTING);
+        let expect = WRITING_SPREAD_MULT + (PRINTING_SPREAD_MULT - 1.0);
+        assert!((spread_multiplier(both) - expect).abs() < 1e-6);
+        // Function contract: without Writing held, always 1.0 — even with
+        // Printing's bit set (can't happen via the real prereq chain, but the
+        // function itself special-cases only the Writing gate, so pin the
+        // no-Writing behavior explicitly).
+        assert_eq!(spread_multiplier(bit(PRINTING)), 1.0);
+    }
+
+    #[test]
+    fn gunpowder_extends_the_weapon_and_range_stacks() {
+        let stack = bit(METALWORKING)
+            | bit(HAFTED_SPEARS)
+            | bit(ARCHERY)
+            | bit(STEEL_ARMS)
+            | bit(GUNPOWDER);
+        let expect = 1.0
+            + METALWORKING_DAMAGE
+            + SPEARS_DAMAGE
+            + ARCHERY_DAMAGE
+            + STEEL_DAMAGE
+            + GUNPOWDER_DAMAGE;
+        assert!((weapon_multiplier(stack) - expect).abs() < 1e-6);
+        assert_eq!(range_multiplier(0), 1.0);
+        assert!((range_multiplier(bit(GUNPOWDER)) - (1.0 + GUNPOWDER_RANGE)).abs() < 1e-6);
+        assert!(
+            (range_multiplier(bit(ARCHERY) | bit(GUNPOWDER))
+                - (1.0 + ARCHERY_RANGE + GUNPOWDER_RANGE))
+                .abs()
+                < 1e-6
+        );
+    }
+
+    #[test]
+    fn irrigation_raises_farmings_crowding_allowance() {
+        let farm = bit(FARMING);
+        let farm_irr = bit(FARMING) | bit(IRRIGATION);
+        // Without Irrigation: base allowance (see
+        // `crowding_stress_only_bites_farmers_above_the_free_allowance`).
+        assert_eq!(crowding_stress(farm, FARMING_CROWDING_FREE), 0.0);
+        // With Irrigation: allowance widens by IRRIGATION_CROWDING_BONUS.
+        let free = FARMING_CROWDING_FREE + IRRIGATION_CROWDING_BONUS;
+        assert_eq!(crowding_stress(farm_irr, free), 0.0);
+        assert_eq!(crowding_stress(farm_irr, free - 1), 0.0, "still under the widened allowance");
+        let excess = 3;
+        assert_eq!(
+            crowding_stress(farm_irr, free + excess),
+            excess as f32 * FARMING_STRESS_PER_NEIGHBOR
+        );
+        // Irrigation alone (no Farming): still zero — the allowance only matters
+        // once Farming is held.
+        assert_eq!(crowding_stress(bit(IRRIGATION), 1_000_000), 0.0);
+    }
+
+    #[test]
+    fn x1_expansion_tree_shape() {
+        use crate::genome::GenomeSlot;
+        // Documented prereqs, eras, and affinity slots for the six X1
+        // inventions (params.rs / mod.rs doc comments).
+        let expect = [
+            (POTTERY, bit(STONE_TOOLS), 1u8, GenomeSlot::Conscientiousness as usize),
+            (IRRIGATION, bit(FARMING), 2u8, GenomeSlot::Conscientiousness as usize),
+            (CURRENCY, bit(WRITING), 3u8, GenomeSlot::Extraversion as usize),
+            (PRINTING, bit(WRITING), 3u8, GenomeSlot::Openness as usize),
+            (SANITATION, bit(MEDICINE), 3u8, GenomeSlot::CognitivePotential as usize),
+            (GUNPOWDER, bit(STEEL_ARMS), 4u8, GenomeSlot::Neuroticism as usize),
+        ];
+        for (k, prereqs, era, slot) in expect {
+            let inv = &INVENTIONS[k];
+            assert_eq!(inv.prereqs, prereqs, "{} prereqs", inv.name);
+            assert_eq!(inv.era, era, "{} era", inv.name);
+            assert_eq!(
+                inv.affinity.map(|a| a.slot as usize),
+                Some(slot),
+                "{} affinity slot",
+                inv.name
+            );
+        }
     }
 }
