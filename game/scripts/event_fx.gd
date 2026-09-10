@@ -82,6 +82,49 @@ const FX: Dictionary = {
 	62: [{"kind": "ring", "color": Color(0.7, 0.9, 1.0, 0.55), "dur": 1.6, "radius": 70.0}],
 }
 
+# Events whose `value` field carries an invention id (codex Discovery,
+# Adoption, MaterialLearning), and the per-invention mote tint applied then.
+# Ids mirror invention/mod.rs; hues echo the coevolution panel's series
+# palette so a breakthrough reads the same in the world as in the charts.
+const INVENTION_VALUE_EVENTS := [17, 18, 22]
+const INVENTION_MOTES := {
+	0: Color(0.7, 0.7, 0.75),  # stone tools
+	1: Color(1.0, 0.5, 0.3),  # fire
+	2: Color(0.5, 0.9, 0.4),  # farming
+	3: Color(0.75, 0.65, 0.5),  # metalworking
+	4: Color(1.0, 0.85, 0.4),  # writing
+	5: Color(0.5, 1.0, 0.7),  # medicine
+	6: Color(0.85, 0.7, 0.4),  # husbandry
+	7: Color(0.9, 0.55, 0.3),  # machinery
+	8: Color(1.0, 0.95, 0.5),  # electricity
+	9: Color(0.65, 0.5, 1.0),  # nuclear
+	10: Color(0.8, 0.6, 0.4),  # hafted spears
+	11: Color(0.6, 0.85, 0.95),  # archery
+	12: Color(0.7, 0.75, 0.55),  # fortifications
+	13: Color(0.85, 0.5, 0.55),  # steel arms
+}
+
 
 static func spec(event_type: int) -> Array:
 	return FX.get(event_type, [])
+
+
+# spec(), with the event's `value` payload applied: an invention-carrying
+# event recolors its motes to that invention's tint (alpha kept from the
+# authored spec). Any other event, an unknown id, or the caller's -1 "no
+# value" sentinel falls through to the plain table.
+static func spec_with_value(event_type: int, value: float) -> Array:
+	var base := spec(event_type)
+	if not INVENTION_VALUE_EVENTS.has(event_type):
+		return base
+	var tint: Color = INVENTION_MOTES.get(roundi(value), Color(0, 0, 0, 0))
+	if tint.a == 0.0:
+		return base
+	var out: Array = []
+	for s in base:
+		var d: Dictionary = s.duplicate()
+		if d["kind"] == "motes":
+			var a: float = (d["color"] as Color).a
+			d["color"] = Color(tint.r, tint.g, tint.b, a)
+		out.append(d)
+	return out

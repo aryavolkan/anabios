@@ -33,18 +33,20 @@ func _cell_opaque(img: Image, cell: int) -> int:
 # must carry them, every quadruped atlas must leave them empty (inventions
 # never reach quads, so the shader never samples there).
 func _check_weapon_cells() -> void:
-	_check(A.POSE_COUNT == 20, "field grid holds the spear/bow pairs")
+	_check(A.POSE_COUNT == 22, "field grid holds the spear/bow/steel pairs")
+	var pairs := [A.POSE_SPEAR, A.POSE_BOW, A.POSE_STEEL]
 	for sp in A.SPECIES_COUNT:
 		var img: Image = A.build_species_atlas(sp).get_image()
 		_check(
 			img.get_width() == A.ATLAS_PX and img.get_height() == A.ATLAS_PX,
 			"species %d atlas is the shared square grid" % sp
 		)
-		for cell in [A.POSE_SPEAR, A.POSE_SPEAR + 1, A.POSE_BOW, A.POSE_BOW + 1]:
-			var n := _cell_opaque(img, cell)
-			_check(n >= 24, "species %d weapon cell %d has art (%d px)" % [sp, cell, n])
+		for base in pairs:
+			for cell in [base, base + 1]:
+				var n := _cell_opaque(img, cell)
+				_check(n >= 24, "species %d weapon cell %d has art (%d px)" % [sp, cell, n])
 	var quad: Image = M.bucket_atlas(M.SKIN_COUNT).get_image()
-	for cell in [16, 17, 18, 19]:
+	for cell in range(16, 22):
 		_check(_cell_opaque(quad, cell) == 0, "quad weapon cell %d stays empty" % cell)
 
 

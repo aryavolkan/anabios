@@ -447,14 +447,16 @@ func watch_events() -> void:
 	for ev in _sim.codex_events_since(_event_cursor).slice(-10):
 		# (slice caps effects at the batch tail: a flood from scenario load or
 		# a tick jump is history, not news — don't light up ancient events.)
-		apply_event_fx(int(ev["type"]), ev.get("loc", Vector2.ZERO))
+		apply_event_fx(int(ev["type"]), ev.get("loc", Vector2.ZERO), float(ev.get("value", -1.0)))
 	_event_cursor = count
 
 
 # Apply one event's effects. Positional kinds need a real location (ZERO is
 # the sim's "no location" sentinel); trauma is global and always lands.
-func apply_event_fx(event_type: int, loc: Vector2) -> void:
-	for s in EventFx.spec(event_type):
+# `value` is the event's payload — invention-carrying events tint their motes
+# per invention through spec_with_value; -1 means "no payload".
+func apply_event_fx(event_type: int, loc: Vector2, value: float = -1.0) -> void:
+	for s in EventFx.spec_with_value(event_type, value):
 		match s["kind"]:
 			"fire":
 				if loc != Vector2.ZERO:

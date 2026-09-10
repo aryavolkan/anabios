@@ -34,11 +34,13 @@ func _check(cond: bool, msg: String) -> void:
 
 func _init() -> void:
 	# Enum/name/count coherence.
-	_check(B.KIND_COUNT == 14, "14 building kinds")
-	# The military branch gets its own art: spears a weapon rack, archery a
-	# target range (fortifications/steel_arms still borrow farm/forge kinds).
+	_check(B.KIND_COUNT == 16, "16 building kinds")
+	# Every military invention carries its own art: a weapon rack, a target
+	# range, a crenellated fort and an armory stand.
 	_check(B.building_for_invention("hafted_spears") == B.SPEAR_RACK, "spears -> rack")
 	_check(B.building_for_invention("archery") == B.ARCHERY_RANGE, "archery -> range")
+	_check(B.building_for_invention("fortifications") == B.FORT, "fortifications -> fort")
+	_check(B.building_for_invention("steel_arms") == B.ARMORY, "steel arms -> armory")
 	_check(B.NAMES.size() == B.KIND_COUNT, "NAMES parallels the enum")
 	# Every kind builds a 16x16 image with at least one opaque (figure) pixel.
 	for k in B.KIND_COUNT:

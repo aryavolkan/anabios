@@ -143,10 +143,10 @@ const WALK_FRAME_COUNT := 4
 # Per-hominin gait cadence (frames/sec), read by mammal_sprites.bucket_gait_fps.
 const WALK_FPS: PackedFloat32Array = [5.0, 4.2, 4.6, 4.8, 5.6]
 # The atlas stacks WALK_FRAME_COUNT gait poses, then TWO frames per action
-# (eat / fight / trade / flee / sleep / celebrate / spear / bow) that main.gd
-# derives from combat, trade, fire-intent, mood, energy and invention signals;
-# the shader cycles each pair when INSTANCE_CUSTOM.a != 0.
-const POSE_COUNT := 20
+# (eat / fight / trade / flee / sleep / celebrate / spear / bow / steel) that
+# main.gd derives from combat, trade, fire-intent, mood, energy and invention
+# signals; the shader cycles each pair when INSTANCE_CUSTOM.a != 0.
+const POSE_COUNT := 22
 const POSE_EAT := 4
 const POSE_FIGHT := 6
 const POSE_TRADE := 8
@@ -154,7 +154,8 @@ const POSE_FLEE := 10
 const POSE_SLEEP := 12
 const POSE_SPEAR := 16
 const POSE_BOW := 18
-# Atlas layout: the 20 poses fill a SQUARE 128x128 grid (8 cols x 8 rows),
+const POSE_STEEL := 20
+# Atlas layout: the 22 poses fill a SQUARE 128x128 grid (8 cols x 8 rows),
 # NOT a 16x192 vertical strip. On Metal (Apple GPUs) an
 # extreme-aspect texture sampled through a canvas_item ShaderMaterial on the
 # MultiMesh2D path corrupts into torn horizontal streaks — a square
@@ -460,6 +461,43 @@ const FIELD_POSES: Array = [
 		[12, 8, 1, 4, "w"],
 		[11, 3, 1, 8, "f"],
 		[8, 5, 2, 1, "s"]
+	],
+	# 20 steel swing — era-3 blade raised high over the braced lunge stance
+	# ("f" doubles as polished steel, "w" the wrapped hilt)
+	[
+		[6, 2, 4, 4, "c"],
+		[7, 4, 2, 2, "s"],
+		[7, 6, 2, 1, "c"],
+		[4, 6, 8, 5, "c"],
+		[7, 7, 2, 2, "a"],
+		[3, 7, 2, 4, "c"],
+		[3, 10, 2, 1, "s"],
+		[3, 11, 3, 4, "c"],
+		[8, 11, 2, 4, "c"],
+		[11, 13, 3, 2, "c"],
+		[10, 3, 2, 3, "c"],
+		[10, 2, 2, 1, "s"],
+		[11, 1, 1, 1, "w"],
+		[11, 0, 4, 1, "f"],
+		[14, 1, 1, 1, "f"]
+	],
+	# 21 steel swing B — the blade sweeps level through the strike
+	[
+		[6, 1, 4, 4, "c"],
+		[7, 3, 2, 2, "s"],
+		[7, 5, 2, 1, "c"],
+		[4, 5, 8, 5, "c"],
+		[7, 6, 2, 2, "a"],
+		[3, 6, 2, 4, "c"],
+		[3, 9, 2, 1, "s"],
+		[3, 11, 3, 4, "c"],
+		[8, 11, 2, 4, "c"],
+		[11, 13, 3, 2, "c"],
+		[11, 5, 2, 2, "c"],
+		[12, 4, 1, 1, "s"],
+		[13, 4, 1, 1, "w"],
+		[13, 3, 3, 1, "f"],
+		[15, 4, 1, 1, "f"]
 	],
 ]
 

@@ -62,7 +62,7 @@ const ACT_SCAN := 8.0
 const ACT_CELEBRATE := 9.0
 const ACT_SPEAR := 10.0
 const ACT_BOW := 11.0
-const ACT_SCALE := 12.0
+const ACT_SCALE := 13.0
 # Mood discriminants from the sim's mood.rs (alive_moods) that drive poses.
 # All-CONTENT when the scenario's affect layer is off.
 const MOOD_CONTENT := 0

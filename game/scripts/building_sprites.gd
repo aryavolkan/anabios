@@ -22,9 +22,11 @@ enum {
 	ELECTRICITY,
 	NUCLEAR,
 	SPEAR_RACK,
-	ARCHERY_RANGE
+	ARCHERY_RANGE,
+	FORT,
+	ARMORY
 }
-const KIND_COUNT := 14
+const KIND_COUNT := 16
 const NAMES: PackedStringArray = [
 	"Market",
 	"Warehouse",
@@ -39,7 +41,9 @@ const NAMES: PackedStringArray = [
 	"Electricity",
 	"Nuclear",
 	"SpearRack",
-	"ArcheryRange"
+	"ArcheryRange",
+	"Fort",
+	"Armory"
 ]
 
 # Invention key (from invention_catalog / species_stats.adopted_inventions) ->
@@ -55,12 +59,11 @@ const INVENTION_BUILDING := {
 	"machinery": MACHINERY,
 	"electricity": ELECTRICITY,
 	"nuclear_power": NUCLEAR,
-	# Military branch: spears and archery carry their own pixel art; the
-	# rest still borrow the nearest existing sprite kind.
+	# Military branch: every invention carries its own pixel art.
 	"hafted_spears": SPEAR_RACK,
 	"archery": ARCHERY_RANGE,
-	"fortifications": FARMING,
-	"steel_arms": METALWORKING,
+	"fortifications": FORT,
+	"steel_arms": ARMORY,
 }
 
 # 16x16 block lists per kind, indexed by the enum.
@@ -236,6 +239,30 @@ const _BLOCKS: Array = [
 		[3, 4, 1, 8, "s"],
 		[2, 14, 8, 1, "b"],
 		[10, 14, 1, 1, "s"],
+	],
+	# FORT — crenellated stone rampart, corner merlons and a timber gate
+	[
+		[2, 8, 12, 6, "g"],
+		[2, 6, 2, 2, "G"],
+		[5, 6, 2, 2, "G"],
+		[8, 6, 2, 2, "G"],
+		[11, 6, 2, 2, "G"],
+		[2, 8, 12, 1, "G"],
+		[6, 10, 4, 4, "b"],
+		[7, 11, 2, 3, "K"],
+		[2, 14, 12, 1, "d"],
+	],
+	# ARMORY — sword standing point-up beside a round shield on its stand
+	[
+		[3, 5, 5, 5, "B"],
+		[4, 6, 3, 3, "r"],
+		[5, 7, 1, 1, "y"],
+		[4, 10, 1, 4, "b"],
+		[6, 10, 1, 4, "b"],
+		[12, 2, 1, 8, "s"],
+		[11, 10, 3, 1, "b"],
+		[12, 11, 1, 3, "b"],
+		[2, 14, 12, 1, "d"],
 	],
 ]
 
