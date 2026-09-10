@@ -26,9 +26,13 @@ enum {
 	CURRENCY,
 	PRINTING,
 	SANITATION,
-	GUNPOWDER
+	GUNPOWDER,
+	HAFTED_SPEARS,
+	ARCHERY,
+	FORTIFICATIONS,
+	STEEL_ARMS
 }
-const KIND_COUNT := 18
+const KIND_COUNT := 22
 const NAMES: PackedStringArray = [
 	"Market",
 	"Warehouse",
@@ -47,7 +51,11 @@ const NAMES: PackedStringArray = [
 	"Currency",
 	"Printing",
 	"Sanitation",
-	"Gunpowder"
+	"Gunpowder",
+	"HaftedSpears",
+	"Archery",
+	"Fortifications",
+	"SteelArms"
 ]
 
 # Invention key (from invention_catalog / species_stats.adopted_inventions) ->
@@ -69,12 +77,11 @@ const INVENTION_BUILDING := {
 	"printing": PRINTING,
 	"sanitation": SANITATION,
 	"gunpowder": GUNPOWDER,
-	# Military branch (2026-09): mapped to the nearest existing sprite kind
-	# until the branch gets its own pixel art.
-	"hafted_spears": STONE_TOOLS,
-	"archery": STONE_TOOLS,
-	"fortifications": FARMING,
-	"steel_arms": METALWORKING,
+	# Military branch (2026-09).
+	"hafted_spears": HAFTED_SPEARS,
+	"archery": ARCHERY,
+	"fortifications": FORTIFICATIONS,
+	"steel_arms": STEEL_ARMS,
 }
 
 # 16x16 block lists per kind, indexed by the enum.
@@ -321,6 +328,81 @@ const _BLOCKS: Array = [
 		[12, 9, 1, 1, "y"],
 		[12, 8, 1, 1, "o"],
 		[13, 7, 1, 1, "O"],
+	],
+	# HAFTED_SPEARS — a rack of two hafted spears crossed in an X over a
+	# wooden base plank, stone blades at each tip
+	[
+		[2, 14, 13, 1, "b"],
+		[3, 13, 1, 1, "t"],
+		[4, 11, 1, 2, "t"],
+		[5, 10, 1, 1, "t"],
+		[6, 8, 1, 2, "t"],
+		[7, 7, 1, 1, "t"],
+		[8, 5, 1, 2, "t"],
+		[9, 4, 1, 1, "t"],
+		[10, 3, 1, 1, "t"],
+		[11, 2, 1, 1, "t"],
+		[10, 1, 3, 2, "s"],
+		[11, 1, 1, 1, "G"],
+		[12, 13, 1, 1, "t"],
+		[11, 11, 1, 2, "t"],
+		[10, 10, 1, 1, "t"],
+		[9, 8, 1, 2, "t"],
+		[8, 7, 1, 1, "t"],
+		[7, 5, 1, 2, "t"],
+		[6, 4, 1, 1, "t"],
+		[5, 3, 1, 1, "t"],
+		[4, 2, 1, 1, "t"],
+		[3, 1, 3, 2, "s"],
+		[4, 1, 1, 1, "G"],
+	],
+	# ARCHERY — a ringed target disc mounted on a post, with a strung bow
+	# leaning beside it
+	[
+		[2, 2, 9, 9, "W"],
+		[3, 3, 7, 7, "R"],
+		[4, 4, 5, 5, "W"],
+		[5, 5, 3, 3, "y"],
+		[5, 10, 2, 4, "b"],
+		[4, 13, 5, 1, "b"],
+		[13, 2, 1, 3, "t"],
+		[12, 5, 1, 2, "t"],
+		[12, 7, 1, 2, "t"],
+		[12, 9, 1, 2, "t"],
+		[13, 11, 1, 3, "t"],
+		[14, 2, 1, 12, "e"],
+	],
+	# FORTIFICATIONS — a crenellated stone rampart section with a dark gate
+	[
+		[1, 7, 14, 7, "g"],
+		[1, 9, 14, 1, "d"],
+		[1, 11, 14, 1, "d"],
+		[1, 7, 14, 1, "G"],
+		[1, 5, 2, 2, "g"],
+		[5, 5, 2, 2, "g"],
+		[9, 5, 2, 2, "g"],
+		[13, 5, 2, 2, "g"],
+		[3, 6, 2, 1, "G"],
+		[7, 6, 2, 1, "G"],
+		[11, 6, 2, 1, "G"],
+		[5, 8, 6, 1, "G"],
+		[6, 9, 4, 5, "K"],
+	],
+	# STEEL_ARMS — armory: a sword and shield mounted over a dark blockhouse
+	[
+		[3, 9, 10, 6, "d"],
+		[2, 8, 12, 1, "K"],
+		[7, 11, 2, 4, "K"],
+		[5, 3, 6, 7, "s"],
+		[5, 3, 1, 7, "G"],
+		[10, 3, 1, 7, "d"],
+		[7, 5, 2, 2, "y"],
+		[11, 2, 1, 2, "s"],
+		[10, 4, 1, 2, "s"],
+		[9, 6, 1, 1, "s"],
+		[9, 7, 3, 1, "K"],
+		[10, 8, 1, 3, "b"],
+		[10, 11, 1, 1, "y"],
 	],
 ]
 
