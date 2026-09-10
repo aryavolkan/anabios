@@ -164,8 +164,8 @@ void vertex() {
 		VERTEX.x += scan * 0.035;
 		VERTEX.y += abs(scan) * 0.018;
 		VERTEX.x *= 1.0 + abs(scan) * 0.018;
-	// Celebrate (act 9): primates use the dedicated raised-hands pair;
-	// quadrupeds fall back to their alert pair and still get the bounce.
+	// Celebrate (act 9): every rig has a dedicated pair; quadrupeds get a
+	// generated raised-tail accent while primates use raised hands.
 	} else if (act > 8.5 && act < 9.5) {
 		float cheer = max(sin(fract(animation_time * action_fps * 0.5 + phase) * 6.2831853), 0.0);
 		VERTEX.y += cheer * 0.06;
@@ -201,7 +201,7 @@ void fragment() {
 		if (act > 5.5 && act < 6.5) {
 			pose_act = 1.0;
 		} else if (act > 8.5) {
-			pose_act = (rig_kind == 2) ? 6.0 : 3.0;
+			pose_act = 6.0;
 		} else if (act > 6.5) {
 			pose_act = 3.0;
 		}
