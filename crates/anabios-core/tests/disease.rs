@@ -118,6 +118,36 @@ fn medicine_holders_recover_faster() {
 }
 
 #[test]
+fn sanitation_compounds_medicine_recovery() {
+    use anabios_core::invention::{HELD_THRESHOLD, INVENTION_CHANNEL_BASE, MEDICINE, SANITATION};
+
+    let mut both = clustered_world(13, 40, true);
+    let mut medicine_only = clustered_world(13, 40, true);
+    let med_ch = INVENTION_CHANNEL_BASE + MEDICINE;
+    let san_ch = INVENTION_CHANNEL_BASE + SANITATION;
+    let ids: Vec<u32> = both.agents.iter_alive().collect();
+    for id in ids {
+        let i = id as usize;
+        both.agents.meme_vector[i][med_ch] = HELD_THRESHOLD;
+        both.agents.meme_vector[i][san_ch] = HELD_THRESHOLD;
+        medicine_only.agents.meme_vector[i][med_ch] = HELD_THRESHOLD;
+    }
+    infect_fraction(&mut both, 1.0, 0.6);
+    infect_fraction(&mut medicine_only, 1.0, 0.6);
+
+    for _ in 0..10 {
+        step(&mut both);
+        step(&mut medicine_only);
+    }
+    let b = total_infection(&both);
+    let m = total_infection(&medicine_only);
+    assert!(
+        b < m * 0.9,
+        "medicine+sanitation must recover materially faster than medicine alone: both={b:.2} vs medicine_only={m:.2}"
+    );
+}
+
+#[test]
 fn sparse_world_no_spillover_no_events() {
     let mut w = World::new(9);
     w.disease_enabled = true;

@@ -20,9 +20,15 @@ enum {
 	HUSBANDRY,
 	MACHINERY,
 	ELECTRICITY,
-	NUCLEAR
+	NUCLEAR,
+	POTTERY,
+	IRRIGATION,
+	CURRENCY,
+	PRINTING,
+	SANITATION,
+	GUNPOWDER
 }
-const KIND_COUNT := 12
+const KIND_COUNT := 18
 const NAMES: PackedStringArray = [
 	"Market",
 	"Warehouse",
@@ -35,7 +41,13 @@ const NAMES: PackedStringArray = [
 	"Husbandry",
 	"Machinery",
 	"Electricity",
-	"Nuclear"
+	"Nuclear",
+	"Pottery",
+	"Irrigation",
+	"Currency",
+	"Printing",
+	"Sanitation",
+	"Gunpowder"
 ]
 
 # Invention key (from invention_catalog / species_stats.adopted_inventions) ->
@@ -51,6 +63,12 @@ const INVENTION_BUILDING := {
 	"machinery": MACHINERY,
 	"electricity": ELECTRICITY,
 	"nuclear_power": NUCLEAR,
+	"pottery": POTTERY,
+	"irrigation": IRRIGATION,
+	"currency": CURRENCY,
+	"printing": PRINTING,
+	"sanitation": SANITATION,
+	"gunpowder": GUNPOWDER,
 	# Military branch (2026-09): mapped to the nearest existing sprite kind
 	# until the branch gets its own pixel art.
 	"hafted_spears": STONE_TOOLS,
@@ -206,6 +224,103 @@ const _BLOCKS: Array = [
 		[5, 4, 6, 2, "W"],
 		[6, 2, 4, 2, "w"],
 		[7, 1, 2, 1, "e"],
+	],
+	# POTTERY — beehive kiln with a glowing fire mouth and stacked pots
+	[
+		[6, 3, 4, 1, "b"],
+		[5, 4, 6, 1, "b"],
+		[4, 5, 8, 6, "o"],
+		[4, 10, 8, 1, "b"],
+		[6, 7, 3, 3, "d"],
+		[7, 8, 1, 1, "R"],
+		[7, 2, 2, 1, "g"],
+		[2, 11, 2, 3, "t"],
+		[2, 10, 2, 1, "T"],
+		[11, 12, 2, 2, "t"],
+		[11, 11, 2, 1, "T"],
+		[12, 8, 2, 3, "m"],
+		[12, 7, 2, 1, "T"],
+	],
+	# IRRIGATION — post-and-lintel well feeding a water channel that branches
+	# into tilled field plots on either side
+	[
+		[6, 1, 4, 1, "b"],
+		[5, 2, 1, 3, "b"],
+		[10, 2, 1, 3, "b"],
+		[6, 3, 4, 3, "g"],
+		[6, 3, 4, 1, "G"],
+		[7, 6, 2, 6, "s"],
+		[7, 6, 2, 1, "e"],
+		[2, 10, 4, 4, "b"],
+		[3, 11, 2, 1, "K"],
+		[10, 10, 4, 4, "b"],
+		[11, 11, 2, 1, "K"],
+		[4, 10, 3, 1, "s"],
+		[9, 10, 3, 1, "s"],
+		[6, 12, 4, 2, "s"],
+		[7, 13, 2, 1, "e"],
+	],
+	# CURRENCY — stone treasury vault with a gold coin emblem and coin stacks
+	[
+		[3, 7, 10, 7, "g"],
+		[3, 7, 10, 1, "G"],
+		[4, 4, 8, 3, "g"],
+		[5, 3, 6, 1, "G"],
+		[2, 6, 12, 1, "s"],
+		[6, 10, 4, 4, "d"],
+		[7, 11, 2, 2, "y"],
+		[11, 1, 4, 4, "y"],
+		[12, 2, 2, 2, "O"],
+		[11, 1, 4, 1, "e"],
+		[2, 11, 3, 2, "y"],
+		[2, 10, 3, 1, "O"],
+		[12, 11, 2, 2, "y"],
+		[12, 10, 2, 1, "O"],
+	],
+	# PRINTING — wooden press frame with a screw, platen and a printed sheet
+	[
+		[4, 2, 1, 11, "b"],
+		[11, 2, 1, 11, "b"],
+		[4, 2, 8, 1, "b"],
+		[4, 7, 8, 1, "B"],
+		[6, 3, 2, 4, "g"],
+		[6, 2, 2, 1, "G"],
+		[4, 8, 8, 2, "d"],
+		[5, 10, 6, 3, "W"],
+		[6, 11, 1, 1, "K"],
+		[8, 11, 1, 1, "K"],
+		[11, 5, 4, 1, "b"],
+		[14, 4, 1, 3, "B"],
+		[3, 13, 10, 1, "b"],
+	],
+	# SANITATION — aqueduct arches carrying a water course down to a pool
+	[
+		[2, 6, 12, 2, "s"],
+		[2, 6, 12, 1, "e"],
+		[1, 8, 14, 1, "G"],
+		[2, 9, 2, 5, "g"],
+		[7, 9, 2, 5, "g"],
+		[12, 9, 2, 5, "g"],
+		[5, 11, 1, 2, "s"],
+		[4, 13, 4, 2, "s"],
+		[5, 14, 2, 1, "e"],
+		[1, 15, 14, 1, "b"],
+	],
+	# GUNPOWDER — dark powder mill with stacked barrels and a lit fuse spark
+	[
+		[3, 7, 9, 7, "d"],
+		[3, 7, 9, 1, "g"],
+		[5, 4, 5, 3, "d"],
+		[6, 3, 3, 1, "g"],
+		[6, 10, 2, 4, "K"],
+		[11, 10, 3, 4, "x"],
+		[11, 10, 3, 1, "X"],
+		[11, 12, 3, 1, "X"],
+		[2, 11, 2, 3, "x"],
+		[2, 11, 2, 1, "X"],
+		[12, 9, 1, 1, "y"],
+		[12, 8, 1, 1, "o"],
+		[13, 7, 1, 1, "O"],
 	],
 ]
 

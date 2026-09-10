@@ -58,6 +58,7 @@ pub fn disease_step(world: &mut World) {
         return;
     }
     let medicine_bit = crate::invention::bit(crate::invention::MEDICINE);
+    let sanitation_bit = crate::invention::bit(crate::invention::SANITATION);
     let ws = world.world_size;
 
     // 1. Recovery & drain (ascending id; deterministic, no draws). Recovery
@@ -74,11 +75,15 @@ pub fn disease_step(world: &mut World) {
             continue;
         }
         let held = crate::invention::held_mask(&world.agents.meme_vector[i]);
-        let rec = if held & medicine_bit != 0 {
-            RECOVERY_RATE * MEDICINE_RECOVERY_MULT
-        } else {
-            RECOVERY_RATE
-        };
+        let mut rec = RECOVERY_RATE;
+        if held & medicine_bit != 0 {
+            rec *= MEDICINE_RECOVERY_MULT;
+        }
+        // Sanitation compounds Medicine (the welfare branch): clean water and
+        // waste removal speed recovery further.
+        if held & sanitation_bit != 0 {
+            rec *= crate::invention::SANITATION_RECOVERY_MULT;
+        }
         let next = (inf - rec).max(0.0);
         world.agents.infection[i] = next;
         if next > 0.0 {
@@ -153,12 +158,68 @@ pub fn disease_step(world: &mut World) {
     for target in targets {
         let o = target as usize;
         let held = crate::invention::held_mask(&world.agents.meme_vector[o]);
-        let p =
-            if held & medicine_bit != 0 { TRANSMIT_P * MEDICINE_SUSCEPT_MULT } else { TRANSMIT_P };
+        let p = transmit_probability(held, medicine_bit, sanitation_bit);
         if world.rng.f32_unit() < p {
             world.agents.infection[o] = INFECTION_SEED;
         }
     }
 
     world.agents.scratch_ids = alive_ids;
+}
+
+/// Per-target infection probability: `TRANSMIT_P` adjusted by the target's
+/// Medicine and Sanitation susceptibility multipliers, which compound (both
+/// held multiplies both factors in, not either-or). A pure function of the
+/// target's held mask, so it draws no RNG and can be unit-tested directly.
+#[inline]
+fn transmit_probability(held: u32, medicine_bit: u32, sanitation_bit: u32) -> f32 {
+    let mut p = TRANSMIT_P;
+    if held & medicine_bit != 0 {
+        p *= MEDICINE_SUSCEPT_MULT;
+    }
+    if held & sanitation_bit != 0 {
+        p *= crate::invention::SANITATION_SUSCEPT_MULT;
+    }
+    p
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitation_halves_susceptibility_and_compounds_with_medicine() {
+        let medicine_bit = crate::invention::bit(crate::invention::MEDICINE);
+        let sanitation_bit = crate::invention::bit(crate::invention::SANITATION);
+
+        let bare = transmit_probability(0, medicine_bit, sanitation_bit);
+        let sanitized = transmit_probability(sanitation_bit, medicine_bit, sanitation_bit);
+        let medicated = transmit_probability(medicine_bit, medicine_bit, sanitation_bit);
+        let both =
+            transmit_probability(medicine_bit | sanitation_bit, medicine_bit, sanitation_bit);
+
+        assert_eq!(bare, TRANSMIT_P, "no tech: base transmission probability");
+        assert!(
+            (sanitized - TRANSMIT_P * crate::invention::SANITATION_SUSCEPT_MULT).abs() < 1e-6,
+            "sanitation alone must halve susceptibility"
+        );
+        assert!(
+            (medicated - TRANSMIT_P * MEDICINE_SUSCEPT_MULT).abs() < 1e-6,
+            "medicine alone must apply its existing multiplier"
+        );
+        assert!(
+            (both - TRANSMIT_P * MEDICINE_SUSCEPT_MULT * crate::invention::SANITATION_SUSCEPT_MULT)
+                .abs()
+                < 1e-6,
+            "medicine + sanitation must compound multiplicatively"
+        );
+        assert!(
+            both < medicated,
+            "sanitation must further reduce susceptibility on top of medicine"
+        );
+        assert!(
+            both < sanitized,
+            "medicine must further reduce susceptibility on top of sanitation"
+        );
+    }
 }
