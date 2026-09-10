@@ -57,10 +57,12 @@ const ACT_FLEE := 4.0
 const ACT_SLEEP := 5.0
 const ACT_DRINK := 6.0
 const ACT_MATE := 7.0
+const ACT_SCAN := 8.0
 const ACT_SCALE := 8.0
 # Mood discriminants from the sim's mood.rs (alive_moods) that drive poses.
 # All-CONTENT when the scenario's affect layer is off.
 const MOOD_CONTENT := 0
+const MOOD_SEEK_FOOD := 1
 const MOOD_SEEK_WATER := 2
 const MOOD_SLEEP := 3
 const MOOD_FLEE := 4
@@ -738,7 +740,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 			# so fear outranks even a high fire_intent) > hunt/fight (real
 			# fire_intent in any world, the FIGHT mood, or standing at a
 			# strike hotspot) > courtship bow > water-seeking sip
-			# > trade hotspot > idle-with-rising-energy eat.
+			# > foraging scan > trade hotspot > idle-with-rising-energy eat.
 			# A pursuing predator fires while moving, so the hunt reads as a
 			# moving lunge instead of the old hotspot-only strike instant.
 			var act := 0.0
@@ -753,6 +755,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				act = ACT_MATE
 			elif mood == MOOD_SEEK_WATER and not walking:
 				act = ACT_DRINK
+			elif mood == MOOD_SEEK_FOOD and not walking:
+				act = ACT_SCAN
 			else:
 				for fp in _fight_pts:
 					if smooth[i].distance_squared_to(fp) < 36.0:

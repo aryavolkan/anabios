@@ -58,8 +58,8 @@ static func advance_animation_time(t: float, delta: float, paused: bool) -> floa
 # the sip motion on top. Keeping this mapping centralized prevents the spare
 # action value from ever sampling an empty atlas cell.
 static func action_pose_base(action: float) -> int:
-	var a := clampi(roundi(action), 1, 7)
-	return 4 if a == 6 else (8 if a == 7 else 2 + a * 2)
+	var a := clampi(roundi(action), 1, 8)
+	return 4 if a == 6 else (8 if a >= 7 else 2 + a * 2)
 
 
 # Facing. cos(heading) is near zero whenever a body travels near-vertically,

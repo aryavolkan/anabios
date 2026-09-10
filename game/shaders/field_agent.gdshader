@@ -15,7 +15,7 @@ shader_type canvas_item;
 //   b = face_left (smoothed 0..1; mid-flip the mirror mix squashes the sprite
 //       horizontally, so turns read as a weight shift instead of a snap)
 //   a = action / 8 (0 none, 1 eat, 2 fight, 3 trade, 4 flee, 5 sleep,
-//       6 drink, 7 mate —
+//       6 drink, 7 mate, 8 scan —
 //       sim signals: strike hotspots, fire_intent, the mood column)
 // Moving agents cycle contact -> passing -> counter-contact -> passing (a
 // step-lift-step gait with the bob baked into the passing pose), paced by the
@@ -157,6 +157,13 @@ void vertex() {
 		VERTEX.y -= bow * 0.055;
 		VERTEX.x += mix(1.0, -1.0, step(0.5, anim.b)) * bow * 0.025;
 		VERTEX.x *= 1.0 + bow * 0.025;
+	// Scan (act 8): an alert forager sweeps its attention side to side,
+	// alternating a small lean so a hungry crowd feels observant, not frozen.
+	} else if (act > 7.5 && act < 8.5) {
+		float scan = sin(animation_time * 6.2831853 * 0.65 + phase);
+		VERTEX.x += scan * 0.035;
+		VERTEX.y += abs(scan) * 0.018;
+		VERTEX.x *= 1.0 + abs(scan) * 0.018;
 	}
 	// Livestock idle: a slow chewing head-bob (only while standing).
 	if (rig_kind == 3 && anim.g < 0.5 && act < 0.5) {
@@ -187,7 +194,7 @@ void fragment() {
 		float pose_act = act;
 		if (act > 5.5 && act < 6.5) {
 			pose_act = 1.0;
-		} else if (act > 6.5 && act < 7.5) {
+		} else if (act > 6.5) {
 			pose_act = 3.0;
 		}
 		fr = 2.0 + pose_act * 2.0 + a2;
