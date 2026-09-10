@@ -175,6 +175,7 @@ func _ready() -> void:
 		var sp_mat := ShaderMaterial.new()
 		sp_mat.shader = FieldAgentShader
 		sp_mat.set_shader_parameter("frames", MammalSprites.POSE_COUNT)
+		sp_mat.set_shader_parameter("act_scale", ACT_SCALE)
 		sp_mat.set_shader_parameter("walk_fps", MammalSprites.bucket_gait_fps(b))
 		sp_mat.set_shader_parameter("rig_kind", MammalSprites.bucket_rig_kind(b))
 		sp_mat.set_shader_parameter("animation_time", 0.0)

@@ -23,7 +23,7 @@ const _RIG_KIND: PackedInt32Array = [
 	RigKind.LIVESTOCK_RIG,  # LIVESTOCK
 ]
 
-# Pose strip is the same 14-slot layout as the apes so one shader serves all.
+# Pose grid is the same 16-slot layout as the apes so one shader serves all.
 const POSE_COUNT := ApeSprites.POSE_COUNT
 
 # Selection thresholds (tunable; validated in Task 9's capture pass).
@@ -156,7 +156,7 @@ static func coat_hue(archetype: int, species_id: int) -> Color:
 	return Color.from_hsv(hue, band[2], band[3])
 
 
-# One rig's 12 poses baked into the shared 64x64 grid atlas (pre-flipped for
+# One rig's poses baked into the shared 64x64 grid atlas (pre-flipped for
 # the QuadMesh's flipped V). QUAD_ZONES already maps each zone key to an
 # explicit neutral Colour, so ApeSprites._pack_grid resolves it the same way
 # the ape atlas resolves its PAL keys. Square-grid layout (not a 16x192 strip)

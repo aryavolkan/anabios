@@ -152,8 +152,8 @@ const POSE_FIGHT := 6
 const POSE_TRADE := 8
 const POSE_FLEE := 10
 const POSE_SLEEP := 12
-# Atlas layout: the 14 poses pack into a SQUARE 64x64 grid (4 cols x 4 rows,
-# two cells spare), NOT a 16x192 vertical strip. On Metal (Apple GPUs) an
+# Atlas layout: the 16 poses fill a SQUARE 64x64 grid (4 cols x 4 rows),
+# NOT a 16x192 vertical strip. On Metal (Apple GPUs) an
 # extreme-aspect texture sampled through a canvas_item ShaderMaterial on the
 # MultiMesh2D path corrupts into torn horizontal streaks — a near-square
 # power-of-two texture renders cleanly. The field_agent shader maps a pose

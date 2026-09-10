@@ -1,10 +1,10 @@
 shader_type canvas_item;
 
 // Field-agent animation. One MultiMesh per species; each draws that species'
-// own 14-pose atlas (ape_sprites.build_species_atlas, full-colour zone-painted
-// figure: 4 gait rows, then TWO frames per action — eat/fight/trade/flee and
-// sleep) and passes per-instance state via INSTANCE_CUSTOM, written each tick in
-// main.gd::_refresh_bodies:
+// own 16-pose atlas (ape_sprites.build_species_atlas, full-colour zone-painted
+// figure: 4 gait poses, then TWO frames per action — eat/fight/trade/flee,
+// sleep and celebrate) and passes per-instance state via INSTANCE_CUSTOM,
+// written each tick in main.gd::_refresh_bodies:
 //   r = gait cycle position (0..1 = one contact -> passing -> contact ->
 //       passing loop). Advanced CPU-side by the distance the body actually
 //       covers on screen, so the stride paces with the ground instead of
@@ -14,8 +14,8 @@ shader_type canvas_item;
 //       secondary motion eases in; the pose index thresholds it at 0.5)
 //   b = face_left (smoothed 0..1; mid-flip the mirror mix squashes the sprite
 //       horizontally, so turns read as a weight shift instead of a snap)
-//   a = action / 8 (0 none, 1 eat, 2 fight, 3 trade, 4 flee, 5 sleep,
-//       6 drink, 7 mate, 8 scan, 9 celebrate —
+//   a = action / act_scale (0 none, 1 eat, 2 fight, 3 trade, 4 flee,
+//       5 sleep, 6 drink, 7 mate, 8 scan, 9 celebrate —
 //       sim signals: strike hotspots, fire_intent, the mood column)
 // Moving agents cycle contact -> passing -> counter-contact -> passing (a
 // step-lift-step gait with the bob baked into the passing pose), paced by the
@@ -50,13 +50,17 @@ uniform float animation_time = 0.0;
 // Signature-move family (mammal_sprites.RigKind): 0 prey, 1 predator,
 // 2 primate (default = today's apes, all new branches off), 3 livestock.
 uniform int rig_kind = 2;
+// Divisor main.gd uses to fit the action id into the 0..1 custom-data
+// channel (main.gd ACT_SCALE). Driven as a uniform so the encode and decode
+// cannot drift apart when a new action pushes the scale up.
+uniform float act_scale = 8.0;
 
 varying flat vec4 anim;
 
 void vertex() {
 	anim = INSTANCE_CUSTOM;
 	float phase = anim.r * 6.2831853;
-	float act = anim.a * 8.0;
+	float act = anim.a * act_scale;
 	// The QuadMesh is a 3D mesh, so its local +Y points up-screen in the 2D
 	// canvas: +VERTEX.y lifts the figure. The mesh is 1x1 in local space and
 	// the per-instance transform scales it to world size, so a local-unit
@@ -188,7 +192,7 @@ void fragment() {
 	// Fractional facing eases the mirror; at b=0.5 (mid-flip) the UV mix
 	// collapses to the centre column — a free horizontal flip-squash.
 	float u = mix(UV.x, 1.0 - UV.x, anim.b);
-	float act = anim.a * 8.0;
+	float act = anim.a * act_scale;
 	float fr;
 	if (act > 0.5) {
 		// Action pairs live below the gait rows: eat 4/5, fight 6/7, trade
