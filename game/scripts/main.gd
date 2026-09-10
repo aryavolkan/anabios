@@ -241,7 +241,7 @@ func _ready() -> void:
 	_effects = preload("res://scripts/viewer_effects.gd").new()
 	_effects.name = "ViewerEffects"
 	add_child(_effects)
-	_effects.setup(sim, $Camera2D as Camera2D, _climate, _disc_texture(8))
+	_effects.setup(sim, $Camera2D as Camera2D, _climate, _disc_texture(8), $Biome)
 	# Emote pictograms (Zzz / heart / droplet / ! / star) above acting agents.
 	_emote_layer = EmoteLayer.new()
 	_emote_layer.name = "EmoteLayer"
@@ -789,6 +789,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				act = action_state.x
 				# Emote-worthy actions get a pictogram above the agent's head.
 				_emote_layer.collect(ids[i], smooth[i], sz, act)
+				if act == ACT_DRINK and _effects != null:
+					_effects.tick_sip(ids[i], smooth[i], sz)
 			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))
 
 	_emote_layer.refresh(_animation_time, delta)

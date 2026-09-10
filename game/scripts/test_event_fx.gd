@@ -21,6 +21,15 @@ class StubCam:
 		trauma_total += amount
 
 
+# Stand-in for biome_renderer.is_water_at: water wherever x < 0, an arbitrary
+# discriminator the sip-ripple test can place agents on either side of.
+class StubBiome:
+	extends Node
+
+	func is_water_at(world_pos: Vector2) -> bool:
+		return world_pos.x < 0.0
+
+
 const KINDS := ["fire", "ring", "motes", "trauma"]
 const FIRE_IDS := [4, 17, 35, 42, 43]
 const TRAUMA_IDS := [7, 38]
@@ -41,6 +50,7 @@ func _init() -> void:
 	_check_spec_table()
 	_check_ring_math()
 	_check_apply_all()
+	_check_sip_ripples()
 	_check_pop_scale()
 	_check_flow_pulse()
 	_check_gait()
@@ -389,6 +399,46 @@ func _check_ring_math() -> void:
 	ring.step(0.2)
 	_check(not ring.active, "ring deactivates after its duration")
 	ring.free()
+
+
+# Drink ripples: fire only on water and only at close zoom — an immediate
+# splash when the sip starts, then at most one ring per SIP_PERIOD of real
+# time (the pose itself flickers with the walking debounce).
+func _check_sip_ripples() -> void:
+	var disc := ImageTexture.create_from_image(Image.create(8, 8, false, Image.FORMAT_RGBA8))
+	var biome := StubBiome.new()
+	var fx: Node2D = ViewerEffects.new()
+	var cam := StubCam.new()
+	cam.zoom = Vector2(4, 4)  # inside the close-up gate
+	fx.setup(null, cam, null, disc, biome)
+	for _i in 120:
+		fx.update_rings(1.0 / 60.0)
+		fx.tick_sip(7, Vector2(5.0, 5.0), 1.5)
+	_check(_ripples_live(fx) == 0, "no ripples on dry land")
+	fx.tick_sip(7, Vector2(-5.0, 5.0), 1.5)
+	_check(_ripples_live(fx) == 1, "sip on water splashes immediately")
+	fx.tick_sip(7, Vector2(-5.0, 5.0), 1.5)
+	_check(_ripples_live(fx) == 1, "second sip inside the period does not double-fire")
+	fx.free()
+	cam.free()
+	# Zoomed out past the gate, nothing fires even on water.
+	var far: Node2D = ViewerEffects.new()
+	var far_cam := StubCam.new()
+	far_cam.zoom = Vector2(1, 1)
+	far.setup(null, far_cam, null, disc, biome)
+	far.tick_sip(7, Vector2(-5.0, 5.0), 1.5)
+	_check(_ripples_live(far) == 0, "no ripples at census zoom")
+	far.free()
+	far_cam.free()
+	biome.free()
+
+
+func _ripples_live(fx: Node2D) -> int:
+	var live := 0
+	for r in fx._ripples:
+		if r.active:
+			live += 1
+	return live
 
 
 func _check_apply_all() -> void:

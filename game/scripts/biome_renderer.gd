@@ -115,6 +115,22 @@ func minimap_texture() -> ImageTexture:
 	return _tex if _last_mode == -1 else _mini_tex
 
 
+# True when the biome pixel under `world_pos` is water, using the exact
+# thresholds of terrain.gdshader's is_water() so presentation effects (drink
+# ripples) agree with where the ground shader draws water. Reads whichever
+# image currently carries raw biome colours: `_img` in the biome view,
+# the minimap's slow biome copy while a data overlay owns the ground.
+func is_water_at(world_pos: Vector2) -> bool:
+	var img: Image = _img if _last_mode == -1 else _mini_img
+	if img == null or _res <= 0:
+		return false
+	var world: float = _res * scale.x
+	var px := clampi(int(fposmod(world_pos.x, world) / world * _res), 0, _res - 1)
+	var py := clampi(int(fposmod(world_pos.y, world) / world * _res), 0, _res - 1)
+	var c := img.get_pixel(px, py)
+	return c.b > c.r + 0.05 and c.b > c.g + 0.05 and c.b > 0.20 and maxf(c.r, c.g) < 0.45
+
+
 func _process(_delta: float) -> void:
 	var res: int = int(sim.biome_resolution())
 	if res != _res:

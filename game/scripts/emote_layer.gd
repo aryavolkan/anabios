@@ -10,6 +10,10 @@ extends Node2D
 # this layer owns the per-id presence weight so emotes bloom in and fade out
 # instead of strobing with the action debounce, and keeps fading entries for
 # agents that stopped acting (or died) at their last seen spot.
+#
+# Presentation is zoom-aware: the whole layer fades out at census-wide zooms
+# (the poses and body colours carry the story there) and a screen-pixel size
+# floor keeps glyphs readable through the mid-zoom band.
 
 const EmoteSprites = preload("res://scripts/emote_sprites.gd")
 const EmoteShader = preload("res://shaders/emote.gdshader")
@@ -28,6 +32,13 @@ const EMOTE_SCALE := 0.62  # emote size relative to the body
 # Size floor in world units (the emote analog of main.gd's BODY_MIN): a glyph
 # over a hare-sized body would otherwise shrink into an unreadable speck.
 const EMOTE_MIN := 2.0
+# Zoom-aware presentation: below ZOOM_HIDE px-per-world-unit the layer fades
+# out entirely (a census view doesn't want 300 glyphs of clutter), reaching
+# full strength at ZOOM_FULL — the same close-up band as the dust puffs. A
+# screen-pixel size floor keeps a glyph readable through the mid-zoom band.
+const ZOOM_HIDE := 1.5
+const ZOOM_FULL := 2.5
+const EMOTE_MIN_PX := 7.0
 
 # Action id -> glyph. Keys mirror main.gd's ACT_FLEE / ACT_SLEEP / ACT_DRINK /
 # ACT_MATE / ACT_CELEBRATE (fight, trade, eat and scan stay emote-free: combat
@@ -143,13 +154,24 @@ func refresh(time: float, delta: float) -> void:
 	var n := mini(_entries.size(), CAP)
 	if n > mm.instance_count:
 		mm.instance_count = n
+	# Zoom gate: px-per-world-unit from the canvas transform (the camera's
+	# zoom). Entries above keep easing regardless, so zooming back in finds
+	# the emotes mid-state instead of restarted. Outside the tree (headless
+	# lifecycle test) there is no canvas: assume close zoom.
+	var ppu := ZOOM_FULL
+	if is_inside_tree():
+		ppu = get_viewport().get_canvas_transform().x.x
+	var zoom_alpha := smoothstep(ZOOM_HIDE, ZOOM_FULL, ppu)
+	if zoom_alpha < 0.01:
+		mm.visible_instance_count = 0
+		return
 	mm.visible_instance_count = n
 	var j := 0
 	for id in _entries:
 		if j >= n:
 			break
 		var e: Array = _entries[id]
-		var s: float = maxf(e[3] * EMOTE_SCALE, EMOTE_MIN)
+		var s: float = maxf(maxf(e[3] * EMOTE_SCALE, EMOTE_MIN), EMOTE_MIN_PX / ppu)
 		var above: Vector2 = e[2] + Vector2(0.0, -maxf(e[3], s) * RISE)
 		mm.set_instance_transform_2d(j, Transform2D(0.0, Vector2(s, s), 0.0, above))
 		# Golden-ratio hash of the id: a stable per-agent phase so a cluster's
@@ -160,7 +182,7 @@ func refresh(time: float, delta: float) -> void:
 		# shipped in the custom-data alpha channel because the shader cannot
 		# carry a computed fade to its fragment on Metal (see emote.gdshader);
 		# the cycle constants match the vertex stage's motion.
-		var alpha: float = e[1]
+		var alpha: float = e[1] * zoom_alpha
 		if e[0] == EmoteSprites.SLEEP_Z:
 			alpha *= 1.0 - smoothstep(0.62, 1.0, fposmod(time * 0.30 + phase, 1.0))
 		elif e[0] == EmoteSprites.STAR:

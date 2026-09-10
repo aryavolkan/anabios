@@ -11,14 +11,18 @@ var active := false
 var _color := Color.WHITE
 var _duration := 1.0
 var _max_radius := 80.0
+var _width := 2.0
 var _t := 0.0
 
 
-func start(pos: Vector2, color: Color, duration: float, max_radius: float) -> void:
+# `width` is the stroke in world units; the 2.0 default suits the big codex
+# event pulses, small close-up ripples pass something finer.
+func start(pos: Vector2, color: Color, duration: float, max_radius: float, width := 2.0) -> void:
 	position = pos
 	_color = color
 	_duration = maxf(duration, 0.05)
 	_max_radius = max_radius
+	_width = width
 	_t = 0.0
 	active = true
 	visible = true
@@ -57,7 +61,7 @@ func _draw() -> void:
 	if r < 0.5:
 		return
 	var a := alpha_now()
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 48, Color(_color.r, _color.g, _color.b, a), 2.0, true)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 48, Color(_color.r, _color.g, _color.b, a), _width, true)
 	draw_arc(
 		Vector2.ZERO,
 		r * 0.78,
@@ -65,6 +69,6 @@ func _draw() -> void:
 		TAU,
 		40,
 		Color(_color.r, _color.g, _color.b, a * 0.45),
-		1.2,
+		_width * 0.6,
 		true
 	)

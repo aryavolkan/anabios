@@ -76,6 +76,9 @@ func _rebuild_key(body_mode: int) -> void:
 		_key_box.add_child(_header("modules"))
 		_key_box.add_child(_swatch_wrap(Palette.MODULE_COLORS, Palette.MODULE_NAMES))
 	_key_box.add_child(_header("links: bright brief = combat · thin lingering = trade"))
+	_key_box.add_child(
+		_header("emotes (close zoom): Z sleep · heart courtship · drop thirst · ! flee · star mate")
+	)
 	match body_mode:
 		1:
 			_key_box.add_child(_header("body: hue = dialect"))
