@@ -10,7 +10,7 @@ shader_type canvas_item;
 //       instead of popping with the action threshold
 //   a = final draw alpha (presence weight x the kind's animated fade, all
 //       computed CPU-side in emote_layer.gd)
-// The glyph cells live in the same square 64x64 / 16px-cell grid as the
+// The glyph cells live in the same square 128x128 / 16px-cell grid as the
 // figure atlases (Metal-safe shape, pre-flipped for the QuadMesh V axis).
 //
 // Fade plumbing — hard-won Metal constraint: in this shader's varying
@@ -22,8 +22,8 @@ shader_type canvas_item;
 // the alpha rides INSTANCE_CUSTOM.a, written CPU-side. The vertex stage and
 // INSTANCE_CUSTOM passthrough are the only proven-safe data paths.
 
-const float ATLAS_COLS = 4.0;
-const float ATLAS_PX = 64.0;
+const float ATLAS_COLS = 8.0;
+const float ATLAS_PX = 128.0;
 const float CELL_PX = 16.0;
 
 // Divisor emote_layer.gd uses to fit the kind id into the custom-data

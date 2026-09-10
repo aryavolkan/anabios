@@ -5,6 +5,7 @@ extends SceneTree
 # Exits 0 on success, 1 on the first failed assertion.
 
 const M = preload("res://scripts/mammal_sprites.gd")
+const A = preload("res://scripts/ape_sprites.gd")
 
 var _failed := false
 
@@ -14,6 +15,37 @@ func _check(cond: bool, msg: String) -> void:
 		push_error("FAIL: " + msg)
 		# quit() only REQUESTS an exit; the flag keeps a later quit(0) honest.
 		_failed = true
+
+
+# Opaque-pixel count inside one 16x16 grid cell of a packed atlas.
+func _cell_opaque(img: Image, cell: int) -> int:
+	var cx := (cell % A.ATLAS_COLS) * A.CELL_PX
+	var cy := int(cell / float(A.ATLAS_COLS)) * A.CELL_PX
+	var n := 0
+	for y in A.CELL_PX:
+		for x in A.CELL_PX:
+			if img.get_pixel(cx + x, cy + y).a > 0.5:
+				n += 1
+	return n
+
+
+# The spear/bow pairs (cells 16..19) are ape-only art: every hominin atlas
+# must carry them, every quadruped atlas must leave them empty (inventions
+# never reach quads, so the shader never samples there).
+func _check_weapon_cells() -> void:
+	_check(A.POSE_COUNT == 20, "field grid holds the spear/bow pairs")
+	for sp in A.SPECIES_COUNT:
+		var img: Image = A.build_species_atlas(sp).get_image()
+		_check(
+			img.get_width() == A.ATLAS_PX and img.get_height() == A.ATLAS_PX,
+			"species %d atlas is the shared square grid" % sp
+		)
+		for cell in [A.POSE_SPEAR, A.POSE_SPEAR + 1, A.POSE_BOW, A.POSE_BOW + 1]:
+			var n := _cell_opaque(img, cell)
+			_check(n >= 24, "species %d weapon cell %d has art (%d px)" % [sp, cell, n])
+	var quad: Image = M.bucket_atlas(M.SKIN_COUNT).get_image()
+	for cell in [16, 17, 18, 19]:
+		_check(_cell_opaque(quad, cell) == 0, "quad weapon cell %d stays empty" % cell)
 
 
 func _init() -> void:
@@ -33,6 +65,7 @@ func _init() -> void:
 	_check(M.archetype_for(0.1, M.SIZE_SPLIT, false) == M.DEER, "size split = large")
 	_check(M.archetype_for(M.HERB_MAX, 0.8, false) == M.BOAR, "diet 0.34 = omnivore")
 	_check(M.archetype_for(M.CARN_MIN, 0.8, false) == M.FOX, "diet 0.66 = carnivore")
+	_check_weapon_cells()
 	if _failed:
 		quit(1)
 		return

@@ -603,6 +603,21 @@ impl Simulation {
         out
     }
 
+    /// Held-invention bitmask (bit k = invention id k, e.g. bit 10 Hafted
+    /// Spears, bit 11 Archery) per alive agent, same order as
+    /// `alive_positions`. All-zero when `inventions_enabled` is off, so the
+    /// viewer can key weapon poses on the bits without a scenario check.
+    #[func]
+    fn alive_invention_masks(&self) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for m in invention_masks_of(w) {
+                out.push(m);
+            }
+        }
+        out
+    }
+
     /// Attack urge (`ActionRegister::fire_intent`, 0..1) per alive agent, same
     /// order as `alive_positions`. Written for every agent every tick by
     /// `decide_all` regardless of scenario flags, so unlike mood/arousal this
@@ -1484,6 +1499,20 @@ fn livestock_flags_of(w: &anabios_core::World) -> Vec<i32> {
         .collect()
 }
 
+/// Per-alive-agent held-invention bitmask (`invention::held_mask` over the
+/// meme vector). All-zero when inventions are disabled — the channels never
+/// charge then, but the short-circuit keeps flag-off viewers allocation-cheap
+/// and explicit, matching `livestock_flags_of`.
+fn invention_masks_of(w: &anabios_core::World) -> Vec<i32> {
+    if !w.inventions_enabled {
+        return w.agents.iter_alive().map(|_| 0).collect();
+    }
+    w.agents
+        .iter_alive()
+        .map(|id| anabios_core::invention::held_mask(&w.agents.meme_vector[id as usize]) as i32)
+        .collect()
+}
+
 /// Project a meme vector onto a stable hue in `[0,1)` so divergent dialects
 /// render as distinct body colors. The per-channel weights are normalized to
 /// sum to 1, so the hue is a weighted average of the meme values (bounded and
@@ -1867,5 +1896,39 @@ mod tests {
         assert!(flags.iter().all(|&f| f == 0 || f == 1));
         assert!(!w.domestication_enabled);
         assert!(flags.iter().all(|&f| f == 0), "domestication off => no livestock");
+    }
+
+    #[test]
+    fn invention_masks_flag_gated_and_seeded() {
+        // Minimal scenario has inventions OFF -> every mask must be 0.
+        let toml = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scenarios/minimal.toml"
+        ))
+        .expect("read minimal.toml");
+        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
+        for _ in 0..25 {
+            anabios_core::tick::step(&mut w);
+        }
+        let masks = super::invention_masks_of(&w);
+        assert_eq!(masks.len(), w.agents.iter_alive().count());
+        assert!(!w.inventions_enabled);
+        assert!(masks.iter().all(|&m| m == 0), "inventions off => empty masks");
+
+        // weapons.toml seeds stone_tools + hafted_spears, so at least one ape
+        // must read back the spear bit the viewer keys its weapon poses on.
+        let toml = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scenarios/weapons.toml"
+        ))
+        .expect("read weapons.toml");
+        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
+        for _ in 0..25 {
+            anabios_core::tick::step(&mut w);
+        }
+        let masks = super::invention_masks_of(&w);
+        assert_eq!(masks.len(), w.agents.iter_alive().count());
+        let spear_bit = 1i32 << anabios_core::invention::HAFTED_SPEARS;
+        assert!(masks.iter().any(|&m| m & spear_bit != 0), "seeded spears missing");
     }
 }
