@@ -19,7 +19,13 @@ const INV_KEYS := [
 	"hafted_spears",
 	"archery",
 	"fortifications",
-	"steel_arms"
+	"steel_arms",
+	"pottery",
+	"irrigation",
+	"currency",
+	"printing",
+	"sanitation",
+	"gunpowder"
 ]
 
 var _failed := false
@@ -34,7 +40,7 @@ func _check(cond: bool, msg: String) -> void:
 
 func _init() -> void:
 	# Enum/name/count coherence.
-	_check(B.KIND_COUNT == 12, "12 building kinds")
+	_check(B.KIND_COUNT == 18, "18 building kinds")
 	_check(B.NAMES.size() == B.KIND_COUNT, "NAMES parallels the enum")
 	# Every kind builds a 16x16 image with at least one opaque (figure) pixel.
 	for k in B.KIND_COUNT:
