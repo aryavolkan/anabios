@@ -6,7 +6,7 @@ extends RefCounted
 #
 # The glyphs are authored in the same block format as the figure atlases
 # ([x, y, w, h, zone] rects in a 16x16 cell) and packed through
-# ApeSprites._pack_grid, so they inherit the square 64x64 grid layout (the
+# ApeSprites._pack_grid, so they inherit the square 128x128 grid layout (the
 # Metal MultiMesh2D-safe shape), the 1px auto-outline pass, and the
 # pre-flip for the shared QuadMesh's V axis. Cell 0 is intentionally empty
 # (kind 0 = no emote); kinds 1..5 map to the cells below.

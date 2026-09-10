@@ -143,24 +143,27 @@ const WALK_FRAME_COUNT := 4
 # Per-hominin gait cadence (frames/sec), read by mammal_sprites.bucket_gait_fps.
 const WALK_FPS: PackedFloat32Array = [5.0, 4.2, 4.6, 4.8, 5.6]
 # The atlas stacks WALK_FRAME_COUNT gait poses, then TWO frames per action
-# (eat / fight / trade / flee / sleep) that main.gd derives from combat,
-# trade, fire-intent, mood and energy signals; the shader cycles each pair
-# when INSTANCE_CUSTOM.a != 0.
-const POSE_COUNT := 16
+# (eat / fight / trade / flee / sleep / celebrate / spear / bow) that main.gd
+# derives from combat, trade, fire-intent, mood, energy and invention signals;
+# the shader cycles each pair when INSTANCE_CUSTOM.a != 0.
+const POSE_COUNT := 20
 const POSE_EAT := 4
 const POSE_FIGHT := 6
 const POSE_TRADE := 8
 const POSE_FLEE := 10
 const POSE_SLEEP := 12
-# Atlas layout: the 16 poses fill a SQUARE 64x64 grid (4 cols x 4 rows),
+const POSE_SPEAR := 16
+const POSE_BOW := 18
+# Atlas layout: the 20 poses fill a SQUARE 128x128 grid (8 cols x 8 rows),
 # NOT a 16x192 vertical strip. On Metal (Apple GPUs) an
 # extreme-aspect texture sampled through a canvas_item ShaderMaterial on the
-# MultiMesh2D path corrupts into torn horizontal streaks — a near-square
+# MultiMesh2D path corrupts into torn horizontal streaks — a square
 # power-of-two texture renders cleanly. The field_agent shader maps a pose
 # index `fr` to cell (fr % ATLAS_COLS, fr / ATLAS_COLS). Keep in sync with the
-# shader's ATLAS_COLS / ATLAS_PX / CELL_PX constants and mammal_sprites.
-const ATLAS_COLS := 4
-const ATLAS_PX := 64
+# shaders' ATLAS_COLS / ATLAS_PX / CELL_PX constants (field_agent AND emote —
+# the emote glyphs pack through the same grid) and mammal_sprites.
+const ATLAS_COLS := 8
+const ATLAS_PX := 128
 const CELL_PX := 16
 # Gait: 0 neutral (idle), 1 contact-left, 2 passing (whole figure lifted 1px —
 # the walk bob), 3 contact-right. The shader cycles 1→2→3→2 when moving and
@@ -386,17 +389,90 @@ const FIELD_POSES: Array = [
 		[6, 10, 2, 4, "c"],
 		[9, 10, 2, 4, "c"]
 	],
+	# 16 spear thrust — poised: shaft level at the shoulder, weight coiled on
+	# the braced back leg (the fight lunge stance, armed). Zones "w"/"f" are
+	# the hafted weapon's wood and knapped stone.
+	[
+		[6, 1, 4, 4, "c"],
+		[7, 3, 2, 2, "s"],
+		[7, 5, 2, 1, "c"],
+		[4, 5, 8, 5, "c"],
+		[7, 6, 2, 2, "a"],
+		[3, 6, 2, 4, "c"],
+		[3, 9, 2, 1, "s"],
+		[3, 11, 3, 4, "c"],
+		[8, 11, 2, 4, "c"],
+		[11, 13, 3, 2, "c"],
+		[1, 4, 11, 1, "w"],
+		[12, 4, 2, 1, "f"],
+		[9, 3, 2, 2, "s"]
+	],
+	# 17 spear thrust B — the thrust lands: body leans in, shaft driven a
+	# stride forward with the point at the leading edge
+	[
+		[7, 1, 4, 4, "c"],
+		[8, 3, 2, 2, "s"],
+		[8, 5, 2, 1, "c"],
+		[5, 5, 8, 5, "c"],
+		[8, 6, 2, 2, "a"],
+		[3, 7, 2, 3, "c"],
+		[3, 10, 2, 1, "s"],
+		[3, 11, 3, 4, "c"],
+		[9, 11, 2, 4, "c"],
+		[12, 13, 3, 2, "c"],
+		[3, 4, 11, 1, "w"],
+		[14, 4, 2, 1, "f"],
+		[10, 3, 2, 2, "s"]
+	],
+	# 18 bow draw — upright archer: stave held out front, string and nocked
+	# arrow pulled back to the cheek
+	[
+		[5, 2, 4, 4, "c"],
+		[6, 4, 2, 2, "s"],
+		[6, 6, 2, 1, "c"],
+		[3, 6, 7, 5, "c"],
+		[6, 7, 2, 2, "a"],
+		[4, 11, 2, 4, "c"],
+		[8, 11, 2, 4, "c"],
+		[10, 6, 3, 1, "c"],
+		[12, 2, 1, 4, "w"],
+		[13, 5, 1, 3, "w"],
+		[12, 8, 1, 4, "w"],
+		[10, 3, 1, 3, "f"],
+		[10, 7, 1, 5, "f"],
+		[10, 6, 4, 1, "w"],
+		[14, 6, 1, 1, "f"],
+		[9, 6, 1, 1, "s"]
+	],
+	# 19 bow loose — the string snaps home against the stave, the arrow is
+	# away and the draw hand flings open behind
+	[
+		[5, 2, 4, 4, "c"],
+		[6, 4, 2, 2, "s"],
+		[6, 6, 2, 1, "c"],
+		[3, 6, 7, 5, "c"],
+		[6, 7, 2, 2, "a"],
+		[4, 11, 2, 4, "c"],
+		[8, 11, 2, 4, "c"],
+		[10, 6, 3, 1, "c"],
+		[12, 2, 1, 4, "w"],
+		[13, 5, 1, 3, "w"],
+		[12, 8, 1, 4, "w"],
+		[11, 3, 1, 8, "f"],
+		[8, 5, 2, 1, "s"]
+	],
 ]
 
 # Zone colours per species, keyed into PAL — matched to the inspector avatars,
 # lifted a step brighter than the true coats so figures stay readable over
-# dark terrain.
+# dark terrain. "w"/"f" are the weapon cells' wood shaft and knapped stone,
+# the same pair the Sapiens avatar's spear uses, shared by every hominin.
 const FIELD_ZONE_COLORS: Array = [
-	{"c": "X", "s": "m", "a": "B"},  # Chimpanzee — charcoal coat, tan skin
-	{"c": "d", "s": "B", "a": "G"},  # Gorilla — slate coat, silver chest
-	{"c": "o", "s": "T", "a": "O"},  # Orangutan — rust coat, pale skin
-	{"c": "B", "s": "t", "a": "r"},  # Australopith — brown coat, tan skin
-	{"c": "m", "s": "t", "a": "h"},  # Sapiens — tawny clothes, tan skin
+	{"c": "X", "s": "m", "a": "B", "w": "b", "f": "s"},  # Chimpanzee — charcoal coat
+	{"c": "d", "s": "B", "a": "G", "w": "b", "f": "s"},  # Gorilla — slate coat
+	{"c": "o", "s": "T", "a": "O", "w": "b", "f": "s"},  # Orangutan — rust coat
+	{"c": "B", "s": "t", "a": "r", "w": "b", "f": "s"},  # Australopith — brown coat
+	{"c": "m", "s": "t", "a": "h", "w": "b", "f": "s"},  # Sapiens — tawny clothes
 ]
 
 

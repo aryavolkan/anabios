@@ -57,6 +57,7 @@ func _init() -> void:
 	_check_locomotion()
 	_check_action_transition()
 	_check_drink_action()
+	_check_weapon_action()
 	_check_animation_clock()
 	_check_facing()
 	_check_shuttle_and_ease()
@@ -209,6 +210,21 @@ func _check_drink_action() -> void:
 	var state := FxMath.step_action(Vector2(-1.0, 0.0), 6.0, 0.05)
 	_check(state.x == 6.0, "drink action starts immediately")
 	_check(state.y > 0.0, "drink action receives recovery hold time")
+
+
+func _check_weapon_action() -> void:
+	_check(FxMath.action_pose_base(10.0) == 16, "spear thrust selects its own frame pair")
+	_check(FxMath.action_pose_base(11.0) == 18, "bow shot selects its own frame pair")
+	var spears := 1 << FxMath.INV_HAFTED_SPEARS
+	var bows := 1 << FxMath.INV_ARCHERY
+	_check(FxMath.weapon_action(2.0, 0) == 2.0, "an unarmed fight keeps the brawl pose")
+	_check(FxMath.weapon_action(2.0, spears) == 10.0, "a spear-holding fighter thrusts")
+	_check(FxMath.weapon_action(2.0, bows) == 11.0, "an archer shoots")
+	_check(FxMath.weapon_action(2.0, spears | bows) == 11.0, "the better weapon wins")
+	_check(FxMath.weapon_action(1.0, spears | bows) == 1.0, "only fighting draws a weapon")
+	_check(FxMath.weapon_action(0.0, spears) == 0.0, "idle agents keep weapons stowed")
+	var other := (1 << 0) | (1 << 9) | (1 << 12) | (1 << 13)
+	_check(FxMath.weapon_action(2.0, other) == 2.0, "non-ranged tech keeps the brawl pose")
 
 
 func _check_animation_clock() -> void:
