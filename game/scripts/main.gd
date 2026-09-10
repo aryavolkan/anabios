@@ -6,6 +6,7 @@ const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
 const FieldAgentShader = preload("res://shaders/field_agent.gdshader")
+const EmoteLayer = preload("res://scripts/emote_layer.gd")
 
 # Number of sim ticks to run per rendered frame. Speeds: 1, 4, 16, 64.
 @export var ticks_per_frame: int = 1
@@ -115,6 +116,7 @@ var _tracks_mmi: MultiMeshInstance2D = null
 var _tracks: Array = []  # entries: [pos: Vector2, ttl: float]
 var _climate: CanvasModulate = null
 var _settlement_layer: Node2D = null
+var _emote_layer: Node2D = null
 var _ember_ambient_t: float = 0.0
 var _fight_pts: PackedVector2Array = PackedVector2Array()
 var _trade_pts: PackedVector2Array = PackedVector2Array()
@@ -240,6 +242,11 @@ func _ready() -> void:
 	_effects.name = "ViewerEffects"
 	add_child(_effects)
 	_effects.setup(sim, $Camera2D as Camera2D, _climate, _disc_texture(8))
+	# Emote pictograms (Zzz / heart / droplet / ! / star) above acting agents.
+	_emote_layer = EmoteLayer.new()
+	_emote_layer.name = "EmoteLayer"
+	add_child(_emote_layer)
+	_emote_layer.setup()
 	# Settlement layer: hut clusters + farms at the codex settlement sites.
 	_settlement_layer = preload("res://scripts/settlement_layer.gd").new()
 	_settlement_layer.name = "SettlementLayer"
@@ -548,6 +555,7 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 		_prev_energy = PackedFloat32Array()
 		_prev_color = PackedColorArray()
 		_actions.clear()
+		_emote_layer.refresh(_animation_time, delta)
 		return
 
 	var positions: PackedVector2Array = sim.alive_positions()
@@ -779,7 +787,11 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				)
 				_actions[ids[i]] = action_state
 				act = action_state.x
+				# Emote-worthy actions get a pictogram above the agent's head.
+				_emote_layer.collect(ids[i], smooth[i], sz, act)
 			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))
+
+	_emote_layer.refresh(_animation_time, delta)
 
 	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
 	if module_layers.visible:
