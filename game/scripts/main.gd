@@ -112,6 +112,7 @@ var _fight_pts: PackedVector2Array = PackedVector2Array()
 var _trade_pts: PackedVector2Array = PackedVector2Array()
 var _prev_energy: PackedFloat32Array = PackedFloat32Array()
 var _match_prev: PackedInt32Array = PackedInt32Array()
+var _animation_time: float = 0.0
 
 
 func _ready() -> void:
@@ -168,6 +169,7 @@ func _ready() -> void:
 		sp_mat.set_shader_parameter("frames", MammalSprites.POSE_COUNT)
 		sp_mat.set_shader_parameter("walk_fps", MammalSprites.bucket_gait_fps(b))
 		sp_mat.set_shader_parameter("rig_kind", MammalSprites.bucket_rig_kind(b))
+		sp_mat.set_shader_parameter("animation_time", 0.0)
 		mmi.material = sp_mat
 	# use_custom_data can only be toggled at instance_count 0; the scene's
 	# Bodies ships with a pre-grown buffer, so clear first, enable, then
@@ -463,6 +465,11 @@ func _notification(what: int) -> void:
 
 func _process(delta: float) -> void:
 	_layout_rail()
+	_animation_time = FxMath.advance_animation_time(_animation_time, delta, paused)
+	for mmi in _body_mmis:
+		var body_mat := mmi.material as ShaderMaterial
+		if body_mat != null:
+			body_mat.set_shader_parameter("animation_time", _animation_time)
 	if not paused:
 		sim.step_n(ticks_per_frame)
 	# Fetch this tick's segments once: the trail pass draws them and the body

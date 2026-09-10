@@ -46,6 +46,13 @@ const WALK_BLEND := 9.0
 # passed to step_action is (current action id, remaining hold seconds).
 const ACTION_HOLD := 0.16
 
+
+# Shared clock for character shaders. Unlike Godot's global TIME, this clock
+# can freeze with the simulation so a paused world is visually deterministic.
+static func advance_animation_time(t: float, delta: float, paused: bool) -> float:
+	return t if paused else t + maxf(delta, 0.0)
+
+
 # Facing. cos(heading) is near zero whenever a body travels near-vertically,
 # and it is exactly 1.0 when the sim zeroes the heading to mean "idle" — so a
 # bare sign test snaps the sprite to face right every time the heading

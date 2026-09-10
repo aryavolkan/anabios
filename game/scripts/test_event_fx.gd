@@ -46,6 +46,7 @@ func _init() -> void:
 	_check_gait()
 	_check_locomotion()
 	_check_action_transition()
+	_check_animation_clock()
 	_check_facing()
 	_check_shuttle_and_ease()
 	_check_radial_texture()
@@ -187,6 +188,17 @@ func _check_action_transition() -> void:
 	for _i in 30:
 		held = FxMath.step_action(held, 0.0, dt)
 	_check(held.x == 0.0, "a cleared action eventually returns to neutral")
+
+
+func _check_animation_clock() -> void:
+	_check(
+		absf(FxMath.advance_animation_time(1.5, 0.25, false) - 1.75) < 0.001,
+		"animation clock advances while running"
+	)
+	_check(
+		absf(FxMath.advance_animation_time(1.5, 0.25, true) - 1.5) < 0.001,
+		"animation clock freezes while paused"
+	)
 
 
 # Facing deadband. The measured failure was the sim zeroing an agent's heading

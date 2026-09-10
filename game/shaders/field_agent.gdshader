@@ -44,6 +44,8 @@ uniform float action_fps = 4.0;
 // vertex stage preserves the crisp atlas while making a crowd feel alive.
 uniform float action_breath_amp = 0.035;
 uniform float action_squash = 0.06;
+// Driven by main.gd so character animation freezes with the simulation.
+uniform float animation_time = 0.0;
 // Signature-move family (mammal_sprites.RigKind): 0 prey, 1 predator,
 // 2 primate (default = today's apes, all new branches off), 3 livestock.
 uniform int rig_kind = 2;
@@ -64,17 +66,17 @@ void vertex() {
 	// only a small bounce here — and it rides the stride itself (two contacts
 	// per loop, body lowest as a foot plants) rather than the clock, so it
 	// stays locked to the feet at whatever speed the agent is travelling.
-	float idle_y = sin(TIME * 6.2831853 * bob_hz + phase) * bob_amp;
+	float idle_y = sin(animation_time * 6.2831853 * bob_hz + phase) * bob_amp;
 	float walk_y = -sin(phase * 2.0) * bob_amp * 0.5;
 	VERTEX.y += mix(idle_y, walk_y, anim.g);
-	VERTEX.x += cos(TIME * 6.2831853 * bob_hz * 0.5 + phase) * bob_amp * 0.4 * (1.0 - anim.g);
+	VERTEX.x += cos(animation_time * 6.2831853 * bob_hz * 0.5 + phase) * bob_amp * 0.4 * (1.0 - anim.g);
 	// Action poses get a slow, offset weight shift instead of freezing between
 	// their two atlas frames. The phase keeps nearby agents from breathing in
 	// perfect lockstep, while the action id changes the character of the motion.
 	if (act > 0.5) {
-		float action_wave = sin(TIME * 6.2831853 * (action_fps * 0.5) + phase);
+		float action_wave = sin(animation_time * 6.2831853 * (action_fps * 0.5) + phase);
 		VERTEX.y += action_wave * action_breath_amp;
-		VERTEX.x += cos(TIME * 6.2831853 * (action_fps * 0.25) + phase) * action_breath_amp * 0.35;
+		VERTEX.x += cos(animation_time * 6.2831853 * (action_fps * 0.25) + phase) * action_breath_amp * 0.35;
 	}
 	// Squash & stretch synced to the stride: compress at the contact poses,
 	// stretch through the passing pose, so the gait has weight. Driven by the
@@ -87,14 +89,14 @@ void vertex() {
 	// reads as a flat two-frame flicker. Press the body down into each chomp
 	// and let it spring back, so the bite has somewhere to land.
 	if (act > 0.5 && act < 1.5) {
-		float c = fract(TIME * action_fps * 0.5 + anim.r * 2.0);
+		float c = fract(animation_time * action_fps * 0.5 + anim.r * 2.0);
 		float chew = pow(max(sin(c * 6.2831853), 0.0), 0.7);
 		VERTEX.y -= chew * 0.05;
 		VERTEX.y *= 1.0 - chew * action_squash * 0.8;
 		VERTEX.x *= 1.0 + chew * action_squash * 0.5;
 	// Fight/attack (act 2): primate lunges; predators add a forward pounce arc.
 	} else if (act > 1.5 && act < 2.5) {
-		float c = fract(TIME * action_fps * 0.5 + anim.r * 2.0);
+		float c = fract(animation_time * action_fps * 0.5 + anim.r * 2.0);
 		float lunge = pow(max(sin(c * 3.14159265), 0.0), 1.5);
 		float dir = mix(1.0, -1.0, step(0.5, anim.b));
 		// A brief compression before the strike gives the lunge a readable
@@ -111,7 +113,7 @@ void vertex() {
 	// figure is facing and settling back, so the offer carries across rather
 	// than the arm just twitching in place.
 	} else if (act > 2.5 && act < 3.5) {
-		float c = fract(TIME * action_fps * 0.5 + anim.r * 2.0);
+		float c = fract(animation_time * action_fps * 0.5 + anim.r * 2.0);
 		float reach = sin(c * 3.14159265);
 		float dir = mix(1.0, -1.0, step(0.5, anim.b));
 		VERTEX.x += dir * reach * 0.06;
@@ -131,27 +133,27 @@ void vertex() {
 			float dir = mix(1.0, -1.0, step(0.5, anim.b));
 			VERTEX.x += dir * 0.045;
 			VERTEX.y += max(sin(anim.r * 6.2831853), 0.0) * 0.035;
-			VERTEX.x += sin(TIME * 43.0 + phase) * 0.03;
-			VERTEX.y += cos(TIME * 37.0 + phase) * 0.02;
+			VERTEX.x += sin(animation_time * 43.0 + phase) * 0.03;
+			VERTEX.y += cos(animation_time * 37.0 + phase) * 0.02;
 		}
 	// Sleep (act 5): the lying pose carries the read; on top just a slow,
 	// deep breath — a gentle swell, about half the idle bob's rate, so a
 	// sleeping cluster sways out of phase instead of twitching.
 	} else if (act > 4.5 && act < 5.5) {
-		float s = sin(TIME * 6.2831853 * 0.35 + phase);
+		float s = sin(animation_time * 6.2831853 * 0.35 + phase);
 		VERTEX.y *= 1.0 - max(s, 0.0) * 0.04;
 		VERTEX.x *= 1.0 + max(s, 0.0) * 0.05;
 	}
 	// Livestock idle: a slow chewing head-bob (only while standing).
 	if (rig_kind == 3 && anim.g < 0.5 && act < 0.5) {
-		VERTEX.y += sin(TIME * 3.0 + phase) * 0.02;
+		VERTEX.y += sin(animation_time * 3.0 + phase) * 0.02;
 	}
 	// Quadruped idle tail/rear sway: the trailing (left) columns drift so a
 	// settled animal isn't frozen. UV.x < 0.5 is the rear before the facing
 	// mirror; scale by (1 - moving) so it only shows at rest.
 	if ((rig_kind == 0 || rig_kind == 1) && act < 0.5) {
 		float rear = clamp(0.5 - UV.x, 0.0, 0.5) * 2.0;
-		VERTEX.x += sin(TIME * 2.2 + phase) * 0.03 * rear * (1.0 - anim.g);
+		VERTEX.x += sin(animation_time * 2.2 + phase) * 0.03 * rear * (1.0 - anim.g);
 	}
 }
 
@@ -165,7 +167,7 @@ void fragment() {
 		// Action pairs live below the gait rows: eat 4/5, fight 6/7, trade
 		// 8/9, flee 10/11, sleep 12/13; swap A/B at action_fps, phase-offset
 		// so a trading cluster doesn't chomp in lockstep.
-		float a2 = floor(mod(TIME * action_fps + anim.r * 2.0, 2.0));
+		float a2 = floor(mod(animation_time * action_fps + anim.r * 2.0, 2.0));
 		fr = 2.0 + act * 2.0 + a2;
 	} else {
 		// Gait: anim.r is the distance-driven cycle position, so s steps
