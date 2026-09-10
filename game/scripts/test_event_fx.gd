@@ -46,6 +46,7 @@ func _init() -> void:
 	_check_gait()
 	_check_locomotion()
 	_check_action_transition()
+	_check_drink_action()
 	_check_animation_clock()
 	_check_facing()
 	_check_shuttle_and_ease()
@@ -188,6 +189,13 @@ func _check_action_transition() -> void:
 	for _i in 30:
 		held = FxMath.step_action(held, 0.0, dt)
 	_check(held.x == 0.0, "a cleared action eventually returns to neutral")
+
+
+func _check_drink_action() -> void:
+	_check(FxMath.action_pose_base(6.0) == 4, "drink reuses the graze/eat frame pair")
+	var state := FxMath.step_action(Vector2(-1.0, 0.0), 6.0, 0.05)
+	_check(state.x == 6.0, "drink action starts immediately")
+	_check(state.y > 0.0, "drink action receives recovery hold time")
 
 
 func _check_animation_clock() -> void:

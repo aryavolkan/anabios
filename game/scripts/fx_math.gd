@@ -53,6 +53,15 @@ static func advance_animation_time(t: float, delta: float, paused: bool) -> floa
 	return t if paused else t + maxf(delta, 0.0)
 
 
+# Atlas pair used for a behavior action. Drinking intentionally shares the
+# eat/graze pair so every rig gets a grounded silhouette, then the shader adds
+# the sip motion on top. Keeping this mapping centralized prevents the spare
+# action value from ever sampling an empty atlas cell.
+static func action_pose_base(action: float) -> int:
+	var a := clampi(roundi(action), 1, 6)
+	return 4 if a == 6 else 2 + a * 2
+
+
 # Facing. cos(heading) is near zero whenever a body travels near-vertically,
 # and it is exactly 1.0 when the sim zeroes the heading to mean "idle" — so a
 # bare sign test snaps the sprite to face right every time the heading

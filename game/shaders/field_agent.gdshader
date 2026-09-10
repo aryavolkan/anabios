@@ -14,7 +14,8 @@ shader_type canvas_item;
 //       secondary motion eases in; the pose index thresholds it at 0.5)
 //   b = face_left (smoothed 0..1; mid-flip the mirror mix squashes the sprite
 //       horizontally, so turns read as a weight shift instead of a snap)
-//   a = action / 8 (0 none, 1 eat, 2 fight, 3 trade, 4 flee, 5 sleep —
+//   a = action / 8 (0 none, 1 eat, 2 fight, 3 trade, 4 flee, 5 sleep,
+//       6 drink —
 //       sim signals: strike hotspots, fire_intent, the mood column)
 // Moving agents cycle contact -> passing -> counter-contact -> passing (a
 // step-lift-step gait with the bob baked into the passing pose), paced by the
@@ -143,6 +144,12 @@ void vertex() {
 		float s = sin(animation_time * 6.2831853 * 0.35 + phase);
 		VERTEX.y *= 1.0 - max(s, 0.0) * 0.04;
 		VERTEX.x *= 1.0 + max(s, 0.0) * 0.05;
+	// Drink (act 6): reuse the eat/graze silhouette, but make the head dip in
+	// two distinct sips so a thirsty agent reads as drinking rather than eating.
+	} else if (act > 5.5 && act < 6.5) {
+		float sip = pow(max(sin(fract(animation_time * action_fps * 0.5 + phase) * 6.2831853), 0.0), 0.8);
+		VERTEX.y -= sip * 0.045;
+		VERTEX.x += cos(animation_time * 6.2831853 * (action_fps * 0.25) + phase) * 0.018;
 	}
 	// Livestock idle: a slow chewing head-bob (only while standing).
 	if (rig_kind == 3 && anim.g < 0.5 && act < 0.5) {
@@ -168,7 +175,10 @@ void fragment() {
 		// 8/9, flee 10/11, sleep 12/13; swap A/B at action_fps, phase-offset
 		// so a trading cluster doesn't chomp in lockstep.
 		float a2 = floor(mod(animation_time * action_fps + anim.r * 2.0, 2.0));
-		fr = 2.0 + act * 2.0 + a2;
+		// Drink has no dedicated atlas cells: frame 4/5 is the compatible
+		// eat/graze pair for primates and quadrupeds alike.
+		float pose_act = (act > 5.5 && act < 6.5) ? 1.0 : act;
+		fr = 2.0 + pose_act * 2.0 + a2;
 	} else {
 		// Gait: anim.r is the distance-driven cycle position, so s steps
 		// through 0..3 once per stride; map to poses 1,2,3,2 = contact,
