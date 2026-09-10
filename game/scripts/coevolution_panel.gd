@@ -71,6 +71,21 @@ const CHARTS := [
 		],
 	},
 	{
+		"title": "invention adoption — military",
+		"unit": "01",
+		"series":
+		[
+			{"key": "inv_hafted_spears_frac", "label": "spears", "color": Color(0.8, 0.6, 0.4)},
+			{"key": "inv_archery_frac", "label": "archery", "color": Color(0.6, 0.85, 0.95)},
+			{
+				"key": "inv_fortifications_frac",
+				"label": "fortifications",
+				"color": Color(0.7, 0.75, 0.55)
+			},
+			{"key": "inv_steel_arms_frac", "label": "steel arms", "color": Color(0.85, 0.5, 0.55)},
+		],
+	},
+	{
 		# Tech→gene selection: affinity-gene mean over holders minus non-holders.
 		# Above zero = the invention is selecting its affinity gene upward.
 		"title": "gene↔tech selection",
@@ -86,6 +101,8 @@ const CHARTS := [
 			{"key": "aff_farming_diff", "label": "Δ farming", "color": Color(0.5, 0.9, 0.4)},
 			{"key": "aff_writing_diff", "label": "Δ writing", "color": Color(1.0, 0.85, 0.4)},
 			{"key": "aff_machinery_diff", "label": "Δ machinery", "color": Color(0.9, 0.55, 0.3)},
+			{"key": "aff_hafted_spears_diff", "label": "Δ spears", "color": Color(0.8, 0.6, 0.4)},
+			{"key": "aff_archery_diff", "label": "Δ archery", "color": Color(0.6, 0.85, 0.95)},
 		],
 	},
 	{
