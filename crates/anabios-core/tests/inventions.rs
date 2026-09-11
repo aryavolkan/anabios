@@ -467,9 +467,10 @@ fn flat_upkeep_and_nuclear_income_apply_in_invention_step() {
     invention::invention_step(&mut w);
     let gained = w.agents.energy[nuke as usize] - e0;
     // `nuke` holds every invention (`0..INVENTION_COUNT`), including the
-    // military-branch ARCHERY and the X1 expansion's CURRENCY/PRINTING/
-    // SANITATION/GUNPOWDER, whose upkeep `flat_upkeep_coupled` also charges —
-    // spec-correct per Task 2, so the expectation must include all of them.
+    // military-branch ARCHERY, the X1 expansion's CURRENCY/PRINTING/
+    // SANITATION/GUNPOWDER, and the X2 expansion's VACCINATION, whose upkeep
+    // `flat_upkeep_coupled` also charges — spec-correct per Task 2, so the
+    // expectation must include all of them. (WELLS carries no upkeep.)
     let expected = invention::NUCLEAR_INCOME
         - invention::WRITING_UPKEEP
         - invention::MEDICINE_UPKEEP
@@ -479,7 +480,8 @@ fn flat_upkeep_and_nuclear_income_apply_in_invention_step() {
         - invention::CURRENCY_UPKEEP
         - invention::PRINTING_UPKEEP
         - invention::SANITATION_UPKEEP
-        - invention::GUNPOWDER_UPKEEP;
+        - invention::GUNPOWDER_UPKEEP
+        - invention::VACCINATION_UPKEEP;
     assert!(
         (gained - expected).abs() < 1e-4,
         "full tree nets Nuclear income minus upkeeps: {gained} vs {expected}"

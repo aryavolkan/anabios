@@ -148,6 +148,45 @@ fn sanitation_compounds_medicine_recovery() {
 }
 
 #[test]
+fn vaccination_compounds_medicine_susceptibility_and_reduces_spillover() {
+    use anabios_core::invention::{HELD_THRESHOLD, INVENTION_CHANNEL_BASE, MEDICINE, VACCINATION};
+
+    // Isolate Vaccination's own effect: both worlds hold Medicine (so
+    // recovery is identical in both — Vaccination does not touch recovery),
+    // only `med_vax` additionally holds Vaccination, which further
+    // suppresses new infections via both the transmission susceptibility
+    // multiplier and the spillover-probability multiplier.
+    let mut med_vax = clustered_world(19, 60, true);
+    let mut medicine_only = clustered_world(19, 60, true);
+    let med_ch = INVENTION_CHANNEL_BASE + MEDICINE;
+    let vax_ch = INVENTION_CHANNEL_BASE + VACCINATION;
+    let ids: Vec<u32> = med_vax.agents.iter_alive().collect();
+    for id in ids {
+        let i = id as usize;
+        med_vax.agents.meme_vector[i][med_ch] = HELD_THRESHOLD;
+        med_vax.agents.meme_vector[i][vax_ch] = HELD_THRESHOLD;
+        medicine_only.agents.meme_vector[i][med_ch] = HELD_THRESHOLD;
+    }
+    // Seed a minority infected: the rest are susceptible targets exposed to
+    // shedders, exercising transmission/spillover susceptibility rather than
+    // recovery (which the two worlds share).
+    infect_fraction(&mut med_vax, 0.2, 0.6);
+    infect_fraction(&mut medicine_only, 0.2, 0.6);
+
+    for _ in 0..30 {
+        step(&mut med_vax);
+        step(&mut medicine_only);
+    }
+    let v = total_infection(&med_vax);
+    let m = total_infection(&medicine_only);
+    assert!(
+        v < m * 0.9,
+        "medicine+vaccination must show materially less total infection than medicine alone: \
+         med_vax={v:.2} vs medicine_only={m:.2}"
+    );
+}
+
+#[test]
 fn sparse_world_no_spillover_no_events() {
     let mut w = World::new(9);
     w.disease_enabled = true;

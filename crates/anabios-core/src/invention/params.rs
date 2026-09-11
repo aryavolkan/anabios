@@ -99,6 +99,13 @@ pub const GUNPOWDER_UPKEEP: f32 = 0.003;
 /// — stored water means slower parching. Applies to the gain only, never to
 /// `DRINK_RATE` or `dehydration_metabolism_multiplier`.
 pub const WELLS_THIRST_MULT: f32 = 0.5;
+/// Vaccination: susceptibility (transmission) and spillover-probability
+/// multipliers, stacking with Medicine's and Sanitation's (the welfare
+/// branch compounds further); small flat per-tick upkeep (era-4 tier,
+/// matching Gunpowder's).
+pub const VACCINATION_SUSCEPT_MULT: f32 = 0.5;
+pub const VACCINATION_SPILLOVER_MULT: f32 = 0.5;
+pub const VACCINATION_UPKEEP: f32 = 0.003;
 
 /// Biome pollution: per-cell cap, regrowth-penalty cap, and per-biome-step
 /// decay. Regrowth is multiplied by `1 - min(pollution, POLLUTION_MAX_EFFECT)`.
