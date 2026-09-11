@@ -32,7 +32,7 @@ mod params;
 pub use params::*;
 
 /// Number of inventions in the tree.
-pub const INVENTION_COUNT: usize = 20;
+pub const INVENTION_COUNT: usize = 21;
 
 /// First meme channel owned by the invention tree. Channels below this keep
 /// their pre-existing meanings (alarm, dialects, cooperation norm, hunt
@@ -67,6 +67,9 @@ pub const CURRENCY: usize = 16;
 pub const PRINTING: usize = 17;
 pub const SANITATION: usize = 18;
 pub const GUNPOWDER: usize = 19;
+// The X2 expansion (appended 2026-09): welfare/storage round two. Same
+// append-only rule.
+pub const WELLS: usize = 20;
 
 /// Adoption level at/above which an invention is functionally held (buffs and
 /// debuffs apply, prereqs count as satisfied, codex counts it).
@@ -442,6 +445,21 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         affinity: Some(GeneAffinity { slot: GenomeSlot::Neuroticism, coeff: 0.8 }),
         gene_req: Some(GeneReq { slot: GenomeSlot::Neuroticism, min: 0.50 }),
     },
+    Invention {
+        name: "Wells",
+        key: "wells",
+        era: 2,
+        prereqs: bit(POTTERY),
+        // Lined shaft stone + fired clay lining — the storage branch
+        // continues: fired clay taught the lining, now it holds water too.
+        materials: [1.0, 1.0, 1.0, 0.0],
+        buff: "slower thirst gain",
+        debuff: "none",
+        // Stored water rewards the same prudent planners as Pottery/
+        // Irrigation: shares their Conscientiousness slot.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Conscientiousness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Conscientiousness, min: 0.40 }),
+    },
 ];
 
 /// The meme channel carrying invention `inv`'s adoption level.
@@ -684,6 +702,15 @@ pub fn irrigation_bite_multiplier_coupled(
         return 1.0;
     }
     1.0 + IRRIGATION_BITE * coupled_held_genome(mask, IRRIGATION, genome, coupling)
+}
+
+/// Wells: multiplier on per-tick thirst GAIN (`needs::needs_step`) — stored
+/// water means slower parching. Exactly `1.0` at mask 0, so needs-only worlds
+/// (basic_needs_enabled without inventions) are byte-identical. Never touches
+/// `DRINK_RATE` or adds energy/water — only scales the gain down.
+#[inline]
+pub fn wells_thirst_multiplier(mask: u32) -> f32 {
+    1.0 - (1.0 - WELLS_THIRST_MULT) * held_f32(mask, WELLS)
 }
 
 /// Currency: trade-reach multiplier (coinage extends a deal past the gossip
@@ -1501,10 +1528,10 @@ mod tests {
         assert!(is_invention_channel(INVENTION_CHANNEL_BASE));
         assert!(is_invention_channel(channel(STEEL_ARMS)));
         // The last invention channel is the top of the tree block — now
-        // Gunpowder, the X1 expansion's capstone (append-only ids moved this
-        // past the old Steel Arms top); the practice channels above it
+        // Wells, the X2 expansion's entry (append-only ids moved this past
+        // the X1 capstone Gunpowder); the practice channels above it
         // (`PRACTICE_CHANNEL_BASE..`) are NOT invention channels.
-        assert_eq!(channel(GUNPOWDER), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
+        assert_eq!(channel(WELLS), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE + INVENTION_COUNT));
         assert!(!is_invention_channel(MEME_CHANNELS));
     }
@@ -1796,6 +1823,35 @@ mod tests {
         // Irrigation alone (no Farming): still zero — the allowance only matters
         // once Farming is held.
         assert_eq!(crowding_stress(bit(IRRIGATION), 1_000_000), 0.0);
+    }
+
+    // --- X2 expansion: Wells --------------------------------------------------
+
+    #[test]
+    fn wells_thirst_multiplier_identity_at_zero_and_halves_when_held() {
+        assert_eq!(wells_thirst_multiplier(0), 1.0);
+        assert_eq!(wells_thirst_multiplier(bit(WELLS)), WELLS_THIRST_MULT);
+        assert!((wells_thirst_multiplier(bit(WELLS)) - 0.5).abs() < 1e-6);
+        // Unrelated bits don't trigger it.
+        assert_eq!(wells_thirst_multiplier(bit(WRITING)), 1.0);
+    }
+
+    #[test]
+    fn wells_tree_shape() {
+        use crate::genome::GenomeSlot;
+        let inv = &INVENTIONS[WELLS];
+        assert_eq!(inv.prereqs, bit(POTTERY), "Wells prereq");
+        assert_eq!(inv.era, 2, "Wells era");
+        assert_eq!(
+            inv.affinity.map(|a| a.slot as usize),
+            Some(GenomeSlot::Conscientiousness as usize),
+            "Wells affinity slot"
+        );
+        assert_eq!(
+            inv.gene_req.map(|r| r.slot as usize),
+            Some(GenomeSlot::Conscientiousness as usize)
+        );
+        assert!((inv.gene_req.unwrap().min - 0.40).abs() < 1e-6);
     }
 
     #[test]

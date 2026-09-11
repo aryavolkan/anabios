@@ -95,6 +95,10 @@ pub const SANITATION_UPKEEP: f32 = 0.002;
 pub const GUNPOWDER_DAMAGE: f32 = 0.40;
 pub const GUNPOWDER_RANGE: f32 = 0.30;
 pub const GUNPOWDER_UPKEEP: f32 = 0.003;
+/// Wells: multiplier on the holder's per-tick thirst GAIN (`needs::needs_step`)
+/// — stored water means slower parching. Applies to the gain only, never to
+/// `DRINK_RATE` or `dehydration_metabolism_multiplier`.
+pub const WELLS_THIRST_MULT: f32 = 0.5;
 
 /// Biome pollution: per-cell cap, regrowth-penalty cap, and per-biome-step
 /// decay. Regrowth is multiplied by `1 - min(pollution, POLLUTION_MAX_EFFECT)`.
