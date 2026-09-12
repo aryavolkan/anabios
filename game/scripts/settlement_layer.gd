@@ -1,24 +1,29 @@
 extends Node2D
 
-# Settlement layer: persistent pixel hut clusters + tilled farm patches at the
-# REAL settlement sites — the codex `settlement_active` latch per species, with
-# the anchor centroid and member count from sim.settlement_sites(). Huts grow
-# in number as membership grows; farms ring the larger settlements. Pure
-# presentation over read-only sim state, refreshed a few times a second.
+# Settlement layer: persistent village footprints + trade/invention landmarks
+# at the REAL settlement sites — the codex `settlement_active` latch per
+# species, with the anchor centroid and member count from
+# sim.settlement_sites(). Footprints come from VillageLayout.plan(): a
+# deterministic function of (species id, anchor, member count, era, recent
+# events) drawn through the `structures` atlas kinds (structure_sprites.gd).
+# Pure presentation over read-only sim state, refreshed a few times a second.
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const Buildings = preload("res://scripts/building_sprites.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
+# Landed separately by parallel agents (D5/D7): the village footprint planner
+# and its per-kind sprite atlas. Preloaded by path so this file keeps
+# compiling against the agreed contract even before those files land.
+const StructureSprites = preload("res://scripts/structure_sprites.gd")
+const VillageLayout = preload("res://scripts/village_layout.gd")
 
 const REDRAW_EVERY := 20
-# Huts are deliberately oversized next to agents (BODY_MIN ~6) so a village
-# reads as architecture, not as a few more creatures.
-const HUT_SCALE := 16.0
-const FARM_SCALE := 11.0
-const FARM_MIN_MEMBERS := 24
-const MAX_HUTS := 6
-const MAX_FARMS := 4
+# Structure sprites are 32px, drawn at half scale (D1: huts/structures span 16
+# world units) — deliberately oversized next to agents (BODY_MIN ~6) so a
+# village reads as architecture, not as a few more creatures.
+const STRUCTURE_SCALE := 0.5
+const MEMBERS_BUCKET := 6
 # Landmark/trade buildings sit a notch bigger than huts so a village's
 # invention history and trade role read at a glance from the ring around it.
 const BUILDING_SCALE := 16.0
@@ -27,26 +32,39 @@ const LANDMARK2_MIN_MEMBERS := 32
 # settlements: in organic runs the settling lineages are asocial foragers with
 # no tech, while the inventive (cultural) lineages rarely settle. So a lineage
 # needs this many live members before its tech earns a landmark at its centroid
-# (keeps tiny splinter species from littering the map).
+# (keeps tiny splinter species from littering the map). Settled species draw
+# their era architecture from VillageLayout instead (MILL/FORGE/SCRIPTORIUM/
+# GRANARY placements replace these markers) — this path now only fires for
+# tech-holding lineages with NO settlement.
 const INVENTION_MIN_MEMBERS := 25
+
+# Codex event ids (codex_panel.gd CHAPTER_NAMES) that drive the village-plan
+# flags: Territory formation and War mark an ongoing state (a longer window),
+# a raid is a short flare (huts still smoking).
+const EVT_COMBAT_RAID := 7
+const EVT_TERRITORY := 9
+const EVT_WAR := 38
+const RECENT_TICKS := 1500
+const RAID_TICKS := 400
 
 # Chimney-smoke plume pool, assigned each redraw to the largest live villages.
 const SMOKE_POOL := 8
 # Construction pops are only sampled on the throttled redraw (~3/s), so the
 # window must span several samples for the ease-out-back arc to actually show.
 const POP_SECS := 1.5
-# Flame flicker for the Fire/Metalworking landmarks: two authored frames
-# swapped at a fixed low cadence (whole-texture swaps on the plain MultiMesh
-# layers, so no per-building nodes and nothing on the Metal atlas path).
+# Flame flicker for animated buildings/structures: two authored frames swapped
+# at a fixed low cadence (whole-texture swaps on the plain MultiMesh layers,
+# so no per-building nodes and nothing on the Metal atlas path).
 const FLICKER_PERIOD := 1.0 / 3.0
 
-var _huts: MultiMeshInstance2D
-var _farms: MultiMeshInstance2D
-var _smoke: Array[GPUParticles2D] = []
 var _building_mmis: Array[MultiMeshInstance2D] = []
-# Animated landmarks only: kind -> [phase-0 texture, phase-1 texture] and
-# kind -> every MultiMeshInstance2D showing it (the source layer plus its
-# eight torus clones), so a frame swap can never leave a clone a frame behind.
+var _structure_mmis: Array[MultiMeshInstance2D] = []
+var _smoke: Array[GPUParticles2D] = []
+# Animated kinds only: key -> [phase-0 texture, phase-1 texture] and key ->
+# every MultiMeshInstance2D showing it (the source layer plus its eight torus
+# clones), so a frame swap can never leave a clone a frame behind. Shared by
+# both building families; old Buildings kinds key as "b<kind>", new
+# StructureSprites kinds as "s<kind>" so the two enums can't collide.
 var _building_frames: Dictionary = {}
 var _building_nodes: Dictionary = {}
 var _flicker_elapsed := 0.0
@@ -58,7 +76,7 @@ var _frame: int = REDRAW_EVERY - 1  # redraw on the very first frame
 # drawn for LINGER seconds after the sim stops reporting them, fading out.
 const LINGER := 45.0
 const FADE := 10.0
-var _villages: Dictionary = {}  # sid -> {pos, members, born, seen}
+var _villages: Dictionary = {}  # sid -> {pos, members, born, seen, plan...}
 # Per-lineage invention-landmark memory, same linger/fade contract as _villages
 # so a landmark eases in when a lineage first earns its tech and lingers/fades
 # when the lineage dies out, instead of popping. sid -> {pos, sig, born, seen}.
@@ -71,28 +89,46 @@ var _now: float = 0.0
 # 0.3-per-redraw drift.
 var _last_ease: float = 0.0
 const ANCHOR_TAU := 0.93
+# Codex event cursor for the flags poll (Territory/War/Raid), independent of
+# codex_panel's own cursor. sid -> {"territory": tick, "war": tick, "raid": tick}.
+var _event_cursor: int = 0
+var _recent_events: Dictionary = {}
 
 @onready var sim = get_node("../Simulation")
+@onready var biome = get_node("../Biome")
+# Optional: the particle/lighting effects subsystem, created as a sibling
+# before this layer in main.gd (same order as `sim`/`biome`). Guarded with
+# get_node_or_null so a burnt-ruin ember burst is skipped harmlessly if the
+# hook is ever missing, rather than adding a new effects pool here.
+@onready var _effects = get_node_or_null("../ViewerEffects")
 
 
 func _ready() -> void:
-	# Huts draw ABOVE agents (z=1): architecture looms over the crowd instead
-	# of being perpetually covered by the villagers milling around it. Farms
-	# stay at ground level. Both textures are pre-flipped for the MultiMesh
-	# QuadMesh's flipped V axis (same convention as the ape atlas).
-	_huts = _make_layer("Huts", _hut_texture(), 1)
-	_farms = _make_layer("Farms", _farm_texture(), -6)
 	# Landmark/trade buildings: one plain (no-shader) MultiMesh layer per
-	# kind, drawn above agents like huts. Kept as separate layers (rather
-	# than one shared atlas) so each building keeps its own untouched
-	# texture on the Metal-safe plain-MultiMesh path.
+	# kind, drawn above agents. Kept as separate layers (rather than one
+	# shared atlas) so each building keeps its own untouched texture on the
+	# Metal-safe plain-MultiMesh path.
 	for k in Buildings.KIND_COUNT:
 		var tex := Buildings.build(k)
 		var mmi := _make_layer("Building_%s" % Buildings.NAMES[k], tex, 1)
 		_building_mmis.append(mmi)
 		if Buildings.is_animated(k):
-			_building_frames[k] = [tex, Buildings.build_variant(k, 1)]
-			_building_nodes[k] = [mmi]
+			var bkey := "b%d" % k
+			_building_frames[bkey] = [tex, Buildings.build_variant(k, 1)]
+			_building_nodes[bkey] = [mmi]
+	# Village-footprint structures: one plain MultiMesh layer per kind, same
+	# Metal-safe contract. Fields draw below agents like the old farm patches;
+	# every other structure kind (huts, halls, fences, palisade, landmarks…)
+	# draws above agents like the old huts.
+	for k in StructureSprites.KIND_COUNT:
+		var z: int = -6 if k == StructureSprites.FIELD else 1
+		var stex: ImageTexture = StructureSprites.build_variant(k, 0)
+		var smmi := _make_layer("Structure_%d" % k, stex, z)
+		_structure_mmis.append(smmi)
+		if StructureSprites.is_animated(k):
+			var skey := "s%d" % k
+			_building_frames[skey] = [stex, StructureSprites.build_variant(k, 1)]
+			_building_nodes[skey] = [smmi]
 	for inv in sim.invention_catalog():
 		_era_of[String(inv["key"])] = int(inv["era"])
 	_make_smoke_pool()
@@ -117,24 +153,26 @@ func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2
 # Same 9-way torus tiling as the agent layers, sharing each MultiMesh.
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
-	for src in [_huts, _farms] + _building_mmis:
-		# Huts/farms are not building kinds: find() yields -1 for them, which
-		# matches no _building_nodes key. Animated buildings register every
-		# clone so a flame-frame swap can never leave a wrap copy behind.
-		var kind: int = _building_mmis.find(src)
-		for gy in range(-1, 2):
-			for gx in range(-1, 2):
-				if gx == 0 and gy == 0:
-					continue
-				var clone := MultiMeshInstance2D.new()
-				clone.multimesh = src.multimesh
-				clone.texture = src.texture
-				clone.texture_filter = src.texture_filter
-				clone.z_index = src.z_index
-				clone.position = Vector2(gx * world, gy * world)
-				add_child(clone)
-				if _building_nodes.has(kind):
-					_building_nodes[kind].append(clone)
+	for k in Buildings.KIND_COUNT:
+		_clone_layer(_building_mmis[k], "b%d" % k, world)
+	for k in StructureSprites.KIND_COUNT:
+		_clone_layer(_structure_mmis[k], "s%d" % k, world)
+
+
+func _clone_layer(src: MultiMeshInstance2D, key: String, world: float) -> void:
+	for gy in range(-1, 2):
+		for gx in range(-1, 2):
+			if gx == 0 and gy == 0:
+				continue
+			var clone := MultiMeshInstance2D.new()
+			clone.multimesh = src.multimesh
+			clone.texture = src.texture
+			clone.texture_filter = src.texture_filter
+			clone.z_index = src.z_index
+			clone.position = Vector2(gx * world, gy * world)
+			add_child(clone)
+			if _building_nodes.has(key):
+				_building_nodes[key].append(clone)
 
 
 func _process(delta: float) -> void:
@@ -152,13 +190,13 @@ func _process(delta: float) -> void:
 	_redraw()
 
 
-# Swap the flame frame on every instance of each animated landmark — the
-# origin layer and its torus clones in one pass — leaving every other
-# landmark's texture untouched.
+# Swap the flame frame on every instance of each animated kind — the origin
+# layer and its torus clones in one pass — leaving every other kind's texture
+# untouched.
 func _tick_landmark_animation() -> void:
-	for kind in _building_frames:
-		var tex: ImageTexture = _building_frames[kind][_flicker_phase]
-		for node in _building_nodes[kind]:
+	for key in _building_frames:
+		var tex: ImageTexture = _building_frames[key][_flicker_phase]
+		for node in _building_nodes[key]:
 			node.texture = tex
 
 
@@ -172,7 +210,89 @@ func has_sites() -> bool:
 	return not _sites.is_empty()
 
 
+# Pure: invention keys a species holds (adopted_inventions from
+# species_stats()) plus a memory of recently-fired codex events for that
+# species -> the VillageLayout flag bitmask. `recent` carries the last tick
+# seen for "territory"/"war"/"raid" (absent = never seen).
+static func flags_for(invention_keys: PackedStringArray, recent: Dictionary, tick: int) -> int:
+	var flags := 0
+	for key in invention_keys:
+		match key:
+			"farming":
+				flags |= VillageLayout.FLAG_FARMING
+			"machinery":
+				flags |= VillageLayout.FLAG_MACHINERY
+			"metalworking":
+				flags |= VillageLayout.FLAG_METALWORKING
+			"writing":
+				flags |= VillageLayout.FLAG_WRITING
+	if recent.has("territory") and tick - int(recent["territory"]) <= RECENT_TICKS:
+		flags |= VillageLayout.FLAG_TERRITORY
+	if recent.has("war") and tick - int(recent["war"]) <= RECENT_TICKS:
+		flags |= VillageLayout.FLAG_WAR
+	if recent.has("raid") and tick - int(recent["raid"]) <= RAID_TICKS:
+		flags |= VillageLayout.FLAG_RAIDED
+	return flags
+
+
+# Pure: highest era among a species' held inventions, via the invention
+# catalogue's key -> era map (the same lookup the old landmark signature used).
+static func era_for(invention_keys: PackedStringArray, era_of: Dictionary) -> int:
+	var era := 0
+	for key in invention_keys:
+		if era_of.has(key):
+			era = maxi(era, int(era_of[key]))
+	return era
+
+
+# Pure: cache key for a village's plan. Bucketed member count so the layout
+# does not replan (and re-pop) on every single birth/death — only when the
+# village crosses a bucket boundary, era advances, or flags change.
+static func plan_signature(sid: int, members: int, era: int, flags: int) -> String:
+	var bucket := int(members / MEMBERS_BUCKET)
+	return "%d|%d|%d|%d" % [sid, bucket, era, flags]
+
+
+# Fold newly-fired Territory/War/CombatRaid events into the per-species
+# recency memory used by flags_for. Own cursor, independent of codex_panel's.
+func _poll_events() -> void:
+	var count: int = int(sim.codex_event_count())
+	if count < _event_cursor:
+		_event_cursor = 0
+		_recent_events.clear()
+	var events: Array = sim.codex_events_since(_event_cursor)
+	for ev in events:
+		_event_cursor = int(ev["index"]) + 1
+		var etype: int = int(ev["type"])
+		if etype != EVT_TERRITORY and etype != EVT_WAR and etype != EVT_COMBAT_RAID:
+			continue
+		var esid: int = int(ev["species_id"])
+		var etick: int = int(ev["tick"])
+		var er: Dictionary = _recent_events.get(esid, {})
+		if etype == EVT_TERRITORY:
+			er["territory"] = etick
+		elif etype == EVT_WAR:
+			er["war"] = etick
+		else:
+			er["raid"] = etick
+		_recent_events[esid] = er
+
+
+# Structure kind priority for the smoke anchor: hearths first, then a hall's
+# communal fire, then a forge. -1 = not a smoke source.
+static func _smoke_rank(kind: int) -> int:
+	if kind == StructureSprites.HEARTH:
+		return 0
+	if kind == StructureSprites.HALL:
+		return 1
+	if kind == StructureSprites.FORGE:
+		return 2
+	return -1
+
+
 func _redraw() -> void:
+	var tick: int = int(sim.tick())
+	_poll_events()
 	# Fold the live sites into the village memory.
 	for site in _sites:
 		var sid: int = int(site["species_id"])
@@ -191,10 +311,7 @@ func _redraw() -> void:
 			v["members"] = int(site["members"])
 			v["seen"] = _now
 	_last_ease = _now
-	var hut_xf: Array = []
-	var hut_col: Array = []
-	var farm_xf: Array = []
-	# One species stats lookup per redraw (adopted inventions drive landmarks).
+	# One species stats lookup per redraw (adopted inventions drive era/flags).
 	var stats_by_sid: Dictionary = {}
 	for st in sim.species_stats():
 		stats_by_sid[int(st["species_id"])] = st
@@ -205,12 +322,17 @@ func _redraw() -> void:
 	)
 	var market_res := int(sim.biome_resolution())
 	var world_sz: float = sim.world_size()
-	# Per-kind transform/colour accumulators for the building MultiMeshes.
+	# Per-kind transform/colour accumulators for the two building families.
 	var build_xf: Array = []
 	var build_col: Array = []
 	for k in Buildings.KIND_COUNT:
 		build_xf.append([])
 		build_col.append([])
+	var struct_xf: Array = []
+	var struct_col: Array = []
+	for k in StructureSprites.KIND_COUNT:
+		struct_xf.append([])
+		struct_col.append([])
 	for sid in _villages.keys():
 		var v: Dictionary = _villages[sid]
 		var stale: float = _now - float(v["seen"])
@@ -218,48 +340,58 @@ func _redraw() -> void:
 			_villages.erase(sid)
 			continue
 		var fade: float = clampf((LINGER - stale) / FADE, 0.0, 1.0)
-		var grow: float = clampf((_now - float(v["born"])) / 0.6, 0.0, 1.0)
-		var eased := 1.0 - pow(1.0 - grow, 3.0)
 		var members: int = v["members"]
 		var pos: Vector2 = v["pos"]
 		var sp: int = MammalSprites.primate_skin_for(sid)
 		var coat := Color(ApeSprites.PAL[ApeSprites.FIELD_ZONE_COLORS[sp]["c"]])
 		var tint := Color(1, 1, 1).lerp(coat, 0.18)
 		tint.a = fade
-		var huts: int = clampi(int(members / 8.0), 1, MAX_HUTS)
-		# Each hut remembers when it first appeared, so huts added as the
-		# village grows get their own construction pop instead of snapping in.
-		var hut_born: Array = v.get("hut_born", [])
-		while hut_born.size() < huts:
-			hut_born.append(_now)
-		if hut_born.size() > huts:
-			hut_born.resize(huts)
-		v["hut_born"] = hut_born
-		for i in huts:
-			# Deterministic ring layout per species: golden-angle step keeps
-			# huts scattered without churn as membership changes the count.
-			var ang: float = sid * 2.39996 + i * 2.39996
-			var r: float = 8.0 + float(i % 3) * 4.5
-			var hp := pos + Vector2.from_angle(ang) * r
-			var s := HUT_SCALE * FxMath.pop_scale((_now - float(hut_born[i])) / POP_SECS)
-			hut_xf.append(Transform2D(0.0, Vector2(s, s), 0.0, hp))
-			hut_col.append(tint)
-		if members >= FARM_MIN_MEMBERS:
-			var farms: int = mini(1 + int(members / 16.0), MAX_FARMS)
-			for i in farms:
-				var ang2: float = sid * 1.7 + i * (TAU / farms)
-				var fp := pos + Vector2.from_angle(ang2) * (24.0 + float(i % 2) * 9.0)
-				var fs := FARM_SCALE * eased
-				# Quarter-turn steps, not the raw bearing: the plot sprite is
-				# 16x16 pixel art, and at an arbitrary angle its furrows aliased
-				# into a ragged brown lozenge. Snapping keeps the edges crisp
-				# and still gives each plot one of two orientations.
-				var frot: float = snappedf(ang2 * 0.5, PI * 0.5)
-				farm_xf.append(Transform2D(frot, Vector2(fs, fs), 0.0, fp))
+		var stats: Dictionary = stats_by_sid.get(sid, {})
+		var adopted: PackedStringArray = stats.get("adopted_inventions", PackedStringArray())
+		var era: int = era_for(adopted, _era_of)
+		var recent: Dictionary = _recent_events.get(sid, {})
+		var flags: int = flags_for(adopted, recent, tick)
+		var sig: String = plan_signature(sid, members, era, flags)
+		if String(v.get("plan_sig", "")) != sig:
+			v["plan"] = VillageLayout.plan(
+				sid, pos, members, era, flags, Callable(biome, "is_water_at")
+			)
+			v["plan_anchor"] = pos
+			v["plan_sig"] = sig
+		var plan: Array = v.get("plan", [])
+		var plan_anchor: Vector2 = v.get("plan_anchor", pos)
+		var delta: Vector2 = pos - plan_anchor
+		var old_born: Dictionary = v.get("plan_born", {})
+		var new_born: Dictionary = {}
+		var smoke_rank := 99
+		var smoke_pos: Vector2 = pos + Vector2(3.0, -12.0)
+		for p in plan:
+			var kind: int = int(p["kind"])
+			var base_pos: Vector2 = p["pos"]
+			var ppos: Vector2 = base_pos + delta
+			var pk: String = "%d:%s" % [kind, base_pos]
+			var first_seen: bool = not old_born.has(pk)
+			var born: float = float(old_born.get(pk, _now))
+			new_born[pk] = born
+			var flip: bool = bool(p.get("flip", false))
+			var base_scale: float = float(StructureSprites.CELL_PX) * STRUCTURE_SCALE
+			var pop: float = FxMath.pop_scale((_now - born) / POP_SECS)
+			var s: float = base_scale * pop
+			var sx: float = -s if flip else s
+			struct_xf[kind].append(Transform2D(0.0, Vector2(sx, s), 0.0, ppos))
+			struct_col[kind].append(tint)
+			var rank: int = _smoke_rank(kind)
+			if rank >= 0 and rank < smoke_rank:
+				smoke_rank = rank
+				smoke_pos = ppos + Vector2(0.0, -8.0)
+			if kind == StructureSprites.RUIN_BURNT and first_seen and _effects != null:
+				_effects.spawn_embers(ppos)
+		v["plan_born"] = new_born
+		v["smoke_pos"] = smoke_pos
 		# Trade building: market/warehouse where the live market-density field
 		# says this village sits on a real market, on a reserved slot north of
-		# the anchor. (Invention landmarks are handled separately below, keyed to
-		# the inventive lineages rather than to settlements.)
+		# the anchor. (Invention landmarks are handled separately below, keyed
+		# to the inventive lineages rather than to settlements.)
 		if not market_field.is_empty():
 			var ci := Buildings.market_cell(pos, world_sz, market_res)
 			if ci >= 0 and ci < market_field.size():
@@ -272,20 +404,23 @@ func _redraw() -> void:
 					build_col[tkind].append(Color(1, 1, 1, fade))
 	_place_invention_landmarks(stats_by_sid, build_xf, build_col)
 	_assign_smoke()
-	_write(_huts.multimesh, hut_xf, hut_col)
-	_write_farms(farm_xf)
 	for k in Buildings.KIND_COUNT:
 		_write(_building_mmis[k].multimesh, build_xf[k], build_col[k])
+	for k in StructureSprites.KIND_COUNT:
+		_write(_structure_mmis[k].multimesh, struct_xf[k], struct_col[k])
 
 
-# Invention landmarks mark the lineages that hold inventions. The sim now gates
-# the tech tree to apes (the PRIMATE archetype: omnivore + large), so only ape
-# lineages ever carry inventions — `adopted_inventions` is populated for them
-# alone, and these landmarks therefore appear only over apes. Each landmark is
-# PINNED at the spot the lineage first reached its tech (a monument), not trailed
-# after a nomadic herd. One pass over the alive arrays builds each species'
-# centroid + head-count; qualifying lineages fold into the linger/fade memory,
-# then draw below into the shared per-kind build accumulators.
+# Invention landmarks mark tech-holding lineages that have NO settlement of
+# their own — a settled species now draws its era architecture (mill, forge,
+# scriptorium, granary…) from VillageLayout instead, so this path skips any
+# sid present in `_villages`. The sim now gates the tech tree to apes (the
+# PRIMATE archetype: omnivore + large), so only ape lineages ever carry
+# inventions — `adopted_inventions` is populated for them alone, and these
+# landmarks therefore appear only over apes. Each landmark is PINNED at the
+# spot the lineage first reached its tech (a monument), not trailed after a
+# nomadic herd. One pass over the alive arrays builds each species' centroid +
+# head-count; qualifying lineages fold into the linger/fade memory, then draw
+# below into the shared per-kind build accumulators.
 func _place_invention_landmarks(
 	stats_by_sid: Dictionary, build_xf: Array, build_col: Array
 ) -> void:
@@ -303,6 +438,8 @@ func _place_invention_landmarks(
 	# Fold qualifying lineages into the landmark memory (pinned pos, latest
 	# signature); draw from memory below so marks linger/fade like villages.
 	for s in counts.keys():
+		if _villages.has(s):
+			continue
 		var cnt: int = counts[s]
 		if cnt < INVENTION_MIN_MEMBERS:
 			continue
@@ -343,7 +480,8 @@ func _place_invention_landmarks(
 
 # Looping gray plumes so villages read as inhabited, not just built. A fixed
 # pool keeps the cost flat; each redraw points the emitters at the largest
-# still-fresh villages. Not wrap-cloned (particle emitters can't share the
+# still-fresh villages, anchored to a hearth/hall/forge placement when the
+# village's plan has one. Not wrap-cloned (particle emitters can't share the
 # MultiMesh trick; same tradeoff as the ember/dust effects).
 func _make_smoke_pool() -> void:
 	var tex := FxMath.radial_texture(16)
@@ -384,7 +522,8 @@ func _assign_smoke() -> void:
 		var v: Dictionary = _villages[sid]
 		# Only villages not yet fading: a plume over a ghost town reads wrong.
 		if _now - float(v["seen"]) <= LINGER - FADE:
-			live.append([int(v["members"]), int(sid), v["pos"] as Vector2])
+			var spos: Vector2 = v.get("smoke_pos", v["pos"])
+			live.append([int(v["members"]), int(sid), spos])
 	# Deterministic tiebreak on species id: sort_custom is not stable, and
 	# equal-membership ties would otherwise swap emitters every redraw.
 	live.sort_custom(
@@ -393,8 +532,7 @@ func _assign_smoke() -> void:
 	for i in _smoke.size():
 		var p := _smoke[i]
 		if i < live.size():
-			# Offset to sit over a hut roof rather than the bare anchor.
-			p.position = (live[i][2] as Vector2) + Vector2(3.0, -12.0)
+			p.position = live[i][2] as Vector2
 			p.emitting = true
 		else:
 			p.emitting = false
@@ -408,49 +546,3 @@ func _write(mm: MultiMesh, xfs: Array, cols: Array) -> void:
 	for i in m:
 		mm.set_instance_transform_2d(i, xfs[i])
 		mm.set_instance_color(i, cols[i])
-
-
-func _write_farms(xfs: Array) -> void:
-	var mm: MultiMesh = _farms.multimesh
-	var m := xfs.size()
-	if m > mm.instance_count:
-		mm.instance_count = m
-	mm.visible_instance_count = m
-	for i in m:
-		mm.set_instance_transform_2d(i, xfs[i])
-		mm.set_instance_color(i, Color(1, 1, 1))
-
-
-# 16x16 hut: pale wood walls, pitched thatch roof, dark door, auto-outline.
-func _hut_texture() -> ImageTexture:
-	var blocks: Array = [
-		[6, 2, 4, 1, "B"],
-		[5, 3, 6, 1, "B"],
-		[4, 4, 8, 1, "B"],
-		[3, 5, 10, 1, "B"],
-		[2, 6, 12, 1, "b"],
-		[3, 7, 10, 7, "t"],
-		[7, 9, 3, 5, "K"],
-		[3, 7, 10, 1, "m"],
-	]
-	var img: Image = ApeSprites._build_cell(blocks)
-	img.flip_y()
-	return ImageTexture.create_from_image(img)
-
-
-# 16x16 tilled patch: dark furrows on bare earth with a few crop sprouts.
-func _farm_texture() -> ImageTexture:
-	var blocks: Array = [
-		[1, 1, 14, 14, "b"],
-		[2, 3, 12, 1, "K"],
-		[2, 6, 12, 1, "K"],
-		[2, 9, 12, 1, "K"],
-		[2, 12, 12, 1, "K"],
-		[4, 2, 1, 1, "h"],
-		[9, 5, 1, 1, "h"],
-		[12, 8, 1, 1, "h"],
-		[6, 11, 1, 1, "h"],
-	]
-	var img: Image = ApeSprites._build_cell(blocks)
-	img.flip_y()
-	return ImageTexture.create_from_image(img)
