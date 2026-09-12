@@ -114,8 +114,9 @@ var _step_dist: PackedFloat32Array = PackedFloat32Array()
 # watcher) live in viewer_effects.gd, created as a child in _ready.
 var _effects: Node2D = null
 var _moving_sample: PackedVector2Array = PackedVector2Array()
-var _tracks_mmi: MultiMeshInstance2D = null
-var _tracks: Array = []  # entries: [pos: Vector2, ttl: float]
+# Footstep tracks + combat/trade segment trails live in trail_layer.gd,
+# created as a child in _ready; it owns the Tracks MMI (see tracks_mmi()).
+var _trail_layer: Node2D = null
 var _climate: CanvasModulate = null
 var _settlement_layer: Node2D = null
 var _emote_layer: Node2D = null
@@ -220,18 +221,15 @@ func _ready() -> void:
 		add_child(dmi)
 		move_child(dmi, carcasses.get_index() + 1 + b)
 		_death_mmis.append(dmi)
-	# Footstep tracks: walkers leave a short-lived dotted trail behind them.
-	var tmm := MultiMesh.new()
-	tmm.transform_format = MultiMesh.TRANSFORM_2D
-	tmm.use_colors = true
-	tmm.mesh = bodies.multimesh.mesh
-	_tracks_mmi = MultiMeshInstance2D.new()
-	_tracks_mmi.name = "Tracks"
-	_tracks_mmi.multimesh = tmm
-	_tracks_mmi.texture = disc
-	_tracks_mmi.z_index = -1
-	add_child(_tracks_mmi)
-	move_child(_tracks_mmi, carcasses.get_index())
+	# Trail pools (footstep tracks + segment trails), split from this file.
+	# Sits where the Tracks MMI used to be added so tree order is unchanged;
+	# the scene's Streaks/TradeRoutes multimeshes are passed in so their
+	# authored z order and additive material stay in charge of the draw.
+	_trail_layer = preload("res://scripts/trail_layer.gd").new()
+	_trail_layer.name = "TrailLayer"
+	add_child(_trail_layer)
+	move_child(_trail_layer, carcasses.get_index())
+	_trail_layer.setup(streaks.multimesh, trade_routes.multimesh, bodies.multimesh.mesh, disc)
 	# Global climate grade: a subtle warm/cool wash tracking the sim's
 	# environmental optimum (affects the world canvas, not the UI layer).
 	_climate = CanvasModulate.new()
@@ -364,38 +362,6 @@ func _layout_hud() -> void:
 			c2.position.y += shift.y
 
 
-# Footsteps: each walker sampled this frame drops a small fading track mark,
-# so migration paths and foraging loops read as trampled trails at close zoom.
-const TRACK_TTL: float = 1.4
-const TRACK_CAP: int = 256
-
-
-func _update_tracks(delta: float) -> void:
-	if _tracks_mmi == null:
-		return
-	if not paused:
-		for pos in _moving_sample:
-			if _tracks.size() >= TRACK_CAP:
-				_tracks.pop_front()
-			_tracks.append([pos, TRACK_TTL])
-	var write := 0
-	for t in _tracks:
-		t[1] -= delta
-		if t[1] > 0.0:
-			_tracks[write] = t
-			write += 1
-	_tracks.resize(write)
-	var mm: MultiMesh = _tracks_mmi.multimesh
-	var m := _tracks.size()
-	if m > mm.instance_count:
-		mm.instance_count = m
-	mm.visible_instance_count = m
-	for i in m:
-		var a: float = 0.20 * float(_tracks[i][1]) / TRACK_TTL
-		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(1.6, 1.6), 0.0, _tracks[i][0]))
-		mm.set_instance_color(i, Color(0.22, 0.18, 0.13, a))
-
-
 # The world is a torus but rendering is not: a camera near a seam sees agents
 # vanish at the edge. Duplicate every agent layer into the 8 neighboring world
 # offsets; each clone shares its source's MultiMesh and texture, so per-frame
@@ -412,7 +378,7 @@ func _make_wrap_clones() -> void:
 	move_child(wrap_box, module_layers.get_index() + 1)
 	var sources: Array[MultiMeshInstance2D] = _body_mmis.duplicate()
 	sources.append_array(_death_mmis)
-	sources.append_array([carcasses, flashes, streaks, trade_routes, _tracks_mmi])
+	sources.append_array([carcasses, flashes, streaks, trade_routes, _trail_layer.tracks_mmi()])
 	for src in sources:
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
@@ -505,22 +471,10 @@ func _process(delta: float) -> void:
 	if flash_count > 0:
 		($Camera2D as Camera2D).add_trauma(minf(0.03, 0.0025 * flash_count))
 	var world: float = sim.world_size()
-	_update_segment_trail(
-		_streak_trail, streaks.multimesh, streak_segs, streak_cols, STREAK_TTL, 1.0, 0.85, world
-	)
-	_update_segment_trail(
-		_trade_trail,
-		trade_routes.multimesh,
-		trade_segs,
-		trade_cols,
-		TRADE_TTL,
-		0.5,
-		0.6,
-		world,
-		true
+	_trail_layer.update(
+		delta, _moving_sample, paused, streak_segs, streak_cols, trade_segs, trade_cols, world
 	)
 	_effects.update(delta, _moving_sample, paused)
-	_update_tracks(delta)
 	# Hearth smoke: settled sites breathe an occasional ember wisp.
 	_ember_ambient_t += delta
 	if _ember_ambient_t > 1.6:
@@ -975,79 +929,6 @@ func _refresh_flashes() -> int:
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(6.0, 6.0), 0.0, pts[i]))
 		mm.set_instance_color(i, Color(1.0, 0.92, 0.45, 0.95))
 	return m
-
-
-# Segment trails: world-space links kept on screen for a few ticks as fading
-# tracers. Combat streaks (attacker→target) are wide, bright, and brief so
-# ranged (Spines) volleys read as volleys; trade routes (trader→partner) are
-# thin, dim, and long-lived so recurring swaps along species borders
-# accumulate into visible lanes. Both tint to the initiator's genome hue.
-# Streaks/flashes draw above everything (they are events in the air); the trade
-# lanes draw at ground level, under bodies and huts (z=-2 in the scene) — over
-# a busy market they used to pile up into bright coloured scribbles across the
-# village roofs instead of reading as paths worn between settlements.
-# Seconds, not frames: as integer per-frame counts a streak lived twice as long
-# in wall-clock at 30 fps. Values match the old 8 and 24 frames at 60 fps.
-const STREAK_TTL: float = 0.133
-const TRADE_TTL: float = 0.4
-var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, expiry: float, color]
-var _trade_trail: Array = []  # entries: [from: Vector2, to: Vector2, expiry: float, color]
-
-
-# Append this tick's segments, age the trail, then draw each survivor as a
-# tinted quad. Segments use the shortest-path torus delta: a hop across the
-# seam is really a short step the other way, and the wrap clones continue it.
-func _update_segment_trail(
-	trail: Array,
-	mm: MultiMesh,
-	segs: PackedVector2Array,
-	cols: PackedColorArray,
-	ttl: float,
-	width: float,
-	max_alpha: float,
-	world: float,
-	flow: bool = false
-) -> void:
-	# Absolute expiry, so ageing is wall-clock with no delta threaded through.
-	var now: float = Time.get_ticks_msec() / 1000.0
-	for i in int(segs.size() / 2.0):
-		trail.append([segs[2 * i], segs[2 * i + 1], now + ttl, cols[i]])
-	# Perf: cap the trail at the multimesh budget, dropping the oldest first.
-	while trail.size() > mm.instance_count:
-		trail.pop_front()
-	# Compact out the expired.
-	var write := 0
-	for read_i in trail.size():
-		var s: Array = trail[read_i]
-		if s[2] > now:
-			trail[write] = s
-			write += 1
-	trail.resize(write)
-	var m: int = mini(trail.size(), mm.instance_count)
-	mm.visible_instance_count = m
-	for i in m:
-		var from: Vector2 = trail[i][0]
-		var d: Vector2 = trail[i][1] - from
-		if d.x > world * 0.5:
-			d.x -= world
-		elif d.x < -world * 0.5:
-			d.x += world
-		if d.y > world * 0.5:
-			d.y -= world
-		elif d.y < -world * 0.5:
-			d.y += world
-		var seg_len: float = maxf(d.length(), 0.001)
-		var mid: Vector2 = from + d * 0.5
-		mm.set_instance_transform_2d(i, Transform2D(d.angle(), Vector2(seg_len, width), 0.0, mid))
-		var c: Color = trail[i][3]
-		c.a = max_alpha * clampf((float(trail[i][2]) - now) / ttl, 0.0, 1.0)
-		if flow:
-			# Directional pulses: project the midpoint onto the segment's own
-			# axis so the bright spots march from `from` toward `to`. Collinear
-			# neighbours of one route stay phase-continuous; bends and torus
-			# seams introduce a small phase jump (invisible in practice).
-			c.a *= FxMath.flow_pulse(mid.dot(d / seg_len), now)
-		mm.set_instance_color(i, c)
 
 
 func _refresh_module_layers() -> void:

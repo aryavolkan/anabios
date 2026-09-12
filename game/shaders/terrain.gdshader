@@ -21,6 +21,23 @@ uniform float world_size = 512.0;      // sim world extent, for seamless shimmer
 uniform float sea_level = 0.35;        // viewer-derived water line, for depth shading
 uniform float vignette = 0.12;         // corner darkening on terrain (0 = off)
 
+// Pixel-art ground tiles (terrain_sprites.gd atlas), blended into the land
+// branch only — water keeps its living treatment, and the data-overlay
+// passthrough below hides tiles automatically. `terrain_ids` is a res×res R8
+// image of TerrainType discriminants (Water = 0 .. Tundra = 8) from
+// `sim.biome_terrain_ids()`; exact ids beat re-classifying the lossy
+// biomass/succession-lerped colors. The atlas MUST stay a square grid
+// (extreme-aspect atlases corrupt on Metal — see terrain_sprites.gd).
+uniform sampler2D tile_atlas : filter_nearest, repeat_disable;
+uniform sampler2D terrain_ids : filter_nearest, repeat_disable;
+uniform float tiles_enabled = 0.0; // biome_renderer flips this once textures are wired
+uniform float tile_mix = 0.7;      // tile weight over the flat biome color at full detail
+uniform float biome_res = 128.0;   // cells per axis, matches terrain_ids size
+uniform float tile_variants = 3.0; // keep in sync with terrain_sprites.gd VARIANTS
+uniform float atlas_cols = 8.0;    // keep in sync with terrain_sprites.gd ATLAS_COLS
+uniform float atlas_cell_px = 16.0;
+uniform float atlas_px = 128.0;
+
 // World-space position of this fragment. The ground is drawn as 9 separate tiles
 // (origin + 8 torus wrap copies), each with its own 0..1 UV; deriving the water
 // shimmer from world position instead of per-tile UV keeps the wave continuous
@@ -98,6 +115,32 @@ void fragment() {
 		// A crisp bright rim right at the waterline (surf).
 		outc += vec3(0.18, 0.26, 0.28) * smoothstep(0.24, 0.26, coast) * (1.0 - smoothstep(0.5, 0.9, coast));
 	} else {
+		// Pixel-art tile detail: pick this cell's tile family from its exact
+		// terrain id, a variant from a per-cell hash (same hash family as
+		// terrain_scatter.gd so platforms can't drift), and blend it under the
+		// relief/beach passes so lushness, succession and hillshade still show
+		// through. Detail dissolves back to the flat biome color as a tile
+		// texel shrinks below a screen pixel (whole-world framings), so far
+		// zoom looks exactly like the pre-tile ground.
+		vec3 land_base = base;
+		if (tiles_enabled > 0.5) {
+			vec2 cellf = UV * biome_res;
+			vec2 cell = floor(cellf);
+			float tid = floor(texture(terrain_ids, (cell + 0.5) / biome_res).r * 255.0 + 0.5);
+			if (tid > 0.5) {
+				float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+				float variant = min(floor(h * tile_variants), tile_variants - 1.0);
+				float cidx = tid * tile_variants + variant;
+				vec2 acell = vec2(mod(cidx, atlas_cols), floor(cidx / atlas_cols));
+				vec2 tuv = (acell + fract(cellf)) * (atlas_cell_px / atlas_px);
+				vec3 tile = texture(tile_atlas, tuv).rgb;
+				float texel_w = (world_size / biome_res) / atlas_cell_px;
+				float texels_per_px = fwidth(world_pos.x) / max(texel_w, 1e-4);
+				float detail = smoothstep(4.5, 1.2, texels_per_px);
+				land_base = mix(base, tile, tile_mix * detail);
+			}
+		}
+
 		// Land relief: sample the packed real elevation (biome texture alpha) at
 		// the four neighbours and light the height gradient directionally. This
 		// replaces the old luminance-as-height fake so mountain ranges (not
@@ -109,7 +152,7 @@ void fragment() {
 		vec2 grad = vec2(eR - eL, eD - eU);
 		float shade = dot(normalize(light_dir), grad) * relief_strength;
 		// Brighten slopes facing the light, darken those facing away.
-		outc = base * (1.0 + clamp(shade, -0.5, 0.5));
+		outc = land_base * (1.0 + clamp(shade, -0.5, 0.5));
 
 		// Sandy shoreline on the land side: a thin warm beach band right at the
 		// waterline, fading inland, so coasts read as coast rather than a hard
