@@ -7,17 +7,13 @@ const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
 const FieldAgentShader = preload("res://shaders/field_agent.gdshader")
 const EmoteLayer = preload("res://scripts/emote_layer.gd")
+const AgentLayer = preload("res://scripts/agent_layer.gd")
 
 # Number of sim ticks to run per rendered frame. Speeds: 1, 4, 16, 64.
 @export var ticks_per_frame: int = 1
 @export var paused: bool = false
 
 const MODULE_COLORS: PackedColorArray = Palette.MODULE_COLORS
-# Bodies are 0.5–3.0 world units across (genome size). Scale them up generously
-# with a floor so the hominin silhouette (head, limbs) reads as a figure at the
-# default cluster-framed zoom — not just when zoomed all the way in.
-const BODY_SCALE: float = 7.0
-const BODY_MIN: float = 6.0
 const GLYPH_SIZE: float = 1.6
 
 @onready var sim = $Simulation
@@ -34,86 +30,23 @@ const GLYPH_SIZE: float = 1.6
 # One MultiMesh per ape species ($Bodies is species 0; the rest are created in
 # _ready). Each draws its own small 4-pose atlas — a single wide all-species
 # atlas corrupts on the canvas MultiMesh path (wide-thin textures sample
-# garbage there), and per-species meshes dodge it entirely.
+# garbage there), and per-species meshes dodge it entirely. Shared with
+# AgentLayer (see setup() in _ready): main.gd owns the nodes (scene
+# structure, torus wrap clone sources) and their per-frame shader parameter;
+# AgentLayer owns the per-frame instance transforms/colours/custom data.
 var _body_mmis: Array[MultiMeshInstance2D] = []
 var _glyph_clones: Array[MultiMeshInstance2D] = []
 
-# Smooth-motion state. Agents teleport once per tick; rendering eases each
-# body toward its latest tick position so movement glides. Identity is by
-# agent id (alive indices reshuffle as agents die): both id arrays ascend, so
-# a two-pointer merge finds each agent's last smoothed position in O(n).
-# Only a seam crossing snaps: on a wrapped world a real displacement is at
-# most half the map per axis. SMOOTH is the approach at 60 fps, scaled by the
-# frame delta AND ticks_per_frame — one frame of 64x covers 64 ticks, so it
-# needs almost no easing and time-lapse stays crisp instead of mushy.
-const SMOOTH: float = 0.35
-# Action poses in the field atlases (two frames each after the four gait
-# poses), picked per agent from the sim signals in _refresh_bodies. Encoded
-# into instance custom data as act / ACT_SCALE — custom data clamps at 1.0,
-# so the scale leaves headroom for poses past 4.
-const ACT_EAT := 1.0
-const ACT_FIGHT := 2.0
-const ACT_TRADE := 3.0
-const ACT_FLEE := 4.0
-const ACT_SLEEP := 5.0
-const ACT_DRINK := 6.0
-const ACT_MATE := 7.0
-const ACT_SCAN := 8.0
-const ACT_CELEBRATE := 9.0
-const ACT_SPEAR := 10.0
-const ACT_BOW := 11.0
-const ACT_SCALE := 13.0
-# Mood discriminants from the sim's mood.rs (alive_moods) that drive poses.
-# All-CONTENT when the scenario's affect layer is off.
-const MOOD_CONTENT := 0
-const MOOD_SEEK_FOOD := 1
-const MOOD_SEEK_WATER := 2
-const MOOD_SLEEP := 3
-const MOOD_FLEE := 4
-const MOOD_FIGHT := 5
-const MOOD_SEEK_MATE := 6
-const MOOD_MATE := 7
-# Same band as the sim's interact::FIRE_THRESHOLD: fire_intent crosses 0.5 on
-# the strike, so the build-up above it is the visible hunt.
-const FIRE_POSE_THRESHOLD := 0.5
-const DEATH_TTL: float = 1.4
-# Seconds for a death ghost to topple from tilted to flat (ease-out-back, so
-# it rolls a hair past flat and settles — a body hitting the ground).
-const DEATH_FALL: float = 0.35
-const DEATH_CAP: int = 512
-const BIRTH_POP: float = 0.3
-var _prev_ids: PackedInt32Array = PackedInt32Array()
-var _prev_smooth: PackedVector2Array = PackedVector2Array()
-var _prev_sizes: PackedFloat32Array = PackedFloat32Array()
-var _prev_bucket: PackedInt32Array = PackedInt32Array()
-# Last frame's per-agent body colour (coat hue for quads, white for the
-# self-coloured hominin atlases), kept in sync with the other _prev_* arrays so
-# a death ghost can inherit its agent's colour instead of a flat grey.
-var _prev_color: PackedColorArray = PackedColorArray()
-var _death_mmis: Array[MultiMeshInstance2D] = []
-var _death_effects: Array = []
-var _birth_times: Dictionary = {}
-# Per-id facing: (committed side 0 right / 1 left, eased value, low-passed
-# heading x). Turns ease through a horizontal squash, not a snap. See FxMath.
-var _facing: Dictionary = {}
-# Per-id gait cycle position (0..1 = one contact -> passing -> contact ->
-# passing loop), advanced by the distance a body actually covers on screen so
-# the cadence tracks real speed instead of a fixed frame rate. Frozen while an
-# agent stands still, where it doubles as that agent's stable idle-bob offset.
-var _gait: Dictionary = {}
-# Per-id locomotion state (hold credit, blended walk weight) — see FxMath.
-var _locomotion: Dictionary = {}
-# Per-id action state (current pose, remaining hold time), debounced so a
-# threshold crossing cannot interrupt a two-frame action at an arbitrary beat.
-var _actions: Dictionary = {}
-# Distance each body moved on screen this frame, parallel to the alive arrays;
-# feeds the gait accumulator above. Filled in the smoothing pass.
-var _step_dist: PackedFloat32Array = PackedFloat32Array()
+# Field-agent body pass (smoothing, gait/facing/action, colour, death
+# ghosts): split into its own layer — see agent_layer.gd's header — and,
+# since Phase 3 step 1
+# (docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md, §6
+# Phase 3), culled to the agents inside the camera view.
+var _agent_layer: Node2D = null
 
 # Tier 2 effects (embers, firelight, ambient weather, bloom, codex-event
 # watcher) live in viewer_effects.gd, created as a child in _ready.
 var _effects: Node2D = null
-var _moving_sample: PackedVector2Array = PackedVector2Array()
 # Footstep tracks + combat/trade segment trails live in trail_layer.gd,
 # created as a child in _ready; it owns the Tracks MMI (see tracks_mmi()).
 var _trail_layer: Node2D = null
@@ -121,10 +54,6 @@ var _climate: CanvasModulate = null
 var _settlement_layer: Node2D = null
 var _emote_layer: Node2D = null
 var _ember_ambient_t: float = 0.0
-var _fight_pts: PackedVector2Array = PackedVector2Array()
-var _trade_pts: PackedVector2Array = PackedVector2Array()
-var _prev_energy: PackedFloat32Array = PackedFloat32Array()
-var _match_prev: PackedInt32Array = PackedInt32Array()
 var _animation_time: float = 0.0
 
 
@@ -154,8 +83,8 @@ func _ready() -> void:
 	# The agents are the apes of DIT: render each as an 8-bit hominin in its
 	# species' own colours instead of a plain disc, one MultiMesh + pose atlas
 	# per bucket, with the [C] overlays multiplying on top as a tint. The
-	# shader reads per-instance animation state written each tick in
-	# _refresh_bodies. Texture + material are set BEFORE _make_wrap_clones() so
+	# shader reads per-instance animation state written each tick by
+	# AgentLayer.refresh(). Texture + material are set BEFORE _make_wrap_clones() so
 	# the 8 torus wrap clones inherit them; use_custom_data exposes
 	# INSTANCE_CUSTOM (shared by the clones via the same MultiMesh).
 	# Per-bucket gait cadence and rig kind come from the archetype registry
@@ -180,14 +109,14 @@ func _ready() -> void:
 		var sp_mat := ShaderMaterial.new()
 		sp_mat.shader = FieldAgentShader
 		sp_mat.set_shader_parameter("frames", MammalSprites.POSE_COUNT)
-		sp_mat.set_shader_parameter("act_scale", ACT_SCALE)
+		sp_mat.set_shader_parameter("act_scale", AgentLayer.ACT_SCALE)
 		sp_mat.set_shader_parameter("walk_fps", MammalSprites.bucket_gait_fps(b))
 		sp_mat.set_shader_parameter("rig_kind", MammalSprites.bucket_rig_kind(b))
 		sp_mat.set_shader_parameter("animation_time", 0.0)
 		mmi.material = sp_mat
 	# use_custom_data can only be toggled at instance_count 0; the scene's
 	# Bodies ships with a pre-grown buffer, so clear first, enable, then
-	# _refresh_bodies re-grows it on the first tick. (The code-created
+	# AgentLayer.refresh() re-grows it on the first tick. (The code-created
 	# species meshes start empty and already have it enabled.)
 	bodies.multimesh.instance_count = 0
 	bodies.multimesh.use_custom_data = true
@@ -204,23 +133,13 @@ func _ready() -> void:
 	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	flashes.material = add_mat
 	streaks.material = add_mat
-	# Death ghosts: one MultiMesh per species drawing the fallen pose, fed by
-	# ids that vanish from the alive list in _refresh_bodies. They sit above
-	# the carcass discs (z -5) but below living bodies.
-	for b in MammalSprites.BUCKET_COUNT:
-		var dmm := MultiMesh.new()
-		dmm.transform_format = MultiMesh.TRANSFORM_2D
-		dmm.use_colors = true
-		dmm.mesh = bodies.multimesh.mesh
-		var dmi := MultiMeshInstance2D.new()
-		dmi.name = "Deaths%d" % b
-		dmi.multimesh = dmm
-		dmi.texture = MammalSprites.bucket_fallen(b)
-		dmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		dmi.z_index = -4
-		add_child(dmi)
-		move_child(dmi, carcasses.get_index() + 1 + b)
-		_death_mmis.append(dmi)
+	# Far-zoom (< 1x) density-dot stand-in for individual agent bodies; hidden
+	# whenever the camera is above 1x (AgentLayer draws real bodies there).
+	var density := preload("res://scripts/density_layer.gd").new()
+	density.name = "DensityLayer"
+	add_child(density)
+	move_child(density, bodies.get_index() + MammalSprites.BUCKET_COUNT)
+	density.setup(sim, $Camera2D as Camera2D)
 	# Trail pools (footstep tracks + segment trails), split from this file.
 	# Sits where the Tracks MMI used to be added so tree order is unchanged;
 	# the scene's Streaks/TradeRoutes multimeshes are passed in so their
@@ -247,6 +166,16 @@ func _ready() -> void:
 	_emote_layer.name = "EmoteLayer"
 	add_child(_emote_layer)
 	_emote_layer.setup()
+	# Field-agent body pass (agent_layer.gd): smoothing, gait/facing/action,
+	# colour and the death ghosts, culled to the camera's visible set (§6
+	# Phase 3). Must be set up before _make_wrap_clones() below, which sources
+	# its death-ghost meshes from it the way it already does _trail_layer's
+	# tracks_mmi().
+	_agent_layer = AgentLayer.new()
+	_agent_layer.name = "AgentLayer"
+	add_child(_agent_layer)
+	move_child(_agent_layer, carcasses.get_index())
+	_agent_layer.setup(sim, _body_mmis, overlay, $Camera2D as Camera2D, _effects, _emote_layer)
 	# Settlement layer: hut clusters + farms at the codex settlement sites.
 	_settlement_layer = preload("res://scripts/settlement_layer.gd").new()
 	_settlement_layer.name = "SettlementLayer"
@@ -379,7 +308,7 @@ func _make_wrap_clones() -> void:
 	add_child(wrap_box)
 	move_child(wrap_box, module_layers.get_index() + 1)
 	var sources: Array[MultiMeshInstance2D] = _body_mmis.duplicate()
-	sources.append_array(_death_mmis)
+	sources.append_array(_agent_layer.death_mmis())
 	sources.append_array([carcasses, flashes, streaks, trade_routes, _trail_layer.tracks_mmi()])
 	for src in sources:
 		for gy in range(-1, 2):
@@ -464,19 +393,27 @@ func _process(delta: float) -> void:
 	var streak_cols: PackedColorArray = sim.combat_streak_colors()
 	var trade_segs: PackedVector2Array = sim.trade_routes()
 	var trade_cols: PackedColorArray = sim.trade_route_colors()
-	_fight_pts = _hotspots(streak_segs, 64)
-	_trade_pts = _hotspots(trade_segs, 64)
-	_refresh_bodies(delta)
+	var fight_pts: PackedVector2Array = _hotspots(streak_segs, 64)
+	var trade_pts: PackedVector2Array = _hotspots(trade_segs, 64)
+	_agent_layer.refresh(delta, _animation_time, ticks_per_frame, fight_pts, trade_pts)
+	# Module-glyph pips are a separate layer main.gd still owns directly (not
+	# moved to AgentLayer): mirror the gate AgentLayer.refresh() used to apply
+	# internally when the population hits zero.
+	if module_layers.visible:
+		if sim.alive_count() == 0:
+			_clear_module_layers()
+		else:
+			_refresh_module_layers()
 	_refresh_carcasses()
-	_refresh_death_effects(delta)
 	var flash_count := _refresh_flashes()
 	if flash_count > 0:
 		($Camera2D as Camera2D).add_trauma(minf(0.03, 0.0025 * flash_count))
 	var world: float = sim.world_size()
+	var moving_sample: PackedVector2Array = _agent_layer.moving_sample()
 	_trail_layer.update(
-		delta, _moving_sample, paused, streak_segs, streak_cols, trade_segs, trade_cols, world
+		delta, moving_sample, paused, streak_segs, streak_cols, trade_segs, trade_cols, world
 	)
-	_effects.update(delta, _moving_sample, paused)
+	_effects.update(delta, moving_sample, paused)
 	# Hearth smoke: settled sites breathe an occasional ember wisp.
 	_ember_ambient_t += delta
 	if _ember_ambient_t > 1.6:
@@ -497,391 +434,6 @@ func _hotspots(segs: PackedVector2Array, cap: int) -> PackedVector2Array:
 	for i in m:
 		out.append(segs[2 * i])
 	return out
-
-
-func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
-	var n: int = int(sim.alive_count())
-	if n == 0:
-		for mmi in _body_mmis:
-			mmi.multimesh.visible_instance_count = 0
-		if module_layers.visible:
-			_clear_module_layers()
-		_prev_ids = PackedInt32Array()
-		_prev_smooth = PackedVector2Array()
-		_prev_sizes = PackedFloat32Array()
-		_prev_bucket = PackedInt32Array()
-		_prev_energy = PackedFloat32Array()
-		_prev_color = PackedColorArray()
-		_actions.clear()
-		_emote_layer.refresh(_animation_time, delta)
-		return
-
-	var positions: PackedVector2Array = sim.alive_positions()
-	var ids: PackedInt32Array = sim.alive_ids()
-	var sizes: PackedFloat32Array = sim.alive_sizes()
-	var rots: PackedFloat32Array = sim.alive_rotations()
-	var sp_ids: PackedInt32Array = sim.alive_species_ids()
-	var energies: PackedFloat32Array = sim.alive_energy()
-	# Pose-driving intent channels: fire_intent is written for every agent
-	# every tick in any world (the hunt signal); the mood column is the
-	# affect layer's behavior label (fight/flee/sleep) and stays all-CONTENT
-	# in flag-off worlds.
-	var fire_intents: PackedFloat32Array = sim.alive_fire_intent()
-	var moods: PackedInt32Array = sim.alive_moods() if sim.affect_active() else PackedInt32Array()
-	# Held-invention bits (all-zero in flag-off worlds) arm the fight pose.
-	var inv_masks: PackedInt32Array = sim.alive_invention_masks()
-	var body_colors: PackedColorArray = _body_colors(n)
-	var have_rots: bool = rots.size() == n
-	var have_sp: bool = sp_ids.size() == n
-	var have_ids: bool = ids.size() == n
-	var have_en: bool = energies.size() == n
-	var have_fire: bool = fire_intents.size() == n
-	var have_moods: bool = moods.size() == n
-
-	# Smoothed render positions: merge-join the current ascending id array
-	# against last frame's to find each agent's previous smoothed position,
-	# then ease toward the new tick position. Becomes next frame's prev.
-	# The approach rate is scaled to the frame delta: at 60 fps this is
-	# exactly SMOOTH per frame, at 30 fps twice that — the same glide.
-	var tick_rate: float = maxf(float(ticks_per_frame), 1.0)
-	var k: float = 1.0 - pow(1.0 - SMOOTH, delta * 60.0 * tick_rate)
-	var half_world: float = maxf(float(sim.world_size()) * 0.5, 1.0)
-	var now: float = Time.get_ticks_msec() / 1000.0
-	var smooth: PackedVector2Array = positions
-	_match_prev = PackedInt32Array()
-	# Reset the per-frame gait input; a body with no previous position (born
-	# this frame, or snapped across the torus seam) contributes no stride.
-	_step_dist.resize(n)
-	_step_dist.fill(0.0)
-	if have_ids:
-		smooth = PackedVector2Array()
-		smooth.resize(n)
-		_match_prev.resize(n)
-		_match_prev.fill(-1)
-		var p := 0
-		var pn: int = _prev_ids.size()
-		for i in n:
-			var id: int = ids[i]
-			while p < pn and _prev_ids[p] < id:
-				_on_agent_death(_prev_ids[p], p)
-				p += 1
-			var target: Vector2 = positions[i]
-			if p < pn and _prev_ids[p] == id:
-				_match_prev[i] = p
-				var from: Vector2 = _prev_smooth[p]
-				var d: Vector2 = target - from
-				if absf(d.x) < half_world and absf(d.y) < half_world:
-					smooth[i] = from.lerp(target, k)
-					# Measure the *rendered* step, not the sim step: the feet
-					# have to keep pace with the glide the viewer actually
-					# draws, which lags the tick position.
-					_step_dist[i] = from.distance_to(smooth[i])
-				else:
-					smooth[i] = target
-				# Consume the matched entry: without this the next id's catch-up
-				# loop reports this very agent dead while it is still alive.
-				p += 1
-			else:
-				smooth[i] = target
-				if not _birth_times.has(id):
-					_birth_times[id] = now
-					if _effects != null:
-						_effects.spawn_dust(target)
-		while p < pn:
-			_on_agent_death(_prev_ids[p], p)
-			p += 1
-		_prev_ids = ids
-		_prev_smooth = smooth
-		_prev_sizes = sizes
-		_prev_energy = energies
-		_prev_color = body_colors
-
-	# Zoom-compensated floor: as the camera pulls out, the minimum body size
-	# grows so hominin figures stay legible at the world overview instead of
-	# dissolving into dots.
-	var zoom_boost := 1.0
-	var cam := get_node_or_null("Camera2D") as Camera2D
-	if cam != null:
-		zoom_boost = clampf(1.2 / cam.zoom.x, 1.0, 3.0)
-	var min_body := BODY_MIN * zoom_boost
-	# First few walkers this frame feed the close-zoom dust puffs.
-	_moving_sample = PackedVector2Array()
-
-	# Bucket alive indices by render bucket — one MultiMesh per bucket.
-	var diet: PackedFloat32Array = sim.alive_diet()
-	var live: PackedInt32Array = _livestock_flags(n)
-	var buckets: Array = []
-	for b in MammalSprites.BUCKET_COUNT:
-		buckets.append(PackedInt32Array())
-	var bucket_ix := PackedInt32Array()
-	bucket_ix.resize(n)
-	for i in n:
-		var arch := (
-			MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0)
-			if have_sp
-			else MammalSprites.PRIMATE
-		)
-		var b := MammalSprites.bucket_of(arch, sp_ids[i]) if have_sp else 0
-		bucket_ix[i] = b
-		buckets[b].append(i)
-	# _prev_bucket must stay in sync with _prev_ids/_prev_smooth/_prev_sizes,
-	# which only refresh when have_ids holds (see the frame-cache block above);
-	# gating this the same way keeps the death-ghost bucket lookup (below)
-	# aligned with the ids it indexes instead of desyncing on off-frames.
-	if have_ids:
-		_prev_bucket = bucket_ix
-
-	for b in MammalSprites.BUCKET_COUNT:
-		var mm: MultiMesh = _body_mmis[b].multimesh
-		var idx: PackedInt32Array = buckets[b]
-		var m: int = idx.size()
-		var gait_fps: float = MammalSprites.bucket_gait_fps(b)
-		if m > mm.instance_count:
-			mm.instance_count = m
-		mm.visible_instance_count = m
-		for j in m:
-			var i: int = idx[j]
-			var sz: float = maxf(sizes[i] * BODY_SCALE, min_body)
-			# New agents squash in, then spring to full size with an overshoot
-			# (anticipation-then-pop) instead of blinking into existence;
-			# after BIRTH_POP seconds the scale is exactly 1.
-			if have_ids:
-				var age: float = now - float(_birth_times.get(ids[i], now - 1.0))
-				if age < BIRTH_POP:
-					sz *= FxMath.birth_scale(age / BIRTH_POP)
-			# Upright: the hominin stands, not spins — heading drives the
-			# walk shader (walk weight + facing), not the transform rotation.
-			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
-			mm.set_instance_transform_2d(j, t)
-			mm.set_instance_color(j, body_colors[i])
-			# Per-instance animation state for the field_agent shader. The sim
-			# reports heading exactly 0.0 when velocity ≈ 0, which doubles as
-			# the idle flag; facing is the heading's x-sign.
-			var rot: float = rots[i] if have_rots else 0.0
-			# `moving` is the blended 0..1 walk weight the shader mixes its
-			# secondary motion with; `walking` is the debounced state picking
-			# the pose and driving the gait. Splitting them stops the sprite
-			# popping on the sim's flickering heading (~3.5 times a second).
-			var walking: bool = rot != 0.0
-			var moving: float = 1.0 if walking else 0.0
-			if have_ids:
-				var loco: Vector2 = FxMath.step_locomotion(
-					_locomotion.get(ids[i], Vector2.ZERO), walking, delta
-				)
-				_locomotion[ids[i]] = loco
-				walking = loco.x > 0.0
-				moving = loco.y
-			if walking and _moving_sample.size() < 8:
-				_moving_sample.append(smooth[i])
-			# Ease the facing mirror per id: the shader's fractional mix turns
-			# the transition into a quick flip-squash rather than a snap. The
-			# side is deadbanded and held while stopped (see FxMath), so a
-			# flickering heading cannot strobe the sprite.
-			var cx: float = cos(rot)
-			var face_left := 1.0 if cx < 0.0 else 0.0
-			if have_ids:
-				var face: Vector3 = FxMath.step_facing(
-					_facing.get(ids[i], Vector3(face_left, face_left, cx)), cx, walking, delta
-				)
-				_facing[ids[i]] = face
-				face_left = face.y
-			# Gait cycle position, paced by the distance this body covered on
-			# screen so the feet keep up with the ground (see FxMath).
-			var phase: float
-			var footfall := false
-			if have_ids:
-				var gid: int = ids[i]
-				var previous_phase: float = float(_gait.get(gid, FxMath.seed_gait(gid)))
-				phase = previous_phase
-				if walking:
-					var stride: float = FxMath.stride_len(sizes[i], gait_fps)
-					phase = FxMath.advance_gait(phase, _step_dist[i], stride)
-					# The four-pose cycle has two contact beats. Fire dust when
-					# crossing either half-cycle boundary, so the puff lands under
-					# a planted foot instead of appearing at a random frame.
-					footfall = int(floor(previous_phase * 2.0)) != int(floor(phase * 2.0))
-				_gait[gid] = phase
-			else:
-				phase = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
-			if footfall and _effects != null:
-				_effects.spawn_dust(smooth[i])
-			# Action pose from sim signals. Priority: sleep (SLEEP mood while
-			# standing) > flee (FLEE mood — the mood is the behavior arbiter,
-			# so fear outranks even a high fire_intent) > hunt/fight (real
-			# fire_intent in any world, the FIGHT mood, or standing at a
-			# strike hotspot) > courtship bow > water-seeking sip
-			# > foraging scan > trade hotspot > idle-with-rising-energy eat.
-			# A pursuing predator fires while moving, so the hunt reads as a
-			# moving lunge instead of the old hotspot-only strike instant.
-			var act := 0.0
-			var mood: int = moods[i] if have_moods else MOOD_CONTENT
-			if mood == MOOD_SLEEP and not walking:
-				act = ACT_SLEEP
-			elif mood == MOOD_FLEE:
-				act = ACT_FLEE
-			elif (have_fire and fire_intents[i] > FIRE_POSE_THRESHOLD) or mood == MOOD_FIGHT:
-				act = ACT_FIGHT
-			elif (mood == MOOD_MATE or mood == MOOD_SEEK_MATE) and not walking:
-				act = ACT_CELEBRATE if mood == MOOD_MATE else ACT_MATE
-			elif mood == MOOD_SEEK_WATER and not walking:
-				act = ACT_DRINK
-			elif mood == MOOD_SEEK_FOOD and not walking:
-				act = ACT_SCAN
-			else:
-				for fp in _fight_pts:
-					if smooth[i].distance_squared_to(fp) < 36.0:
-						act = ACT_FLEE if walking else ACT_FIGHT
-						break
-			if act == 0.0:
-				for tp in _trade_pts:
-					if smooth[i].distance_squared_to(tp) < 36.0:
-						act = ACT_TRADE
-						break
-			if act == 0.0 and not walking and have_en:
-				var pi: int = _match_prev[i] if i < _match_prev.size() else -1
-				if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
-					act = ACT_EAT
-			if i < inv_masks.size():
-				act = FxMath.weapon_action(act, inv_masks[i])
-			if have_ids:
-				var action_state := FxMath.step_action(
-					_actions.get(ids[i], Vector2(-1.0, 0.0)), act, delta
-				)
-				_actions[ids[i]] = action_state
-				act = action_state.x
-				# Emote-worthy actions get a pictogram above the agent's head.
-				_emote_layer.collect(ids[i], smooth[i], sz, act)
-				if act == ACT_DRINK and _effects != null:
-					_effects.tick_sip(ids[i], smooth[i], sz)
-			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))
-
-	_emote_layer.refresh(_animation_time, delta)
-
-	# Skip the per-tick glyph pass while the pips are hidden ([M] toggles).
-	if module_layers.visible:
-		_refresh_module_layers()
-
-
-# An id present last frame but gone now died (or left the alive list). Record a
-# fallen-figure ghost at its last smoothed position, in its species and size,
-# toppling away from its last facing, and forget its animation state so a
-# recycled id would pop in fresh.
-func _on_agent_death(id: int, prev_idx: int) -> void:
-	_birth_times.erase(id)
-	_gait.erase(id)
-	_locomotion.erase(id)
-	_actions.erase(id)
-	var fv: Vector3 = _facing.get(id, Vector3.ZERO)
-	var side: float = -1.0 if fv.y >= 0.5 else 1.0
-	_facing.erase(id)
-	if _death_effects.size() >= DEATH_CAP:
-		_death_effects.pop_front()
-	var sp := 0
-	var sz := BODY_MIN
-	if prev_idx < _prev_bucket.size():
-		sp = _prev_bucket[prev_idx]
-	if prev_idx < _prev_sizes.size():
-		sz = maxf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN)
-	# Inherit the agent's body colour so a quadruped ghost keeps its coat hue
-	# instead of the neutral-grey value-ramp; hominin atlases are self-coloured
-	# (white here) so their ghosts are unchanged.
-	var col := Color(1, 1, 1)
-	if prev_idx < _prev_color.size():
-		col = _prev_color[prev_idx]
-	_death_effects.append([_prev_smooth[prev_idx], 0.0, sp, sz, side, col])
-
-
-# Age and draw the ghosts: fallen figures that fade out quadratically over
-# DEATH_TTL seconds while the sim's own carcass disc persists beneath them.
-func _refresh_death_effects(delta: float) -> void:
-	if _death_mmis.is_empty():
-		return
-	var write := 0
-	for e in _death_effects:
-		e[1] += delta
-		if e[1] < DEATH_TTL:
-			_death_effects[write] = e
-			write += 1
-	_death_effects.resize(write)
-	var buckets: Array = []
-	for b in MammalSprites.BUCKET_COUNT:
-		buckets.append(PackedInt32Array())
-	for i in _death_effects.size():
-		buckets[_death_effects[i][2]].append(i)
-	for b in MammalSprites.BUCKET_COUNT:
-		var mm: MultiMesh = _death_mmis[b].multimesh
-		var idx: PackedInt32Array = buckets[b]
-		var m := idx.size()
-		if m > mm.instance_count:
-			mm.instance_count = m
-		mm.visible_instance_count = m
-		for j in m:
-			var e: Array = _death_effects[idx[j]]
-			var life: float = 1.0 - float(e[1]) / DEATH_TTL
-			# Topple: the ghost starts tilted and eases flat with a slight
-			# bounce, dipping vertically mid-fall (the impact squash).
-			var ft: float = clampf(float(e[1]) / DEATH_FALL, 0.0, 1.0)
-			var ang: float = float(e[4]) * 0.55 * (1.0 - FxMath.ease_out_back(ft))
-			var sy: float = float(e[3]) * (1.0 - 0.18 * sin(ft * PI))
-			mm.set_instance_transform_2d(j, Transform2D(ang, Vector2(e[3], sy), 0.0, e[0]))
-			var c: Color = e[5]
-			c.a = 0.85 * life * life
-			mm.set_instance_color(j, c)
-
-
-func _body_colors(n: int) -> PackedColorArray:
-	var out := PackedColorArray()
-	out.resize(n)
-	match overlay.body_mode:
-		overlay.BODY_DIALECT:
-			var hues: PackedFloat32Array = sim.alive_dialect_hue()
-			for i in n:
-				out[i] = Color.from_hsv(hues[i], 0.7, 0.95)
-		overlay.BODY_DIET:
-			out = _ramp_body_colors(n, Palette.RAMP_DIET, sim.alive_diet(), 1.0)
-		overlay.BODY_ENERGY:
-			out = _ramp_body_colors(n, Palette.RAMP_ENERGY, sim.alive_energy(), 50.0)
-		overlay.BODY_AFFECT:
-			out = _ramp_body_colors(n, Palette.RAMP_AROUSAL, sim.alive_arousal(), 1.0)
-		overlay.BODY_INFECTION:
-			out = _ramp_body_colors(n, Palette.RAMP_INFECTION, sim.alive_infection(), 1.0)
-		overlay.BODY_MOOD:
-			var moods: PackedInt32Array = sim.alive_moods()
-			for i in n:
-				out[i] = Palette.MOOD_COLORS[clampi(moods[i], 0, Palette.MOOD_COLORS.size() - 1)]
-		_:
-			# Species mode: Primate atlases carry their own coat/skin colours, so
-			# white; quadruped atlases are neutral grayscale, so each agent gets
-			# its per-species coat hue here. Diet/size come from the same batches
-			# _refresh_bodies already fetched.
-			var diet: PackedFloat32Array = sim.alive_diet()
-			var sizes: PackedFloat32Array = sim.alive_sizes()
-			var sp_ids: PackedInt32Array = sim.alive_species_ids()
-			var live: PackedInt32Array = _livestock_flags(n)
-			for i in n:
-				var arch := MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0)
-				out[i] = MammalSprites.coat_hue(arch, sp_ids[i])
-	return out
-
-
-# One body colour per agent from a Palette ramp over a per-agent scalar,
-# normalized by `value_scale` (energy runs 0..~50; the rest are already 0..1).
-func _ramp_body_colors(
-	n: int, ramp: Array, values: PackedFloat32Array, value_scale: float
-) -> PackedColorArray:
-	var out := PackedColorArray()
-	out.resize(n)
-	for i in n:
-		out[i] = Palette.ramp(ramp, values[i] / value_scale)
-	return out
-
-
-func _livestock_flags(n: int) -> PackedInt32Array:
-	if sim.domestication_enabled():
-		return sim.alive_livestock_flags()
-	var z := PackedInt32Array()
-	z.resize(n)
-	return z
 
 
 # A shaded disc, multiplied by each MultiMesh instance color to turn the flat
