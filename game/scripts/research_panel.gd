@@ -6,6 +6,7 @@ extends PanelContainer
 # Visible only when the scenario's invention tree is on. Pure presentation
 # over `alive_invention_masks()` and `invention_catalog()`.
 
+const HudCommon = preload("res://scripts/hud_common.gd")
 const HudIcons = preload("res://scripts/hud_icons.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
@@ -24,7 +25,11 @@ const FILL := Color(0.42, 0.80, 0.36)
 const FILL_DONE := Color(0.30, 0.88, 0.70)
 const BAR_BG := Color(0.06, 0.09, 0.11)
 
-@onready var sim = get_node("../../Simulation")
+# As a page of the codex book (codex_panel.gd) the panel drops its own frame
+# and title and leaves visibility to the book's tabs.
+var embedded: bool = false
+
+@onready var sim = HudCommon.find_sim(self)
 
 var _catalog: Array = []  # [{key, name, era, bit}] in tree order
 var _fractions: PackedFloat32Array = PackedFloat32Array()
@@ -40,11 +45,14 @@ func _ready() -> void:
 		_font = ThemeDB.fallback_font
 	var box := VBoxContainer.new()
 	add_child(box)
-	var title := Label.new()
-	title.text = "RESEARCH"
-	title.add_theme_font_size_override("font_size", 13)
-	title.add_theme_color_override("font_color", UiTheme.ACCENT)
-	box.add_child(title)
+	if embedded:
+		add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	else:
+		var title := Label.new()
+		title.text = "RESEARCH"
+		title.add_theme_font_size_override("font_size", 13)
+		title.add_theme_color_override("font_color", UiTheme.ACCENT)
+		box.add_child(title)
 	_rows = Control.new()
 	_rows.draw.connect(_draw_rows)
 	box.add_child(_rows)
@@ -95,7 +103,8 @@ func _process(_delta: float) -> void:
 	if not bool(sim.inventions_enabled()):
 		visible = false
 		return
-	visible = true
+	if not embedded:
+		visible = true
 	_frame += 1
 	if _frame % REFRESH_EVERY != 7:
 		return

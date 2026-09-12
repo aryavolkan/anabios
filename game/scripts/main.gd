@@ -233,8 +233,10 @@ func _ready() -> void:
 
 # Panels pinned to the right edge / the bottom edge of the design viewport.
 const DESIGN_VP := Vector2(1280.0, 800.0)
-const HUD_RIGHT: PackedStringArray = ["Inspector", "PopulationPanel", "DitPanel", "TechPanel"]
-const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "CodexPanel"]
+const HUD_RIGHT: PackedStringArray = ["PopulationPanel", "DitPanel", "TechPanel"]
+const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "EventLog", "CodexPanel"]
+# Glued to both the right and the bottom edge: the unit card.
+const HUD_CORNER: PackedStringArray = ["Inspector"]
 # The right rail, top to bottom. Every panel here is content-sized, so the stack
 # is laid out live rather than at fixed offsets (see _layout_rail).
 const RAIL_TOP := 10.0
@@ -255,6 +257,9 @@ var _rail_home: Dictionary = {}
 func _layout_rail() -> void:
 	var y: float = RAIL_TOP
 	var limit: float = DESIGN_VP.y / maxf(0.01, GameConfig.ui_scale)
+	# The unit card sits in the bottom-right corner; the rail stops above it.
+	if inspector.visible:
+		limit = minf(limit, inspector.position.y)
 	for n in HUD_RIGHT:
 		var c := $UI.get_node_or_null(n) as Control
 		if c == null or not c.visible:
@@ -291,6 +296,10 @@ func _layout_hud() -> void:
 		var c2 := $UI.get_node_or_null(n) as Control
 		if c2 != null:
 			c2.position.y += shift.y
+	for n in HUD_CORNER:
+		var c3 := $UI.get_node_or_null(n) as Control
+		if c3 != null:
+			c3.position += shift
 
 
 # The world is a torus but rendering is not: a camera near a seam sees agents
@@ -350,7 +359,7 @@ func _fail_to_load(reason: String) -> void:
 	_apply_ui_theme()
 	hud.text = "⚠ " + reason
 	hud.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45))
-	for n in [$UI/Minimap, $UI/CodexPanel, $UI/LegendPanel, $UI/PopulationPanel]:
+	for n in [$UI/Minimap, $UI/CodexPanel, $UI/EventLog, $UI/LegendPanel, $UI/PopulationPanel]:
 		(n as CanvasItem).visible = false
 	set_process(false)
 

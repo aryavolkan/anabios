@@ -4,7 +4,7 @@
 [ext_resource type="MultiMesh" path="res://resources/body_multimesh.tres" id="2_mm"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="3_cam"]
 [ext_resource type="Script" path="res://scripts/time_controls.gd" id="4_time"]
-[ext_resource type="Script" path="res://scripts/inspector_panel.gd" id="5_insp"]
+[ext_resource type="Script" path="res://scripts/unit_card.gd" id="5_insp"]
 [ext_resource type="Script" path="res://scripts/biome_renderer.gd" id="7_biome"]
 [ext_resource type="Script" path="res://scripts/codex_panel.gd" id="8_codex"]
 [ext_resource type="Script" path="res://scripts/overlay_manager.gd" id="9_overlay"]
@@ -15,7 +15,7 @@
 [ext_resource type="Script" path="res://scripts/coevolution_panel.gd" id="13_coevo"]
 [ext_resource type="Script" path="res://scripts/minimap_panel.gd" id="15_minimap"]
 [ext_resource type="Script" path="res://scripts/top_bar.gd" id="16_topbar"]
-[ext_resource type="Script" path="res://scripts/research_panel.gd" id="17_research"]
+[ext_resource type="Script" path="res://scripts/event_log.gd" id="17_eventlog"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -220,12 +220,20 @@ offset_right = 420.0
 offset_bottom = 44.0
 script = ExtResource("16_topbar")
 
-[node name="ResearchPanel" type="PanelContainer" parent="UI"]
+[node name="CodexPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("8_codex")
 offset_left = 10.0
 offset_top = 282.0
-offset_right = 290.0
+offset_right = 300.0
 offset_bottom = 300.0
-script = ExtResource("17_research")
+
+[node name="EventLog" type="PanelContainer" parent="UI"]
+script = ExtResource("17_eventlog")
+offset_left = 10.0
+offset_top = 602.0
+offset_right = 400.0
+offset_bottom = 750.0
+grow_vertical = 0
 
 [node name="TimeControls" type="HBoxContainer" parent="UI"]
 script = ExtResource("4_time")
@@ -259,22 +267,10 @@ text = "Menu"
 script = ExtResource("5_insp")
 visible = false
 offset_left = 1050.0
-offset_top = 10.0
+offset_top = 640.0
 offset_right = 1270.0
-offset_bottom = 246.0
-
-[node name="VBoxContainer" type="VBoxContainer" parent="UI/Inspector"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 10.0
-offset_top = 10.0
-offset_right = -10.0
-offset_bottom = -10.0
-
-[node name="Label" type="Label" parent="UI/Inspector/VBoxContainer"]
-text = "—"
-theme_override_font_sizes/font_size = 14
+offset_bottom = 790.0
+grow_vertical = 0
 
 [node name="PopulationPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("10_pop")
@@ -307,8 +303,9 @@ offset_bottom = 480.0
 
 [node name="LegendPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("12_legend")
+visible = false
 offset_left = 10.0
-offset_top = 620.0
+offset_top = 598.0
 offset_right = 380.0
 offset_bottom = 750.0
 grow_vertical = 0
@@ -325,23 +322,3 @@ offset_top = 20.0
 offset_right = 1035.0
 offset_bottom = 555.0
 
-[node name="CodexPanel" type="PanelContainer" parent="UI"]
-script = ExtResource("8_codex")
-offset_left = 400.0
-offset_top = 560.0
-offset_right = 1030.0
-offset_bottom = 790.0
-grow_vertical = 0
-
-[node name="VBox" type="VBoxContainer" parent="UI/CodexPanel"]
-
-[node name="Counts" type="Label" parent="UI/CodexPanel/VBox"]
-text = "codex"
-theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
-theme_override_font_sizes/font_size = 13
-
-[node name="Scroll" type="ScrollContainer" parent="UI/CodexPanel/VBox"]
-custom_minimum_size = Vector2(610, 190)
-
-[node name="RecentList" type="VBoxContainer" parent="UI/CodexPanel/VBox/Scroll"]
-custom_minimum_size = Vector2(600, 0)

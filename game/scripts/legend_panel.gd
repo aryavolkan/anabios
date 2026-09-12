@@ -24,15 +24,16 @@ WASD/drag pan · wheel zoom · click inspect"""
 
 var _controls: Label
 var _key_box: VBoxContainer
-var _expanded: bool = true
 var _last_body: int = -1
 var _last_modules: bool = true
 
 
 func _ready() -> void:
-	# Replace the scene's placeholder Label with our own layout.
+	# Replace the scene's placeholder Label with our own layout. The panel
+	# starts hidden ([H] shows it) so the event log owns the bottom-left slot.
 	for c in get_children():
 		c.queue_free()
+	visible = false
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 6)
 	add_child(vb)
@@ -51,13 +52,11 @@ func _ready() -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
-		_expanded = not _expanded
-		_key_box.visible = _expanded
+		visible = not visible
 
 
 func _process(_delta: float) -> void:
-	if not _expanded:
-		_controls.text = "[H] show controls"
+	if not visible:
 		return
 	var g: int = clampi(overlay.ground_mode, 0, GROUND_NAMES.size() - 1)
 	var b: int = clampi(overlay.body_mode, 0, BODY_NAMES.size() - 1)
