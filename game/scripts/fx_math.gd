@@ -53,13 +53,40 @@ static func advance_animation_time(t: float, delta: float, paused: bool) -> floa
 	return t if paused else t + maxf(delta, 0.0)
 
 
+# Invention ids mirrored from the sim's tech tree (invention/mod.rs) — the
+# bits the viewer reads out of `alive_invention_masks()`. Only the three
+# weapon techs matter for posing; everything else keeps the fight cells.
+const INV_HAFTED_SPEARS := 10
+const INV_ARCHERY := 11
+const INV_STEEL_ARMS := 13
+
+
 # Atlas pair used for a behavior action. Drinking intentionally shares the
 # eat/graze pair so every rig gets a grounded silhouette, then the shader adds
 # the sip motion on top. Keeping this mapping centralized prevents the spare
 # action value from ever sampling an empty atlas cell.
 static func action_pose_base(action: float) -> int:
-	var a := clampi(roundi(action), 1, 9)
+	var a := clampi(roundi(action), 1, 12)
+	if a >= 10:
+		return 16 + (a - 10) * 2
 	return 14 if a == 9 else (4 if a == 6 else (8 if a >= 7 else 2 + a * 2))
+
+
+# Upgrade a fight (action 2) to the wielder's most advanced weapon: era-3
+# Steel Arms (action 12, blade cells) outranks Archery (11, bow cells),
+# which beats Hafted Spears (10, spear cells). Every other action — and
+# every other invention bit, weapon art is ape-only and the rest of the
+# tech tree reads fine on the brawl cells — passes through untouched.
+static func weapon_action(action: float, inv_mask: int) -> float:
+	if not is_equal_approx(action, 2.0):
+		return action
+	if inv_mask & (1 << INV_STEEL_ARMS):
+		return 12.0
+	if inv_mask & (1 << INV_ARCHERY):
+		return 11.0
+	if inv_mask & (1 << INV_HAFTED_SPEARS):
+		return 10.0
+	return action
 
 
 # Facing. cos(heading) is near zero whenever a body travels near-vertically,

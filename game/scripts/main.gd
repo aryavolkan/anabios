@@ -60,7 +60,9 @@ const ACT_DRINK := 6.0
 const ACT_MATE := 7.0
 const ACT_SCAN := 8.0
 const ACT_CELEBRATE := 9.0
-const ACT_SCALE := 10.0
+const ACT_SPEAR := 10.0
+const ACT_BOW := 11.0
+const ACT_SCALE := 13.0
 # Mood discriminants from the sim's mood.rs (alive_moods) that drive poses.
 # All-CONTENT when the scenario's affect layer is off.
 const MOOD_CONTENT := 0
@@ -570,6 +572,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 	# in flag-off worlds.
 	var fire_intents: PackedFloat32Array = sim.alive_fire_intent()
 	var moods: PackedInt32Array = sim.alive_moods() if sim.affect_active() else PackedInt32Array()
+	# Held-invention bits (all-zero in flag-off worlds) arm the fight pose.
+	var inv_masks: PackedInt32Array = sim.alive_invention_masks()
 	var body_colors: PackedColorArray = _body_colors(n)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n
@@ -781,6 +785,8 @@ func _refresh_bodies(delta: float = 1.0 / 60.0) -> void:
 				var pi: int = _match_prev[i] if i < _match_prev.size() else -1
 				if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
 					act = ACT_EAT
+			if i < inv_masks.size():
+				act = FxMath.weapon_action(act, inv_masks[i])
 			if have_ids:
 				var action_state := FxMath.step_action(
 					_actions.get(ids[i], Vector2(-1.0, 0.0)), act, delta

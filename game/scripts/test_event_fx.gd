@@ -57,6 +57,8 @@ func _init() -> void:
 	_check_locomotion()
 	_check_action_transition()
 	_check_drink_action()
+	_check_weapon_action()
+	_check_invention_tint()
 	_check_animation_clock()
 	_check_facing()
 	_check_shuttle_and_ease()
@@ -209,6 +211,49 @@ func _check_drink_action() -> void:
 	var state := FxMath.step_action(Vector2(-1.0, 0.0), 6.0, 0.05)
 	_check(state.x == 6.0, "drink action starts immediately")
 	_check(state.y > 0.0, "drink action receives recovery hold time")
+
+
+func _check_weapon_action() -> void:
+	_check(FxMath.action_pose_base(10.0) == 16, "spear thrust selects its own frame pair")
+	_check(FxMath.action_pose_base(11.0) == 18, "bow shot selects its own frame pair")
+	_check(FxMath.action_pose_base(12.0) == 20, "steel swing selects its own frame pair")
+	var spears := 1 << FxMath.INV_HAFTED_SPEARS
+	var bows := 1 << FxMath.INV_ARCHERY
+	var steel := 1 << FxMath.INV_STEEL_ARMS
+	_check(FxMath.weapon_action(2.0, 0) == 2.0, "an unarmed fight keeps the brawl pose")
+	_check(FxMath.weapon_action(2.0, spears) == 10.0, "a spear-holding fighter thrusts")
+	_check(FxMath.weapon_action(2.0, bows) == 11.0, "an archer shoots")
+	_check(FxMath.weapon_action(2.0, steel) == 12.0, "a steel-armed fighter swings the blade")
+	_check(FxMath.weapon_action(2.0, spears | bows) == 11.0, "the better weapon wins")
+	_check(
+		FxMath.weapon_action(2.0, spears | bows | steel) == 12.0,
+		"era-3 steel outranks the whole rack"
+	)
+	_check(FxMath.weapon_action(1.0, spears | bows | steel) == 1.0, "only fighting draws a weapon")
+	_check(FxMath.weapon_action(0.0, spears) == 0.0, "idle agents keep weapons stowed")
+	var other := (1 << 0) | (1 << 9) | (1 << 12)
+	_check(FxMath.weapon_action(2.0, other) == 2.0, "non-weapon tech keeps the brawl pose")
+
+
+# Discovery (17), Adoption (18) and MaterialLearning (22) carry the invention
+# id in `value`; their motes take that invention's tint so an Archery
+# breakthrough reads differently from a Fire one. Everything else — other
+# events, unknown ids, the -1 "no value" sentinel — keeps the default spec.
+func _check_invention_tint() -> void:
+	var base: Array = EventFx.spec(17)
+	var tinted: Array = EventFx.spec_with_value(17, 11.0)
+	_check(tinted.size() == base.size(), "tint keeps the spec shape")
+	_check(tinted[0]["kind"] == "fire", "non-mote specs pass through")
+	_check(tinted[1]["color"] != base[1]["color"], "archery discovery tints its motes")
+	_check(tinted[1]["color"].a == base[1]["color"].a, "tint keeps the authored mote alpha")
+	_check(EventFx.spec_with_value(17, -1.0) == base, "value-less events keep the default")
+	_check(EventFx.spec_with_value(17, 99.0) == base, "unknown invention keeps the default")
+	_check(EventFx.spec_with_value(38, 11.0) == EventFx.spec(38), "war ignores value")
+	_check(EventFx.INVENTION_MOTES.size() == 14, "every invention has a tint")
+	for t in [17, 18, 22]:
+		for k in EventFx.INVENTION_MOTES:
+			var s: Array = EventFx.spec_with_value(t, float(k))
+			_check(_has_kind(s, "motes"), "event %d invention %d keeps its motes" % [t, k])
 
 
 func _check_animation_clock() -> void:

@@ -1,9 +1,10 @@
 shader_type canvas_item;
 
 // Field-agent animation. One MultiMesh per species; each draws that species'
-// own 16-pose atlas (ape_sprites.build_species_atlas, full-colour zone-painted
+// own pose atlas (ape_sprites.build_species_atlas, full-colour zone-painted
 // figure: 4 gait poses, then TWO frames per action — eat/fight/trade/flee,
-// sleep and celebrate) and passes per-instance state via INSTANCE_CUSTOM,
+// sleep, celebrate and the ape-only weapon pairs) and passes per-instance
+// state via INSTANCE_CUSTOM,
 // written each tick in main.gd::_refresh_bodies:
 //   r = gait cycle position (0..1 = one contact -> passing -> contact ->
 //       passing loop). Advanced CPU-side by the distance the body actually
@@ -15,8 +16,10 @@ shader_type canvas_item;
 //   b = face_left (smoothed 0..1; mid-flip the mirror mix squashes the sprite
 //       horizontally, so turns read as a weight shift instead of a snap)
 //   a = action / act_scale (0 none, 1 eat, 2 fight, 3 trade, 4 flee,
-//       5 sleep, 6 drink, 7 mate, 8 scan, 9 celebrate —
-//       sim signals: strike hotspots, fire_intent, the mood column)
+//       5 sleep, 6 drink, 7 mate, 8 scan, 9 celebrate, 10 spear, 11 bow,
+//       12 steel — sim signals: strike hotspots, fire_intent, the mood
+//       column, and the held-invention mask that upgrades a fight to the
+//       wielder's most advanced weapon)
 // Moving agents cycle contact -> passing -> counter-contact -> passing (a
 // step-lift-step gait with the bob baked into the passing pose), paced by the
 // distance travelled so feet don't slide; idle agents hold the neutral pose
@@ -25,11 +28,11 @@ shader_type canvas_item;
 // a fight lunge / flee tremble on top.
 
 uniform int frames = 16;
-// Atlas layout: poses live in a SQUARE 64x64 grid, ATLAS_COLS per row (see
+// Atlas layout: poses live in a SQUARE 128x128 grid, ATLAS_COLS per row (see
 // ape_sprites.gd — a 16x192 strip corrupts on Metal's MultiMesh2D canvas
 // path). A pose index `fr` maps to cell (fr % ATLAS_COLS, fr / ATLAS_COLS).
-const float ATLAS_COLS = 4.0;
-const float ATLAS_PX = 64.0;
+const float ATLAS_COLS = 8.0;
+const float ATLAS_PX = 128.0;
 const float CELL_PX = 16.0;
 // Authored walk cadence (frames/sec). The walk cycle itself is now paced by
 // distance travelled (see anim.r above), so this only sets the flee gallop's
@@ -174,6 +177,39 @@ void vertex() {
 		float cheer = max(sin(fract(animation_time * action_fps * 0.5 + phase) * 6.2831853), 0.0);
 		VERTEX.y += cheer * 0.06;
 		VERTEX.x *= 1.0 - cheer * 0.035;
+	// Spear thrust (act 10): the fight lunge, armed — a deeper coil on the
+	// wind-up beat, then the body rides the shaft forward on the strike.
+	} else if (act > 9.5 && act < 10.5) {
+		float c = fract(animation_time * action_fps * 0.5 + anim.r * 2.0);
+		float drive = pow(max(sin(c * 3.14159265), 0.0), 2.0);
+		float dir = mix(1.0, -1.0, step(0.5, anim.b));
+		float coil = smoothstep(0.0, 0.3, c) * (1.0 - smoothstep(0.3, 0.5, c));
+		VERTEX.x *= 1.0 - coil * action_squash * 1.3;
+		VERTEX.y *= 1.0 + coil * action_squash * 0.6;
+		VERTEX.x += dir * drive * 0.13;
+		VERTEX.y += drive * 0.02;
+	// Bow (act 11): a slow lean-back settle while the draw frame holds, then
+	// a sharp forward recoil snap the instant the loose frame lands.
+	} else if (act > 10.5 && act < 11.5) {
+		float c = fract(animation_time * action_fps * 0.5 + anim.r * 2.0);
+		float dir = mix(1.0, -1.0, step(0.5, anim.b));
+		float draw_lean = smoothstep(0.0, 0.45, c) * (1.0 - step(0.5, c));
+		float loose = step(0.5, c) * pow(1.0 - fract(c * 2.0), 2.0);
+		VERTEX.x -= dir * draw_lean * 0.05;
+		VERTEX.y *= 1.0 - draw_lean * 0.03;
+		VERTEX.x += dir * loose * 0.06;
+	// Steel swing (act 12): the blade rises on a slow wind-up stretch, then
+	// the whole body drops and drives forward through the cut — heavier
+	// anticipation and follow-through than the fist or spear.
+	} else if (act > 11.5 && act < 12.5) {
+		float c = fract(animation_time * action_fps * 0.5 + anim.r * 2.0);
+		float dir = mix(1.0, -1.0, step(0.5, anim.b));
+		float windup = smoothstep(0.0, 0.4, c) * (1.0 - step(0.5, c));
+		float cut = step(0.5, c) * pow(1.0 - fract(c * 2.0), 1.5);
+		VERTEX.y *= 1.0 + windup * action_squash;
+		VERTEX.x *= 1.0 - windup * action_squash * 0.7;
+		VERTEX.x += dir * cut * 0.14;
+		VERTEX.y -= cut * 0.04;
 	}
 	// Livestock idle: a slow chewing head-bob (only while standing).
 	if (rig_kind == 3 && anim.g < 0.5 && act < 0.5) {
@@ -196,14 +232,17 @@ void fragment() {
 	float fr;
 	if (act > 0.5) {
 		// Action pairs live below the gait rows: eat 4/5, fight 6/7, trade
-		// 8/9, flee 10/11, sleep 12/13; swap A/B at action_fps, phase-offset
-		// so a trading cluster doesn't chomp in lockstep.
+		// 8/9, flee 10/11, sleep 12/13, celebrate 14/15, spear 16/17, bow
+		// 18/19, steel 20/21; swap A/B at action_fps, phase-offset so a
+		// trading cluster doesn't chomp in lockstep.
 		float a2 = floor(mod(animation_time * action_fps + anim.r * 2.0, 2.0));
 		// Drink has no dedicated atlas cells: frame 4/5 is the compatible
 		// eat/graze pair; courtship uses frame 8/9, the trade/alert pair.
 		float pose_act = act;
 		if (act > 5.5 && act < 6.5) {
 			pose_act = 1.0;
+		} else if (act > 9.5) {
+			pose_act = act - 3.0;  // spear 10 -> 16/17, bow 11 -> 18/19, steel 12 -> 20/21
 		} else if (act > 8.5) {
 			pose_act = 6.0;
 		} else if (act > 6.5) {
@@ -222,7 +261,7 @@ void fragment() {
 		// Threshold it here and let the vertex stage use the blend.
 		fr = mix(0.0, 1.0 + min(s, 4.0 - s), step(0.5, anim.g));
 	}
-	// Frames live in a 64x64 grid, ATLAS_COLS per row; cells are pre-flipped
+	// Frames live in a 128x128 grid, ATLAS_COLS per row; cells are pre-flipped
 	// (the QuadMesh V axis is flipped in the 2D canvas), so a plain sample
 	// draws the figure upright. Map fr -> (col, row) and offset into its cell.
 	float col = mod(fr, ATLAS_COLS);
