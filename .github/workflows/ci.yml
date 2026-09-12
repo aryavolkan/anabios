@@ -236,7 +236,7 @@ jobs:
       # Sprite-module unit tests: SceneTree harnesses over the block-art tables
       # (building/goods/cart sprites, the mammal archetype registry, event FX).
       - name: sprite module tests
-        run: scripts/godot-smoke.sh scripts test_building_sprites test_mammal_sprites test_event_fx test_emote_sprites test_terrain_sprites test_terrain_scatter test_prop_chunk test_trail_layer test_biome_props test_pixel_fx_sprites test_atlas_registry test_minimap_math test_coast_tiles test_camera_steps test_ground_streaming test_density_layer
+        run: scripts/godot-smoke.sh scripts test_building_sprites test_mammal_sprites test_event_fx test_emote_sprites test_terrain_sprites test_terrain_scatter test_prop_chunk test_trail_layer test_biome_props test_pixel_fx_sprites test_atlas_registry test_minimap_math test_coast_tiles test_camera_steps test_ground_streaming test_density_layer test_anim_state
       # GDScript lint/format gate (gdtoolkit — the clippy/rustfmt analog for
       # GDScript). `gdformat --check` enforces formatting/width; `gdlint`
       # enforces the substantive rules (two stylistic rules are disabled in
