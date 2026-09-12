@@ -59,9 +59,17 @@ uniform int rig_kind = 2;
 uniform float act_scale = 8.0;
 
 varying flat vec4 anim;
+// Per-instance colour (species coat tint, [C] overlay tint, fade alpha),
+// carried from the vertex stage. Reading the built-in COLOR in fragment()
+// is NOT safe on this MultiMesh2D path: on Metal (and the MoltenVK/ANGLE
+// paths on macOS) it collapses UV to the whole texture, so every body drew
+// the full pose atlas instead of one cell. Same corruption family as the
+// emote shader's INSTANCE_CUSTOM.a workaround; a flat varying survives.
+varying flat vec4 tint;
 
 void vertex() {
 	anim = INSTANCE_CUSTOM;
+	tint = COLOR;
 	float phase = anim.r * 6.2831853;
 	float act = anim.a * act_scale;
 	// The QuadMesh is a 3D mesh, so its local +Y points up-screen in the 2D
@@ -267,5 +275,5 @@ void fragment() {
 	float col = mod(fr, ATLAS_COLS);
 	float row = floor(fr / ATLAS_COLS);
 	vec2 cell_uv = (vec2(col + u, row + UV.y)) * (CELL_PX / ATLAS_PX);
-	COLOR = texture(TEXTURE, cell_uv) * COLOR;
+	COLOR = texture(TEXTURE, cell_uv) * tint;
 }
