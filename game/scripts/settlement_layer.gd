@@ -35,11 +35,22 @@ const SMOKE_POOL := 8
 # Construction pops are only sampled on the throttled redraw (~3/s), so the
 # window must span several samples for the ease-out-back arc to actually show.
 const POP_SECS := 1.5
+# Flame flicker for the Fire/Metalworking landmarks: two authored frames
+# swapped at a fixed low cadence (whole-texture swaps on the plain MultiMesh
+# layers, so no per-building nodes and nothing on the Metal atlas path).
+const FLICKER_PERIOD := 1.0 / 3.0
 
 var _huts: MultiMeshInstance2D
 var _farms: MultiMeshInstance2D
 var _smoke: Array[GPUParticles2D] = []
 var _building_mmis: Array[MultiMeshInstance2D] = []
+# Animated landmarks only: kind -> [phase-0 texture, phase-1 texture] and
+# kind -> every MultiMeshInstance2D showing it (the source layer plus its
+# eight torus clones), so a frame swap can never leave a clone a frame behind.
+var _building_frames: Dictionary = {}
+var _building_nodes: Dictionary = {}
+var _flicker_elapsed := 0.0
+var _flicker_phase := 0
 var _era_of: Dictionary = {}  # invention key -> era, cached once
 var _frame: int = REDRAW_EVERY - 1  # redraw on the very first frame
 # Villages linger: the sim's settlement latch drops the moment anchor cohesion
@@ -79,6 +90,9 @@ func _ready() -> void:
 		var tex := Buildings.build(k)
 		var mmi := _make_layer("Building_%s" % Buildings.NAMES[k], tex, 1)
 		_building_mmis.append(mmi)
+		if Buildings.is_animated(k):
+			_building_frames[k] = [tex, Buildings.build_variant(k, 1)]
+			_building_nodes[k] = [mmi]
 	for inv in sim.invention_catalog():
 		_era_of[String(inv["key"])] = int(inv["era"])
 	_make_smoke_pool()
@@ -104,6 +118,7 @@ func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
 	for src in [_huts, _farms] + _building_mmis:
+		var kind: int = _building_mmis.find(src)
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
 				if gx == 0 and gy == 0:
@@ -115,15 +130,32 @@ func _make_wrap_clones() -> void:
 				clone.z_index = src.z_index
 				clone.position = Vector2(gx * world, gy * world)
 				add_child(clone)
+				if _building_nodes.has(kind):
+					_building_nodes[kind].append(clone)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_now = Time.get_ticks_msec() / 1000.0
+	_flicker_elapsed += delta
+	if _flicker_elapsed >= FLICKER_PERIOD:
+		_flicker_elapsed = 0.0
+		_flicker_phase = 1 - _flicker_phase
+		_tick_landmark_animation()
 	_frame += 1
 	if _frame % REDRAW_EVERY != 0:
 		return
 	_sites = sim.settlement_sites()
 	_redraw()
+
+
+# Swap the flame frame on every instance of each animated landmark — the
+# origin layer and its torus clones in one pass — leaving every other
+# landmark's texture untouched.
+func _tick_landmark_animation() -> void:
+	for kind in _building_frames:
+		var tex: ImageTexture = _building_frames[kind][_flicker_phase]
+		for node in _building_nodes[kind]:
+			node.texture = tex
 
 
 func random_site_pos() -> Vector2:
