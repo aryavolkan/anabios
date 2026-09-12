@@ -981,6 +981,28 @@ impl Simulation {
         out
     }
 
+    /// One `TerrainType` id per biome cell, row-major (`row * RES + col`),
+    /// as `u8` discriminants (Water = 0 .. Tundra = 8). Presentation-only:
+    /// the viewer keys pixel-art ground tiles off exact terrain ids instead
+    /// of re-classifying the (lossy, biomass/succession-lerped) colors from
+    /// `biome_colors`. River cells (`river_flow > 0`) report Water to match
+    /// the river-blue tint that trips the terrain shader's water treatment.
+    /// Returns `RES²` bytes, or empty if no world is loaded.
+    #[func]
+    fn biome_terrain_ids(&self) -> PackedByteArray {
+        let mut out = PackedByteArray::new();
+        let Some(w) = self.inner.as_ref() else { return out };
+        for cell in w.biome.cells.iter() {
+            let id = if cell.river_flow > 0.0 {
+                anabios_core::biome::TerrainType::Water as u8
+            } else {
+                cell.terrain as u8
+            };
+            out.push(id);
+        }
+        out
+    }
+
     /// Number of pheromone channels (for the overlay cycling loop).
     #[func]
     fn pheromone_channel_count(&self) -> i64 {
