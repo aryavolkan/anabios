@@ -7,9 +7,33 @@ extends RefCounted
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 
-enum { HARE, DEER, BOAR, PRIMATE, FOX, WOLF, LIVESTOCK }
-const ARCHETYPE_COUNT := 7
-const NAMES: PackedStringArray = ["Hare", "Deer", "Boar", "Primate", "Fox", "Wolf", "Livestock"]
+enum {
+	HARE,
+	DEER,
+	BOAR,
+	PRIMATE,
+	FOX,
+	WOLF,
+	LIVESTOCK,
+	TORTOISE,
+	PORCUPINE,
+	MAMMOTH,
+	WADER,
+}
+const ARCHETYPE_COUNT := 11
+const NAMES: PackedStringArray = [
+	"Hare",
+	"Deer",
+	"Boar",
+	"Primate",
+	"Fox",
+	"Wolf",
+	"Livestock",
+	"Tortoise",
+	"Porcupine",
+	"Mammoth",
+	"Wader",
+]
 
 # Signature-move family, passed to the shader as the `rig_kind` uniform.
 enum RigKind { PREY, PREDATOR, PRIMATE_RIG, LIVESTOCK_RIG }
@@ -21,6 +45,10 @@ const _RIG_KIND: PackedInt32Array = [
 	RigKind.PREDATOR,  # FOX
 	RigKind.PREDATOR,  # WOLF
 	RigKind.LIVESTOCK_RIG,  # LIVESTOCK
+	RigKind.PREY,  # TORTOISE
+	RigKind.PREY,  # PORCUPINE
+	RigKind.PREY,  # MAMMOTH
+	RigKind.PREY,  # WADER
 ]
 
 # Pose grid is the same 16-slot layout as the apes so one shader serves all.
@@ -31,6 +59,15 @@ const SIZE_SPLIT := 1.25
 const HERB_MAX := 0.34
 const CARN_MIN := 0.66
 
+# Module-keyed body tags (crates/anabios-godot `alive_body_tags` bit layout;
+# also the 8th column of `alive_render_state`). Bit per module family the
+# archetype selector cares about, independent of diet/size.
+const TAG_ARMOR := 1 << 0
+const TAG_SPINES := 1 << 1
+const TAG_JAWS := 1 << 2
+const TAG_STORAGE := 1 << 3
+const TAG_LOCOMOTOR2 := 1 << 4
+
 
 static func rig_kind(archetype: int) -> int:
 	return _RIG_KIND[archetype]
@@ -38,11 +75,26 @@ static func rig_kind(archetype: int) -> int:
 
 # Pure archetype selector. `size` in world units (0.5..3.0), `diet` carnivory
 # 0..1. Stable per agent (diet/size fixed at birth) so no per-frame flicker.
-static func archetype_for(diet: float, size: float, livestock: bool) -> int:
+# `tags` (default 0, see the TAG_* bits above) layers module-keyed families
+# on top of the diet/size table: livestock still wins outright, then armour
+# on a non-carnivore reads as a tortoise, spines as a porcupine at any diet,
+# a large Storage-bearing herbivore as a mammoth, and a small herbivore with
+# two-or-more Locomotor modules as a wading bird. Anything else falls through
+# to the original hare/deer/boar/primate/fox/wolf table unchanged.
+static func archetype_for(diet: float, size: float, livestock: bool, tags: int = 0) -> int:
 	if livestock:
 		return LIVESTOCK
 	var large := size >= SIZE_SPLIT
-	if diet < HERB_MAX:
+	var herbivore := diet < HERB_MAX
+	if (tags & TAG_ARMOR) != 0 and diet < CARN_MIN:
+		return TORTOISE
+	if (tags & TAG_SPINES) != 0:
+		return PORCUPINE
+	if large and herbivore and (tags & TAG_STORAGE) != 0:
+		return MAMMOTH
+	if not large and herbivore and (tags & TAG_LOCOMOTOR2) != 0:
+		return WADER
+	if herbivore:
 		return DEER if large else HARE
 	if diet < CARN_MIN:
 		return PRIMATE if large else BOAR
@@ -55,10 +107,12 @@ static func primate_skin_for(species_id: int) -> int:
 
 # --- Render-bucket table ---------------------------------------------------
 # Primate is NOT a single mesh: its five hominins keep their own buckets (0..4,
-# byte-identical to today), and the six quadruped archetypes take buckets 5..10.
+# byte-identical to today), and the ten quadruped archetypes take buckets 5..14.
 const SKIN_COUNT := ApeSprites.SPECIES_COUNT  # 5 hominins
-const QUAD_ORDER: Array = [HARE, DEER, BOAR, FOX, WOLF, LIVESTOCK]
-const BUCKET_COUNT := SKIN_COUNT + 6  # 11
+const QUAD_ORDER: Array = [
+	HARE, DEER, BOAR, FOX, WOLF, LIVESTOCK, TORTOISE, PORCUPINE, MAMMOTH, WADER
+]
+const BUCKET_COUNT := SKIN_COUNT + 10  # 15
 
 # Quadruped pose data, filled in Tasks 6-7. Absent archetypes fall back to ape
 # skin-0 art (harmless: those buckets carry 0 instances until their rig lands).
@@ -69,6 +123,10 @@ const _QUAD_DATA := {
 	FOX: preload("res://scripts/mammal_data/fox.gd"),
 	WOLF: preload("res://scripts/mammal_data/wolf.gd"),
 	LIVESTOCK: preload("res://scripts/mammal_data/livestock.gd"),
+	TORTOISE: preload("res://scripts/mammal_data/tortoise.gd"),
+	PORCUPINE: preload("res://scripts/mammal_data/porcupine.gd"),
+	MAMMOTH: preload("res://scripts/mammal_data/mammoth.gd"),
+	WADER: preload("res://scripts/mammal_data/wader.gd"),
 }
 
 
@@ -117,8 +175,9 @@ static func bucket_rig_kind(b: int) -> int:
 static func bucket_gait_fps(b: int) -> float:
 	if b < SKIN_COUNT:
 		return ApeSprites.WALK_FPS[b]
-	# Quad cadence: hares scurry, deer lope, boar trot, fox/wolf trot, cattle amble.
-	return [7.0, 4.6, 5.2, 6.5, 5.6, 4.0][b - SKIN_COUNT]
+	# Quad cadence: hares scurry, deer lope, boar trot, fox/wolf trot, cattle
+	# amble, tortoises plod, porcupines scuttle, mammoths lumber, waders stride.
+	return [7.0, 4.6, 5.2, 6.5, 5.6, 4.0, 1.8, 4.2, 2.2, 5.5][b - SKIN_COUNT]
 
 
 # --- Quadruped atlas + per-species coat hue --------------------------------
@@ -142,6 +201,10 @@ const _COAT_BAND := {
 	FOX: [0.045, 0.02, 0.75, 0.90],
 	WOLF: [0.08, 0.06, 0.18, 0.62],
 	LIVESTOCK: [0.08, 0.10, 0.25, 0.80],
+	TORTOISE: [0.12, 0.04, 0.35, 0.55],
+	PORCUPINE: [0.08, 0.03, 0.30, 0.42],
+	MAMMOTH: [0.07, 0.03, 0.15, 0.45],
+	WADER: [0.53, 0.05, 0.10, 0.88],
 }
 
 

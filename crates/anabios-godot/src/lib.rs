@@ -536,6 +536,22 @@ impl Simulation {
         self.inner.as_ref().map(|w| w.domestication_enabled).unwrap_or(false)
     }
 
+    /// Body-plan bitmask per alive agent, same order as `alive_positions`:
+    /// bit 0 = has >=1 Armor module, bit 1 = >=1 Spines, bit 2 = >=1 Jaws,
+    /// bit 3 = >=1 Storage, bit 4 = >=2 Locomotor modules. Used by the
+    /// viewer to pick module-keyed archetypes (tortoise, porcupine, mammoth,
+    /// wader) on top of the diet/size table.
+    #[func]
+    fn alive_body_tags(&self) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for t in body_tags_of(w) {
+                out.push(t);
+            }
+        }
+        out
+    }
+
     /// Dialect hue per alive agent in `[0,1)`, same order as `alive_positions`.
     #[func]
     fn alive_dialect_hue(&self) -> PackedFloat32Array {
@@ -663,11 +679,12 @@ impl Simulation {
     }
 
     /// `render_state_stride()` floats per alive agent (in `alive_positions`
-    /// order): `[x, y, size, diet, livestock, mood, fire_intent]` — the same
-    /// source columns and scenario-flag fallbacks as `alive_positions`,
-    /// `alive_sizes`, `alive_diet`, `alive_livestock_flags`, `alive_moods`
-    /// and `alive_fire_intent`, packed into one array so the viewer can read
-    /// it instead of seven separate ones.
+    /// order): `[x, y, size, diet, livestock, mood, fire_intent, body_tags]`
+    /// — the same source columns and scenario-flag fallbacks as
+    /// `alive_positions`, `alive_sizes`, `alive_diet`,
+    /// `alive_livestock_flags`, `alive_moods`, `alive_fire_intent` and
+    /// `alive_body_tags`, packed into one array so the viewer can read it
+    /// instead of eight separate ones.
     #[func]
     fn alive_render_state(&self) -> PackedFloat32Array {
         let mut out = PackedFloat32Array::new();
@@ -1637,8 +1654,42 @@ fn livestock_flags_of(w: &anabios_core::World) -> Vec<i32> {
         .collect()
 }
 
+/// Per-alive-agent body-plan bitmask, same order as `alive_positions`: bit 0
+/// = has >=1 Armor module, bit 1 = >=1 Spines, bit 2 = >=1 Jaws, bit 3 = >=1
+/// Storage, bit 4 = >=2 Locomotor modules. Module composition is always
+/// populated (no scenario flag gates it), unlike `livestock_flags_of` /
+/// `invention_masks_of`. The viewer layers module-keyed archetype picks
+/// (tortoise, porcupine, mammoth, wader) on top of these tags.
+fn body_tags_of(w: &anabios_core::World) -> Vec<i32> {
+    use anabios_core::module::ModuleType;
+    w.agents
+        .iter_alive()
+        .map(|id| {
+            let modules = &w.agents.modules[id as usize];
+            let count_of = |t: ModuleType| modules.iter().filter(|m| m.module_type() == t).count();
+            let mut tag = 0i32;
+            if count_of(ModuleType::Armor) >= 1 {
+                tag |= 1 << 0;
+            }
+            if count_of(ModuleType::Spines) >= 1 {
+                tag |= 1 << 1;
+            }
+            if count_of(ModuleType::Jaws) >= 1 {
+                tag |= 1 << 2;
+            }
+            if count_of(ModuleType::Storage) >= 1 {
+                tag |= 1 << 3;
+            }
+            if count_of(ModuleType::Locomotor) >= 2 {
+                tag |= 1 << 4;
+            }
+            tag
+        })
+        .collect()
+}
+
 /// Number of `f32` values per alive agent in `alive_render_state_of`.
-const RENDER_STATE_STRIDE: usize = 7;
+const RENDER_STATE_STRIDE: usize = 8;
 
 /// Alive-array indices (see the `alive_in_rect` doc comment) of alive
 /// agents whose torus-wrapped position falls inside `[x0,x1) x [y0,y1)`. A
@@ -1679,13 +1730,15 @@ fn agent_density_of(w: &anabios_core::World, res: i64) -> Vec<u8> {
     counts
 }
 
-/// Flat `[x, y, size, diet, livestock, mood, fire_intent]` per alive agent
-/// (`RENDER_STATE_STRIDE` floats each), reading exactly the same source
-/// columns and scenario-flag fallbacks as `alive_positions`, `alive_sizes`,
-/// `alive_diet`, `livestock_flags_of` and `alive_moods`/`alive_fire_intent`.
+/// Flat `[x, y, size, diet, livestock, mood, fire_intent, body_tags]` per
+/// alive agent (`RENDER_STATE_STRIDE` floats each), reading exactly the same
+/// source columns and scenario-flag fallbacks as `alive_positions`,
+/// `alive_sizes`, `alive_diet`, `livestock_flags_of`,
+/// `alive_moods`/`alive_fire_intent` and `body_tags_of`.
 fn alive_render_state_of(w: &anabios_core::World) -> Vec<f32> {
     use anabios_core::genome::GenomeSlot;
     let livestock = livestock_flags_of(w);
+    let tags = body_tags_of(w);
     let mut out = Vec::with_capacity(w.agents.iter_alive().count() * RENDER_STATE_STRIDE);
     for (i, id) in w.agents.iter_alive().enumerate() {
         let idx = id as usize;
@@ -1699,6 +1752,7 @@ fn alive_render_state_of(w: &anabios_core::World) -> Vec<f32> {
         out.push(livestock[i] as f32);
         out.push(w.agents.mood[idx] as f32);
         out.push(w.actions[idx].fire_intent);
+        out.push(tags[i] as f32);
     }
     out
 }
@@ -2447,6 +2501,7 @@ mod tests {
             w.agents.iter_alive().map(|id| w.agents.mood[id as usize] as i32).collect();
         let fire_intent: Vec<f32> =
             w.agents.iter_alive().map(|id| w.actions[id as usize].fire_intent).collect();
+        let tags = super::body_tags_of(&w);
 
         for i in 0..n {
             let base = i * super::RENDER_STATE_STRIDE;
@@ -2457,6 +2512,35 @@ mod tests {
             assert_eq!(state[base + 4], livestock[i] as f32);
             assert_eq!(state[base + 5], moods[i] as f32);
             assert_eq!(state[base + 6], fire_intent[i]);
+            assert_eq!(state[base + 7], tags[i] as f32);
+        }
+    }
+
+    #[test]
+    fn body_tags_match_module_counts() {
+        use anabios_core::module::ModuleType;
+        let w = minimal_world();
+        let ids: Vec<u32> = w.agents.iter_alive().collect();
+        let tags = super::body_tags_of(&w);
+        assert_eq!(tags.len(), ids.len());
+
+        for (i, &id) in ids.iter().enumerate() {
+            let modules = &w.agents.modules[id as usize];
+            let count_of = |t: ModuleType| modules.iter().filter(|m| m.module_type() == t).count();
+            let want_armor = count_of(ModuleType::Armor) >= 1;
+            let want_spines = count_of(ModuleType::Spines) >= 1;
+            let want_jaws = count_of(ModuleType::Jaws) >= 1;
+            let want_storage = count_of(ModuleType::Storage) >= 1;
+            let want_locomotor2 = count_of(ModuleType::Locomotor) >= 2;
+
+            let tag = tags[i];
+            assert_eq!(tag & (1 << 0) != 0, want_armor, "agent {id} armor bit");
+            assert_eq!(tag & (1 << 1) != 0, want_spines, "agent {id} spines bit");
+            assert_eq!(tag & (1 << 2) != 0, want_jaws, "agent {id} jaws bit");
+            assert_eq!(tag & (1 << 3) != 0, want_storage, "agent {id} storage bit");
+            assert_eq!(tag & (1 << 4) != 0, want_locomotor2, "agent {id} locomotor bit");
+            // No stray bits beyond the five defined ones.
+            assert_eq!(tag & !0b11111, 0, "agent {id} unexpected extra bits: {tag}");
         }
     }
 
