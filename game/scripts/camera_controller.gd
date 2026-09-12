@@ -1,16 +1,16 @@
 extends Camera2D
 
 # Pixel-perfect pipeline (D4, docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md
-# §4). Three project.godot [rendering] settings this camera's stepped zoom
+# §4). Two project.godot [rendering] settings this camera's stepped zoom
 # depends on (project.godot cannot hold comments, so they're documented here):
 #   2d/snap/snap_2d_transforms_to_pixel=true   - node positions snap to whole
 #       pixels, so an integer-zoomed world never shimmers.
 #   2d/snap/snap_2d_vertices_to_pixel=false    - vertices stay unsnapped; the
 #       MultiMesh prop/agent quads would distort if their corners snapped
 #       independently of their transform.
-#   textures/canvas_textures/default_texture_filter=0 (nearest) - crisp texels
-#       everywhere that doesn't opt into linear filtering explicitly
-#       (biome_renderer.gd's ground sprite and 3×3 tiles still request LINEAR).
+# The project's default texture filter is deliberately left at linear: every
+# pixel-art node sets TEXTURE_FILTER_NEAREST itself, and the disc sprites,
+# footstep tracks and showcase vignette still want the smooth default.
 #
 # Wheel zoom now snaps to a fixed step table instead of an endless
 # multiplicative ramp: steps >= 1.0 are integer texel multiples (the D4
