@@ -74,6 +74,28 @@ Deterministic (bit-identical per seed) and fast enough for long runs — measure
 cargo bench -p anabios-core          # tick, stages, and scavenge groups
 ```
 
+### Viewer bench
+
+The Godot viewer has its own frame-time readout, separate from the core
+criterion suite above: press **F3** in a running viewer for a small HUD panel
+(fps, frame/process ms, alive/visible agent counts, draw calls, primitives,
+video memory, and the Phase 2 chunk-streaming counters, which stay 0 until
+that work lands).
+
+`scripts/viewer-bench.sh` drives the same readout headlessly-ish (it still
+needs a real window — Godot's render/performance monitors read back nothing
+useful under `--headless`): it boots a scenario, samples N frames without
+pausing the sim, and writes + prints the mean:
+
+```bash
+scripts/viewer-bench.sh predator-prey            # 300 frames, default seed
+scripts/viewer-bench.sh continental 600 3         # 600 frames, seed 3
+cat runs/viewer-bench.csv                         # header + one row/frame + a "mean" row
+```
+
+This is the number quoted as the Phase 0 baseline and every later phase's
+budget check in `docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md`.
+
 ## Running a sweep (headless)
 
 Run N seeds of a scenario in parallel and dump per-run codex events + a CSV summary:

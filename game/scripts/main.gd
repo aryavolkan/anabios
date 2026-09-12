@@ -281,6 +281,8 @@ func _ready() -> void:
 	var helix_panel := preload("res://scripts/helix_panel.gd").new()
 	helix_panel.name = "HelixPanel"
 	$UI.add_child(helix_panel)
+	# Frame-time / scale readout (Phase 0 instrumentation), toggled with [F3].
+	$UI.add_child(preload("res://scripts/perf_readout.gd").new())
 	# Capture hooks (inert in normal play): ANABIOS_PIN opens the inspector on a
 	# representative agent (a click otherwise); ANABIOS_ZOOM frames the camera on
 	# that agent so screenshot runs can show the field body art up close.
