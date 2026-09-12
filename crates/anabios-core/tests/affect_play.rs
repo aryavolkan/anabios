@@ -75,7 +75,11 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // meme channels widened 24->32 and INVENTION_COUNT grew 14->20.
     // inventions_enabled is off here ⇒ layout growth only, trajectory
     // byte-identical.
-    &[(0, 0x45e13db6a54b5bf3), (100, 0xd6ea2e81ae34efe5), (200, 0x8c2d8f987e10bae9)];
+    // Refreshed 2026-09-11 (X2 Wells+Vaccination, FORMAT_VERSION 41→42):
+    // invention count 20->22 shifted the discovery table and practice
+    // channels. inventions_enabled is off here ⇒ layout growth only; tick 0
+    // held, ticks 100/200 moved.
+    &[(0, 0x45e13db6a54b5bf3), (100, 0x48cec90083f03438), (200, 0xe6bf8c64b03cc8c1)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

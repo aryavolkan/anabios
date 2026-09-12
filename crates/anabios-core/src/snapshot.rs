@@ -187,7 +187,13 @@ use crate::world::World;
 /// 41: X1 invention expansion — meme channels widened 24->32 and the
 ///     invention tree grown 14->20 entries; both the serialized meme-vector
 ///     layout and downstream discovery/copy/inheritance behavior change.
-pub const FORMAT_VERSION: u32 = 41;
+/// 42: X2 Wells + Vaccination — invention tree grown 20->22 entries
+///     (`invention::INVENTION_COUNT`); the derived practice channel base
+///     shifts 28..30 -> 30..32, consuming the spare meme-channel headroom
+///     left by v41 (`MEME_CHANNELS` stays 32). Serialized meme-vector layout
+///     unchanged in width, but the invention/practice channel split moved —
+///     an old reader would misread practice adoption as invention adoption.
+pub const FORMAT_VERSION: u32 = 42;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

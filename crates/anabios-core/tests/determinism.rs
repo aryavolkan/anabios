@@ -200,7 +200,11 @@ const GOLDEN: &[(u64, u64)] =
     // growing the discovery probability table layout for every scenario.
     // Inventions off in minimal ⇒ trajectory byte-identical, layout growth
     // only.
-    &[(0, 0x438e6837d64f0a64), (100, 0x8412ea7266832f0f), (1000, 0xf29196284c7a3407)];
+    // Refreshed 2026-09-11 (X2 Wells+Vaccination, FORMAT_VERSION 41→42):
+    // invention count 20->22 shifted the discovery table and practice
+    // channels — layout growth only (inventions off in minimal); only tick
+    // 1000 moved.
+    &[(0, 0x438e6837d64f0a64), (100, 0x8412ea7266832f0f), (1000, 0x3708f8d8a3047875)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

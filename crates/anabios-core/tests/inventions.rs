@@ -1306,7 +1306,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // meme channels widened 24->32 and six more inventions were appended
     // (INVENTION_COUNT 14->20) — another real trajectory change from tick 0,
     // same reason as the military-branch refresh above.
-    &[(0, 0x51ae2a582ebb31a5), (100, 0xd3f890861d9b1ea4), (300, 0x73f64923dddf6e88)];
+    // Refreshed 2026-09-11 (X2 Wells+Vaccination, FORMAT_VERSION 41→42):
+    // invention count 20->22 shifted the discovery table and practice
+    // channels — same class of real trajectory change as the two refreshes
+    // above; tick 0 held (predates discovery), ticks 100/300 moved.
+    &[(0, 0x51ae2a582ebb31a5), (100, 0x48cc350ba12b5f09), (300, 0xb08fbd277580a962)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
