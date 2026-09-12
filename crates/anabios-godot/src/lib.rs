@@ -635,6 +635,56 @@ impl Simulation {
         out
     }
 
+    /// Alive-array indices (position in `iter_alive()` order — the same
+    /// index space `alive_positions()` and the other `alive_*` exports use)
+    /// of every alive agent whose torus-wrapped position falls inside the
+    /// axis-aligned rect `[x0, x1) x [y0, y1)`. Torus-aware: the rect may
+    /// extend past `[0, world_size)` (e.g. `x0` negative) or be wider than
+    /// the world, in which case that axis always matches. Ascending order.
+    #[func]
+    fn alive_in_rect(&self, x0: f32, y0: f32, x1: f32, y1: f32) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for i in alive_in_rect_of(w, x0, y0, x1, y1) {
+                out.push(i);
+            }
+        }
+        out
+    }
+
+    /// `res×res` (`res` clamped `1..=512`) row-major counts of alive agents
+    /// per cell (cell size = `world_size / res`), saturating at 255. Row =
+    /// y, col = x, like `biome_colors`/`biome_terrain_ids`. Used by the
+    /// far-zoom dot layer and the minimap.
+    #[func]
+    fn agent_density(&self, res: i64) -> PackedByteArray {
+        let counts = self.inner.as_ref().map(|w| agent_density_of(w, res)).unwrap_or_default();
+        PackedByteArray::from(counts.as_slice())
+    }
+
+    /// `render_state_stride()` floats per alive agent (in `alive_positions`
+    /// order): `[x, y, size, diet, livestock, mood, fire_intent]` — the same
+    /// source columns and scenario-flag fallbacks as `alive_positions`,
+    /// `alive_sizes`, `alive_diet`, `alive_livestock_flags`, `alive_moods`
+    /// and `alive_fire_intent`, packed into one array so the viewer can read
+    /// it instead of seven separate ones.
+    #[func]
+    fn alive_render_state(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for v in alive_render_state_of(w) {
+                out.push(v);
+            }
+        }
+        out
+    }
+
+    /// Number of `f32` values per alive agent in `alive_render_state()`.
+    #[func]
+    fn render_state_stride(&self) -> i64 {
+        RENDER_STATE_STRIDE as i64
+    }
+
     /// Look up one alive agent by id. Returns a Dictionary; empty if dead.
     #[func]
     fn get_agent_info(&self, id: i64) -> VarDictionary {
@@ -1521,6 +1571,72 @@ fn livestock_flags_of(w: &anabios_core::World) -> Vec<i32> {
         .collect()
 }
 
+/// Number of `f32` values per alive agent in `alive_render_state_of`.
+const RENDER_STATE_STRIDE: usize = 7;
+
+/// Alive-array indices (see the `alive_in_rect` doc comment) of alive
+/// agents whose torus-wrapped position falls inside `[x0,x1) x [y0,y1)`. A
+/// point is inside on one axis iff `fposmod(p - lo, world_size) <= (hi -
+/// lo)` when `hi - lo < world_size`; a span at least as wide as the world
+/// always matches on that axis. `iter_alive()` is already ascending, so the
+/// filtered indices come out ascending too.
+fn alive_in_rect_of(w: &anabios_core::World, x0: f32, y0: f32, x1: f32, y1: f32) -> Vec<i32> {
+    let ws = w.world_size;
+    let sx = x1 - x0;
+    let sy = y1 - y0;
+    let in_span = |p: f32, lo: f32, span: f32| span >= ws || (p - lo).rem_euclid(ws) <= span;
+    w.agents
+        .iter_alive()
+        .enumerate()
+        .filter_map(|(i, id)| {
+            let p = w.agents.position[id as usize];
+            (in_span(p.x, x0, sx) && in_span(p.y, y0, sy)).then_some(i as i32)
+        })
+        .collect()
+}
+
+/// `res×res` (`res` clamped `1..=512`) row-major alive-agent counts,
+/// saturating at 255 per cell. Cell size = `world_size / res`; row = y,
+/// col = x, torus-wrapped.
+fn agent_density_of(w: &anabios_core::World, res: i64) -> Vec<u8> {
+    let res = res.clamp(1, 512) as usize;
+    let mut counts = vec![0u8; res * res];
+    let ws = w.world_size;
+    let cell = ws / res as f32;
+    for id in w.agents.iter_alive() {
+        let p = w.agents.position[id as usize];
+        let col = (p.x.rem_euclid(ws) / cell) as usize;
+        let row = (p.y.rem_euclid(ws) / cell) as usize;
+        let idx = row.min(res - 1) * res + col.min(res - 1);
+        counts[idx] = counts[idx].saturating_add(1);
+    }
+    counts
+}
+
+/// Flat `[x, y, size, diet, livestock, mood, fire_intent]` per alive agent
+/// (`RENDER_STATE_STRIDE` floats each), reading exactly the same source
+/// columns and scenario-flag fallbacks as `alive_positions`, `alive_sizes`,
+/// `alive_diet`, `livestock_flags_of` and `alive_moods`/`alive_fire_intent`.
+fn alive_render_state_of(w: &anabios_core::World) -> Vec<f32> {
+    use anabios_core::genome::GenomeSlot;
+    let livestock = livestock_flags_of(w);
+    let mut out = Vec::with_capacity(w.agents.iter_alive().count() * RENDER_STATE_STRIDE);
+    for (i, id) in w.agents.iter_alive().enumerate() {
+        let idx = id as usize;
+        let p = w.agents.position[idx];
+        let size = 0.5 + 2.5 * w.agents.genome[idx].get(GenomeSlot::Size);
+        let diet = anabios_core::module::effective_diet_carnivory(&w.agents.modules[idx]);
+        out.push(p.x);
+        out.push(p.y);
+        out.push(size);
+        out.push(diet);
+        out.push(livestock[i] as f32);
+        out.push(w.agents.mood[idx] as f32);
+        out.push(w.actions[idx].fire_intent);
+    }
+    out
+}
+
 /// Per-alive-agent held-invention bitmask (`invention::held_mask` over the
 /// meme vector). All-zero when inventions are disabled — the channels never
 /// charge then, but the short-circuit keeps flag-off viewers allocation-cheap
@@ -1764,6 +1880,22 @@ fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
 mod tests {
     use super::*;
 
+    /// A world with agents for the query tests below: the shipped minimal
+    /// scenario (200 agents, uniform placement), stepped a few ticks so
+    /// positions, moods and fire intent are non-trivial.
+    fn minimal_world() -> anabios_core::World {
+        let toml = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scenarios/minimal.toml"
+        ))
+        .expect("read minimal.toml");
+        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
+        for _ in 0..25 {
+            anabios_core::tick::step(&mut w);
+        }
+        w
+    }
+
     #[test]
     fn water_line_separates_sea_from_land() {
         use anabios_core::biome::{BiomeField, ClimateParams, TerrainType, SEA_LEVEL};
@@ -1952,5 +2084,140 @@ mod tests {
         assert_eq!(masks.len(), w.agents.iter_alive().count());
         let spear_bit = 1i32 << anabios_core::invention::HAFTED_SPEARS;
         assert!(masks.iter().any(|&m| m & spear_bit != 0), "seeded spears missing");
+    }
+
+    #[test]
+    fn alive_in_rect_whole_world_and_empty_rect() {
+        let w = minimal_world();
+        let ws = w.world_size;
+        let n = w.agents.iter_alive().count();
+        assert!(n > 0, "minimal.toml should still have live agents after 25 ticks");
+
+        // A rect covering the whole world matches every alive index, ascending.
+        let all = super::alive_in_rect_of(&w, 0.0, 0.0, ws, ws);
+        assert_eq!(all, (0..n as i32).collect::<Vec<_>>());
+
+        // A wider-than-world rect also matches everything on both axes.
+        let over = super::alive_in_rect_of(&w, -ws, -ws, 2.0 * ws, 2.0 * ws);
+        assert_eq!(over, (0..n as i32).collect::<Vec<_>>());
+
+        // A zero-span rect covers nothing (agents sit at generic float
+        // positions; landing exactly on one point has probability 0).
+        let empty = super::alive_in_rect_of(&w, 1.0, 1.0, 1.0, 1.0);
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn alive_in_rect_wraps_the_seam() {
+        use anabios_core::prelude_test::Vec2;
+
+        let mut w = minimal_world();
+        let ws = w.world_size;
+        let ids: Vec<u32> = w.agents.iter_alive().collect();
+        assert!(ids.len() >= 3, "need at least 3 live agents for the seam test");
+
+        // Pin three alive agents to known positions: two just inside the
+        // world edge near x = world_size, one dead center on the x axis.
+        w.agents.position[ids[0] as usize] = Vec2::new(ws - 1.0, 5.0);
+        w.agents.position[ids[1] as usize] = Vec2::new(ws - 0.25, 500.0);
+        w.agents.position[ids[2] as usize] = Vec2::new(ws / 2.0, 500.0);
+
+        // x in [-5, 5) wrapped covers [world_size-5, world_size) ∪ [0, 5);
+        // y spans the whole world so only x matters here.
+        let seam = super::alive_in_rect_of(&w, -5.0, 0.0, 5.0, ws);
+        assert!(seam.contains(&0), "agent at x=world_size-1 must be included");
+        assert!(seam.contains(&1), "agent at x=world_size-0.25 must be included");
+        assert!(!seam.contains(&2), "agent at x=world_size/2 must be excluded");
+
+        // Every returned index is really inside the wrapped rect, every
+        // excluded one is really outside, and the result is ascending.
+        let positions: Vec<Vec2> =
+            w.agents.iter_alive().map(|id| w.agents.position[id as usize]).collect();
+        let x_inside = |x: f32| (x - -5.0_f32).rem_euclid(ws) <= 10.0;
+        let mut prev = -1i32;
+        let seam_set: std::collections::HashSet<i32> = seam.iter().copied().collect();
+        for (i, p) in positions.iter().enumerate() {
+            let expect_in = x_inside(p.x);
+            assert_eq!(seam_set.contains(&(i as i32)), expect_in, "index {i} at x={}", p.x);
+        }
+        for &idx in &seam {
+            assert!(idx > prev, "alive_in_rect_of must return ascending indices");
+            prev = idx;
+        }
+    }
+
+    #[test]
+    fn agent_density_sums_and_places_a_cluster() {
+        use anabios_core::prelude_test::Vec2;
+
+        let mut w = minimal_world();
+        let ws = w.world_size;
+        let res: i64 = 8;
+        let n = w.agents.iter_alive().count();
+        assert!(n < (255 * res * res) as usize, "test assumes no cell can saturate");
+
+        let counts = super::agent_density_of(&w, res);
+        assert_eq!(counts.len(), (res * res) as usize);
+        let total: u32 = counts.iter().map(|&c| c as u32).sum();
+        assert_eq!(total, n as u32, "density grid must account for every alive agent");
+
+        // Hand-place a small cluster inside cell (col=1, row=3) of an 8x8
+        // grid (cell size = world_size/8) and confirm it lands there.
+        let cell = ws / res as f32;
+        let ids: Vec<u32> = w.agents.iter_alive().take(5).collect();
+        for &id in &ids {
+            w.agents.position[id as usize] = Vec2::new(1.5 * cell, 3.5 * cell);
+        }
+        let counts2 = super::agent_density_of(&w, res);
+        let idx = 3 * res as usize + 1;
+        assert!(counts2[idx] as usize >= ids.len(), "cluster must land in cell (1,3)");
+    }
+
+    #[test]
+    fn alive_render_state_matches_the_individual_columns() {
+        let w = minimal_world();
+        let n = w.agents.iter_alive().count();
+
+        let state = super::alive_render_state_of(&w);
+        assert_eq!(state.len(), super::RENDER_STATE_STRIDE * n);
+
+        let positions: Vec<(f32, f32)> = w
+            .agents
+            .iter_alive()
+            .map(|id| {
+                let p = w.agents.position[id as usize];
+                (p.x, p.y)
+            })
+            .collect();
+        let sizes = {
+            use anabios_core::genome::GenomeSlot;
+            w.agents
+                .iter_alive()
+                .map(|id| 0.5 + 2.5 * w.agents.genome[id as usize].get(GenomeSlot::Size))
+                .collect::<Vec<f32>>()
+        };
+        let diets: Vec<f32> = w
+            .agents
+            .iter_alive()
+            .map(|id| {
+                anabios_core::module::effective_diet_carnivory(&w.agents.modules[id as usize])
+            })
+            .collect();
+        let livestock = super::livestock_flags_of(&w);
+        let moods: Vec<i32> =
+            w.agents.iter_alive().map(|id| w.agents.mood[id as usize] as i32).collect();
+        let fire_intent: Vec<f32> =
+            w.agents.iter_alive().map(|id| w.actions[id as usize].fire_intent).collect();
+
+        for i in 0..n {
+            let base = i * super::RENDER_STATE_STRIDE;
+            assert_eq!(state[base], positions[i].0);
+            assert_eq!(state[base + 1], positions[i].1);
+            assert_eq!(state[base + 2], sizes[i]);
+            assert_eq!(state[base + 3], diets[i]);
+            assert_eq!(state[base + 4], livestock[i] as f32);
+            assert_eq!(state[base + 5], moods[i] as f32);
+            assert_eq!(state[base + 6], fire_intent[i]);
+        }
     }
 }
