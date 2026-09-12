@@ -145,7 +145,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // probability table layout for every scenario. inventions_enabled is on
     // here, so the wider candidate pool genuinely reshapes discovery/copy
     // draws — a real trajectory change, not pure layout growth.
-    &[(0, 0x53347826cb8d6f0d), (100, 0x87a11e0b2fda2f92), (300, 0xc232bdefcec39343)];
+    // Refreshed 2026-09-10 (X1 invention expansion, FORMAT_VERSION 40→41):
+    // meme channels widened 24->32 and INVENTION_COUNT grew 14->20;
+    // inventions_enabled is on here so the wider candidate pool again
+    // reshapes discovery/copy draws — a real trajectory change.
+    &[(0, 0xcfb9358f996c770d), (100, 0x671f938cb34680e7), (300, 0x49e732f6cfb0e9be)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

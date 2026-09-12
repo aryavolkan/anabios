@@ -118,6 +118,29 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         let coupling = world.gene_tech_coupling;
         desired_bite *=
             crate::invention::graze_multiplier_coupled(inv_mask, &world.agents.genome[i], coupling);
+        // Cell-conditional agrarian buffs (Pottery / Irrigation): stored food
+        // reads as a bigger bite exactly when the local cell is depleted;
+        // watered fields read as a bigger bite on dry cells. Both identity at
+        // mask 0, so flag-off worlds are unchanged. Scalars copied out before
+        // the mutable graze below.
+        {
+            let cell = world.biome.sample(pos);
+            let cap = cell.terrain.carrying_capacity();
+            let biomass_frac = if cap > 0.0 { cell.plant_biomass / cap } else { 1.0 };
+            let moisture = cell.moisture;
+            desired_bite *= crate::invention::pottery_bite_multiplier_coupled(
+                inv_mask,
+                biomass_frac < crate::invention::POTTERY_LOW_BIOMASS,
+                &world.agents.genome[i],
+                coupling,
+            );
+            desired_bite *= crate::invention::irrigation_bite_multiplier_coupled(
+                inv_mask,
+                moisture,
+                &world.agents.genome[i],
+                coupling,
+            );
+        }
         // Individual technique learning (env mode): an ONGOING cognitive process
         // that runs each foraging tick, decoupled from whether this tick's bite
         // landed — so a learner's technique tracks the shifting optimum reliably,
@@ -562,7 +585,13 @@ fn trade_pass(world: &mut World, alive_ids: &[u32]) {
         if tgt == crate::sense::NO_NEIGHBOR_ID {
             continue;
         }
-        if world.sensors[i].nearest_other_dist >= crate::resource::TRADE_RANGE {
+        // Currency: coinage extends the deal past the gossip circle. Identity
+        // at mask 0, so tree-off (and resource-off) worlds are unchanged.
+        let inv_mask_i = crate::invention::held_mask(&world.agents.meme_vector[i]);
+        if world.sensors[i].nearest_other_dist
+            >= crate::resource::TRADE_RANGE
+                * crate::invention::currency_range_multiplier(inv_mask_i)
+        {
             continue;
         }
         let t = tgt as usize;
@@ -591,6 +620,13 @@ fn trade_pass(world: &mut World, alive_ids: &[u32]) {
         if recv != give {
             world.agents.inventory[t][recv] -= TRADE_UNIT;
             world.agents.inventory[i][recv] += TRADE_UNIT;
+        }
+        // Currency: market efficiency pays both sides a small energy dividend
+        // (the branch's demographic payoff; identity at mask 0).
+        let dividend = crate::invention::currency_swap_dividend(inv_mask_i);
+        if dividend > 0.0 {
+            world.agents.energy[i] += dividend;
+            world.agents.energy[t] += dividend;
         }
         world.total_trades += 1;
         // Viewer scratch: tally the traded good(s) to the nearest hub (the swap

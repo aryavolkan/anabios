@@ -92,7 +92,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // vector widened and four inventions were appended. inventions_enabled is
     // off here ⇒ the new candidates are never consulted — layout growth only,
     // trajectory byte-identical.
-    &[(0, 0xf58eec136bfac185), (100, 0x90198b3c238cf68b), (300, 0xdd0cc6cc14b6cea8)];
+    // Refreshed 2026-09-10 (X1 invention expansion, FORMAT_VERSION 40→41):
+    // meme channels widened 24->32 and INVENTION_COUNT grew 14->20.
+    // inventions_enabled is off here ⇒ layout growth only, trajectory
+    // byte-identical.
+    &[(0, 0x4dce8fa629642185), (100, 0x0040b7131170d80b), (300, 0xde499cea653834a8)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -187,7 +191,11 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // vector widened and four inventions were appended. inventions_enabled is
     // off here ⇒ the new candidates are never consulted — layout growth only,
     // trajectory byte-identical.
-    &[(0, 0x2361e2ebc7880516), (100, 0xe2a450c0eb98ced1), (300, 0x235a604d3e3aed07)];
+    // Refreshed 2026-09-10 (X1 invention expansion, FORMAT_VERSION 40→41):
+    // meme channels widened 24->32 and INVENTION_COUNT grew 14->20.
+    // inventions_enabled is off here ⇒ layout growth only, trajectory
+    // byte-identical.
+    &[(0, 0xe9467932b084e516), (100, 0x8a01b4bb5d218fd1), (300, 0xbb29f3af6a7b560f)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

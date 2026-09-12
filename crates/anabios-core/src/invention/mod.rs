@@ -32,7 +32,7 @@ mod params;
 pub use params::*;
 
 /// Number of inventions in the tree.
-pub const INVENTION_COUNT: usize = 14;
+pub const INVENTION_COUNT: usize = 20;
 
 /// First meme channel owned by the invention tree. Channels below this keep
 /// their pre-existing meanings (alarm, dialects, cooperation norm, hunt
@@ -59,6 +59,14 @@ pub const HAFTED_SPEARS: usize = 10;
 pub const ARCHERY: usize = 11;
 pub const FORTIFICATIONS: usize = 12;
 pub const STEEL_ARMS: usize = 13;
+// The branch expansion (X1, appended 2026-09): storage, agrarian, trade,
+// knowledge, welfare, and the military capstone. Same append-only rule.
+pub const POTTERY: usize = 14;
+pub const IRRIGATION: usize = 15;
+pub const CURRENCY: usize = 16;
+pub const PRINTING: usize = 17;
+pub const SANITATION: usize = 18;
+pub const GUNPOWDER: usize = 19;
 
 /// Adoption level at/above which an invention is functionally held (buffs and
 /// debuffs apply, prereqs count as satisfied, codex counts it).
@@ -349,6 +357,91 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         affinity: Some(GeneAffinity { slot: GenomeSlot::Territoriality, coeff: 0.8 }),
         gene_req: Some(GeneReq { slot: GenomeSlot::Territoriality, min: 0.50 }),
     },
+    Invention {
+        name: "Pottery",
+        key: "pottery",
+        era: 1,
+        prereqs: bit(STONE_TOOLS),
+        // Fired clay: shaped earth hardened in the fire's hearth.
+        materials: [1.0, 0.0, 2.0, 0.0],
+        buff: "+30% bite on depleted cells",
+        debuff: "none",
+        // Storage rewards foresight: the bite buff on depleted cells scales
+        // with Conscientiousness (the agrarian branch's gene).
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Conscientiousness, coeff: 0.8 }),
+        // Era-1 entry tech stays genetically free (matches Stone Tools).
+        gene_req: None,
+    },
+    Invention {
+        name: "Irrigation",
+        key: "irrigation",
+        era: 2,
+        prereqs: bit(FARMING),
+        // Ditched channels: moved water, moved earth, moved stone.
+        materials: [1.0, 2.0, 0.0, 1.0],
+        buff: "+30% bite on dry cells, +8 crowding allowance",
+        debuff: "none",
+        // Waterworks reward the same prudent planners as Farming: shares its
+        // Conscientiousness slot.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Conscientiousness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Conscientiousness, min: 0.40 }),
+    },
+    Invention {
+        name: "Currency",
+        key: "currency",
+        era: 3,
+        prereqs: bit(WRITING),
+        // Coinage: rare metal blanks struck over a counted ledger.
+        materials: [0.0, 2.0, 2.0, 0.0],
+        buff: "+50% trade reach, swap dividend",
+        debuff: "small upkeep",
+        // Markets are a social technology: the swap dividend scales with
+        // Extraversion (band-level deal-making), sharing Archery's slot.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Extraversion, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Extraversion, min: 0.45 }),
+    },
+    Invention {
+        name: "Printing",
+        key: "printing",
+        era: 3,
+        prereqs: bit(WRITING),
+        // Type metal, pigment, and press timber.
+        materials: [0.0, 2.0, 2.0, 0.0],
+        buff: "1.5x meme + invention spread",
+        debuff: "small upkeep",
+        // Mass literacy rewards the novelty-seeking lineage that builds it:
+        // the spread buff scales with Openness (Fire/Electricity's slot).
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Openness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Openness, min: 0.50 }),
+    },
+    Invention {
+        name: "Sanitation",
+        key: "sanitation",
+        era: 3,
+        prereqs: bit(MEDICINE),
+        // Aqueduct stone, lime wash, and soap rendered from tallow.
+        materials: [2.0, 1.0, 1.0, 0.0],
+        buff: "halves infection risk, faster recovery",
+        debuff: "small upkeep",
+        // Public health is applied biology: shares Medicine's
+        // CognitivePotential slot.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::CognitivePotential, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::CognitivePotential, min: 0.55 }),
+    },
+    Invention {
+        name: "Gunpowder",
+        key: "gunpowder",
+        era: 4,
+        prereqs: bit(STEEL_ARMS),
+        // Saltpeter, charcoal, sulfur — the whole pre-industrial supply chain.
+        materials: [2.0, 2.0, 1.0, 1.0],
+        buff: "+40% weapon damage, +30% range",
+        debuff: "small upkeep",
+        // Fielding powder weapons rewards steady nerves under fire: wires the
+        // tree's last unused personality slot (Neuroticism) into the loop.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Neuroticism, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Neuroticism, min: 0.50 }),
+    },
 ];
 
 /// The meme channel carrying invention `inv`'s adoption level.
@@ -560,6 +653,54 @@ pub fn graze_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f
         + MACHINERY_BITE * coupled_held_genome(mask, MACHINERY, genome, coupling)
 }
 
+/// Pottery: stored food reads as a bigger bite exactly when the local cell is
+/// depleted (`low_biomass` = the cell sits below `POTTERY_LOW_BIOMASS` of its
+/// carrying capacity) — `interact::feed_pass`, applied on top of the flat
+/// graze multiplier so the bonus helps precisely in scarcity.
+#[inline]
+pub fn pottery_bite_multiplier_coupled(
+    mask: u32,
+    low_biomass: bool,
+    genome: &Genome,
+    coupling: bool,
+) -> f32 {
+    if !low_biomass {
+        return 1.0;
+    }
+    1.0 + POTTERY_BITE * coupled_held_genome(mask, POTTERY, genome, coupling)
+}
+
+/// Irrigation: watered fields read as a bigger bite on dry cells (moisture
+/// below `IRRIGATION_DRY_MOISTURE`) — `interact::feed_pass`, same
+/// on-top-of-graze pattern as Pottery.
+#[inline]
+pub fn irrigation_bite_multiplier_coupled(
+    mask: u32,
+    moisture: f32,
+    genome: &Genome,
+    coupling: bool,
+) -> f32 {
+    if moisture >= IRRIGATION_DRY_MOISTURE {
+        return 1.0;
+    }
+    1.0 + IRRIGATION_BITE * coupled_held_genome(mask, IRRIGATION, genome, coupling)
+}
+
+/// Currency: trade-reach multiplier (coinage extends a deal past the gossip
+/// circle) — `interact::trade_pass` range check only.
+#[inline]
+pub fn currency_range_multiplier(mask: u32) -> f32 {
+    1.0 + CURRENCY_RANGE * held_f32(mask, CURRENCY)
+}
+
+/// Currency: the flat energy dividend each side of a completed swap pockets
+/// when the initiator holds it (market efficiency) — `interact::trade_pass`.
+/// 0.0 without the tech, so resources-off or tree-off worlds are unchanged.
+#[inline]
+pub fn currency_swap_dividend(mask: u32) -> f32 {
+    CURRENCY_SWAP_ENERGY * held_f32(mask, CURRENCY)
+}
+
 /// Graze-bite multiplier with coupling off (genome-independent, as before).
 /// Test-only oracle: production uses `graze_multiplier_coupled`, which equals
 /// this exactly at `coupling = false`.
@@ -585,14 +726,15 @@ pub fn food_energy_multiplier(mask: u32) -> f32 {
     1.0 + FIRE_ENERGY * held_f32(mask, FIRE)
 }
 
-/// Weapon-damage multiplier (Metalworking, Spears, Archery, Steel Arms) —
-/// `interact::combat_pass`.
+/// Weapon-damage multiplier (Metalworking, Spears, Archery, Steel Arms,
+/// Gunpowder) — `interact::combat_pass`.
 #[inline]
 pub fn weapon_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
     1.0 + METALWORKING_DAMAGE * coupled_held_genome(mask, METALWORKING, genome, coupling)
         + SPEARS_DAMAGE * coupled_held_genome(mask, HAFTED_SPEARS, genome, coupling)
         + ARCHERY_DAMAGE * coupled_held_genome(mask, ARCHERY, genome, coupling)
         + STEEL_DAMAGE * coupled_held_genome(mask, STEEL_ARMS, genome, coupling)
+        + GUNPOWDER_DAMAGE * coupled_held_genome(mask, GUNPOWDER, genome, coupling)
 }
 
 /// Weapon-damage multiplier with coupling off. Test-only oracle for
@@ -604,6 +746,7 @@ pub fn weapon_multiplier(mask: u32) -> f32 {
         + SPEARS_DAMAGE * held_f32(mask, HAFTED_SPEARS)
         + ARCHERY_DAMAGE * held_f32(mask, ARCHERY)
         + STEEL_DAMAGE * held_f32(mask, STEEL_ARMS)
+        + GUNPOWDER_DAMAGE * held_f32(mask, GUNPOWDER)
 }
 
 /// Fraction of the FINAL net combat damage (post-armor, post-defense) the
@@ -625,11 +768,12 @@ pub fn defense_multiplier(mask: u32) -> f32 {
     1.0 - FORT_DEFENSE * held_f32(mask, FORTIFICATIONS)
 }
 
-/// Weapon-reach multiplier (Archery) — `interact::combat_pass` range check
-/// only; sense radii and the anthro-race threat register are untouched.
+/// Weapon-reach multiplier (Archery, Gunpowder) — `interact::combat_pass`
+/// range check only; sense radii and the anthro-race threat register are
+/// untouched.
 #[inline]
 pub fn range_multiplier(mask: u32) -> f32 {
-    1.0 + ARCHERY_RANGE * held_f32(mask, ARCHERY)
+    1.0 + ARCHERY_RANGE * held_f32(mask, ARCHERY) + GUNPOWDER_RANGE * held_f32(mask, GUNPOWDER)
 }
 
 /// Effective breeding-threshold multiplier (Fortifications) —
@@ -725,9 +869,10 @@ pub fn perception_multiplier(mask: u32) -> f32 {
     1.0 + ELECTRICITY_PERCEPTION * held_f32(mask, ELECTRICITY)
 }
 
-/// Meme-copy / invention-spread multiplier (Writing) — `culture::culture_step`.
-/// With `coupling` on, the literacy bonus above `1.0` scales with the holder's
-/// CommunicationStrength gene.
+/// Meme-copy / invention-spread multiplier (Writing, then Printing on top —
+/// the knowledge branch compounds) — `culture::culture_step`. With `coupling`
+/// on, each tech's bonus above `1.0` scales with its own affinity gene
+/// (Writing: CommunicationStrength; Printing: Openness).
 #[inline]
 pub fn spread_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
     if mask & bit(WRITING) == 0 {
@@ -738,7 +883,16 @@ pub fn spread_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> 
         (true, Some(a)) => 1.0 + a.coeff * (genome.get(a.slot) - 0.5),
         _ => 1.0,
     };
-    1.0 + bonus * scale
+    let mut mult = 1.0 + bonus * scale;
+    // Printing requires Writing (prereq), so no separate gate: it can only be
+    // held inside this branch.
+    let print_bonus = PRINTING_SPREAD_MULT - 1.0;
+    let print_scale = match (coupling, INVENTIONS[PRINTING].affinity) {
+        (true, Some(a)) => 1.0 + a.coeff * (genome.get(a.slot) - 0.5),
+        _ => 1.0,
+    };
+    mult += print_bonus * held_f32(mask, PRINTING) * print_scale;
+    mult
 }
 
 /// Meme-copy / invention-spread multiplier with coupling off. Test-only oracle
@@ -749,7 +903,7 @@ pub fn spread_multiplier(mask: u32) -> f32 {
     if mask & bit(WRITING) == 0 {
         return 1.0;
     }
-    WRITING_SPREAD_MULT
+    WRITING_SPREAD_MULT + (PRINTING_SPREAD_MULT - 1.0) * held_f32(mask, PRINTING)
 }
 
 /// Multiplier on invention `inv`'s per-tick discovery probability from the
@@ -786,6 +940,10 @@ pub fn flat_upkeep(mask: u32) -> f32 {
     cost += ARCHERY_UPKEEP * held_f32(mask, ARCHERY);
     cost += ELECTRICITY_UPKEEP * held_f32(mask, ELECTRICITY);
     cost += NUCLEAR_UPKEEP * held_f32(mask, NUCLEAR_POWER);
+    cost += CURRENCY_UPKEEP * held_f32(mask, CURRENCY);
+    cost += PRINTING_UPKEEP * held_f32(mask, PRINTING);
+    cost += SANITATION_UPKEEP * held_f32(mask, SANITATION);
+    cost += GUNPOWDER_UPKEEP * held_f32(mask, GUNPOWDER);
     cost - NUCLEAR_INCOME * held_f32(mask, NUCLEAR_POWER)
 }
 
@@ -799,16 +957,23 @@ pub fn flat_upkeep_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
     cost += ARCHERY_UPKEEP * held_f32(mask, ARCHERY);
     cost += ELECTRICITY_UPKEEP * held_f32(mask, ELECTRICITY);
     cost += NUCLEAR_UPKEEP * held_f32(mask, NUCLEAR_POWER);
+    cost += CURRENCY_UPKEEP * held_f32(mask, CURRENCY);
+    cost += PRINTING_UPKEEP * held_f32(mask, PRINTING);
+    cost += SANITATION_UPKEEP * held_f32(mask, SANITATION);
+    cost += GUNPOWDER_UPKEEP * held_f32(mask, GUNPOWDER);
     cost - NUCLEAR_INCOME * coupled_held_genome(mask, NUCLEAR_POWER, genome, coupling)
 }
 
 /// Per-tick energy drain from Farming crowding stress, given this tick's
-/// crowding neighbour count.
+/// crowding neighbour count. Irrigation raises the free allowance (watered
+/// fields carry denser villages).
 pub fn crowding_stress(mask: u32, crowding: u32) -> f32 {
     if mask & bit(FARMING) == 0 {
         return 0.0;
     }
-    let extra = crowding.saturating_sub(FARMING_CROWDING_FREE) as f32;
+    let free = FARMING_CROWDING_FREE
+        + if mask & bit(IRRIGATION) != 0 { IRRIGATION_CROWDING_BONUS } else { 0 };
+    let extra = crowding.saturating_sub(free) as f32;
     extra * FARMING_STRESS_PER_NEIGHBOR
 }
 
@@ -1254,21 +1419,24 @@ mod tests {
 
     #[test]
     fn candidates_respect_prereqs() {
+        // Pottery shares Stone Tools' prereq (none but itself), so it joins
+        // every candidate list below alongside the pre-X1 entries once Stone
+        // Tools is held.
         let mut got = Vec::new();
         candidates(0, |k| got.push(k));
         assert_eq!(got, vec![STONE_TOOLS]);
         got.clear();
         candidates(bit(STONE_TOOLS), |k| got.push(k));
-        assert_eq!(got, vec![FIRE, HAFTED_SPEARS]);
+        assert_eq!(got, vec![FIRE, HAFTED_SPEARS, POTTERY]);
         got.clear();
         candidates(bit(STONE_TOOLS) | bit(FIRE), |k| got.push(k));
-        assert_eq!(got, vec![FARMING, METALWORKING, HAFTED_SPEARS]);
+        assert_eq!(got, vec![FARMING, METALWORKING, HAFTED_SPEARS, POTTERY]);
         got.clear();
         // Machinery needs BOTH metalworking and writing; Archery needs Spears.
         candidates(bit(STONE_TOOLS) | bit(FIRE) | bit(METALWORKING) | bit(HAFTED_SPEARS), |k| {
             got.push(k)
         });
-        assert_eq!(got, vec![FARMING, ARCHERY]);
+        assert_eq!(got, vec![FARMING, ARCHERY, POTTERY]);
     }
 
     #[test]
@@ -1332,9 +1500,11 @@ mod tests {
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE - 1));
         assert!(is_invention_channel(INVENTION_CHANNEL_BASE));
         assert!(is_invention_channel(channel(STEEL_ARMS)));
-        // The last invention channel is the top of the tree block; the practice
-        // channels above it (`PRACTICE_CHANNEL_BASE..`) are NOT invention channels.
-        assert_eq!(channel(STEEL_ARMS), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
+        // The last invention channel is the top of the tree block — now
+        // Gunpowder, the X1 expansion's capstone (append-only ids moved this
+        // past the old Steel Arms top); the practice channels above it
+        // (`PRACTICE_CHANNEL_BASE..`) are NOT invention channels.
+        assert_eq!(channel(GUNPOWDER), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE + INVENTION_COUNT));
         assert!(!is_invention_channel(MEME_CHANNELS));
     }
@@ -1482,5 +1652,175 @@ mod tests {
         // Archery pays flat upkeep.
         assert!((flat_upkeep(bit(ARCHERY)) - ARCHERY_UPKEEP).abs() < 1e-6);
         assert_eq!(flat_upkeep_coupled(bit(ARCHERY), &neutral, false), flat_upkeep(bit(ARCHERY)));
+    }
+
+    // --- X1 expansion: Pottery, Irrigation, Currency, Printing, Sanitation,
+    // Gunpowder --------------------------------------------------------------
+
+    #[test]
+    fn pottery_bite_multiplier_shape() {
+        use crate::genome::{Genome, GenomeSlot};
+        let pot = bit(POTTERY);
+        // Not low-biomass: identity regardless of mask or coupling.
+        assert_eq!(pottery_bite_multiplier_coupled(pot, false, &Genome::neutral(), false), 1.0);
+        assert_eq!(pottery_bite_multiplier_coupled(pot, false, &Genome::neutral(), true), 1.0);
+        assert_eq!(pottery_bite_multiplier_coupled(0, false, &Genome::neutral(), false), 1.0);
+        // Low-biomass, mask 0: unheld, no bonus.
+        assert_eq!(pottery_bite_multiplier_coupled(0, true, &Genome::neutral(), false), 1.0);
+        // Low-biomass, held, coupling off: flat bonus.
+        let base = pottery_bite_multiplier_coupled(pot, true, &Genome::neutral(), false);
+        assert!((base - (1.0 + POTTERY_BITE)).abs() < 1e-6);
+        // Coupling scales with Conscientiousness like the other coupled fns:
+        // off = identity regardless of gene; on, neutral = base; high > base > low.
+        let mut lo = Genome::neutral();
+        lo.set(GenomeSlot::Conscientiousness, 0.0);
+        let mut hi = Genome::neutral();
+        hi.set(GenomeSlot::Conscientiousness, 1.0);
+        assert_eq!(pottery_bite_multiplier_coupled(pot, true, &lo, false), base);
+        assert_eq!(pottery_bite_multiplier_coupled(pot, true, &hi, false), base);
+        assert!(
+            (pottery_bite_multiplier_coupled(pot, true, &Genome::neutral(), true) - base).abs()
+                < 1e-6
+        );
+        let lo_m = pottery_bite_multiplier_coupled(pot, true, &lo, true);
+        let hi_m = pottery_bite_multiplier_coupled(pot, true, &hi, true);
+        assert!(hi_m > base && base > lo_m);
+        assert!(lo_m > 0.0, "buff must stay positive");
+    }
+
+    #[test]
+    fn irrigation_bite_multiplier_shape() {
+        use crate::genome::{Genome, GenomeSlot};
+        let irr = bit(IRRIGATION);
+        let wet = IRRIGATION_DRY_MOISTURE + 0.1;
+        let dry = IRRIGATION_DRY_MOISTURE - 0.1;
+        // Wet cell: identity regardless of mask/coupling.
+        assert_eq!(irrigation_bite_multiplier_coupled(irr, wet, &Genome::neutral(), false), 1.0);
+        assert_eq!(irrigation_bite_multiplier_coupled(irr, wet, &Genome::neutral(), true), 1.0);
+        // Dry cell, mask 0: unheld, no bonus.
+        assert_eq!(irrigation_bite_multiplier_coupled(0, dry, &Genome::neutral(), false), 1.0);
+        // Dry cell, held, coupling off: flat bonus.
+        let base = irrigation_bite_multiplier_coupled(irr, dry, &Genome::neutral(), false);
+        assert!((base - (1.0 + IRRIGATION_BITE)).abs() < 1e-6);
+        // Exactly at the threshold counts as NOT dry (matches feed_pass's `>=` check).
+        assert_eq!(
+            irrigation_bite_multiplier_coupled(
+                irr,
+                IRRIGATION_DRY_MOISTURE,
+                &Genome::neutral(),
+                false
+            ),
+            1.0
+        );
+        // Coupling scales with Conscientiousness.
+        let mut lo = Genome::neutral();
+        lo.set(GenomeSlot::Conscientiousness, 0.0);
+        let mut hi = Genome::neutral();
+        hi.set(GenomeSlot::Conscientiousness, 1.0);
+        assert_eq!(irrigation_bite_multiplier_coupled(irr, dry, &lo, false), base);
+        assert!(
+            (irrigation_bite_multiplier_coupled(irr, dry, &Genome::neutral(), true) - base).abs()
+                < 1e-6
+        );
+        let lo_m = irrigation_bite_multiplier_coupled(irr, dry, &lo, true);
+        let hi_m = irrigation_bite_multiplier_coupled(irr, dry, &hi, true);
+        assert!(hi_m > base && base > lo_m);
+        assert!(lo_m > 0.0);
+    }
+
+    #[test]
+    fn currency_functions_identity_and_value() {
+        assert_eq!(currency_range_multiplier(0), 1.0);
+        assert_eq!(currency_swap_dividend(0), 0.0);
+        let cur = bit(CURRENCY);
+        assert!((currency_range_multiplier(cur) - (1.0 + CURRENCY_RANGE)).abs() < 1e-6);
+        assert!((currency_swap_dividend(cur) - CURRENCY_SWAP_ENERGY).abs() < 1e-6);
+        // Unrelated bits don't trigger it.
+        assert_eq!(currency_range_multiplier(bit(WRITING)), 1.0);
+        assert_eq!(currency_swap_dividend(bit(WRITING)), 0.0);
+    }
+
+    #[test]
+    fn printing_extends_the_spread_stack_and_needs_no_writing_gate_of_its_own() {
+        // Printing stacks on top of Writing (the knowledge branch compounds).
+        let both = bit(WRITING) | bit(PRINTING);
+        let expect = WRITING_SPREAD_MULT + (PRINTING_SPREAD_MULT - 1.0);
+        assert!((spread_multiplier(both) - expect).abs() < 1e-6);
+        // Function contract: without Writing held, always 1.0 — even with
+        // Printing's bit set (can't happen via the real prereq chain, but the
+        // function itself special-cases only the Writing gate, so pin the
+        // no-Writing behavior explicitly).
+        assert_eq!(spread_multiplier(bit(PRINTING)), 1.0);
+    }
+
+    #[test]
+    fn gunpowder_extends_the_weapon_and_range_stacks() {
+        let stack = bit(METALWORKING)
+            | bit(HAFTED_SPEARS)
+            | bit(ARCHERY)
+            | bit(STEEL_ARMS)
+            | bit(GUNPOWDER);
+        let expect = 1.0
+            + METALWORKING_DAMAGE
+            + SPEARS_DAMAGE
+            + ARCHERY_DAMAGE
+            + STEEL_DAMAGE
+            + GUNPOWDER_DAMAGE;
+        assert!((weapon_multiplier(stack) - expect).abs() < 1e-6);
+        assert_eq!(range_multiplier(0), 1.0);
+        assert!((range_multiplier(bit(GUNPOWDER)) - (1.0 + GUNPOWDER_RANGE)).abs() < 1e-6);
+        assert!(
+            (range_multiplier(bit(ARCHERY) | bit(GUNPOWDER))
+                - (1.0 + ARCHERY_RANGE + GUNPOWDER_RANGE))
+                .abs()
+                < 1e-6
+        );
+    }
+
+    #[test]
+    fn irrigation_raises_farmings_crowding_allowance() {
+        let farm = bit(FARMING);
+        let farm_irr = bit(FARMING) | bit(IRRIGATION);
+        // Without Irrigation: base allowance (see
+        // `crowding_stress_only_bites_farmers_above_the_free_allowance`).
+        assert_eq!(crowding_stress(farm, FARMING_CROWDING_FREE), 0.0);
+        // With Irrigation: allowance widens by IRRIGATION_CROWDING_BONUS.
+        let free = FARMING_CROWDING_FREE + IRRIGATION_CROWDING_BONUS;
+        assert_eq!(crowding_stress(farm_irr, free), 0.0);
+        assert_eq!(crowding_stress(farm_irr, free - 1), 0.0, "still under the widened allowance");
+        let excess = 3;
+        assert_eq!(
+            crowding_stress(farm_irr, free + excess),
+            excess as f32 * FARMING_STRESS_PER_NEIGHBOR
+        );
+        // Irrigation alone (no Farming): still zero — the allowance only matters
+        // once Farming is held.
+        assert_eq!(crowding_stress(bit(IRRIGATION), 1_000_000), 0.0);
+    }
+
+    #[test]
+    fn x1_expansion_tree_shape() {
+        use crate::genome::GenomeSlot;
+        // Documented prereqs, eras, and affinity slots for the six X1
+        // inventions (params.rs / mod.rs doc comments).
+        let expect = [
+            (POTTERY, bit(STONE_TOOLS), 1u8, GenomeSlot::Conscientiousness as usize),
+            (IRRIGATION, bit(FARMING), 2u8, GenomeSlot::Conscientiousness as usize),
+            (CURRENCY, bit(WRITING), 3u8, GenomeSlot::Extraversion as usize),
+            (PRINTING, bit(WRITING), 3u8, GenomeSlot::Openness as usize),
+            (SANITATION, bit(MEDICINE), 3u8, GenomeSlot::CognitivePotential as usize),
+            (GUNPOWDER, bit(STEEL_ARMS), 4u8, GenomeSlot::Neuroticism as usize),
+        ];
+        for (k, prereqs, era, slot) in expect {
+            let inv = &INVENTIONS[k];
+            assert_eq!(inv.prereqs, prereqs, "{} prereqs", inv.name);
+            assert_eq!(inv.era, era, "{} era", inv.name);
+            assert_eq!(
+                inv.affinity.map(|a| a.slot as usize),
+                Some(slot),
+                "{} affinity slot",
+                inv.name
+            );
+        }
     }
 }

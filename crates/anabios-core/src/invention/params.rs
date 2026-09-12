@@ -63,6 +63,38 @@ pub const FORT_SPEED_PENALTY: f32 = 0.10;
 pub const STEEL_DAMAGE: f32 = 0.60;
 pub const STEEL_SPOILS: f32 = 0.20;
 pub const STEEL_UPKEEP: f32 = 0.10;
+/// Pottery: graze-bite bonus when the local cell is depleted (stored food
+/// reads as a bigger bite exactly when the land runs out), and the
+/// biomass-fraction-of-capacity below which the bonus applies.
+pub const POTTERY_BITE: f32 = 0.30;
+pub const POTTERY_LOW_BIOMASS: f32 = 0.5;
+/// Irrigation: graze-bite bonus on dry cells, the moisture below which a cell
+/// counts as dry, and the extra crowding allowance it adds to Farming's free
+/// neighbors (watered fields carry denser villages).
+pub const IRRIGATION_BITE: f32 = 0.30;
+pub const IRRIGATION_DRY_MOISTURE: f32 = 0.4;
+pub const IRRIGATION_CROWDING_BONUS: u32 = 8;
+/// Currency: trade-range multiplier bonus (coinage lets strangers deal at
+/// arm's length) and the flat energy dividend each side of a swap pockets
+/// (market efficiency); small flat per-tick upkeep.
+pub const CURRENCY_RANGE: f32 = 0.50;
+pub const CURRENCY_SWAP_ENERGY: f32 = 0.05;
+pub const CURRENCY_UPKEEP: f32 = 0.002;
+/// Printing: multiplier on meme copy / invention spread stacking with
+/// Writing's (the knowledge branch compounds); small flat per-tick upkeep.
+pub const PRINTING_SPREAD_MULT: f32 = 1.5;
+pub const PRINTING_UPKEEP: f32 = 0.002;
+/// Sanitation: susceptibility and recovery multipliers, stacking with
+/// Medicine's (the welfare branch compounds); small flat per-tick upkeep.
+pub const SANITATION_SUSCEPT_MULT: f32 = 0.5;
+pub const SANITATION_RECOVERY_MULT: f32 = 1.5;
+pub const SANITATION_UPKEEP: f32 = 0.002;
+/// Gunpowder: weapon-damage and weapon-range bonuses (stack additively with
+/// the earlier military branch inside the same multipliers); small flat
+/// per-tick upkeep.
+pub const GUNPOWDER_DAMAGE: f32 = 0.40;
+pub const GUNPOWDER_RANGE: f32 = 0.30;
+pub const GUNPOWDER_UPKEEP: f32 = 0.003;
 
 /// Biome pollution: per-cell cap, regrowth-penalty cap, and per-biome-step
 /// decay. Regrowth is multiplied by `1 - min(pollution, POLLUTION_MAX_EFFECT)`.

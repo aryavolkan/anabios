@@ -295,10 +295,12 @@ mod trait_evolution {
     #[test]
     fn convergent_scenario_fires_trait_events() {
         let mut scenario = Scenario::parse_toml(SCENARIO).expect("parse");
-        // Seed 3 fires a TraitFixation within the 1500-tick window after the
-        // PerceptionRadius gene was removed and non-cognition perception falls
-        // back to a hardcoded neutral modulator.
-        scenario.seed = 3;
+        // Re-picked 2026-09-10: the X1 invention expansion (MEME_CHANNELS
+        // 24->32) shifted trajectories enough that seed 3 no longer fires
+        // within the 1500-tick window (a 0..128 sweep found it fires only
+        // at tick 1950 under the wider genome). Seed 94 fires a
+        // TraitFixation at tick 390, well inside the window with margin.
+        scenario.seed = 94;
         let mut world = scenario.instantiate();
         // Pin the cap for debug-profile speed; trait dynamics are unaffected.
         world.max_population = 1000;

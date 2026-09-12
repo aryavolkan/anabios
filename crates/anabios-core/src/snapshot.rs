@@ -184,7 +184,10 @@ use crate::world::World;
 ///     grew.
 /// 40: meme vector widened 20->24; military invention branch appended
 ///     (hafted_spears/archery/fortifications/steel_arms, ids 10-13).
-pub const FORMAT_VERSION: u32 = 40;
+/// 41: X1 invention expansion — meme channels widened 24->32 and the
+///     invention tree grown 14->20 entries; both the serialized meme-vector
+///     layout and downstream discovery/copy/inheritance behavior change.
+pub const FORMAT_VERSION: u32 = 41;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
