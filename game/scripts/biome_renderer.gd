@@ -36,6 +36,12 @@ var _tiles: Array[Sprite2D] = []
 const TerrainShader := preload("res://shaders/terrain.gdshader")
 var _terrain_mat: ShaderMaterial
 
+# Decorative props (reeds, shrubs, conifers, rocks, logs) scattered from the
+# terrain colours. A child of this sprite so it shares the ground's wrap
+# tiling and dim/cool modulate; shown only in the biome view.
+const BiomeProps = preload("res://scripts/biome_props.gd")
+var _props: Node2D
+
 
 func _ready() -> void:
 	centered = false
@@ -61,6 +67,10 @@ func _ready() -> void:
 			tile.material = _terrain_mat
 			add_child(tile)
 			_tiles.append(tile)
+	_props = BiomeProps.new()
+	_props.name = "BiomeProps"
+	add_child(_props)
+	_props.setup(sim)
 	_setup(int(sim.biome_resolution()))
 
 
@@ -153,6 +163,8 @@ func _process(_delta: float) -> void:
 	# overlays (pheromone/optimum/market/succession) pass through faithfully.
 	if _terrain_mat != null:
 		_terrain_mat.set_shader_parameter("biome_mode", 1.0 if mode == -1 else 0.0)
+	# Scenery follows the same rule: props only over the real terrain.
+	_props.set_terrain_visible(mode == -1)
 	# While a data overlay owns the ground texture, keep the minimap's biome copy
 	# current on its own (much slower) cadence — the minimap is 200px wide and
 	# the terrain creeps. `== 1` refreshes on the first frame after the switch so
@@ -192,6 +204,10 @@ func _process(_delta: float) -> void:
 	else:
 		colors = sim.biome_colors()
 	_blit(colors, _img, _tex)
+	# Re-scatter the props from the fresh terrain (a no-op while the terrain
+	# checksum holds); only the biome view carries raw terrain colours.
+	if mode == -1:
+		_props.refresh(colors, _res, sim.world_size())
 
 
 # Pack a res² colour grid into an RGBA8 byte buffer and push it to `tex` (one
