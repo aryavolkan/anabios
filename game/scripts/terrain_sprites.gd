@@ -30,18 +30,21 @@ const CELL_PX := 16
 
 # --- ground tile pixel maps -------------------------------------------------
 # Char keys per terrain: first entry is the base fill; accents stay within the
-# hue family except rare feature pixels (flowers, stones) kept to a few px so
-# the tile's mean colour tracks the biome.rs canon.
+# hue family except rare feature pixels (flowers, stones) kept to a few px.
+# The green families sit a step brighter than the biome.rs canon on purpose:
+# tiles now carry 90% of the land colour (terrain.gdshader tile_mix) and the
+# canon's dark forest read as dusk in every capture; the minimap still uses
+# the canon colours, so the two agree in hue, not value.
 
 const _TILE_PALS: Array = [
 	{"w": "173070", "k": "12265c", "h": "2a4a94"},
-	{"a": "367030", "d": "2c5f28", "l": "4a8a3c", "f": "d9c05a"},
-	{"b": "12421c", "d": "0d3315", "l": "1d5426", "m": "2a6b30"},
+	{"a": "4a8a3a", "d": "3d7530", "l": "5fa84a", "f": "e6cc60"},
+	{"b": "236a2e", "d": "1a5223", "l": "2f8a3c", "m": "3fa04a"},
 	{"e": "ad9454", "d": "947c42", "r": "c4ac68", "t": "7a6a4a"},
 	{"r": "6b6673", "d": "575260", "l": "807a8a", "k": "494452"},
 	{"s": "b8a85c", "d": "9c8c48", "l": "ccbc70", "t": "857a3a"},
-	{"j": "0f5729", "d": "0a4220", "l": "1a6b34", "m": "2f8a44"},
-	{"g": "295742", "d": "1f4634", "l": "356a50", "n": "15382a"},
+	{"j": "1f7a3a", "d": "166030", "l": "2c9a4c", "m": "45b45e"},
+	{"g": "3a7a5c", "d": "2c604a", "l": "4a9270", "n": "245240"},
 	{"u": "9ea89e", "d": "8a948a", "l": "b2bcb2", "k": "76806f"},
 ]
 

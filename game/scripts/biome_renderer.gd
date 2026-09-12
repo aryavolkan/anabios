@@ -66,9 +66,9 @@ func _ready() -> void:
 	centered = false
 	position = Vector2.ZERO
 	z_index = -10
-	# Slightly dim + cool the ground so organisms and overlays read clearly on
-	# top and the terrain harmonizes with the dark instrument HUD.
-	modulate = Color(0.85, 0.88, 0.92)
+	# A whisper of cool tint keeps the ground under the HUD's teal; the old
+	# 0.85 dim made every capture read as dusk.
+	modulate = Color(0.97, 0.98, 1.0)
 	# Linear filtering removes the harshest nearest-neighbour stair-steps before
 	# the shader's relief/softening pass; the shader keeps biomes distinct.
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR

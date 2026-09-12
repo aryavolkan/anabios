@@ -15,11 +15,15 @@ shader_type canvas_item;
 
 uniform float biome_mode = 1.0;        // 1 = terrain treatment, 0 = passthrough
 uniform float relief_strength = 12.0;  // hillshade intensity on land (elevation gradient)
-uniform float soften = 0.45;           // 0 = crisp blocks, 1 = fully smoothed
+uniform float soften = 0.10;           // 0 = crisp blocks, 1 = fully smoothed
 uniform vec2 light_dir = vec2(-0.65, -0.75); // light from upper-left
 uniform float world_size = 512.0;      // sim world extent, for seamless shimmer
 uniform float sea_level = 0.35;        // viewer-derived water line, for depth shading
-uniform float vignette = 0.12;         // corner darkening on terrain (0 = off)
+uniform float vignette = 0.06;         // corner darkening on terrain (0 = off)
+// Land finish: a saturation lift and brightness gain applied after relief and
+// shore passes so the muted sim palette reads as pixel art, not a heatmap.
+uniform float vibrance = 0.35;
+uniform float land_lift = 1.22;
 
 // Pixel-art ground tiles (terrain_sprites.gd atlas), blended into the land
 // branch only — water keeps its living treatment, and the data-overlay
@@ -31,7 +35,7 @@ uniform float vignette = 0.12;         // corner darkening on terrain (0 = off)
 uniform sampler2D tile_atlas : filter_nearest, repeat_disable;
 uniform sampler2D terrain_ids : filter_nearest, repeat_disable;
 uniform float tiles_enabled = 0.0; // biome_renderer flips this once textures are wired
-uniform float tile_mix = 0.7;      // tile weight over the flat biome color at full detail
+uniform float tile_mix = 0.9;      // tile weight over the flat biome color at full detail
 uniform float biome_res = 128.0;   // cells per axis, matches terrain_ids size
 uniform float tile_variants = 3.0; // keep in sync with terrain_sprites.gd VARIANTS
 uniform float atlas_cols = 8.0;    // keep in sync with terrain_sprites.gd ATLAS_COLS
@@ -132,8 +136,8 @@ void fragment() {
 	if (water) {
 		// Depth gradient: deeper (darker, more saturated) water in open sea,
 		// brighter teal shallows toward the coast.
-		vec3 deep = base * vec3(0.72, 0.82, 1.05);
-		vec3 shallow = mix(base, vec3(0.30, 0.62, 0.72), 0.55);
+		vec3 deep = base * vec3(0.95, 1.05, 1.30);
+		vec3 shallow = mix(base, vec3(0.34, 0.68, 0.78), 0.60);
 		// Real depth: elevation (packed in alpha, C2) relative to the water line.
 		// ~1 at the shoreline (elevation just below sea level), →0 in the deepest
 		// basin, so open-ocean trenches read dark and shelves read bright teal.
@@ -183,8 +187,6 @@ void fragment() {
 				vec3 tile = texture(tile_atlas, tuv).rgb;
 				land_base = mix(base, tile, tile_mix * detail);
 			}
-			// Coast tile on the land side (beach band), over the ground tile.
-			land_base = mix(land_base, coast_tile.rgb, coast_tile.a * detail);
 		}
 
 		// Land relief: sample the packed real elevation (biome texture alpha) at
@@ -210,6 +212,13 @@ void fragment() {
 		// Slightly deepen the shoreline on the land side just past the beach so
 		// the transition has a little depth.
 		outc = mix(outc, outc * 0.86, max(coast - 0.25, 0.0) * 0.5);
+
+		// Land finish: lift saturation and brightness so tiles read crisp and
+		// warm, then stamp the shoreline band LAST so sand and foam stay bright
+		// under the relief and shore-darkening passes above.
+		float lum = luma(outc);
+		outc = mix(vec3(lum), outc, 1.0 + vibrance) * land_lift;
+		outc = mix(outc, coast_tile.rgb, coast_tile.a * detail);
 	}
 
 	// Soft vignette to frame the field — darkens screen corners only, and only
