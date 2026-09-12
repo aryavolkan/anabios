@@ -24,23 +24,14 @@ const TEXT_DIM := Color(0.56, 0.67, 0.69)
 static func build() -> Theme:
 	var theme := Theme.new()
 
-	var panel := StyleBoxFlat.new()
-	panel.bg_color = BG_PANEL
-	panel.set_corner_radius_all(4)
-	panel.border_width_left = 2
-	panel.border_color = ACCENT
-	panel.content_margin_left = 11
-	panel.content_margin_right = 9
-	panel.content_margin_top = 7
-	panel.content_margin_bottom = 7
-	theme.set_stylebox("panel", "PanelContainer", panel)
+	theme.set_stylebox("panel", "PanelContainer", pixel_frame(BG_PANEL, ACCENT_DIM, 9, 7))
 
 	theme.set_color("font_color", "Label", TEXT)
 	theme.set_font_size("font_size", "Label", 12)
 
-	theme.set_stylebox("normal", "Button", _button_box(BG_ELEV, ACCENT_DIM))
-	theme.set_stylebox("hover", "Button", _button_box(BG_HOVER, ACCENT))
-	theme.set_stylebox("pressed", "Button", _button_box(BG_PRESSED, ACCENT))
+	theme.set_stylebox("normal", "Button", pixel_frame(BG_ELEV, ACCENT_DIM, 8, 4))
+	theme.set_stylebox("hover", "Button", pixel_frame(BG_HOVER, ACCENT, 8, 4))
+	theme.set_stylebox("pressed", "Button", pixel_frame(BG_PRESSED, ACCENT, 8, 4))
 	var focus := StyleBoxFlat.new()
 	focus.bg_color = Color(0, 0, 0, 0)
 	focus.set_corner_radius_all(3)
@@ -82,6 +73,55 @@ static func build() -> Theme:
 	theme.set_font_size("font_size", "PopupMenu", 13)
 
 	return theme
+
+
+# A pixel-art 9-slice frame (Phase 5, D1): a 2px near-black outline, a 1px
+# bevel in the accent colour along the top/left and a darker one along the
+# bottom/right, over the translucent panel fill. Built once per (fill, accent)
+# pair as a 12x12 Image, so panels and buttons carry the reference boards'
+# framed look without any imported texture.
+static var _frame_cache: Dictionary = {}
+
+
+static func pixel_frame(fill: Color, accent: Color, pad_x: int, pad_y: int) -> StyleBoxTexture:
+	var key := "%s|%s" % [fill.to_html(), accent.to_html()]
+	var tex: ImageTexture = _frame_cache.get(key)
+	if tex == null:
+		var n := 12
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		img.fill(fill)
+		var outline := Color(0.03, 0.04, 0.05, 1.0)
+		var lit := Color(accent.r, accent.g, accent.b, 0.9)
+		var dark := Color(accent.r * 0.35, accent.g * 0.35, accent.b * 0.35, 0.9)
+		for i in n:
+			for e in [0, 1]:
+				img.set_pixel(i, e, outline)
+				img.set_pixel(i, n - 1 - e, outline)
+				img.set_pixel(e, i, outline)
+				img.set_pixel(n - 1 - e, i, outline)
+		for i in range(2, n - 2):
+			img.set_pixel(i, 2, lit)
+			img.set_pixel(2, i, lit)
+			img.set_pixel(i, n - 3, dark)
+			img.set_pixel(n - 3, i, dark)
+		# Notched corners: the light bevel wins the top-left corner, the dark
+		# one the bottom-right, the two others meet as outline.
+		img.set_pixel(2, 2, lit)
+		img.set_pixel(n - 3, n - 3, dark)
+		tex = ImageTexture.create_from_image(img)
+		_frame_cache[key] = tex
+	var sb := StyleBoxTexture.new()
+	sb.texture = tex
+	sb.texture_margin_left = 4
+	sb.texture_margin_top = 4
+	sb.texture_margin_right = 4
+	sb.texture_margin_bottom = 4
+	sb.content_margin_left = pad_x
+	sb.content_margin_right = pad_x
+	sb.content_margin_top = pad_y
+	sb.content_margin_bottom = pad_y
+	sb.draw_center = true
+	return sb
 
 
 static func _button_box(bg: Color, border: Color) -> StyleBoxFlat:

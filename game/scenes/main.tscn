@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="MultiMesh" path="res://resources/body_multimesh.tres" id="2_mm"]
@@ -14,6 +14,8 @@
 [ext_resource type="Script" path="res://scripts/legend_panel.gd" id="12_legend"]
 [ext_resource type="Script" path="res://scripts/coevolution_panel.gd" id="13_coevo"]
 [ext_resource type="Script" path="res://scripts/minimap_panel.gd" id="15_minimap"]
+[ext_resource type="Script" path="res://scripts/top_bar.gd" id="16_topbar"]
+[ext_resource type="Script" path="res://scripts/research_panel.gd" id="17_research"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -210,6 +212,20 @@ offset_bottom = 60.0
 text = "tick=0 alive=0"
 theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
 theme_override_font_sizes/font_size = 16
+
+[node name="TopBar" type="PanelContainer" parent="UI"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 420.0
+offset_bottom = 44.0
+script = ExtResource("16_topbar")
+
+[node name="ResearchPanel" type="PanelContainer" parent="UI"]
+offset_left = 10.0
+offset_top = 282.0
+offset_right = 290.0
+offset_bottom = 300.0
+script = ExtResource("17_research")
 
 [node name="TimeControls" type="HBoxContainer" parent="UI"]
 script = ExtResource("4_time")
