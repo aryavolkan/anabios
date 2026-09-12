@@ -134,7 +134,10 @@ cargo build --release --bin anabios-headless
    ```
 2. Open `game/project.godot` in Godot 4.6+ (or import via `godot --headless --import --path game/`).
 3. Press F5 to run the main scene.
-   - Mouse wheel: zoom; middle-drag or WASD/arrow keys: pan
+   - Mouse wheel: zoom, snapping to fixed steps with an eased, cursor-anchored
+     transition — integer texel multiples 1×–8× above 1×, an overview range
+     (down to 0.0625×) for framing large worlds below 1×. Middle-drag or
+     WASD/arrow keys: pan
    - Bottom-left buttons: pause + speed (1× / 4× / 16× / 64×)
    - Left-click an agent (within 4 world units) to pin its stats in the inspector panel
    - Scrolling list at bottom-right shows codex events as they fire
