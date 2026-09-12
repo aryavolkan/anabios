@@ -129,6 +129,43 @@ func _init() -> void:
 					opaque += 1
 		_check(opaque >= 8, "%s good has a visible icon" % B.GOOD_NAMES[g])
 
+	# --- animated landmarks: Fire and Metalworking flicker between two frames ---
+	_check(B.is_animated(B.FIRE), "fire landmark animates")
+	_check(B.is_animated(B.METALWORKING), "forge landmark animates")
+	_check(not B.is_animated(B.MARKET), "market stays static")
+	_check(not B.is_animated(B.WRITING), "library stays static")
+	_check(B.ANIMATED_KINDS.size() == 2, "exactly two animated landmarks")
+	for k in B.ANIMATED_KINDS:
+		var low: Image = B.build_variant(k, 0).get_image()
+		var high: Image = B.build_variant(k, 1).get_image()
+		_check(low.get_size() == Vector2i(16, 16), "%s flicker frame stays 16x16" % B.NAMES[k])
+		_check(high.get_size() == Vector2i(16, 16), "%s lifted frame stays 16x16" % B.NAMES[k])
+		_check(low.get_data() == B.build_image(k).get_data(), "%s phase 0 is the base" % B.NAMES[k])
+		_check(low.get_data() != high.get_data(), "%s flicker frames differ" % B.NAMES[k])
+		_check(
+			B.build_variant(k, 3).get_image().get_data() == high.get_data(),
+			"%s odd phases share the lifted frame" % B.NAMES[k]
+		)
+		# The lift only touches a few flame pixels: the silhouette survives.
+		var changed := 0
+		var lit := 0
+		for y in 16:
+			for x in 16:
+				if low.get_pixel(x, y) != high.get_pixel(x, y):
+					changed += 1
+				if high.get_pixel(x, y).a > 0.5:
+					lit += 1
+		_check(
+			changed >= 1 and changed <= 16,
+			"%s lift moves a few pixels (%d)" % [B.NAMES[k], changed]
+		)
+		_check(lit >= 8, "%s lifted frame keeps a visible figure" % B.NAMES[k])
+	# A static kind returns its base art for every phase.
+	_check(
+		B.build_variant(B.MARKET, 1).get_image().get_data() == B.build_image(B.MARKET).get_data(),
+		"static kinds ignore the phase"
+	)
+
 	# --- caravan cart: 16x16 texture with a visible figure ---
 	var cart := B.build_cart()
 	_check(

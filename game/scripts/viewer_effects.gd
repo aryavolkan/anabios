@@ -13,6 +13,11 @@ const FIRE_LIGHT_TTL: float = 4.0
 const EventFx = preload("res://scripts/event_fx.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
 const FxRing = preload("res://scripts/fx_ring.gd")
+const PixelFxSprites = preload("res://scripts/pixel_fx_sprites.gd")
+
+# Pooled pixel-art bursts: a fixed ten so a flood of raids can only recycle
+# the oldest burst, never grow the node count.
+const PIXEL_BURST_POOL := 10
 
 var _sim = null
 var _cam: Camera2D = null
@@ -35,6 +40,9 @@ var _rings: Array = []
 var _ring_idx: int = 0
 var _sparks: Array[GPUParticles2D] = []
 var _spark_idx: int = 0
+var _pixel_bursts: Array[GPUParticles2D] = []
+var _pixel_burst_idx: int = 0
+var _pixel_bursts_spawned: int = 0
 var _event_cursor: int = 0
 # Water ripples under drinking agents (own pool so a shoreline of sippers
 # can't starve the codex-event rings). _sip_last maps id -> the _fx_time of
@@ -67,6 +75,7 @@ func setup(
 	_make_ring_pool()
 	_make_ripple_pool()
 	_make_spark_pool()
+	_make_pixel_burst_pool()
 	_make_weather()
 
 
@@ -319,6 +328,72 @@ func spawn_motes(pos: Vector2, color: Color) -> void:
 	p.restart()
 
 
+# Pooled pixel-art bursts: a short, sharp scatter of one 16x16 mark (impact
+# star for combat, sparkle for a breakthrough) where the procedural rings and
+# motes alone read too soft. Retargeted per spawn: texture picks the mark,
+# modulate the hue. Nearest-filtered so the pixels stay crisp under zoom, and
+# additive like the sparks so overlapping bursts bloom rather than stack.
+func _make_pixel_burst_pool() -> void:
+	# Warm the texture cache for every mark up front so the first combat or
+	# discovery burst doesn't pay a one-time texture build mid-game.
+	for kind in PixelFxSprites.KIND_COUNT:
+		PixelFxSprites.build(kind)
+	for i in PIXEL_BURST_POOL:
+		var p := GPUParticles2D.new()
+		p.name = "PixelBurst%d" % i
+		p.amount = 8
+		p.lifetime = 0.45
+		p.one_shot = true
+		p.explosiveness = 1.0
+		p.emitting = false
+		p.z_index = 6
+		p.visibility_rect = Rect2(-32, -32, 64, 64)
+		p.texture = PixelFxSprites.build(PixelFxSprites.EMBER)
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var m := ParticleProcessMaterial.new()
+		m.direction = Vector3(1, 0, 0)
+		m.spread = 180.0
+		m.initial_velocity_min = 18.0
+		m.initial_velocity_max = 44.0
+		m.gravity = Vector3.ZERO
+		m.damping_min = 30.0
+		m.damping_max = 60.0
+		m.scale_min = 0.35
+		m.scale_max = 0.6
+		var grad := Gradient.new()
+		grad.set_color(0, Color(1.0, 1.0, 1.0))
+		grad.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+		var gt := GradientTexture1D.new()
+		gt.gradient = grad
+		m.color_ramp = gt
+		p.process_material = m
+		var add := CanvasItemMaterial.new()
+		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		p.material = add
+		add_child(p)
+		_pixel_bursts.append(p)
+
+
+func spawn_pixel_burst(pos: Vector2, sprite: int, color: Color) -> void:
+	if _pixel_bursts.is_empty():
+		return
+	var burst: GPUParticles2D = _pixel_bursts[_pixel_burst_idx]
+	_pixel_burst_idx = (_pixel_burst_idx + 1) % _pixel_bursts.size()
+	_pixel_bursts_spawned += 1
+	burst.texture = PixelFxSprites.build(sprite)
+	burst.modulate = color
+	burst.position = pos
+	burst.restart()
+
+
+func pixel_bursts() -> Array[GPUParticles2D]:
+	return _pixel_bursts
+
+
+func pixel_bursts_spawned() -> int:
+	return _pixel_bursts_spawned
+
+
 # Pooled flickering fire lights: a warm PointLight2D (additive, so it can only
 # brighten) that breathes for a few seconds where a fire-kind event fired.
 func _make_fire_light_pool() -> void:
@@ -468,5 +543,8 @@ func apply_event_fx(event_type: int, loc: Vector2, value: float = -1.0) -> void:
 			"motes":
 				if loc != Vector2.ZERO:
 					spawn_motes(loc, s["color"])
+			"burst":
+				if loc != Vector2.ZERO:
+					spawn_pixel_burst(loc, int(s["sprite"]), s["color"])
 			"trauma":
 				_cam.add_trauma(s["amount"])

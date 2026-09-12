@@ -3,8 +3,10 @@ extends RefCounted
 # texture per trade/invention building, built with the shared ApeSprites cell
 # painter (auto 1px outline, PAL palette) so buildings match the hut/farm look.
 # Textures are flip_y()-ed for the MultiMesh QuadMesh's flipped V axis, same as
-# settlement_layer's hut/farm textures. Buildings never animate and are drawn
-# through a plain (no-shader) MultiMesh, keeping them off the Metal atlas path.
+# settlement_layer's hut/farm textures. Buildings are drawn through a plain
+# (no-shader) MultiMesh, keeping them off the Metal atlas path; the only
+# motion is the two-frame flame flicker of the Fire and Metalworking
+# landmarks (build_variant), swapped as whole textures by the layer.
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 
@@ -460,6 +462,43 @@ static func build_image(kind: int) -> Image:
 
 static func build(kind: int) -> ImageTexture:
 	return ImageTexture.create_from_image(build_image(kind))
+
+
+# Landmarks with a live flame. Phase 1 paints _LIFT_BLOCKS over the base art:
+# only flame pixels move or brighten (an alpha-0 block erases one), so walls,
+# roofs, footprint, enum, name and invention mapping are exactly the base's.
+const ANIMATED_KINDS: PackedInt32Array = [FIRE, METALWORKING]
+const _LIFT_BLOCKS := {
+	# Fire: the side lick jumps a notch, the top amber pixel turns yellow and
+	# the tip grows two pixels taller, ending pale.
+	FIRE:
+	[
+		[6, 9, 1, 1, Color(0, 0, 0, 0)],
+		[6, 7, 1, 1, "o"],
+		[7, 5, 1, 1, "y"],
+		[8, 3, 1, 1, "y"],
+		[8, 2, 1, 1, "h"],
+	],
+	# Metalworking: the forge-mouth core whitens and an orange tongue climbs
+	# one pixel up the forge wall.
+	METALWORKING: [[5, 11, 1, 1, "h"], [5, 10, 1, 1, "y"], [5, 9, 1, 1, "o"]],
+}
+
+
+static func is_animated(kind: int) -> bool:
+	return ANIMATED_KINDS.has(kind)
+
+
+static func build_variant_image(kind: int, phase: int) -> Image:
+	if phase % 2 == 0 or not is_animated(kind):
+		return build_image(kind)
+	var img: Image = ApeSprites._build_cell(_BLOCKS[kind] + _LIFT_BLOCKS[kind])
+	img.flip_y()
+	return img
+
+
+static func build_variant(kind: int, phase: int) -> ImageTexture:
+	return ImageTexture.create_from_image(build_variant_image(kind, phase))
 
 
 static func building_for_invention(key: String) -> int:

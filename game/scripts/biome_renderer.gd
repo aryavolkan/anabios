@@ -45,6 +45,11 @@ var _tiles_on := true
 var _ids := PackedByteArray()
 var _ids_tex: ImageTexture = null
 var _scatter: Node2D = null
+# Decorative props (reeds, shrubs, conifers, rocks, logs) scattered from the
+# terrain colours. A child of this sprite so it shares the ground's wrap
+# tiling and dim/cool modulate; shown only in the biome view.
+const BiomeProps = preload("res://scripts/biome_props.gd")
+var _props: Node2D
 
 
 func _ready() -> void:
@@ -83,6 +88,10 @@ func _ready() -> void:
 			tile.material = _terrain_mat
 			add_child(tile)
 			_tiles.append(tile)
+	_props = BiomeProps.new()
+	_props.name = "BiomeProps"
+	add_child(_props)
+	_props.setup(sim)
 	_setup(int(sim.biome_resolution()))
 
 
@@ -190,6 +199,8 @@ func _process(_delta: float) -> void:
 		_scatter.visible = _tiles_on and mode == -1
 	if _tiles_on and _frame % _redraw_interval == 0:
 		_refresh_terrain_ids()
+	# Scenery follows the same rule: props only over the real terrain.
+	_props.set_terrain_visible(mode == -1)
 	# While a data overlay owns the ground texture, keep the minimap's biome copy
 	# current on its own (much slower) cadence — the minimap is 200px wide and
 	# the terrain creeps. `== 1` refreshes on the first frame after the switch so
@@ -229,6 +240,10 @@ func _process(_delta: float) -> void:
 	else:
 		colors = sim.biome_colors()
 	_blit(colors, _img, _tex)
+	# Re-scatter the props from the fresh terrain (a no-op while the terrain
+	# checksum holds); only the biome view carries raw terrain colours.
+	if mode == -1:
+		_props.refresh(colors, _res, sim.world_size())
 
 
 # Upload the exact TerrainType id grid as an R8 texture for the tile lookup

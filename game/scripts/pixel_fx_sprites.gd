@@ -1,0 +1,79 @@
+extends RefCounted
+# 16x16 pixel-art marks for the viewer's event bursts, built with the shared
+# ApeSprites cell painter (auto 1px outline, PAL palette) so a burst reads in
+# the same hand as the creatures and buildings it lands among. Each mark is a
+# small outlined shape on a transparent cell — the pooled GPUParticles2D in
+# viewer_effects scatter a handful of them per event and tint them via
+# modulate. Not flipped: particles draw the texture upright (the flip_y() in
+# the building/prop registries is the MultiMesh QuadMesh's V convention).
+
+const ApeSprites = preload("res://scripts/ape_sprites.gd")
+
+enum { EMBER, IMPACT, DISCOVERY }
+const KIND_COUNT := 3
+
+# [x, y, w, h, key] blocks on a 16x16 grid, drawn back-to-front.
+const _BLOCKS: Array = [
+	# EMBER — a squat diamond with a hot amber core: the spark of a fire event
+	[
+		[7, 5, 2, 6, "o"],
+		[6, 6, 4, 4, "o"],
+		[5, 7, 6, 2, "o"],
+		[7, 6, 2, 4, "O"],
+		[7, 7, 2, 2, "y"],
+	],
+	# IMPACT — four-direction star, white-hot along the arms, amber tips and
+	# four diagonal pips: the strike of a raid or a war
+	[
+		[7, 2, 2, 12, "y"],
+		[2, 7, 12, 2, "y"],
+		[6, 6, 4, 4, "y"],
+		[7, 4, 2, 8, "W"],
+		[4, 7, 8, 2, "W"],
+		[7, 7, 2, 2, "W"],
+		[5, 5, 1, 1, "y"],
+		[10, 5, 1, 1, "y"],
+		[5, 10, 1, 1, "y"],
+		[10, 10, 1, 1, "y"],
+	],
+	# DISCOVERY — an eight-point sparkle: bright cross arms, a hot core and
+	# short diagonal glints — the flash of a breakthrough, thinner than the
+	# impact star so the two never read alike at field scale
+	[
+		[7, 3, 2, 10, "W"],
+		[3, 7, 10, 2, "W"],
+		[6, 6, 4, 4, "W"],
+		[7, 7, 2, 2, "e"],
+		[4, 4, 1, 1, "y"],
+		[3, 3, 1, 1, "s"],
+		[11, 4, 1, 1, "y"],
+		[12, 3, 1, 1, "s"],
+		[4, 11, 1, 1, "y"],
+		[3, 12, 1, 1, "s"],
+		[11, 11, 1, 1, "y"],
+		[12, 12, 1, 1, "s"],
+	],
+]
+
+# One texture per kind, built on first use: a burst is retargeted many times
+# a minute and must not upload a fresh texture per spawn.
+static var _cache: Dictionary = {}
+
+
+static func build_image(kind: int) -> Image:
+	return ApeSprites._build_cell(_BLOCKS[kind])
+
+
+static func build(kind: int) -> ImageTexture:
+	if not _cache.has(kind):
+		_cache[kind] = ImageTexture.create_from_image(build_image(kind))
+	return _cache[kind]
+
+
+static func opaque_pixels(image: Image) -> int:
+	var n := 0
+	for y in image.get_height():
+		for x in image.get_width():
+			if image.get_pixel(x, y).a > 0.5:
+				n += 1
+	return n
