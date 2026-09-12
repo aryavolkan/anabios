@@ -152,6 +152,16 @@ the invasion margin or gets honestly closed.*
   its pin in-JSON (was script-only). *Done when:* ~~the tier exists with its own smoke coverage, and
   `docs/scenarios.md` maps it.~~ ✔
 
+- **[V, L] Pixel world at scale.** Reach the reference pixel-art look (crisp
+  tiles, autotiled coasts/rivers, dense flora, villages with footprints, a
+  themed HUD) on much larger maps (8192–16384-unit worlds). Chunked bridge
+  export + streaming ground, visible-set agents, a deterministic village
+  layout generator, and an imported-atlas asset pipeline. *Depends:* none
+  (engine slice is read-only queries + opt-in fields). *Done when:* the Huge
+  tier streams at ≥ 55 fps with 10k agents, every reference panel is bound to
+  live data, and goldens are unchanged. Phased plan:
+  [`docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md`](docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md).
+
 **Horizon-1 exit:** the era-3 climb is either emergent on the Earth map or closed
 with a named, measured blocker; O4's demographic claim is adjudicated; one new
 evidence-backed subsystem fires in the corpus.
