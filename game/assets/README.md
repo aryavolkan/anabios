@@ -188,7 +188,7 @@ canvas_item shader. It is a pure `#include`-able function library (no
 bool at_is_water(sampler2D ids_tex, float ids_res, vec2 cell);
 
 vec4 coast_autotile(sampler2D ids_tex, float ids_res, vec2 cellf,
-                    sampler2D coast_atlas, float atlas_cols, float cell_px, float atlas_px);
+                    sampler2D c_atlas, float c_cols, float c_cell_px, float c_atlas_px);
 ```
 
 Intended call site in `terrain.gdshader`'s land branch, where `cellf` is

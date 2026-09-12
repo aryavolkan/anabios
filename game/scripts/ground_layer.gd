@@ -54,7 +54,9 @@ func setup(biome_renderer, sim) -> void:
 func _process(_delta: float) -> void:
 	if _biome == null or _sim == null or _cam == null:
 		return
-	var show := _biome.is_biome_view() and _biome.tiles_enabled() and _biome.streaming_enabled()
+	var show: bool = (
+		_biome.is_biome_view() and _biome.tiles_enabled() and _biome.streaming_enabled()
+	)
 	visible = show
 	if not show:
 		return

@@ -20,6 +20,8 @@
 // cell index equals the mask, row-major, matching coast_tiles.gd's
 // `build_atlas()`.
 //
+// Parameter names carry a `c_` prefix so they never collide with the
+// including shader's uniforms (Godot reports a redefinition otherwise).
 // Written for a Godot 4 canvas_item shader include: no TIME, no `texture()`
 // outside a function body, only functions/uniforms usable from an included
 // file.
@@ -41,7 +43,7 @@ bool at_is_water(sampler2D ids_tex, float ids_res, vec2 cell) {
 //   vec4 t = coast_autotile(terrain_ids, biome_res, cellf, coast_atlas, 4.0, 16.0, 64.0);
 //   land_base = mix(land_base, t.rgb, t.a * detail);
 vec4 coast_autotile(sampler2D ids_tex, float ids_res, vec2 cellf,
-		sampler2D coast_atlas, float atlas_cols, float cell_px, float atlas_px) {
+		sampler2D c_atlas, float c_cols, float c_cell_px, float c_atlas_px) {
 	vec2 c = floor(cellf - 0.5);
 	bool tl = at_is_water(ids_tex, ids_res, c);
 	bool tr = at_is_water(ids_tex, ids_res, c + vec2(1.0, 0.0));
@@ -51,8 +53,8 @@ vec4 coast_autotile(sampler2D ids_tex, float ids_res, vec2 cellf,
 	if (mask == 0 || mask == 15) {
 		return vec4(0.0);
 	}
-	vec2 acell = vec2(mod(float(mask), atlas_cols), floor(float(mask) / atlas_cols));
+	vec2 acell = vec2(mod(float(mask), c_cols), floor(float(mask) / c_cols));
 	vec2 local = fract(cellf - 0.5);
-	vec2 tuv = (acell + local) * (cell_px / atlas_px);
-	return texture(coast_atlas, tuv);
+	vec2 tuv = (acell + local) * (c_cell_px / c_atlas_px);
+	return texture(c_atlas, tuv);
 }
