@@ -9,6 +9,7 @@ const FxMath = preload("res://scripts/fx_math.gd")
 const FxRing = preload("res://scripts/fx_ring.gd")
 const ViewerEffects = preload("res://scripts/viewer_effects.gd")
 const CodexPanel = preload("res://scripts/codex_panel.gd")
+const PixelFx = preload("res://scripts/pixel_fx_sprites.gd")
 
 
 # Stand-in for camera_controller.gd, which cannot compile under -s (it touches
@@ -30,7 +31,8 @@ class StubBiome:
 		return world_pos.x < 0.0
 
 
-const KINDS := ["fire", "ring", "motes", "trauma"]
+const KINDS := ["fire", "ring", "motes", "trauma", "burst"]
+const BURST_IDS := [7, 17, 18, 38]
 const FIRE_IDS := [4, 17, 35, 42, 43]
 const TRAUMA_IDS := [7, 38]
 
@@ -59,6 +61,7 @@ func _init() -> void:
 	_check_drink_action()
 	_check_weapon_action()
 	_check_invention_tint()
+	_check_pixel_bursts()
 	_check_animation_clock()
 	_check_facing()
 	_check_shuttle_and_ease()
@@ -256,6 +259,56 @@ func _check_invention_tint() -> void:
 			_check(_has_kind(s, "motes"), "event %d invention %d keeps its motes" % [t, k])
 
 
+# Pixel bursts: combat (raid, war) flashes an impact star, a breakthrough
+# (discovery, adoption) a sparkle in the invention's tint. They ride the
+# existing spec table and the ten-element burst pool; no location, no burst.
+func _check_pixel_bursts() -> void:
+	for t in BURST_IDS:
+		_check(_has_kind(EventFx.spec(t), "burst"), "id %d has a pixel burst" % t)
+	for t in [7, 38]:
+		for s in EventFx.spec(t):
+			if s["kind"] == "burst":
+				_check(s["sprite"] == PixelFx.IMPACT, "combat id %d bursts an impact star" % t)
+	for t in [17, 18]:
+		for s in EventFx.spec(t):
+			if s["kind"] == "burst":
+				_check(s["sprite"] == PixelFx.DISCOVERY, "invention id %d bursts a sparkle" % t)
+	# The burst takes the invention tint alongside the motes.
+	var base: Array = EventFx.spec(17)
+	var tinted: Array = EventFx.spec_with_value(17, 1.0)
+	for i in base.size():
+		if base[i]["kind"] == "burst":
+			_check(tinted[i]["color"] != base[i]["color"], "fire discovery tints its burst")
+			_check(tinted[i]["color"].a == base[i]["color"].a, "tint keeps the burst alpha")
+	# Existing effects survive: the raid keeps its ring, the discovery its fire.
+	_check(_has_kind(EventFx.spec(7), "ring"), "raid keeps its ring")
+	_check(_has_kind(EventFx.spec(17), "fire"), "discovery keeps its embers")
+
+	var fx: Node2D = ViewerEffects.new()
+	var cam := StubCam.new()
+	var disc := ImageTexture.create_from_image(Image.create(8, 8, false, Image.FORMAT_RGBA8))
+	fx.setup(null, cam, null, disc)
+	_check(fx.pixel_bursts().size() == ViewerEffects.PIXEL_BURST_POOL, "burst pool is bounded")
+	_check(ViewerEffects.PIXEL_BURST_POOL == 10, "ten pooled bursts")
+	for p in fx.pixel_bursts():
+		_check(p.one_shot, "bursts are one-shot")
+		_check(not p.emitting, "bursts start idle")
+	fx.apply_event_fx(7, Vector2.ZERO)
+	_check(fx.pixel_bursts_spawned() == 0, "no location, no burst")
+	fx.apply_event_fx(7, Vector2(30, 40))
+	_check(fx.pixel_bursts_spawned() == 1, "a located raid spawns one burst")
+	var first: GPUParticles2D = fx.pixel_bursts()[0]
+	_check(first.position == Vector2(30, 40), "burst lands on the event")
+	_check(first.texture == PixelFx.build(PixelFx.IMPACT), "raid burst wears the impact star")
+	# Round-robin: 25 spawns wrap the ten-element pool without growing it.
+	for i in 25:
+		fx.spawn_pixel_burst(Vector2(i, i), PixelFx.EMBER, Color(1, 1, 1, 1))
+	_check(fx.pixel_bursts().size() == ViewerEffects.PIXEL_BURST_POOL, "pool never grows")
+	_check(fx.pixel_bursts_spawned() == 26, "every spawn is counted")
+	fx.free()
+	cam.free()
+
+
 func _check_animation_clock() -> void:
 	_check(
 		absf(FxMath.advance_animation_time(1.5, 0.25, false) - 1.75) < 0.001,
@@ -406,8 +459,11 @@ func _check_spec_table() -> void:
 		_check(not specs.is_empty(), "spec(%d) non-empty" % t)
 		for s in specs:
 			_check(KINDS.has(s["kind"]), "kind '%s' valid for id %d" % [s["kind"], t])
-			if s["kind"] == "ring" or s["kind"] == "motes":
+			if s["kind"] == "ring" or s["kind"] == "motes" or s["kind"] == "burst":
 				_check((s["color"] as Color).a > 0.0, "id %d %s color visible" % [t, s["kind"]])
+			if s["kind"] == "burst":
+				var sprite: int = s["sprite"]
+				_check(sprite >= 0 and sprite < PixelFx.KIND_COUNT, "id %d burst sprite valid" % t)
 			if s["kind"] == "trauma":
 				_check(s["amount"] > 0.0 and s["amount"] <= 0.5, "id %d trauma sane" % t)
 	# Unmapped ids yield an empty spec, not an error.

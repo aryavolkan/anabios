@@ -4,9 +4,12 @@ extends RefCounted
 # not behavior: each entry lists effect specs applied where the event fired.
 # Kinds: "fire" (ember burst + flickering light, the original fire-kind look),
 # "ring" (expanding pulse, color/dur/radius), "motes" (tinted rising sparks),
-# "trauma" (camera shake; the only kind that fires for loc-less events).
+# "trauma" (camera shake; the only kind that fires for loc-less events),
+# "burst" (a scatter of one pixel_fx_sprites mark, sprite/color).
 # Ids index codex_panel's CHAPTER_NAMES; hues echo its timeline colors so an
 # event reads the same in the world as in the codex.
+
+const PixelFx = preload("res://scripts/pixel_fx_sprites.gd")
 
 const FX: Dictionary = {
 	0:  # Extinction — slow dark-red shockwave, felt everywhere
@@ -22,10 +25,11 @@ const FX: Dictionary = {
 	2: [{"kind": "ring", "color": Color(0.55, 0.85, 1.0, 0.6), "dur": 1.6, "radius": 70.0}],
 	3: [{"kind": "ring", "color": Color(0.65, 0.75, 1.0, 0.5), "dur": 1.6, "radius": 80.0}],
 	4: [{"kind": "fire"}],  # NovelModule
-	7:  # CombatRaid — keeps its shake, gains a sharp local ring
+	7:  # CombatRaid — keeps its shake, gains a sharp local ring and an impact star
 	[
 		{"kind": "trauma", "amount": 0.25},
 		{"kind": "ring", "color": Color(1.0, 0.4, 0.25, 0.6), "dur": 0.9, "radius": 55.0},
+		{"kind": "burst", "sprite": PixelFx.IMPACT, "color": Color(1.0, 0.75, 0.35, 1.0)},
 	],
 	11: [{"kind": "ring", "color": Color(0.75, 0.6, 1.0, 0.55), "dur": 1.4, "radius": 60.0}],
 	12:  # MemeSweep — a dialect ring that actually travels
@@ -33,8 +37,17 @@ const FX: Dictionary = {
 		{"kind": "ring", "color": Color(0.75, 0.6, 1.0, 0.6), "dur": 1.8, "radius": 95.0},
 		{"kind": "motes", "color": Color(0.8, 0.65, 1.0, 0.9)},
 	],
-	17: [{"kind": "fire"}, {"kind": "motes", "color": Color(1.0, 0.85, 0.4, 0.9)}],  # Discovery
-	18: [{"kind": "motes", "color": Color(1.0, 0.85, 0.45, 0.8)}],  # Adoption
+	17:  # Discovery — hearth embers, tinted motes and a sparkle in the invention's hue
+	[
+		{"kind": "fire"},
+		{"kind": "motes", "color": Color(1.0, 0.85, 0.4, 0.9)},
+		{"kind": "burst", "sprite": PixelFx.DISCOVERY, "color": Color(1.0, 0.85, 0.4, 1.0)},
+	],
+	18:  # Adoption
+	[
+		{"kind": "motes", "color": Color(1.0, 0.85, 0.45, 0.8)},
+		{"kind": "burst", "sprite": PixelFx.DISCOVERY, "color": Color(1.0, 0.85, 0.45, 0.85)},
+	],
 	21: [{"kind": "ring", "color": Color(1.0, 0.8, 0.45, 0.5), "dur": 1.2, "radius": 50.0}],
 	22: [{"kind": "motes", "color": Color(1.0, 0.75, 0.35, 0.8)}],  # MaterialLearn
 	35: [{"kind": "fire"}],  # ToolUse
@@ -42,6 +55,7 @@ const FX: Dictionary = {
 	[
 		{"kind": "trauma", "amount": 0.25},
 		{"kind": "ring", "color": Color(1.0, 0.35, 0.25, 0.65), "dur": 1.6, "radius": 110.0},
+		{"kind": "burst", "sprite": PixelFx.IMPACT, "color": Color(1.0, 0.55, 0.3, 1.0)},
 	],
 	39: [{"kind": "ring", "color": Color(0.95, 0.97, 1.0, 0.5), "dur": 2.0, "radius": 90.0}],
 	42:  # Settlement — hearth fire plus a founding ring
@@ -110,9 +124,9 @@ static func spec(event_type: int) -> Array:
 
 
 # spec(), with the event's `value` payload applied: an invention-carrying
-# event recolors its motes to that invention's tint (alpha kept from the
-# authored spec). Any other event, an unknown id, or the caller's -1 "no
-# value" sentinel falls through to the plain table.
+# event recolors its motes and its pixel burst to that invention's tint
+# (alpha kept from the authored spec). Any other event, an unknown id, or the
+# caller's -1 "no value" sentinel falls through to the plain table.
 static func spec_with_value(event_type: int, value: float) -> Array:
 	var base := spec(event_type)
 	if not INVENTION_VALUE_EVENTS.has(event_type):
@@ -123,7 +137,7 @@ static func spec_with_value(event_type: int, value: float) -> Array:
 	var out: Array = []
 	for s in base:
 		var d: Dictionary = s.duplicate()
-		if d["kind"] == "motes":
+		if d["kind"] == "motes" or d["kind"] == "burst":
 			var a: float = (d["color"] as Color).a
 			d["color"] = Color(tint.r, tint.g, tint.b, a)
 		out.append(d)
