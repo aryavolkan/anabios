@@ -149,7 +149,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // meme channels widened 24->32 and INVENTION_COUNT grew 14->20;
     // inventions_enabled is on here so the wider candidate pool again
     // reshapes discovery/copy draws — a real trajectory change.
-    &[(0, 0xcfb9358f996c770d), (100, 0x671f938cb34680e7), (300, 0x49e732f6cfb0e9be)];
+    // Refreshed 2026-09-11 (X2 Wells+Vaccination, FORMAT_VERSION 41→42):
+    // invention count 20->22 shifted the discovery table and practice
+    // channels; inventions_enabled is on here so the wider candidate pool
+    // again reshapes discovery/copy draws.
+    &[(0, 0xcfb9358f996c770d), (100, 0x4a65a191f6e580c9), (300, 0x7d665dc6a0e2cc3c)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

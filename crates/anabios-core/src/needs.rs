@@ -123,15 +123,27 @@ pub fn needs_step(world: &mut World) {
         return;
     }
     let biome = &world.biome;
-    let AgentBuffers { position, velocity, genome, thirst, fatigue, asleep, alive, .. } =
-        &mut world.agents;
+    let AgentBuffers {
+        position,
+        velocity,
+        genome,
+        thirst,
+        fatigue,
+        asleep,
+        alive,
+        meme_vector,
+        ..
+    } = &mut world.agents;
     for i in alive.iter_ones() {
         let speed = velocity[i].length();
         if drinkable_near(biome, position[i]) {
             thirst[i] = (thirst[i] - DRINK_RATE).max(0.0);
         } else {
             let tol = genome[i].get(GenomeSlot::ThirstTolerance);
-            let gain = (THIRST_RATE_BASE + THIRST_RATE_MOVE * speed) * (1.5 - tol);
+            let mask = crate::invention::held_mask(&meme_vector[i]);
+            let gain = (THIRST_RATE_BASE + THIRST_RATE_MOVE * speed)
+                * (1.5 - tol)
+                * crate::invention::wells_thirst_multiplier(mask);
             thirst[i] = (thirst[i] + gain).min(1.0);
         }
         if asleep[i] {
@@ -208,6 +220,43 @@ mod tests {
             (w.agents.thirst[i] - (0.8 - DRINK_RATE)).abs() < 1e-6,
             "drinking reduces thirst by DRINK_RATE, got {}",
             w.agents.thirst[i]
+        );
+    }
+
+    #[test]
+    fn wells_halve_thirst_gain_but_leave_drinking_unchanged() {
+        let (mut w_bare, id_bare) = needs_world(TerrainType::Grass);
+        let (mut w_wells, id_wells) = needs_world(TerrainType::Grass);
+        w_wells.agents.meme_vector[id_wells as usize]
+            [crate::invention::channel(crate::invention::WELLS)] = 1.0;
+
+        needs_step(&mut w_bare);
+        needs_step(&mut w_wells);
+        let bare_gain = w_bare.agents.thirst[id_bare as usize];
+        let wells_gain = w_wells.agents.thirst[id_wells as usize];
+        assert!(bare_gain > 0.0, "sanity: bare agent accumulates thirst");
+        assert!(
+            (wells_gain - bare_gain * crate::invention::WELLS_THIRST_MULT).abs() < 1e-7,
+            "Wells holder gains thirst at WELLS_THIRST_MULT of the bare rate: bare={bare_gain} wells={wells_gain}"
+        );
+
+        // Drinking speed is unaffected: parch both, stand both at water, and
+        // the loss must be exactly DRINK_RATE for each (never scaled).
+        w_bare.agents.thirst[id_bare as usize] = 0.8;
+        w_wells.agents.thirst[id_wells as usize] = 0.8;
+        let (cx, cy) = w_bare.biome.cell_coords(w_bare.agents.position[id_bare as usize]);
+        w_bare.biome.at_mut(cx, cy).terrain = TerrainType::Water;
+        let (wx, wy) = w_wells.biome.cell_coords(w_wells.agents.position[id_wells as usize]);
+        w_wells.biome.at_mut(wx, wy).terrain = TerrainType::Water;
+        needs_step(&mut w_bare);
+        needs_step(&mut w_wells);
+        assert!(
+            (w_bare.agents.thirst[id_bare as usize] - (0.8 - DRINK_RATE)).abs() < 1e-6,
+            "bare drink rate unchanged"
+        );
+        assert!(
+            (w_wells.agents.thirst[id_wells as usize] - (0.8 - DRINK_RATE)).abs() < 1e-6,
+            "Wells does not change DRINK_RATE"
         );
     }
 

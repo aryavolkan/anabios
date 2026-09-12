@@ -467,9 +467,10 @@ fn flat_upkeep_and_nuclear_income_apply_in_invention_step() {
     invention::invention_step(&mut w);
     let gained = w.agents.energy[nuke as usize] - e0;
     // `nuke` holds every invention (`0..INVENTION_COUNT`), including the
-    // military-branch ARCHERY and the X1 expansion's CURRENCY/PRINTING/
-    // SANITATION/GUNPOWDER, whose upkeep `flat_upkeep_coupled` also charges —
-    // spec-correct per Task 2, so the expectation must include all of them.
+    // military-branch ARCHERY, the X1 expansion's CURRENCY/PRINTING/
+    // SANITATION/GUNPOWDER, and the X2 expansion's VACCINATION, whose upkeep
+    // `flat_upkeep_coupled` also charges — spec-correct per Task 2, so the
+    // expectation must include all of them. (WELLS carries no upkeep.)
     let expected = invention::NUCLEAR_INCOME
         - invention::WRITING_UPKEEP
         - invention::MEDICINE_UPKEEP
@@ -479,7 +480,8 @@ fn flat_upkeep_and_nuclear_income_apply_in_invention_step() {
         - invention::CURRENCY_UPKEEP
         - invention::PRINTING_UPKEEP
         - invention::SANITATION_UPKEEP
-        - invention::GUNPOWDER_UPKEEP;
+        - invention::GUNPOWDER_UPKEEP
+        - invention::VACCINATION_UPKEEP;
     assert!(
         (gained - expected).abs() < 1e-4,
         "full tree nets Nuclear income minus upkeeps: {gained} vs {expected}"
@@ -1304,7 +1306,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // meme channels widened 24->32 and six more inventions were appended
     // (INVENTION_COUNT 14->20) — another real trajectory change from tick 0,
     // same reason as the military-branch refresh above.
-    &[(0, 0x51ae2a582ebb31a5), (100, 0xd3f890861d9b1ea4), (300, 0x73f64923dddf6e88)];
+    // Refreshed 2026-09-11 (X2 Wells+Vaccination, FORMAT_VERSION 41→42):
+    // invention count 20->22 shifted the discovery table and practice
+    // channels — same class of real trajectory change as the two refreshes
+    // above; tick 0 held (predates discovery), ticks 100/300 moved.
+    &[(0, 0x51ae2a582ebb31a5), (100, 0x48cc350ba12b5f09), (300, 0xb08fbd277580a962)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

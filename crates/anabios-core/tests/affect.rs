@@ -195,7 +195,11 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // meme channels widened 24->32 and INVENTION_COUNT grew 14->20.
     // inventions_enabled is off here ⇒ layout growth only, trajectory
     // byte-identical.
-    &[(0, 0xe9467932b084e516), (100, 0x8a01b4bb5d218fd1), (300, 0xbb29f3af6a7b560f)];
+    // Refreshed 2026-09-11 (X2 Wells+Vaccination, FORMAT_VERSION 41→42):
+    // invention count 20->22 shifted the discovery table and practice
+    // channels. inventions_enabled is off here ⇒ layout growth only; only
+    // tick 300 moved.
+    &[(0, 0xe9467932b084e516), (100, 0x8a01b4bb5d218fd1), (300, 0x3aff50a59b43b487)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

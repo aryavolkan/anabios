@@ -59,6 +59,7 @@ pub fn disease_step(world: &mut World) {
     }
     let medicine_bit = crate::invention::bit(crate::invention::MEDICINE);
     let sanitation_bit = crate::invention::bit(crate::invention::SANITATION);
+    let vaccination_bit = crate::invention::bit(crate::invention::VACCINATION);
     let ws = world.world_size;
 
     // 1. Recovery & drain (ascending id; deterministic, no draws). Recovery
@@ -93,14 +94,17 @@ pub fn disease_step(world: &mut World) {
 
     // 2. Spillover: crowded susceptibles develop infection spontaneously. One
     //    `world.rng` draw per crowded susceptible, in ascending id order (the
-    //    `&&` short-circuit skips the draw for uncrowded agents). Drawing
-    //    inline is byte-identical to a collect-then-draw two-pass: crowding
-    //    counts ignore infection state and each agent only writes its OWN
-    //    infection, so no earlier write can affect a later agent's count or
+    //    outer `if` guards the draw so uncrowded agents never consume one —
+    //    same draw count/order as before Vaccination). Drawing inline is
+    //    byte-identical to a collect-then-draw two-pass: crowding counts
+    //    ignore infection state and each agent only writes its OWN infection,
+    //    so no earlier write can affect a later agent's count or
     //    susceptibility. The closure early-returns once the threshold is met —
     //    `count` is only ever compared with `>=`, so capping it at the
     //    threshold is a provable identity that skips the distance math for
-    //    the rest of a dense ring.
+    //    the rest of a dense ring. Vaccination (first tech to mitigate
+    //    zoonotic spillover, not just contact transmission) scales the
+    //    COMPARED probability, never the draw itself.
     for &id in &alive_ids {
         let i = id as usize;
         if world.agents.infection[i] > 0.0 {
@@ -121,8 +125,13 @@ pub fn disease_step(world: &mut World) {
                 count += 1;
             }
         });
-        if count >= SPILLOVER_MIN_NEIGHBORS && world.rng.f32_unit() < SPILLOVER_P {
-            world.agents.infection[i] = INFECTION_SEED;
+        if count >= SPILLOVER_MIN_NEIGHBORS {
+            let vax_mult = crate::invention::vaccination_spillover_multiplier(
+                crate::invention::held_mask(&world.agents.meme_vector[i]),
+            );
+            if world.rng.f32_unit() < SPILLOVER_P * vax_mult {
+                world.agents.infection[i] = INFECTION_SEED;
+            }
         }
     }
 
@@ -158,7 +167,7 @@ pub fn disease_step(world: &mut World) {
     for target in targets {
         let o = target as usize;
         let held = crate::invention::held_mask(&world.agents.meme_vector[o]);
-        let p = transmit_probability(held, medicine_bit, sanitation_bit);
+        let p = transmit_probability(held, medicine_bit, sanitation_bit, vaccination_bit);
         if world.rng.f32_unit() < p {
             world.agents.infection[o] = INFECTION_SEED;
         }
@@ -168,17 +177,26 @@ pub fn disease_step(world: &mut World) {
 }
 
 /// Per-target infection probability: `TRANSMIT_P` adjusted by the target's
-/// Medicine and Sanitation susceptibility multipliers, which compound (both
-/// held multiplies both factors in, not either-or). A pure function of the
-/// target's held mask, so it draws no RNG and can be unit-tested directly.
+/// Medicine, Sanitation, and Vaccination susceptibility multipliers, which
+/// all compound (each held tech multiplies its own factor in, not
+/// either-or). A pure function of the target's held mask, so it draws no RNG
+/// and can be unit-tested directly.
 #[inline]
-fn transmit_probability(held: u32, medicine_bit: u32, sanitation_bit: u32) -> f32 {
+fn transmit_probability(
+    held: u32,
+    medicine_bit: u32,
+    sanitation_bit: u32,
+    vaccination_bit: u32,
+) -> f32 {
     let mut p = TRANSMIT_P;
     if held & medicine_bit != 0 {
         p *= MEDICINE_SUSCEPT_MULT;
     }
     if held & sanitation_bit != 0 {
         p *= crate::invention::SANITATION_SUSCEPT_MULT;
+    }
+    if held & vaccination_bit != 0 {
+        p *= crate::invention::VACCINATION_SUSCEPT_MULT;
     }
     p
 }
@@ -191,12 +209,25 @@ mod tests {
     fn sanitation_halves_susceptibility_and_compounds_with_medicine() {
         let medicine_bit = crate::invention::bit(crate::invention::MEDICINE);
         let sanitation_bit = crate::invention::bit(crate::invention::SANITATION);
+        let vaccination_bit = crate::invention::bit(crate::invention::VACCINATION);
 
-        let bare = transmit_probability(0, medicine_bit, sanitation_bit);
-        let sanitized = transmit_probability(sanitation_bit, medicine_bit, sanitation_bit);
-        let medicated = transmit_probability(medicine_bit, medicine_bit, sanitation_bit);
-        let both =
-            transmit_probability(medicine_bit | sanitation_bit, medicine_bit, sanitation_bit);
+        let bare = transmit_probability(0, medicine_bit, sanitation_bit, vaccination_bit);
+        let sanitized =
+            transmit_probability(sanitation_bit, medicine_bit, sanitation_bit, vaccination_bit);
+        let medicated =
+            transmit_probability(medicine_bit, medicine_bit, sanitation_bit, vaccination_bit);
+        let both = transmit_probability(
+            medicine_bit | sanitation_bit,
+            medicine_bit,
+            sanitation_bit,
+            vaccination_bit,
+        );
+        let all_three = transmit_probability(
+            medicine_bit | sanitation_bit | vaccination_bit,
+            medicine_bit,
+            sanitation_bit,
+            vaccination_bit,
+        );
 
         assert_eq!(bare, TRANSMIT_P, "no tech: base transmission probability");
         assert!(
@@ -221,5 +252,18 @@ mod tests {
             both < sanitized,
             "medicine must further reduce susceptibility on top of sanitation"
         );
+        // Vaccination stacks on top of both: all three compound to
+        // TRANSMIT_P × 0.25 × 0.5 × 0.5.
+        assert!(
+            (all_three
+                - TRANSMIT_P
+                    * MEDICINE_SUSCEPT_MULT
+                    * crate::invention::SANITATION_SUSCEPT_MULT
+                    * crate::invention::VACCINATION_SUSCEPT_MULT)
+                .abs()
+                < 1e-6,
+            "medicine + sanitation + vaccination must compound multiplicatively"
+        );
+        assert!(all_three < both, "vaccination must further reduce susceptibility on top of both");
     }
 }

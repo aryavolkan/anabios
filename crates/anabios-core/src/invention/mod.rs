@@ -32,7 +32,7 @@ mod params;
 pub use params::*;
 
 /// Number of inventions in the tree.
-pub const INVENTION_COUNT: usize = 20;
+pub const INVENTION_COUNT: usize = 22;
 
 /// First meme channel owned by the invention tree. Channels below this keep
 /// their pre-existing meanings (alarm, dialects, cooperation norm, hunt
@@ -67,6 +67,10 @@ pub const CURRENCY: usize = 16;
 pub const PRINTING: usize = 17;
 pub const SANITATION: usize = 18;
 pub const GUNPOWDER: usize = 19;
+// The X2 expansion (appended 2026-09): welfare/storage round two. Same
+// append-only rule.
+pub const WELLS: usize = 20;
+pub const VACCINATION: usize = 21;
 
 /// Adoption level at/above which an invention is functionally held (buffs and
 /// debuffs apply, prereqs count as satisfied, codex counts it).
@@ -442,6 +446,37 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         affinity: Some(GeneAffinity { slot: GenomeSlot::Neuroticism, coeff: 0.8 }),
         gene_req: Some(GeneReq { slot: GenomeSlot::Neuroticism, min: 0.50 }),
     },
+    Invention {
+        name: "Wells",
+        key: "wells",
+        era: 2,
+        prereqs: bit(POTTERY),
+        // Lined shaft stone + fired clay lining — the storage branch
+        // continues: fired clay taught the lining, now it holds water too.
+        materials: [1.0, 1.0, 1.0, 0.0],
+        buff: "slower thirst gain",
+        debuff: "none",
+        // Stored water rewards the same prudent planners as Pottery/
+        // Irrigation: shares their Conscientiousness slot.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Conscientiousness, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::Conscientiousness, min: 0.40 }),
+    },
+    Invention {
+        name: "Vaccination",
+        key: "vaccination",
+        era: 4,
+        prereqs: bit(SANITATION) | bit(PRINTING),
+        // Refined serum in glass vials, preserved with salt, recorded in
+        // printed inoculation ledgers — germ theory needs both the welfare
+        // and knowledge branches to converge.
+        materials: [1.0, 2.0, 1.0, 2.0],
+        buff: "immunization: halves infection risk and spillover",
+        debuff: "small upkeep",
+        // Immunization is applied biology, one step past Medicine/
+        // Sanitation on their shared CognitivePotential slot.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::CognitivePotential, coeff: 0.8 }),
+        gene_req: Some(GeneReq { slot: GenomeSlot::CognitivePotential, min: 0.60 }),
+    },
 ];
 
 /// The meme channel carrying invention `inv`'s adoption level.
@@ -684,6 +719,26 @@ pub fn irrigation_bite_multiplier_coupled(
         return 1.0;
     }
     1.0 + IRRIGATION_BITE * coupled_held_genome(mask, IRRIGATION, genome, coupling)
+}
+
+/// Wells: multiplier on per-tick thirst GAIN (`needs::needs_step`) — stored
+/// water means slower parching. Exactly `1.0` at mask 0, so needs-only worlds
+/// (basic_needs_enabled without inventions) are byte-identical. Never touches
+/// `DRINK_RATE` or adds energy/water — only scales the gain down.
+#[inline]
+pub fn wells_thirst_multiplier(mask: u32) -> f32 {
+    1.0 - (1.0 - WELLS_THIRST_MULT) * held_f32(mask, WELLS)
+}
+
+/// Vaccination: multiplier on the per-tick zoonotic spillover probability
+/// (`disease::disease_step`, stage 2) — immunization suppresses spontaneous
+/// spillover too, not just contact transmission. Exactly `1.0` at mask 0, so
+/// disease worlds without Vaccination held are unaffected; the caller must
+/// multiply this into the probability COMPARED against the existing RNG draw
+/// and never skip or add a draw.
+#[inline]
+pub fn vaccination_spillover_multiplier(mask: u32) -> f32 {
+    1.0 - (1.0 - VACCINATION_SPILLOVER_MULT) * held_f32(mask, VACCINATION)
 }
 
 /// Currency: trade-reach multiplier (coinage extends a deal past the gossip
@@ -944,6 +999,7 @@ pub fn flat_upkeep(mask: u32) -> f32 {
     cost += PRINTING_UPKEEP * held_f32(mask, PRINTING);
     cost += SANITATION_UPKEEP * held_f32(mask, SANITATION);
     cost += GUNPOWDER_UPKEEP * held_f32(mask, GUNPOWDER);
+    cost += VACCINATION_UPKEEP * held_f32(mask, VACCINATION);
     cost - NUCLEAR_INCOME * held_f32(mask, NUCLEAR_POWER)
 }
 
@@ -961,6 +1017,7 @@ pub fn flat_upkeep_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
     cost += PRINTING_UPKEEP * held_f32(mask, PRINTING);
     cost += SANITATION_UPKEEP * held_f32(mask, SANITATION);
     cost += GUNPOWDER_UPKEEP * held_f32(mask, GUNPOWDER);
+    cost += VACCINATION_UPKEEP * held_f32(mask, VACCINATION);
     cost - NUCLEAR_INCOME * coupled_held_genome(mask, NUCLEAR_POWER, genome, coupling)
 }
 
@@ -1501,10 +1558,11 @@ mod tests {
         assert!(is_invention_channel(INVENTION_CHANNEL_BASE));
         assert!(is_invention_channel(channel(STEEL_ARMS)));
         // The last invention channel is the top of the tree block — now
-        // Gunpowder, the X1 expansion's capstone (append-only ids moved this
-        // past the old Steel Arms top); the practice channels above it
-        // (`PRACTICE_CHANNEL_BASE..`) are NOT invention channels.
-        assert_eq!(channel(GUNPOWDER), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
+        // Vaccination, the X2 expansion's capstone (append-only ids moved
+        // this past Wells and the X1 capstone Gunpowder); the practice
+        // channels above it (`PRACTICE_CHANNEL_BASE..`) are NOT invention
+        // channels.
+        assert_eq!(channel(VACCINATION), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE + INVENTION_COUNT));
         assert!(!is_invention_channel(MEME_CHANNELS));
     }
@@ -1796,6 +1854,62 @@ mod tests {
         // Irrigation alone (no Farming): still zero — the allowance only matters
         // once Farming is held.
         assert_eq!(crowding_stress(bit(IRRIGATION), 1_000_000), 0.0);
+    }
+
+    // --- X2 expansion: Wells --------------------------------------------------
+
+    #[test]
+    fn wells_thirst_multiplier_identity_at_zero_and_halves_when_held() {
+        assert_eq!(wells_thirst_multiplier(0), 1.0);
+        assert_eq!(wells_thirst_multiplier(bit(WELLS)), WELLS_THIRST_MULT);
+        assert!((wells_thirst_multiplier(bit(WELLS)) - 0.5).abs() < 1e-6);
+        // Unrelated bits don't trigger it.
+        assert_eq!(wells_thirst_multiplier(bit(WRITING)), 1.0);
+    }
+
+    #[test]
+    fn wells_tree_shape() {
+        use crate::genome::GenomeSlot;
+        let inv = &INVENTIONS[WELLS];
+        assert_eq!(inv.prereqs, bit(POTTERY), "Wells prereq");
+        assert_eq!(inv.era, 2, "Wells era");
+        assert_eq!(
+            inv.affinity.map(|a| a.slot as usize),
+            Some(GenomeSlot::Conscientiousness as usize),
+            "Wells affinity slot"
+        );
+        assert_eq!(
+            inv.gene_req.map(|r| r.slot as usize),
+            Some(GenomeSlot::Conscientiousness as usize)
+        );
+        assert!((inv.gene_req.unwrap().min - 0.40).abs() < 1e-6);
+    }
+
+    #[test]
+    fn vaccination_spillover_multiplier_identity_at_zero_and_halves_when_held() {
+        assert_eq!(vaccination_spillover_multiplier(0), 1.0);
+        assert_eq!(vaccination_spillover_multiplier(bit(VACCINATION)), VACCINATION_SPILLOVER_MULT);
+        assert!((vaccination_spillover_multiplier(bit(VACCINATION)) - 0.5).abs() < 1e-6);
+        // Unrelated bits don't trigger it.
+        assert_eq!(vaccination_spillover_multiplier(bit(WRITING)), 1.0);
+    }
+
+    #[test]
+    fn vaccination_tree_shape() {
+        use crate::genome::GenomeSlot;
+        let inv = &INVENTIONS[VACCINATION];
+        assert_eq!(inv.prereqs, bit(SANITATION) | bit(PRINTING), "Vaccination prereqs");
+        assert_eq!(inv.era, 4, "Vaccination era");
+        assert_eq!(
+            inv.affinity.map(|a| a.slot as usize),
+            Some(GenomeSlot::CognitivePotential as usize),
+            "Vaccination affinity slot"
+        );
+        assert_eq!(
+            inv.gene_req.map(|r| r.slot as usize),
+            Some(GenomeSlot::CognitivePotential as usize)
+        );
+        assert!((inv.gene_req.unwrap().min - 0.60).abs() < 1e-6);
     }
 
     #[test]

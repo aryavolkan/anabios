@@ -30,9 +30,11 @@ enum {
 	HAFTED_SPEARS,
 	ARCHERY,
 	FORTIFICATIONS,
-	STEEL_ARMS
+	STEEL_ARMS,
+	WELLS,
+	VACCINATION
 }
-const KIND_COUNT := 22
+const KIND_COUNT := 24
 const NAMES: PackedStringArray = [
 	"Market",
 	"Warehouse",
@@ -55,7 +57,9 @@ const NAMES: PackedStringArray = [
 	"HaftedSpears",
 	"Archery",
 	"Fortifications",
-	"SteelArms"
+	"SteelArms",
+	"Wells",
+	"Vaccination"
 ]
 
 # Invention key (from invention_catalog / species_stats.adopted_inventions) ->
@@ -82,6 +86,9 @@ const INVENTION_BUILDING := {
 	"archery": ARCHERY,
 	"fortifications": FORTIFICATIONS,
 	"steel_arms": STEEL_ARMS,
+	# Basic-needs / late-era rounds (2026-09).
+	"wells": WELLS,
+	"vaccination": VACCINATION,
 }
 
 # 16x16 block lists per kind, indexed by the enum.
@@ -403,6 +410,44 @@ const _BLOCKS: Array = [
 		[9, 7, 3, 1, "K"],
 		[10, 8, 1, 3, "b"],
 		[10, 11, 1, 1, "y"],
+	],
+	# WELLS — freestanding roofed stone well: peaked plank roof on two posts,
+	# a round stone ring (rim + wide body, not the post-and-lintel square of
+	# IRRIGATION and no side channels), a rope from the crossbar and a bucket
+	# hanging into the dark shaft opening
+	[
+		[7, 1, 2, 1, "b"],
+		[6, 2, 4, 1, "B"],
+		[5, 3, 6, 1, "b"],
+		[5, 4, 1, 3, "b"],
+		[10, 4, 1, 3, "b"],
+		[4, 8, 8, 1, "G"],
+		[3, 9, 10, 3, "g"],
+		[4, 12, 9, 1, "b"],
+		[5, 8, 2, 1, "K"],
+		[9, 8, 2, 1, "K"],
+		[7, 4, 1, 4, "t"],
+		[6, 8, 3, 2, "d"],
+		[6, 8, 3, 1, "s"],
+	],
+	# VACCINATION — small white/light clinic, flat pale roof, a prominent red
+	# cross emblem on the facade (the dominant feature, unlike MEDICINE's
+	# brown apothecary hut with hanging herb bundles) and a vial/bottle
+	# accent standing on a shelf beside the door
+	[
+		[2, 5, 12, 1, "G"],
+		[2, 6, 12, 1, "s"],
+		[3, 7, 10, 7, "W"],
+		[3, 7, 10, 1, "e"],
+		[7, 11, 2, 3, "d"],
+		[7, 7, 2, 4, "R"],
+		[6, 8, 4, 2, "R"],
+		[4, 9, 2, 2, "s"],
+		[12, 12, 2, 1, "b"],
+		[12, 9, 1, 3, "e"],
+		[12, 10, 1, 2, "R"],
+		[12, 8, 1, 1, "K"],
+		[3, 14, 10, 1, "g"],
 	],
 ]
 
