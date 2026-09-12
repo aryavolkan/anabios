@@ -174,6 +174,20 @@ func _init() -> void:
 	var sig_b := SettlementLayer.plan_signature(3, 17, 1, 9)
 	_check(sig_a == sig_b, "plan_signature is deterministic for identical inputs")
 
+	# --- merge_sites: co-located anchors fold into the largest lineage ---
+	var sites: Array = [
+		{"species_id": 1, "pos": Vector2(100, 100), "members": 40},
+		{"species_id": 2, "pos": Vector2(110, 104), "members": 300},
+		{"species_id": 3, "pos": Vector2(900, 900), "members": 20},
+		{"species_id": 4, "pos": Vector2(130, 96), "members": 5},
+	]
+	var merged: Array = SettlementLayer.merge_sites(sites, 48.0)
+	_check(merged.size() == 2, "three co-located sites merge into one village (+1 far site)")
+	_check(int(merged[0]["species_id"]) == 2, "the largest lineage keeps the village")
+	_check(int(merged[0]["members"]) == 345, "merged members are summed")
+	_check(int(merged[1]["species_id"]) == 3, "a distant site stays its own village")
+	_check(SettlementLayer.merge_sites([], 48.0).is_empty(), "no sites merge to nothing")
+
 	if _failed:
 		quit(1)
 		return

@@ -4,10 +4,9 @@ extends RefCounted
 # palette keys plus an auto 1px dark outline -- the same painter technique as
 # TerrainSprites._sprite (row-string + palette) with the auto-outline pass of
 # ApeSprites._build_cell (any transparent pixel touching an opaque one is
-# outlined). Every kind is flip_y()-ed before it leaves this module, exactly
-# like BuildingSprites.build_image, so a village layer reading either single
-# textures (plain MultiMesh, one texture per kind) or the packed atlas below
-# sees pre-corrected art for the MultiMesh QuadMesh's flipped V axis.
+# outlined). Rows are authored top-down and left as painted: the plain
+# MultiMesh quad the village layer draws with shows them upright as-is
+# (verified in a rendered capture; a flip_y() here drew every tent apex-down).
 #
 # This is the Phase 4 step 2 "era sets" contract from
 # docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md section 6:
@@ -898,17 +897,13 @@ static func _paint(rows: Array, overrides: Array) -> Image:
 
 
 static func kind_image(kind: int) -> Image:
-	var img: Image = _paint(_ROWS[kind], [])
-	img.flip_y()
-	return img
+	return _paint(_ROWS[kind], [])
 
 
 static func build_variant_image(kind: int, phase: int) -> Image:
 	if phase % 2 == 0 or not is_animated(kind):
 		return kind_image(kind)
-	var img: Image = _paint(_ROWS[kind], _LIFT[kind])
-	img.flip_y()
-	return img
+	return _paint(_ROWS[kind], _LIFT[kind])
 
 
 static func build_variant(kind: int, phase: int) -> ImageTexture:
@@ -933,8 +928,7 @@ static func era_of(kind: int) -> int:
 # index == kind, row-major -- same square-grid contract and _blit_cell
 # geometry as TerrainSprites.build_atlas (required by the Metal MultiMesh
 # path: extreme-aspect atlases corrupt). Cells already carry kind_image's
-# flip_y(), so a cell's centre pixel matches kind_image(k)'s centre pixel
-# directly, with no further flip at blit time.
+# so a cell's centre pixel matches kind_image(k)'s centre pixel directly.
 static func build_atlas() -> ImageTexture:
 	var side := ATLAS_COLS * CELL_PX
 	var atlas := Image.create(side, side, false, Image.FORMAT_RGBA8)

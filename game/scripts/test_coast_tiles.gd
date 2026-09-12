@@ -6,9 +6,6 @@ extends SceneTree
 
 const T = preload("res://scripts/coast_tiles.gd")
 
-const WATER_COLOR := "2f6f9c"
-const SAND_COLOR := "d9c58a"
-
 var _failed := false
 
 
@@ -81,51 +78,67 @@ func _init() -> void:
 		seen[T.rotate_mask_cw(m)] = true
 	_check(seen.size() == 14, "rotate_mask_cw permutes the 14 non-trivial masks onto themselves")
 
-	# --- corner-colour property: every non-trivial mask's tile is
-	# water-coloured at the pixel nearest each water corner and
-	# sand-coloured at the pixel nearest each land corner ---
+	# --- shoreline bands: every non-trivial tile is transparent at the pixel
+	# nearest each corner (the ground shows through), paints sand only on the
+	# land side of the waterline and shallow water only on the water side, and
+	# carries all three bands somewhere ---
 	var corner_px := [Vector2i(0, 0), Vector2i(15, 0), Vector2i(0, 15), Vector2i(15, 15)]
 	var corner_name := ["TL", "TR", "BL", "BR"]
 	for mask in range(1, 15):
 		var img: Image = T.tile_image(mask)
 		_check(img.get_width() == 16 and img.get_height() == 16, "mask %d tile is 16x16" % mask)
 		for i in 4:
-			var bit_set := ((mask >> i) & 1) == 1
 			var px: Vector2i = corner_px[i]
-			var c := img.get_pixel(px.x, px.y)
-			var want := Color(WATER_COLOR) if bit_set else Color(SAND_COLOR)
 			_check(
-				c.is_equal_approx(want),
-				(
-					"mask %d (%s) corner %s is %s-coloured"
-					% [mask, mask, corner_name[i], "water" if bit_set else "sand"]
-				)
+				img.get_pixel(px.x, px.y).a == 0.0,
+				"mask %d corner %s is transparent" % [mask, corner_name[i]]
 			)
+		var sand := 0
+		var foam := 0
+		var shallow := 0
+		var band_ok := true
+		for y in 16:
+			for x in 16:
+				var c := img.get_pixel(x, y)
+				if c.a == 0.0:
+					continue
+				var w := T.water_weight(mask, x, y)
+				if c.is_equal_approx(T.FOAM):
+					foam += 1
+				elif c.is_equal_approx(T.SAND):
+					sand += 1
+					band_ok = band_ok and w < 0.5
+				elif is_equal_approx(c.r, T.SHALLOW.r) and is_equal_approx(c.b, T.SHALLOW.b):
+					shallow += 1
+					band_ok = band_ok and w >= 0.5
+		_check(
+			sand > 0 and foam > 0 and shallow > 0, "mask %d carries sand, foam and shallow" % mask
+		)
+		_check(band_ok, "mask %d sand stays on the land side, shallow on the water side" % mask)
+		_check(
+			T.opaque_pixels(img) < 224,
+			"mask %d is a band, not a slab (%d opaque)" % [mask, T.opaque_pixels(img)]
+		)
 
-	# --- rotation consistency at the art level: rotating a tile's corner
-	# colours 90 degrees (TL->TR->BR->BL) matches the tile at the rotated
-	# mask, for every non-trivial mask ---
+	# --- water_weight is bilinear in the corner bits ---
+	_check(T.water_weight(1, 0, 0) > 0.85, "TL-only weight is near 1 at the TL pixel")
+	_check(T.water_weight(1, 15, 15) < 0.15, "TL-only weight is near 0 at the BR pixel")
+	_check(absf(T.water_weight(3, 7, 7) - 0.53) < 0.05, "top-edge weight is ~0.5 mid-tile")
+	_check(absf(T.water_weight(9, 7, 7) - 0.5) < 0.01, "diagonal pair balances at the centre")
+
+	# --- rotation consistency at the art level: rotating a tile 90 degrees
+	# clockwise yields the tile of the rotated mask, pixel for pixel ---
 	for mask in range(1, 15):
 		var img: Image = T.tile_image(mask)
 		var rotated_mask := T.rotate_mask_cw(mask)
 		var rimg: Image = T.tile_image(rotated_mask)
-		# old TL corner colour should equal new TR corner colour, etc.
-		_check(
-			img.get_pixel(0, 0).is_equal_approx(rimg.get_pixel(15, 0)),
-			"mask %d -> %d: TL colour moves to TR under rotation" % [mask, rotated_mask]
-		)
-		_check(
-			img.get_pixel(15, 0).is_equal_approx(rimg.get_pixel(15, 15)),
-			"mask %d -> %d: TR colour moves to BR under rotation" % [mask, rotated_mask]
-		)
-		_check(
-			img.get_pixel(15, 15).is_equal_approx(rimg.get_pixel(0, 15)),
-			"mask %d -> %d: BR colour moves to BL under rotation" % [mask, rotated_mask]
-		)
-		_check(
-			img.get_pixel(0, 15).is_equal_approx(rimg.get_pixel(0, 0)),
-			"mask %d -> %d: BL colour moves to TL under rotation" % [mask, rotated_mask]
-		)
+		var same := true
+		for y in 16:
+			for x in 16:
+				# (x, y) rotated 90 degrees clockwise lands at (15 - y, x).
+				if not img.get_pixel(x, y).is_equal_approx(rimg.get_pixel(15 - y, x)):
+					same = false
+		_check(same, "mask %d rotated 90 degrees is mask %d" % [mask, rotated_mask])
 
 	# --- atlas layout: tile cells land where mask == cell index says ---
 	var aimg := atlas.get_image()

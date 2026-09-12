@@ -23,6 +23,8 @@ const REDRAW_EVERY := 20
 # world units) — deliberately oversized next to agents (BODY_MIN ~6) so a
 # village reads as architecture, not as a few more creatures.
 const STRUCTURE_SCALE := 0.5
+# Sites closer than this (world units) share one village footprint.
+const MERGE_RADIUS := 48.0
 const MEMBERS_BUCKET := 6
 # Landmark/trade buildings sit a notch bigger than huts so a village's
 # invention history and trade role read at a glance from the ring around it.
@@ -290,11 +292,36 @@ static func _smoke_rank(kind: int) -> int:
 	return -1
 
 
+# Cluster settlement sites whose anchors lie within `radius` of an already
+# accepted (larger) site: the accepted site keeps its species id and position
+# and absorbs the smaller site's members. Pure; sorted by members descending
+# so the merge is deterministic for a given site list.
+static func merge_sites(sites: Array, radius: float) -> Array:
+	var ordered: Array = sites.duplicate()
+	ordered.sort_custom(func(a, b): return int(a["members"]) > int(b["members"]))
+	var merged: Array = []
+	for site in ordered:
+		var pos: Vector2 = site["pos"]
+		var absorbed := false
+		for head in merged:
+			if (head["pos"] as Vector2).distance_to(pos) <= radius:
+				head["members"] = int(head["members"]) + int(site["members"])
+				absorbed = true
+				break
+		if not absorbed:
+			merged.append(
+				{"species_id": int(site["species_id"]), "pos": pos, "members": int(site["members"])}
+			)
+	return merged
+
+
 func _redraw() -> void:
 	var tick: int = int(sim.tick())
 	_poll_events()
-	# Fold the live sites into the village memory.
-	for site in _sites:
+	# Fold the live sites into the village memory. Co-located anchors (several
+	# lineages settling the same market square) merge into ONE village under
+	# the largest lineage so footprints never stack on top of each other.
+	for site in merge_sites(_sites, MERGE_RADIUS):
 		var sid: int = int(site["species_id"])
 		var v: Dictionary = _villages.get(sid, {})
 		if v.is_empty():
