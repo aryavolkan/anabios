@@ -9,6 +9,8 @@ const EventLog = preload("res://scripts/event_log.gd")
 const Icons = preload("res://scripts/hud_icons.gd")
 const ResearchPanel = preload("res://scripts/research_panel.gd")
 const SpeciesNames = preload("res://scripts/species_names.gd")
+const EcoMeters = preload("res://scripts/eco_meters.gd")
+const TimeControls = preload("res://scripts/time_controls.gd")
 const TopBar = preload("res://scripts/top_bar.gd")
 const UnitCard = preload("res://scripts/unit_card.gd")
 
@@ -93,6 +95,19 @@ func _init() -> void:
 		UnitCard.pip_counts(PackedStringArray()) == PackedInt32Array([0, 0, 0, 0]),
 		"no modules -> zero pips"
 	)
+
+	# --- hotbar tools resolve to real keys and icons; meters clamp ---
+	for tool in TimeControls.TOOLS:
+		var ev: InputEventKey = TimeControls.key_event(String(tool[0]))
+		_check(ev.keycode != KEY_NONE and ev.pressed, "hotbar key %s resolves" % tool[0])
+		_check(int(tool[2]) >= 0 and int(tool[2]) < Icons.KIND_COUNT, "hotbar icon %s" % tool[0])
+	_check(TimeControls.key_event("G").keycode == KEY_G, "G maps to KEY_G")
+	_check(is_equal_approx(EcoMeters.health_of(50, 200), 0.25), "health is live over peak")
+	_check(is_equal_approx(EcoMeters.health_of(300, 200), 1.0), "health caps at one")
+	_check(is_equal_approx(EcoMeters.health_of(5, 0), 0.0), "no peak yet -> zero")
+	_check(is_equal_approx(EcoMeters.simpson(PackedInt32Array([10])), 0.0), "one species -> 0")
+	_check(is_equal_approx(EcoMeters.simpson(PackedInt32Array([5, 5])), 0.5), "two even -> 0.5")
+	_check(is_equal_approx(EcoMeters.simpson(PackedInt32Array()), 0.0), "no species -> 0")
 
 	# --- codex species helpers ---
 	_check(Codex.diet_label(0.1) == "Herbivore", "low carnivory is a herbivore")
