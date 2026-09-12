@@ -12,6 +12,17 @@ use crate::world::World;
 /// How often (in ticks) the biome plant regrowth step runs.
 pub const BIOME_STEP_INTERVAL: u64 = 10;
 
+/// The effective biome-step cadence for `world`: the base
+/// `BIOME_STEP_INTERVAL` scaled by the opt-in `World::biome_step_interval`
+/// multiplier (default 1, so this equals `BIOME_STEP_INTERVAL` for every
+/// pre-existing scenario). Shared by `step`'s Stage 10 gate and any detector
+/// (e.g. `codex::disturbance::detect_succession`) that must only look for a
+/// succession change on ticks where the biome actually stepped.
+#[inline]
+pub fn biome_step_interval(world: &World) -> u64 {
+    BIOME_STEP_INTERVAL * world.biome_step_interval.max(1) as u64
+}
+
 /// Advance the world by one tick.
 pub fn step(world: &mut World) {
     world.resize_scratch();
@@ -149,7 +160,9 @@ pub fn step(world: &mut World) {
     }
 
     // Stage 10: periodic biome regrowth (+ recolonization in a living biome).
-    if world.tick.is_multiple_of(BIOME_STEP_INTERVAL) {
+    // `biome_step_interval` (default 1, opt-in scaling lever for huge worlds)
+    // multiplies the base cadence.
+    if world.tick.is_multiple_of(biome_step_interval(world)) {
         let sf = world.soil_fertility;
         if world.living_biome {
             world.biome.recolonize_step(sf);

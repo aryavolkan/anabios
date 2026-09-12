@@ -294,6 +294,23 @@ pub struct World {
     /// stays ~16 when the world scales.
     #[serde(default = "default_hash_res")]
     pub hash_res: usize,
+    /// Opt-in throughput lever for huge worlds (Phase 1 "scale fields"):
+    /// multiplies the existing `tick::BIOME_STEP_INTERVAL` (10-tick) biome
+    /// cadence, so the regrow/recolonize/seasonal-regrow/resource-spawn block
+    /// in `tick::step` only runs on ticks where
+    /// `tick % (BIOME_STEP_INTERVAL * biome_step_interval) == 0`. `1` (the
+    /// default) leaves the cadence exactly as today — bit-identical. `N > 1`
+    /// runs the biome step `N` times less often, trading regrowth
+    /// *resolution* for tick throughput at large `biome_res` (recomputing a
+    /// whole 2048²+ biome grid every 10 ticks dominates tick time at that
+    /// scale). Unlike `codex_interval` this is genuine simulation state (it
+    /// gates plant biomass, which every forager reads), so — unlike that
+    /// runtime knob — it is NOT `#[serde(skip)]`: it must persist across a
+    /// snapshot round-trip or a reloaded huge world would silently regrow
+    /// 4x/8x/etc. more often than the continuous run it was saved from.
+    /// Defaulted so old snapshots without this field still deserialize.
+    #[serde(default = "default_biome_step_interval")]
+    pub biome_step_interval: u32,
     /// How often (in ticks) the codex observer (`observe_all`) runs. `0`/`1`
     /// (the default) = every tick — bit-identical to a build without this
     /// field. `N > 1` runs the ~45 emergence detectors only when
@@ -414,6 +431,11 @@ fn default_biome_res() -> usize {
 fn default_hash_res() -> usize {
     crate::spatial::HASH_RES_DEFAULT
 }
+/// Serde default for `World::biome_step_interval` (old snapshots lack the
+/// field): `1` == today's `BIOME_STEP_INTERVAL`-only cadence, unchanged.
+fn default_biome_step_interval() -> u32 {
+    1
+}
 
 impl World {
     /// Build a world from a seed: deterministic biome + empty agent
@@ -481,6 +503,9 @@ impl World {
             world_size: crate::biome::WORLD_SIZE_DEFAULT,
             biome_res: crate::biome::BIOME_RES_DEFAULT,
             hash_res: crate::spatial::HASH_RES_DEFAULT,
+            // 1x the existing BIOME_STEP_INTERVAL cadence (bit-identical to a
+            // build without the knob).
+            biome_step_interval: 1,
             // Every tick by default (bit-identical to a build without the knob).
             codex_interval: 1,
             spatial: UniformSpatialHash::with_dims(

@@ -2,7 +2,7 @@
 //! segregation, corridor use, and post-fire succession.
 
 use super::*;
-use crate::tick::BIOME_STEP_INTERVAL;
+use crate::tick::biome_step_interval;
 
 pub(super) fn update_range_history(world: &mut World, agg: &SpeciesAggTable) {
     for &sid in agg.active() {
@@ -208,7 +208,7 @@ pub(super) fn detect_corridor_use(world: &mut World, agg: &SpeciesAggTable) {
 /// so requiring full Climax never completes under real grazing pressure).
 /// Runs on the biome-step cadence (succession only moves then).
 pub(super) fn detect_succession(world: &mut World) {
-    if !world.disasters_enabled || !world.tick.is_multiple_of(BIOME_STEP_INTERVAL) {
+    if !world.disasters_enabled || !world.tick.is_multiple_of(biome_step_interval(world)) {
         return;
     }
     let tick = world.tick;

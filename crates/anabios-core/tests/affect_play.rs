@@ -79,7 +79,10 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // invention count 20->22 shifted the discovery table and practice
     // channels. inventions_enabled is off here ⇒ layout growth only; tick 0
     // held, ticks 100/200 moved.
-    &[(0, 0x45e13db6a54b5bf3), (100, 0x48cec90083f03438), (200, 0xe6bf8c64b03cc8c1)];
+    // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
+    // 42→43): World.biome_step_interval added (default/absent 1) — layout
+    // growth only, trajectory byte-identical.
+    &[(0, 0xc281070a7a4d0fd2), (100, 0x93947fa094bdca1d), (200, 0x6514327d1b7b4964)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

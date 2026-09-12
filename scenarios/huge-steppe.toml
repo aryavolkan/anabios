@@ -1,0 +1,29 @@
+name = "huge-steppe"
+seed = 21
+world_size = 8192.0
+biome_res = 1024
+hash_res = 512
+living_biome = true
+season_period = 5000
+max_population = 6000
+
+# Phase-1 "Huge" scale tier (docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md,
+# steps 5-6): an 8192^2 world (biome grid 1024^2, spatial hash 512^2) — 4x sandbox-xlarge's
+# 4096^2 tier in linear extent (16x the area), same living-biome + seasonal-regrowth mix and
+# the same 6k population budget, so this scenario exercises world-scale (not population-scale)
+# throughput: how the substrate holds up when the biome field itself gets much bigger while the
+# agent count stays in the existing design budget. `biome_step_interval` is left at its default
+# (1, today's every-10-ticks cadence) here — `scenarios/experiments/vast-steppe.toml` is where
+# that throughput lever gets exercised, one scale tier up.
+
+# A uniform herbivore population spread across the whole steppe.
+[[agents]]
+count = 1500
+placement = { kind = "uniform" }
+archetype = "grazer"
+
+# A scattering of communicators for lineage/culture variety at this scale.
+[[agents]]
+count = 30
+placement = { kind = "uniform" }
+archetype = "communicator"

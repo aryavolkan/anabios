@@ -92,6 +92,12 @@ roundtrip_tests! {
         "../../../scenarios/anthro-race.toml", 400, |w: &World| w.anthro_race_enabled && !w.culture_roots.is_empty(), "anthro_race_enabled+culture_roots";
     out_of_africa_earth_roundtrip:
         "../../../scenarios/out-of-africa-earth.toml", 300, |w: &World| w.biome.res == 256, "out-of-africa-earth (from_earth field + every opt-in)";
+    biome_step_interval_roundtrip:
+        // A default-size carrier scenario rather than vast-steppe: instantiating
+        // the 2048^2 grid is the slowest thing in the suite (minutes in the
+        // debug coverage shards) and the flag's persistence needs only one
+        // full biome_step_interval=4 period (effective cadence 40 ticks).
+        "../../../scenarios/experiments/biome-step-interval.toml", 120, |w: &World| w.biome_step_interval > 1, "biome_step_interval";
 }
 
 /// The strongest single guard: grand-theater warms every subsystem at once.
