@@ -148,3 +148,72 @@ godot --headless --rendering-driver dummy --path game \
 
 It is wired into the "sprite module tests" step of `.github/workflows/ci.yml`
 alongside the existing sprite module tests.
+
+## Dual-grid coast autotiling (Phase 2 step 3, water/land)
+
+`game/scripts/coast_tiles.gd` and `game/shaders/autotile.gdshaderinc` are the
+first transition pair (water/land coast) of the Phase 2 step 3 "Crisp tiles +
+autotiling" work in
+`docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md` (§4 D1,
+D2; §6 Phase 2 item 3). They are independent of the atlas pipeline above —
+`coast_tiles.gd` is a hand-authored block-string family, packed into its own
+square atlas, the same way `terrain_sprites.gd` is.
+
+The transition grid is offset half a cell from the terrain id grid: each
+16x16 coast tile sits at a shared corner of 4 terrain cells and is picked by
+a 4-bit mask of which of those cells is water (id 0):
+
+```
+bit 0 (1) = top-left  (TL) cell is water
+bit 1 (2) = top-right (TR) cell is water
+bit 2 (4) = bottom-left  (BL) cell is water
+bit 3 (8) = bottom-right (BR) cell is water
+```
+
+`coast_tiles.gd`'s `build_atlas()` packs a 4x4 square atlas (`ATLAS_COLS =
+4`, `CELL_PX = 16`, 64x64 total) with one 16x16 tile per mask, cell index =
+mask, row-major — masks 0 (all land) and 15 (all water) are fully
+transparent (no overlay needed; the flat shader branches already look
+right). The other 14 tiles are generated from 4 hand-authored base shapes
+(corner, edge, diagonal pair, inner corner) rotated 90 degrees at a time by
+`rotate_mask_cw`/`_rotate_rows_cw`, so the art and the mask bit order can
+never drift apart; see the comment at the top of `coast_tiles.gd` for the
+full derivation.
+
+`game/shaders/autotile.gdshaderinc` samples that atlas from a Godot 4
+canvas_item shader. It is a pure `#include`-able function library (no
+`shader_type`, no `TIME`, no `texture()` outside a function body) exposing:
+
+```glsl
+bool at_is_water(sampler2D ids_tex, float ids_res, vec2 cell);
+
+vec4 coast_autotile(sampler2D ids_tex, float ids_res, vec2 cellf,
+                    sampler2D coast_atlas, float atlas_cols, float cell_px, float atlas_px);
+```
+
+Intended call site in `terrain.gdshader`'s land branch, where `cellf` is
+`UV * biome_res` (the same value already computed there for the tile-atlas
+lookup) and `coast_atlas` is `coast_tiles.gd`'s `build_atlas()` result wired
+up as a `filter_nearest` uniform, the same way `tile_atlas`/`terrain_ids`
+already are:
+
+```glsl
+vec4 t = coast_autotile(terrain_ids, biome_res, cellf, coast_atlas, 4.0, 16.0, 64.0);
+land_base = mix(land_base, t.rgb, t.a * detail);
+```
+
+`t.a` is 0 away from any coast (masks 0/15), so the `mix` is a no-op there;
+`detail` is the same screen-space texel-size falloff the existing tile blend
+uses, so coast tiles dissolve back to the flat biome colour at the same
+distance the ground tiles do. `terrain.gdshader` and `biome_renderer.gd`
+(which owns wiring shader uniforms) are not touched by this change — hooking
+the include in is a follow-up.
+
+`game/scripts/test_coast_tiles.gd` is the headless test: atlas
+size/squareness, masks 0/15 fully transparent, `mask_of`'s bit order, the
+corner-colour property (every non-trivial mask's tile is water-coloured at
+the pixel nearest each water corner and sand-coloured at the pixel nearest
+each land corner) for all 14 tiles, and rotation consistency (`TL`-only
+rotates 90 degrees to `TR`-only, etc., both at the mask-bit level and the
+rendered-pixel level). It is wired into the "sprite module tests" step of
+`.github/workflows/ci.yml` alongside the other sprite module tests.
