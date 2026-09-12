@@ -36,6 +36,16 @@ var _tiles: Array[Sprite2D] = []
 const TerrainShader := preload("res://shaders/terrain.gdshader")
 var _terrain_mat: ShaderMaterial
 
+# Pixel-art ground: the terrain_sprites.gd tile atlas sampled in the shader,
+# keyed by an R8 texture of exact TerrainType ids from the bridge, plus the
+# decoration prop scatter child. [B] toggles the whole treatment.
+const TerrainSprites := preload("res://scripts/terrain_sprites.gd")
+const TerrainScatter := preload("res://scripts/terrain_scatter.gd")
+var _tiles_on := true
+var _ids := PackedByteArray()
+var _ids_tex: ImageTexture = null
+var _scatter: Node2D = null
+
 
 func _ready() -> void:
 	centered = false
@@ -50,6 +60,18 @@ func _ready() -> void:
 	_terrain_mat = ShaderMaterial.new()
 	_terrain_mat.shader = TerrainShader
 	material = _terrain_mat
+	# Static tile-atlas wiring; per-world uniforms (biome_res, terrain_ids)
+	# follow in _setup once the scenario's resolution is known.
+	_terrain_mat.set_shader_parameter("tile_atlas", TerrainSprites.build_atlas())
+	_terrain_mat.set_shader_parameter("tile_variants", float(TerrainSprites.VARIANTS))
+	_terrain_mat.set_shader_parameter("atlas_cols", float(TerrainSprites.ATLAS_COLS))
+	_terrain_mat.set_shader_parameter("atlas_cell_px", float(TerrainSprites.CELL_PX))
+	_terrain_mat.set_shader_parameter(
+		"atlas_px", float(TerrainSprites.ATLAS_COLS * TerrainSprites.CELL_PX)
+	)
+	_scatter = TerrainScatter.new()
+	_scatter.name = "TerrainScatter"
+	add_child(_scatter)
 	for gy in range(-1, 2):
 		for gx in range(-1, 2):
 			if gx == 0 and gy == 0:
@@ -99,6 +121,13 @@ func _setup(res: int) -> void:
 			tile.position = Vector2(gx * _res, gy * _res)
 	_redraw_interval = REDRAW_EVERY * maxi(1, int(_res / 128.0))
 	_last_mode = -999  # force an immediate redraw
+	# Reset the tile-id cache so the id texture and scatter rebuild for the new
+	# world; counter-scale the scatter child back to world units (children
+	# inherit this node's world/res scale).
+	_ids = PackedByteArray()
+	_terrain_mat.set_shader_parameter("biome_res", float(_res))
+	if _scatter != null:
+		_scatter.scale = Vector2(_res / world, _res / world)
 
 
 # The whole-world ground ImageTexture (res×res) as currently displayed — the
@@ -153,6 +182,14 @@ func _process(_delta: float) -> void:
 	# overlays (pheromone/optimum/market/succession) pass through faithfully.
 	if _terrain_mat != null:
 		_terrain_mat.set_shader_parameter("biome_mode", 1.0 if mode == -1 else 0.0)
+	# Pixel-art ground upkeep: refresh the terrain-id texture and the prop
+	# scatter when the id grid changes (rarely — worldgen or disturbance).
+	# Props hide under data overlays so heatmaps stay uncluttered; the tile
+	# blend needs no gating because the passthrough branch already bypasses it.
+	if _scatter != null:
+		_scatter.visible = _tiles_on and mode == -1
+	if _tiles_on and _frame % _redraw_interval == 0:
+		_refresh_terrain_ids()
 	# While a data overlay owns the ground texture, keep the minimap's biome copy
 	# current on its own (much slower) cadence — the minimap is 200px wide and
 	# the terrain creeps. `== 1` refreshes on the first frame after the switch so
@@ -192,6 +229,34 @@ func _process(_delta: float) -> void:
 	else:
 		colors = sim.biome_colors()
 	_blit(colors, _img, _tex)
+
+
+# Upload the exact TerrainType id grid as an R8 texture for the tile lookup
+# and re-plan the prop scatter — both only when the ids actually changed.
+func _refresh_terrain_ids() -> void:
+	var ids: PackedByteArray = sim.biome_terrain_ids()
+	if ids.size() != _res * _res or ids == _ids:
+		return
+	_ids = ids
+	var img := Image.create_from_data(_res, _res, false, Image.FORMAT_R8, ids)
+	if _ids_tex == null or _ids_tex.get_width() != _res:
+		_ids_tex = ImageTexture.create_from_image(img)
+	else:
+		_ids_tex.update(img)
+	_terrain_mat.set_shader_parameter("terrain_ids", _ids_tex)
+	_terrain_mat.set_shader_parameter("tiles_enabled", 1.0 if _tiles_on else 0.0)
+	if _scatter != null:
+		_scatter.rebuild(ids, _res, _res * scale.x)
+
+
+# [B] toggles the pixel-art ground (tiles + props) without touching the
+# relief/water treatment or any data overlay.
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_B:
+		_tiles_on = not _tiles_on
+		_terrain_mat.set_shader_parameter("tiles_enabled", 1.0 if _tiles_on else 0.0)
+		if _scatter != null:
+			_scatter.visible = _tiles_on and _last_mode == -1
 
 
 # Pack a res² colour grid into an RGBA8 byte buffer and push it to `tex` (one
