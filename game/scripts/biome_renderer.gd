@@ -41,6 +41,7 @@ var _terrain_mat: ShaderMaterial
 # decoration prop scatter child. [B] toggles the whole treatment.
 const TerrainSprites := preload("res://scripts/terrain_sprites.gd")
 const TerrainScatter := preload("res://scripts/terrain_scatter.gd")
+const CoastTiles := preload("res://scripts/coast_tiles.gd")
 var _tiles_on := true
 var _ids := PackedByteArray()
 var _ids_tex: ImageTexture = null
@@ -83,6 +84,15 @@ func _ready() -> void:
 	_terrain_mat.set_shader_parameter(
 		"atlas_px", float(TerrainSprites.ATLAS_COLS * TerrainSprites.CELL_PX)
 	)
+	# Dual-grid coast transitions ride the same material (and every chunk's
+	# duplicate of it), keyed off the exact terrain ids.
+	_terrain_mat.set_shader_parameter("coast_atlas", CoastTiles.build_atlas())
+	_terrain_mat.set_shader_parameter("coast_cols", float(CoastTiles.ATLAS_COLS))
+	_terrain_mat.set_shader_parameter("coast_cell_px", float(CoastTiles.CELL_PX))
+	_terrain_mat.set_shader_parameter(
+		"coast_atlas_px", float(CoastTiles.ATLAS_COLS * CoastTiles.CELL_PX)
+	)
+	_terrain_mat.set_shader_parameter("autotile_enabled", 1.0)
 	_scatter = TerrainScatter.new()
 	_scatter.name = "TerrainScatter"
 	add_child(_scatter)
@@ -238,7 +248,7 @@ func _process(_delta: float) -> void:
 	# Props hide under data overlays so heatmaps stay uncluttered; the tile
 	# blend needs no gating because the passthrough branch already bypasses it.
 	if _scatter != null:
-		_scatter.visible = _tiles_on and mode == -1
+		_scatter.visible = _tiles_on and mode == -1 and not streaming_enabled()
 	if _tiles_on and _frame % _redraw_interval == 0:
 		_refresh_terrain_ids()
 	# Scenery follows the same rule: props only over the real terrain.
@@ -317,9 +327,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_tiles_on = not _tiles_on
 		_terrain_mat.set_shader_parameter("tiles_enabled", 1.0 if _tiles_on else 0.0)
 		if _scatter != null:
-			_scatter.visible = _tiles_on and _last_mode == -1
+			_scatter.visible = _tiles_on and _last_mode == -1 and not streaming_enabled()
 	elif event.keycode == KEY_N:
 		_chunks_on = not _chunks_on
+		if _scatter != null:
+			_scatter.visible = _tiles_on and _last_mode == -1 and not streaming_enabled()
 
 
 # Pack a res² colour grid into an RGBA8 byte buffer and push it to `tex` (one

@@ -41,19 +41,30 @@ uniform float atlas_px = 128.0;
 // Chunk addressing (D3, `docs/superpowers/specs/
 // 2026-09-12-pixel-world-at-scale-design.md` §4/§6 Phase 2): a streamed
 // GroundChunk shows a 66x66-cell apron texture through its interior 64x64
-// region, so its UV does not span `biome_res` cells the way the whole-world
-// sprite's does. `ids_cells > 0.5` switches the cell lookup to
-// `UV * ids_cells + ids_offset` (chunk: ids_cells = 64, ids_offset = (1,1),
-// biome_res overridden to 66 so `terrain_ids` sampling lands in the apron
-// texture); at the defaults below (`ids_cells = 0`) the lookup is exactly
-// the original `UV * biome_res` whole-world path. `cell_origin` is this
-// texture's local (0,0) cell in WORLD cell coordinates, added back in for
-// the per-cell hash only, so a chunk's tile variants match the whole-world
-// hash and never drift at a chunk border (defaults to 0 = identity for the
-// whole-world sprite, whose cell coordinates already are world coordinates).
+// region. Godot hands a region sprite its UV in WHOLE-texture space, so
+// `UV * biome_res` (biome_res = 66 on a chunk) already lands in apron cell
+// coordinates and the neighbour taps at TEXTURE_PIXEL_SIZE read the apron.
+// `ids_offset` is the apron inset ((1,1) on a chunk, (0,0) on the
+// whole-world sprite) and `cell_origin` the chunk's global cell coordinate;
+// together they recover the WORLD cell for the per-cell hash, so a chunk's
+// tile variants match the whole-world path and never drift at a border.
+// `cell_world` is the width of one cell in world units for the LOD fade
+// (0 = derive it from world_size / biome_res, which is only right on the
+// whole-world sprite).
 uniform vec2 ids_offset = vec2(0.0);
-uniform float ids_cells = 0.0;
 uniform vec2 cell_origin = vec2(0.0);
+uniform float cell_world = 0.0;
+
+// Dual-grid coast transitions (autotile.gdshaderinc, coast_tiles.gd): a
+// 4x4 atlas of 16 px tiles indexed by the water mask of the four cells
+// around each half-offset corner. Drawn over both the land and the water
+// side at full tile detail, and faded out with the tile LOD.
+#include "res://shaders/autotile.gdshaderinc"
+uniform sampler2D coast_atlas : filter_nearest, repeat_disable;
+uniform float autotile_enabled = 0.0;
+uniform float coast_cols = 4.0;
+uniform float coast_cell_px = 16.0;
+uniform float coast_atlas_px = 64.0;
 
 // World-space position of this fragment. The ground is drawn as 9 separate tiles
 // (origin + 8 torus wrap copies), each with its own 0..1 UV; deriving the water
@@ -105,6 +116,18 @@ void fragment() {
 	coast += is_water(cD) != water ? 1.0 : 0.0;
 	coast *= 0.25; // 0..1
 
+	// Tile-space cell coordinate and the LOD weight, shared by the land tiles
+	// and the coast autotile: detail dissolves as a tile texel shrinks below a
+	// screen pixel so far zoom looks exactly like the flat ground.
+	vec2 cellf = UV * biome_res;
+	float texel_w = (cell_world > 0.0 ? cell_world : world_size / biome_res) / atlas_cell_px;
+	float texels_per_px = fwidth(world_pos.x) / max(texel_w, 1e-4);
+	float detail = smoothstep(4.5, 1.2, texels_per_px);
+	vec4 coast_tile = vec4(0.0);
+	if (tiles_enabled > 0.5 && autotile_enabled > 0.5) {
+		coast_tile = coast_autotile(terrain_ids, biome_res, cellf, coast_atlas, coast_cols, coast_cell_px, coast_atlas_px);
+	}
+
 	vec3 outc;
 	if (water) {
 		// Depth gradient: deeper (darker, more saturated) water in open sea,
@@ -131,6 +154,8 @@ void fragment() {
 
 		// A crisp bright rim right at the waterline (surf).
 		outc += vec3(0.18, 0.26, 0.28) * smoothstep(0.24, 0.26, coast) * (1.0 - smoothstep(0.5, 0.9, coast));
+		// Coast tile on the water side (shallows + foam).
+		outc = mix(outc, coast_tile.rgb, coast_tile.a * detail);
 	} else {
 		// Pixel-art tile detail: pick this cell's tile family from its exact
 		// terrain id, a variant from a per-cell hash (same hash family as
@@ -141,14 +166,13 @@ void fragment() {
 		// zoom looks exactly like the pre-tile ground.
 		vec3 land_base = base;
 		if (tiles_enabled > 0.5) {
-			vec2 cellf = ids_cells > 0.5 ? (UV * ids_cells + ids_offset) : (UV * biome_res);
 			vec2 cell = floor(cellf);
 			float tid = floor(texture(terrain_ids, (cell + 0.5) / biome_res).r * 255.0 + 0.5);
 			if (tid > 0.5) {
 				// World-space cell, for a hash that matches the whole-world
 				// path exactly (cell_origin/ids_offset default to 0/(0,0)
 				// there, so this is `cell` unchanged on the whole-world
-				// sprite; a chunk undoes its (1,1) apron offset and adds its
+				// sprite; a chunk undoes its (1,1) apron inset and adds its
 				// own global cell coordinate).
 				vec2 world_cell = cell_origin + cell - ids_offset;
 				float h = fract(sin(dot(world_cell, vec2(127.1, 311.7))) * 43758.5453);
@@ -157,11 +181,10 @@ void fragment() {
 				vec2 acell = vec2(mod(cidx, atlas_cols), floor(cidx / atlas_cols));
 				vec2 tuv = (acell + fract(cellf)) * (atlas_cell_px / atlas_px);
 				vec3 tile = texture(tile_atlas, tuv).rgb;
-				float texel_w = (world_size / biome_res) / atlas_cell_px;
-				float texels_per_px = fwidth(world_pos.x) / max(texel_w, 1e-4);
-				float detail = smoothstep(4.5, 1.2, texels_per_px);
 				land_base = mix(base, tile, tile_mix * detail);
 			}
+			// Coast tile on the land side (beach band), over the ground tile.
+			land_base = mix(land_base, coast_tile.rgb, coast_tile.a * detail);
 		}
 
 		// Land relief: sample the packed real elevation (biome texture alpha) at

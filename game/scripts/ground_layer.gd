@@ -16,6 +16,7 @@ extends Node2D
 
 const GroundStreaming = preload("res://scripts/ground_streaming.gd")
 const GroundChunk = preload("res://scripts/ground_chunk.gd")
+const PropChunk = preload("res://scripts/prop_chunk.gd")
 
 const UPLOAD_BUDGET := 8
 const RING := 1
@@ -27,6 +28,8 @@ var _cam: Camera2D
 
 # Vector2i(cx, cy) -> GroundChunk node.
 var _chunks: Dictionary = {}
+# Vector2i(cx, cy) -> PropChunk node (the chunk's decoration scatter).
+var _props: Dictionary = {}
 # Vector2i(cx, cy) -> {"version": int, "age": int}; mirrors _chunks' keys.
 var _resident: Dictionary = {}
 
@@ -79,6 +82,9 @@ func _process(_delta: float) -> void:
 		if _chunks.has(key):
 			_chunks[key].queue_free()
 			_chunks.erase(key)
+		if _props.has(key):
+			_props[key].queue_free()
+			_props.erase(key)
 		_resident.erase(key)
 
 	var perf := get_node_or_null("../../UI/PerfReadout")
@@ -96,6 +102,15 @@ func _process(_delta: float) -> void:
 		var ids: PackedByteArray = _sim.biome_chunk_ids(cx, cy)
 		if chunk.upload(bytes, ids):
 			_resident[key] = {"version": int(_sim.biome_chunk_version(cx, cy)), "age": 0}
+			# Decoration props for the chunk, planned from the same id apron
+			# (prop_chunk.gd reproduces the whole-world scatter exactly).
+			var props = _props.get(key)
+			if props == null:
+				props = PropChunk.new()
+				props.z_index = 4
+				add_child(props)
+				_props[key] = props
+			props.build(cx, cy, ids, res, world, Vector2.ZERO)
 			if perf != null:
 				perf.note_chunk_upload()
 
@@ -108,6 +123,9 @@ func _process(_delta: float) -> void:
 		if chunk != null:
 			var pos := Vector2(entry[0] * chunk_world + entry[2], entry[1] * chunk_world + entry[3])
 			chunk.place(pos, cell_w)
+		var props = _props.get(key)
+		if props != null:
+			props.set_wrap_offset(Vector2(entry[2], entry[3]))
 
 	if perf != null:
 		perf.set_resident_chunks(_resident.size())

@@ -30,8 +30,10 @@ func setup(shared_material: ShaderMaterial, cx: int, cy: int) -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_mat = shared_material.duplicate() as ShaderMaterial
 	material = _mat
+	# A region sprite's UV spans the WHOLE texture, so biome_res = 66 puts
+	# `UV * biome_res` straight into apron cell coordinates; ids_offset is the
+	# apron inset the hash subtracts, cell_origin the chunk's global cell.
 	_mat.set_shader_parameter("biome_res", float(APRON))
-	_mat.set_shader_parameter("ids_cells", float(INTERIOR))
 	_mat.set_shader_parameter("ids_offset", Vector2(1.0, 1.0))
 	_mat.set_shader_parameter("cell_origin", Vector2(cx * INTERIOR, cy * INTERIOR))
 
@@ -65,3 +67,6 @@ func upload(bytes: PackedByteArray, ids: PackedByteArray) -> bool:
 func place(world_pos: Vector2, cell_w: float) -> void:
 	position = world_pos
 	scale = Vector2(cell_w, cell_w)
+	# The LOD fade needs the real cell width; world_size / biome_res would
+	# read the 66-cell apron as a whole world.
+	_mat.set_shader_parameter("cell_world", cell_w)
