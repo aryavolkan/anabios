@@ -32,7 +32,7 @@ class StubBiome:
 
 
 const KINDS := ["fire", "ring", "motes", "trauma", "burst"]
-const BURST_IDS := [7, 17, 18, 38]
+const BURST_IDS := [7, 17, 18, 38, 42]
 const FIRE_IDS := [4, 17, 35, 42, 43]
 const TRAUMA_IDS := [7, 38]
 
@@ -273,6 +273,9 @@ func _check_pixel_bursts() -> void:
 		for s in EventFx.spec(t):
 			if s["kind"] == "burst":
 				_check(s["sprite"] == PixelFx.DISCOVERY, "invention id %d bursts a sparkle" % t)
+	for s in EventFx.spec(42):
+		if s["kind"] == "burst":
+			_check(s["sprite"] == PixelFx.EMBER, "a founded settlement scatters pixel embers")
 	# The burst takes the invention tint alongside the motes.
 	var base: Array = EventFx.spec(17)
 	var tinted: Array = EventFx.spec_with_value(17, 1.0)

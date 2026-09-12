@@ -30,7 +30,7 @@ func _terrain() -> PackedColorArray:
 	colors.resize(RES * RES)
 	for y in RES:
 		for x in RES:
-			var c := GRASS if x < RES / 2 else DRY
+			var c := GRASS if x < int(RES / 2.0) else DRY
 			if y >= RES - 12:
 				c = TAIGA
 			if x >= 12 and x < 24 and y >= 12 and y < 24:
@@ -76,8 +76,8 @@ func _check_classifier() -> void:
 	_check(Props.is_water(WATER), "is_water agrees with the terrain shader on water")
 	_check(not Props.is_water(GRASS), "grass is not water")
 	# Seeds are pure functions of the cell, and neighbours differ.
-	var seed: int = Props.sample_seed(3, 7)
-	_check(seed == Props.sample_seed(3, 7), "seed is stable")
+	var cell_seed: int = Props.sample_seed(3, 7)
+	_check(cell_seed == Props.sample_seed(3, 7), "seed is stable")
 	_check(Props.sample_seed(3, 7) != Props.sample_seed(4, 7), "seed varies across x")
 	_check(Props.sample_seed(3, 7) != Props.sample_seed(3, 8), "seed varies across y")
 
@@ -109,7 +109,7 @@ func _check_sampling() -> void:
 				Props.REEDS:
 					_check(Props.has_water_neighbour(colors, RES, x, y), "reeds hug the shore")
 	_check(total > 0, "a varied terrain places some props (got %d)" % total)
-	_check(total < RES * RES / 20, "props stay sparse (got %d)" % total)
+	_check(total < int(RES * RES / 20.0), "props stay sparse (got %d)" % total)
 	_check((a[Props.SHRUB] as PackedVector2Array).size() > 0, "grass half grows shrubs")
 	_check((a[Props.ROCK] as PackedVector2Array).size() > 0, "dry half grows rocks")
 	# Uniform water: nothing at all.

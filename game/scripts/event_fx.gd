@@ -58,10 +58,11 @@ const FX: Dictionary = {
 		{"kind": "burst", "sprite": PixelFx.IMPACT, "color": Color(1.0, 0.55, 0.3, 1.0)},
 	],
 	39: [{"kind": "ring", "color": Color(0.95, 0.97, 1.0, 0.5), "dur": 2.0, "radius": 90.0}],
-	42:  # Settlement — hearth fire plus a founding ring
+	42:  # Settlement — hearth fire, a founding ring and a scatter of pixel embers
 	[
 		{"kind": "fire"},
 		{"kind": "ring", "color": Color(1.0, 0.75, 0.4, 0.5), "dur": 1.8, "radius": 70.0},
+		{"kind": "burst", "sprite": PixelFx.EMBER, "color": Color(1.0, 0.65, 0.3, 0.9)},
 	],
 	43: [{"kind": "fire"}],  # Market
 	45: [{"kind": "ring", "color": Color(0.5, 0.9, 0.8, 0.55), "dur": 1.5, "radius": 65.0}],
