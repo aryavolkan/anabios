@@ -130,8 +130,8 @@ func _init() -> void:
 	# --- atlas layout: tile cells land where mask == cell index says ---
 	var aimg := atlas.get_image()
 	for mask in [1, 6, 11]:
-		var cx := (mask % T.ATLAS_COLS) * T.CELL_PX
-		var cy := int(mask / float(T.ATLAS_COLS)) * T.CELL_PX
+		var cx: int = (mask % T.ATLAS_COLS) * T.CELL_PX
+		var cy: int = int(mask / float(T.ATLAS_COLS)) * T.CELL_PX
 		_check(
 			aimg.get_pixel(cx + 8, cy + 8) == T.tile_image(mask).get_pixel(8, 8),
 			"atlas cell %d content matches the tile it maps" % mask
