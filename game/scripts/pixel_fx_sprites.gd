@@ -11,7 +11,6 @@ const ApeSprites = preload("res://scripts/ape_sprites.gd")
 
 enum { EMBER, IMPACT, DISCOVERY }
 const KIND_COUNT := 3
-const NAMES: PackedStringArray = ["Ember", "Impact", "Discovery"]
 
 # [x, y, w, h, key] blocks on a 16x16 grid, drawn back-to-front.
 const _BLOCKS: Array = [

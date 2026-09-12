@@ -334,6 +334,10 @@ func spawn_motes(pos: Vector2, color: Color) -> void:
 # modulate the hue. Nearest-filtered so the pixels stay crisp under zoom, and
 # additive like the sparks so overlapping bursts bloom rather than stack.
 func _make_pixel_burst_pool() -> void:
+	# Warm the texture cache for every mark up front so the first combat or
+	# discovery burst doesn't pay a one-time texture build mid-game.
+	for kind in PixelFxSprites.KIND_COUNT:
+		PixelFxSprites.build(kind)
 	for i in PIXEL_BURST_POOL:
 		var p := GPUParticles2D.new()
 		p.name = "PixelBurst%d" % i

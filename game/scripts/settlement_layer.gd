@@ -118,6 +118,9 @@ func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
 	for src in [_huts, _farms] + _building_mmis:
+		# Huts/farms are not building kinds: find() yields -1 for them, which
+		# matches no _building_nodes key. Animated buildings register every
+		# clone so a flame-frame swap can never leave a wrap copy behind.
 		var kind: int = _building_mmis.find(src)
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
@@ -138,7 +141,8 @@ func _process(delta: float) -> void:
 	_now = Time.get_ticks_msec() / 1000.0
 	_flicker_elapsed += delta
 	if _flicker_elapsed >= FLICKER_PERIOD:
-		_flicker_elapsed = 0.0
+		# Carry the overshoot so the cadence holds at low frame rates.
+		_flicker_elapsed -= FLICKER_PERIOD
 		_flicker_phase = 1 - _flicker_phase
 		_tick_landmark_animation()
 	_frame += 1

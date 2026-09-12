@@ -180,7 +180,9 @@ static func sample_seed(x: int, y: int) -> int:
 
 
 # Second, independent hash per cell for jitter/size/mirror bits: the lattice
-# hash's low bits are zero by construction (posmod == 0), so they can't vary.
+# survivors all share posmod(sample_seed, m) == 0, so that hash's surviving
+# values are correlated with the modulus (and its low bits are dead whenever
+# m is a power of two) — don't reuse it for per-prop detail.
 static func detail_seed(x: int, y: int) -> int:
 	return int(((x + 1) * 83492791) ^ ((y + 1) * 2654435761))
 
@@ -302,7 +304,6 @@ func setup(sim: Node) -> void:
 func _make_layer(pname: String, tex: ImageTexture) -> MultiMeshInstance2D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_2D
-	mm.use_colors = true
 	mm.mesh = QuadMesh.new()
 	var mmi := MultiMeshInstance2D.new()
 	mmi.name = pname
@@ -385,4 +386,3 @@ func _write(mm: MultiMesh, cells: PackedVector2Array, kind: int, cell_w: float) 
 		var flip := -1.0 if ((h >> 3) & 1) == 1 else 1.0
 		var pos := Vector2((cx + 0.5 + jx) * cell_w, (cy + 0.5 + jy) * cell_w)
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(size * flip, size), 0.0, pos))
-		mm.set_instance_color(i, Color(1, 1, 1))
