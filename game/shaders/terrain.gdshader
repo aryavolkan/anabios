@@ -38,6 +38,23 @@ uniform float atlas_cols = 8.0;    // keep in sync with terrain_sprites.gd ATLAS
 uniform float atlas_cell_px = 16.0;
 uniform float atlas_px = 128.0;
 
+// Chunk addressing (D3, `docs/superpowers/specs/
+// 2026-09-12-pixel-world-at-scale-design.md` §4/§6 Phase 2): a streamed
+// GroundChunk shows a 66x66-cell apron texture through its interior 64x64
+// region, so its UV does not span `biome_res` cells the way the whole-world
+// sprite's does. `ids_cells > 0.5` switches the cell lookup to
+// `UV * ids_cells + ids_offset` (chunk: ids_cells = 64, ids_offset = (1,1),
+// biome_res overridden to 66 so `terrain_ids` sampling lands in the apron
+// texture); at the defaults below (`ids_cells = 0`) the lookup is exactly
+// the original `UV * biome_res` whole-world path. `cell_origin` is this
+// texture's local (0,0) cell in WORLD cell coordinates, added back in for
+// the per-cell hash only, so a chunk's tile variants match the whole-world
+// hash and never drift at a chunk border (defaults to 0 = identity for the
+// whole-world sprite, whose cell coordinates already are world coordinates).
+uniform vec2 ids_offset = vec2(0.0);
+uniform float ids_cells = 0.0;
+uniform vec2 cell_origin = vec2(0.0);
+
 // World-space position of this fragment. The ground is drawn as 9 separate tiles
 // (origin + 8 torus wrap copies), each with its own 0..1 UV; deriving the water
 // shimmer from world position instead of per-tile UV keeps the wave continuous
@@ -124,11 +141,17 @@ void fragment() {
 		// zoom looks exactly like the pre-tile ground.
 		vec3 land_base = base;
 		if (tiles_enabled > 0.5) {
-			vec2 cellf = UV * biome_res;
+			vec2 cellf = ids_cells > 0.5 ? (UV * ids_cells + ids_offset) : (UV * biome_res);
 			vec2 cell = floor(cellf);
 			float tid = floor(texture(terrain_ids, (cell + 0.5) / biome_res).r * 255.0 + 0.5);
 			if (tid > 0.5) {
-				float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+				// World-space cell, for a hash that matches the whole-world
+				// path exactly (cell_origin/ids_offset default to 0/(0,0)
+				// there, so this is `cell` unchanged on the whole-world
+				// sprite; a chunk undoes its (1,1) apron offset and adds its
+				// own global cell coordinate).
+				vec2 world_cell = cell_origin + cell - ids_offset;
+				float h = fract(sin(dot(world_cell, vec2(127.1, 311.7))) * 43758.5453);
 				float variant = min(floor(h * tile_variants), tile_variants - 1.0);
 				float cidx = tid * tile_variants + variant;
 				vec2 acell = vec2(mod(cidx, atlas_cols), floor(cidx / atlas_cols));

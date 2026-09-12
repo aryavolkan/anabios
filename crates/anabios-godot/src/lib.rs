@@ -1048,15 +1048,20 @@ impl Simulation {
         chunk_count_for(res) as i64
     }
 
-    /// `CHUNK_CELLS × CHUNK_CELLS` RGBA8 bytes for chunk `(cx, cy)`, row-major
-    /// within the chunk (D3, `docs/superpowers/specs/
-    /// 2026-09-12-pixel-world-at-scale-design.md` §6 Phase 1). Byte-identical
-    /// to slicing the same cells out of a whole-world RGBA8 image built from
-    /// `biome_colors()` with the GDScript `int(clampf(v,0,1)*255.0)`
-    /// conversion — see `cell_view_rgba8`. Cells past the grid edge (the last
-    /// chunk row/column when `res` is not a multiple of `CHUNK_CELLS`) wrap on
-    /// the torus, so every exported chunk is full-size. Returns an empty
-    /// array for an out-of-range chunk index or no loaded world.
+    /// `(CHUNK_CELLS + 2) × (CHUNK_CELLS + 2)` RGBA8 bytes for chunk
+    /// `(cx, cy)`, row-major: the chunk plus a 1-cell torus-wrapped apron on
+    /// every side, same apron rule as `biome_chunk_ids` (D3, `docs/
+    /// superpowers/specs/2026-09-12-pixel-world-at-scale-design.md` §4/§6
+    /// Phase 2) so the ground shader can take neighbour taps (softening,
+    /// relief, coast) at a chunk's edges without a seam against the next
+    /// chunk. The centre `CHUNK_CELLS × CHUNK_CELLS` (offset `[1..65)` on each
+    /// axis) is byte-identical to slicing the same cells out of a whole-world
+    /// RGBA8 image built from `biome_colors()` with the GDScript
+    /// `int(clampf(v,0,1)*255.0)` conversion — see `cell_view_rgba8`. Cells
+    /// past the grid edge (the last chunk row/column when `res` is not a
+    /// multiple of `CHUNK_CELLS`, or the apron itself) wrap on the torus, so
+    /// every exported chunk is full-size. Returns an empty array for an
+    /// out-of-range chunk index or no loaded world.
     #[func]
     fn biome_chunk_bytes(&self, cx: i64, cy: i64) -> PackedByteArray {
         let Some(w) = self.inner.as_ref() else { return PackedByteArray::new() };
@@ -1836,20 +1841,22 @@ fn chunk_in_range(res: usize, cx: i64, cy: i64) -> bool {
     n > 0 && cx >= 0 && cy >= 0 && (cx as usize) < n && (cy as usize) < n
 }
 
-/// Pure builder behind `biome_chunk_bytes`: `CHUNK_CELLS × CHUNK_CELLS`
-/// RGBA8 bytes, row-major, wrapping past-edge source cells on the torus.
-/// `None` for an out-of-range chunk index.
+/// Pure builder behind `biome_chunk_bytes`: `(CHUNK_CELLS + 2)²` RGBA8
+/// bytes, row-major, the chunk plus a 1-cell torus-wrapped apron on every
+/// side (same shape as `chunk_ids_of`). `None` for an out-of-range chunk
+/// index.
 fn chunk_bytes_of(biome: &anabios_core::biome::BiomeField, cx: i64, cy: i64) -> Option<Vec<u8>> {
     let res = biome.res;
     if !chunk_in_range(res, cx, cy) {
         return None;
     }
     let (cx, cy) = (cx as usize, cy as usize);
-    let mut buf = Vec::with_capacity(CHUNK_CELLS * CHUNK_CELLS * 4);
-    for ry in 0..CHUNK_CELLS {
-        let row = (cy * CHUNK_CELLS + ry) % res;
-        for rx in 0..CHUNK_CELLS {
-            let col = (cx * CHUNK_CELLS + rx) % res;
+    let res_i = res as isize;
+    let mut buf = Vec::with_capacity((CHUNK_CELLS + 2) * (CHUNK_CELLS + 2) * 4);
+    for ry in -1..=(CHUNK_CELLS as isize) {
+        let row = ((cy * CHUNK_CELLS) as isize + ry).rem_euclid(res_i) as usize;
+        for rx in -1..=(CHUNK_CELLS as isize) {
+            let col = ((cx * CHUNK_CELLS) as isize + rx).rem_euclid(res_i) as usize;
             buf.extend_from_slice(&cell_view_rgba8(&biome.cells[row * res + col]));
         }
     }
@@ -2465,7 +2472,7 @@ mod tests {
     }
 
     #[test]
-    fn chunk_bytes_match_whole_world_buffer_default_and_non_multiple() {
+    fn chunk_bytes_center_matches_whole_world_buffer_default_and_non_multiple() {
         // Default resolution (a multiple of CHUNK_CELLS) and res=200 (not a
         // multiple of 64, so the last chunk row/column overhangs and wraps).
         for res in [None, Some(200usize)] {
@@ -2473,18 +2480,21 @@ mod tests {
             let res = w.biome.res;
             let whole: Vec<[u8; 4]> = w.biome.cells.iter().map(cell_view_rgba8).collect();
             let n = chunk_count_for(res);
+            let side = CHUNK_CELLS + 2;
             assert!(n > 0);
             for cy in 0..n {
                 for cx in 0..n {
                     let got = chunk_bytes_of(&w.biome, cx as i64, cy as i64)
                         .expect("in-range chunk index");
-                    assert_eq!(got.len(), CHUNK_CELLS * CHUNK_CELLS * 4);
+                    assert_eq!(got.len(), side * side * 4);
+                    // Centre (offset by 1 into the apron buffer) equals the
+                    // whole-world slice.
                     for ry in 0..CHUNK_CELLS {
                         let row = (cy * CHUNK_CELLS + ry) % res;
                         for rx in 0..CHUNK_CELLS {
                             let col = (cx * CHUNK_CELLS + rx) % res;
                             let expected = whole[row * res + col];
-                            let i = (ry * CHUNK_CELLS + rx) * 4;
+                            let i = ((ry + 1) * side + (rx + 1)) * 4;
                             assert_eq!(
                                 &got[i..i + 4],
                                 &expected[..],
@@ -2495,6 +2505,36 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn chunk_bytes_apron_wraps_on_the_torus() {
+        // res=200 with CHUNK_CELLS=64 gives an overhanging last chunk
+        // (192..256 source range on a 200-wide grid), so the last chunk's
+        // apron genuinely wraps around the torus rather than staying
+        // in-range — same case the ids apron test exercises.
+        let w = world_with_res(Some(200));
+        let res = w.biome.res;
+        let whole: Vec<[u8; 4]> = w.biome.cells.iter().map(cell_view_rgba8).collect();
+        let n = chunk_count_for(res);
+        let (cx, cy) = (n - 1, n - 1);
+        let got = chunk_bytes_of(&w.biome, cx as i64, cy as i64).expect("in-range chunk");
+        let side = CHUNK_CELLS + 2;
+        assert_eq!(got.len(), side * side * 4);
+
+        let origin_row = cy * CHUNK_CELLS;
+        let origin_col = cx * CHUNK_CELLS;
+        let tl_row = (origin_row + res - 1) % res;
+        let tl_col = (origin_col + res - 1) % res;
+        assert_eq!(&got[0..4], &whole[tl_row * res + tl_col][..], "top-left apron corner wraps");
+        let br_row = (origin_row + CHUNK_CELLS) % res;
+        let br_col = (origin_col + CHUNK_CELLS) % res;
+        let last = (side - 1) * side + (side - 1);
+        assert_eq!(
+            &got[last * 4..last * 4 + 4],
+            &whole[br_row * res + br_col][..],
+            "bottom-right apron corner wraps"
+        );
     }
 
     #[test]
