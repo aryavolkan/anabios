@@ -14,6 +14,7 @@ extends Node2D
 # view-relative wrapped position changes (D6) without a rebuild.
 
 const TerrainSprites = preload("res://scripts/terrain_sprites.gd")
+const FloraSprites = preload("res://scripts/flora_sprites.gd")
 
 const CHUNK_CELLS := 64
 const _APRON := CHUNK_CELLS + 2
@@ -26,6 +27,12 @@ const _DENSITY: PackedFloat32Array = [0.0, 0.05, 0.14, 0.03, 0.05, 0.06, 0.16, 0
 const PROP_SCALE := 0.625
 
 var _mmis: Array = []
+# Canopy trees: one MultiMesh per FloraSprites kind, 32 px art at 0.5 world
+# units per texel (two biome cells), planned from a hash offset so trees and
+# the 16 px props never coincide, sorted by y so nearer trees overlap farther.
+const CANOPY_SCALE := 0.5
+const CANOPY_HASH_OFFSET := 977
+var _canopy: Array = []
 
 
 # Copied from terrain_scatter.gd's `_hash2`: same family as the tile-variant
@@ -72,6 +79,39 @@ static func plan(cx: int, cy: int, ids66: PackedByteArray, res: int, world: floa
 	return out
 
 
+# Pure canopy plan for chunk (cx, cy): per FloraSprites kind, world positions
+# (no wrap offset) of the trees its inner cells grow, y-sorted. Density and
+# kind per terrain come from FloraSprites; the hash is taken at the global
+# cell shifted by CANOPY_HASH_OFFSET so a cell can carry both a bush and a
+# tree without them sharing one jitter.
+static func plan_canopy(cx: int, cy: int, ids66: PackedByteArray, res: int, world: float) -> Array:
+	var buckets: Array = []
+	for k in FloraSprites.KIND_COUNT:
+		buckets.append([])
+	var cell_w := world / float(res)
+	for ly in CHUNK_CELLS:
+		for lx in CHUNK_CELLS:
+			var id := ids66[(ly + 1) * _APRON + (lx + 1)]
+			var kind := FloraSprites.kind_for_terrain(id)
+			if kind < 0:
+				continue
+			var gx := (cx * CHUNK_CELLS + lx) % res
+			var gy := (cy * CHUNK_CELLS + ly) % res
+			var h := _hash2(gx + CANOPY_HASH_OFFSET, gy)
+			if h >= FloraSprites.DENSITY[id]:
+				continue
+			var jx := fposmod(h * 17.17, 1.0)
+			var jy := fposmod(h * 5.55, 1.0)
+			var pos := Vector2(gx + 0.1 + 0.8 * jx, gy + 0.1 + 0.8 * jy) * cell_w
+			buckets[kind].append(pos)
+	var out: Array = []
+	for k in FloraSprites.KIND_COUNT:
+		var positions: Array = buckets[k]
+		positions.sort_custom(func(a, b): return a.y < b.y)
+		out.append(PackedVector2Array(positions))
+	return out
+
+
 # (Re)fill every prop kind's multimesh for chunk (cx, cy) and place this node
 # at `offset` (D6) so every instance transform, kept in unshifted world
 # space, reads at its wrapped position. `ids66`, `res` and `world` are as for
@@ -93,12 +133,31 @@ func build(
 				i, Transform2D(0.0, Vector2(PROP_SCALE, PROP_SCALE), 0.0, pos)
 			)
 			i += 1
+	if _canopy.is_empty():
+		_make_canopy_mmis()
+	var trees := plan_canopy(cx, cy, ids66, res, world)
+	for k in FloraSprites.KIND_COUNT:
+		var positions: PackedVector2Array = trees[k]
+		var mm: MultiMesh = _canopy[k].multimesh
+		mm.instance_count = positions.size()
+		var i := 0
+		for pos in positions:
+			# Anchor the sprite's trunk foot (near the bottom of the 32 px
+			# cell) on the planned cell, so the canopy rises above it.
+			mm.set_instance_transform_2d(
+				i,
+				Transform2D(0.0, Vector2(CANOPY_SCALE, CANOPY_SCALE), 0.0, pos - Vector2(0.0, 5.0))
+			)
+			i += 1
 
 
 # Hide every prop instance without discarding the multimeshes (the chunk left
 # the resident ring; `build()` will refill them if it comes back).
 func clear() -> void:
 	for mmi in _mmis:
+		var mm: MultiMesh = mmi.multimesh
+		mm.instance_count = 0
+	for mmi in _canopy:
 		var mm: MultiMesh = mmi.multimesh
 		mm.instance_count = 0
 
@@ -123,3 +182,21 @@ func _make_mmis() -> void:
 		mmi.name = "Prop%s" % TerrainSprites.PROP_NAMES[k]
 		add_child(mmi)
 		_mmis.append(mmi)
+
+
+func _make_canopy_mmis() -> void:
+	for k in FloraSprites.KIND_COUNT:
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_2D
+		var quad := QuadMesh.new()
+		quad.size = Vector2(FloraSprites.CELL_PX, FloraSprites.CELL_PX)
+		mm.mesh = quad
+		var mmi := MultiMeshInstance2D.new()
+		mmi.multimesh = mm
+		mmi.texture = FloraSprites.kind_texture(k)
+		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		mmi.name = "Canopy%s" % FloraSprites.NAMES[k]
+		# Above the 16 px props so a tree overlaps the bush at its foot.
+		mmi.z_index = 1
+		add_child(mmi)
+		_canopy.append(mmi)
