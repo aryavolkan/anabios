@@ -1877,7 +1877,7 @@ fn chunk_ids_of(biome: &anabios_core::biome::BiomeField, cx: i64, cy: i64) -> Op
     Some(buf)
 }
 
-/// FNV-1a basis and prime (64-bit) — see https://isthe.com/chongo/tech/comp/fnv/.
+/// FNV-1a basis and prime (64-bit) — see <https://isthe.com/chongo/tech/comp/fnv/>.
 const FNV_OFFSET: u64 = 0xcbf29ce484222325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
