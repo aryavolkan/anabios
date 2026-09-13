@@ -40,6 +40,7 @@ the curated root set. Run any of these with
 | `sandbox-coevolution.toml` | Freeform coevolution sandbox | living_biome, season_period, inventions |
 | `sandbox-large.toml` | 2048² world (custom dims; save/load round-trip pin) | living_biome, season_period |
 | `riverlands.toml` | 4096² world with mountains + a river network; herds auto-sited on watered forage, predators seeded onto the herds (terrain-aware placement); a predator pack that persists (`max_share` + mate seeking) | living_biome, season_period, basic_needs, mate_seeking |
+| `huge-steppe.toml` | Phase-1 "Huge" scale tier: 8192² world (biome grid 1024²) at the same 6k population budget as `sandbox-large.toml`/`sandbox-xlarge.toml` — world-scale (not population-scale) throughput | living_biome, season_period |
 | `biome-trade.toml` | Biome trade-goods economy (freezes ~t10k — the baseline) | resources, living_biome |
 | `geographic-trade.toml` | Terrain-sorted trade (sputters, never fully freezes) | terrain_habitat, resources |
 | `unilateral-trade.toml` | The O2.6 freeze fix: surplus gifts + goods conserved on death | resources, conserve_goods_on_death, unilateral_trade, living_biome |
@@ -99,6 +100,18 @@ prints a lineage's count, energy, thirst, births and kill-rate proxy over time):
   under the cap still produced zero births once its founders spread out.
 
 Both default off and are byte-identical when absent.
+
+## Scaling the biome step (Phase 1 "scale fields")
+
+`biome_step_interval = N` (default absent = `1`) multiplies the existing
+`tick::BIOME_STEP_INTERVAL` (10-tick) biome cadence: the
+regrow/recolonize/seasonal-regrow/resource-spawn block only runs every
+`10 * N` ticks instead of every 10, trading regrowth *resolution* for tick
+throughput on huge `biome_res` worlds, where recomputing the whole grid every
+10 ticks dominates. `1` is byte-identical to every scenario written before
+this flag existed. `scenarios/huge-steppe.toml` leaves it at the default;
+`scenarios/experiments/vast-steppe.toml` (one scale tier further out) sets
+`biome_step_interval = 4`.
 
 A caution that outlives this feature: `river_threshold` in a `[climate]`
 block thresholds a flow accumulation counted in *upstream grid cells*, so it

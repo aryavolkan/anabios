@@ -9,8 +9,8 @@ extends RefCounted
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 
-enum { EMBER, IMPACT, DISCOVERY }
-const KIND_COUNT := 3
+enum { EMBER, IMPACT, DISCOVERY, SMOKE, FLAME, BONES }
+const KIND_COUNT := 6
 
 # [x, y, w, h, key] blocks on a 16x16 grid, drawn back-to-front.
 const _BLOCKS: Array = [
@@ -52,6 +52,44 @@ const _BLOCKS: Array = [
 		[3, 12, 1, 1, "s"],
 		[11, 11, 1, 1, "y"],
 		[12, 12, 1, 1, "s"],
+	],
+	# SMOKE — a lumpy three-lobed puff in two greys with a lit top edge: the
+	# boards' chimney smoke is clumps of pixels, not a soft haze, so the
+	# settlement plume scatters these hard-edged puffs instead of a radial
+	# disc that blurred into a grey fog over the hearth
+	[
+		[3, 6, 10, 6, "g"],
+		[5, 4, 6, 4, "g"],
+		[2, 8, 3, 3, "g"],
+		[11, 7, 3, 3, "g"],
+		[6, 5, 4, 3, "G"],
+		[4, 7, 7, 3, "G"],
+		[6, 4, 3, 1, "s"],
+		[3, 8, 2, 1, "s"],
+	],
+	# FLAME — a tongue of fire: orange body tapering to a tip, a yellow core
+	# and a white-hot heart, for the pooled fires over a burning ruin
+	[
+		[7, 2, 2, 2, "O"],
+		[6, 4, 4, 3, "O"],
+		[5, 7, 6, 4, "O"],
+		[4, 9, 8, 3, "o"],
+		[7, 5, 2, 2, "y"],
+		[6, 7, 4, 4, "y"],
+		[7, 9, 2, 2, "W"],
+	],
+	# BONES — what a carcass leaves on the ground: a bleached skull at one
+	# end of a spine with three rib pairs, lying flat
+	[
+		[3, 7, 10, 2, "w"],
+		[6, 4, 1, 8, "w"],
+		[8, 4, 1, 8, "w"],
+		[10, 5, 1, 6, "w"],
+		[11, 6, 4, 4, "w"],
+		[12, 7, 1, 1, "K"],
+		[14, 7, 1, 1, "K"],
+		[13, 9, 1, 1, "K"],
+		[3, 8, 10, 1, "s"],
 	],
 ]
 

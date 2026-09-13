@@ -212,6 +212,15 @@ pub struct Scenario {
     pub biome_res: Option<usize>,
     #[serde(default)]
     pub hash_res: Option<usize>,
+    /// Opt-in biome-step cadence multiplier (`World::biome_step_interval`).
+    /// Absent/`1` = today's cadence (every `tick::BIOME_STEP_INTERVAL`
+    /// ticks), bit-identical. `N > 1` runs biome regrowth/recolonization/
+    /// seasonal-regrow/resource-spawn `N` times less often — a throughput
+    /// lever for huge `biome_res` worlds (Phase 1 "scale fields") where
+    /// recomputing the whole grid every 10 ticks dominates tick time. Must be
+    /// `>= 1` (validated at parse).
+    #[serde(default)]
+    pub biome_step_interval: Option<u32>,
     /// Opt-in codex-observer cadence (`World::codex_interval`). Absent/`1` =
     /// run the emergence detectors every tick (the default; bit-identical).
     /// `N > 1` runs them every N ticks, a throughput lever for long headless
@@ -871,6 +880,12 @@ pub enum ScenarioError {
     )]
     InvalidWorldSize(f32),
     #[error(
+        "biome_step_interval must be >= 1 (got {0}): it multiplies the base biome-step \
+         cadence, and 0 collapses that cadence to only tick 0 (`is_multiple_of(0)` is \
+         true only there), silently freezing plant regrowth for the rest of the run"
+    )]
+    InvalidBiomeStepInterval(u32),
+    #[error(
         "agents[{spec}] uses `placement = {{ kind = \"near_spec\", spec = {host} }}`, which \
          is not an earlier spec — specs are placed in `[[agents]]` order, so a host must \
          have index < {spec} (and exist) for its positions to be known yet"
@@ -927,6 +942,9 @@ impl Scenario {
             if !(ws.is_finite() && ws > 0.0) {
                 return Err(ScenarioError::InvalidWorldSize(ws));
             }
+        }
+        if scenario.biome_step_interval == Some(0) {
+            return Err(ScenarioError::InvalidBiomeStepInterval(0));
         }
         // Terrain-aware placement preconditions. `instantiate` degrades
         // gracefully on both of these (uniform fallback / `max(1)`), but a
@@ -1027,6 +1045,9 @@ impl Scenario {
         }
         if let Some(interval) = self.codex_interval {
             w.codex_interval = interval;
+        }
+        if let Some(interval) = self.biome_step_interval {
+            w.biome_step_interval = interval;
         }
         // Personality is sampled from a DEDICATED rng substream (seeded from the
         // world seed) so it never perturbs `world.rng` — the physics/placement/
@@ -1923,6 +1944,25 @@ sixe = 0.5
         }
         // 3 and up are accepted.
         assert!(Scenario::parse_toml("name = \"t\"\nseed = 1\nhash_res = 3\n").is_ok());
+    }
+
+    #[test]
+    fn parse_toml_rejects_zero_biome_step_interval() {
+        let err = Scenario::parse_toml("name = \"t\"\nseed = 1\nbiome_step_interval = 0\n")
+            .expect_err("biome_step_interval = 0 must be rejected");
+        assert!(
+            err.to_string().contains("biome_step_interval"),
+            "error should name biome_step_interval, got: {err}"
+        );
+        // 1 and up are accepted, and instantiate applies the value.
+        assert!(Scenario::parse_toml("name = \"t\"\nseed = 1\nbiome_step_interval = 1\n").is_ok());
+        let w = Scenario::parse_toml("name = \"t\"\nseed = 1\nbiome_step_interval = 4\n")
+            .unwrap()
+            .instantiate();
+        assert_eq!(w.biome_step_interval, 4);
+        // Absent defaults to 1 (today's cadence), matching `World::new`.
+        let w = Scenario::parse_toml("name = \"t\"\nseed = 1\n").unwrap().instantiate();
+        assert_eq!(w.biome_step_interval, 1);
     }
 
     #[test]

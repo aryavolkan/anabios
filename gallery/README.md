@@ -29,6 +29,41 @@ and the territorial scent reads on the `phero-3` channel (`ANABIOS_GROUND=4`) as
 faint red halos — the current sim leaves the old Marker channel (`phero-0`)
 empty for this scenario, so the overlay channel moved.
 
+## pixel world at scale (Phases 0–5, 2026-09-13)
+
+The `scale-*` stills come from the pixel-world plan
+(`docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md`): streamed
+autotiled ground, hand-drawn tiles and flora, 24 px hand-authored creature
+figures, village footprints, market squares and the pixel-font HUD. Rendered
+on software Vulkan (llvmpipe) under Xvfb at 1280×800 with the same
+`debug_capture.gd` env vars as the rest of this gallery; `ANABIOS_CODEX_TAB`
+picks the codex page (0 research, 1 species, 2 biomes) and `ANABIOS_INSPECT=1`
+pins an agent in the unit card.
+
+| File | Scenario / tick / zoom | What you're seeing |
+|---|---|---|
+| scale-settlement-t891-village-4x.png | `settlement` t891 4× (default camera, `ANABIOS_INSPECT=1`) | A camp on packed-earth yards with paths to the hearth, tents and walled hide yurts spaced a hut-width apart on 20-unit tiles, the crowd capped to one figure per 17 units at 4× (12 at 2×, staggered rows), a market square with awning stalls beside it, pixel-puff hearth smoke, the outcrop east of the camp as warm stone, the unit card. |
+| scale-settlement-t891-fortified-2x.png | `settlement` t891 2× (`ANABIOS_VILLAGE_ERA=2 ANABIOS_VILLAGE_FLAGS=123`) | The same camp forced into its fortified era: timber-frame houses with slate roofs over a front wall about a figure high (the 32×44 tall variants, roughly two figures tall on a 20-unit tile), the communal hall a quarter bigger than the houses, a log palisade taller than a figure hugging them, a gate with banners and a catapult to the south, a watchtower, fenced fields outside the wall, the forest standing back from the clearing. |
+| scale-settlement-t891-raided-4x.png | `settlement` t891 4× (`ANABIOS_VILLAGE_ERA=1 ANABIOS_VILLAGE_FLAGS=127`) | The same camp as a raided thatch village: thatch huts with walled fronts, burnt ruins with pixel flames and black smoke over them, the palisade, the fenced field. |
+| scale-settlement-t3120-camp-4x.png | `settlement` t3120 4× | The same camp later: hearth smoke, herds at the square, codex species page. |
+| scale-settlement-t1020-codex-species-2x.png | `settlement` t1020 2× (`ANABIOS_CODEX_TAB=1`) | The settlement peninsula: flat lake water with block ripples, dithered biome borders, mixed oak silhouettes, olive savanna, resting herds with their heads up, the HUD. |
+| scale-settlement-t1591-1x.png | `settlement` t1591 1× | The same world at 1×: dirt roads threading between the market squares. |
+| scale-settlement-t691-overview.png | `settlement` t691, `ANABIOS_CAM_FIT=1` | Whole-world framing: the overview mip with the density dots. |
+| scale-settlement-t891-market-8x.png | `settlement` t891 8× at (1060, 298) | The market square up close: the 32 px market hall (awning over a walled counter, the same pixel grain as the stalls), stalls, goods on the counters, carts, the square's earth at the ground tiles' grain. |
+| scale-trade-hubs-t600-roads-2x.png | `trade-hubs` t600 2× at (1060, 298) | Dirt roads worn along the caravan routes from the market square through the woods, stopping at the water. |
+| scale-trade-hubs-t600-market-4x.png | `trade-hubs` t600 4× at (1060, 298) | A trade hub as a market square in the woods, its market hall at the structures' pixel size, its roads leading off, a snow patch with an ordered-dither edge on the outcrop behind it. |
+| scale-riverlands-t291-relief-2x.png | `riverlands` t291 2× | Rivers with waterfalls on their steep stretches, contour-ledged mountains in warm olive stone with a dithered snow line, forests mixing three oaks at 0.7 scale (a tree a little taller than a house, not three huts high), clutter on the grass. |
+| scale-riverlands-t291-river-4x.png | `riverlands` t291 4× at (2367, 1017) | A one-cell river running diagonally through the oaks as one stream between mud banks: the diagonal coast tiles carry a channel instead of pinching the cells into beads, and a river shore is bank, not beach. |
+| scale-riverlands-t291-clutter-4x.png | `riverlands` t291 4× at (2500, 1200) | Flowers, tufts, mushrooms and stumps at 4×. |
+| scale-riverlands-t291-lake-4x.png | `riverlands` t291 4× at (2427, 1357) | A desert lake: one flat blue, sparse strokes, foam and beach from the coast autotile. |
+| scale-inventions-t2620-coast-2x.png | `inventions` t2620 2× (`ANABIOS_CODEX_TAB=1`) | Hominin bands along a coast; an invention-holding band's workshops (32 px walled fronts with the invention icon as the shop sign) on dirt yards in a clearing of the wood. |
+| scale-inventions-t2620-hominins-4x.png | `inventions` t2620 4× (`ANABIOS_INSPECT=1`, `ANABIOS_CODEX_TAB=0`) | Hand-authored hominins in the field (one wading offshore, cut at the waterline) among their workshops, each a slate-roofed plaster front at the structures' pixel grain with its invention hung as a sign, the research list with an icon per invention, the unit card; the species, adaptation and tech tables stay hidden until `[P]`. |
+| scale-inventions-t2620-unit-card-1x.png | `inventions` t2620 1× (`ANABIOS_INSPECT=1`) | The same at 1×. |
+| scale-huge-steppe-t191-2x.png | `huge-steppe` t191 2× | The 8192-unit Huge tier streaming its ground chunks. |
+| scale-minimal-t111-shoreline-8x.png | `minimal` t111 8× | Shoreline autotile at 8×. |
+| scale-hero-pose-sheet.png | `hero_sheet.gd` tool | The 16-pose sheet of the ten quadruped masters. |
+| scale-hominin-pose-sheet.png | `hominin_sheet.gd` tool | The 22-pose sheet of the five hominin masters, weapons included, a round shield on the back arm in the steel poses. |
+
 ## grand theater (all subsystems at once)
 
 Every opt-in flag on in one world (`grand-theater`, seed 424242): seasonal +

@@ -80,3 +80,33 @@ communicator-free, so whole-tick numbers can look fine while
 culture-dominated scenarios (sandbox-xlarge, grand-theater, OoA) pay 73% in
 `culture_step`. Any future claim of a whole-tick win should quote a
 communicator-dense bench alongside `tick/10000`.
+
+## Viewer (pixel world at scale, 2026-09-13)
+
+`scripts/viewer-bench.sh settlement 240` on the CI-style container (no GPU:
+llvmpipe software Vulkan under Xvfb, 1280×800), after Phases 0–5 of the
+pixel-world plan. The numbers are a smoke reading, not the ≥ 55 fps gate the
+ROADMAP sets for the Huge tier — that needs a real GPU.
+
+| metric | mean over 240 frames |
+|---|---|
+| fps | 3.47 |
+| frame_ms | 133.3 |
+| process_ms (sim + viewer) | 296.0 |
+| alive | 2169 |
+| visible_agents | 2133 |
+| draw_calls | 246 |
+| primitives | 18 994 |
+| video_mem_mb | 55.3 |
+| resident_chunks | 4 |
+
+What the row does say: the whole viewer frame is a few hundred draw calls
+with four resident 64-cell ground chunks and ~55 MB of textures (the
+combined hero atlas and the 144 px market square are the growth since the
+first reading; draw calls fell with the single body MultiMesh), so the
+GPU-side cost is small; the software rasteriser dominates here, and the sim
+step (2.2k agents at 1×) is the other half of `process_ms`. The per-agent
+GDScript work is now Dictionary-free (`anim_state.gd` slots, visible-set
+culling, a close-zoom crowd cap), which is where the next GPU-backed
+measurement should show the win.
+

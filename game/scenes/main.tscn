@@ -1,10 +1,10 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="MultiMesh" path="res://resources/body_multimesh.tres" id="2_mm"]
 [ext_resource type="Script" path="res://scripts/camera_controller.gd" id="3_cam"]
 [ext_resource type="Script" path="res://scripts/time_controls.gd" id="4_time"]
-[ext_resource type="Script" path="res://scripts/inspector_panel.gd" id="5_insp"]
+[ext_resource type="Script" path="res://scripts/unit_card.gd" id="5_insp"]
 [ext_resource type="Script" path="res://scripts/biome_renderer.gd" id="7_biome"]
 [ext_resource type="Script" path="res://scripts/codex_panel.gd" id="8_codex"]
 [ext_resource type="Script" path="res://scripts/overlay_manager.gd" id="9_overlay"]
@@ -14,6 +14,10 @@
 [ext_resource type="Script" path="res://scripts/legend_panel.gd" id="12_legend"]
 [ext_resource type="Script" path="res://scripts/coevolution_panel.gd" id="13_coevo"]
 [ext_resource type="Script" path="res://scripts/minimap_panel.gd" id="15_minimap"]
+[ext_resource type="Script" path="res://scripts/top_bar.gd" id="16_topbar"]
+[ext_resource type="Script" path="res://scripts/event_log.gd" id="17_eventlog"]
+[ext_resource type="Script" path="res://scripts/eco_meters.gd" id="18_meters"]
+[ext_resource type="Script" path="res://scripts/brand_panel.gd" id="19_brand"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -196,10 +200,10 @@ multimesh = SubResource("MM_mod10")
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="Minimap" type="Control" parent="UI"]
-offset_left = 10.0
-offset_top = 70.0
-offset_right = 210.0
-offset_bottom = 270.0
+offset_left = 1070.0
+offset_top = 10.0
+offset_right = 1270.0
+offset_bottom = 210.0
 script = ExtResource("15_minimap")
 
 [node name="HUD" type="Label" parent="UI"]
@@ -211,11 +215,40 @@ text = "tick=0 alive=0"
 theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
 theme_override_font_sizes/font_size = 16
 
+[node name="Brand" type="PanelContainer" parent="UI"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 300.0
+offset_bottom = 52.0
+script = ExtResource("19_brand")
+
+[node name="TopBar" type="PanelContainer" parent="UI"]
+offset_left = 560.0
+offset_top = 10.0
+offset_right = 1060.0
+offset_bottom = 44.0
+script = ExtResource("16_topbar")
+
+[node name="CodexPanel" type="PanelContainer" parent="UI"]
+script = ExtResource("8_codex")
+offset_left = 10.0
+offset_top = 60.0
+offset_right = 300.0
+offset_bottom = 80.0
+
+[node name="EventLog" type="PanelContainer" parent="UI"]
+script = ExtResource("17_eventlog")
+offset_left = 10.0
+offset_top = 602.0
+offset_right = 400.0
+offset_bottom = 750.0
+grow_vertical = 0
+
 [node name="TimeControls" type="HBoxContainer" parent="UI"]
 script = ExtResource("4_time")
-offset_left = 10.0
-offset_top = 760.0
-offset_right = 380.0
+offset_left = 380.0
+offset_top = 756.0
+offset_right = 1040.0
 offset_bottom = 790.0
 
 [node name="PauseButton" type="Button" parent="UI/TimeControls"]
@@ -243,29 +276,25 @@ text = "Menu"
 script = ExtResource("5_insp")
 visible = false
 offset_left = 1050.0
-offset_top = 10.0
+offset_top = 640.0
 offset_right = 1270.0
-offset_bottom = 246.0
+offset_bottom = 790.0
+grow_vertical = 0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="UI/Inspector"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 10.0
-offset_top = 10.0
-offset_right = -10.0
-offset_bottom = -10.0
-
-[node name="Label" type="Label" parent="UI/Inspector/VBoxContainer"]
-text = "—"
-theme_override_font_sizes/font_size = 14
+[node name="EcoMeters" type="PanelContainer" parent="UI"]
+script = ExtResource("18_meters")
+offset_left = 1050.0
+offset_top = 710.0
+offset_right = 1270.0
+offset_bottom = 790.0
+grow_vertical = 0
 
 [node name="PopulationPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("10_pop")
 offset_left = 1050.0
-offset_top = 256.0
+offset_top = 220.0
 offset_right = 1270.0
-offset_bottom = 260.0
+offset_bottom = 224.0
 
 [node name="VBox" type="VBoxContainer" parent="UI/PopulationPanel"]
 
@@ -291,8 +320,9 @@ offset_bottom = 480.0
 
 [node name="LegendPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("12_legend")
+visible = false
 offset_left = 10.0
-offset_top = 620.0
+offset_top = 598.0
 offset_right = 380.0
 offset_bottom = 750.0
 grow_vertical = 0
@@ -309,23 +339,3 @@ offset_top = 20.0
 offset_right = 1035.0
 offset_bottom = 555.0
 
-[node name="CodexPanel" type="PanelContainer" parent="UI"]
-script = ExtResource("8_codex")
-offset_left = 400.0
-offset_top = 560.0
-offset_right = 1030.0
-offset_bottom = 790.0
-grow_vertical = 0
-
-[node name="VBox" type="VBoxContainer" parent="UI/CodexPanel"]
-
-[node name="Counts" type="Label" parent="UI/CodexPanel/VBox"]
-text = "codex"
-theme_override_colors/font_color = Color(0.9, 0.92, 0.96, 1)
-theme_override_font_sizes/font_size = 13
-
-[node name="Scroll" type="ScrollContainer" parent="UI/CodexPanel/VBox"]
-custom_minimum_size = Vector2(610, 190)
-
-[node name="RecentList" type="VBoxContainer" parent="UI/CodexPanel/VBox/Scroll"]
-custom_minimum_size = Vector2(600, 0)

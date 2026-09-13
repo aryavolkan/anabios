@@ -39,7 +39,7 @@ var _font: Font
 
 func _ready() -> void:
 	visible = false
-	_font = ThemeDB.fallback_font
+	_font = UiTheme.font()
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 6)
 	add_child(vb)

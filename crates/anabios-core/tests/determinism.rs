@@ -204,7 +204,14 @@ const GOLDEN: &[(u64, u64)] =
     // invention count 20->22 shifted the discovery table and practice
     // channels — layout growth only (inventions off in minimal); only tick
     // 1000 moved.
-    &[(0, 0x438e6837d64f0a64), (100, 0x8412ea7266832f0f), (1000, 0x3708f8d8a3047875)];
+    // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
+    // 42→43): added World.biome_step_interval (u32, default/absent 1).
+    // Absent in minimal.toml ⇒ the Stage-10 gate divides by the same
+    // BIOME_STEP_INTERVAL as before — trajectory byte-identical (see
+    // `tests/biome_step_interval.rs::interval_one_is_byte_identical_to_the_
+    // field_absent`); only the serialized layout grew, moving all three
+    // hashes once.
+    &[(0, 0x1f0833df5551cb75), (100, 0x3bf5b90f0c20a792), (1000, 0xfda6a2cf52557694)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

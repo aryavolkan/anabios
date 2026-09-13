@@ -14,12 +14,30 @@ shader_type canvas_item;
 // passes the colors straight through so heatmaps stay faithful.
 
 uniform float biome_mode = 1.0;        // 1 = terrain treatment, 0 = passthrough
-uniform float relief_strength = 12.0;  // hillshade intensity on land (elevation gradient)
-uniform float soften = 0.45;           // 0 = crisp blocks, 1 = fully smoothed
+uniform float relief_strength = 3.5;   // hillshade intensity on land (elevation gradient)
+uniform float soften = 0.10;           // 0 = crisp blocks, 1 = fully smoothed
 uniform vec2 light_dir = vec2(-0.65, -0.75); // light from upper-left
 uniform float world_size = 512.0;      // sim world extent, for seamless shimmer
 uniform float sea_level = 0.35;        // viewer-derived water line, for depth shading
-uniform float vignette = 0.12;         // corner darkening on terrain (0 = off)
+uniform float vignette = 0.0;          // corner darkening on terrain (0 = off; the boards have none)
+// Land finish: a saturation lift and brightness gain applied after relief and
+// shore passes so the muted sim palette reads as pixel art, not a heatmap.
+uniform float vibrance = 0.18;
+uniform float land_lift = 0.92;
+// 2.5D relief (D9): land elevation is quantised into terraces; where a cell
+// stands a terrace above its southern neighbour the bottom band of the cell
+// wears a dark cliff face, a plateau's northern edge a lit rim, and the
+// east/west edges a thin dark line, so highlands read as stacked ledges the
+// way the reference boards' cliffs do. `terrace_levels` counts levels over
+// the full 0..1 elevation range; `cliff_strength` scales the face darkening;
+// `height_lift` brightens land with altitude.
+uniform float terrace_levels = 14.0;
+uniform float cliff_strength = 0.75;
+uniform float cliff_band = 0.42;   // fraction of a cell the face occupies
+uniform float height_lift = 0.22;
+// Elevation drop between a water cell and the water cell south of it that
+// paints a waterfall (see the water branch).
+uniform float fall_step = 0.0075;
 
 // Pixel-art ground tiles (terrain_sprites.gd atlas), blended into the land
 // branch only — water keeps its living treatment, and the data-overlay
@@ -28,24 +46,64 @@ uniform float vignette = 0.12;         // corner darkening on terrain (0 = off)
 // `sim.biome_terrain_ids()`; exact ids beat re-classifying the lossy
 // biomass/succession-lerped colors. The atlas MUST stay a square grid
 // (extreme-aspect atlases corrupt on Metal — see terrain_sprites.gd).
+// The biome texture again, as a uniform: the elevation helpers below take a
+// sampler argument, and Godot's shader compiler will not hand the TEXTURE
+// built-in to a function (it logs a custom_samplers complaint per call), so
+// the ground layers set this alongside their sprite texture.
+uniform sampler2D biome_tex : filter_nearest, repeat_disable;
 uniform sampler2D tile_atlas : filter_nearest, repeat_disable;
 uniform sampler2D terrain_ids : filter_nearest, repeat_disable;
 uniform float tiles_enabled = 0.0; // biome_renderer flips this once textures are wired
-uniform float tile_mix = 0.7;      // tile weight over the flat biome color at full detail
+uniform float tile_mix = 0.9;      // tile weight over the flat biome color at full detail
 uniform float biome_res = 128.0;   // cells per axis, matches terrain_ids size
 uniform float tile_variants = 3.0; // keep in sync with terrain_sprites.gd VARIANTS
 uniform float atlas_cols = 8.0;    // keep in sync with terrain_sprites.gd ATLAS_COLS
 uniform float atlas_cell_px = 16.0;
 uniform float atlas_px = 128.0;
 
+// Chunk addressing (D3, `docs/superpowers/specs/
+// 2026-09-12-pixel-world-at-scale-design.md` §4/§6 Phase 2): a streamed
+// GroundChunk shows a 66x66-cell apron texture through its interior 64x64
+// region. Godot hands a region sprite its UV in WHOLE-texture space, so
+// `UV * biome_res` (biome_res = 66 on a chunk) already lands in apron cell
+// coordinates and the neighbour taps at TEXTURE_PIXEL_SIZE read the apron.
+// `ids_offset` is the apron inset ((1,1) on a chunk, (0,0) on the
+// whole-world sprite) and `cell_origin` the chunk's global cell coordinate;
+// together they recover the WORLD cell for the per-cell hash, so a chunk's
+// tile variants match the whole-world path and never drift at a border.
+// `cell_world` is the width of one cell in world units for the LOD fade
+// (0 = derive it from world_size / biome_res, which is only right on the
+// whole-world sprite).
+uniform vec2 ids_offset = vec2(0.0);
+uniform vec2 cell_origin = vec2(0.0);
+uniform float cell_world = 0.0;
+
+// Dual-grid coast transitions (autotile.gdshaderinc, coast_tiles.gd): a
+// 4x4 atlas of 16 px tiles indexed by the water mask of the four cells
+// around each half-offset corner. Drawn over both the land and the water
+// side at full tile detail, and faded out with the tile LOD.
+#include "res://shaders/autotile.gdshaderinc"
+uniform sampler2D coast_atlas : filter_nearest, repeat_disable;
+uniform float autotile_enabled = 0.0;
+uniform float coast_cols = 4.0;
+uniform float coast_cell_px = 16.0;
+uniform float coast_atlas_px = 64.0;
+
 // World-space position of this fragment. The ground is drawn as 9 separate tiles
 // (origin + 8 torus wrap copies), each with its own 0..1 UV; deriving the water
 // shimmer from world position instead of per-tile UV keeps the wave continuous
 // across tile seams (no phase jump where copies abut).
 varying vec2 world_pos;
+// The node's modulate, captured in the vertex stage. In the fragment stage
+// Godot 4 hands COLOR already multiplied by the texture sample — and this
+// texture's alpha is the packed ELEVATION, not opacity — so multiplying the
+// result by the fragment COLOR used to make deep water nearly transparent
+// and every land cell partially see-through over the black clear colour.
+varying vec4 modulate_v;
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
+	modulate_v = COLOR;
 }
 
 float luma(vec3 c) {
@@ -61,9 +119,75 @@ bool is_water(vec3 c) {
 	return c.b > c.r + 0.05 && c.b > c.g + 0.05 && c.b > 0.20 && max(c.r, c.g) < 0.45;
 }
 
+// Exact terrain id of a cell (Water = 0) from the id texture.
+float tid_at(vec2 cell) {
+	return floor(texture(terrain_ids, (cell + 0.5) / biome_res).r * 255.0 + 0.5);
+}
+
+// Water test for a cell: the exact id when the id texture is wired (rivers
+// report Water there too), the colour heuristic on the legacy path. The sim's
+// water colour is dark enough to fail the heuristic's blue floor, which used
+// to send every lake through the land branch.
+bool water_cell(vec2 cell, vec3 col) {
+	return tiles_enabled > 0.5 ? tid_at(cell) < 0.5 : is_water(col);
+}
+
+// Land cells among the four neighbours of `cell` (id texture only; 0 on
+// the legacy colour path, which never draws waterfalls).
+float land_neighbours(vec2 cell) {
+	if (tiles_enabled < 0.5) {
+		return 0.0;
+	}
+	return step(0.5, tid_at(cell + vec2(1.0, 0.0))) + step(0.5, tid_at(cell - vec2(1.0, 0.0)))
+		+ step(0.5, tid_at(cell + vec2(0.0, 1.0))) + step(0.5, tid_at(cell - vec2(0.0, 1.0)));
+}
+
+// Elevation (packed in alpha) interpolated between the four nearest cell
+// centres, so relief, altitude and water depth vary continuously across a
+// cell instead of stepping at every cell edge (the per-cell steps were what
+// made the ground read as a mosaic of tiles). Terraces still quantise the
+// raw per-cell value on purpose.
+float elev_bilin(sampler2D tex, vec2 cellf) {
+	vec2 b = floor(cellf - 0.5);
+	vec2 f = fract(cellf - 0.5);
+	float e00 = texture(tex, (b + vec2(0.5, 0.5)) / biome_res).a;
+	float e10 = texture(tex, (b + vec2(1.5, 0.5)) / biome_res).a;
+	float e01 = texture(tex, (b + vec2(0.5, 1.5)) / biome_res).a;
+	float e11 = texture(tex, (b + vec2(1.5, 1.5)) / biome_res).a;
+	return mix(mix(e00, e10, f.x), mix(e01, e11, f.x), f.y);
+}
+
+float hash2(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// Ordered 4x4 Bayer threshold for a ground texel: a pixel-art dither for
+// the snow line (a hash stipple read as static).
+float bayer4(vec2 p) {
+	int x = int(mod(p.x, 4.0));
+	int y = int(mod(p.y, 4.0));
+	// Bayer index: bit-interleave of x^y and y, giving the 0..15 pattern.
+	int a = x ^ y;
+	int idx = ((a & 1) << 3) | ((y & 1) << 2) | ((a & 2) << 0) | ((y & 2) >> 1);
+	return (float(idx) + 0.5) / 16.0;
+}
+
+// Ground tile sample for a cell of terrain id `tid` at fractional cell
+// coordinate `cellf`; `variant` is the tile variant (0..tile_variants-1).
+vec3 tile_at(float tid, float variant, vec2 cellf) {
+	float cidx = tid * tile_variants + variant;
+	vec2 acell = vec2(mod(cidx, atlas_cols), floor(cidx / atlas_cols));
+	vec2 tuv = (acell + fract(cellf)) * (atlas_cell_px / atlas_px);
+	return texture(tile_atlas, tuv).rgb;
+}
+
+// The water tile family's flat base colour (terrain_sprites.gd "w"); ripple
+// pixels are read as their difference from it.
+const vec3 WATER_TILE_BASE = vec3(0.090, 0.188, 0.439);
+
 void fragment() {
-	// Incoming COLOR carries the node's modulate (dim/cool tint) — preserve it.
-	vec4 tint = COLOR;
+	// The node's modulate (dim/cool tint), from the vertex stage — see above.
+	vec4 tint = modulate_v;
 	vec2 px = TEXTURE_PIXEL_SIZE;
 	vec3 c = texture(TEXTURE, UV).rgb;
 
@@ -78,42 +202,122 @@ void fragment() {
 	vec3 soft_c = (c * 4.0 + cL + cR + cU + cD) / 8.0;
 	vec3 base = mix(c, soft_c, soften);
 
-	bool water = is_water(base);
+	vec2 cell0 = floor(UV * biome_res);
+	bool water = water_cell(cell0, base);
 
 	// Coast proximity: how many neighbours differ in water-ness from center.
 	float coast = 0.0;
-	coast += is_water(cL) != water ? 1.0 : 0.0;
-	coast += is_water(cR) != water ? 1.0 : 0.0;
-	coast += is_water(cU) != water ? 1.0 : 0.0;
-	coast += is_water(cD) != water ? 1.0 : 0.0;
+	coast += water_cell(cell0 - vec2(1.0, 0.0), cL) != water ? 1.0 : 0.0;
+	coast += water_cell(cell0 + vec2(1.0, 0.0), cR) != water ? 1.0 : 0.0;
+	coast += water_cell(cell0 - vec2(0.0, 1.0), cU) != water ? 1.0 : 0.0;
+	coast += water_cell(cell0 + vec2(0.0, 1.0), cD) != water ? 1.0 : 0.0;
 	coast *= 0.25; // 0..1
+
+	// Tile-space cell coordinate and the LOD weight, shared by the land tiles
+	// and the coast autotile: detail dissolves as a tile texel shrinks below a
+	// screen pixel so far zoom looks exactly like the flat ground.
+	vec2 cellf = UV * biome_res;
+	float texel_w = (cell_world > 0.0 ? cell_world : world_size / biome_res) / atlas_cell_px;
+	float texels_per_px = fwidth(world_pos.x) / max(texel_w, 1e-4);
+	float detail = smoothstep(4.5, 1.2, texels_per_px);
+	vec4 coast_tile = vec4(0.0);
+	if (tiles_enabled > 0.5 && autotile_enabled > 0.5) {
+		coast_tile = coast_autotile(terrain_ids, biome_res, cellf, coast_atlas, coast_cols, coast_cell_px, coast_atlas_px);
+	}
 
 	vec3 outc;
 	if (water) {
-		// Depth gradient: deeper (darker, more saturated) water in open sea,
-		// brighter teal shallows toward the coast.
-		vec3 deep = base * vec3(0.72, 0.82, 1.05);
-		vec3 shallow = mix(base, vec3(0.30, 0.62, 0.72), 0.55);
-		// Real depth: elevation (packed in alpha, C2) relative to the water line.
-		// ~1 at the shoreline (elevation just below sea level), →0 in the deepest
-		// basin, so open-ocean trenches read dark and shelves read bright teal.
-		float elev = texture(TEXTURE, UV).a;
-		// Deepest basins sit well below sea level, so raw elev/sea_level never
-		// reaches 0; square it to deepen open ocean while keeping shelves bright.
-		float shallowness = clamp(elev / max(sea_level, 1e-3), 0.0, 1.0);
+		// Lake blue: one tone across open water (the reference boards' water
+		// is flat and saturated), a faint depth cue from the interpolated
+		// elevation, and a brighter shelf on the cells that touch land.
+		vec3 deep = mix(base, vec3(0.16, 0.46, 0.84), 0.66);
+		vec3 shallow = mix(base, vec3(0.42, 0.78, 0.92), 0.78);
+		float es = elev_bilin(biome_tex, cellf);
+		float shallowness = clamp(es / max(sea_level, 1e-3), 0.0, 1.0);
 		shallowness *= shallowness;
-		outc = mix(deep, shallow, shallowness);
+		// The depth cue in dithered steps, like the land's relief.
+		vec2 depth_tex = floor(world_pos / max(texel_w, 1e-4));
+		float shallow_q = floor(shallowness * 4.0 + bayer4(depth_tex + vec2(4.0, 1.0))) / 4.0;
+		shallow_q = mix(shallowness, shallow_q, detail);
+		outc = mix(deep, shallow, 0.22 * shallow_q + 0.06 * step(0.01, coast));
 
-		// Slow directional shimmer in seamless world coordinates (continuous
-		// across the 9 wrap tiles). One world-width spans the same phase count
-		// the per-tile UV version used, so the look is unchanged but seam-free.
+		// Pixel ripples: the water tile family's light dashes and dark
+		// specks, cycled through its variants on a per-cell phase so the
+		// surface twinkles slowly; dissolves with the tile LOD like land.
+		if (tiles_enabled > 0.5) {
+			// The tile spans two cells (twice the texel) so the strokes are
+			// chunky and sparse, its variant and phase come from the 2x2
+			// block, and each block's weight varies smoothly so the surface
+			// never shows the cell grid.
+			vec2 wcellf = cell_origin + cellf - ids_offset;
+			vec2 block = floor(wcellf * 0.5);
+			float h = hash2(block);
+			float variant = mod(floor(h * tile_variants + TIME * 0.9 + h * 7.0), tile_variants);
+			vec3 tile = tile_at(0.0, variant, wcellf * 0.5);
+			float weight = 0.35 + 0.65 * hash2(block + vec2(13.0, 5.0));
+			outc += (tile - WATER_TILE_BASE) * 1.3 * detail * weight;
+		}
+		// A soft, slow swell in seamless world coordinates keeps far zoom
+		// (where the ripples have dissolved) from going dead flat.
 		vec2 wuv = world_pos / world_size;
 		float w = sin(wuv.x * 90.0 + TIME * 0.6) * 0.5 + 0.5;
 		w *= sin(wuv.y * 70.0 - TIME * 0.4) * 0.5 + 0.5;
-		outc += vec3(0.05, 0.08, 0.10) * w * (0.5 + 0.5 * (1.0 - coast));
+		outc += vec3(0.02, 0.03, 0.04) * w * (1.0 - detail);
 
-		// A crisp bright rim right at the waterline (surf).
-		outc += vec3(0.18, 0.26, 0.28) * smoothstep(0.24, 0.26, coast) * (1.0 - smoothstep(0.5, 0.9, coast));
+		// Coast tile on the water side (shallows + foam).
+		outc = mix(outc, coast_tile.rgb, coast_tile.a * detail);
+
+		// Waterfalls: a narrow water cell (a river: at least two land
+		// neighbours) standing a real step above its lowest water neighbour
+		// wears white falling streaks over the half of the cell facing that
+		// neighbour, lanes picked per texel and brightness sliding
+		// downstream with time, plus a foam lip where the drop begins, so a
+		// river coming down off a terrace reads as the reference boards'
+		// falls. The sea is excluded by the neighbour test: its bed keeps
+		// dropping past the shore but it is never a narrow channel.
+		float e_here = texture(TEXTURE, UV).a;
+		float dN = water_cell(cell0 - vec2(0.0, 1.0), cU) ? e_here - texture(TEXTURE, UV - vec2(0.0, px.y)).a : 0.0;
+		float dS = water_cell(cell0 + vec2(0.0, 1.0), cD) ? e_here - texture(TEXTURE, UV + vec2(0.0, px.y)).a : 0.0;
+		float dE = water_cell(cell0 + vec2(1.0, 0.0), cR) ? e_here - texture(TEXTURE, UV + vec2(px.x, 0.0)).a : 0.0;
+		float dW = water_cell(cell0 - vec2(1.0, 0.0), cL) ? e_here - texture(TEXTURE, UV - vec2(px.x, 0.0)).a : 0.0;
+		float best = max(max(dN, dS), max(dE, dW));
+		bool vertical = best == dN || best == dS;
+		bool forward = best == dS || best == dE;
+		vec2 next = cell0 + (vertical ? vec2(0.0, forward ? 1.0 : -1.0) : vec2(forward ? 1.0 : -1.0, 0.0));
+		// Both this cell and the one it pours into must be narrow channels.
+		float fall = step(fall_step, best) * step(0.49, coast) * step(1.5, land_neighbours(next));
+		if (fall > 0.5 && detail > 0.05) {
+			vec2 fc0 = fract(cellf);
+			vec2 texel0 = floor(world_pos / max(texel_w, 1e-4));
+			float across = vertical ? fc0.y : fc0.x;
+			float band = forward ? step(0.5, across) : 1.0 - step(0.5, across);
+			float lane = vertical ? texel0.x : texel0.y;
+			float along = vertical ? texel0.y : texel0.x;
+			float lane_on = step(0.45, hash2(vec2(lane, 3.0)));
+			float slide = fract(along * 0.25 * (forward ? 1.0 : -1.0) - TIME * 5.0 + hash2(vec2(lane, 9.0)));
+			float streak = band * lane_on * (0.55 + 0.45 * step(0.5, slide));
+			outc = mix(outc, vec3(0.93, 0.97, 1.0), streak * 0.8 * detail);
+			float lip = step(0.44, across) * (1.0 - step(0.56, across));
+			outc = mix(outc, vec3(1.0), lip * 0.9 * detail);
+		}
+		// Splash pool: the narrow cell a fall pours into churns white in the
+		// half nearest the drop (speckled per texel, flickering with time),
+		// so a fall reads as a two-cell event with foam at its foot.
+		float uN = water_cell(cell0 - vec2(0.0, 1.0), cU) ? texture(TEXTURE, UV - vec2(0.0, px.y)).a - e_here : 0.0;
+		float uS = water_cell(cell0 + vec2(0.0, 1.0), cD) ? texture(TEXTURE, UV + vec2(0.0, px.y)).a - e_here : 0.0;
+		float uE = water_cell(cell0 + vec2(1.0, 0.0), cR) ? texture(TEXTURE, UV + vec2(px.x, 0.0)).a - e_here : 0.0;
+		float uW = water_cell(cell0 - vec2(1.0, 0.0), cL) ? texture(TEXTURE, UV - vec2(px.x, 0.0)).a - e_here : 0.0;
+		float above = max(max(uN, uS), max(uE, uW));
+		if (above >= fall_step && coast >= 0.49 && detail > 0.05) {
+			vec2 fc1 = fract(cellf);
+			vec2 texel1 = floor(world_pos / max(texel_w, 1e-4));
+			bool from_vertical = above == uN || above == uS;
+			bool from_low = above == uS || above == uE;  // the drop comes from the south/east side
+			float along1 = from_vertical ? fc1.y : fc1.x;
+			float near = from_low ? step(0.5, along1) : 1.0 - step(0.5, along1);
+			float speck = step(0.62, hash2(texel1 + vec2(floor(TIME * 6.0), 0.0)));
+			outc = mix(outc, vec3(0.95, 0.98, 1.0), near * speck * 0.85 * detail);
+		}
 	} else {
 		// Pixel-art tile detail: pick this cell's tile family from its exact
 		// terrain id, a variant from a per-cell hash (same hash family as
@@ -124,19 +328,30 @@ void fragment() {
 		// zoom looks exactly like the pre-tile ground.
 		vec3 land_base = base;
 		if (tiles_enabled > 0.5) {
-			vec2 cellf = UV * biome_res;
 			vec2 cell = floor(cellf);
-			float tid = floor(texture(terrain_ids, (cell + 0.5) / biome_res).r * 255.0 + 0.5);
+			float tid = tid_at(cell);
 			if (tid > 0.5) {
-				float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+				// Dithered biome edges: each ground texel looks up its tile
+				// family from a cell jittered by up to half a cell in a
+				// stable per-texel pattern, so grass and savanna (say)
+				// interleave along their border instead of meeting at a
+				// hard cell edge. A jitter that lands in water keeps the
+				// cell's own family so coasts stay crisp.
+				vec2 texel = floor(world_pos / max(texel_w, 1e-4));
+				vec2 jit = vec2(hash2(texel + vec2(3.1, 7.7)), hash2(texel + vec2(9.3, 1.9))) - 0.5;
+				vec2 jcell = floor(cellf + jit * 1.1);
+				float jt = tid_at(jcell);
+				vec2 pick = jt > 0.5 ? jcell : cell;
+				float ptid = jt > 0.5 ? jt : tid;
+				// World-space cell, for a hash that matches the whole-world
+				// path exactly (cell_origin/ids_offset default to 0/(0,0)
+				// there, so this is `cell` unchanged on the whole-world
+				// sprite; a chunk undoes its (1,1) apron inset and adds its
+				// own global cell coordinate).
+				vec2 world_cell = cell_origin + pick - ids_offset;
+				float h = hash2(world_cell);
 				float variant = min(floor(h * tile_variants), tile_variants - 1.0);
-				float cidx = tid * tile_variants + variant;
-				vec2 acell = vec2(mod(cidx, atlas_cols), floor(cidx / atlas_cols));
-				vec2 tuv = (acell + fract(cellf)) * (atlas_cell_px / atlas_px);
-				vec3 tile = texture(tile_atlas, tuv).rgb;
-				float texel_w = (world_size / biome_res) / atlas_cell_px;
-				float texels_per_px = fwidth(world_pos.x) / max(texel_w, 1e-4);
-				float detail = smoothstep(4.5, 1.2, texels_per_px);
+				vec3 tile = tile_at(ptid, variant, cellf);
 				land_base = mix(base, tile, tile_mix * detail);
 			}
 		}
@@ -149,21 +364,154 @@ void fragment() {
 		float eR = texture(TEXTURE, UV + vec2(px.x, 0.0)).a;
 		float eU = texture(TEXTURE, UV - vec2(0.0, px.y)).a;
 		float eD = texture(TEXTURE, UV + vec2(0.0, px.y)).a;
-		vec2 grad = vec2(eR - eL, eD - eU);
+		// Continuous gradient from the interpolated elevation (the per-cell
+		// taps above still drive the terraces).
+		vec2 grad = vec2(
+			elev_bilin(biome_tex, cellf + vec2(1.0, 0.0)) - elev_bilin(biome_tex, cellf - vec2(1.0, 0.0)),
+			elev_bilin(biome_tex, cellf + vec2(0.0, 1.0)) - elev_bilin(biome_tex, cellf - vec2(0.0, 1.0)));
 		float shade = dot(normalize(light_dir), grad) * relief_strength;
 		// Brighten slopes facing the light, darken those facing away.
-		outc = land_base * (1.0 + clamp(shade, -0.5, 0.5));
+		// Kept gentle: at the old strength a slope facing away from the
+		// light read as a large dark smear across open grass.
+		// Quantised to four steps a side through the ordered dither, so the
+		// relief reads as pixel-art shading bands rather than a smooth
+		// gradient washing across the tiles.
+		float shade_n = clamp(shade, -0.22, 0.22) / 0.22;
+		vec2 shade_tex = floor(world_pos / max(texel_w, 1e-4));
+		float shade_q = floor(shade_n * 4.0 + bayer4(shade_tex + vec2(2.0, 9.0))) / 4.0;
+		// Far out a texel is under a screen pixel and the dither would only
+		// be noise: fall back to the smooth value as the detail dissolves.
+		shade_q = mix(shade_n, shade_q, detail);
+		outc = land_base * (1.0 + shade_q * 0.22);
+
+		// Terraces and cliff faces (D9). Levels are integers; a drop of one
+		// or more levels toward a neighbour paints that edge of the cell.
+		float e0 = texture(TEXTURE, UV).a;
+		// Soil steps only where the elevation really jumps between two
+		// cells (at least 0.6 of a level): the per-cell field is noisy at
+		// the level scale, and gentle grass used to sprout stray bars. Rock
+		// terrain skips these per-cell faces entirely and gets contour
+		// ledges from the smoothed field below, plus snow on top.
+		float tid0 = tiles_enabled > 0.5 ? tid_at(floor(cellf)) : 1.0;
+		float on_rock = step(3.5, tid0) * (1.0 - step(4.5, tid0));
+		float levels = terrace_levels;
+		float lv = floor(e0 * levels);
+		float lvD = floor(eD * levels);
+		float lvU = floor(eU * levels);
+		float lvL = floor(eL * levels);
+		float lvR = floor(eR * levels);
+		vec2 fc = fract(cellf);
+		// Southern cliff face: the higher the drop, the darker, browner and
+		// TALLER — a one-level step wears the thin soil band, a drop of
+		// three or more levels a face most of a cell high, striated into
+		// stone columns (a per-texel column hash) the way the boards' crags
+		// and river gorges are drawn.
+		float drop_lv = clamp(lv - lvD, 0.0, 4.0);
+		float drop = clamp(drop_lv / 3.0, 0.0, 1.0);
+		float band_h = min(cliff_band * (0.5 + 0.6 * drop_lv), 0.85);
+		float real = mix(0.6, 9.0, on_rock) / levels;
+		float face = drop * step(1.0 - band_h, fc.y) * step(0.5, lv - lvD) * step(real, e0 - eD);
+		vec3 face_col = mix(vec3(0.30, 0.23, 0.17), vec3(0.34, 0.33, 0.28), on_rock);
+		vec3 cliff = mix(outc * 0.45, face_col, 0.5);
+		float col_hash = hash2(vec2(floor(world_pos.x / max(texel_w, 1e-4)), floor(cellf.y)) + vec2(1.7, 4.3));
+		cliff *= 0.82 + 0.28 * step(0.45, col_hash);
+		// A lit lip along the top of the face.
+		float lip = step(1.0 - band_h, fc.y) * (1.0 - step(1.0 - band_h + 0.08, fc.y));
+		outc = mix(outc, cliff, face * cliff_strength);
+		outc = mix(outc, outc * 1.35 + 0.08, face * lip * cliff_strength);
+		// Bank face: land standing a level above the water south of it wears
+		// the face whatever the step, so a plateau shore reads as a bank
+		// (the beach band from the coast tile still lands on top of it).
+		float bank = step(0.5, lv - lvD) * (water_cell(cell0 + vec2(0.0, 1.0), cD) ? 1.0 : 0.0);
+		outc = mix(outc, cliff, bank * step(1.0 - cliff_band, fc.y) * cliff_strength * 0.7);
+		// Northern rim of a plateau: a thin bright line.
+		float rim = step(0.5, lv - lvU) * step(real, e0 - eU) * (1.0 - step(0.10, fc.y));
+		outc = mix(outc, outc * 1.25 + 0.06, rim * cliff_strength * 0.8);
+		// East/west ledges: a thin dark line where the cell stands higher.
+		float ledge = step(0.5, lv - lvL) * step(real, e0 - eL) * (1.0 - step(0.08, fc.x))
+			+ step(0.5, lv - lvR) * step(real, e0 - eR) * step(0.92, fc.x);
+		outc = mix(outc, outc * 0.6, clamp(ledge, 0.0, 1.0) * cliff_strength * 0.3);
+		// Altitude: highlands sit a touch brighter than the lowlands.
+		float es = elev_bilin(biome_tex, cellf);
+		if (on_rock > 0.5) {
+			// Stacked stone: contour ledges of the smoothed elevation (a
+			// five-tap box over the interpolated field so the lines follow
+			// the ridge rather than the per-cell noise). Just above each
+			// contour a dark stone face, just below the next a lit rim, so
+			// the mountain reads as terraces the way the reference boards'
+			// crags do; lines crowd where the slope is steep.
+			float esm = (
+				es
+				+ elev_bilin(biome_tex, cellf + vec2(1.0, 0.0))
+				+ elev_bilin(biome_tex, cellf - vec2(1.0, 0.0))
+				+ elev_bilin(biome_tex, cellf + vec2(0.0, 1.0))
+				+ elev_bilin(biome_tex, cellf - vec2(0.0, 1.0))
+			) * 0.2;
+			float f = fract(esm * terrace_levels * 3.0);
+			// Only where the ground climbs: on a near-flat outcrop the
+			// contours spread into concentric rings that read as a map, so
+			// the ledges fade out with the slope and flat stone stays plain.
+			float ledge_gate = smoothstep(0.0015, 0.006, length(grad));
+			float ledge_dark = (1.0 - smoothstep(0.0, 0.18, f)) * ledge_gate;
+			float ledge_lit = smoothstep(0.84, 1.0, f) * ledge_gate;
+			vec3 stone = mix(outc * 0.55, vec3(0.31, 0.30, 0.25), 0.5);
+			outc = mix(outc, stone, ledge_dark * cliff_strength * 0.8);
+			outc = mix(outc, outc * 1.22 + 0.05, ledge_lit * 0.7);
+			// Snow caps: the top of the rock band whitens with altitude. The
+			// cover is thresholded per ground texel against a stable hash,
+			// so its edge is a stipple of snow pixels (the boards' peaks)
+			// rather than a soft white haze over the whole outcrop.
+			// A narrow band: a wide one dithered half an outcrop into a screen door at 8x.
+			float snow = smoothstep(0.87, 0.94, es);
+			vec2 stex = floor(world_pos / max(texel_w, 1e-4));
+			float snow_px = step(bayer4(stex), snow);
+			outc = mix(outc, vec3(0.90, 0.93, 0.97), snow_px * 0.9);
+		}
+		// Altitude lift in the same dithered steps.
+		float lift_n = clamp((es - sea_level) / max(1.0 - sea_level, 1e-3), 0.0, 1.0);
+		float lift_q = floor(lift_n * 4.0 + bayer4(shade_tex + vec2(6.0, 3.0))) / 4.0;
+		outc *= 1.0 + height_lift * mix(lift_n, lift_q, detail);
 
 		// Sandy shoreline on the land side: a thin warm beach band right at the
 		// waterline, fading inland, so coasts read as coast rather than a hard
 		// color cut. Kept subtle and tinted to the cell so it reads under any
 		// biome (grass/forest/desert).
-		vec3 sand = vec3(0.80, 0.73, 0.52);
-		outc = mix(outc, sand, coast * 0.40);
+		// River banks: when the water next door is a narrow river cell (at
+		// least two land neighbours of its own), the shore is a mossy mud
+		// bank, not a beach. The boards' rivers run between grass banks;
+		// the lake-shore sand on both sides of every stream read as a
+		// desert road through the forest.
+		float river = 0.0;
+		if (coast > 0.0 && tiles_enabled > 0.5) {
+			if (water_cell(cell0 - vec2(1.0, 0.0), cL)) {
+				river = max(river, step(1.5, land_neighbours(cell0 - vec2(1.0, 0.0))));
+			}
+			if (water_cell(cell0 + vec2(1.0, 0.0), cR)) {
+				river = max(river, step(1.5, land_neighbours(cell0 + vec2(1.0, 0.0))));
+			}
+			if (water_cell(cell0 - vec2(0.0, 1.0), cU)) {
+				river = max(river, step(1.5, land_neighbours(cell0 - vec2(0.0, 1.0))));
+			}
+			if (water_cell(cell0 + vec2(0.0, 1.0), cD)) {
+				river = max(river, step(1.5, land_neighbours(cell0 + vec2(0.0, 1.0))));
+			}
+		}
+		vec3 bank_mud = vec3(0.42, 0.40, 0.24);
+		vec3 sand = mix(vec3(0.80, 0.73, 0.52), bank_mud, river);
+		outc = mix(outc, sand, coast * 0.18);
 
 		// Slightly deepen the shoreline on the land side just past the beach so
 		// the transition has a little depth.
 		outc = mix(outc, outc * 0.86, max(coast - 0.25, 0.0) * 0.5);
+
+		// Land finish: lift saturation and brightness so tiles read crisp and
+		// warm, then stamp the shoreline band LAST so sand and foam stay bright
+		// under the relief and shore-darkening passes above.
+		float lum = luma(outc);
+		outc = mix(vec3(lum), outc, 1.0 + vibrance) * land_lift;
+		// The autotile's sand bands turn to bank mud beside a river.
+		vec3 shore_tile = mix(coast_tile.rgb, coast_tile.rgb * vec3(0.55, 0.58, 0.42), river);
+		outc = mix(outc, shore_tile, coast_tile.a * detail);
 	}
 
 	// Soft vignette to frame the field — darkens screen corners only, and only

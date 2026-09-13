@@ -206,7 +206,7 @@ codex events that prove it fired.
 | **The Exodus** | Out of Africa | migration, corridors, biome adaptation, speciation | agents funnel through the desert crossings; cline forms | **G** → env-optimum | `Migration`, `CorridorUse`, `RangeExpansion`, `SpeciationEvent` |
 | **Settling Down** | Farming & trade | era-2 tech, settlement, markets, trade goods | settlements anchor; trade lanes drawn | **G** → markets | `SettlementFormed`, `MarketEmerged`, `ResourceTraded` |
 | **The Word** | ★ Invention of writing | era-3 tech, DIT/culture, dialects, institutions | tech panel reaches **Writing**; dialect-hue clusters | tech panel; **C** → dialect | `InventionDiscovered` (Writing), `MemeSweep`, `InstitutionalRatchet`, `DialectFormed` |
-| **The Herd** | ★ Domestication | Husbandry, livestock, herd cohesion | penned stock near owners; `livestock of agent N` in inspector | click herder + neighbors | `AnimalDomesticated`, `LivestockHerd`, `HerdCohesion` |
+| **The Herd** | ★ Domestication | Husbandry, livestock, herd cohesion | penned stock near owners; `livestock of N` on the unit card | click herder + neighbors | `AnimalDomesticated`, `LivestockHerd`, `HerdCohesion` |
 | **Blood & Kin** | Conflict & cooperation | combat, war, territory, kin, cognition, dimorphism | combat glow, raids, territory borders, two sexes | **Y** coevolution; inspect | `CombatRaid`, `WarOrRaid`, `AllianceFormed`, `TerritoryFormation`, `SexualSelection` |
 
 **The two ★ chapters — Writing and the Herd — are the payoff**, and §3/§4 show
@@ -227,8 +227,8 @@ Launch: `scripts/emergence.sh view <scenario> --seed 318` (needs Godot 4.x).
 |---|---|
 | **G** | Cycle ground overlay: biome → env-optimum → succession → markets → pheromone 0–3 (auto-skips inactive subsystems). |
 | **C** | Cycle agent coloring (diet / dialect-hue / energy / species …). |
-| **T** / **Y** | Evolution panel / coevolution panel. **H** legend. |
-| **Click agent** | Pin in inspector (species, lineage, OCEAN personality, modules, `livestock of agent N`). |
+| **T** / **Y** | Evolution panel / coevolution panel. **H** controls + legend (hidden by default). |
+| **Click agent** | Pin in the unit card (portrait, species name, HP, stamina, module pips, `livestock of N`). |
 | **WASD / arrows / F** | Pan / follow camera. **R/U/V/Esc** replay & menu. |
 
 ---

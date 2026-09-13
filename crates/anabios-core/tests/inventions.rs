@@ -1310,7 +1310,10 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // invention count 20->22 shifted the discovery table and practice
     // channels — same class of real trajectory change as the two refreshes
     // above; tick 0 held (predates discovery), ticks 100/300 moved.
-    &[(0, 0x51ae2a582ebb31a5), (100, 0x48cc350ba12b5f09), (300, 0xb08fbd277580a962)];
+    // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
+    // 42→43): World.biome_step_interval added (default/absent 1) — layout
+    // growth only, trajectory byte-identical.
+    &[(0, 0xdddcfaf87d6dd1a4), (100, 0x47b1ca50bbd414d0), (300, 0xe1d6d9b8759b2bf7)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

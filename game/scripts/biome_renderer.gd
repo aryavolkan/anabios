@@ -41,6 +41,7 @@ var _terrain_mat: ShaderMaterial
 # decoration prop scatter child. [B] toggles the whole treatment.
 const TerrainSprites := preload("res://scripts/terrain_sprites.gd")
 const TerrainScatter := preload("res://scripts/terrain_scatter.gd")
+const CoastTiles := preload("res://scripts/coast_tiles.gd")
 var _tiles_on := true
 var _ids := PackedByteArray()
 var _ids_tex: ImageTexture = null
@@ -51,14 +52,23 @@ var _scatter: Node2D = null
 const BiomeProps = preload("res://scripts/biome_props.gd")
 var _props: Node2D
 
+# Phase 2 chunk streaming (D3): GroundLayer draws resident 64-cell chunk
+# sprites over this whole-world sprite while active; the whole-world sprite
+# always stays underneath as the far-zoom fallback and the [B]-toggle A/B
+# reference. [N] toggles streaming on/off, independent of [B], for A/B
+# captures between the two ground paths.
+const GroundLayer = preload("res://scripts/ground_layer.gd")
+var _ground_layer: Node2D
+var _chunks_on := true
+
 
 func _ready() -> void:
 	centered = false
 	position = Vector2.ZERO
 	z_index = -10
-	# Slightly dim + cool the ground so organisms and overlays read clearly on
-	# top and the terrain harmonizes with the dark instrument HUD.
-	modulate = Color(0.85, 0.88, 0.92)
+	# A whisper of cool tint keeps the ground under the HUD's teal; the old
+	# 0.85 dim made every capture read as dusk.
+	modulate = Color(0.97, 0.98, 1.0)
 	# Linear filtering removes the harshest nearest-neighbour stair-steps before
 	# the shader's relief/softening pass; the shader keeps biomes distinct.
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -74,6 +84,15 @@ func _ready() -> void:
 	_terrain_mat.set_shader_parameter(
 		"atlas_px", float(TerrainSprites.ATLAS_COLS * TerrainSprites.CELL_PX)
 	)
+	# Dual-grid coast transitions ride the same material (and every chunk's
+	# duplicate of it), keyed off the exact terrain ids.
+	_terrain_mat.set_shader_parameter("coast_atlas", CoastTiles.build_atlas())
+	_terrain_mat.set_shader_parameter("coast_cols", float(CoastTiles.ATLAS_COLS))
+	_terrain_mat.set_shader_parameter("coast_cell_px", float(CoastTiles.CELL_PX))
+	_terrain_mat.set_shader_parameter(
+		"coast_atlas_px", float(CoastTiles.ATLAS_COLS * CoastTiles.CELL_PX)
+	)
+	_terrain_mat.set_shader_parameter("autotile_enabled", 1.0)
 	_scatter = TerrainScatter.new()
 	_scatter.name = "TerrainScatter"
 	add_child(_scatter)
@@ -92,6 +111,10 @@ func _ready() -> void:
 	_props.name = "BiomeProps"
 	add_child(_props)
 	_props.setup(sim)
+	_ground_layer = GroundLayer.new()
+	_ground_layer.name = "GroundLayer"
+	add_child(_ground_layer)
+	_ground_layer.setup(self, sim)
 	_setup(int(sim.biome_resolution()))
 
 
@@ -107,6 +130,7 @@ func _setup(res: int) -> void:
 	_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
 	_tex = ImageTexture.create_from_image(_img)
 	texture = _tex
+	_terrain_mat.set_shader_parameter("biome_tex", _tex)
 	_mini_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
 	_mini_tex = ImageTexture.create_from_image(_mini_img)
 	_mini_frame = 0
@@ -137,6 +161,8 @@ func _setup(res: int) -> void:
 	_terrain_mat.set_shader_parameter("biome_res", float(_res))
 	if _scatter != null:
 		_scatter.scale = Vector2(_res / world, _res / world)
+	if _ground_layer != null:
+		_ground_layer.scale = Vector2(_res / world, _res / world)
 
 
 # The whole-world ground ImageTexture (res×res) as currently displayed — the
@@ -151,6 +177,33 @@ func world_texture() -> ImageTexture:
 # a separately-maintained copy while a data overlay is up.
 func minimap_texture() -> ImageTexture:
 	return _tex if _last_mode == -1 else _mini_tex
+
+
+# The shared terrain ShaderMaterial (relief/water/tile-atlas uniforms already
+# wired). GroundLayer duplicates this per chunk so a chunk's `terrain_ids`/
+# `biome_res`/`ids_*` overrides never leak into the whole-world sprite or
+# sibling chunks, while everything else (tile_atlas, world_size, sea_level,
+# tiles_enabled, tile_mix, ...) tracks this node's uniform writes untouched.
+func terrain_material() -> ShaderMaterial:
+	return _terrain_mat
+
+
+# True while the ground selection is the biome view (as opposed to a data
+# overlay) — GroundLayer only draws chunks over the biome view.
+func is_biome_view() -> bool:
+	return _last_mode == -1
+
+
+# True while the pixel-art ground treatment ([B]) is on.
+func tiles_enabled() -> bool:
+	return _tiles_on
+
+
+# True while chunk streaming ([N]) is on. Chunk streaming is independent of
+# [B]: GroundLayer draws only when both are on, so [N] alone A/B-tests the
+# whole-world sprite against the streamed chunks with tiles already showing.
+func streaming_enabled() -> bool:
+	return _chunks_on
 
 
 # True when the biome pixel under `world_pos` is water, using the exact
@@ -196,11 +249,13 @@ func _process(_delta: float) -> void:
 	# Props hide under data overlays so heatmaps stay uncluttered; the tile
 	# blend needs no gating because the passthrough branch already bypasses it.
 	if _scatter != null:
-		_scatter.visible = _tiles_on and mode == -1
+		_scatter.visible = _tiles_on and mode == -1 and not streaming_enabled()
 	if _tiles_on and _frame % _redraw_interval == 0:
 		_refresh_terrain_ids()
-	# Scenery follows the same rule: props only over the real terrain.
+	# Scenery follows the same rule: props only over the real terrain; with
+	# the tiles on, only the shoreline reeds (the tile scatter grows the rest).
 	_props.set_terrain_visible(mode == -1)
+	_props.set_reeds_only(_tiles_on)
 	# While a data overlay owns the ground texture, keep the minimap's biome copy
 	# current on its own (much slower) cadence — the minimap is 200px wide and
 	# the terrain creeps. `== 1` refreshes on the first frame after the switch so
@@ -265,13 +320,21 @@ func _refresh_terrain_ids() -> void:
 
 
 # [B] toggles the pixel-art ground (tiles + props) without touching the
-# relief/water treatment or any data overlay.
+# relief/water treatment or any data overlay. [N] toggles chunk streaming
+# (Phase 2, D3) independently, for A/B captures of the streamed ground
+# against the whole-world sprite it draws over.
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_B:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	if event.keycode == KEY_B:
 		_tiles_on = not _tiles_on
 		_terrain_mat.set_shader_parameter("tiles_enabled", 1.0 if _tiles_on else 0.0)
 		if _scatter != null:
-			_scatter.visible = _tiles_on and _last_mode == -1
+			_scatter.visible = _tiles_on and _last_mode == -1 and not streaming_enabled()
+	elif event.keycode == KEY_N:
+		_chunks_on = not _chunks_on
+		if _scatter != null:
+			_scatter.visible = _tiles_on and _last_mode == -1 and not streaming_enabled()
 
 
 # Pack a res² colour grid into an RGBA8 byte buffer and push it to `tex` (one

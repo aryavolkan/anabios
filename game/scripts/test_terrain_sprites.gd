@@ -75,10 +75,25 @@ func _init() -> void:
 				_opaque_count(img) == 256,
 				"%s tile is fully opaque (ground tiles must have no holes)" % label
 			)
+			# Tiles agree with the biome.rs canon in HUE (so the minimap and the
+			# ground name the same terrain) but may sit brighter: they carry 90%
+			# of the land colour and the canon's dark greens read as dusk.
 			var canon: Array = CANON[t]
-			var d := (_mean_rgb(img) - Vector3(canon[0], canon[1], canon[2])).length()
+			var mean: Vector3 = _mean_rgb(img)
+			var mc := Color(mean.x, mean.y, mean.z)
+			var cc := Color(canon[0], canon[1], canon[2])
+			var dh := absf(mc.h - cc.h)
+			dh = minf(dh, 1.0 - dh)
 			_check(
-				d < 0.10, "%s tile mean colour stays near the biome.rs canon (d=%.3f)" % [label, d]
+				dh < 0.06 or cc.s < 0.12,
+				"%s tile mean hue stays near the biome.rs canon (dh=%.3f)" % [label, dh]
+			)
+			_check(
+				mc.v >= cc.v - 0.06,
+				(
+					"%s tile is no darker than the biome.rs canon (v=%.2f vs %.2f)"
+					% [label, mc.v, cc.v]
+				)
 			)
 		_check(
 			T.tile_image(t, 0).get_data() != T.tile_image(t, 1).get_data(),
@@ -108,6 +123,19 @@ func _init() -> void:
 	for t in range(1, T.TERRAIN_COUNT):
 		var p: int = T.prop_for_terrain(t)
 		_check(p >= 0 and p < T.PROP_COUNT, "%s suggests a valid prop" % T.NAMES[t])
+		for i in 20:
+			var v: int = T.prop_variant_for(t, float(i) / 20.0)
+			_check(
+				T.props_for_terrain(t).has(v), "%s variant %d is one of its props" % [T.NAMES[t], v]
+			)
+	_check(T.prop_variant_for(T.WATER, 0.5) == -1, "water grows no prop variant")
+	var grass_kinds: Dictionary = {}
+	for i in 60:
+		grass_kinds[T.prop_variant_for(T.GRASS, float(i) / 60.0)] = true
+	var distinct: Dictionary = {}
+	for k in T.props_for_terrain(T.GRASS):
+		distinct[k] = true
+	_check(grass_kinds.size() == distinct.size(), "grass grows every one of its props")
 
 	# --- atlas layout: tile cells land where the mapping says ---
 	var aimg := atlas.get_image()

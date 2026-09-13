@@ -28,12 +28,21 @@ shader_type canvas_item;
 // a fight lunge / flee tremble on top.
 
 uniform int frames = 16;
-// Atlas layout: poses live in a SQUARE 128x128 grid, ATLAS_COLS per row (see
-// ape_sprites.gd — a 16x192 strip corrupts on Metal's MultiMesh2D canvas
-// path). A pose index `fr` maps to cell (fr % ATLAS_COLS, fr / ATLAS_COLS).
-const float ATLAS_COLS = 8.0;
-const float ATLAS_PX = 128.0;
-const float CELL_PX = 16.0;
+// Atlas layout: poses live in a SQUARE grid, atlas_cols per row (see
+// ape_sprites.gd — an extreme-aspect strip corrupts on Metal's MultiMesh2D
+// canvas path). A pose index `fr` maps to cell (fr % atlas_cols, fr / atlas_cols).
+// Hero atlas by default (ape_sprites.gd HERO_PX / HERO_ATLAS_PX); main.gd
+// sets these per material so the shader and the packer cannot drift.
+uniform float atlas_cols = 8.0;
+uniform float atlas_px = 192.0;
+uniform float cell_px = 24.0;
+// Combined atlas (mammal_sprites.combined_atlas): every bucket's 192 px
+// atlas packed into a bucket_cols x bucket_cols grid, so all figures share
+// ONE MultiMesh and y-sort across species. The bucket comes from the
+// instance colour's alpha (mammal_sprites.bucket_alpha); its rig kind from
+// rig_kinds[bucket]. With bucket_cols = 1 the atlas is a single bucket.
+uniform float bucket_cols = 1.0;
+uniform int rig_kinds[16];
 // Authored walk cadence (frames/sec). The walk cycle itself is now paced by
 // distance travelled (see anim.r above), so this only sets the flee gallop's
 // bounding rate; main.gd reuses the same per-bucket value to scale stride
@@ -52,7 +61,7 @@ uniform float action_squash = 0.06;
 uniform float animation_time = 0.0;
 // Signature-move family (mammal_sprites.RigKind): 0 prey, 1 predator,
 // 2 primate (default = today's apes, all new branches off), 3 livestock.
-uniform int rig_kind = 2;
+uniform int rig_kind_default = 2;
 // Divisor main.gd uses to fit the action id into the 0..1 custom-data
 // channel (main.gd ACT_SCALE). Driven as a uniform so the encode and decode
 // cannot drift apart when a new action pushes the scale up.
@@ -66,10 +75,22 @@ varying flat vec4 anim;
 // the full pose atlas instead of one cell. Same corruption family as the
 // emote shader's INSTANCE_CUSTOM.a workaround; a flat varying survives.
 varying flat vec4 tint;
+varying flat int bucket;
+// 1 when the figure stands on a water cell (mammal_sprites.bucket_alpha):
+// the fragment stage cuts it off at the waterline.
+varying flat int wading;
+// Fraction of the cell (from the feet) under water for a wading figure.
+uniform float waterline = 0.3;
 
 void vertex() {
 	anim = INSTANCE_CUSTOM;
-	tint = COLOR;
+	tint = vec4(COLOR.rgb, 1.0);
+	int slots = int(bucket_cols * bucket_cols);
+	// Alpha: lower half names the bucket, upper half the same bucket wading.
+	float a2 = COLOR.a * 2.0;
+	wading = a2 >= 1.0 ? 1 : 0;
+	bucket = clamp(int(floor(fract(a2) * float(slots))), 0, slots - 1);
+	int rig_kind = bucket_cols > 1.5 ? rig_kinds[bucket] : rig_kind_default;
 	float phase = anim.r * 6.2831853;
 	float act = anim.a * act_scale;
 	// The QuadMesh is a 3D mesh, so its local +Y points up-screen in the 2D
@@ -269,11 +290,30 @@ void fragment() {
 		// Threshold it here and let the vertex stage use the blend.
 		fr = mix(0.0, 1.0 + min(s, 4.0 - s), step(0.5, anim.g));
 	}
-	// Frames live in a 128x128 grid, ATLAS_COLS per row; cells are pre-flipped
+	// Frames live in a square grid, atlas_cols per row; cells are pre-flipped
 	// (the QuadMesh V axis is flipped in the 2D canvas), so a plain sample
 	// draws the figure upright. Map fr -> (col, row) and offset into its cell.
-	float col = mod(fr, ATLAS_COLS);
-	float row = floor(fr / ATLAS_COLS);
-	vec2 cell_uv = (vec2(col + u, row + UV.y)) * (CELL_PX / ATLAS_PX);
+	float col = mod(fr, atlas_cols);
+	float row = floor(fr / atlas_cols);
+	vec2 cell_uv = (vec2(col + u, row + UV.y)) * (cell_px / atlas_px);
+	// Into the bucket's cell of the combined atlas.
+	vec2 origin = vec2(float(bucket % int(bucket_cols)), floor(float(bucket) / bucket_cols));
+	cell_uv = (origin + cell_uv) / bucket_cols;
 	COLOR = texture(TEXTURE, cell_uv) * tint;
+	// Wading: the cell's feet are at UV.y = 0; below the waterline the body
+	// is under water, and the two rows just above it take a pale wet rim
+	// so the cut reads as a surface rather than a missing half.
+	if (wading == 1) {
+		if (UV.y < waterline) {
+			discard;
+		}
+		float rim = 1.0 - smoothstep(0.0, 2.0 / cell_px, UV.y - waterline);
+		COLOR.rgb = mix(COLOR.rgb, vec3(0.78, 0.88, 0.96), rim * 0.7 * COLOR.a);
+		// A pale wake: one texel row of foam along the waterline either
+		// side of the body, so the cut reads as the water's surface.
+		float wake_row = step(UV.y - waterline, 1.0 / cell_px);
+		float wake_span = step(abs(UV.x - 0.5), 0.34);
+		float wake = wake_row * wake_span * (1.0 - step(0.5, COLOR.a));
+		COLOR = mix(COLOR, vec4(0.86, 0.93, 0.98, 0.85), wake);
+	}
 }
