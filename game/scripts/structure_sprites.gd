@@ -39,8 +39,10 @@ enum {
 	HUT_B,
 	HUT_C,
 	STALL,
+	TENT_B,
 }
-const KIND_COUNT := 23
+const KIND_COUNT := 24
+const ExtraRows = preload("res://scripts/structure_rows_extra.gd")
 const CELL_PX := 32
 const ATLAS_COLS := 8  # 8x8 grid of 32px cells = a square 256x256 atlas; cell index == kind
 
@@ -68,6 +70,7 @@ const NAMES: PackedStringArray = [
 	"HutRound",
 	"Longhouse",
 	"Stall",
+	"Yurt",
 ]
 
 # 32x32 row-string pixel maps per kind, indexed by the enum. '.' is
@@ -157,28 +160,28 @@ const _ROWS: Array = [
 		"...............KK...............",
 		"..............KyyK..............",
 		"..............KyyK..............",
-		"..............KyyK..............",
-		"..............KyyK..............",
-		"..............KyyK..............",
-		"..............KyyK..............",
+		".............KyyyyK.............",
+		".............KyyyyK.............",
 		".............KoyyoK.............",
-		".............KooooK.............",
-		".............KooooK.............",
-		".............KooooK.............",
-		".............KooooK.............",
-		"............KooooooK............",
-		"............KooooooK............",
-		"............KooooooK............",
-		"........KKKKKooooooKKKKK........",
-		".......KSSSSSooooooSSSSSK.......",
-		"......KKSSSSSooooooSSSSSKK......",
-		".....KssSSSSSSSSSSSSSSSSssK.....",
-		".....KssssssssssssssssssssK.....",
-		".....KsssskkkkkkkkkkkkssssK.....",
-		"....KksssskkkkkkkkkkkksssskK....",
-		"....KkkkkkkkkkkkkkkkkkkkkkkK....",
-		"....KkkkkkkkkkkkkkkkkkkkkkkK....",
-		".....KKKKKKKKKKKKKKKKKKKKKK.....",
+		"............KooyyooK............",
+		"............KooyyooK............",
+		"............KoooooooK...........",
+		"...........KoooooooooK..........",
+		"...........KoooooooooK..........",
+		"...........KrooooooorK..........",
+		".........KKKKooooooKKKK.........",
+		"........KSsSSKooooKSSsSK........",
+		".......KSSsSSSKKKKSSSsSSK.......",
+		".......KSsSSSkkkkkkSSSSsK.......",
+		".......KSSSSSkkkkkkSSsSSK.......",
+		"..KKKK.KsSSSSSSSSSSSSSSsK.KKKK..",
+		".KbbbbK.KSSSSsSSSSsSSSSK.KbbbbK.",
+		".KBBBBK..KKSSSSSSSSSSKK..KBBBBK.",
+		".KbbbbK....KKKKKKKKKK....KbbbbK.",
+		"..KKKK....................KKKK..",
+		"................................",
+		"................................",
+		"................................",
 		"................................",
 	],
 	# HUT
@@ -776,111 +779,6 @@ const _ROWS: Array = [
 		"..KkkkkkkkkkkkkkkkkkkkkkkkkkkK..",
 		"...KKKKKKKKKKKKKKKKKKKKKKKKKK...",
 	],
-	# HUT_B
-	[
-		"................................",
-		"...............KK...............",
-		"..............KTTK..............",
-		".............KTttTK.............",
-		"............KTttttTK............",
-		"...........KTttttttTK...........",
-		"..........KTttttttttTK..........",
-		".........KTttttttttttTK.........",
-		"........KTttttttttttttTK........",
-		".......KTttttttttttttttTK.......",
-		"......KTttttttttttttttttTK......",
-		".....KTttttttttttttttttttTK.....",
-		"....KTTTTTTTTTTTTTTTTTTTTTTK....",
-		"....KttttttttttttttttttttttK....",
-		"...KttttttttttttttttttttttttK...",
-		"...KTTTTTTTTTTTTTTTTTTTTTTTTK...",
-		"....KBBBBBBBBBBBBBBBBBBBBBBK....",
-		"....KbbbbbbbbbbbbbbbbbbbbbbK....",
-		"....KbbbbbbbbbbbbbbbbbbbbbbK....",
-		"....KbbbbbbbbbbbbbbbbbbbbbbK....",
-		".....KbbbbbbbbbbbbbbbbbbbbK.....",
-		".....KKKKKKKKKKKKKKKKKKKKKK.....",
-		"...........KKKKKKKKK............",
-		"...........KKKKKKKKK............",
-		"...........KKKKKKKKK............",
-		"...........KKKKKKKKK............",
-		"...........KKKKKKKKK............",
-		"....KKKKKKKKKKKKKKKKKKKKKKKK....",
-		"...KkkkkkkkkKKKKKKKKKkkkkkkkK...",
-		"...KkkkkkkkkkkkkkkkkkkkkkkkkK...",
-		"....KKKKKKKKKKKKKKKKKKKKKKKK....",
-		"................................",
-	],
-	# HUT_C
-	[
-		"................................",
-		"................................",
-		"................................",
-		"................................",
-		"........KKKKKKKKKKKKKKKK........",
-		"......KKTTTTTTTTTTTTTTTTKK......",
-		".....KTTttttttttttttttttTTK.....",
-		"....KTttttttttttttttttttttTK....",
-		"...KTttttttttttttttttttttttTK...",
-		"..KTttttttttttttttttttttttttTK..",
-		"..KttttttttttttttttttttttttttK..",
-		"..KTTTTTTTTTTTTTTTTTTTTTTTTTTK..",
-		"..KttttttttttttttttttttttttttK..",
-		"..KttttttttttttttttttttttttttK..",
-		"..KTTTTTTTTTTTTTTTTTTTTTTTTTTK..",
-		".KBBBBBBBBBBBBBBBBBBBBBBBBBBBBK.",
-		".KbbbbbbbbbbbbbbbbbbbbbbbbbbbbK.",
-		".KbbbKooKbbbbbbbbbbbbbbbKooKbbK.",
-		".KbbbKooKbbbbbbbbbbbbbbbKooKbbK.",
-		".KbbbbbbbbbbbbbbbbbbbbbbbbbbbbK.",
-		".KbbbbbbbbbbbbbbbbbbbbbbbbbbbbK.",
-		".KbbbbbbbbbbbbbbbbbbbbbbbbbbbbK.",
-		"..KKKKKKKKKKKBBBBBBKKKKKKKKKKK..",
-		"............KKKKKKKK............",
-		"............KKKKKKKK............",
-		"............KKKKKKKK............",
-		"............KKKKKKKK............",
-		"..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
-		".KkkkkkkkkkkKKKKKKKKkkkkkkkkkkK.",
-		".KkkkkkkkkkkkkkkkkkkkkkkkkkkkkK.",
-		"..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
-		"................................",
-	],
-	# STALL
-	[
-		"................................",
-		"................................",
-		"................................",
-		"................................",
-		"................................",
-		".......KKKKKKKKKKKKKKKKKK.......",
-		".....KKrrhhrrhhrrhhrrhhrrKK.....",
-		"....KrrhhrrhhrrhhrrhhrrhhrrK....",
-		"...KrrhhrrhhrrhhrrhhrrhhrrhhK...",
-		"..KrrhhrrhhrrhhrrhhrrhhrrhhrrK..",
-		"..KhhrrhhrrhhrrhhrrhhrrhhrrhhK..",
-		"..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
-		"...KbK....................KbK...",
-		"...KbK....................KbK...",
-		"...KbK.....ooo....yyy.....KbK...",
-		"...KbK....ooooo..yyyyy....KbK...",
-		"...KbKKKKKKKKKKKKKKKKKKKKKKbK...",
-		"...KBBBBBBBBBBBBBBBBBBBBBBBBK...",
-		"...KttttttttttttttttttttttttK...",
-		"...KBBBBBBBBBBBBBBBBBBBBBBBBK...",
-		"...KKbbKKKKKKKKKKKKKKKKKKbbKK...",
-		"....KbK..................KbK....",
-		"....KbK..................KbK....",
-		"....KKK..................KKK....",
-		"................................",
-		"................................",
-		"................................",
-		"................................",
-		"................................",
-		"................................",
-		"................................",
-		"................................",
-	],
 ]
 
 const PAL: Dictionary = {
@@ -1008,14 +906,22 @@ static func _paint(rows: Array, overrides: Array) -> Image:
 	return img
 
 
+# Rows for a kind: the base set lives in _ROWS, later kinds in
+# structure_rows_extra.gd.
+static func rows_of(kind: int) -> Array:
+	if kind < _ROWS.size():
+		return _ROWS[kind]
+	return ExtraRows.ROWS[kind - ExtraRows.BASE_COUNT]
+
+
 static func kind_image(kind: int) -> Image:
-	return _paint(_ROWS[kind], [])
+	return _paint(rows_of(kind), [])
 
 
 static func build_variant_image(kind: int, phase: int) -> Image:
 	if phase % 2 == 0 or not is_animated(kind):
 		return kind_image(kind)
-	return _paint(_ROWS[kind], _LIFT[kind])
+	return _paint(rows_of(kind), _LIFT[kind])
 
 
 static func build_variant(kind: int, phase: int) -> ImageTexture:
@@ -1028,7 +934,7 @@ static func build_variant(kind: int, phase: int) -> ImageTexture:
 # scriptorium, banners.
 static func era_of(kind: int) -> int:
 	match kind:
-		TENT, WINDBREAK, HEARTH:
+		TENT, TENT_B, WINDBREAK, HEARTH:
 			return 0
 		HUT, HUT_B, HUT_C, FENCE_H, FENCE_V, FIELD, GRANARY, WELL, RUIN_BURNT, STALL:
 			return 1

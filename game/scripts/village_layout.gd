@@ -36,7 +36,10 @@ enum {
 	HUT_B,
 	HUT_C,
 	STALL,
+	TENT_B,
 }
+# The two tent silhouettes an era-0 dwelling cell may take.
+const TENT_KINDS: PackedInt32Array = [TENT, TENT_B]
 # The three hut silhouettes an era-1 dwelling cell may take.
 const HUT_KINDS: PackedInt32Array = [HUT, HUT_B, HUT_C]
 
@@ -239,7 +242,10 @@ static func plan(
 		while placed < count and i < lattice_cells.size():
 			var c: Vector2i = lattice_cells[i]
 			i += 1
-			if _place(c, TENT, _flip_bit(sid, c), occupied, anchor, is_water, out):
+			var tk: int = TENT_KINDS[
+				int(hash2(sid * 5 + 2, c.x, c.y) * TENT_KINDS.size()) % TENT_KINDS.size()
+			]
+			if _place(c, tk, _flip_bit(sid, c), occupied, anchor, is_water, out):
 				placed += 1
 		if members >= 16:
 			_place_first_free(spiral_cells, WINDBREAK, occupied, anchor, is_water, out, true)
@@ -341,7 +347,7 @@ static func plan(
 		var burnable: Array = []
 		for idx in out.size():
 			var kind: int = out[idx]["kind"]
-			if kind == TENT or HUT_KINDS.has(kind):
+			if TENT_KINDS.has(kind) or HUT_KINDS.has(kind):
 				var c: Vector2i = out[idx]["cell"]
 				burnable.append([hash2(sid * 7 + 3, c.x, c.y), idx])
 		burnable.sort_custom(func(a, b): return a[0] < b[0])

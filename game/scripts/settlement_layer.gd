@@ -337,6 +337,7 @@ static func _smoke_rank(kind: int) -> int:
 # the hearth); fences, fields and walls keep the ground they are on.
 const _YARD_KINDS: PackedInt32Array = [
 	StructureSprites.TENT,
+	StructureSprites.TENT_B,
 	StructureSprites.HUT,
 	StructureSprites.HUT_B,
 	StructureSprites.HUT_C,

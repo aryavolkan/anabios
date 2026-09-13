@@ -112,7 +112,13 @@ func _init() -> void:
 	_check(_count_kind(camp, L.HEARTH) == 1, "era 0 has exactly one hearth")
 	_check(_count_kind(camp, L.HUT) == 0, "era 0 places no huts")
 	_check(
-		_count_kind(camp, L.TENT) == clampi(1 + 10 / 8, 1, 6), "era 0 tent count matches formula"
+		_count_kind(camp, L.TENT) + _count_kind(camp, L.TENT_B) == clampi(1 + 10 / 8, 1, 6),
+		"era 0 tent count matches formula"
+	)
+	var big_camp := L.plan(12, Vector2.ZERO, 60, 0, 0, no_water)
+	_check(
+		_count_kind(big_camp, L.TENT) > 0 and _count_kind(big_camp, L.TENT_B) > 0,
+		"a large camp mixes tents and yurts"
 	)
 
 	# --- era 1, farming, members 30: >= 2 fields, fully fenced ---
