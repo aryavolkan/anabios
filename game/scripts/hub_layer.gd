@@ -26,8 +26,8 @@ const REDRAW_EVERY := 30
 const SQUARE_SCALE := 72.0
 # Square image size: a texel per half world unit, like the ground tiles.
 const SQUARE_PX := 144
-const STALL_SCALE := 16.0
-const STALL_RADIUS := 22.0
+const STALL_SCALE := 20.0
+const STALL_RADIUS := 26.0
 const STALL_COUNT := 3
 
 var _market_mmi: MultiMeshInstance2D

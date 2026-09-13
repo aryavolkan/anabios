@@ -18,15 +18,18 @@ const PixelFxSprites = preload("res://scripts/pixel_fx_sprites.gd")
 # and its per-kind sprite atlas. Preloaded by path so this file keeps
 # compiling against the agreed contract even before those files land.
 const StructureSprites = preload("res://scripts/structure_sprites.gd")
+const StructureTall = preload("res://scripts/structure_tall.gd")
 const SpriteSplit = preload("res://scripts/sprite_split.gd")
 const VillageLayout = preload("res://scripts/village_layout.gd")
 const Clearings = preload("res://scripts/clearings.gd")
 
 const REDRAW_EVERY := 20
-# Structure sprites are 32px, drawn at half scale (D1: huts/structures span 16
+# Structure sprites are 32px, drawn at 0.625 scale (huts/structures span 20
 # world units) — deliberately oversized next to agents (BODY_MIN ~6) so a
 # village reads as architecture, not as a few more creatures.
-const STRUCTURE_SCALE := 0.5
+const STRUCTURE_SCALE := 0.625
+# Height over width of a tall (walled) structure's quad: TALL_PX / CELL_PX.
+const TALL_RATIO := float(StructureTall.TALL_PX) / float(StructureSprites.CELL_PX)
 # Sites closer than this (world units) share one village footprint.
 const MERGE_RADIUS := 48.0
 # Clearing margin around the outermost structure centre (world units): half
@@ -35,7 +38,7 @@ const CLEARING_MARGIN := 14.0
 const MEMBERS_BUCKET := 6
 # Landmark/trade buildings sit a notch bigger than huts so a village's
 # invention history and trade role read at a glance from the ring around it.
-const BUILDING_SCALE := 16.0
+const BUILDING_SCALE := 20.0
 const LANDMARK2_MIN_MEMBERS := 32
 # Invention landmarks are anchored to the SPECIES that hold inventions, not to
 # settlements: in organic runs the settling lineages are asocial foragers with
@@ -174,12 +177,13 @@ func _ready() -> void:
 	# figure south of a hut stands in front of it and one north of it is
 	# hidden behind the roof.
 	for k in StructureSprites.KIND_COUNT:
-		var img0: Image = StructureSprites.build_variant_image(k, 0)
+		# Walled kinds draw their 32x44 tall variant (StructureTall.TALL_ROWS).
+		var img0: Image = StructureTall.tall_image(k, 0)
 		if k == StructureSprites.FIELD:
 			_structure_mmis.append(_make_layer("Structure_%d" % k, SpriteSplit.for_quad(img0), -6))
 			_structure_top_mmis.append(null)
 			continue
-		var row: int = SpriteSplit.split_row(img0)
+		var row: int = StructureTall.tall_split_row(k)
 		var base_tex := SpriteSplit.for_quad(SpriteSplit.lower(img0, row))
 		var top_tex := SpriteSplit.for_quad(SpriteSplit.upper(img0, row))
 		var smmi := _make_layer("Structure_%d" % k, base_tex, -1)
@@ -193,7 +197,7 @@ func _ready() -> void:
 		add_child(top)
 		_structure_top_mmis.append(top)
 		if StructureSprites.is_animated(k):
-			var img1: Image = StructureSprites.build_variant_image(k, 1)
+			var img1: Image = StructureTall.tall_image(k, 1)
 			_building_frames["s%d" % k] = [
 				base_tex, SpriteSplit.for_quad(SpriteSplit.lower(img1, row))
 			]
@@ -584,7 +588,12 @@ func _redraw() -> void:
 			var pop: float = FxMath.pop_scale((_now - born) / POP_SECS)
 			var s: float = base_scale * pop
 			var sx: float = -s if flip else s
-			struct_xf[kind].append(Transform2D(0.0, Vector2(sx, s), 0.0, ppos))
+			# A tall kind's quad is half again as high, its base kept on the
+			# footprint, so the extra wall rises up-screen.
+			var tall: bool = StructureTall.is_tall(kind)
+			var sy: float = s * TALL_RATIO if tall else s
+			var spos: Vector2 = ppos - Vector2(0.0, (sy - s) * 0.5)
+			struct_xf[kind].append(Transform2D(0.0, Vector2(sx, sy), 0.0, spos))
 			# Each structure takes its own small tone swing from its cell, so
 			# a row of huts or a block of fields is not one sprite stamped
 			# over and over (the boards' roofs and crops vary hut to hut).
@@ -610,7 +619,7 @@ func _redraw() -> void:
 			var rank: int = _smoke_rank(kind)
 			if rank >= 0 and rank < smoke_rank:
 				smoke_rank = rank
-				smoke_pos = ppos + Vector2(0.0, -8.0)
+				smoke_pos = ppos + Vector2(0.0, -16.0 if StructureTall.is_tall(kind) else -8.0)
 			if kind == StructureSprites.RUIN_BURNT:
 				if first_seen and _effects != null:
 					_effects.spawn_embers(ppos)

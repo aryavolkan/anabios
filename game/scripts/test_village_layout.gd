@@ -212,7 +212,7 @@ func _init() -> void:
 	_check(_count_kind(war, L.PALISADE_CORNER) == 4, "war village has all four palisade corners")
 
 	# --- MILL: appears only when a water-adjacent land cell exists in range ---
-	var river := func(pos: Vector2) -> bool: return pos.x >= 48.0 and pos.x < 64.0
+	var river := func(pos: Vector2) -> bool: return pos.x >= 3.0 * L.GRID and pos.x < 4.0 * L.GRID
 	var milled := L.plan(9, Vector2.ZERO, 5, 2, L.FLAG_MACHINERY, river)
 	_check(_count_kind(milled, L.MILL) == 1, "machinery + nearby water places one mill")
 	var mill_pos := Vector2.ZERO
@@ -222,7 +222,7 @@ func _init() -> void:
 	# The bank column is x = 2 (the river fills column 3); the hut lattice
 	# takes (2, 0), so the mill lands on the nearest free bank cell beside it.
 	_check(
-		mill_pos.x == 32.0 and absf(mill_pos.y) <= 16.0,
+		mill_pos.x == 2.0 * L.GRID and absf(mill_pos.y) <= L.GRID,
 		"mill sits on the nearest free water-adjacent land cell (got %s)" % mill_pos
 	)
 	var dry := L.plan(9, Vector2.ZERO, 5, 2, L.FLAG_MACHINERY, no_water)

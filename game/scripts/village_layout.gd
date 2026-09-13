@@ -4,7 +4,7 @@ extends RefCounted
 #
 # Pure logic, no scene/node state: plan() maps (settlement id, anchor, member
 # count, era, event flags, a water predicate) to a placement list on the
-# local GRID (16 world units per cell — D1's structure-tile size). Nothing
+# local GRID (20 world units per cell, a structure tile). Nothing
 # here reads or writes sim state; the same inputs always produce the same
 # output, so replay stays bit-identical (D7, D8).
 #
@@ -49,8 +49,8 @@ const HUT_KINDS: PackedInt32Array = [HUT, HUT_B, HUT_C]
 const HOUSE_KINDS: PackedInt32Array = [HOUSE, HOUSE, HUT_C]
 
 # One structure occupies one grid cell of GRID world units (a 32 px sprite at
-# 0.5 world units per texel, per D1).
-const GRID := 16.0
+# 0.625 world units per texel; the 2.5D tall variants stand 27.5 high).
+const GRID := 20.0
 
 # Recent-codex-event / held-invention flags, OR'd into `flags`.
 const FLAG_TERRITORY := 1

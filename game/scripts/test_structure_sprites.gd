@@ -4,7 +4,9 @@ extends SceneTree
 #     -s res://scripts/test_structure_sprites.gd
 # Exits 0 on success, 1 on the first failed assertion.
 
+const SpriteSplit = preload("res://scripts/sprite_split.gd")
 const S = preload("res://scripts/structure_sprites.gd")
+const T = preload("res://scripts/structure_tall.gd")
 
 var _failed := false
 
@@ -152,6 +154,42 @@ func _init() -> void:
 		S.BANNER
 	]:
 		_check(S.era_of(k) == 2, "%s is era 2 (timber/stone)" % S.NAMES[k])
+
+	# --- tall variants: 32x44 for walled kinds, roof and base art intact ---
+	_check(T.TALL_PX == 44 and T.EXTRA_ROWS == 12, "tall cell is 32x44")
+	_check(
+		T.is_tall(S.HUT) and T.is_tall(S.HOUSE) and not T.is_tall(S.FENCE_H),
+		"walled kinds are tall"
+	)
+	var hut: Image = S.kind_image(S.HUT)
+	var tall: Image = T.tall_image(S.HUT)
+	_check(tall.get_width() == 32 and tall.get_height() == 44, "tall hut is 32x44")
+	var cut: int = SpriteSplit.split_row(hut)
+	_check(T.tall_split_row(S.HUT) == cut + T.EXTRA_ROWS, "tall split sits under the extruded wall")
+	var lift: int = T.EXTRA_ROWS - T.tall_rows(S.HUT)
+	var same := true
+	for y in cut:
+		for x in 32:
+			same = same and tall.get_pixel(x, y + lift) == hut.get_pixel(x, y)
+	for y in range(cut, 32):
+		for x in 32:
+			same = same and tall.get_pixel(x, y + T.EXTRA_ROWS) == hut.get_pixel(x, y)
+	_check(same, "the roof and the base rows are the 32 px art")
+	var band := true
+	for i in T.tall_rows(S.HUT):
+		for x in 32:
+			band = band and tall.get_pixel(x, cut + lift + i) == hut.get_pixel(x, cut - 1)
+	_check(band, "the extruded band repeats the row above the split")
+	var clear := true
+	for y in lift:
+		for x in 32:
+			clear = clear and tall.get_pixel(x, y).a == 0.0
+	_check(clear, "spare rows above a short extrusion stay clear")
+	_check(
+		T.tall_rows(S.TOWER) == T.EXTRA_ROWS and T.tall_rows(S.FENCE_H) == 0,
+		"tower uses the full band"
+	)
+	_check(T.tall_image(S.FENCE_H).get_height() == 32, "a flat kind stays 32x32")
 
 	if _failed:
 		quit(1)

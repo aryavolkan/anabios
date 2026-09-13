@@ -44,6 +44,8 @@ enum {
 	CATAPULT,
 }
 const KIND_COUNT := 26
+
+# Walled kinds also have a taller 2.5D variant, see structure_tall.gd.
 const ExtraRows = preload("res://scripts/structure_rows_extra.gd")
 const CELL_PX := 32
 const ATLAS_COLS := 8  # 8x8 grid of 32px cells = a square 256x256 atlas; cell index == kind

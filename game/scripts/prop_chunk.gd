@@ -32,7 +32,10 @@ var _mmis: Array = []
 # Canopy trees: one MultiMesh per FloraSprites kind, 32 px art at 0.5 world
 # units per texel (two biome cells), planned from a hash offset so trees and
 # the 16 px props never coincide, sorted by y so nearer trees overlap farther.
-const CANOPY_SCALE := 0.5
+# 0.7 world units per texel: a 32 px tree stands ~22 units, nearly two
+# figures (12) and a hut's roofline (24), the 3/4-view proportion of the
+# reference tilesets (a tree taller than the people under it).
+const CANOPY_SCALE := 0.7
 const CANOPY_HASH_OFFSET := 977
 var _canopy: Array = []
 
@@ -166,7 +169,12 @@ func build(
 			# cell) on the planned cell, so the canopy rises above it.
 			mm.set_instance_transform_2d(
 				i,
-				Transform2D(0.0, Vector2(CANOPY_SCALE, CANOPY_SCALE), 0.0, pos - Vector2(0.0, 5.0))
+				Transform2D(
+					0.0,
+					Vector2(CANOPY_SCALE, CANOPY_SCALE),
+					0.0,
+					pos - Vector2(0.0, 10.0 * CANOPY_SCALE)
+				)
 			)
 			mm.set_instance_color(i, tree_tint(pos))
 			i += 1
