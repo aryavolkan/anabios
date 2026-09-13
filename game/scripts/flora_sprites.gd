@@ -13,9 +13,19 @@ const CELL_PX := 32
 # Kinds 4 and 5 are rock outcrops: the same 32 px, y-sorted, split-layered
 # pipeline as the trees, planted on Rock terrain so mountains read as grey
 # crags rather than flat purple tiles (the reference boards' outcrops).
-enum { OAK, PINE, ACACIA, JUNGLE, BOULDERS, CRAG }
-const KIND_COUNT := 6
-const NAMES: PackedStringArray = ["Oak", "Pine", "Acacia", "Jungle", "Boulders", "Crag"]
+# Kinds 6..9 are variants of the oak, pine and jungle families (a broad
+# lobed oak, a tall narrow oak, a wide layered pine, a twin-crowned jungle
+# tree): the planner picks one per cell from the cell hash so a forest
+# mixes silhouettes instead of repeating one lollipop.
+enum { OAK, PINE, ACACIA, JUNGLE, BOULDERS, CRAG, OAK_B, OAK_C, PINE_B, JUNGLE_B }
+const KIND_COUNT := 10
+const NAMES: PackedStringArray = [
+	"Oak", "Pine", "Acacia", "Jungle", "Boulders", "Crag", "OakB", "OakC", "PineB", "JungleB"
+]
+# Kind -> family head (the kind kind_for_terrain() names for its terrain).
+const FAMILY: PackedInt32Array = [
+	OAK, PINE, ACACIA, JUNGLE, BOULDERS, BOULDERS, OAK, OAK, PINE, JUNGLE
+]
 
 # Terrain ids (biome.rs / terrain_sprites.gd): Water 0, Grass 1, Forest 2,
 # Desert 3, Rock 4, Savanna 5, Rainforest 6, Taiga 7, Tundra 8.
@@ -257,6 +267,146 @@ const _ROWS := {
 		"................................",
 		"................................",
 	],
+	OAK_B:
+	[
+		"................................",
+		"................................",
+		"................................",
+		"..........kkkk......kkk.........",
+		"........kkddddkk..kkdddkk.......",
+		".......kdgglllgdkkdgllggdk......",
+		"......kdgglllllgddggllgggdk.....",
+		".....kdggglllllggggglllgggdk....",
+		"....kdgggglllllgggggllgggggdk...",
+		"....kdggggglllgggggggggggggdk...",
+		"...kdgggggggggggggggggggggggdk..",
+		"..kdgggllgggggggggggggglllggggdk",
+		"..kdgglllgggggggggggggglllggggdk",
+		"..kdggglllggggggggggggggllgggddk",
+		"..kddggggggggggggggggggggggggddk",
+		"...kddgggggggggggggggggggggdddk.",
+		"...kdddggggggggggggggggggggdddk.",
+		"....kddddgggggggggggggggddddk...",
+		".....kdddddddggggggddddddddk....",
+		"......kkkdddddddddddddddkkk.....",
+		".........kkkddddddddkkk.........",
+		"............kkTTtTkk............",
+		"..............kTttTk............",
+		"..............kTttTk............",
+		".............kTTtttTk...........",
+		"............kTTTtttTTk..........",
+		"...........kkkkkkkkkkkk.........",
+		"........ssssssssssssssssss......",
+		"......ssssssssssssssssssssss....",
+		"........ssssssssssssssssss......",
+		"................................",
+		"................................",
+	],
+	OAK_C:
+	[
+		"................................",
+		".............kkkk...............",
+		"...........kkddddkk.............",
+		"..........kdgglllgdk............",
+		".........kdggllllggdk...........",
+		"........kdgglllllgggdk..........",
+		"........kdgggllllggggdk.........",
+		".......kdgggglllggggggdk........",
+		".......kdggggggggggggggdk.......",
+		".......kdggglllgggggggggdk......",
+		".......kdgglllggggggggggdk......",
+		".......kddggllgggggggggddk......",
+		"........kddgggggggggggddk.......",
+		"........kdddgggggggggdddk.......",
+		".........kddddgggggddddk........",
+		"..........kkdddddddddkk.........",
+		"............kkkdddkkk...........",
+		"..............kTtTk.............",
+		"..............kTtTk.............",
+		"..............kTtTk.............",
+		"..............kTtTk.............",
+		"..............kTttk.............",
+		"..............kTttk.............",
+		".............kTTttTk............",
+		"............kTTTttTTk...........",
+		"...........kkkkkkkkkkk..........",
+		".........ssssssssssssss.........",
+		".......ssssssssssssssssss.......",
+		".........ssssssssssssss.........",
+		"................................",
+		"................................",
+		"................................",
+	],
+	PINE_B:
+	[
+		"................................",
+		"................................",
+		"...............kk...............",
+		"..............kPPk..............",
+		"..............kPpk..............",
+		".............kPppDk.............",
+		"............kPPppDDk............",
+		"...........kPPpppDDDk...........",
+		"..........kkPppppDDDkk..........",
+		"............kPpppDDk............",
+		"...........kPPppppDDk...........",
+		"..........kPPpppppDDDk..........",
+		".........kPPppppppDDDDk.........",
+		"........kPPPpppppppDDDDk........",
+		".......kkkkPpppppppDDDkkkk......",
+		"..........kPPpppppDDDDk.........",
+		".........kPPppppppDDDDDk........",
+		"........kPPPppppppppDDDDk.......",
+		".......kPPPppppppppppDDDDk......",
+		"......kPPPpppppppppppDDDDDk.....",
+		".....kkkkkPpppppppppDDDDkkkkk...",
+		"........kPPpppppppppDDDDDk......",
+		".......kPPPppppppppppDDDDDk.....",
+		"......kPPPpppppppppppppDDDDk....",
+		".....kkkkkkkkkkTttTkkkkkkkkkk...",
+		"..............kTttTk............",
+		".............kTTttTTk...........",
+		"............kkkkkkkkkk..........",
+		"..........ssssssssssssss........",
+		"........ssssssssssssssssss......",
+		"..........ssssssssssssss........",
+		"................................",
+	],
+	JUNGLE_B:
+	[
+		"................................",
+		"................................",
+		".......kkk..........kkk.........",
+		"......kLLLk..kkkk..kLLLk........",
+		".....kLJJJLkkLLLLkkLJJJLk.......",
+		"....kLJjjjJLkLJJLkLJjjjJLk......",
+		"....kJjjjjjJLJjjJLJjjjjjJk......",
+		"...kLJjjjjjjJjjjjJjjjjjjJLk.....",
+		"...kJjjjjjjjjjjjjjjjjjjjjJk.....",
+		"...kJjjjjjjjjjjjjjjjjjjjjjk.....",
+		"....kJjjjjjjjjjjjjjjjjjjjJk.....",
+		"....kkJjjjjjjjjjjjjjjjjjJkk.....",
+		"......kkJjjjjjjjjjjjjjJkk.......",
+		"........kkjjjjjjjjjjjkk.........",
+		"..........kkkjjjjjkkk...........",
+		".............kkTtTkk............",
+		"..............kTtTk.............",
+		"..............kTtTk.............",
+		"..............kTtTk.............",
+		"..............kTtTk.............",
+		"..............kTtTk.............",
+		".............kTTtTTk............",
+		"............kTTTtTTTk...........",
+		"...........kkkkkkkkkkk..........",
+		".........ssssssssssssss.........",
+		".......ssssssssssssssssss.......",
+		".........ssssssssssssss.........",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+	],
 }
 
 static var _cache: Dictionary = {}
@@ -268,12 +418,26 @@ static func kind_for_terrain(terrain: int) -> int:
 	return _TERRAIN_KIND[terrain]
 
 
-# Per-cell variety within a family: the rock family alternates boulder
-# clusters and crags on the planner's cell hash. Trees keep one kind each.
+# Per-cell variety within a family on the planner's cell hash: the rock
+# family alternates boulder clusters and crags, oaks split three ways,
+# pines and jungle trees two ways.
 static func variant_for(kind: int, h: float) -> int:
-	if kind == BOULDERS and fposmod(h * 977.0, 1.0) < 0.4:
-		return CRAG
+	var v := fposmod(h * 977.0, 1.0)
+	match kind:
+		BOULDERS:
+			return CRAG if v < 0.4 else BOULDERS
+		OAK:
+			return OAK if v < 0.4 else (OAK_B if v < 0.72 else OAK_C)
+		PINE:
+			return PINE if v < 0.55 else PINE_B
+		JUNGLE:
+			return JUNGLE if v < 0.5 else JUNGLE_B
 	return kind
+
+
+# The family head of a kind (OAK for every oak variant, ...).
+static func family_of(kind: int) -> int:
+	return FAMILY[kind] if kind >= 0 and kind < FAMILY.size() else kind
 
 
 static func kind_image(kind: int) -> Image:

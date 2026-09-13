@@ -79,7 +79,15 @@ func _init() -> void:
 	_check(Flora.kind_for_terrain(2) == Flora.OAK, "forest grows oaks")
 	_check(Flora.kind_for_terrain(7) == Flora.PINE, "taiga grows pines")
 	_check(Flora.kind_for_terrain(4) == Flora.BOULDERS, "rock terrain grows outcrops")
-	_check(Flora.variant_for(Flora.OAK, 0.1) == Flora.OAK, "trees keep their kind")
+	_check(Flora.FAMILY.size() == Flora.KIND_COUNT, "one family per kind")
+	var seen := {}
+	for i in 100:
+		var v: int = Flora.variant_for(Flora.OAK, float(i) / 100.0)
+		_check(Flora.family_of(v) == Flora.OAK, "oak variants stay oaks")
+		seen[v] = true
+	_check(seen.size() == 3, "oak cells split across the three oak silhouettes")
+	_check(Flora.family_of(Flora.PINE_B) == Flora.PINE, "the wide pine is a pine")
+	_check(Flora.family_of(Flora.CRAG) == Flora.BOULDERS, "a crag is an outcrop")
 	var crags := 0
 	for i in 100:
 		if Flora.variant_for(Flora.BOULDERS, float(i) / 100.0) == Flora.CRAG:
@@ -95,11 +103,16 @@ func _init() -> void:
 	var trees: Array = PropChunk.plan_canopy(0, 0, forest, res, 1024.0)
 	_check(trees.size() == Flora.KIND_COUNT, "one bucket per kind")
 	var oaks: PackedVector2Array = trees[Flora.OAK]
+	var oak_family := 0
+	for k in Flora.KIND_COUNT:
+		if Flora.family_of(k) == Flora.OAK:
+			oak_family += (trees[k] as PackedVector2Array).size()
 	var expected := int(64 * 64 * Flora.DENSITY[2])
 	_check(
-		oaks.size() > expected / 2 and oaks.size() < expected * 2,
-		"forest chunk grows about %d oaks (got %d)" % [expected, oaks.size()]
+		oak_family > expected / 2 and oak_family < expected * 2,
+		"forest chunk grows about %d oaks (got %d)" % [expected, oak_family]
 	)
+	_check(oaks.size() > 0 and oaks.size() < oak_family, "a forest mixes oak silhouettes")
 	var sorted := true
 	for i in range(1, oaks.size()):
 		if oaks[i].y < oaks[i - 1].y:
