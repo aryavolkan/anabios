@@ -36,6 +36,15 @@ var _cart_mmi: MultiMeshInstance2D
 # caravan routes read as the boards' worn tracks between settlements
 # instead of a dashed line. Built once with the route network.
 var _road_mmi: MultiMeshInstance2D
+# Plank bridges where a road crosses a narrow water (a run of at most
+# BRIDGE_MAX_STEPS water steps with land either side, a river or a strait);
+# wider water still ends the road at the shore.
+var _bridge_mmi: MultiMeshInstance2D
+const BRIDGE_MAX_STEPS := 2
+# Land steps the road must run on either side of a crossing: a bridge over
+# the corner of a bay that leads straight into open water is no bridge.
+const BRIDGE_LAND_STEPS := 3
+const BRIDGE_SCALE := 12.0
 const ROAD_STEP := 6.0
 const ROAD_SCALE := 9.0
 const ROAD_WANDER := 1.5
@@ -56,6 +65,7 @@ func _ready() -> void:
 		"Caravan_Road", SpriteSplit.for_quad(SettlementLayer.yard_image()), SettlementLayer.YARD_Z
 	)
 	_road_mmi.modulate = Color(1, 1, 1, ROAD_ALPHA)
+	_bridge_mmi = _make_layer("Caravan_Bridge", Buildings.build_bridge(), -1)
 	_cart_mmi = _make_layer("Caravan_Cart", Buildings.build_cart(), 2)
 	for g in Buildings.GOOD_COUNT:
 		_good_mmis.append(_make_layer("Caravan_Good_%d" % g, Buildings.build_good(g), 3))
@@ -78,7 +88,7 @@ func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2
 
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
-	for src in [_road_mmi, _cart_mmi] + _good_mmis:
+	for src in [_road_mmi, _bridge_mmi, _cart_mmi] + _good_mmis:
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
 				if gx == 0 and gy == 0:
@@ -135,12 +145,22 @@ func _build_routes() -> void:
 func _lay_roads() -> void:
 	var is_water := Callable(_biome, "is_water_at") if _biome != null else Callable()
 	var xfs: Array = []
+	var bridge_xfs: Array = []
 	var strips: Array[PackedVector2Array] = []
 	for r in _routes:
-		for p in road_steps(r["pa"], r["pb"], ROAD_STEP, is_water):
+		var pa: Vector2 = r["pa"]
+		var pb: Vector2 = r["pb"]
+		var plan: Dictionary = road_plan(pa, pb, ROAD_STEP, is_water)
+		for p in plan["road"]:
 			xfs.append(Transform2D(0.0, Vector2(ROAD_SCALE, ROAD_SCALE * 0.8), 0.0, p))
-		strips.append(PackedVector2Array([r["pa"], r["pb"]]))
+		# Snapped to eighth turns: a plank deck at an arbitrary angle is a
+		# jagged diagonal, at 45-degree steps it stays pixel-art.
+		var ang: float = round((pb - pa).angle() / (PI * 0.25)) * (PI * 0.25)
+		for p in plan["bridge"]:
+			bridge_xfs.append(Transform2D(ang, Vector2(BRIDGE_SCALE, BRIDGE_SCALE), 0.0, p))
+		strips.append(PackedVector2Array([pa, pb]))
 	_write(_road_mmi.multimesh, xfs)
+	_write(_bridge_mmi.multimesh, bridge_xfs)
 	# The scatter keeps off the road (trees stood in the middle of it).
 	Clearings.publish_segments("roads", strips)
 
@@ -151,21 +171,53 @@ func _lay_roads() -> void:
 static func road_steps(
 	pa: Vector2, pb: Vector2, step: float, is_water: Callable
 ) -> PackedVector2Array:
-	var out := PackedVector2Array()
+	return road_plan(pa, pb, step, is_water)["road"]
+
+
+# The road's patches ("road") and, on the line itself with no wander, the
+# bridge steps ("bridge"): water steps in a run of at most BRIDGE_MAX_STEPS
+# with land steps on both sides. Longer water runs are left bare.
+static func road_plan(pa: Vector2, pb: Vector2, step: float, is_water: Callable) -> Dictionary:
+	var road := PackedVector2Array()
+	var bridge := PackedVector2Array()
 	var d := pb - pa
 	var len := d.length()
 	if len < step or step <= 0.0:
-		return out
-	var dir := d / len
-	var side := Vector2(-dir.y, dir.x)
+		return {"road": road, "bridge": bridge}
+	var unit := d / len
+	var side := Vector2(-unit.y, unit.x)
 	var n := int(len / step)
-	for i in range(1, n):
-		var h := fposmod(sin(float(i) * 12.9898 + pa.x * 0.37 + pa.y * 0.73) * 43758.5453, 1.0)
-		var p := pa + dir * (step * i) + side * ((h - 0.5) * 2.0 * ROAD_WANDER)
-		if is_water.is_valid() and bool(is_water.call(p)):
+	var wet: Array[bool] = []
+	var line := PackedVector2Array()
+	var worn := PackedVector2Array()
+	for s in range(1, n):
+		var h := fposmod(sin(float(s) * 12.9898 + pa.x * 0.37 + pa.y * 0.73) * 43758.5453, 1.0)
+		var on_line := pa + unit * (step * s)
+		line.append(on_line)
+		worn.append(on_line + side * ((h - 0.5) * 2.0 * ROAD_WANDER))
+		wet.append(is_water.is_valid() and bool(is_water.call(on_line)))
+	var i := 0
+	while i < wet.size():
+		if not wet[i]:
+			road.append(worn[i])
+			i += 1
 			continue
-		out.append(p)
-	return out
+		var j := i
+		while j < wet.size() and wet[j]:
+			j += 1
+		# The wet run is [i, j): bridge it when short and flanked by a real
+		# stretch of road on both sides.
+		var before := 0
+		while i - 1 - before >= 0 and not wet[i - 1 - before]:
+			before += 1
+		var after := 0
+		while j + after < wet.size() and not wet[j + after]:
+			after += 1
+		if j - i <= BRIDGE_MAX_STEPS and before >= BRIDGE_LAND_STEPS and after >= BRIDGE_LAND_STEPS:
+			for k in range(i, j):
+				bridge.append(line[k])
+		i = j
+	return {"road": road, "bridge": bridge}
 
 
 # The route's endpoints pulled in by `margin` from each hub centre (the

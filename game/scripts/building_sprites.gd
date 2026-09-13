@@ -617,6 +617,30 @@ const _CART_BLOCKS: Array = [
 	[5, 9, 6, 1, "d"],  # axle shadow
 ]
 
+# 16x16 plank bridge, drawn along +x (the caravan layer rotates it onto the
+# road): dark planks with lit seams and a rail along each edge.
+const _BRIDGE_BLOCKS: Array = [
+	[0, 4, 16, 8, "b"],  # deck
+	[0, 5, 16, 1, "t"],  # lit seam
+	[0, 8, 16, 1, "t"],
+	[0, 11, 16, 1, "t"],
+	[0, 3, 16, 1, "K"],  # near rail
+	[0, 12, 16, 1, "K"],  # far rail
+	[3, 4, 1, 8, "d"],  # plank joints
+	[8, 4, 1, 8, "d"],
+	[13, 4, 1, 8, "d"],
+]
+
+
+static func build_bridge_image() -> Image:
+	var img: Image = ApeSprites._build_cell(_BRIDGE_BLOCKS)
+	img.flip_y()
+	return img
+
+
+static func build_bridge() -> ImageTexture:
+	return ImageTexture.create_from_image(build_bridge_image())
+
 
 static func build_cart_image() -> Image:
 	var img: Image = ApeSprites._build_cell(_CART_BLOCKS)

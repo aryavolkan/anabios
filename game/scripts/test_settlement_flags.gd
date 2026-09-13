@@ -62,6 +62,28 @@ func _init() -> void:
 	_check(
 		CaravanLayer.road_steps(Vector2.ZERO, Vector2(3, 0), 6.0, Callable()).is_empty(), "no road"
 	)
+	# A narrow crossing (one or two water steps with land either side) gets
+	# a bridge on the line; the wide lake above stays bare.
+	var river := func(p: Vector2) -> bool: return p.x > 27.0 and p.x < 33.0
+	var crossing: Dictionary = CaravanLayer.road_plan(Vector2(0, 0), Vector2(60, 0), 6.0, river)
+	_check((crossing["bridge"] as PackedVector2Array).size() == 1, "one bridge step over the river")
+	_check(
+		(crossing["bridge"] as PackedVector2Array)[0] == Vector2(30, 0), "bridge sits on the line"
+	)
+	_check((crossing["road"] as PackedVector2Array).size() == 8, "road patches flank the bridge")
+	var lake: Dictionary = CaravanLayer.road_plan(Vector2(0, 0), Vector2(60, 0), 6.0, wet)
+	_check((lake["bridge"] as PackedVector2Array).is_empty(), "a wide water is not bridged")
+	var bay := func(p: Vector2) -> bool: return p.x > 45.0 and p.x < 51.0
+	var corner: Dictionary = CaravanLayer.road_plan(Vector2(0, 0), Vector2(60, 0), 6.0, bay)
+	_check(
+		(corner["bridge"] as PackedVector2Array).is_empty(),
+		"a crossing with no road beyond it is not bridged"
+	)
+	var shore := func(p: Vector2) -> bool: return p.x < 9.0
+	var edge: Dictionary = CaravanLayer.road_plan(Vector2(0, 0), Vector2(60, 0), 6.0, shore)
+	_check(
+		(edge["bridge"] as PackedVector2Array).is_empty(), "water at the road's end is not bridged"
+	)
 	# --- dirt yards: a 32 px earth patch, solid centre, clear corners ---
 	var yard: Image = SettlementLayer.yard_image()
 	_check(yard.get_width() == 32 and yard.get_height() == 32, "yard patch is 32x32")
