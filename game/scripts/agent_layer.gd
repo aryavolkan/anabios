@@ -37,8 +37,12 @@ const BODY_SCALE: float = 8.5
 # Body ceiling in world units: a structure cell is 16, and a figure taller
 # than the hut it stands beside breaks the scale the reference boards keep.
 const BODY_CAP: float = 16.0
-# Close-zoom crowd cap (see refresh): one drawn figure per CROWD_CELL world
-# units once the camera zoom reaches CROWD_ZOOM.
+# Close-zoom crowd cap (see refresh): one drawn figure per crowd cell once
+# the camera zoom reaches CROWD_ZOOM. The cell is CROWD_CELL world units at
+# CROWD_ZOOM and grows with the square root of the zoom (17 at 4x, 24 at
+# 8x): the closer the view, the more room each figure needs before a herd
+# at the square stops reading as a heap. Odd rows are staggered by half a
+# cell so the survivors do not line up on a grid.
 const CROWD_ZOOM := 2.0
 const CROWD_CELL := 12.0
 const BODY_MIN: float = 6.0
@@ -282,6 +286,20 @@ static func merge_prev(
 # user-selected sim speed the smoothing rate scales with) — main.gd already
 # computes both for its own shader-parameter loop, so refresh() reuses them
 # instead of keeping a second copy in sync.
+
+
+# Crowd cell edge (world units) for a camera zoom at or beyond CROWD_ZOOM.
+static func crowd_cell_for(zoom: float) -> float:
+	return CROWD_CELL * sqrt(maxf(zoom, CROWD_ZOOM) / CROWD_ZOOM)
+
+
+# Staggered crowd-cell key: odd rows shift by half a cell.
+static func crowd_key(pos: Vector2, cell: float) -> Vector2i:
+	var row := int(floor(pos.y / cell))
+	var xs: float = pos.x + (cell * 0.5 if (row & 1) == 1 else 0.0)
+	return Vector2i(int(floor(xs / cell)), row)
+
+
 func refresh(
 	delta: float,
 	animation_time: float,
@@ -473,6 +491,7 @@ func refresh(
 	# a crowd reads as a crowd. Presentation only: the sim, the visible-set
 	# report, bucket bookkeeping and the death ghosts are untouched.
 	var crowd_cap: bool = _cam != null and _cam.zoom.x >= CROWD_ZOOM
+	var crowd_cell: float = crowd_cell_for(_cam.zoom.x) if crowd_cap else CROWD_CELL
 	var crowd_occupied: Dictionary = {}
 	for i in n:
 		if visible_mask[i]:
@@ -485,7 +504,7 @@ func refresh(
 			var b := MammalSprites.bucket_of(arch, sp_ids[i]) if have_sp else 0
 			bucket_ix[i] = b
 			if crowd_cap:
-				var key := Vector2i((smooth[i] / CROWD_CELL).floor())
+				var key := crowd_key(smooth[i], crowd_cell)
 				if crowd_occupied.has(key):
 					continue
 				crowd_occupied[key] = true

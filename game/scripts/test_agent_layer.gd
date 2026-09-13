@@ -132,10 +132,36 @@ func _check_merge_prev() -> void:
 	_check(out_gap[1].is_equal_approx(Vector2(5, 5)), "id 5 still matches across a gap")
 
 
+func _check_crowd_cells() -> void:
+	# The crowd cell is CROWD_CELL at CROWD_ZOOM and grows with sqrt(zoom).
+	_check(
+		is_equal_approx(AgentLayer.crowd_cell_for(AgentLayer.CROWD_ZOOM), AgentLayer.CROWD_CELL),
+		"crowd cell is CROWD_CELL at CROWD_ZOOM"
+	)
+	var c4: float = AgentLayer.crowd_cell_for(4.0)
+	var c8: float = AgentLayer.crowd_cell_for(8.0)
+	_check(c4 > AgentLayer.CROWD_CELL and c8 > c4, "crowd cell grows with zoom")
+	_check(is_equal_approx(c8, c4 * sqrt(2.0)), "crowd cell grows with sqrt(zoom)")
+	_check(
+		is_equal_approx(AgentLayer.crowd_cell_for(1.0), AgentLayer.CROWD_CELL),
+		"below CROWD_ZOOM the cell does not shrink"
+	)
+	# Odd rows are staggered by half a cell: two figures the same distance
+	# apart share a cell on an even row and split on the odd row above.
+	var k_even_a := AgentLayer.crowd_key(Vector2(1.0, 1.0), 10.0)
+	var k_even_b := AgentLayer.crowd_key(Vector2(9.0, 1.0), 10.0)
+	_check(k_even_a == k_even_b, "same cell on an even row")
+	var k_odd_a := AgentLayer.crowd_key(Vector2(1.0, 11.0), 10.0)
+	var k_odd_b := AgentLayer.crowd_key(Vector2(9.0, 11.0), 10.0)
+	_check(k_odd_a != k_odd_b, "odd rows are staggered by half a cell")
+	_check(k_odd_a.y == 1 and k_even_a.y == 0, "row index is the plain cell row")
+
+
 func _init() -> void:
 	_check_view_rect()
 	_check_pos_in_rect()
 	_check_merge_prev()
+	_check_crowd_cells()
 
 	if _failed:
 		quit(1)
