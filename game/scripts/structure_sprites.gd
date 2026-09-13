@@ -803,13 +803,28 @@ const PAL: Dictionary = {
 	"e": "f4f4f4",
 }
 
-# --- animated kinds: hearth flame, forge glow, ember-lit ruin -------------
+# --- animated kinds: hearth flame, forge glow, ember-lit ruin, banner ------
 # Phase 1 pixel overrides ([x, y, key]) applied ON TOP of the base rows,
 # touching only flame/ember pixels -- walls, roofs, footprint, enum and
 # NAMES are exactly the base's, same discipline as
 # BuildingSprites._LIFT_BLOCKS (Fire/Metalworking).
-const ANIMATED_KINDS: PackedInt32Array = [HEARTH, FORGE, RUIN_BURNT]
+const ANIMATED_KINDS: PackedInt32Array = [HEARTH, FORGE, RUIN_BURNT, BANNER]
 const _LIFT: Dictionary = {
+	# Banner: the flag's free edge bellies out a pixel on its middle rows
+	# on the odd phase, so the gate banners flap instead of hanging stiff.
+	BANNER:
+	[
+		[27, 5, "S"],
+		[28, 5, "K"],
+		[27, 6, "S"],
+		[28, 6, "K"],
+		[27, 7, "S"],
+		[28, 7, "K"],
+		[27, 8, "S"],
+		[28, 8, "K"],
+		[27, 9, "K"],
+		[27, 4, "K"],
+	],
 	# Hearth: the flame tip climbs two rows (with its own outline cap and
 	# ring, tapering the same way the base art's tip does) and the existing
 	# tip turns white-hot; the wide base brightens from amber to yellow at

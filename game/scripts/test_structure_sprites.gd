@@ -101,7 +101,7 @@ func _init() -> void:
 	_check(S.is_animated(S.RUIN_BURNT), "burnt ruin animates")
 	_check(not S.is_animated(S.HUT), "hut stays static")
 	_check(not S.is_animated(S.TENT), "tent stays static")
-	_check(S.ANIMATED_KINDS.size() == 3, "exactly three animated kinds")
+	_check(S.ANIMATED_KINDS.size() == 4, "exactly four animated kinds")
 
 	for k in S.ANIMATED_KINDS:
 		var low: Image = S.build_variant(k, 0).get_image()
