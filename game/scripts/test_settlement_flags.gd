@@ -98,6 +98,22 @@ func _init() -> void:
 		square.get_pixel(72, 8).a == 0.0 and square.get_pixel(72, 24).a > 0.9, "square is flatter"
 	)
 	_check(SettlementLayer.yard_scale(VillageLayout.HUT) > 0.0, "huts stand on a yard")
+	# Per-structure tone: bounded, stable, and different across cells.
+	var tones := {}
+	for i in 20:
+		var sw: float = SettlementLayer.tone_swing(3, Vector2i(i, -i))
+		_check(
+			(
+				sw >= 1.0 - SettlementLayer.TONE_SWING - 0.001
+				and sw <= 1.0 + SettlementLayer.TONE_SWING + 0.001
+			),
+			"tone swing stays within its band"
+		)
+		tones[snappedf(sw, 0.001)] = true
+	_check(tones.size() >= 10, "tone swing varies across cells")
+	var sw_a: float = SettlementLayer.tone_swing(3, Vector2i(2, 2))
+	var sw_b: float = SettlementLayer.tone_swing(3, Vector2i(2, 2))
+	_check(sw_a == sw_b, "tone swing is stable")
 	var steps: PackedVector2Array = SettlementLayer.path_steps(Vector2.ZERO, Vector2(70, 0), 7.0)
 	_check(steps.size() == 7, "a 70-unit path gets seven 7-unit steps clear of both yards")
 	_check(

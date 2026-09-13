@@ -386,6 +386,14 @@ const _YARD_KINDS: PackedInt32Array = [
 	StructureSprites.RUIN_BURNT,
 ]
 
+# Brightness multiplier in [1 - TONE_SWING, 1 + TONE_SWING] for a
+# structure at `cell` of village `sid`, stable across redraws.
+const TONE_SWING := 0.06
+
+
+static func tone_swing(sid: int, cell: Vector2i) -> float:
+	return 1.0 + (VillageLayout.hash2(sid * 7 + 3, cell.x, cell.y) - 0.5) * 2.0 * TONE_SWING
+
 
 static func yard_scale(kind: int) -> float:
 	if kind == StructureSprites.HEARTH or kind == StructureSprites.HALL:
@@ -566,7 +574,11 @@ func _redraw() -> void:
 			var s: float = base_scale * pop
 			var sx: float = -s if flip else s
 			struct_xf[kind].append(Transform2D(0.0, Vector2(sx, s), 0.0, ppos))
-			struct_col[kind].append(tint)
+			# Each structure takes its own small tone swing from its cell, so
+			# a row of huts or a block of fields is not one sprite stamped
+			# over and over (the boards' roofs and crops vary hut to hut).
+			var swing: float = tone_swing(sid, cell)
+			struct_col[kind].append(Color(tint.r * swing, tint.g * swing, tint.b * swing, tint.a))
 			var ys: float = yard_scale(kind)
 			if ys > 0.0:
 				shadow_xf.append(
