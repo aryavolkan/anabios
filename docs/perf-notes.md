@@ -90,18 +90,20 @@ ROADMAP sets for the Huge tier — that needs a real GPU.
 
 | metric | mean over 240 frames |
 |---|---|
-| fps | 3.55 |
-| frame_ms | 133.4 |
-| process_ms (sim + viewer) | 292.3 |
+| fps | 3.47 |
+| frame_ms | 133.3 |
+| process_ms (sim + viewer) | 296.0 |
 | alive | 2169 |
 | visible_agents | 2133 |
-| draw_calls | 271 |
-| primitives | 20 661 |
-| video_mem_mb | 29.9 |
+| draw_calls | 246 |
+| primitives | 18 994 |
+| video_mem_mb | 55.3 |
 | resident_chunks | 4 |
 
 What the row does say: the whole viewer frame is a few hundred draw calls
-with four resident 64-cell ground chunks and ~30 MB of textures, so the
+with four resident 64-cell ground chunks and ~55 MB of textures (the
+combined hero atlas and the 144 px market square are the growth since the
+first reading; draw calls fell with the single body MultiMesh), so the
 GPU-side cost is small; the software rasteriser dominates here, and the sim
 step (2.2k agents at 1×) is the other half of `process_ms`. The per-agent
 GDScript work is now Dictionary-free (`anim_state.gd` slots, visible-set
