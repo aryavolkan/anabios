@@ -770,7 +770,7 @@ func _draw_culture() -> void:
 		page.draw_string(
 			_font,
 			Vector2(222, y + 14),
-			"%.2f" % v,
+			"%.2f" % (0.0 if absf(v) < 0.005 else v),  # no "-0.00" for a tiny negative mean
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1,
 			11,
