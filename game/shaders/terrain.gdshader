@@ -444,7 +444,8 @@ void fragment() {
 			// cover is thresholded per ground texel against a stable hash,
 			// so its edge is a stipple of snow pixels (the boards' peaks)
 			// rather than a soft white haze over the whole outcrop.
-			float snow = smoothstep(0.82, 0.95, es);
+			// A narrow band: a wide one dithered half an outcrop into a screen door at 8x.
+			float snow = smoothstep(0.87, 0.94, es);
 			vec2 stex = floor(world_pos / max(texel_w, 1e-4));
 			float snow_px = step(bayer4(stex), snow);
 			outc = mix(outc, vec3(0.90, 0.93, 0.97), snow_px * 0.9);
