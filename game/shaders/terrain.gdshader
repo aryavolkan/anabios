@@ -369,6 +369,11 @@ void fragment() {
 		float lip = step(1.0 - cliff_band, fc.y) * (1.0 - step(1.0 - cliff_band + 0.08, fc.y));
 		outc = mix(outc, cliff, face * cliff_strength);
 		outc = mix(outc, outc * 1.35 + 0.08, face * lip * cliff_strength);
+		// Bank face: land standing a level above the water south of it wears
+		// the face whatever the step, so a plateau shore reads as a bank
+		// (the beach band from the coast tile still lands on top of it).
+		float bank = step(0.5, lv - lvD) * (water_cell(cell0 + vec2(0.0, 1.0), cD) ? 1.0 : 0.0);
+		outc = mix(outc, cliff, bank * step(1.0 - cliff_band, fc.y) * cliff_strength * 0.7);
 		// Northern rim of a plateau: a thin bright line.
 		float rim = step(0.5, lv - lvU) * step(real, e0 - eU) * (1.0 - step(0.10, fc.y));
 		outc = mix(outc, outc * 1.25 + 0.06, rim * cliff_strength * 0.8);

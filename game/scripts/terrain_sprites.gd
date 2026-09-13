@@ -19,8 +19,8 @@ const NAMES: PackedStringArray = [
 # Variants 0 and 1 are hand-authored; variant 2 is variant 0 mirrored.
 const VARIANTS := 3
 
-enum { BUSH, OAK, CACTUS, BOULDER, ACACIA, JUNGLE, PINE, SHRUB, FLOWERS, TUFT, MUSHROOM, STUMP }
-const PROP_COUNT := 12
+enum {BUSH, OAK, CACTUS, BOULDER, ACACIA, JUNGLE, PINE, SHRUB, FLOWERS, TUFT, MUSHROOM, STUMP, DIRT}
+const PROP_COUNT := 13
 const PROP_NAMES: PackedStringArray = [
 	"Bush",
 	"Oak",
@@ -34,6 +34,7 @@ const PROP_NAMES: PackedStringArray = [
 	"Tuft",
 	"Mushroom",
 	"Stump",
+	"Dirt",
 ]
 
 const ATLAS_COLS := 8
@@ -423,6 +424,7 @@ const _PROP_PALS: Array = [
 	{"g": "3f7a34", "d": "2c5f28", "l": "55964a"},
 	{"r": "c24a3a", "w": "f2ebd8", "t": "d9c8a0", "d": "7a4a30"},
 	{"t": "8a6a42", "b": "5a3c22", "r": "a88a5a", "g": "3f7a34"},
+	{"e": "8a6a42", "d": "7a5a36", "l": "9c7c50"},
 ]
 
 const _PROP_MAPS: Array = [
@@ -642,6 +644,24 @@ const _PROP_MAPS: Array = [
 		"................",
 		"................",
 	],
+	[
+		"................",
+		"................",
+		"................",
+		"................",
+		"......e.e.......",
+		"....e.eeee.e....",
+		"...eeeeedeee....",
+		"..eeedeeeeeee.e.",
+		".e.eeeeeeleeeee.",
+		"..eeeleeeeeedee.",
+		"...eeeeeeeeeee..",
+		"....e.eeeee.e...",
+		"......e.e.......",
+		"................",
+		"................",
+		"................",
+	],
 ]
 
 # Scatter props per terrain (water stays bare): the first entry is the
@@ -652,11 +672,11 @@ const _PROP_MAPS: Array = [
 # an accent under the trees, not a polka dot over the whole wood).
 const _TERRAIN_PROPS: Array = [
 	[],
-	[BUSH, BUSH, FLOWERS, FLOWERS, TUFT, TUFT, BOULDER],
+	[BUSH, BUSH, FLOWERS, FLOWERS, TUFT, TUFT, BOULDER, DIRT, DIRT],
 	[OAK, OAK, STUMP, MUSHROOM],
 	[CACTUS],
 	[BOULDER],
-	[ACACIA, ACACIA, TUFT, TUFT, BOULDER],
+	[ACACIA, ACACIA, TUFT, TUFT, BOULDER, DIRT],
 	[JUNGLE, JUNGLE, MUSHROOM],
 	[PINE, PINE, STUMP],
 	[SHRUB, TUFT],

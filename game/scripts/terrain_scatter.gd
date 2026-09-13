@@ -110,5 +110,8 @@ func _make_mmis() -> void:
 		mmi.texture = SpriteSplit.for_quad(TerrainSprites.prop_image(k))
 		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		mmi.name = "Prop%s" % TerrainSprites.PROP_NAMES[k]
+		if k == TerrainSprites.DIRT:
+			# Bare earth lies under the figures, not over their feet.
+			mmi.z_index = -3
 		add_child(mmi)
 		_mmis.append(mmi)
