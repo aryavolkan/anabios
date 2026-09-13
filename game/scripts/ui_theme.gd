@@ -17,12 +17,19 @@ const BG_HOVER := Color(0.12, 0.17, 0.19, 0.96)
 const BG_PRESSED := Color(0.10, 0.24, 0.22, 0.96)
 const ACCENT := Color(0.30, 0.88, 0.70)
 const ACCENT_DIM := Color(0.30, 0.88, 0.70, 0.28)
+const PixelFont = preload("res://scripts/pixel_font.gd")
+
 const TEXT := Color(0.86, 0.92, 0.93)
 const TEXT_DIM := Color(0.56, 0.67, 0.69)
 
 
 static func build() -> Theme:
 	var theme := Theme.new()
+	# Pixel HUD text: the fixed-size bitmap font scales by whole steps, so
+	# the 11-13 px sizes below all render at 9 px per line and the brand
+	# name at 18.
+	theme.default_font = PixelFont.build()
+	theme.default_font_size = PixelFont.CELL_H
 
 	theme.set_stylebox("panel", "PanelContainer", pixel_frame(BG_PANEL, ACCENT_DIM, 9, 7))
 

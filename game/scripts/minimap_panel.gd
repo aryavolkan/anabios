@@ -1,5 +1,7 @@
 extends Control
 
+const PixelFont = preload("res://scripts/pixel_font.gd")
+
 # Whole-world overview in the HUD corner: draws the bridge's area-averaged
 # overview mip (never the active [G] ground overlay — see biome_overview()'s
 # docs), a density grid standing in for per-agent dots, the current camera
@@ -44,9 +46,7 @@ func _ready() -> void:
 	# STOP so clicks on the minimap are consumed by _gui_input and never fall
 	# through to the world agent-pick handler in main.gd:_unhandled_input.
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	_font = get_theme_default_font()
-	if _font == null:
-		_font = ThemeDB.fallback_font
+	_font = PixelFont.build()
 
 
 func _process(dt: float) -> void:

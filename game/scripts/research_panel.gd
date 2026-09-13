@@ -7,6 +7,7 @@ extends PanelContainer
 # over `alive_invention_masks()` and `invention_catalog()`.
 
 const HudCommon = preload("res://scripts/hud_common.gd")
+const PixelFont = preload("res://scripts/pixel_font.gd")
 const HudIcons = preload("res://scripts/hud_icons.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
@@ -40,9 +41,7 @@ var _font: Font
 
 
 func _ready() -> void:
-	_font = get_theme_default_font()
-	if _font == null:
-		_font = ThemeDB.fallback_font
+	_font = PixelFont.build()
 	var box := VBoxContainer.new()
 	add_child(box)
 	if embedded:

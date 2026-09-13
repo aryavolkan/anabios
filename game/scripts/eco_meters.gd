@@ -8,6 +8,7 @@ extends PanelContainer
 # its corner with the unit card and yields to it while an agent is pinned.
 
 const HudIcons = preload("res://scripts/hud_icons.gd")
+const PixelFont = preload("res://scripts/pixel_font.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
 const REFRESH_EVERY := 30
@@ -30,9 +31,7 @@ var _font: Font
 
 
 func _ready() -> void:
-	_font = get_theme_default_font()
-	if _font == null:
-		_font = ThemeDB.fallback_font
+	_font = PixelFont.build()
 	_body = Control.new()
 	_body.custom_minimum_size = Vector2(200, ROW_H * 2)
 	_body.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

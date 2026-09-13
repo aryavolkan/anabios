@@ -10,6 +10,7 @@ extends PanelContainer
 # showcase_director.gd and settlement_layer.gd preload them from this script.
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
+const PixelFont = preload("res://scripts/pixel_font.gd")
 const HudIcons = preload("res://scripts/hud_icons.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const ResearchPanel = preload("res://scripts/research_panel.gd")
@@ -205,9 +206,7 @@ func _ready() -> void:
 				% [CHAPTER_NAMES.size(), core_count]
 			)
 		)
-	_font = get_theme_default_font()
-	if _font == null:
-		_font = ThemeDB.fallback_font
+	_font = PixelFont.build()
 	for i in ApeSprites.NAMES.size():
 		_ape_tex.append(MammalSprites.hominin_portrait(i))
 	for t in TerrainSprites.NAMES.size():

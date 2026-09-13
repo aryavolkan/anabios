@@ -1,5 +1,7 @@
 extends Control
 
+const PixelFont = preload("res://scripts/pixel_font.gd")
+
 # Gene↔culture co-evolution time-series. Reads the Rust per-tick history and
 # draws a vertical stack of small-multiple charts sharing one time axis.
 # Toggle with [Y]. Click a legend label to hide/show a series; click a chart to
@@ -178,7 +180,7 @@ var _mark_cursor: int = 0  # own cursor over the shared event log
 
 func _ready() -> void:
 	visible = false
-	_font = ThemeDB.fallback_font
+	_font = PixelFont.build()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:

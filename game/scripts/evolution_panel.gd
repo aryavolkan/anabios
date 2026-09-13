@@ -4,6 +4,7 @@ extends PanelContainer
 # living phylogeny. Toggle with [T]. Read-only.
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
+const PixelFont = preload("res://scripts/pixel_font.gd")
 
 # (slot id, label, color) for the trait-drift chart.
 const TRAIT_SERIES := [
@@ -39,7 +40,7 @@ var _font: Font
 
 func _ready() -> void:
 	visible = false
-	_font = ThemeDB.fallback_font
+	_font = PixelFont.build()
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 6)
 	add_child(vb)

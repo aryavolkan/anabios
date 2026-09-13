@@ -8,6 +8,7 @@ extends PanelContainer
 # capture hooks and the showcase director still find it.
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
+const PixelFont = preload("res://scripts/pixel_font.gd")
 const HudIcons = preload("res://scripts/hud_icons.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const SpeciesNames = preload("res://scripts/species_names.gd")
@@ -40,9 +41,7 @@ var _quad_tex: Dictionary = {}
 
 
 func _ready() -> void:
-	_font = get_theme_default_font()
-	if _font == null:
-		_font = ThemeDB.fallback_font
+	_font = PixelFont.build()
 	for i in ApeSprites.NAMES.size():
 		_ape_tex.append(MammalSprites.hominin_portrait(i))
 	_card = Control.new()
