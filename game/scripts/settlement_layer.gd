@@ -385,16 +385,22 @@ static func path_steps(from: Vector2, to: Vector2, step: float) -> PackedVector2
 
 # A 32 px patch of packed earth: an ellipse with a dithered rim and a few
 # darker specks, top-down like every other structure sprite.
-static func yard_image() -> Image:
-	var img := Image.create(YARD_PX, YARD_PX, false, Image.FORMAT_RGBA8)
+# `px` sizes the image: the village yards draw the default at ~16 world
+# units (a texel per half unit, the ground tiles' grain); the 72-unit market
+# square asks for a larger one so its texels stay that size instead of
+# turning into 2-unit checker blocks at 8x.
+static func yard_image(px: int = YARD_PX) -> Image:
+	var img := Image.create(px, px, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	var earth := Color("8a6a42")
 	var dark := Color("735634")
-	var c := (YARD_PX - 1) * 0.5
-	for y in YARD_PX:
-		for x in YARD_PX:
-			var dx := (x - c) / 15.5
-			var dy := (y - c) / 11.5
+	var c := (px - 1) * 0.5
+	var rx := float(px) * 15.5 / 32.0
+	var ry := float(px) * 11.5 / 32.0
+	for y in px:
+		for x in px:
+			var dx := (x - c) / rx
+			var dy := (y - c) / ry
 			var d := dx * dx + dy * dy
 			if d > 1.0:
 				continue

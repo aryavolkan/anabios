@@ -23,6 +23,8 @@ const REDRAW_EVERY := 30
 # the old icon ring. Stalls are cut like every other structure so a trader
 # walks behind the awning and in front of the counter.
 const SQUARE_SCALE := 72.0
+# Square image size: a texel per half world unit, like the ground tiles.
+const SQUARE_PX := 144
 const STALL_SCALE := 16.0
 const STALL_RADIUS := 22.0
 const STALL_COUNT := 3
@@ -41,7 +43,9 @@ var _frame: int = REDRAW_EVERY - 1
 
 func _ready() -> void:
 	_square_mmi = _make_layer(
-		"Hub_Square", SpriteSplit.for_quad(SettlementLayer.yard_image()), SettlementLayer.YARD_Z
+		"Hub_Square",
+		SpriteSplit.for_quad(SettlementLayer.yard_image(SQUARE_PX)),
+		SettlementLayer.YARD_Z
 	)
 	var stall: Image = StructureSprites.kind_image(StructureSprites.STALL)
 	var cut: int = SpriteSplit.split_row(stall)

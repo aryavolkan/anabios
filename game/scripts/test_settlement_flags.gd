@@ -52,6 +52,14 @@ func _init() -> void:
 	_check(yard.get_width() == 32 and yard.get_height() == 32, "yard patch is 32x32")
 	_check(yard.get_pixel(16, 16).a > 0.9, "yard centre is packed earth")
 	_check(yard.get_pixel(0, 0).a == 0.0, "yard corners stay clear")
+	# The market square asks for a larger image with the same ellipse.
+	var square: Image = SettlementLayer.yard_image(144)
+	_check(square.get_width() == 144 and square.get_height() == 144, "square patch is 144x144")
+	_check(square.get_pixel(72, 72).a > 0.9, "square centre is packed earth")
+	_check(square.get_pixel(0, 0).a == 0.0 and square.get_pixel(143, 72).a == 0.0, "square ellipse")
+	_check(
+		square.get_pixel(72, 8).a == 0.0 and square.get_pixel(72, 24).a > 0.9, "square is flatter"
+	)
 	_check(SettlementLayer.yard_scale(VillageLayout.HUT) > 0.0, "huts stand on a yard")
 	var steps: PackedVector2Array = SettlementLayer.path_steps(Vector2.ZERO, Vector2(70, 0), 7.0)
 	_check(steps.size() == 7, "a 70-unit path gets seven 7-unit steps clear of both yards")

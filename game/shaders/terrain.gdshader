@@ -161,6 +161,17 @@ float hash2(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
+// Ordered 4x4 Bayer threshold for a ground texel: a pixel-art dither for
+// the snow line (a hash stipple read as static).
+float bayer4(vec2 p) {
+	int x = int(mod(p.x, 4.0));
+	int y = int(mod(p.y, 4.0));
+	// Bayer index: bit-interleave of x^y and y, giving the 0..15 pattern.
+	int a = x ^ y;
+	int idx = ((a & 1) << 3) | ((y & 1) << 2) | ((a & 2) << 0) | ((y & 2) >> 1);
+	return (float(idx) + 0.5) / 16.0;
+}
+
 // Ground tile sample for a cell of terrain id `tid` at fractional cell
 // coordinate `cellf`; `variant` is the tile variant (0..tile_variants-1).
 vec3 tile_at(float tid, float variant, vec2 cellf) {
@@ -421,9 +432,14 @@ void fragment() {
 			vec3 stone = mix(outc * 0.55, vec3(0.31, 0.30, 0.25), 0.5);
 			outc = mix(outc, stone, ledge_dark * cliff_strength * 0.8);
 			outc = mix(outc, outc * 1.22 + 0.05, ledge_lit * 0.7);
-			// Snow caps: the top of the rock band whitens with altitude.
-			float snow = smoothstep(0.78, 0.95, es);
-			outc = mix(outc, vec3(0.90, 0.93, 0.97), snow * 0.85);
+			// Snow caps: the top of the rock band whitens with altitude. The
+			// cover is thresholded per ground texel against a stable hash,
+			// so its edge is a stipple of snow pixels (the boards' peaks)
+			// rather than a soft white haze over the whole outcrop.
+			float snow = smoothstep(0.82, 0.95, es);
+			vec2 stex = floor(world_pos / max(texel_w, 1e-4));
+			float snow_px = step(bayer4(stex), snow);
+			outc = mix(outc, vec3(0.90, 0.93, 0.97), snow_px * 0.9);
 		}
 		outc *= 1.0 + height_lift * clamp((es - sea_level) / max(1.0 - sea_level, 1e-3), 0.0, 1.0);
 
