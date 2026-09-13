@@ -26,6 +26,7 @@ extends Node2D
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const Palette = preload("res://scripts/palette.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
+const AnimState = preload("res://scripts/anim_state.gd")
 
 # Bodies are 0.5–3.0 world units across (genome size). Scale them up generously
 # with a floor so the hominin silhouette (head, limbs) reads as a figure at the
@@ -129,20 +130,16 @@ var _prev_bucket: PackedInt32Array = PackedInt32Array()
 # self-coloured hominin atlases), kept in sync with the other _prev_* arrays so
 # a death ghost can inherit its agent's colour instead of a flat grey.
 var _prev_color: PackedColorArray = PackedColorArray()
-var _birth_times: Dictionary = {}
-# Per-id facing: (committed side 0 right / 1 left, eased value, low-passed
-# heading x). Turns ease through a horizontal squash, not a snap. See FxMath.
-var _facing: Dictionary = {}
-# Per-id gait cycle position (0..1 = one contact -> passing -> contact ->
-# passing loop), advanced by the distance a body actually covers on screen so
-# the cadence tracks real speed instead of a fixed frame rate. Frozen while an
-# agent stands still, where it doubles as that agent's stable idle-bob offset.
-var _gait: Dictionary = {}
-# Per-id locomotion state (hold credit, blended walk weight) — see FxMath.
-var _locomotion: Dictionary = {}
-# Per-id action state (current pose, remaining hold time), debounced so a
-# threshold crossing cannot interrupt a two-frame action at an arbitrary beat.
-var _actions: Dictionary = {}
+# Per-agent animation state (Phase 3 step 2, D6): birth time, facing
+# (committed side 0 right / 1 left, eased value, low-passed heading x), gait
+# cycle position (0..1, advanced by the distance a body covers on screen and
+# frozen while it stands, where it doubles as the idle-bob offset),
+# locomotion (hold credit, blended walk weight) and the debounced action
+# (current pose, remaining hold) live in anim_state.gd's slot-indexed packed
+# arrays instead of five per-id Dictionaries; `_slots[i]` is alive index i's
+# slot this frame (valid only while `have_ids`).
+var _anim := AnimState.new()
+var _slots: PackedInt32Array = PackedInt32Array()
 # Distance each body moved on screen this frame, parallel to the alive arrays;
 # feeds the gait accumulator above. Filled in the smoothing pass.
 var _step_dist: PackedFloat32Array = PackedFloat32Array()
@@ -303,7 +300,8 @@ func refresh(
 		_prev_bucket = PackedInt32Array()
 		_prev_energy = PackedFloat32Array()
 		_prev_color = PackedColorArray()
-		_actions.clear()
+		_anim.sync(PackedInt32Array(), Time.get_ticks_msec() / 1000.0)
+		_anim.compact()
 		_report_visible(0)
 		_emote_layer.refresh(animation_time, delta)
 		_refresh_death_effects(delta)
@@ -383,6 +381,9 @@ func refresh(
 	_moving_sample = PackedVector2Array()
 
 	if have_ids:
+		# Compact the animation slots before this frame's kills read them
+		# (a compaction renumbers, and _kill looks a dying id's slot up).
+		_anim.compact()
 		# Pass 1: match current ids against last frame's (birth/death
 		# bookkeeping), world-wide — cheap index arithmetic, no per-id
 		# Dictionary lookups, so this always runs over the full alive array
@@ -402,6 +403,9 @@ func refresh(
 		while p < pn:
 			_kill(_prev_ids[p], p, not is_overview, x0, y0, x1, y1, world)
 			p += 1
+		# Slots for this frame: vanished ids are released (their ghosts were
+		# recorded above), first-seen ids get a fresh slot stamped with `now`.
+		_slots = _anim.sync(ids, now)
 
 		# Pass 2: smoothed render positions. `from_arr` is last frame's
 		# smoothed position per current id (or this frame's own position for
@@ -427,10 +431,8 @@ func refresh(
 					smooth[i] = target
 			else:
 				smooth[i] = target
-				if _match_prev[i] < 0 and not _birth_times.has(ids[i]):
-					_birth_times[ids[i]] = now
-					if visible_mask[i] and _effects != null:
-						_effects.spawn_dust(target)
+				if _match_prev[i] < 0 and visible_mask[i] and _effects != null:
+					_effects.spawn_dust(target)
 		_prev_ids = ids
 		_prev_smooth = smooth
 		_prev_sizes = sizes
@@ -524,8 +526,9 @@ func refresh(
 			# New agents squash in, then spring to full size with an overshoot
 			# (anticipation-then-pop) instead of blinking into existence;
 			# after BIRTH_POP seconds the scale is exactly 1.
+			var s: int = _slots[i] if have_ids else -1
 			if have_ids:
-				var age: float = now - float(_birth_times.get(ids[i], now - 1.0))
+				var age: float = now - _anim.birth_time[s]
 				if age < BIRTH_POP:
 					sz *= FxMath.birth_scale(age / BIRTH_POP)
 			# Upright: the hominin stands, not spins — heading drives the
@@ -555,9 +558,10 @@ func refresh(
 			var moving: float = 1.0 if walking else 0.0
 			if have_ids:
 				var loco: Vector2 = FxMath.step_locomotion(
-					_locomotion.get(ids[i], Vector2.ZERO), walking, delta
+					Vector2(_anim.walk_hold[s], _anim.walk_weight[s]), walking, delta
 				)
-				_locomotion[ids[i]] = loco
+				_anim.walk_hold[s] = loco.x
+				_anim.walk_weight[s] = loco.y
 				walking = loco.x > 0.0
 				moving = loco.y
 			if walking and _moving_sample.size() < 8:
@@ -569,18 +573,25 @@ func refresh(
 			var cx: float = cos(rot)
 			var face_left := 1.0 if cx < 0.0 else 0.0
 			if have_ids:
-				var face: Vector3 = FxMath.step_facing(
-					_facing.get(ids[i], Vector3(face_left, face_left, cx)), cx, walking, delta
-				)
-				_facing[ids[i]] = face
+				# A slot born this frame seeds from the current heading (the
+				# old Dictionary default) so a newborn never eases in from a
+				# side it never faced.
+				var prev_face := Vector3(face_left, face_left, cx)
+				if _anim.birth_time[s] != now:
+					prev_face = Vector3(
+						float(_anim.facing_side[s]), _anim.facing_ease[s], _anim.facing_heading[s]
+					)
+				var face: Vector3 = FxMath.step_facing(prev_face, cx, walking, delta)
+				_anim.facing_side[s] = int(round(face.x))
+				_anim.facing_ease[s] = face.y
+				_anim.facing_heading[s] = face.z
 				face_left = face.y
 			# Gait cycle position, paced by the distance this body covered on
 			# screen so the feet keep up with the ground (see FxMath).
 			var phase: float
 			var footfall := false
 			if have_ids:
-				var gid: int = ids[i]
-				var previous_phase: float = float(_gait.get(gid, FxMath.seed_gait(gid)))
+				var previous_phase: float = _anim.gait[s]
 				phase = previous_phase
 				if walking:
 					var stride: float = FxMath.stride_len(sizes[i], gait_fps)
@@ -589,7 +600,7 @@ func refresh(
 					# crossing either half-cycle boundary, so the puff lands under
 					# a planted foot instead of appearing at a random frame.
 					footfall = int(floor(previous_phase * 2.0)) != int(floor(phase * 2.0))
-				_gait[gid] = phase
+				_anim.gait[s] = phase
 			else:
 				phase = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
 			if footfall and _effects != null:
@@ -634,9 +645,10 @@ func refresh(
 				act = FxMath.weapon_action(act, inv_masks[i])
 			if have_ids:
 				var action_state := FxMath.step_action(
-					_actions.get(ids[i], Vector2(-1.0, 0.0)), act, delta
+					Vector2(_anim.action_pose[s], _anim.action_hold[s]), act, delta
 				)
-				_actions[ids[i]] = action_state
+				_anim.action_pose[s] = action_state.x
+				_anim.action_hold[s] = action_state.y
 				act = action_state.x
 				# Emote-worthy actions get a pictogram above the agent's head.
 				_emote_layer.collect(ids[i], smooth[i], sz, act)
@@ -666,13 +678,12 @@ func _kill(
 	y1: float,
 	world: float
 ) -> void:
-	_birth_times.erase(id)
-	_gait.erase(id)
-	_locomotion.erase(id)
-	_actions.erase(id)
-	var fv: Vector3 = _facing.get(id, Vector3.ZERO)
-	var side: float = -1.0 if fv.y >= 0.5 else 1.0
-	_facing.erase(id)
+	# The slot is still allocated here (sync() releases it after pass 1), so
+	# the ghost can topple away from the side the agent last faced.
+	var slot: int = int(_anim.slot_of.get(id, -1))
+	var side: float = 1.0
+	if slot >= 0 and _anim.facing_ease[slot] >= 0.5:
+		side = -1.0
 	if prev_idx >= _prev_smooth.size():
 		return
 	var last_pos: Vector2 = _prev_smooth[prev_idx]
