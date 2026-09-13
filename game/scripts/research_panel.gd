@@ -11,9 +11,9 @@ const HudIcons = preload("res://scripts/hud_icons.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
 const REFRESH_EVERY := 30
-const ROW_H := 19
-const ICON := 16
-const BAR_W := 96
+const ROW_H := 24
+const ICON := 21
+const BAR_W := 88
 const BAR_H := 8
 const COMPLETE_AT := 0.9
 # Rows shown: every invention some of the population holds, then the next
@@ -52,6 +52,7 @@ func _ready() -> void:
 		title.add_theme_color_override("font_color", UiTheme.ACCENT)
 		box.add_child(title)
 	_rows = Control.new()
+	_rows.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_rows.draw.connect(_draw_rows)
 	box.add_child(_rows)
 	_load_catalog()
