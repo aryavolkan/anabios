@@ -12,8 +12,8 @@ const UiTheme = preload("res://scripts/ui_theme.gd")
 
 const REFRESH_EVERY := 30
 const BAR_W := 150
-const BAR_H := 8
-const ROW_H := 30
+const BAR_H := 14
+const ROW_H := 36
 const HEALTH_FILL := Color(0.42, 0.80, 0.36)
 const DIVERSITY_FILL := Color(0.35, 0.62, 0.95)
 const BAR_BG := Color(0.06, 0.09, 0.11)
@@ -85,6 +85,7 @@ func _row(y: int, icon: int, label: String, frac: float, fill: Color) -> void:
 	)
 	_body.draw_rect(Rect2(24, y + 16, BAR_W, BAR_H), BAR_BG)
 	_body.draw_rect(Rect2(24, y + 16, BAR_W * frac, BAR_H), fill)
+	_body.draw_rect(Rect2(24, y + 16, BAR_W * frac, 2), fill.lerp(Color.WHITE, 0.35))
 	_body.draw_rect(Rect2(24, y + 16, BAR_W, BAR_H), UiTheme.ACCENT_DIM, false, 1.0)
 
 
