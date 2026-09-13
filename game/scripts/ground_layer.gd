@@ -17,6 +17,7 @@ extends Node2D
 const GroundStreaming = preload("res://scripts/ground_streaming.gd")
 const GroundChunk = preload("res://scripts/ground_chunk.gd")
 const PropChunk = preload("res://scripts/prop_chunk.gd")
+const Clearings = preload("res://scripts/clearings.gd")
 
 const UPLOAD_BUDGET := 8
 const RING := 1
@@ -32,6 +33,8 @@ var _chunks: Dictionary = {}
 var _props: Dictionary = {}
 # Vector2i(cx, cy) -> {"version": int, "age": int}; mirrors _chunks' keys.
 var _resident: Dictionary = {}
+# Clearings.version the resident props were last planned against.
+var _clear_ver: int = -1
 
 
 func _ready() -> void:
@@ -131,3 +134,13 @@ func _process(_delta: float) -> void:
 
 	if perf != null:
 		perf.set_resident_chunks(_resident.size())
+
+	# A village appearing (or growing) re-plans the props of every resident
+	# chunk so the forest stands back from its footprint.
+	if _clear_ver != Clearings.version:
+		_clear_ver = Clearings.version
+		for key in _props.keys():
+			var props = _props[key]
+			props.build(
+				key.x, key.y, _sim.biome_chunk_ids(key.x, key.y), res, world, props.position
+			)

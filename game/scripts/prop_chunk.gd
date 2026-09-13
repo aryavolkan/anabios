@@ -16,6 +16,7 @@ extends Node2D
 const TerrainSprites = preload("res://scripts/terrain_sprites.gd")
 const FloraSprites = preload("res://scripts/flora_sprites.gd")
 const SpriteSplit = preload("res://scripts/sprite_split.gd")
+const Clearings = preload("res://scripts/clearings.gd")
 
 const CHUNK_CELLS := 64
 const _APRON := CHUNK_CELLS + 2
@@ -126,7 +127,8 @@ func build(
 	position = offset
 	var planned := plan(cx, cy, ids66, res, world)
 	for k in TerrainSprites.PROP_COUNT:
-		var positions: PackedVector2Array = planned[k]
+		# Village clearings: nothing grows on a settlement's footprint.
+		var positions: PackedVector2Array = Clearings.filter(planned[k])
 		var mm: MultiMesh = _mmis[k].multimesh
 		mm.instance_count = positions.size()
 		var i := 0
@@ -139,7 +141,7 @@ func build(
 		_make_canopy_mmis()
 	var trees := plan_canopy(cx, cy, ids66, res, world)
 	for k in FloraSprites.KIND_COUNT:
-		var positions: PackedVector2Array = trees[k]
+		var positions: PackedVector2Array = Clearings.filter(trees[k])
 		var mm: MultiMesh = _canopy[k].multimesh
 		mm.instance_count = positions.size()
 		var i := 0

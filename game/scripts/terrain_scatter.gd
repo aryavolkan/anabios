@@ -11,6 +11,7 @@ extends Node2D
 
 const TerrainSprites = preload("res://scripts/terrain_sprites.gd")
 const SpriteSplit = preload("res://scripts/sprite_split.gd")
+const Clearings = preload("res://scripts/clearings.gd")
 
 # Fraction of cells of each terrain that grow a prop (indexed by TerrainType
 # id). Water is bare; forests read denser than steppe and tundra.
@@ -23,6 +24,11 @@ const PROP_SCALE := 0.625
 
 var _mmis: Array = []
 var _last_ids := PackedByteArray()
+# Clearings.version the last rebuild filtered against, plus the res/world it
+# was planned for so a clearing change can re-plan without new ids.
+var _last_clear_ver := -1
+var _last_res := 0
+var _last_world := 0.0
 
 
 func _ready() -> void:
@@ -32,6 +38,12 @@ func _ready() -> void:
 	var ps: Vector2 = parent.scale if parent != null else Vector2.ONE
 	if ps.x != 0.0 and ps.y != 0.0:
 		scale = Vector2(1.0 / ps.x, 1.0 / ps.y)
+
+
+# A village appearing (or growing its fields) re-plans the scatter around it.
+func _process(_delta: float) -> void:
+	if visible and _last_clear_ver != Clearings.version and not _last_ids.is_empty():
+		rebuild(_last_ids, _last_res, _last_world)
 
 
 # Deterministic per-cell hash in [0, 1) — same family as the tile-variant
@@ -77,14 +89,18 @@ static func plan(ids: PackedByteArray, res: int, world: float, budget: int) -> A
 # Refill the per-kind multimeshes when the terrain-id grid changes. Each
 # position is drawn 9 times (torus 3x3) like every other world layer.
 func rebuild(ids: PackedByteArray, res: int, world: float) -> void:
-	if ids == _last_ids or ids.is_empty():
+	if ids.is_empty() or (ids == _last_ids and Clearings.version == _last_clear_ver):
 		return
 	_last_ids = ids.duplicate()
+	_last_clear_ver = Clearings.version
+	_last_res = res
+	_last_world = world
 	if _mmis.is_empty():
 		_make_mmis()
 	var planned := plan(ids, res, world, PROP_BUDGET)
 	for k in TerrainSprites.PROP_COUNT:
-		var positions: PackedVector2Array = planned[k]
+		# Village clearings: nothing grows on a settlement's footprint.
+		var positions: PackedVector2Array = Clearings.filter(planned[k])
 		var mm: MultiMesh = _mmis[k].multimesh
 		mm.instance_count = positions.size() * 9
 		var i := 0

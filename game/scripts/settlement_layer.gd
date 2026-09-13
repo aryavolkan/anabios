@@ -18,6 +18,7 @@ const FxMath = preload("res://scripts/fx_math.gd")
 const StructureSprites = preload("res://scripts/structure_sprites.gd")
 const SpriteSplit = preload("res://scripts/sprite_split.gd")
 const VillageLayout = preload("res://scripts/village_layout.gd")
+const Clearings = preload("res://scripts/clearings.gd")
 
 const REDRAW_EVERY := 20
 # Structure sprites are 32px, drawn at half scale (D1: huts/structures span 16
@@ -26,6 +27,9 @@ const REDRAW_EVERY := 20
 const STRUCTURE_SCALE := 0.5
 # Sites closer than this (world units) share one village footprint.
 const MERGE_RADIUS := 48.0
+# Clearing margin around the outermost structure centre (world units): half
+# a village cell plus a yard's worth.
+const CLEARING_MARGIN := 14.0
 const MEMBERS_BUCKET := 6
 # Landmark/trade buildings sit a notch bigger than huts so a village's
 # invention history and trade role read at a glance from the ring around it.
@@ -471,6 +475,7 @@ func _redraw() -> void:
 		struct_col.append([])
 	var yard_xf: Array = []
 	var yard_col: Array = []
+	var clearings: Array[Rect2] = []
 	for sid in _villages.keys():
 		var v: Dictionary = _villages[sid]
 		var stale: float = _now - float(v["seen"])
@@ -506,10 +511,12 @@ func _redraw() -> void:
 		var new_born: Dictionary = {}
 		var smoke_rank := 99
 		var smoke_pos: Vector2 = pos + Vector2(3.0, -12.0)
+		var footprint := PackedVector2Array()
 		for p in plan:
 			var kind: int = int(p["kind"])
 			var base_pos: Vector2 = p["pos"]
 			var ppos: Vector2 = base_pos + delta
+			footprint.append(ppos)
 			# Keyed by kind and grid cell, not by the absolute position: the
 			# anchor eases every redraw and a crowded square re-plans often,
 			# and a key built from the exact position restarted every
@@ -546,6 +553,10 @@ func _redraw() -> void:
 				_effects.spawn_embers(ppos)
 		v["plan_born"] = new_born
 		v["smoke_pos"] = smoke_pos
+		# The village stands in a clearing: its structures' bounds plus most
+		# of a cell, so the scatter keeps off the outermost yards and fields.
+		if not footprint.is_empty():
+			clearings.append(Clearings.bounds_of(footprint, CLEARING_MARGIN))
 		# Trade building: market/warehouse where the live market-density field
 		# says this village sits on a real market, on a reserved slot north of
 		# the anchor. (Invention landmarks are handled separately below, keyed
@@ -567,6 +578,7 @@ func _redraw() -> void:
 	for k in StructureSprites.KIND_COUNT:
 		_write(_structure_mmis[k].multimesh, struct_xf[k], struct_col[k])
 	_write(_yard_mmi.multimesh, yard_xf, yard_col)
+	Clearings.publish("villages", clearings)
 
 
 # Invention landmarks mark tech-holding lineages that have NO settlement of

@@ -8,6 +8,7 @@ extends Node2D
 # state; plain no-shader MultiMesh (Metal-safe), same as settlement_layer.
 
 const Buildings = preload("res://scripts/building_sprites.gd")
+const Clearings = preload("res://scripts/clearings.gd")
 const SettlementLayer = preload("res://scripts/settlement_layer.gd")
 const SpriteSplit = preload("res://scripts/sprite_split.gd")
 const StructureSprites = preload("res://scripts/structure_sprites.gd")
@@ -125,11 +126,15 @@ func _redraw() -> void:
 	var square_xf: Array = []
 	var stall_xf: Array = []
 	var good_xf: Array = []
+	var clearings: Array[Rect2] = []
 	for g in Buildings.GOOD_COUNT:
 		good_xf.append([])
 	for hub in _hubs:
 		var pos: Vector2 = hub["pos"]
 		square_xf.append(Transform2D(0.0, Vector2(SQUARE_SCALE, SQUARE_SCALE * 0.8), 0.0, pos))
+		# The square and its stalls stand on trodden ground: no scatter.
+		var half := Vector2(SQUARE_SCALE, SQUARE_SCALE * 0.8) * 0.5
+		clearings.append(Clearings.snap(Rect2(pos - half, half * 2.0)))
 		var slots: PackedVector2Array = stall_slots(pos, STALL_COUNT)
 		for i in slots.size():
 			# Stalls east of the building face west (flipped) so their
@@ -160,6 +165,7 @@ func _redraw() -> void:
 				gp = pos + Vector2.from_angle(ang) * GOOD_RING_RADIUS
 			good_xf[gi].append(Transform2D(0.0, Vector2(GOOD_SCALE, GOOD_SCALE), 0.0, gp))
 	_write(_square_mmi.multimesh, square_xf)
+	Clearings.publish("hubs", clearings)
 	_write(_stall_mmi.multimesh, stall_xf)
 	_write(_market_mmi.multimesh, market_xf)
 	_write(_warehouse_mmi.multimesh, warehouse_xf)
