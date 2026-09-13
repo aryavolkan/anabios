@@ -818,8 +818,8 @@ func _make_fire_pool() -> void:
 	for i in FIRE_POOL:
 		var p := GPUParticles2D.new()
 		p.name = "Fire%d" % i
-		p.amount = 14
-		p.lifetime = 0.8
+		p.amount = 24
+		p.lifetime = 1.1
 		p.emitting = false
 		p.z_index = 3
 		p.visibility_rect = Rect2(-40, -60, 80, 80)
@@ -827,14 +827,14 @@ func _make_fire_pool() -> void:
 		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var m := ParticleProcessMaterial.new()
 		m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-		m.emission_box_extents = Vector3(5.0, 1.5, 1.0)
+		m.emission_box_extents = Vector3(8.0, 2.0, 1.0)
 		m.direction = Vector3(0, -1, 0)
 		m.spread = 12.0
-		m.initial_velocity_min = 6.0
-		m.initial_velocity_max = 12.0
+		m.initial_velocity_min = 10.0
+		m.initial_velocity_max = 19.0
 		m.gravity = Vector3(0, -6.0, 0)
-		m.scale_min = 0.3
-		m.scale_max = 0.55
+		m.scale_min = 0.6
+		m.scale_max = 1.1
 		var grad := Gradient.new()
 		grad.set_color(0, Color(1.0, 1.0, 1.0, 1.0))
 		grad.add_point(0.6, Color(1.0, 0.75, 0.55, 0.9))
@@ -847,8 +847,8 @@ func _make_fire_pool() -> void:
 		_fires.append(p)
 		var s := GPUParticles2D.new()
 		s.name = "FireSmoke%d" % i
-		s.amount = 8
-		s.lifetime = 2.4
+		s.amount = 12
+		s.lifetime = 3.2
 		s.emitting = false
 		s.z_index = 3
 		s.visibility_rect = Rect2(-80, -140, 160, 180)
@@ -857,11 +857,11 @@ func _make_fire_pool() -> void:
 		var sm := ParticleProcessMaterial.new()
 		sm.direction = Vector3(0, -1, 0)
 		sm.spread = 14.0
-		sm.initial_velocity_min = 8.0
-		sm.initial_velocity_max = 14.0
+		sm.initial_velocity_min = 9.0
+		sm.initial_velocity_max = 15.0
 		sm.gravity = Vector3(2.0, -6.0, 0)
-		sm.scale_min = 0.4
-		sm.scale_max = 0.7
+		sm.scale_min = 0.8
+		sm.scale_max = 1.4
 		var sg := Gradient.new()
 		sg.set_color(0, Color(0.25, 0.22, 0.22, 0.9))
 		sg.set_color(1, Color(0.3, 0.3, 0.32, 0.0))
