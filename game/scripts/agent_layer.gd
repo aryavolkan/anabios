@@ -514,7 +514,14 @@ func refresh(
 		shadows.instance_count = total_vis
 	for b in MammalSprites.BUCKET_COUNT:
 		var mm: MultiMesh = _body_mmis[b].multimesh
-		var idx: PackedInt32Array = buckets[b]
+		# Y-sort within the bucket: a MultiMesh draws its instances in index
+		# order, so writing the northern figures first puts a figure that
+		# stands further south in front of the one behind it, the way a
+		# crowd overlaps in the reference boards. (Between buckets the layer
+		# order still decides; see the split-sprite note in the spec.)
+		var order: Array = Array(buckets[b])
+		order.sort_custom(func(a, c): return smooth[a].y < smooth[c].y)
+		var idx := PackedInt32Array(order)
 		var m: int = idx.size()
 		var gait_fps: float = MammalSprites.bucket_gait_fps(b)
 		if m > mm.instance_count:
