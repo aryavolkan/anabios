@@ -46,6 +46,11 @@ uniform float fall_step = 0.0075;
 // `sim.biome_terrain_ids()`; exact ids beat re-classifying the lossy
 // biomass/succession-lerped colors. The atlas MUST stay a square grid
 // (extreme-aspect atlases corrupt on Metal — see terrain_sprites.gd).
+// The biome texture again, as a uniform: the elevation helpers below take a
+// sampler argument, and Godot's shader compiler will not hand the TEXTURE
+// built-in to a function (it logs a custom_samplers complaint per call), so
+// the ground layers set this alongside their sprite texture.
+uniform sampler2D biome_tex : filter_nearest, repeat_disable;
 uniform sampler2D tile_atlas : filter_nearest, repeat_disable;
 uniform sampler2D terrain_ids : filter_nearest, repeat_disable;
 uniform float tiles_enabled = 0.0; // biome_renderer flips this once textures are wired
@@ -216,7 +221,7 @@ void fragment() {
 		// elevation, and a brighter shelf on the cells that touch land.
 		vec3 deep = mix(base, vec3(0.16, 0.46, 0.84), 0.66);
 		vec3 shallow = mix(base, vec3(0.42, 0.78, 0.92), 0.78);
-		float es = elev_bilin(TEXTURE, cellf);
+		float es = elev_bilin(biome_tex, cellf);
 		float shallowness = clamp(es / max(sea_level, 1e-3), 0.0, 1.0);
 		shallowness *= shallowness;
 		outc = mix(deep, shallow, 0.22 * shallowness + 0.06 * step(0.01, coast));
@@ -329,8 +334,8 @@ void fragment() {
 		// Continuous gradient from the interpolated elevation (the per-cell
 		// taps above still drive the terraces).
 		vec2 grad = vec2(
-			elev_bilin(TEXTURE, cellf + vec2(1.0, 0.0)) - elev_bilin(TEXTURE, cellf - vec2(1.0, 0.0)),
-			elev_bilin(TEXTURE, cellf + vec2(0.0, 1.0)) - elev_bilin(TEXTURE, cellf - vec2(0.0, 1.0)));
+			elev_bilin(biome_tex, cellf + vec2(1.0, 0.0)) - elev_bilin(biome_tex, cellf - vec2(1.0, 0.0)),
+			elev_bilin(biome_tex, cellf + vec2(0.0, 1.0)) - elev_bilin(biome_tex, cellf - vec2(0.0, 1.0)));
 		float shade = dot(normalize(light_dir), grad) * relief_strength;
 		// Brighten slopes facing the light, darken those facing away.
 		// Kept gentle: at the old strength a slope facing away from the
@@ -372,7 +377,7 @@ void fragment() {
 			+ step(0.5, lv - lvR) * step(real, e0 - eR) * step(0.92, fc.x);
 		outc = mix(outc, outc * 0.6, clamp(ledge, 0.0, 1.0) * cliff_strength * 0.3);
 		// Altitude: highlands sit a touch brighter than the lowlands.
-		float es = elev_bilin(TEXTURE, cellf);
+		float es = elev_bilin(biome_tex, cellf);
 		if (on_rock > 0.5) {
 			// Stacked stone: contour ledges of the smoothed elevation (a
 			// five-tap box over the interpolated field so the lines follow
@@ -382,10 +387,10 @@ void fragment() {
 			// crags do; lines crowd where the slope is steep.
 			float esm = (
 				es
-				+ elev_bilin(TEXTURE, cellf + vec2(1.0, 0.0))
-				+ elev_bilin(TEXTURE, cellf - vec2(1.0, 0.0))
-				+ elev_bilin(TEXTURE, cellf + vec2(0.0, 1.0))
-				+ elev_bilin(TEXTURE, cellf - vec2(0.0, 1.0))
+				+ elev_bilin(biome_tex, cellf + vec2(1.0, 0.0))
+				+ elev_bilin(biome_tex, cellf - vec2(1.0, 0.0))
+				+ elev_bilin(biome_tex, cellf + vec2(0.0, 1.0))
+				+ elev_bilin(biome_tex, cellf - vec2(0.0, 1.0))
 			) * 0.2;
 			float f = fract(esm * terrace_levels * 3.0);
 			float ledge_dark = 1.0 - smoothstep(0.0, 0.18, f);

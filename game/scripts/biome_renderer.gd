@@ -130,6 +130,7 @@ func _setup(res: int) -> void:
 	_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
 	_tex = ImageTexture.create_from_image(_img)
 	texture = _tex
+	_terrain_mat.set_shader_parameter("biome_tex", _tex)
 	_mini_img = Image.create(_res, _res, false, Image.FORMAT_RGBA8)
 	_mini_tex = ImageTexture.create_from_image(_mini_img)
 	_mini_frame = 0

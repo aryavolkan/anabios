@@ -48,6 +48,7 @@ func upload(bytes: PackedByteArray, ids: PackedByteArray) -> bool:
 		_color_img = Image.create_from_data(APRON, APRON, false, Image.FORMAT_RGBA8, bytes)
 		_color_tex = ImageTexture.create_from_image(_color_img)
 		texture = _color_tex
+		_mat.set_shader_parameter("biome_tex", _color_tex)
 	else:
 		_color_img.set_data(APRON, APRON, false, Image.FORMAT_RGBA8, bytes)
 		_color_tex.update(_color_img)
