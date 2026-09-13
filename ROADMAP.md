@@ -164,11 +164,13 @@ the invasion margin or gets honestly closed.*
   *Status (PR #169):* Phases 0–5 landed — chunked bridge export and streamed
   ground, autotiled coasts, waterfalls, contour-ledged mountains, mottled
   tiles with clutter, mixed tree silhouettes, hand-authored 24 px quadruped
-  and hominin masters, spaced villages on dirt yards with paths, market
-  squares, the pixel-font HUD, and captures in `gallery/scale-*.png`. Still
-  open: a true cross-layer y-sort, the SubViewport pixel pipeline, caravan
-  endpoints at village gates, and the Huge-tier fps gate (only measured here
-  on software Vulkan, see `docs/perf-notes.md`).
+  and hominin masters y-sorted across species in one MultiMesh, spaced
+  villages in clearings on dirt yards with paths (camps, thatch huts,
+  timber-frame houses, palisades, fields, burning ruins), market squares
+  joined by dirt roads, the themed HUD, and captures in
+  `gallery/scale-*.png`. Still open: the SubViewport pixel pipeline and the
+  Huge-tier fps gate (only measured here on software Vulkan, see
+  `docs/perf-notes.md`).
 
 **Horizon-1 exit:** the era-3 climb is either emergent on the Earth map or closed
 with a named, measured blocker; O4's demographic claim is adjudicated; one new
