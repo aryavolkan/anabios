@@ -21,6 +21,10 @@ const LINE_COLOR := Color(0.85, 0.80, 0.55, 0.18)
 const LINE_DASH := 8.0
 # Convoy geometry, derived once from the cart constants (loop-invariant).
 const CONVOY_HALF := CART_GAP_FRAC * (CARTS_PER_ROUTE - 1) * 0.5
+# Carts halt at the edge of the market square (hub_layer draws the square
+# SQUARE_SCALE wide around the hub), the square's "gate", instead of
+# driving over the stalls: each route is trimmed by this much at both ends.
+const GATE_MARGIN := 34.0
 const CART_MID := (CARTS_PER_ROUTE - 1) * 0.5
 
 var _cart_mmi: MultiMeshInstance2D
@@ -102,9 +106,21 @@ func _build_routes() -> void:
 			if seen.has(key):
 				continue
 			seen[key] = true
+			var ends: PackedVector2Array = gate_ends(pi, dists[k]["pj"], GATE_MARGIN)
 			_routes.append(
-				{"a": i, "b": j, "pa": pi, "pb": dists[k]["pj"], "cargo": PackedInt32Array()}
+				{"a": i, "b": j, "pa": ends[0], "pb": ends[1], "cargo": PackedInt32Array()}
 			)
+
+
+# The route's endpoints pulled in by `margin` from each hub centre (the
+# square's gate); a route too short for two margins keeps its centres.
+static func gate_ends(pa: Vector2, pb: Vector2, margin: float) -> PackedVector2Array:
+	var d := pb - pa
+	var len := d.length()
+	if len <= margin * 2.0 + 1.0:
+		return PackedVector2Array([pa, pb])
+	var dir := d / len
+	return PackedVector2Array([pa + dir * margin, pb - dir * margin])
 
 
 # Apportion CARTS_PER_ROUTE carts to goods by largest-remainder over the summed

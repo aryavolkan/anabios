@@ -14,6 +14,7 @@ extends SceneTree
 
 const SettlementLayer = preload("res://scripts/settlement_layer.gd")
 const HubLayer = preload("res://scripts/hub_layer.gd")
+const CaravanLayer = preload("res://scripts/caravan_layer.gd")
 const VillageLayout = preload("res://scripts/village_layout.gd")
 
 var _failed := false
@@ -36,6 +37,16 @@ func _init() -> void:
 		)
 	_check(slots[0] != slots[1] and slots[1] != slots[2], "stall slots are distinct")
 	_check(HubLayer.stall_slots(Vector2.ZERO, 0).is_empty(), "no stalls, no slots")
+	# --- caravan routes stop at the square's gate ---
+	var ends: PackedVector2Array = CaravanLayer.gate_ends(Vector2(0, 0), Vector2(200, 0), 34.0)
+	_check(
+		ends[0] == Vector2(34, 0) and ends[1] == Vector2(166, 0),
+		"route ends pull in by the gate margin"
+	)
+	var short: PackedVector2Array = CaravanLayer.gate_ends(Vector2(0, 0), Vector2(40, 0), 34.0)
+	_check(
+		short[0] == Vector2(0, 0) and short[1] == Vector2(40, 0), "a short route keeps its centres"
+	)
 	# --- dirt yards: a 32 px earth patch, solid centre, clear corners ---
 	var yard: Image = SettlementLayer.yard_image()
 	_check(yard.get_width() == 32 and yard.get_height() == 32, "yard patch is 32x32")
