@@ -448,8 +448,12 @@ void fragment() {
 				+ elev_bilin(biome_tex, cellf - vec2(0.0, 1.0))
 			) * 0.2;
 			float f = fract(esm * terrace_levels * 3.0);
-			float ledge_dark = 1.0 - smoothstep(0.0, 0.18, f);
-			float ledge_lit = smoothstep(0.84, 1.0, f);
+			// Only where the ground climbs: on a near-flat outcrop the
+			// contours spread into concentric rings that read as a map, so
+			// the ledges fade out with the slope and flat stone stays plain.
+			float ledge_gate = smoothstep(0.0015, 0.006, length(grad));
+			float ledge_dark = (1.0 - smoothstep(0.0, 0.18, f)) * ledge_gate;
+			float ledge_lit = smoothstep(0.84, 1.0, f) * ledge_gate;
 			vec3 stone = mix(outc * 0.55, vec3(0.31, 0.30, 0.25), 0.5);
 			outc = mix(outc, stone, ledge_dark * cliff_strength * 0.8);
 			outc = mix(outc, outc * 1.22 + 0.05, ledge_lit * 0.7);
