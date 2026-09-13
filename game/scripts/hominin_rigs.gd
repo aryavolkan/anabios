@@ -272,10 +272,14 @@ static func pose_recipe(index: int) -> Dictionary:
 		# arm + weapon group is nudged back into the cell when a long-armed
 		# hominin would push it over the edge (see _fit).
 		16:
-			return {Part.ARM_F: [-1, 0, -35], "weapon": "spear_a"}
+			return {Part.ARM_F: [-1, 0, -35], "weapon": "spear_a", "shield": true}
 		17:
 			return {
-				Part.ARM_F: [-3, 0, -60], Part.BODY: [1, 0], Part.HEAD: [1, 0], "weapon": "spear_b"
+				Part.ARM_F: [-3, 0, -60],
+				Part.BODY: [1, 0],
+				Part.HEAD: [1, 0],
+				"weapon": "spear_b",
+				"shield": true,
 			}
 		18:
 			return {Part.ARM_F: [-3, 0, -90], Part.ARM_B: [-1, 0, -100], "weapon": "bow_a"}

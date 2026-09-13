@@ -164,6 +164,41 @@ func _check_hominin_masters() -> void:
 					if c.a > 0.5 and c.r > 0.6 and c.b > c.r + 0.02:
 						blade += 1
 			_check(blade >= 2, "%s pose %d carries its weapon (%d px)" % [name, cell, blade])
+		# Shield check: the spear poses (16/17) now carry a shield on the back
+		# arm too -- shield+spear is the board's default infantry silhouette,
+		# not reserved for the steel tier. shield_pixels() draws it in the same
+		# "f"/"w" zones as the weapon (steel boss / wood face), so match pixels
+		# against those exact colors, shaded variants included, and require
+		# well more than the spear alone could draw.
+		var pal: Dictionary = HM.palette(sp)
+		var shield_hues: Array = []
+		for zone in ["f", "w"]:
+			var base: Color = pal[zone]
+			shield_hues.append(base)
+			shield_hues.append(
+				Color(
+					minf(base.r * A.SHADE_LIT, 1.0),
+					minf(base.g * A.SHADE_LIT, 1.0),
+					minf(base.b * A.SHADE_LIT, 1.0),
+					1.0
+				)
+			)
+			shield_hues.append(
+				Color(base.r * A.SHADE_DARK, base.g * A.SHADE_DARK, base.b * A.SHADE_DARK, 1.0)
+			)
+		for cell in [A.POSE_SPEAR, A.POSE_SPEAR + 1]:
+			var shield_img: Image = cells[cell]
+			var shield := 0
+			for y in HM.PX:
+				for x in HM.PX:
+					var c := shield_img.get_pixel(x, y)
+					if c.a <= 0.5:
+						continue
+					for hue in shield_hues:
+						if c.is_equal_approx(hue):
+							shield += 1
+							break
+			_check(shield >= 15, "%s pose %d carries a shield (%d px)" % [name, cell, shield])
 	_check(
 		HM.build_cell(0, 0).get_data() != HM.build_cell(1, 0).get_data(),
 		"hominins differ in silhouette"
