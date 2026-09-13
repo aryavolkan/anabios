@@ -556,10 +556,12 @@ func _make_smoke_pool() -> void:
 		m.initial_velocity_max = 9.0
 		# A touch of sideways gravity gives every plume the same gentle wind.
 		m.gravity = Vector3(1.5, -5.0, 0)
-		m.scale_min = 1.1
-		m.scale_max = 2.0
+		# Compact puffs (the disc is sized in world units; at 2x a two-unit
+		# scale read as a grey haze over half the village).
+		m.scale_min = 0.45
+		m.scale_max = 0.8
 		var grad := Gradient.new()
-		grad.set_color(0, Color(0.62, 0.58, 0.55, 0.28))
+		grad.set_color(0, Color(0.66, 0.63, 0.60, 0.40))
 		grad.set_color(1, Color(0.55, 0.55, 0.58, 0.0))
 		var gt := GradientTexture1D.new()
 		gt.gradient = grad

@@ -14,7 +14,7 @@ shader_type canvas_item;
 // passes the colors straight through so heatmaps stay faithful.
 
 uniform float biome_mode = 1.0;        // 1 = terrain treatment, 0 = passthrough
-uniform float relief_strength = 7.0;   // hillshade intensity on land (elevation gradient)
+uniform float relief_strength = 3.5;   // hillshade intensity on land (elevation gradient)
 uniform float soften = 0.10;           // 0 = crisp blocks, 1 = fully smoothed
 uniform vec2 light_dir = vec2(-0.65, -0.75); // light from upper-left
 uniform float world_size = 512.0;      // sim world extent, for seamless shimmer
@@ -283,7 +283,9 @@ void fragment() {
 			elev_bilin(TEXTURE, cellf + vec2(0.0, 1.0)) - elev_bilin(TEXTURE, cellf - vec2(0.0, 1.0)));
 		float shade = dot(normalize(light_dir), grad) * relief_strength;
 		// Brighten slopes facing the light, darken those facing away.
-		outc = land_base * (1.0 + clamp(shade, -0.5, 0.5));
+		// Kept gentle: at the old strength a slope facing away from the
+		// light read as a large dark smear across open grass.
+		outc = land_base * (1.0 + clamp(shade, -0.22, 0.22));
 
 		// Terraces and cliff faces (D9). Levels are integers; a drop of one
 		// or more levels toward a neighbour paints that edge of the cell.
