@@ -20,6 +20,9 @@ const TOOLS: Array = [
 	["H", "[H] controls and legend", HudIcons.ERA],
 ]
 
+# Tool tile edge (px): the 16 px glyph at 2x plus the frame's padding.
+const TILE_PX := 36
+
 @onready var main: Node2D = get_node("../..")
 
 var _speed_btns: Dictionary = {}
@@ -54,6 +57,13 @@ func _ready() -> void:
 		b.icon = HudIcons.kind_texture(int(tool[2]))
 		b.tooltip_text = String(tool[1])
 		b.focus_mode = Control.FOCUS_NONE
+		# Square tiles with the glyph drawn at twice its size, unfiltered:
+		# the boards' hotbar is a row of large icon tiles, not text-height
+		# buttons with a small icon in the corner.
+		b.custom_minimum_size = Vector2(TILE_PX, TILE_PX)
+		b.expand_icon = true
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		b.pressed.connect(_on_tool.bind(String(tool[0])))
 		add_child(b)
 		move_child(b, $Restart.get_index())

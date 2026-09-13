@@ -246,9 +246,9 @@ grow_vertical = 0
 
 [node name="TimeControls" type="HBoxContainer" parent="UI"]
 script = ExtResource("4_time")
-offset_left = 410.0
+offset_left = 380.0
 offset_top = 756.0
-offset_right = 1030.0
+offset_right = 1040.0
 offset_bottom = 790.0
 
 [node name="PauseButton" type="Button" parent="UI/TimeControls"]
