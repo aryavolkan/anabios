@@ -58,6 +58,11 @@ var _built: bool = false  # route network built once (hubs are immutable at runt
 
 @onready var sim = get_node("../Simulation")
 @onready var _biome = get_node_or_null("../Biome")
+@onready var _cam: Camera2D = get_node_or_null("../Camera2D")
+# The dashed route tracers are a far-zoom aid; from CLOSE_ZOOM in the dirt
+# roads carry the routes and the dashes only scribble over them.
+const CLOSE_ZOOM := 2.0
+var _close: bool = false
 
 
 func _ready() -> void:
@@ -287,6 +292,10 @@ func _process(delta: float) -> void:
 		queue_redraw()  # paint the (static) route lines once
 	if _routes.is_empty():
 		return  # <2 hubs: no routes to draw
+	var close_now: bool = _cam != null and _cam.zoom.x >= CLOSE_ZOOM
+	if close_now != _close:
+		_close = close_now
+		queue_redraw()
 	if _frame % REDRAW_MIX_EVERY == 0:
 		_recompute_cargo(sim.hub_trade_tally())
 	_animate()
@@ -336,7 +345,7 @@ func _write(mm: MultiMesh, xfs: Array) -> void:
 # Faint dashed route lines, drawn at all 9 torus offsets so seam-crossing routes
 # read correctly. Static: repainted only when the route network is (re)built.
 func _draw() -> void:
-	if _routes.is_empty():
+	if _routes.is_empty() or _close:
 		return
 	var world: float = sim.world_size()
 	for gy in range(-1, 2):
