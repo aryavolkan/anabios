@@ -2,7 +2,7 @@ extends RefCounted
 # Row-string pixel maps for the structure kinds added after the base set
 # (structure_sprites.gd keeps the first twenty; this file holds the rest so
 # neither crosses the lint file-length cap). Indexed by kind - BASE_COUNT,
-# in enum order: HUT_B, HUT_C, STALL, TENT_B. Same palette, same 32x32
+# in enum order: HUT_B, HUT_C, STALL, TENT_B, HOUSE. Same palette, same 32x32
 # top-down authoring, same auto-outline pass.
 
 const BASE_COUNT := 20
@@ -147,5 +147,41 @@ const ROWS: Array = [
 		"................................",
 		"................................",
 		"................................",
+	],
+	# HOUSE -- timber-frame house with a slate roof, plaster walls between
+	# dark studs, two lit windows and a door: the era-2 dwelling
+	[
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		".............KKKKKK.............",
+		"............KSSSSSSK............",
+		"...........KSssssssSK...........",
+		"..........KSssssssssSK..........",
+		".........KSssssssssssSK.........",
+		"........KSssssssssssssSK........",
+		".......KSssssssssssssssSK.......",
+		"......KSssssssssssssssssSK......",
+		".....KSssssssssssssssssssSK.....",
+		"....KSssssssssssssssssssssSK....",
+		"...KSssssssssssssssssssssssSK...",
+		"..KSSSSSSSSSSSSSSSSSSSSSSSSSSK..",
+		"..KhhhhhhhhhhhhhhhhhhhhhhhhhhK..",
+		"..KhbhhhhbhhhhhhhhhhbhhhhbhhhK..",
+		"..KhbhhKooKhhhhhhhhhbhhKooKhhK..",
+		"..KhbhhKooKhhhbbbbhhbhhKooKhhK..",
+		"..KhbhhhhbhhhhbddbhhbhhhhbhhhK..",
+		"..KhbbbbbbbbbbbddbbbbbbbbbbbhK..",
+		"..KhhhhhhhhhhhhddhhhhhhhhhhhhK..",
+		"...KKKKKKKKKKKKddKKKKKKKKKKKK...",
+		"............KKKKKKKK............",
+		"............KKKKKKKK............",
+		"............KKKKKKKK............",
+		"............KKKKKKKK............",
+		"...KKKKKKKKKKKKKKKKKKKKKKKKKK...",
+		"..KkkkkkkkkkkKKKKKKkkkkkkkkkkK..",
+		"..KkkkkkkkkkkkkkkkkkkkkkkkkkkK..",
+		"...KKKKKKKKKKKKKKKKKKKKKKKKKK...",
 	],
 ]

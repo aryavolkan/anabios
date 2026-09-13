@@ -162,6 +162,18 @@ func _init() -> void:
 			hut_kinds[int(p["kind"])] = true
 	_check(hut_kinds.size() >= 2, "a large era-1 village mixes hut silhouettes")
 
+	# --- era 2 dwellings are timber-frame houses, no thatch hut left ---
+	var stone := L.plan(11, Vector2.ZERO, 80, 2, 0, no_water)
+	var houses := 0
+	var thatch := 0
+	for p in stone:
+		var k2: int = int(p["kind"])
+		if k2 == L.HOUSE:
+			houses += 1
+		elif k2 == L.HUT or k2 == L.HUT_B:
+			thatch += 1
+	_check(houses >= 2 and thatch == 0, "an era-2 village builds houses, not thatch huts")
+
 	# --- a fortified farming village walls its huts and keeps the fields outside ---
 	var fort := L.plan(13, Vector2.ZERO, 60, 1, L.FLAG_TERRITORY | L.FLAG_FARMING, no_water)
 	var wall_x := 0

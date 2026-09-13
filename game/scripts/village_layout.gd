@@ -37,11 +37,15 @@ enum {
 	HUT_C,
 	STALL,
 	TENT_B,
+	HOUSE,
 }
 # The two tent silhouettes an era-0 dwelling cell may take.
 const TENT_KINDS: PackedInt32Array = [TENT, TENT_B]
 # The three hut silhouettes an era-1 dwelling cell may take.
 const HUT_KINDS: PackedInt32Array = [HUT, HUT_B, HUT_C]
+# Era-2 dwellings: timber-frame houses, with the longhouse kept as the
+# communal building.
+const HOUSE_KINDS: PackedInt32Array = [HOUSE, HOUSE, HUT_C]
 
 # One structure occupies one grid cell of GRID world units (a 32 px sprite at
 # 0.5 world units per texel, per D1).
@@ -314,9 +318,8 @@ static func plan(
 		while placed < count and i < lattice_cells.size():
 			var c: Vector2i = lattice_cells[i]
 			i += 1
-			var hk: int = HUT_KINDS[
-				int(hash2(sid * 3 + 1, c.x, c.y) * HUT_KINDS.size()) % HUT_KINDS.size()
-			]
+			var kinds: PackedInt32Array = HUT_KINDS if era < 2 else HOUSE_KINDS
+			var hk: int = kinds[int(hash2(sid * 3 + 1, c.x, c.y) * kinds.size()) % kinds.size()]
 			if _place(c, hk, _flip_bit(sid, c), occupied, anchor, is_water, out):
 				huts.append(c)
 				placed += 1
@@ -382,7 +385,7 @@ static func plan(
 		var burnable: Array = []
 		for idx in out.size():
 			var kind: int = out[idx]["kind"]
-			if TENT_KINDS.has(kind) or HUT_KINDS.has(kind):
+			if TENT_KINDS.has(kind) or HUT_KINDS.has(kind) or HOUSE_KINDS.has(kind):
 				var c: Vector2i = out[idx]["cell"]
 				burnable.append([hash2(sid * 7 + 3, c.x, c.y), idx])
 		burnable.sort_custom(func(a, b): return a[0] < b[0])

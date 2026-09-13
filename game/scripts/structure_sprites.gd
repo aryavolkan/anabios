@@ -40,8 +40,9 @@ enum {
 	HUT_C,
 	STALL,
 	TENT_B,
+	HOUSE,
 }
-const KIND_COUNT := 24
+const KIND_COUNT := 25
 const ExtraRows = preload("res://scripts/structure_rows_extra.gd")
 const CELL_PX := 32
 const ATLAS_COLS := 8  # 8x8 grid of 32px cells = a square 256x256 atlas; cell index == kind
@@ -71,6 +72,7 @@ const NAMES: PackedStringArray = [
 	"Longhouse",
 	"Stall",
 	"Yurt",
+	"House",
 ]
 
 # 32x32 row-string pixel maps per kind, indexed by the enum. '.' is
@@ -930,8 +932,8 @@ static func build_variant(kind: int, phase: int) -> ImageTexture:
 
 # Camp (era 0): tents, windbreak, hearth. Thatch (era 1): huts, fences,
 # fields, granary, well, and the burnt ruin left by a raid. Timber/stone
-# (era 2): everything else -- halls, palisade, gate, tower, mill, forge,
-# scriptorium, banners.
+# (era 2): everything else -- houses, halls, palisade, gate, tower, mill,
+# forge, scriptorium, banners.
 static func era_of(kind: int) -> int:
 	match kind:
 		TENT, TENT_B, WINDBREAK, HEARTH:

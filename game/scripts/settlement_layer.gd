@@ -377,6 +377,7 @@ const _YARD_KINDS: PackedInt32Array = [
 	StructureSprites.HUT,
 	StructureSprites.HUT_B,
 	StructureSprites.HUT_C,
+	StructureSprites.HOUSE,
 	StructureSprites.WELL,
 	StructureSprites.FORGE,
 	StructureSprites.SCRIPTORIUM,
