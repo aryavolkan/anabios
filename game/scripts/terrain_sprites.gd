@@ -648,16 +648,17 @@ const _PROP_MAPS: Array = [
 # terrain's head prop, the rest are the clutter a cell may grow instead
 # (flowers and tufts on grass, mushrooms and stumps under the trees), picked
 # per cell by prop_variant_for() so the ground reads as lived-in rather than
-# one bush repeated.
+# one bush repeated. A kind listed twice is twice as likely (mushrooms stay
+# an accent under the trees, not a polka dot over the whole wood).
 const _TERRAIN_PROPS: Array = [
 	[],
 	[BUSH, FLOWERS, TUFT],
-	[OAK, MUSHROOM, STUMP],
+	[OAK, OAK, STUMP, MUSHROOM],
 	[CACTUS],
 	[BOULDER],
 	[ACACIA, TUFT],
-	[JUNGLE, MUSHROOM],
-	[PINE, STUMP],
+	[JUNGLE, JUNGLE, MUSHROOM],
+	[PINE, PINE, STUMP],
 	[SHRUB, TUFT],
 ]
 
