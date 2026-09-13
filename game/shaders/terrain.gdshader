@@ -19,7 +19,7 @@ uniform float soften = 0.10;           // 0 = crisp blocks, 1 = fully smoothed
 uniform vec2 light_dir = vec2(-0.65, -0.75); // light from upper-left
 uniform float world_size = 512.0;      // sim world extent, for seamless shimmer
 uniform float sea_level = 0.35;        // viewer-derived water line, for depth shading
-uniform float vignette = 0.06;         // corner darkening on terrain (0 = off)
+uniform float vignette = 0.0;          // corner darkening on terrain (0 = off; the boards have none)
 // Land finish: a saturation lift and brightness gain applied after relief and
 // shore passes so the muted sim palette reads as pixel art, not a heatmap.
 uniform float vibrance = 0.18;

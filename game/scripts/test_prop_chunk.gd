@@ -147,5 +147,20 @@ func _init() -> void:
 	if _failed:
 		quit(1)
 		return
+	# Per-tree tint: within the swing, varies from tree to tree, opaque.
+	var seen := {}
+	for i in 40:
+		var c: Color = PC.tree_tint(Vector2(i * 7.3, i * 4.1))
+		_check(c.a == 1.0, "tree tint is opaque")
+		_check(c.r > 1.0 - PC.TINT_SWING - PC.TINT_HUE - 0.02, "tree tint stays near white (r)")
+		_check(c.b < 1.0 + PC.TINT_SWING + PC.TINT_HUE + 0.02, "tree tint stays near white (b)")
+		seen[str(c)] = true
+	_check(seen.size() >= 20, "tree tints vary from tree to tree (%d distinct)" % seen.size())
+	var tint_a: Color = PC.tree_tint(Vector2(10, 10))
+	var tint_b: Color = PC.tree_tint(Vector2(10, 10))
+	_check(tint_a == tint_b, "tree tint is stable")
+	if _failed:
+		quit(1)
+		return
 	print("test_prop_chunk: all passed")
 	quit(0)

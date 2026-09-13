@@ -82,6 +82,22 @@ static func plan(cx: int, cy: int, ids66: PackedByteArray, res: int, world: floa
 	return out
 
 
+# Per-tree tone from its planted position: a stable +-7% brightness swing
+# and a slight lean toward yellow-green or blue-green, so a forest reads
+# as many trees under one light rather than one crown stamped a hundred
+# times (the boards' woods vary tree to tree).
+const TINT_SWING := 0.07
+const TINT_HUE := 0.05
+
+
+static func tree_tint(pos: Vector2) -> Color:
+	var h1 := _hash2(int(floor(pos.x * 3.0)), int(floor(pos.y * 3.0)))
+	var h2 := _hash2(int(floor(pos.y * 3.0)) + 311, int(floor(pos.x * 3.0)) + 127)
+	var v := 1.0 + (h1 - 0.5) * 2.0 * TINT_SWING
+	var warm := (h2 - 0.5) * 2.0 * TINT_HUE
+	return Color(v * (1.0 + warm), v, v * (1.0 - warm), 1.0)
+
+
 # Pure canopy plan for chunk (cx, cy): per FloraSprites kind, world positions
 # (no wrap offset) of the trees its inner cells grow, y-sorted. Density and
 # kind per terrain come from FloraSprites; the hash is taken at the global
@@ -152,6 +168,7 @@ func build(
 				i,
 				Transform2D(0.0, Vector2(CANOPY_SCALE, CANOPY_SCALE), 0.0, pos - Vector2(0.0, 5.0))
 			)
+			mm.set_instance_color(i, tree_tint(pos))
 			i += 1
 
 
@@ -203,6 +220,7 @@ func _make_canopy_mmis() -> void:
 	for k in FloraSprites.KIND_COUNT:
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_2D
+		mm.use_colors = true  # per-tree tone (tree_tint)
 		var quad := QuadMesh.new()
 		quad.size = Vector2(FloraSprites.CELL_PX, FloraSprites.CELL_PX)
 		mm.mesh = quad

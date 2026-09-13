@@ -216,13 +216,20 @@ func shadow_mmi() -> MultiMeshInstance2D:
 
 
 # A soft white ellipse (alpha falls off toward the rim) filling the cell.
+# A hard-edged ellipse with a one-texel checker-dithered rim: pixel art
+# has no soft shadows, and the smooth radial disc this used read as a
+# blurred smudge under every crisp figure and hut.
 static func shadow_image(res: int) -> Image:
 	var img := Image.create(res, res, false, Image.FORMAT_RGBA8)
 	var c := (res - 1) * 0.5
 	for y in res:
 		for x in res:
 			var d := Vector2((x - c) / c, (y - c) / c).length()
-			var a := clampf(1.0 - smoothstep(0.55, 1.0, d), 0.0, 1.0)
+			var a := 0.0
+			if d <= 0.78:
+				a = 1.0
+			elif d <= 0.98 and (x + y) % 2 == 0:
+				a = 1.0
 			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
 	return img
 
