@@ -405,12 +405,23 @@ static func yard_scale(kind: int) -> float:
 
 # Points every `step` world units along the open stretch from `from` toward
 # `to`, leaving the first and last step clear of the two yards.
+# Steps wander up to PATH_WANDER sideways on a stable hash of the step and
+# the path's start, so a trodden path winds a little the way the boards'
+# do instead of running as a ruled line of dots.
+const PATH_WANDER := 1.5
+
+
 static func path_steps(from: Vector2, to: Vector2, step: float) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	var d := from.distance_to(to)
 	var n := int(d / step)
+	if n <= 0:
+		return out
+	var dir := (to - from) / maxf(d, 0.001)
+	var side := Vector2(-dir.y, dir.x)
 	for i in range(2, n - 1):
-		out.append(from.lerp(to, float(i) / float(n)))
+		var h := fposmod(sin(float(i) * 7.31 + from.x * 0.53 + from.y * 0.29) * 43758.5453, 1.0)
+		out.append(from.lerp(to, float(i) / float(n)) + side * ((h - 0.5) * 2.0 * PATH_WANDER))
 	return out
 
 

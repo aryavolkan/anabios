@@ -116,8 +116,16 @@ func _init() -> void:
 	_check(sw_a == sw_b, "tone swing is stable")
 	var steps: PackedVector2Array = SettlementLayer.path_steps(Vector2.ZERO, Vector2(70, 0), 7.0)
 	_check(steps.size() == 7, "a 70-unit path gets seven 7-unit steps clear of both yards")
+	var wandered := false
+	for s in steps:
+		_check(
+			absf(s.y) <= SettlementLayer.PATH_WANDER + 0.001,
+			"path step %s wanders within bounds" % s
+		)
+		wandered = wandered or absf(s.y) > 0.05
+	_check(wandered, "path steps wander off the ruled line")
 	_check(
-		steps[0] == Vector2(14, 0) and steps[-1] == Vector2(56, 0),
+		is_equal_approx(steps[0].x, 14.0) and is_equal_approx(steps[-1].x, 56.0),
 		"path steps stay between the yards"
 	)
 	_check(
