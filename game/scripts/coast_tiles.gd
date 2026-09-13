@@ -24,10 +24,10 @@ const CELL_PX := 16
 const ATLAS_COLS := 4  # 4x4 square atlas (Metal constraint): 16 cells = 16 masks.
 
 # Palette: sand, wet sand, shallow water, foam.
-const SAND := Color("d9c58a")
-const WET_SAND := Color("bfa86e")
-const SHALLOW := Color("2f6f9c")
-const FOAM := Color("bcd8e6")
+const SAND := Color("e8d19f")
+const WET_SAND := Color("d4b87a")
+const SHALLOW := Color("6bb4d0")
+const FOAM := Color("d8ecf3")
 
 # Water-weight bands around the 0.5 waterline (see water_weight): the land
 # side wears sand, the waterline foam, the water side a shallow tint.
