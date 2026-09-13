@@ -48,6 +48,25 @@ func _init() -> void:
 		_check(opaque >= 60, "%s has a readable silhouette (%d opaque px)" % [S.NAMES[k], opaque])
 		images.append(img)
 
+	# --- walled dwellings that used to be windowless now carry a lit window -
+	var lit_window_a := Color(S.PAL["o"])
+	var lit_window_b := Color(S.PAL["y"])
+	for k in [S.HUT, S.HUT_B, S.HALL]:
+		var win_img: Image = S.kind_image(k)
+		var has_lit_window := false
+		for y in win_img.get_height():
+			for x in win_img.get_width():
+				var px := win_img.get_pixel(x, y)
+				if (
+					px.a > 0.5
+					and (px.is_equal_approx(lit_window_a) or px.is_equal_approx(lit_window_b))
+				):
+					has_lit_window = true
+					break
+			if has_lit_window:
+				break
+		_check(has_lit_window, "%s has at least one lit window pixel" % S.NAMES[k])
+
 	# --- every pair of kinds is visually distinct --------------------------
 	for i in S.KIND_COUNT:
 		for j in range(i + 1, S.KIND_COUNT):
