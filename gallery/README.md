@@ -43,6 +43,7 @@ pins an agent in the unit card.
 | File | Scenario / tick / zoom | What you're seeing |
 |---|---|---|
 | scale-settlement-t891-village-4x.png | `settlement` t891 4× (default camera, `ANABIOS_INSPECT=1`) | A camp on packed-earth yards with paths to the hearth, tents spaced a hut-width apart, the crowd capped to one figure per 10 units, a market square with awning stalls beside it, the unit card. |
+| scale-settlement-t891-fortified-2x.png | `settlement` t891 2× (`ANABIOS_VILLAGE_ERA=2 ANABIOS_VILLAGE_FLAGS=123`) | The same camp forced into its fortified era: a log palisade hugging the huts, a gate with banners to the south, a watchtower, fenced fields outside the wall. |
 | scale-settlement-t3120-camp-4x.png | `settlement` t3120 4× | The same camp later: hearth smoke, herds at the square, codex species page. |
 | scale-settlement-t1020-codex-species-2x.png | `settlement` t1020 2× (`ANABIOS_CODEX_TAB=1`) | The settlement peninsula: flat lake water with block ripples, dithered biome borders, mixed oak silhouettes, the pixel-font HUD. |
 | scale-settlement-t1591-1x.png | `settlement` t1591 1× | The same world at 1×. |
