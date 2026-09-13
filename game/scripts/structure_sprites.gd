@@ -803,13 +803,67 @@ const PAL: Dictionary = {
 	"e": "f4f4f4",
 }
 
-# --- animated kinds: hearth flame, forge glow, ember-lit ruin, banner ------
+# --- animated kinds: hearth flame, forge glow, ember-lit ruin, banner, mill -
 # Phase 1 pixel overrides ([x, y, key]) applied ON TOP of the base rows,
 # touching only flame/ember pixels -- walls, roofs, footprint, enum and
 # NAMES are exactly the base's, same discipline as
 # BuildingSprites._LIFT_BLOCKS (Fire/Metalworking).
-const ANIMATED_KINDS: PackedInt32Array = [HEARTH, FORGE, RUIN_BURNT, BANNER]
+const ANIMATED_KINDS: PackedInt32Array = [HEARTH, FORGE, RUIN_BURNT, BANNER, MILL]
 const _LIFT: Dictionary = {
+	# Mill: the wheel's upright spokes become diagonal ones on the odd
+	# phase (the upright pair painted back to rim, the diagonals drawn in),
+	# an eighth of a turn, so the water wheel turns.
+	MILL:
+	[
+		[7, 12, "S"],
+		[8, 12, "S"],
+		[7, 13, "S"],
+		[8, 13, "S"],
+		[7, 14, "S"],
+		[8, 14, "S"],
+		[7, 15, "S"],
+		[8, 15, "S"],
+		[7, 18, "S"],
+		[8, 18, "S"],
+		[7, 19, "S"],
+		[8, 19, "S"],
+		[7, 20, "S"],
+		[8, 20, "S"],
+		[7, 21, "S"],
+		[8, 21, "S"],
+		[3, 16, "S"],
+		[3, 17, "S"],
+		[4, 16, "S"],
+		[4, 17, "S"],
+		[5, 16, "S"],
+		[5, 17, "S"],
+		[6, 16, "S"],
+		[6, 17, "S"],
+		[9, 16, "S"],
+		[9, 17, "S"],
+		[10, 16, "S"],
+		[10, 17, "S"],
+		[11, 16, "S"],
+		[11, 17, "S"],
+		[12, 16, "S"],
+		[12, 17, "S"],
+		[6, 15, "b"],
+		[5, 14, "b"],
+		[4, 13, "b"],
+		[3, 12, "b"],
+		[9, 15, "b"],
+		[10, 14, "b"],
+		[11, 13, "b"],
+		[12, 12, "b"],
+		[6, 18, "b"],
+		[5, 19, "b"],
+		[4, 20, "b"],
+		[3, 21, "b"],
+		[9, 18, "b"],
+		[10, 19, "b"],
+		[11, 20, "b"],
+		[12, 21, "b"],
+	],
 	# Banner: the flag's free edge bellies out a pixel on its middle rows
 	# on the odd phase, so the gate banners flap instead of hanging stiff.
 	BANNER:
