@@ -34,9 +34,10 @@ const AnimState = preload("res://scripts/anim_state.gd")
 # Figures at ~60% of a canopy tree's height, the reference boards' ratio
 # (24 px hero art at 10 world units; the 32 px trees stand 16 units tall).
 const BODY_SCALE: float = 8.5
-# Body ceiling in world units: a structure cell is 16, and a figure taller
-# than the hut it stands beside breaks the scale the reference boards keep.
-const BODY_CAP: float = 16.0
+# Body ceiling in world units: a structure cell is 16, and the boards keep
+# their deer and people at about two thirds of a hut; a figure as tall as
+# the hut it stands beside breaks that scale.
+const BODY_CAP: float = 12.0
 # Close-zoom crowd cap (see refresh): one drawn figure per crowd cell once
 # the camera zoom reaches CROWD_ZOOM. The cell is CROWD_CELL world units at
 # CROWD_ZOOM and grows with the square root of the zoom (17 at 4x, 24 at
