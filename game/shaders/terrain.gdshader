@@ -235,7 +235,10 @@ void fragment() {
 		float es = elev_bilin(biome_tex, cellf);
 		float shallowness = clamp(es / max(sea_level, 1e-3), 0.0, 1.0);
 		shallowness *= shallowness;
-		outc = mix(deep, shallow, 0.22 * shallowness + 0.06 * step(0.01, coast));
+		// The depth cue in dithered steps, like the land's relief.
+		vec2 depth_tex = floor(world_pos / max(texel_w, 1e-4));
+		float shallow_q = floor(shallowness * 4.0 + bayer4(depth_tex + vec2(4.0, 1.0))) / 4.0;
+		outc = mix(deep, shallow, 0.22 * shallow_q + 0.06 * step(0.01, coast));
 
 		// Pixel ripples: the water tile family's light dashes and dark
 		// specks, cycled through its variants on a per-cell phase so the
