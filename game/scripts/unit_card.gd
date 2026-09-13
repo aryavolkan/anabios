@@ -21,7 +21,7 @@ const PORTRAIT := 48
 const CARD_W := 200
 const CARD_H := 126
 const BAR_W := 118
-const BAR_H := 8
+const BAR_H := 13
 const HP_FILL := Color(0.42, 0.80, 0.36)
 const STAMINA_FILL := Color(0.35, 0.62, 0.95)
 const BAR_BG := Color(0.06, 0.09, 0.11)
@@ -110,12 +110,21 @@ func _portrait() -> Dictionary:
 func _bar(y: int, icon: int, label: String, frac: float, fill: Color) -> void:
 	_card.draw_texture_rect(HudIcons.kind_texture(icon), Rect2(PORTRAIT + 10, y, 16, 16), false)
 	var bx := PORTRAIT + 30
+	var bar_top := y + 3
+	_card.draw_rect(Rect2(bx, bar_top, BAR_W, BAR_H), BAR_BG)
+	_card.draw_rect(Rect2(bx, bar_top, BAR_W * clampf(frac, 0.0, 1.0), BAR_H), fill)
+	_card.draw_rect(Rect2(bx, bar_top, BAR_W, BAR_H), UiTheme.ACCENT_DIM, false, 1.0)
+	# Label painted on top of the fill, centered inside the bar itself (not a
+	# separate line above it), matching the reference board's unit card.
 	_card.draw_string(
-		_font, Vector2(bx, y + 11), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, UiTheme.TEXT
+		_font,
+		Vector2(bx + 4, bar_top + BAR_H / 2 + 4),
+		label,
+		HORIZONTAL_ALIGNMENT_LEFT,
+		-1,
+		10,
+		UiTheme.TEXT
 	)
-	_card.draw_rect(Rect2(bx, y + 13, BAR_W, BAR_H), BAR_BG)
-	_card.draw_rect(Rect2(bx, y + 13, BAR_W * clampf(frac, 0.0, 1.0), BAR_H), fill)
-	_card.draw_rect(Rect2(bx, y + 13, BAR_W, BAR_H), UiTheme.ACCENT_DIM, false, 1.0)
 
 
 func _draw_card() -> void:
