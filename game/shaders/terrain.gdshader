@@ -456,7 +456,28 @@ void fragment() {
 		// waterline, fading inland, so coasts read as coast rather than a hard
 		// color cut. Kept subtle and tinted to the cell so it reads under any
 		// biome (grass/forest/desert).
-		vec3 sand = vec3(0.80, 0.73, 0.52);
+		// River banks: when the water next door is a narrow river cell (at
+		// least two land neighbours of its own), the shore is a mossy mud
+		// bank, not a beach. The boards' rivers run between grass banks;
+		// the lake-shore sand on both sides of every stream read as a
+		// desert road through the forest.
+		float river = 0.0;
+		if (coast > 0.0 && tiles_enabled > 0.5) {
+			if (water_cell(cell0 - vec2(1.0, 0.0), cL)) {
+				river = max(river, step(1.5, land_neighbours(cell0 - vec2(1.0, 0.0))));
+			}
+			if (water_cell(cell0 + vec2(1.0, 0.0), cR)) {
+				river = max(river, step(1.5, land_neighbours(cell0 + vec2(1.0, 0.0))));
+			}
+			if (water_cell(cell0 - vec2(0.0, 1.0), cU)) {
+				river = max(river, step(1.5, land_neighbours(cell0 - vec2(0.0, 1.0))));
+			}
+			if (water_cell(cell0 + vec2(0.0, 1.0), cD)) {
+				river = max(river, step(1.5, land_neighbours(cell0 + vec2(0.0, 1.0))));
+			}
+		}
+		vec3 bank_mud = vec3(0.42, 0.40, 0.24);
+		vec3 sand = mix(vec3(0.80, 0.73, 0.52), bank_mud, river);
 		outc = mix(outc, sand, coast * 0.18);
 
 		// Slightly deepen the shoreline on the land side just past the beach so
@@ -468,7 +489,9 @@ void fragment() {
 		// under the relief and shore-darkening passes above.
 		float lum = luma(outc);
 		outc = mix(vec3(lum), outc, 1.0 + vibrance) * land_lift;
-		outc = mix(outc, coast_tile.rgb, coast_tile.a * detail);
+		// The autotile's sand bands turn to bank mud beside a river.
+		vec3 shore_tile = mix(coast_tile.rgb, coast_tile.rgb * vec3(0.55, 0.58, 0.42), river);
+		outc = mix(outc, shore_tile, coast_tile.a * detail);
 	}
 
 	// Soft vignette to frame the field — darkens screen corners only, and only

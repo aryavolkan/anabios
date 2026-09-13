@@ -53,7 +53,7 @@ pins an agent in the unit card.
 | scale-trade-hubs-t600-roads-2x.png | `trade-hubs` t600 2× at (1060, 298) | Dirt roads worn along the caravan routes from the market square through the woods, stopping at the water. |
 | scale-trade-hubs-t600-market-4x.png | `trade-hubs` t600 4× at (1060, 298) | A trade hub as a market square in the woods with its roads leading off, a snow patch with an ordered-dither edge on the outcrop behind it. |
 | scale-riverlands-t291-relief-2x.png | `riverlands` t291 2× | Rivers with waterfalls on their steep stretches, contour-ledged mountains in warm olive stone with a dithered snow line, forests mixing three oaks, clutter on the grass. |
-| scale-riverlands-t291-river-4x.png | `riverlands` t291 4× at (2367, 1017) | A one-cell river running diagonally through the oaks as one stream: the diagonal coast tiles carry a channel instead of pinching the cells into beads. |
+| scale-riverlands-t291-river-4x.png | `riverlands` t291 4× at (2367, 1017) | A one-cell river running diagonally through the oaks as one stream between mud banks: the diagonal coast tiles carry a channel instead of pinching the cells into beads, and a river shore is bank, not beach. |
 | scale-riverlands-t291-clutter-4x.png | `riverlands` t291 4× at (2500, 1200) | Flowers, tufts, mushrooms and stumps at 4×. |
 | scale-riverlands-t291-lake-4x.png | `riverlands` t291 4× at (2427, 1357) | A desert lake: one flat blue, sparse strokes, foam and beach from the coast autotile. |
 | scale-inventions-t2620-coast-2x.png | `inventions` t2620 2× (`ANABIOS_CODEX_TAB=1`) | Hominin bands along a coast. |
