@@ -31,8 +31,8 @@ const FxMath = preload("res://scripts/fx_math.gd")
 # with a floor so the hominin silhouette (head, limbs) reads as a figure at the
 # default cluster-framed zoom — not just when zoomed all the way in.
 # Figures at ~60% of a canopy tree's height, the reference boards' ratio
-# (16 px art at 9 world units; the 32 px trees stand 16 units tall).
-const BODY_SCALE: float = 9.0
+# (24 px hero art at 10 world units; the 32 px trees stand 16 units tall).
+const BODY_SCALE: float = 10.0
 const BODY_MIN: float = 6.0
 # World units of margin added on every side of the camera's world rect before
 # querying alive_in_rect(): keeps an agent walking toward the edge of the

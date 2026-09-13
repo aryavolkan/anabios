@@ -166,6 +166,19 @@ const POSE_STEEL := 20
 const ATLAS_COLS := 8
 const ATLAS_PX := 128
 const CELL_PX := 16
+# Hero atlas (D1's 24 px figures, adopted): the authored 16 px rigs are
+# scaled 1.5x onto 24 px cells, shaded (lit crown, dark belly) and given
+# per-archetype accents (mammal_sprites.ACCENTS, anchored to each pose's
+# head block), then packed ATLAS_COLS per row into a square 192x192 grid.
+# field_agent.gdshader reads the cell/atlas sizes as uniforms.
+const HERO_PX := 24
+const HERO_ATLAS_PX := 192
+# The authored figure occupies the bottom HERO_FIGURE_PX rows of the hero
+# cell; the rows above are headroom for accents (antlers, ears).
+const HERO_FIGURE_PX := 20
+const HERO_HEADROOM := HERO_PX - HERO_FIGURE_PX
+const SHADE_LIT := 1.22
+const SHADE_DARK := 0.72
 # Gait: 0 neutral (idle), 1 contact-left, 2 passing (whole figure lifted 1px —
 # the walk bob), 3 contact-right. The shader cycles 1→2→3→2 when moving and
 # holds 0 when idle, so the stride reads as step-lift-step-lift.
@@ -514,11 +527,74 @@ const FIELD_ZONE_COLORS: Array = [
 ]
 
 
-# Build one 16x16 cell from `blocks` ([x,y,w,h] white, or [x,y,w,h,key] via
-# PAL), plus an auto 1px dark outline (every empty pixel touching the figure;
-# collected first, then written, so outline pixels don't seed more outline).
-static func _build_cell(blocks: Array) -> Image:
-	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+# Rescale rect blocks ([x, y, w, h, ...]) from one cell size to another,
+# rounding each edge so adjacent blocks stay adjacent and no block vanishes.
+static func scale_blocks(blocks: Array, from_px: int, to_px: int) -> Array:
+	var f := float(to_px) / float(from_px)
+	var out: Array = []
+	for b in blocks:
+		var x0 := int(round(float(b[0]) * f))
+		var y0 := int(round(float(b[1]) * f))
+		var x1 := int(round(float(b[0] + b[2]) * f))
+		var y1 := int(round(float(b[1] + b[3]) * f))
+		var nb: Array = [x0, y0, maxi(1, x1 - x0), maxi(1, y1 - y0)]
+		for extra in b.slice(4):
+			nb.append(extra)
+		out.append(nb)
+	return out
+
+
+# The head of a right-facing pose: its topmost block, the rightmost on ties.
+static func head_block(blocks: Array) -> Rect2i:
+	var best := Rect2i(0, 0, 0, 0)
+	var found := false
+	for b in blocks:
+		var r := Rect2i(b[0], b[1], b[2], b[3])
+		var higher: bool = r.position.y < best.position.y
+		var righter: bool = r.position.y == best.position.y and r.end.x > best.end.x
+		if not found or higher or righter:
+			best = r
+			found = true
+	return best
+
+
+# Lit crown / dark belly: an opaque pixel with nothing above it brightens,
+# one with nothing below it darkens, so a flat block figure reads as a
+# rounded body. Applied before the outline pass.
+static func shade(img: Image, px: int) -> void:
+	var lit: Array = []
+	var dark: Array = []
+	for y in px:
+		for x in px:
+			if img.get_pixel(x, y).a <= 0.5:
+				continue
+			if y == 0 or img.get_pixel(x, y - 1).a <= 0.5:
+				lit.append(Vector2i(x, y))
+			elif y == px - 1 or img.get_pixel(x, y + 1).a <= 0.5:
+				dark.append(Vector2i(x, y))
+	for p in lit:
+		var c := img.get_pixel(p.x, p.y)
+		img.set_pixel(
+			p.x,
+			p.y,
+			Color(
+				minf(c.r * SHADE_LIT, 1.0),
+				minf(c.g * SHADE_LIT, 1.0),
+				minf(c.b * SHADE_LIT, 1.0),
+				c.a
+			)
+		)
+	for p in dark:
+		var c := img.get_pixel(p.x, p.y)
+		img.set_pixel(p.x, p.y, Color(c.r * SHADE_DARK, c.g * SHADE_DARK, c.b * SHADE_DARK, c.a))
+
+
+# Build one px×px cell from `blocks` ([x,y,w,h] white, or [x,y,w,h,key] via
+# PAL, or [x,y,w,h,Color]), optionally shaded, plus an auto 1px dark outline
+# (every empty pixel touching the figure; collected first, then written, so
+# outline pixels don't seed more outline).
+static func _build_cell(blocks: Array, px: int = CELL_PX, hero: bool = false) -> Image:
+	var img := Image.create(px, px, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	for b in blocks:
 		var col: Color = (
@@ -527,16 +603,18 @@ static func _build_cell(blocks: Array) -> Image:
 			else (Color(1, 1, 1, 1) if b.size() < 5 else Color(PAL[b[4]]))
 		)
 		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), col)
+	if hero:
+		shade(img, px)
 	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	var edges: Array = []
-	for y in 16:
-		for x in 16:
+	for y in px:
+		for x in px:
 			if img.get_pixel(x, y).a > 0.0:
 				continue
 			for d in dirs:
 				var nx: int = x + d.x
 				var ny: int = y + d.y
-				if nx >= 0 and nx < 16 and ny >= 0 and ny < 16 and img.get_pixel(nx, ny).a > 0.5:
+				if nx >= 0 and nx < px and ny >= 0 and ny < px and img.get_pixel(nx, ny).a > 0.5:
 					edges.append(Vector2i(x, y))
 					break
 	for e in edges:
@@ -544,12 +622,27 @@ static func _build_cell(blocks: Array) -> Image:
 	return img
 
 
-# One species' walk cycle, zone colours applied.
-static func _build_pose(pose: Array, zones: Dictionary) -> Image:
+# One pose, zone colours applied. `hero` scales the 16 px blocks onto the
+# 24 px cell, shades them and adds `accents` ([dx, dy, w, h, zone], placed
+# from the head block's top-right corner) — antlers, tusks, ears.
+static func _build_pose(
+	pose: Array, zones: Dictionary, hero: bool = false, accents: Array = []
+) -> Image:
+	var src: Array = pose
+	if hero:
+		src = []
+		for b in scale_blocks(pose, CELL_PX, HERO_FIGURE_PX):
+			var nb: Array = b.duplicate()
+			nb[1] += HERO_HEADROOM
+			src.append(nb)
 	var blocks: Array = []
-	for b in pose:
+	for b in src:
 		blocks.append([b[0], b[1], b[2], b[3], zones[b[4]]])
-	return _build_cell(blocks)
+	if hero and not accents.is_empty():
+		var head := head_block(src)
+		for a in accents:
+			blocks.append([head.end.x + a[0], head.position.y + a[1], a[2], a[3], zones[a[4]]])
+	return _build_cell(blocks, HERO_PX if hero else CELL_PX, hero)
 
 
 # One species' poses packed into a SQUARE 64x64 grid (ATLAS_COLS per row):
@@ -563,22 +656,26 @@ static func _build_pose(pose: Array, zones: Dictionary) -> Image:
 # pre-flipping the art draws figures upright. Cell(fr) = (fr % ATLAS_COLS,
 # fr / ATLAS_COLS) — kept in sync with field_agent.gdshader.
 static func build_species_atlas(sp: int) -> ImageTexture:
-	return _pack_grid(FIELD_POSES, FIELD_ZONE_COLORS[sp])
+	return _pack_grid(FIELD_POSES, FIELD_ZONE_COLORS[sp], true)
 
 
 # Shared grid packer: paint each pose to a 16x16 cell (flipped for the QuadMesh
 # V axis) and blit it into the 64x64 grid at its (col, row). Used by the ape
 # atlas here and the quadruped atlas in mammal_sprites (which passes explicit
 # Colours already resolved, so `zones` maps zone-key -> Color).
-static func _pack_grid(poses: Array, zones: Dictionary) -> ImageTexture:
-	var atlas := Image.create(ATLAS_PX, ATLAS_PX, false, Image.FORMAT_RGBA8)
+static func _pack_grid(
+	poses: Array, zones: Dictionary, hero: bool = false, accents: Array = []
+) -> ImageTexture:
+	var px: int = HERO_PX if hero else CELL_PX
+	var apx: int = HERO_ATLAS_PX if hero else ATLAS_PX
+	var atlas := Image.create(apx, apx, false, Image.FORMAT_RGBA8)
 	atlas.fill(Color(0, 0, 0, 0))
 	for fr in poses.size():
-		var cell := _build_pose(poses[fr], zones)
+		var cell := _build_pose(poses[fr], zones, hero, accents)
 		cell.flip_y()
-		var cx := (fr % ATLAS_COLS) * CELL_PX
-		var cy := int(fr / float(ATLAS_COLS)) * CELL_PX
-		atlas.blit_rect(cell, Rect2i(0, 0, CELL_PX, CELL_PX), Vector2i(cx, cy))
+		var cx := (fr % ATLAS_COLS) * px
+		var cy := int(fr / float(ATLAS_COLS)) * px
+		atlas.blit_rect(cell, Rect2i(0, 0, px, px), Vector2i(cx, cy))
 	return ImageTexture.create_from_image(atlas)
 
 
@@ -589,7 +686,7 @@ static func build_fallen_texture(sp: int) -> ImageTexture:
 	var blocks: Array = []
 	for b in FIELD_POSES[0]:
 		blocks.append([15 - (b[1] + b[3]), b[0], b[3], b[2], b[4]])
-	var cell := _build_pose(blocks, FIELD_ZONE_COLORS[sp])
+	var cell := _build_pose(blocks, FIELD_ZONE_COLORS[sp], true)
 	cell.flip_y()
 	return ImageTexture.create_from_image(cell)
 
@@ -597,11 +694,10 @@ static func build_fallen_texture(sp: int) -> ImageTexture:
 # Build the ImageTexture for ape `idx`, nearest-filtered when displayed so the
 # 16x16 grid stays crisp when scaled up.
 static func build(idx: int) -> ImageTexture:
-	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	for b in APES[idx]:
-		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), Color(PAL[b[4]]))
-	return ImageTexture.create_from_image(img)
+	var blocks: Array = []
+	for b in scale_blocks(APES[idx], CELL_PX, HERO_FIGURE_PX):
+		blocks.append([b[0], b[1] + HERO_HEADROOM, b[2], b[3], Color(PAL[b[4]])])
+	return ImageTexture.create_from_image(_build_cell(blocks, HERO_PX, true))
 
 
 # Map an agent's species id to one of the five hominins (stable per species).

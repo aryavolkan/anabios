@@ -142,7 +142,7 @@ static func bucket_atlas(b: int) -> ImageTexture:
 		return ApeSprites.build_species_atlas(b)
 	var arch: int = QUAD_ORDER[b - SKIN_COUNT]
 	if _QUAD_DATA.has(arch):
-		return build_quad_atlas(_with_celebration_poses(_QUAD_DATA[arch].POSES))
+		return build_quad_atlas(_with_celebration_poses(_QUAD_DATA[arch].POSES), arch)
 	return ApeSprites.build_species_atlas(0)  # fallback until the rig lands
 
 
@@ -154,7 +154,9 @@ static func bucket_atlas(b: int) -> ImageTexture:
 static func portrait(archetype: int) -> ImageTexture:
 	if not _QUAD_DATA.has(archetype):
 		return ApeSprites.build(0)
-	return ImageTexture.create_from_image(_build_quad_cell(_QUAD_DATA[archetype].POSES[0]))
+	return ImageTexture.create_from_image(
+		_build_quad_cell(_QUAD_DATA[archetype].POSES[0], archetype)
+	)
 
 
 static func bucket_fallen(b: int) -> ImageTexture:
@@ -189,6 +191,23 @@ const QUAD_ZONES := {
 	"u": Color(0.92, 0.92, 0.92),
 	"n": Color(0.74, 0.74, 0.74),
 	"e": Color(0.10, 0.10, 0.11),
+	"i": Color(0.96, 0.94, 0.86),  # ivory (tusks)
+	"h": Color(0.30, 0.28, 0.25),  # horn (antlers, horns)
+}
+
+# Hero-atlas accents per archetype: [dx, dy, w, h, zone] in 24 px cell
+# pixels, placed from the head block's top-right corner (see
+# ApeSprites._build_pose). They follow the head through every pose, so a
+# grazing deer dips its antlers and a sleeping one lays them down.
+const ACCENTS := {
+	DEER: [[-4, -5, 1, 5, "h"], [-2, -6, 1, 6, "h"], [-5, -3, 1, 1, "h"], [-1, -4, 1, 1, "h"]],
+	MAMMOTH: [[0, 3, 3, 1, "i"], [2, 4, 1, 2, "i"]],
+	LIVESTOCK: [[-4, -2, 1, 2, "h"], [-1, -2, 1, 2, "h"]],
+	HARE: [[-4, -5, 1, 5, "c"], [-2, -6, 1, 6, "c"]],
+	FOX: [[-4, -2, 1, 2, "c"], [-1, -2, 1, 2, "c"]],
+	WOLF: [[-4, -2, 1, 2, "c"], [-1, -2, 1, 2, "c"]],
+	BOAR: [[0, 2, 1, 1, "i"]],
+	WADER: [[-5, -2, 1, 2, "c"]],
 }
 
 # Per-archetype coat palette band: [base_hue, hue_jitter, saturation, value].
@@ -224,8 +243,8 @@ static func coat_hue(archetype: int, species_id: int) -> Color:
 # explicit neutral Colour, so ApeSprites._pack_grid resolves it the same way
 # the ape atlas resolves its PAL keys. Square-grid layout (not a 16x192 strip)
 # avoids the Metal MultiMesh2D texture corruption — see ApeSprites.ATLAS_PX.
-static func build_quad_atlas(poses: Array) -> ImageTexture:
-	return ApeSprites._pack_grid(poses, QUAD_ZONES)
+static func build_quad_atlas(poses: Array, archetype: int = -1) -> ImageTexture:
+	return ApeSprites._pack_grid(poses, QUAD_ZONES, true, ACCENTS.get(archetype, []))
 
 
 # Quadruped rigs share the 14 authored cells, but the celebration action needs
@@ -250,7 +269,7 @@ static func build_quad_fallen(poses: Array) -> ImageTexture:
 	var blocks: Array = []
 	for b in poses[0]:
 		blocks.append([15 - (b[1] + b[3]), b[0], b[3], b[2], b[4]])
-	var cell: Image = _build_quad_cell(blocks)
+	var cell: Image = ApeSprites._build_pose(blocks, QUAD_ZONES, true)
 	cell.flip_y()
 	return ImageTexture.create_from_image(cell)
 
@@ -258,8 +277,5 @@ static func build_quad_fallen(poses: Array) -> ImageTexture:
 # Resolve a rig's zone-keyed blocks to explicit Colours via QUAD_ZONES, then
 # reuse the shared ApeSprites._build_cell (Color-aware after Step below) so the
 # 1px auto-outline pass is written once, not duplicated.
-static func _build_quad_cell(pose: Array) -> Image:
-	var blocks: Array = []
-	for b in pose:
-		blocks.append([b[0], b[1], b[2], b[3], QUAD_ZONES[b[4]]])
-	return ApeSprites._build_cell(blocks)
+static func _build_quad_cell(pose: Array, archetype: int = -1) -> Image:
+	return ApeSprites._build_pose(pose, QUAD_ZONES, true, ACCENTS.get(archetype, []))

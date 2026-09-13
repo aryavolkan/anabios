@@ -17,13 +17,13 @@ func _check(cond: bool, msg: String) -> void:
 		_failed = true
 
 
-# Opaque-pixel count inside one 16x16 grid cell of a packed atlas.
+# Opaque-pixel count inside one hero (24x24) grid cell of a packed atlas.
 func _cell_opaque(img: Image, cell: int) -> int:
-	var cx := (cell % A.ATLAS_COLS) * A.CELL_PX
-	var cy := int(cell / float(A.ATLAS_COLS)) * A.CELL_PX
+	var cx := (cell % A.ATLAS_COLS) * A.HERO_PX
+	var cy := int(cell / float(A.ATLAS_COLS)) * A.HERO_PX
 	var n := 0
-	for y in A.CELL_PX:
-		for x in A.CELL_PX:
+	for y in A.HERO_PX:
+		for x in A.HERO_PX:
 			if img.get_pixel(cx + x, cy + y).a > 0.5:
 				n += 1
 	return n
@@ -38,8 +38,8 @@ func _check_weapon_cells() -> void:
 	for sp in A.SPECIES_COUNT:
 		var img: Image = A.build_species_atlas(sp).get_image()
 		_check(
-			img.get_width() == A.ATLAS_PX and img.get_height() == A.ATLAS_PX,
-			"species %d atlas is the shared square grid" % sp
+			img.get_width() == A.HERO_ATLAS_PX and img.get_height() == A.HERO_ATLAS_PX,
+			"species %d atlas is the shared square hero grid" % sp
 		)
 		for base in pairs:
 			for cell in [base, base + 1]:
@@ -50,7 +50,7 @@ func _check_weapon_cells() -> void:
 		_check(_cell_opaque(quad, cell) == 0, "quad weapon cell %d stays empty" % cell)
 
 
-# Every quadruped archetype's atlas is the shared 128x128 grid, each of its
+# Every quadruped archetype's atlas is the shared 192x192 hero grid, each of its
 # 14 authored pose cells carries opaque art, and its fallen-ghost texture
 # differs from the idle (frame 0) pose — regression guard for a rig whose
 # pose list is accidentally empty or whose fallen build forgets to rotate.
@@ -60,21 +60,58 @@ func _check_quad_archetypes() -> void:
 		var b: int = M.bucket_of(arch, 0)
 		var img: Image = M.bucket_atlas(b).get_image()
 		_check(
-			img.get_width() == A.ATLAS_PX and img.get_height() == A.ATLAS_PX,
-			"%s atlas is the shared square grid" % M.NAMES[arch]
+			img.get_width() == A.HERO_ATLAS_PX and img.get_height() == A.HERO_ATLAS_PX,
+			"%s atlas is the shared square hero grid" % M.NAMES[arch]
 		)
 		for cell in range(14):
 			var n := _cell_opaque(img, cell)
 			_check(n > 0, "%s pose %d has opaque pixels" % [M.NAMES[arch], cell])
-		var idle := img.get_region(Rect2i(0, 0, A.CELL_PX, A.CELL_PX))
+		var idle := img.get_region(Rect2i(0, 0, A.HERO_PX, A.HERO_PX))
 		var fallen: Image = M.bucket_fallen(b).get_image()
 		_check(
-			fallen.get_width() == A.CELL_PX and fallen.get_height() == A.CELL_PX,
+			fallen.get_width() == A.HERO_PX and fallen.get_height() == A.HERO_PX,
 			"%s fallen texture is one cell" % M.NAMES[arch]
 		)
 		_check(
 			fallen.get_data() != idle.get_data(), "%s fallen pose differs from idle" % M.NAMES[arch]
 		)
+
+
+# Hero atlas: block scaling keeps the cell filled and adjacency intact, the
+# head anchor is the topmost-rightmost block, the shading pass lightens the
+# crown, and the deer wears antlers above its head in the field atlas.
+func _check_hero_art() -> void:
+	var full: Array = A.scale_blocks([[0, 0, 16, 16, "c"]], 16, 20)
+	_check(full == [[0, 0, 20, 20, "c"]], "a full cell scales to the hero figure box")
+	var pair: Array = A.scale_blocks([[0, 0, 8, 16, "c"], [8, 0, 8, 16, "u"]], 16, 20)
+	_check(pair[0][2] + pair[1][2] == 20 and pair[1][0] == 10, "adjacent blocks stay adjacent")
+	var deer_top: Image = M.portrait(M.DEER).get_image()
+	var headroom_used := false
+	for x in A.HERO_PX:
+		for y in A.HERO_HEADROOM:
+			if deer_top.get_pixel(x, y).a > 0.5:
+				headroom_used = true
+	_check(headroom_used, "deer antlers rise into the headroom rows")
+	_check(A.scale_blocks([[3, 3, 1, 1]], 16, 24)[0][2] >= 1, "no block vanishes")
+	var head: Rect2i = A.head_block([[4, 6, 8, 5], [11, 1, 3, 2], [3, 1, 2, 2]])
+	_check(head == Rect2i(11, 1, 3, 2), "head is the topmost, rightmost block")
+	var deer: Image = M.portrait(M.DEER).get_image()
+	_check(deer.get_width() == A.HERO_PX, "portraits are hero cells")
+	var horn := 0
+	var lit := 0
+	for y in A.HERO_PX:
+		for x in A.HERO_PX:
+			var c := deer.get_pixel(x, y)
+			# Horn pixels (lit or shaded) are the only warm dark tone: the
+			# outline is neutral grey and the coat ramp is neutral too.
+			if c.a > 0.5 and c.r < 0.42 and c.r - c.b > 0.03:
+				horn += 1
+			if c.a > 0.5 and c.r > 0.70 and c.r < 0.76:
+				lit += 1
+	_check(horn >= 8, "deer portrait carries antler pixels (%d)" % horn)
+	_check(lit >= 4, "shading lightens the crown (%d lit px)" % lit)
+	var hare: Image = M.portrait(M.HARE).get_image()
+	_check(hare.get_data() != deer.get_data(), "accents differ per archetype")
 
 
 func _init() -> void:
@@ -117,6 +154,7 @@ func _init() -> void:
 
 	_check_weapon_cells()
 	_check_quad_archetypes()
+	_check_hero_art()
 	if _failed:
 		quit(1)
 		return

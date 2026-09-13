@@ -28,12 +28,14 @@ shader_type canvas_item;
 // a fight lunge / flee tremble on top.
 
 uniform int frames = 16;
-// Atlas layout: poses live in a SQUARE 128x128 grid, ATLAS_COLS per row (see
-// ape_sprites.gd — a 16x192 strip corrupts on Metal's MultiMesh2D canvas
-// path). A pose index `fr` maps to cell (fr % ATLAS_COLS, fr / ATLAS_COLS).
-const float ATLAS_COLS = 8.0;
-const float ATLAS_PX = 128.0;
-const float CELL_PX = 16.0;
+// Atlas layout: poses live in a SQUARE grid, atlas_cols per row (see
+// ape_sprites.gd — an extreme-aspect strip corrupts on Metal's MultiMesh2D
+// canvas path). A pose index `fr` maps to cell (fr % atlas_cols, fr / atlas_cols).
+// Hero atlas by default (ape_sprites.gd HERO_PX / HERO_ATLAS_PX); main.gd
+// sets these per material so the shader and the packer cannot drift.
+uniform float atlas_cols = 8.0;
+uniform float atlas_px = 192.0;
+uniform float cell_px = 24.0;
 // Authored walk cadence (frames/sec). The walk cycle itself is now paced by
 // distance travelled (see anim.r above), so this only sets the flee gallop's
 // bounding rate; main.gd reuses the same per-bucket value to scale stride
@@ -269,11 +271,11 @@ void fragment() {
 		// Threshold it here and let the vertex stage use the blend.
 		fr = mix(0.0, 1.0 + min(s, 4.0 - s), step(0.5, anim.g));
 	}
-	// Frames live in a 128x128 grid, ATLAS_COLS per row; cells are pre-flipped
+	// Frames live in a square grid, atlas_cols per row; cells are pre-flipped
 	// (the QuadMesh V axis is flipped in the 2D canvas), so a plain sample
 	// draws the figure upright. Map fr -> (col, row) and offset into its cell.
-	float col = mod(fr, ATLAS_COLS);
-	float row = floor(fr / ATLAS_COLS);
-	vec2 cell_uv = (vec2(col + u, row + UV.y)) * (CELL_PX / ATLAS_PX);
+	float col = mod(fr, atlas_cols);
+	float row = floor(fr / atlas_cols);
+	vec2 cell_uv = (vec2(col + u, row + UV.y)) * (cell_px / atlas_px);
 	COLOR = texture(TEXTURE, cell_uv) * tint;
 }
