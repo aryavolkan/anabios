@@ -173,6 +173,22 @@ func _init() -> void:
 		elif k2 == L.HUT or k2 == L.HUT_B:
 			thatch += 1
 	_check(houses >= 2 and thatch == 0, "an era-2 village builds houses, not thatch huts")
+	# --- at war in the timber age, a catapult stands before the gate ---
+	var siege := L.plan(11, Vector2.ZERO, 60, 2, L.FLAG_WAR, no_water)
+	var catapults := 0
+	var gate_y := 0
+	for p in siege:
+		if int(p["kind"]) == L.GATE:
+			gate_y = _cell_of(Vector2.ZERO, p["pos"]).y
+	for p in siege:
+		if int(p["kind"]) == L.CATAPULT:
+			catapults += 1
+			var cc := _cell_of(Vector2.ZERO, p["pos"])
+			_check(cc.x == 0 and cc.y > gate_y, "the catapult stands outside the gate")
+	_check(catapults == 1, "one catapult at war (%d)" % catapults)
+	var peace := L.plan(11, Vector2.ZERO, 60, 2, L.FLAG_TERRITORY, no_water)
+	for p in peace:
+		_check(int(p["kind"]) != L.CATAPULT, "no catapult without a war")
 
 	# --- a fortified farming village walls its huts and keeps the fields outside ---
 	var fort := L.plan(13, Vector2.ZERO, 60, 1, L.FLAG_TERRITORY | L.FLAG_FARMING, no_water)

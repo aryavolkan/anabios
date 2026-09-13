@@ -38,6 +38,7 @@ enum {
 	STALL,
 	TENT_B,
 	HOUSE,
+	CATAPULT,
 }
 # The two tent silhouettes an era-0 dwelling cell may take.
 const TENT_KINDS: PackedInt32Array = [TENT, TENT_B]
@@ -379,6 +380,10 @@ static func plan(
 		if (flags & FLAG_TERRITORY) != 0:
 			_place(Vector2i(-1, r + 1), BANNER, false, occupied, anchor, is_water, out)
 			_place(Vector2i(1, r + 1), BANNER, false, occupied, anchor, is_water, out)
+		# A village at war in the timber age wheels a catapult out before
+		# its gate (the raid board's siege engine).
+		if era >= 2 and (flags & FLAG_WAR) != 0:
+			_place(Vector2i(0, r + 2), CATAPULT, false, occupied, anchor, is_water, out)
 
 	# --- raid aftermath: up to 2 huts/tents burn ---
 	if (flags & FLAG_RAIDED) != 0:

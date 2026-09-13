@@ -2,7 +2,7 @@ extends RefCounted
 # Row-string pixel maps for the structure kinds added after the base set
 # (structure_sprites.gd keeps the first twenty; this file holds the rest so
 # neither crosses the lint file-length cap). Indexed by kind - BASE_COUNT,
-# in enum order: HUT_B, HUT_C, STALL, TENT_B, HOUSE. Same palette, same 32x32
+# in enum order: HUT_B, HUT_C, STALL, TENT_B, HOUSE, CATAPULT. Same palette, same 32x32
 # top-down authoring, same auto-outline pass.
 
 const BASE_COUNT := 20
@@ -183,5 +183,42 @@ const ROWS: Array = [
 		"..KkkkkkkkkkkKKKKKKkkkkkkkkkkK..",
 		"..KkkkkkkkkkkkkkkkkkkkkkkkkkkK..",
 		"...KKKKKKKKKKKKKKKKKKKKKKKKKK...",
+	],
+	# CATAPULT -- a siege engine at the gate of a village at war: a plank
+	# frame on two spoked wheels, the throwing arm cocked up and to the
+	# left with a stone in its cup, a dark stanchion in the middle
+	[
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		".........KK.....................",
+		"........KssK....................",
+		".......KssssK...................",
+		".......KssssK...................",
+		"........KssKBK..................",
+		".........KKKBBK.................",
+		"...........KBBBK................",
+		"............KBBBK...............",
+		".............KBBBK..............",
+		"..............KBBBK.............",
+		"...............KBBBK............",
+		"................KBBBK...........",
+		".....KKKKKKKKKKKKKBBBKKKKKKKK...",
+		"....KTTTTTTTTTTTTTTBBBTTTTTTTK..",
+		"....KBBBBBBBBBBBBBBBBBBBBBBBBK..",
+		"....KbK.......KbbbbK.......KbK..",
+		"....KbK......KbbbbbbK......KbK..",
+		"....KbK......KbbbbbbK......KbK..",
+		"....KbK.......KbbbbK.......KbK..",
+		"...KKbKK.....KKKKKKKK.....KKbKK.",
+		"..KbbbbbK................KbbbbbK",
+		"..KbKKKbK................KbKKKbK",
+		"..KbKkKbK................KbKkKbK",
+		"..KbKKKbK................KbKKKbK",
+		"..KbbbbbK................KbbbbbK",
+		"...KKKKKKkkkkkkkkkkkkkkkkKKKKKK.",
+		"........KkkkkkkkkkkkkkkkK.......",
+		".........KKKKKKKKKKKKKKK........",
 	],
 ]

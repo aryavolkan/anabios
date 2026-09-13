@@ -41,8 +41,9 @@ enum {
 	STALL,
 	TENT_B,
 	HOUSE,
+	CATAPULT,
 }
-const KIND_COUNT := 25
+const KIND_COUNT := 26
 const ExtraRows = preload("res://scripts/structure_rows_extra.gd")
 const CELL_PX := 32
 const ATLAS_COLS := 8  # 8x8 grid of 32px cells = a square 256x256 atlas; cell index == kind
@@ -73,6 +74,7 @@ const NAMES: PackedStringArray = [
 	"Stall",
 	"Yurt",
 	"House",
+	"Catapult",
 ]
 
 # 32x32 row-string pixel maps per kind, indexed by the enum. '.' is
