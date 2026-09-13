@@ -76,12 +76,20 @@ varying flat vec4 anim;
 // emote shader's INSTANCE_CUSTOM.a workaround; a flat varying survives.
 varying flat vec4 tint;
 varying flat int bucket;
+// 1 when the figure stands on a water cell (mammal_sprites.bucket_alpha):
+// the fragment stage cuts it off at the waterline.
+varying flat int wading;
+// Fraction of the cell (from the feet) under water for a wading figure.
+uniform float waterline = 0.3;
 
 void vertex() {
 	anim = INSTANCE_CUSTOM;
 	tint = vec4(COLOR.rgb, 1.0);
 	int slots = int(bucket_cols * bucket_cols);
-	bucket = clamp(int(floor(COLOR.a * float(slots))), 0, slots - 1);
+	// Alpha: lower half names the bucket, upper half the same bucket wading.
+	float a2 = COLOR.a * 2.0;
+	wading = a2 >= 1.0 ? 1 : 0;
+	bucket = clamp(int(floor(fract(a2) * float(slots))), 0, slots - 1);
 	int rig_kind = bucket_cols > 1.5 ? rig_kinds[bucket] : rig_kind_default;
 	float phase = anim.r * 6.2831853;
 	float act = anim.a * act_scale;
@@ -292,4 +300,14 @@ void fragment() {
 	vec2 origin = vec2(float(bucket % int(bucket_cols)), floor(float(bucket) / bucket_cols));
 	cell_uv = (origin + cell_uv) / bucket_cols;
 	COLOR = texture(TEXTURE, cell_uv) * tint;
+	// Wading: the cell's feet are at UV.y = 0; below the waterline the body
+	// is under water, and the two rows just above it take a pale wet rim
+	// so the cut reads as a surface rather than a missing half.
+	if (wading == 1) {
+		if (UV.y < waterline) {
+			discard;
+		}
+		float rim = 1.0 - smoothstep(0.0, 2.0 / cell_px, UV.y - waterline);
+		COLOR.rgb = mix(COLOR.rgb, vec3(0.78, 0.88, 0.96), rim * 0.7 * COLOR.a);
+	}
 }

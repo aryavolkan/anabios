@@ -45,6 +45,9 @@ const BODY_CAP: float = 16.0
 # cell so the survivors do not line up on a grid.
 const CROWD_ZOOM := 2.0
 const CROWD_CELL := 12.0
+# Camera zoom from which figures on water are drawn wading (a per-figure
+# biome lookup each frame, so only where the cut is visible).
+const WADING_ZOOM := 1.0
 const BODY_MIN: float = 6.0
 # World units of margin added on every side of the camera's world rect before
 # querying alive_in_rect(): keeps an agent walking toward the edge of the
@@ -104,6 +107,9 @@ var _overlay = null
 var _cam: Camera2D = null
 var _effects: Node2D = null
 var _emote_layer: Node2D = null
+# biome_renderer.gd, for `is_water_at`: a figure on a water cell is drawn
+# wading (cut at the waterline, no contact shadow) from WADING_ZOOM in.
+var _biome = null
 
 # perf_readout.gd is created after this layer during Main._ready (it needs no
 # earlier hook), so it is looked up lazily — see perf_readout.gd's header —
@@ -169,13 +175,15 @@ func setup(
 	overlay,
 	cam: Camera2D,
 	effects: Node2D,
-	emote_layer: Node2D
+	emote_layer: Node2D,
+	biome = null
 ) -> void:
 	sim = sim_ref
 	_body_mmis = body_mmis
 	_overlay = overlay
 	_cam = cam
 	_effects = effects
+	_biome = biome
 	_emote_layer = emote_layer
 	for b in MammalSprites.BUCKET_COUNT:
 		var dmm := MultiMesh.new()
@@ -525,6 +533,7 @@ func refresh(
 		_prev_bucket = bucket_ix
 
 	var shadows: MultiMesh = _shadow_mmi.multimesh
+	var wading_check: bool = _biome != null and _cam != null and _cam.zoom.x >= WADING_ZOOM
 	var shadow_n := 0
 	var total_vis := 0
 	for b in MammalSprites.BUCKET_COUNT:
@@ -564,18 +573,18 @@ func refresh(
 		# walk shader (walk weight + facing), not the transform rotation.
 		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
 		mm.set_instance_transform_2d(j, t)
+		var wading: bool = wading_check and _biome.is_water_at(smooth[i])
+		# A wading figure casts no contact shadow on the water.
+		var sh_w: float = 0.0 if wading else sz * SHADOW_W
 		shadows.set_instance_transform_2d(
 			shadow_n,
 			Transform2D(
-				0.0,
-				Vector2(sz * SHADOW_W, sz * SHADOW_H),
-				0.0,
-				smooth[i] + Vector2(0.0, sz * SHADOW_DROP)
+				0.0, Vector2(sh_w, sz * SHADOW_H), 0.0, smooth[i] + Vector2(0.0, sz * SHADOW_DROP)
 			)
 		)
 		shadow_n += 1
 		var body_col: Color = body_colors[i]
-		body_col.a = MammalSprites.bucket_alpha(b)
+		body_col.a = MammalSprites.bucket_alpha(b, wading)
 		mm.set_instance_color(j, body_col)
 		# Per-instance animation state for the field_agent shader. The sim
 		# reports heading exactly 0.0 when velocity ≈ 0, which doubles as

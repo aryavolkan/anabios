@@ -164,9 +164,23 @@ static func combined_atlas() -> ImageTexture:
 
 
 # The instance-colour alpha that names bucket `b` to the field shader (the
-# live bodies never use alpha for fading, so the channel is free).
-static func bucket_alpha(b: int) -> float:
-	return (float(b) + 0.5) / float(ATLAS_GRID * ATLAS_GRID)
+# live bodies never use alpha for fading, so the channel is free). The
+# bucket takes the lower half of the range; the upper half is the same
+# bucket wading: a figure standing on a water cell, which the shader cuts
+# off at the waterline instead of drawing it walking on the lake.
+static func bucket_alpha(b: int, wading: bool = false) -> float:
+	var a := (float(b) + 0.5) / float(ATLAS_GRID * ATLAS_GRID) * 0.5
+	return a + 0.5 if wading else a
+
+
+# GDScript mirror of the field shader's decode, for the tests.
+static func bucket_from_alpha(a: float) -> int:
+	var a2 := a * 2.0
+	return int(floor((a2 - floor(a2)) * float(ATLAS_GRID * ATLAS_GRID)))
+
+
+static func wading_from_alpha(a: float) -> bool:
+	return a * 2.0 >= 1.0
 
 
 static func bucket_atlas(b: int) -> ImageTexture:

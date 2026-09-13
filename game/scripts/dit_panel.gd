@@ -15,9 +15,18 @@ const SHARED_MAX_ROWS := 4
 @onready var _tech: Control = get_parent().get_node_or_null("TechPanel")
 var _frame: int = 0
 
+# Like the species table, this readout is debugging the reference boards do
+# not carry: it starts hidden and [P] shows all three tables together.
+var _open: bool = false
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_P:
+		_open = not _open
+
 
 func _process(_delta: float) -> void:
-	if not bool(sim.env_active()):
+	if not _open or not bool(sim.env_active()):
 		visible = false
 		return
 	visible = true

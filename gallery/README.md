@@ -54,7 +54,7 @@ pins an agent in the unit card.
 | scale-riverlands-t291-clutter-4x.png | `riverlands` t291 4× at (2500, 1200) | Flowers, tufts, mushrooms and stumps at 4×. |
 | scale-riverlands-t291-lake-4x.png | `riverlands` t291 4× at (2427, 1357) | A desert lake: one flat blue, sparse strokes, foam and beach from the coast autotile. |
 | scale-inventions-t2620-coast-2x.png | `inventions` t2620 2× (`ANABIOS_CODEX_TAB=1`) | Hominin bands along a coast. |
-| scale-inventions-t2620-hominins-4x.png | `inventions` t2620 4× (`ANABIOS_INSPECT=1`, `ANABIOS_CODEX_TAB=0`) | Hand-authored hominins in the field, the research list with an icon per invention, the unit card. |
+| scale-inventions-t2620-hominins-4x.png | `inventions` t2620 4× (`ANABIOS_INSPECT=1`, `ANABIOS_CODEX_TAB=0`) | Hand-authored hominins in the field (one wading offshore, cut at the waterline), the research list with an icon per invention, the unit card; the species, adaptation and tech tables stay hidden until `[P]`. |
 | scale-inventions-t2620-unit-card-1x.png | `inventions` t2620 1× (`ANABIOS_INSPECT=1`) | The same at 1×. |
 | scale-huge-steppe-t191-2x.png | `huge-steppe` t191 2× | The 8192-unit Huge tier streaming its ground chunks. |
 | scale-minimal-t111-shoreline-8x.png | `minimal` t111 8× | Shoreline autotile at 8×. |

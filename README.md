@@ -142,7 +142,7 @@ cargo build --release --bin anabios-headless
    - Left-click an agent (within 4 world units) to pin it in the unit card (portrait, HP, stamina, module pips)
    - Scrolling list at bottom-right shows codex events as they fire
     - **R**: replay the latest codex event (rewind to a snapshot, fast-forward, pause at the moment; R/Esc resumes live) · **U**: run at max speed until the next event fires · **V**: event camera — auto-cut tour of recent event locations
-   - **F**: frame the whole world · **F3**: frame-time readout · **B**: toggle the pixel-art ground (tiles + props) · **N**: toggle chunk streaming (A/B against the whole-world sprite) · **P**: species table · **H**: overlay legend · **T** / **Y**: evolution and co-evolution panels
+   - **F**: frame the whole world · **F3**: frame-time readout · **B**: toggle the pixel-art ground (tiles + props) · **N**: toggle chunk streaming (A/B against the whole-world sprite) · **P**: species, adaptation and tech tables · **H**: overlay legend · **T** / **Y**: evolution and co-evolution panels
 
 ## Recording a showcase video
 

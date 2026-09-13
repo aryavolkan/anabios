@@ -208,12 +208,19 @@ func _init() -> void:
 	var seen_alpha: Dictionary = {}
 	for b in M.BUCKET_COUNT:
 		var a: float = M.bucket_alpha(b)
-		_check(
-			int(floor(a * M.ATLAS_GRID * M.ATLAS_GRID)) == b,
-			"bucket %d round-trips through its alpha" % b
-		)
+		_check(M.bucket_from_alpha(a) == b, "bucket %d round-trips through its alpha" % b)
+		_check(not M.wading_from_alpha(a), "bucket %d on land" % b)
+		var aw: float = M.bucket_alpha(b, true)
+		_check(M.bucket_from_alpha(aw) == b, "wading bucket %d round-trips" % b)
+		_check(M.wading_from_alpha(aw), "bucket %d wading flag survives" % b)
+		# Survives 8-bit colour quantisation either way.
+		var q: float = round(a * 255.0) / 255.0
+		var qw: float = round(aw * 255.0) / 255.0
+		_check(M.bucket_from_alpha(q) == b and not M.wading_from_alpha(q), "8-bit safe %d" % b)
+		_check(M.bucket_from_alpha(qw) == b and M.wading_from_alpha(qw), "8-bit safe wading %d" % b)
 		seen_alpha[a] = true
-	_check(seen_alpha.size() == M.BUCKET_COUNT, "bucket alphas are distinct")
+		seen_alpha[aw] = true
+	_check(seen_alpha.size() == 2 * M.BUCKET_COUNT, "bucket alphas are distinct")
 	# Livestock override beats everything.
 	_check(M.archetype_for(0.9, 2.0, true) == M.LIVESTOCK, "livestock override")
 	# Herbivore band (diet < 0.34): small -> Hare, large -> Deer.

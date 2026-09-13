@@ -14,7 +14,7 @@ const BODY_NAMES := ["species", "dialect", "diet", "energy", "arousal", "mood", 
 const CONTROLS_FMT := """[G] ground: %s
 [C] body: %s
 [M] module pips · [Y] co-evolution · [T] evolution
-[X] DIT helix · [P] species table · [F] reset view · [H] hide
+[X] DIT helix · [P] species tables · [F] reset view · [H] hide
 [R] replay event · [U] run to event · [V] event cam
 WASD/drag pan · wheel zoom · click inspect"""
 

@@ -172,7 +172,9 @@ func _ready() -> void:
 	_agent_layer.name = "AgentLayer"
 	add_child(_agent_layer)
 	move_child(_agent_layer, carcasses.get_index())
-	_agent_layer.setup(sim, _body_mmis, overlay, $Camera2D as Camera2D, _effects, _emote_layer)
+	_agent_layer.setup(
+		sim, _body_mmis, overlay, $Camera2D as Camera2D, _effects, _emote_layer, $Biome
+	)
 	# Settlement layer: hut clusters + farms at the codex settlement sites.
 	_settlement_layer = preload("res://scripts/settlement_layer.gd").new()
 	_settlement_layer.name = "SettlementLayer"
