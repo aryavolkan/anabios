@@ -185,7 +185,8 @@ static func palette(species: int) -> Dictionary:
 	return out
 
 
-# Master pixels by part: Part -> Array of [x, y, zone_key, is_hand].
+# Master pixels by part: Part -> Array of [x, y, zone_key, is_hand] (both
+# hands are flagged: the front one holds the weapon, the back one the shield).
 static func parts_of(rows: Array) -> Dictionary:
 	var out: Dictionary = {}
 	for p in Part.values():
@@ -197,7 +198,7 @@ static func parts_of(rows: Array) -> Dictionary:
 			if ch == "." or not KEYS.has(ch):
 				continue
 			var spec: Array = KEYS[ch]
-			out[spec[0]].append([x, y, spec[1], ch == "r"])
+			out[spec[0]].append([x, y, spec[1], ch == "r" or ch == "l"])
 	return out
 
 
@@ -281,10 +282,14 @@ static func pose_recipe(index: int) -> Dictionary:
 		19:
 			return {Part.ARM_F: [-3, 0, -90], Part.ARM_B: [-3, 0, -80], "weapon": "bow_b"}
 		20:
-			return {Part.ARM_F: [-2, 0, -120], "weapon": "steel_a"}
+			return {Part.ARM_F: [-2, 0, -120], "weapon": "steel_a", "shield": true}
 		21:
 			return {
-				Part.ARM_F: [-2, 0, -40], Part.BODY: [1, 0], Part.HEAD: [1, 0], "weapon": "steel_b"
+				Part.ARM_F: [-2, 0, -40],
+				Part.BODY: [1, 0],
+				Part.HEAD: [1, 0],
+				"weapon": "steel_b",
+				"shield": true,
 			}
 		_:
 			return {}
@@ -381,6 +386,18 @@ static func weapon_pixels(kind: String) -> Array:
 	return out
 
 
+# A round shield on the back arm: wooden face, a steel boss, held a little
+# forward of the hand so it shows in front of the body (the boards' raiders
+# carry one with their blade). Offsets from the back hand.
+static func shield_pixels() -> Array:
+	var out: Array = []
+	for y in range(-3, 3):
+		var half: int = 1 if (y == -3 or y == 2) else 2
+		for x in range(-half, half + 1):
+			out.append([x + 2, y - 1, "f" if (x == 0 and y == -1) else "w"])
+	return out
+
+
 # One pose cell (unflipped, shaded, outlined) for a hominin.
 static func build_cell(species: int, index: int) -> Image:
 	var rows: Array = MASTERS[species]
@@ -409,6 +426,8 @@ static func build_cell(species: int, index: int) -> Image:
 			parts[p] = kept
 	var eyes_closed: bool = bool(recipe.get("eyes_closed", false))
 	var weapon: String = String(recipe.get("weapon", ""))
+	var shield: bool = bool(recipe.get("shield", false))
+	var shield_px: Array = []
 	for p in DRAW_ORDER:
 		var shift: Array = recipe.get(p, [0, 0])
 		var dx: int = int(shift[0])
@@ -436,8 +455,14 @@ static func build_cell(species: int, index: int) -> Image:
 			for w in weapon_pixels(weapon):
 				placed.append([hand.x + int(w[0]), hand.y + int(w[1]), w[2]])
 			_fit(placed)
+		if p == Part.ARM_B and shield and hand.x >= 0:
+			# Drawn last, over the body, once every part is down.
+			for s in shield_pixels():
+				shield_px.append([hand.x + int(s[0]), hand.y + int(s[1]), s[2]])
 		for q in placed:
 			_put(img, int(q[0]), int(q[1]), pal[q[2]])
+	for q in shield_px:
+		_put(img, int(q[0]), int(q[1]), pal[q[2]])
 	ApeSprites.shade(img, PX)
 	ApeSprites.outline(img, PX)
 	return img

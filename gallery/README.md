@@ -62,7 +62,7 @@ pins an agent in the unit card.
 | scale-huge-steppe-t191-2x.png | `huge-steppe` t191 2× | The 8192-unit Huge tier streaming its ground chunks. |
 | scale-minimal-t111-shoreline-8x.png | `minimal` t111 8× | Shoreline autotile at 8×. |
 | scale-hero-pose-sheet.png | `hero_sheet.gd` tool | The 16-pose sheet of the ten quadruped masters. |
-| scale-hominin-pose-sheet.png | `hominin_sheet.gd` tool | The 22-pose sheet of the five hominin masters, weapons included. |
+| scale-hominin-pose-sheet.png | `hominin_sheet.gd` tool | The 22-pose sheet of the five hominin masters, weapons included, a round shield on the back arm in the steel poses. |
 
 ## grand theater (all subsystems at once)
 
