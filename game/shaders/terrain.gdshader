@@ -35,6 +35,9 @@ uniform float terrace_levels = 14.0;
 uniform float cliff_strength = 0.75;
 uniform float cliff_band = 0.42;   // fraction of a cell the face occupies
 uniform float height_lift = 0.22;
+// Elevation drop between a water cell and the water cell south of it that
+// paints a waterfall (see the water branch).
+uniform float fall_step = 0.0075;
 
 // Pixel-art ground tiles (terrain_sprites.gd atlas), blended into the land
 // branch only — water keeps its living treatment, and the data-overlay
@@ -122,6 +125,16 @@ float tid_at(vec2 cell) {
 // to send every lake through the land branch.
 bool water_cell(vec2 cell, vec3 col) {
 	return tiles_enabled > 0.5 ? tid_at(cell) < 0.5 : is_water(col);
+}
+
+// Land cells among the four neighbours of `cell` (id texture only; 0 on
+// the legacy colour path, which never draws waterfalls).
+float land_neighbours(vec2 cell) {
+	if (tiles_enabled < 0.5) {
+		return 0.0;
+	}
+	return step(0.5, tid_at(cell + vec2(1.0, 0.0))) + step(0.5, tid_at(cell - vec2(1.0, 0.0)))
+		+ step(0.5, tid_at(cell + vec2(0.0, 1.0))) + step(0.5, tid_at(cell - vec2(0.0, 1.0)));
 }
 
 // Elevation (packed in alpha) interpolated between the four nearest cell
@@ -233,6 +246,40 @@ void fragment() {
 
 		// Coast tile on the water side (shallows + foam).
 		outc = mix(outc, coast_tile.rgb, coast_tile.a * detail);
+
+		// Waterfalls: a narrow water cell (a river: at least two land
+		// neighbours) standing a real step above its lowest water neighbour
+		// wears white falling streaks over the half of the cell facing that
+		// neighbour, lanes picked per texel and brightness sliding
+		// downstream with time, plus a foam lip where the drop begins, so a
+		// river coming down off a terrace reads as the reference boards'
+		// falls. The sea is excluded by the neighbour test: its bed keeps
+		// dropping past the shore but it is never a narrow channel.
+		float e_here = texture(TEXTURE, UV).a;
+		float dN = water_cell(cell0 - vec2(0.0, 1.0), cU) ? e_here - texture(TEXTURE, UV - vec2(0.0, px.y)).a : 0.0;
+		float dS = water_cell(cell0 + vec2(0.0, 1.0), cD) ? e_here - texture(TEXTURE, UV + vec2(0.0, px.y)).a : 0.0;
+		float dE = water_cell(cell0 + vec2(1.0, 0.0), cR) ? e_here - texture(TEXTURE, UV + vec2(px.x, 0.0)).a : 0.0;
+		float dW = water_cell(cell0 - vec2(1.0, 0.0), cL) ? e_here - texture(TEXTURE, UV - vec2(px.x, 0.0)).a : 0.0;
+		float best = max(max(dN, dS), max(dE, dW));
+		bool vertical = best == dN || best == dS;
+		bool forward = best == dS || best == dE;
+		vec2 next = cell0 + (vertical ? vec2(0.0, forward ? 1.0 : -1.0) : vec2(forward ? 1.0 : -1.0, 0.0));
+		// Both this cell and the one it pours into must be narrow channels.
+		float fall = step(fall_step, best) * step(0.49, coast) * step(1.5, land_neighbours(next));
+		if (fall > 0.5 && detail > 0.05) {
+			vec2 fc0 = fract(cellf);
+			vec2 texel0 = floor(world_pos / max(texel_w, 1e-4));
+			float across = vertical ? fc0.y : fc0.x;
+			float band = forward ? step(0.5, across) : 1.0 - step(0.5, across);
+			float lane = vertical ? texel0.x : texel0.y;
+			float along = vertical ? texel0.y : texel0.x;
+			float lane_on = step(0.45, hash2(vec2(lane, 3.0)));
+			float slide = fract(along * 0.25 * (forward ? 1.0 : -1.0) - TIME * 5.0 + hash2(vec2(lane, 9.0)));
+			float streak = band * lane_on * (0.55 + 0.45 * step(0.5, slide));
+			outc = mix(outc, vec3(0.93, 0.97, 1.0), streak * 0.8 * detail);
+			float lip = step(0.44, across) * (1.0 - step(0.56, across));
+			outc = mix(outc, vec3(1.0), lip * 0.9 * detail);
+		}
 	} else {
 		// Pixel-art tile detail: pick this cell's tile family from its exact
 		// terrain id, a variant from a per-cell hash (same hash family as
