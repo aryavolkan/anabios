@@ -109,6 +109,12 @@ const ANCHOR_TAU := 0.93
 # codex_panel's own cursor. sid -> {"territory": tick, "war": tick, "raid": tick}.
 var _event_cursor: int = 0
 var _recent_events: Dictionary = {}
+# Capture aid: ANABIOS_VILLAGE_ERA / ANABIOS_VILLAGE_FLAGS force every
+# village's era and OR in layout flags (VillageLayout.FLAG_*), so the era-2
+# architecture can be framed without waiting for a lineage to earn it.
+# Presentation only; unset in normal play.
+var _demo_era: int = -1
+var _demo_flags: int = 0
 
 @onready var sim = get_node("../Simulation")
 @onready var biome = get_node("../Biome")
@@ -120,6 +126,9 @@ var _recent_events: Dictionary = {}
 
 
 func _ready() -> void:
+	if OS.has_environment("ANABIOS_VILLAGE_ERA"):
+		_demo_era = int(OS.get_environment("ANABIOS_VILLAGE_ERA"))
+		_demo_flags = int(OS.get_environment("ANABIOS_VILLAGE_FLAGS"))
 	# Landmark/trade buildings: one plain (no-shader) MultiMesh layer per
 	# kind, drawn above agents. Kept as separate layers (rather than one
 	# shared atlas) so each building keeps its own untouched texture on the
@@ -480,6 +489,9 @@ func _redraw() -> void:
 		var era: int = era_for(adopted, _era_of)
 		var recent: Dictionary = _recent_events.get(sid, {})
 		var flags: int = flags_for(adopted, recent, tick)
+		if _demo_era >= 0:
+			era = _demo_era
+			flags |= _demo_flags
 		var sig: String = plan_signature(sid, members, era, flags)
 		if String(v.get("plan_sig", "")) != sig:
 			v["plan"] = VillageLayout.plan(

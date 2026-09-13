@@ -162,6 +162,21 @@ func _init() -> void:
 			hut_kinds[int(p["kind"])] = true
 	_check(hut_kinds.size() >= 2, "a large era-1 village mixes hut silhouettes")
 
+	# --- a fortified farming village walls its huts and keeps the fields outside ---
+	var fort := L.plan(13, Vector2.ZERO, 60, 1, L.FLAG_TERRITORY | L.FLAG_FARMING, no_water)
+	var wall_x := 0
+	for p in fort:
+		if int(p["kind"]) == L.PALISADE_V:
+			wall_x = maxi(wall_x, _cell_of(Vector2.ZERO, p["pos"]).x)
+	_check(wall_x >= 2, "the wall stands east of the huts")
+	for p in fort:
+		var c := _cell_of(Vector2.ZERO, p["pos"])
+		var k: int = int(p["kind"])
+		if L.HUT_KINDS.has(k):
+			_check(absi(c.x) < wall_x and absi(c.y) < wall_x, "hut %s is inside the wall" % c)
+		elif k == L.FIELD:
+			_check(c.x > wall_x, "field %s lies outside the wall" % c)
+
 	# --- FLAG_WAR: exactly one gate, at least one tower, 4 corners ---
 	var war := L.plan(8, Vector2.ZERO, 5, 1, L.FLAG_WAR, no_water)
 	_check(_count_kind(war, L.GATE) == 1, "war village has exactly one gate")

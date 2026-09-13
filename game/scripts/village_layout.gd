@@ -222,12 +222,13 @@ static func _place_fields(
 	occupied: Dictionary,
 	anchor: Vector2,
 	is_water: Callable,
-	out: Array
+	out: Array,
+	min_fx0: int = 0
 ) -> void:
 	var max_gx := 0
 	for h in dwellings:
 		max_gx = maxi(max_gx, h.x)
-	var fx0 := max_gx + 2
+	var fx0 := maxi(max_gx + 2, min_fx0)
 	var fx1 := fx0 + 1
 	var rows := int(ceil(float(fields) / 2.0))
 	var fy0 := 0
@@ -274,6 +275,9 @@ static func plan(
 		if c.x % 2 == 0 and c.y % 2 == 0:
 			lattice_cells.append(c)
 
+	var fortified := era >= 1 and (flags & (FLAG_TERRITORY | FLAG_WAR)) != 0
+	var wall_r := 0
+
 	# --- centrepiece: hearth (camp/thatch) or hall (timber/stone) ---
 	var center_kind := HEARTH if era < 2 else HALL
 	_place(Vector2i.ZERO, center_kind, false, occupied, anchor, is_water, out)
@@ -319,10 +323,25 @@ static func plan(
 		if members >= 24:
 			_place_first_free(spiral_cells, WELL, occupied, anchor, is_water, out, false)
 
+		# A fortified village walls its dwellings only (the ring hugs the
+		# huts the way the boards' palisades do); the fields lie outside
+		# the wall with a cell of open ground between.
+		if fortified:
+			var ext := 1
+			for h in huts:
+				ext = maxi(ext, maxi(absi(h.x), absi(h.y)))
+			wall_r = ext + 1
 		var farming := (flags & FLAG_FARMING) != 0
 		if farming or members >= 24:
 			_place_fields(
-				clampi(members / 12, 2, 6), huts, farming, occupied, anchor, is_water, out
+				clampi(members / 12, 2, 6),
+				huts,
+				farming,
+				occupied,
+				anchor,
+				is_water,
+				out,
+				wall_r + 2 if fortified else 0
 			)
 
 		if era >= 2:
@@ -337,12 +356,8 @@ static func plan(
 					_place(mill_cell, MILL, false, occupied, anchor, is_water, out)
 
 	# --- palisade ring: any era >= 1 site under Territory or War ---
-	if era >= 1 and (flags & (FLAG_TERRITORY | FLAG_WAR)) != 0:
-		var max_extent := 0
-		for p in out:
-			var c: Vector2i = p["cell"]
-			max_extent = maxi(max_extent, maxi(absi(c.x), absi(c.y)))
-		var r := max_extent + 1
+	if fortified:
+		var r := wall_r
 		for gx in range(-r + 1, r):
 			if gx == 0:
 				_place(Vector2i(0, r), GATE, false, occupied, anchor, is_water, out)
