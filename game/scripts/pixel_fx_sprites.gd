@@ -9,8 +9,8 @@ extends RefCounted
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 
-enum { EMBER, IMPACT, DISCOVERY, SMOKE }
-const KIND_COUNT := 4
+enum { EMBER, IMPACT, DISCOVERY, SMOKE, FLAME }
+const KIND_COUNT := 5
 
 # [x, y, w, h, key] blocks on a 16x16 grid, drawn back-to-front.
 const _BLOCKS: Array = [
@@ -66,6 +66,17 @@ const _BLOCKS: Array = [
 		[4, 7, 7, 3, "G"],
 		[6, 4, 3, 1, "s"],
 		[3, 8, 2, 1, "s"],
+	],
+	# FLAME — a tongue of fire: orange body tapering to a tip, a yellow core
+	# and a white-hot heart, for the pooled fires over a burning ruin
+	[
+		[7, 2, 2, 2, "O"],
+		[6, 4, 4, 3, "O"],
+		[5, 7, 6, 4, "O"],
+		[4, 9, 8, 3, "o"],
+		[7, 5, 2, 2, "y"],
+		[6, 7, 4, 4, "y"],
+		[7, 9, 2, 2, "W"],
 	],
 ]
 

@@ -44,6 +44,7 @@ pins an agent in the unit card.
 |---|---|---|
 | scale-settlement-t891-village-4x.png | `settlement` t891 4× (default camera, `ANABIOS_INSPECT=1`) | A camp on packed-earth yards with paths to the hearth, tents spaced a hut-width apart, the crowd capped to one figure per 17 units at 4× (12 at 2×, staggered rows), a market square with awning stalls beside it, pixel-puff hearth smoke, the outcrop east of the camp as warm stone, the unit card. |
 | scale-settlement-t891-fortified-2x.png | `settlement` t891 2× (`ANABIOS_VILLAGE_ERA=2 ANABIOS_VILLAGE_FLAGS=123`) | The same camp forced into its fortified era: a log palisade hugging the huts, a gate with banners to the south, a watchtower, fenced fields outside the wall, the forest standing back from the clearing. |
+| scale-settlement-t891-raided-4x.png | `settlement` t891 4× (`ANABIOS_VILLAGE_ERA=1 ANABIOS_VILLAGE_FLAGS=127`) | The same camp as a raided thatch village: burnt ruins with pixel flames and black smoke over them, the palisade, the fenced field. |
 | scale-settlement-t3120-camp-4x.png | `settlement` t3120 4× | The same camp later: hearth smoke, herds at the square, codex species page. |
 | scale-settlement-t1020-codex-species-2x.png | `settlement` t1020 2× (`ANABIOS_CODEX_TAB=1`) | The settlement peninsula: flat lake water with block ripples, dithered biome borders, mixed oak silhouettes, olive savanna, resting herds with their heads up, the HUD. |
 | scale-settlement-t1591-1x.png | `settlement` t1591 1× | The same world at 1×. |

@@ -57,6 +57,9 @@ const RAID_TICKS := 400
 
 # Chimney-smoke plume pool, assigned each redraw to the largest live villages.
 const SMOKE_POOL := 8
+# Fires over burning ruins: a pooled flame emitter plus a dark smoke plume
+# per ruin, assigned each redraw to the first FIRE_POOL burnt structures.
+const FIRE_POOL := 6
 # Construction pops are only sampled on the throttled redraw (~3/s), so the
 # window must span several samples for the ease-out-back arc to actually show.
 const POP_SECS := 1.5
@@ -79,6 +82,8 @@ const HEARTH_YARD_SCALE := 2.6
 const PATH_STEP := 7.0
 const PATH_SCALE := 0.55
 var _smoke: Array[GPUParticles2D] = []
+var _fires: Array[GPUParticles2D] = []
+var _fire_smoke: Array[GPUParticles2D] = []
 # Animated kinds only: key -> [phase-0 texture, phase-1 texture] and key ->
 # every MultiMeshInstance2D showing it (the source layer plus its eight torus
 # clones), so a frame swap can never leave a clone a frame behind. Shared by
@@ -186,6 +191,7 @@ func _ready() -> void:
 	for inv in sim.invention_catalog():
 		_era_of[String(inv["key"])] = int(inv["era"])
 	_make_smoke_pool()
+	_make_fire_pool()
 	_make_wrap_clones()
 
 
@@ -483,6 +489,7 @@ func _redraw() -> void:
 	var yard_xf: Array = []
 	var yard_col: Array = []
 	var clearings: Array[Rect2] = []
+	var fire_pos: PackedVector2Array = PackedVector2Array()
 	for sid in _villages.keys():
 		var v: Dictionary = _villages[sid]
 		var stale: float = _now - float(v["seen"])
@@ -556,8 +563,11 @@ func _redraw() -> void:
 			if rank >= 0 and rank < smoke_rank:
 				smoke_rank = rank
 				smoke_pos = ppos + Vector2(0.0, -8.0)
-			if kind == StructureSprites.RUIN_BURNT and first_seen and _effects != null:
-				_effects.spawn_embers(ppos)
+			if kind == StructureSprites.RUIN_BURNT:
+				if first_seen and _effects != null:
+					_effects.spawn_embers(ppos)
+				if fade > 0.5:
+					fire_pos.append(ppos + Vector2(0.0, -3.0))
 		v["plan_born"] = new_born
 		v["smoke_pos"] = smoke_pos
 		# The village stands in a clearing: its structures' bounds plus most
@@ -580,6 +590,7 @@ func _redraw() -> void:
 					build_col[tkind].append(Color(1, 1, 1, fade))
 	_place_invention_landmarks(stats_by_sid, build_xf, build_col)
 	_assign_smoke()
+	_assign_fires(fire_pos)
 	for k in Buildings.KIND_COUNT:
 		_write(_building_mmis[k].multimesh, build_xf[k], build_col[k])
 	for k in StructureSprites.KIND_COUNT:
@@ -695,6 +706,81 @@ func _make_smoke_pool() -> void:
 		p.process_material = m
 		add_child(p)
 		_smoke.append(p)
+
+
+# One flame emitter and one dark plume per burning ruin: flames as pixel
+# tongues licking up from the ruin's footprint (the boards' raided huts
+# burn with a visible fire, not just an ember spray on the first frame),
+# black smoke rising above them.
+func _make_fire_pool() -> void:
+	var flame := PixelFxSprites.build(PixelFxSprites.FLAME)
+	var puff := PixelFxSprites.build(PixelFxSprites.SMOKE)
+	for i in FIRE_POOL:
+		var p := GPUParticles2D.new()
+		p.name = "Fire%d" % i
+		p.amount = 14
+		p.lifetime = 0.8
+		p.emitting = false
+		p.z_index = 3
+		p.visibility_rect = Rect2(-40, -60, 80, 80)
+		p.texture = flame
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var m := ParticleProcessMaterial.new()
+		m.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		m.emission_box_extents = Vector3(5.0, 1.5, 1.0)
+		m.direction = Vector3(0, -1, 0)
+		m.spread = 12.0
+		m.initial_velocity_min = 6.0
+		m.initial_velocity_max = 12.0
+		m.gravity = Vector3(0, -6.0, 0)
+		m.scale_min = 0.3
+		m.scale_max = 0.55
+		var grad := Gradient.new()
+		grad.set_color(0, Color(1.0, 1.0, 1.0, 1.0))
+		grad.add_point(0.6, Color(1.0, 0.75, 0.55, 0.9))
+		grad.set_color(1, Color(0.4, 0.15, 0.1, 0.0))
+		var gt := GradientTexture1D.new()
+		gt.gradient = grad
+		m.color_ramp = gt
+		p.process_material = m
+		add_child(p)
+		_fires.append(p)
+		var s := GPUParticles2D.new()
+		s.name = "FireSmoke%d" % i
+		s.amount = 8
+		s.lifetime = 2.4
+		s.emitting = false
+		s.z_index = 3
+		s.visibility_rect = Rect2(-80, -140, 160, 180)
+		s.texture = puff
+		s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var sm := ParticleProcessMaterial.new()
+		sm.direction = Vector3(0, -1, 0)
+		sm.spread = 14.0
+		sm.initial_velocity_min = 8.0
+		sm.initial_velocity_max = 14.0
+		sm.gravity = Vector3(2.0, -6.0, 0)
+		sm.scale_min = 0.4
+		sm.scale_max = 0.7
+		var sg := Gradient.new()
+		sg.set_color(0, Color(0.25, 0.22, 0.22, 0.9))
+		sg.set_color(1, Color(0.3, 0.3, 0.32, 0.0))
+		var sgt := GradientTexture1D.new()
+		sgt.gradient = sg
+		sm.color_ramp = sgt
+		s.process_material = sm
+		add_child(s)
+		_fire_smoke.append(s)
+
+
+func _assign_fires(positions: PackedVector2Array) -> void:
+	for i in _fires.size():
+		var on: bool = i < positions.size()
+		if on:
+			_fires[i].position = positions[i]
+			_fire_smoke[i].position = positions[i] + Vector2(0.0, -6.0)
+		_fires[i].emitting = on
+		_fire_smoke[i].emitting = on
 
 
 func _assign_smoke() -> void:
