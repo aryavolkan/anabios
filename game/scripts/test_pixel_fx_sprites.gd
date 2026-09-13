@@ -17,7 +17,7 @@ func _check(cond: bool, msg: String) -> void:
 
 
 func _init() -> void:
-	_check(PixelFx.KIND_COUNT == 5, "ember, impact, discovery, smoke and flame sprites")
+	_check(PixelFx.KIND_COUNT == 6, "ember, impact, discovery, smoke, flame and bones sprites")
 	_check(PixelFx.EMBER == 0 and PixelFx.IMPACT == 1 and PixelFx.DISCOVERY == 2, "stable ids")
 	for kind in PixelFx.KIND_COUNT:
 		var image: Image = PixelFx.build_image(kind)

@@ -1,6 +1,7 @@
 extends Node2D
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
+const PixelFxSprites = preload("res://scripts/pixel_fx_sprites.gd")
 const Palette = preload("res://scripts/palette.gd")
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
@@ -78,8 +79,12 @@ func _ready() -> void:
 	$UI.transform = Transform2D(0.0, Vector2(s, s), 0.0, Vector2.ZERO)
 	_apply_ui_theme()
 	var disc := _disc_texture()
-	carcasses.texture = disc
-	flashes.texture = disc
+	# Carcasses and combat flashes are pixel marks (bones, the impact
+	# star), unfiltered: the filtered disc was a soft beige blob at 16x.
+	carcasses.texture = PixelFxSprites.build(PixelFxSprites.BONES)
+	carcasses.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	flashes.texture = PixelFxSprites.build(PixelFxSprites.IMPACT)
+	flashes.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# The agents are the apes of DIT: render each as an 8-bit hominin in its
 	# species' own colours instead of a plain disc, one MultiMesh + pose atlas
 	# per bucket, with the [C] overlays multiplying on top as a tint. The
@@ -496,12 +501,12 @@ func _refresh_carcasses() -> void:
 	for i in m:
 		var d: Dictionary = data[i]
 		var pos: Vector2 = d["pos"]
-		var f: float = clampf(float(d["flesh"]) / 20.0 * 4.0, 3.0, 7.0)
+		# The 16 px mark spans the cell, so twice the old disc's size.
+		var f: float = clampf(float(d["flesh"]) / 20.0 * 4.0, 3.0, 7.0) * 2.0
 		mm.set_instance_transform_2d(i, Transform2D(0.0, Vector2(f, f), 0.0, pos))
-		# Bone, not the old cold near-white: at 0.55 alpha a pale blue-grey disc
-		# was the brightest thing on a green field, so every carcass pulled the
-		# eye like a UI marker. Warm and dim reads as remains on the ground.
-		mm.set_instance_color(i, Color(0.78, 0.74, 0.63, 0.42))
+		# Warm and dim so the remains sit on the ground rather than pulling
+		# the eye like a UI marker.
+		mm.set_instance_color(i, Color(0.95, 0.9, 0.78, 0.7))
 
 
 func _refresh_flashes() -> int:
