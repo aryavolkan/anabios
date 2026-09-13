@@ -33,7 +33,11 @@ enum {
 	BANNER,
 	WELL,
 	RUIN_BURNT,
+	HUT_B,
+	HUT_C,
 }
+# The three hut silhouettes an era-1 dwelling cell may take.
+const HUT_KINDS: PackedInt32Array = [HUT, HUT_B, HUT_C]
 
 # One structure occupies one grid cell of GRID world units (a 32 px sprite at
 # 0.5 world units per texel, per D1).
@@ -247,7 +251,10 @@ static func plan(
 		while placed < count and i < lattice_cells.size():
 			var c: Vector2i = lattice_cells[i]
 			i += 1
-			if _place(c, HUT, _flip_bit(sid, c), occupied, anchor, is_water, out):
+			var hk: int = HUT_KINDS[
+				int(hash2(sid * 3 + 1, c.x, c.y) * HUT_KINDS.size()) % HUT_KINDS.size()
+			]
+			if _place(c, hk, _flip_bit(sid, c), occupied, anchor, is_water, out):
 				huts.append(c)
 				placed += 1
 		if members >= 24:
@@ -333,7 +340,7 @@ static func plan(
 		var burnable: Array = []
 		for idx in out.size():
 			var kind: int = out[idx]["kind"]
-			if kind == TENT or kind == HUT:
+			if kind == TENT or HUT_KINDS.has(kind):
 				var c: Vector2i = out[idx]["cell"]
 				burnable.append([hash2(sid * 7 + 3, c.x, c.y), idx])
 		burnable.sort_custom(func(a, b): return a[0] < b[0])

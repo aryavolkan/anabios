@@ -141,6 +141,14 @@ func _init() -> void:
 				"field %s neighbour %s outside the block is a fence or field (got %d)" % [fc, nb, k]
 			)
 
+	# --- era 1 huts mix the three silhouettes ---
+	var big := L.plan(11, Vector2.ZERO, 80, 1, 0, no_water)
+	var hut_kinds: Dictionary = {}
+	for p in big:
+		if L.HUT_KINDS.has(int(p["kind"])):
+			hut_kinds[int(p["kind"])] = true
+	_check(hut_kinds.size() >= 2, "a large era-1 village mixes hut silhouettes")
+
 	# --- FLAG_WAR: exactly one gate, at least one tower, 4 corners ---
 	var war := L.plan(8, Vector2.ZERO, 5, 1, L.FLAG_WAR, no_water)
 	_check(_count_kind(war, L.GATE) == 1, "war village has exactly one gate")

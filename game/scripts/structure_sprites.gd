@@ -36,8 +36,10 @@ enum {
 	BANNER,
 	WELL,
 	RUIN_BURNT,
+	HUT_B,
+	HUT_C,
 }
-const KIND_COUNT := 20
+const KIND_COUNT := 22
 const CELL_PX := 32
 const ATLAS_COLS := 8  # 8x8 grid of 32px cells = a square 256x256 atlas; cell index == kind
 
@@ -62,6 +64,8 @@ const NAMES: PackedStringArray = [
 	"Banner",
 	"Well",
 	"RuinBurnt",
+	"HutRound",
+	"Longhouse",
 ]
 
 # 32x32 row-string pixel maps per kind, indexed by the enum. '.' is
@@ -770,6 +774,76 @@ const _ROWS: Array = [
 		"..KkkkkkkkkkkkkkkkkkkkkkkkkkkK..",
 		"...KKKKKKKKKKKKKKKKKKKKKKKKKK...",
 	],
+	# HUT_B
+	[
+		"................................",
+		"...............KK...............",
+		"..............KTTK..............",
+		".............KTttTK.............",
+		"............KTttttTK............",
+		"...........KTttttttTK...........",
+		"..........KTttttttttTK..........",
+		".........KTttttttttttTK.........",
+		"........KTttttttttttttTK........",
+		".......KTttttttttttttttTK.......",
+		"......KTttttttttttttttttTK......",
+		".....KTttttttttttttttttttTK.....",
+		"....KTTTTTTTTTTTTTTTTTTTTTTK....",
+		"....KttttttttttttttttttttttK....",
+		"...KttttttttttttttttttttttttK...",
+		"...KTTTTTTTTTTTTTTTTTTTTTTTTK...",
+		"....KBBBBBBBBBBBBBBBBBBBBBBK....",
+		"....KbbbbbbbbbbbbbbbbbbbbbbK....",
+		"....KbbbbbbbbbbbbbbbbbbbbbbK....",
+		"....KbbbbbbbbbbbbbbbbbbbbbbK....",
+		".....KbbbbbbbbbbbbbbbbbbbbK.....",
+		".....KKKKKKKKKKKKKKKKKKKKKK.....",
+		"...........KKKKKKKKK............",
+		"...........KKKKKKKKK............",
+		"...........KKKKKKKKK............",
+		"...........KKKKKKKKK............",
+		"...........KKKKKKKKK............",
+		"....KKKKKKKKKKKKKKKKKKKKKKKK....",
+		"...KkkkkkkkkKKKKKKKKKkkkkkkkK...",
+		"...KkkkkkkkkkkkkkkkkkkkkkkkkK...",
+		"....KKKKKKKKKKKKKKKKKKKKKKKK....",
+		"................................",
+	],
+	# HUT_C
+	[
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"........KKKKKKKKKKKKKKKK........",
+		"......KKTTTTTTTTTTTTTTTTKK......",
+		".....KTTttttttttttttttttTTK.....",
+		"....KTttttttttttttttttttttTK....",
+		"...KTttttttttttttttttttttttTK...",
+		"..KTttttttttttttttttttttttttTK..",
+		"..KttttttttttttttttttttttttttK..",
+		"..KTTTTTTTTTTTTTTTTTTTTTTTTTTK..",
+		"..KttttttttttttttttttttttttttK..",
+		"..KttttttttttttttttttttttttttK..",
+		"..KTTTTTTTTTTTTTTTTTTTTTTTTTTK..",
+		".KBBBBBBBBBBBBBBBBBBBBBBBBBBBBK.",
+		".KbbbbbbbbbbbbbbbbbbbbbbbbbbbbK.",
+		".KbbbKooKbbbbbbbbbbbbbbbKooKbbK.",
+		".KbbbKooKbbbbbbbbbbbbbbbKooKbbK.",
+		".KbbbbbbbbbbbbbbbbbbbbbbbbbbbbK.",
+		".KbbbbbbbbbbbbbbbbbbbbbbbbbbbbK.",
+		".KbbbbbbbbbbbbbbbbbbbbbbbbbbbbK.",
+		"..KKKKKKKKKKKBBBBBBKKKKKKKKKKK..",
+		"............KKKKKKKK............",
+		"............KKKKKKKK............",
+		"............KKKKKKKK............",
+		"............KKKKKKKK............",
+		"..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
+		".KkkkkkkkkkkKKKKKKKKkkkkkkkkkkK.",
+		".KkkkkkkkkkkkkkkkkkkkkkkkkkkkkK.",
+		"..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
+		"................................",
+	],
 ]
 
 const PAL: Dictionary = {
@@ -919,7 +993,7 @@ static func era_of(kind: int) -> int:
 	match kind:
 		TENT, WINDBREAK, HEARTH:
 			return 0
-		HUT, FENCE_H, FENCE_V, FIELD, GRANARY, WELL, RUIN_BURNT:
+		HUT, HUT_B, HUT_C, FENCE_H, FENCE_V, FIELD, GRANARY, WELL, RUIN_BURNT:
 			return 1
 		_:
 			return 2

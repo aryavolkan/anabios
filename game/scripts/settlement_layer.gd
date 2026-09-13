@@ -338,6 +338,8 @@ static func _smoke_rank(kind: int) -> int:
 const _YARD_KINDS: PackedInt32Array = [
 	StructureSprites.TENT,
 	StructureSprites.HUT,
+	StructureSprites.HUT_B,
+	StructureSprites.HUT_C,
 	StructureSprites.WELL,
 	StructureSprites.FORGE,
 	StructureSprites.SCRIPTORIUM,
