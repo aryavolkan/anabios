@@ -90,33 +90,27 @@ func _ready() -> void:
 	# Per-bucket gait cadence and rig kind come from the archetype registry
 	# (bucket_gait_fps reads ApeSprites.WALK_FPS for the hominin buckets).
 	_body_mmis.append(bodies)
-	for b in range(1, MammalSprites.BUCKET_COUNT):
-		var mmi := MultiMeshInstance2D.new()
-		mmi.name = "Bodies%d" % b
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_2D
-		mm.use_colors = true
-		mm.use_custom_data = true
-		mm.mesh = bodies.multimesh.mesh
-		mmi.multimesh = mm
-		add_child(mmi)
-		move_child(mmi, bodies.get_index() + b)
-		_body_mmis.append(mmi)
+	# One MultiMesh for every figure (D9 y-sort across species): the combined
+	# atlas packs each bucket's hero atlas into a 4x4 grid and the instance
+	# colour alpha names the bucket, so agent_layer can write all visible
+	# figures north to south regardless of species.
+	bodies.texture = MammalSprites.combined_atlas()
+	bodies.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var sp_mat := ShaderMaterial.new()
+	sp_mat.shader = FieldAgentShader
+	sp_mat.set_shader_parameter("frames", MammalSprites.POSE_COUNT)
+	sp_mat.set_shader_parameter("atlas_cols", float(ApeSprites.ATLAS_COLS))
+	sp_mat.set_shader_parameter("atlas_px", float(ApeSprites.HERO_ATLAS_PX))
+	sp_mat.set_shader_parameter("cell_px", float(ApeSprites.HERO_PX))
+	sp_mat.set_shader_parameter("bucket_cols", float(MammalSprites.ATLAS_GRID))
+	var rig_kinds := PackedInt32Array()
+	rig_kinds.resize(MammalSprites.ATLAS_GRID * MammalSprites.ATLAS_GRID)
 	for b in MammalSprites.BUCKET_COUNT:
-		var mmi := _body_mmis[b]
-		mmi.texture = MammalSprites.bucket_atlas(b)
-		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		var sp_mat := ShaderMaterial.new()
-		sp_mat.shader = FieldAgentShader
-		sp_mat.set_shader_parameter("frames", MammalSprites.POSE_COUNT)
-		sp_mat.set_shader_parameter("atlas_cols", float(ApeSprites.ATLAS_COLS))
-		sp_mat.set_shader_parameter("atlas_px", float(ApeSprites.HERO_ATLAS_PX))
-		sp_mat.set_shader_parameter("cell_px", float(ApeSprites.HERO_PX))
-		sp_mat.set_shader_parameter("act_scale", AgentLayer.ACT_SCALE)
-		sp_mat.set_shader_parameter("walk_fps", MammalSprites.bucket_gait_fps(b))
-		sp_mat.set_shader_parameter("rig_kind", MammalSprites.bucket_rig_kind(b))
-		sp_mat.set_shader_parameter("animation_time", 0.0)
-		mmi.material = sp_mat
+		rig_kinds[b] = MammalSprites.bucket_rig_kind(b)
+	sp_mat.set_shader_parameter("rig_kinds", rig_kinds)
+	sp_mat.set_shader_parameter("act_scale", AgentLayer.ACT_SCALE)
+	sp_mat.set_shader_parameter("animation_time", 0.0)
+	bodies.material = sp_mat
 	# use_custom_data can only be toggled at instance_count 0; the scene's
 	# Bodies ships with a pre-grown buffer, so clear first, enable, then
 	# AgentLayer.refresh() re-grows it on the first tick. (The code-created
@@ -141,7 +135,7 @@ func _ready() -> void:
 	var density := preload("res://scripts/density_layer.gd").new()
 	density.name = "DensityLayer"
 	add_child(density)
-	move_child(density, bodies.get_index() + MammalSprites.BUCKET_COUNT)
+	move_child(density, bodies.get_index() + _body_mmis.size())
 	density.setup(sim, $Camera2D as Camera2D)
 	# Trail pools (footstep tracks + segment trails), split from this file.
 	# Sits where the Tracks MMI used to be added so tree order is unchanged;

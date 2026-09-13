@@ -139,6 +139,36 @@ static func bucket_of(archetype: int, species_id: int) -> int:
 	return SKIN_COUNT + QUAD_ORDER.find(archetype)
 
 
+# Every bucket's hero atlas packed into one square grid (ATLAS_GRID x
+# ATLAS_GRID cells of HERO_ATLAS_PX), bucket b at cell (b % ATLAS_GRID,
+# b / ATLAS_GRID), so all figures can share ONE MultiMesh and y-sort across
+# species; the field shader picks the bucket cell from the instance colour's
+# alpha. Square, as the Metal MultiMesh path requires.
+const ATLAS_GRID := 4
+const COMBINED_ATLAS_PX := ATLAS_GRID * ApeSprites.HERO_ATLAS_PX
+
+
+static func combined_atlas() -> ImageTexture:
+	var side: int = COMBINED_ATLAS_PX
+	var img := Image.create(side, side, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for b in BUCKET_COUNT:
+		var cell: Image = bucket_atlas(b).get_image()
+		var px: int = ApeSprites.HERO_ATLAS_PX
+		img.blit_rect(
+			cell,
+			Rect2i(0, 0, px, px),
+			Vector2i((b % ATLAS_GRID) * px, int(b / float(ATLAS_GRID)) * px)
+		)
+	return ImageTexture.create_from_image(img)
+
+
+# The instance-colour alpha that names bucket `b` to the field shader (the
+# live bodies never use alpha for fading, so the channel is free).
+static func bucket_alpha(b: int) -> float:
+	return (float(b) + 0.5) / float(ATLAS_GRID * ATLAS_GRID)
+
+
 static func bucket_atlas(b: int) -> ImageTexture:
 	if b < SKIN_COUNT:
 		if HomininRigs.has(b):

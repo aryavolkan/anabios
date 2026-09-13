@@ -36,6 +36,13 @@ uniform int frames = 16;
 uniform float atlas_cols = 8.0;
 uniform float atlas_px = 192.0;
 uniform float cell_px = 24.0;
+// Combined atlas (mammal_sprites.combined_atlas): every bucket's 192 px
+// atlas packed into a bucket_cols x bucket_cols grid, so all figures share
+// ONE MultiMesh and y-sort across species. The bucket comes from the
+// instance colour's alpha (mammal_sprites.bucket_alpha); its rig kind from
+// rig_kinds[bucket]. With bucket_cols = 1 the atlas is a single bucket.
+uniform float bucket_cols = 1.0;
+uniform int rig_kinds[16];
 // Authored walk cadence (frames/sec). The walk cycle itself is now paced by
 // distance travelled (see anim.r above), so this only sets the flee gallop's
 // bounding rate; main.gd reuses the same per-bucket value to scale stride
@@ -54,7 +61,7 @@ uniform float action_squash = 0.06;
 uniform float animation_time = 0.0;
 // Signature-move family (mammal_sprites.RigKind): 0 prey, 1 predator,
 // 2 primate (default = today's apes, all new branches off), 3 livestock.
-uniform int rig_kind = 2;
+uniform int rig_kind_default = 2;
 // Divisor main.gd uses to fit the action id into the 0..1 custom-data
 // channel (main.gd ACT_SCALE). Driven as a uniform so the encode and decode
 // cannot drift apart when a new action pushes the scale up.
@@ -68,10 +75,14 @@ varying flat vec4 anim;
 // the full pose atlas instead of one cell. Same corruption family as the
 // emote shader's INSTANCE_CUSTOM.a workaround; a flat varying survives.
 varying flat vec4 tint;
+varying flat int bucket;
 
 void vertex() {
 	anim = INSTANCE_CUSTOM;
-	tint = COLOR;
+	tint = vec4(COLOR.rgb, 1.0);
+	int slots = int(bucket_cols * bucket_cols);
+	bucket = clamp(int(floor(COLOR.a * float(slots))), 0, slots - 1);
+	int rig_kind = bucket_cols > 1.5 ? rig_kinds[bucket] : rig_kind_default;
 	float phase = anim.r * 6.2831853;
 	float act = anim.a * act_scale;
 	// The QuadMesh is a 3D mesh, so its local +Y points up-screen in the 2D
@@ -277,5 +288,8 @@ void fragment() {
 	float col = mod(fr, atlas_cols);
 	float row = floor(fr / atlas_cols);
 	vec2 cell_uv = (vec2(col + u, row + UV.y)) * (cell_px / atlas_px);
+	// Into the bucket's cell of the combined atlas.
+	vec2 origin = vec2(float(bucket % int(bucket_cols)), floor(float(bucket) / bucket_cols));
+	cell_uv = (origin + cell_uv) / bucket_cols;
 	COLOR = texture(TEXTURE, cell_uv) * tint;
 }

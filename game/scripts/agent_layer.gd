@@ -512,156 +512,161 @@ func refresh(
 		total_vis += buckets[b].size()
 	if total_vis > shadows.instance_count:
 		shadows.instance_count = total_vis
+	# Every visible figure goes into the ONE body MultiMesh (the combined
+	# atlas, mammal_sprites.combined_atlas), y-sorted north to south: a
+	# MultiMesh draws its instances in index order, so a figure standing
+	# further south lands in front of the one behind it whatever its species,
+	# the way a crowd overlaps in the reference boards. The bucket rides in
+	# the instance colour's alpha for the shader's atlas cell and rig kind.
+	var order: Array = []
 	for b in MammalSprites.BUCKET_COUNT:
-		var mm: MultiMesh = _body_mmis[b].multimesh
-		# Y-sort within the bucket: a MultiMesh draws its instances in index
-		# order, so writing the northern figures first puts a figure that
-		# stands further south in front of the one behind it, the way a
-		# crowd overlaps in the reference boards. (Between buckets the layer
-		# order still decides; see the split-sprite note in the spec.)
-		var order: Array = Array(buckets[b])
-		order.sort_custom(func(a, c): return smooth[a].y < smooth[c].y)
-		var idx := PackedInt32Array(order)
-		var m: int = idx.size()
+		order.append_array(Array(buckets[b]))
+	order.sort_custom(func(a, c): return smooth[a].y < smooth[c].y)
+	var idx := PackedInt32Array(order)
+	var mm: MultiMesh = _body_mmis[0].multimesh
+	var m: int = idx.size()
+	if m > mm.instance_count:
+		mm.instance_count = m
+	mm.visible_instance_count = m
+	for j in m:
+		var i: int = idx[j]
+		var b: int = bucket_ix[i]
 		var gait_fps: float = MammalSprites.bucket_gait_fps(b)
-		if m > mm.instance_count:
-			mm.instance_count = m
-		mm.visible_instance_count = m
-		for j in m:
-			var i: int = idx[j]
-			var sz: float = clampf(sizes[i] * BODY_SCALE, min_body, BODY_CAP)
-			# New agents squash in, then spring to full size with an overshoot
-			# (anticipation-then-pop) instead of blinking into existence;
-			# after BIRTH_POP seconds the scale is exactly 1.
-			var s: int = _slots[i] if have_ids else -1
-			if have_ids:
-				var age: float = now - _anim.birth_time[s]
-				if age < BIRTH_POP:
-					sz *= FxMath.birth_scale(age / BIRTH_POP)
-			# Upright: the hominin stands, not spins — heading drives the
-			# walk shader (walk weight + facing), not the transform rotation.
-			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
-			mm.set_instance_transform_2d(j, t)
-			shadows.set_instance_transform_2d(
-				shadow_n,
-				Transform2D(
-					0.0,
-					Vector2(sz * SHADOW_W, sz * SHADOW_H),
-					0.0,
-					smooth[i] + Vector2(0.0, sz * SHADOW_DROP)
-				)
+		var sz: float = clampf(sizes[i] * BODY_SCALE, min_body, BODY_CAP)
+		# New agents squash in, then spring to full size with an overshoot
+		# (anticipation-then-pop) instead of blinking into existence;
+		# after BIRTH_POP seconds the scale is exactly 1.
+		var s: int = _slots[i] if have_ids else -1
+		if have_ids:
+			var age: float = now - _anim.birth_time[s]
+			if age < BIRTH_POP:
+				sz *= FxMath.birth_scale(age / BIRTH_POP)
+		# Upright: the hominin stands, not spins — heading drives the
+		# walk shader (walk weight + facing), not the transform rotation.
+		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
+		mm.set_instance_transform_2d(j, t)
+		shadows.set_instance_transform_2d(
+			shadow_n,
+			Transform2D(
+				0.0,
+				Vector2(sz * SHADOW_W, sz * SHADOW_H),
+				0.0,
+				smooth[i] + Vector2(0.0, sz * SHADOW_DROP)
 			)
-			shadow_n += 1
-			mm.set_instance_color(j, body_colors[i])
-			# Per-instance animation state for the field_agent shader. The sim
-			# reports heading exactly 0.0 when velocity ≈ 0, which doubles as
-			# the idle flag; facing is the heading's x-sign.
-			var rot: float = rots[i] if have_rots else 0.0
-			# `moving` is the blended 0..1 walk weight the shader mixes its
-			# secondary motion with; `walking` is the debounced state picking
-			# the pose and driving the gait. Splitting them stops the sprite
-			# popping on the sim's flickering heading (~3.5 times a second).
-			var walking: bool = rot != 0.0
-			var moving: float = 1.0 if walking else 0.0
-			if have_ids:
-				var loco: Vector2 = FxMath.step_locomotion(
-					Vector2(_anim.walk_hold[s], _anim.walk_weight[s]), walking, delta
+		)
+		shadow_n += 1
+		var body_col: Color = body_colors[i]
+		body_col.a = MammalSprites.bucket_alpha(b)
+		mm.set_instance_color(j, body_col)
+		# Per-instance animation state for the field_agent shader. The sim
+		# reports heading exactly 0.0 when velocity ≈ 0, which doubles as
+		# the idle flag; facing is the heading's x-sign.
+		var rot: float = rots[i] if have_rots else 0.0
+		# `moving` is the blended 0..1 walk weight the shader mixes its
+		# secondary motion with; `walking` is the debounced state picking
+		# the pose and driving the gait. Splitting them stops the sprite
+		# popping on the sim's flickering heading (~3.5 times a second).
+		var walking: bool = rot != 0.0
+		var moving: float = 1.0 if walking else 0.0
+		if have_ids:
+			var loco: Vector2 = FxMath.step_locomotion(
+				Vector2(_anim.walk_hold[s], _anim.walk_weight[s]), walking, delta
+			)
+			_anim.walk_hold[s] = loco.x
+			_anim.walk_weight[s] = loco.y
+			walking = loco.x > 0.0
+			moving = loco.y
+		if walking and _moving_sample.size() < 8:
+			_moving_sample.append(smooth[i])
+		# Ease the facing mirror per id: the shader's fractional mix turns
+		# the transition into a quick flip-squash rather than a snap. The
+		# side is deadbanded and held while stopped (see FxMath), so a
+		# flickering heading cannot strobe the sprite.
+		var cx: float = cos(rot)
+		var face_left := 1.0 if cx < 0.0 else 0.0
+		if have_ids:
+			# A slot born this frame seeds from the current heading (the
+			# old Dictionary default) so a newborn never eases in from a
+			# side it never faced.
+			var prev_face := Vector3(face_left, face_left, cx)
+			if _anim.birth_time[s] != now:
+				prev_face = Vector3(
+					float(_anim.facing_side[s]), _anim.facing_ease[s], _anim.facing_heading[s]
 				)
-				_anim.walk_hold[s] = loco.x
-				_anim.walk_weight[s] = loco.y
-				walking = loco.x > 0.0
-				moving = loco.y
-			if walking and _moving_sample.size() < 8:
-				_moving_sample.append(smooth[i])
-			# Ease the facing mirror per id: the shader's fractional mix turns
-			# the transition into a quick flip-squash rather than a snap. The
-			# side is deadbanded and held while stopped (see FxMath), so a
-			# flickering heading cannot strobe the sprite.
-			var cx: float = cos(rot)
-			var face_left := 1.0 if cx < 0.0 else 0.0
-			if have_ids:
-				# A slot born this frame seeds from the current heading (the
-				# old Dictionary default) so a newborn never eases in from a
-				# side it never faced.
-				var prev_face := Vector3(face_left, face_left, cx)
-				if _anim.birth_time[s] != now:
-					prev_face = Vector3(
-						float(_anim.facing_side[s]), _anim.facing_ease[s], _anim.facing_heading[s]
-					)
-				var face: Vector3 = FxMath.step_facing(prev_face, cx, walking, delta)
-				_anim.facing_side[s] = int(round(face.x))
-				_anim.facing_ease[s] = face.y
-				_anim.facing_heading[s] = face.z
-				face_left = face.y
-			# Gait cycle position, paced by the distance this body covered on
-			# screen so the feet keep up with the ground (see FxMath).
-			var phase: float
-			var footfall := false
-			if have_ids:
-				var previous_phase: float = _anim.gait[s]
-				phase = previous_phase
-				if walking:
-					var stride: float = FxMath.stride_len(sizes[i], gait_fps)
-					phase = FxMath.advance_gait(phase, _step_dist[i], stride)
-					# The four-pose cycle has two contact beats. Fire dust when
-					# crossing either half-cycle boundary, so the puff lands under
-					# a planted foot instead of appearing at a random frame.
-					footfall = int(floor(previous_phase * 2.0)) != int(floor(phase * 2.0))
-				_anim.gait[s] = phase
-			else:
-				phase = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
-			if footfall and _effects != null:
-				_effects.spawn_dust(smooth[i])
-			# Action pose from sim signals. Priority: sleep (SLEEP mood while
-			# standing) > flee (FLEE mood — the mood is the behavior arbiter,
-			# so fear outranks even a high fire_intent) > hunt/fight (real
-			# fire_intent in any world, the FIGHT mood, or standing at a
-			# strike hotspot) > courtship bow > water-seeking sip
-			# > foraging scan > trade hotspot > idle-with-rising-energy eat.
-			# A pursuing predator fires while moving, so the hunt reads as a
-			# moving lunge instead of the old hotspot-only strike instant.
-			var act := 0.0
-			var mood: int = moods[i] if have_moods else MOOD_CONTENT
-			if mood == MOOD_SLEEP and not walking:
-				act = ACT_SLEEP
-			elif mood == MOOD_FLEE:
-				act = ACT_FLEE
-			elif (have_fire and fire_intents[i] > FIRE_POSE_THRESHOLD) or mood == MOOD_FIGHT:
-				act = ACT_FIGHT
-			elif (mood == MOOD_MATE or mood == MOOD_SEEK_MATE) and not walking:
-				act = ACT_CELEBRATE if mood == MOOD_MATE else ACT_MATE
-			elif mood == MOOD_SEEK_WATER and not walking:
-				act = ACT_DRINK
-			elif mood == MOOD_SEEK_FOOD and not walking:
-				act = ACT_SCAN
-			else:
-				for fp in fight_pts:
-					if smooth[i].distance_squared_to(fp) < 36.0:
-						act = ACT_FLEE if walking else ACT_FIGHT
-						break
-			if act == 0.0:
-				for tp in trade_pts:
-					if smooth[i].distance_squared_to(tp) < 36.0:
-						act = ACT_TRADE
-						break
-			if act == 0.0 and not walking and have_en:
-				var pi: int = _match_prev[i] if i < _match_prev.size() else -1
-				if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
-					act = ACT_EAT
-			if i < inv_masks.size():
-				act = FxMath.weapon_action(act, inv_masks[i])
-			if have_ids:
-				var action_state := FxMath.step_action(
-					Vector2(_anim.action_pose[s], _anim.action_hold[s]), act, delta
-				)
-				_anim.action_pose[s] = action_state.x
-				_anim.action_hold[s] = action_state.y
-				act = action_state.x
-				# Emote-worthy actions get a pictogram above the agent's head.
-				_emote_layer.collect(ids[i], smooth[i], sz, act)
-				if act == ACT_DRINK and _effects != null:
-					_effects.tick_sip(ids[i], smooth[i], sz)
-			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))
+			var face: Vector3 = FxMath.step_facing(prev_face, cx, walking, delta)
+			_anim.facing_side[s] = int(round(face.x))
+			_anim.facing_ease[s] = face.y
+			_anim.facing_heading[s] = face.z
+			face_left = face.y
+		# Gait cycle position, paced by the distance this body covered on
+		# screen so the feet keep up with the ground (see FxMath).
+		var phase: float
+		var footfall := false
+		if have_ids:
+			var previous_phase: float = _anim.gait[s]
+			phase = previous_phase
+			if walking:
+				var stride: float = FxMath.stride_len(sizes[i], gait_fps)
+				phase = FxMath.advance_gait(phase, _step_dist[i], stride)
+				# The four-pose cycle has two contact beats. Fire dust when
+				# crossing either half-cycle boundary, so the puff lands under
+				# a planted foot instead of appearing at a random frame.
+				footfall = int(floor(previous_phase * 2.0)) != int(floor(phase * 2.0))
+			_anim.gait[s] = phase
+		else:
+			phase = fposmod(positions[i].x * 0.11 + positions[i].y * 0.07, 1.0)
+		if footfall and _effects != null:
+			_effects.spawn_dust(smooth[i])
+		# Action pose from sim signals. Priority: sleep (SLEEP mood while
+		# standing) > flee (FLEE mood — the mood is the behavior arbiter,
+		# so fear outranks even a high fire_intent) > hunt/fight (real
+		# fire_intent in any world, the FIGHT mood, or standing at a
+		# strike hotspot) > courtship bow > water-seeking sip
+		# > foraging scan > trade hotspot > idle-with-rising-energy eat.
+		# A pursuing predator fires while moving, so the hunt reads as a
+		# moving lunge instead of the old hotspot-only strike instant.
+		var act := 0.0
+		var mood: int = moods[i] if have_moods else MOOD_CONTENT
+		if mood == MOOD_SLEEP and not walking:
+			act = ACT_SLEEP
+		elif mood == MOOD_FLEE:
+			act = ACT_FLEE
+		elif (have_fire and fire_intents[i] > FIRE_POSE_THRESHOLD) or mood == MOOD_FIGHT:
+			act = ACT_FIGHT
+		elif (mood == MOOD_MATE or mood == MOOD_SEEK_MATE) and not walking:
+			act = ACT_CELEBRATE if mood == MOOD_MATE else ACT_MATE
+		elif mood == MOOD_SEEK_WATER and not walking:
+			act = ACT_DRINK
+		elif mood == MOOD_SEEK_FOOD and not walking:
+			act = ACT_SCAN
+		else:
+			for fp in fight_pts:
+				if smooth[i].distance_squared_to(fp) < 36.0:
+					act = ACT_FLEE if walking else ACT_FIGHT
+					break
+		if act == 0.0:
+			for tp in trade_pts:
+				if smooth[i].distance_squared_to(tp) < 36.0:
+					act = ACT_TRADE
+					break
+		if act == 0.0 and not walking and have_en:
+			var pi: int = _match_prev[i] if i < _match_prev.size() else -1
+			if pi >= 0 and pi < _prev_energy.size() and energies[i] > _prev_energy[pi] + 0.02:
+				act = ACT_EAT
+		if i < inv_masks.size():
+			act = FxMath.weapon_action(act, inv_masks[i])
+		if have_ids:
+			var action_state := FxMath.step_action(
+				Vector2(_anim.action_pose[s], _anim.action_hold[s]), act, delta
+			)
+			_anim.action_pose[s] = action_state.x
+			_anim.action_hold[s] = action_state.y
+			act = action_state.x
+			# Emote-worthy actions get a pictogram above the agent's head.
+			_emote_layer.collect(ids[i], smooth[i], sz, act)
+			if act == ACT_DRINK and _effects != null:
+				_effects.tick_sip(ids[i], smooth[i], sz)
+		mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))
 	shadows.visible_instance_count = shadow_n
 
 	_emote_layer.refresh(animation_time, delta)

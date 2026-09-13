@@ -189,6 +189,31 @@ func _bottom_row(img: Image) -> int:
 
 
 func _init() -> void:
+	# --- combined atlas: every bucket's grid in one square, alpha names it ---
+	var combined: ImageTexture = M.combined_atlas()
+	_check(
+		(
+			combined.get_width() == M.COMBINED_ATLAS_PX
+			and combined.get_height() == M.COMBINED_ATLAS_PX
+		),
+		"combined atlas is the square bucket grid"
+	)
+	_check(M.BUCKET_COUNT <= M.ATLAS_GRID * M.ATLAS_GRID, "every bucket fits the grid")
+	var cimg: Image = combined.get_image()
+	var b1: Image = M.bucket_atlas(1).get_image()
+	_check(
+		cimg.get_pixel(A.HERO_ATLAS_PX + 12, 12) == b1.get_pixel(12, 12),
+		"bucket 1 lands in the second grid cell"
+	)
+	var seen_alpha: Dictionary = {}
+	for b in M.BUCKET_COUNT:
+		var a: float = M.bucket_alpha(b)
+		_check(
+			int(floor(a * M.ATLAS_GRID * M.ATLAS_GRID)) == b,
+			"bucket %d round-trips through its alpha" % b
+		)
+		seen_alpha[a] = true
+	_check(seen_alpha.size() == M.BUCKET_COUNT, "bucket alphas are distinct")
 	# Livestock override beats everything.
 	_check(M.archetype_for(0.9, 2.0, true) == M.LIVESTOCK, "livestock override")
 	# Herbivore band (diet < 0.34): small -> Hare, large -> Deer.
