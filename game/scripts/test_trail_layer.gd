@@ -123,6 +123,15 @@ func _check_segment_trails() -> void:
 	)
 	_check(TrailLayer.trade_palette(cols, 1.0) == cols, "far lanes keep the genome hue")
 	_check(TrailLayer.TRADE_EARTH_ALPHA < 0.6, "close lanes are fainter than the far tracers")
+	# Combat streaks bleach toward white up close and keep their hue afar.
+	var far_streak := TrailLayer.streak_palette(cols, 1.0)
+	_check(far_streak == cols, "far streaks keep the species hue")
+	var near_streak := TrailLayer.streak_palette(cols, 4.0)
+	_check(
+		near_streak[0].g > cols[0].g + 0.3 and near_streak[0].r > 0.9,
+		"close streaks are near-white"
+	)
+	_check(TrailLayer.STREAK_CLOSE_WIDTH < 1.0, "close streaks are thinner")
 
 	# Perf cap: the trail never outgrows the multimesh budget; oldest first.
 	var tiny_mm := _make_mm(4)

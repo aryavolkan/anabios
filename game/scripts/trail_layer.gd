@@ -37,6 +37,8 @@ const TRADE_TTL: float = 0.4
 const CLOSE_ZOOM: float = 2.0
 const TRADE_EARTH := Color(0.22, 0.18, 0.13, 1.0)
 const TRADE_EARTH_ALPHA: float = 0.28
+const STREAK_CLOSE_WIDTH: float = 0.5
+const STREAK_CLOSE_WHITE: float = 0.7  # how far the species hue bleaches toward white
 
 var _tracks_mmi: MultiMeshInstance2D = null
 var _tracks: Array = []  # entries: [pos: Vector2, ttl: float]
@@ -71,6 +73,19 @@ func tracks_mmi() -> MultiMeshInstance2D:
 	return _tracks_mmi
 
 
+# Streak colours for this zoom: the species hues at far zoom, bleached most
+# of the way to white from CLOSE_ZOOM in.
+static func streak_palette(cols: PackedColorArray, zoom: float) -> PackedColorArray:
+	if zoom < CLOSE_ZOOM:
+		return cols
+	var out := PackedColorArray()
+	out.resize(cols.size())
+	for i in cols.size():
+		var c: Color = cols[i]
+		out[i] = Color(c.lerp(Color.WHITE, STREAK_CLOSE_WHITE), c.a)
+	return out
+
+
 # Lane colours for this zoom: the genome hues as given at far zoom, one
 # trodden-earth brown per lane from CLOSE_ZOOM in.
 static func trade_palette(trade_cols: PackedColorArray, zoom: float) -> PackedColorArray:
@@ -97,10 +112,19 @@ func update(
 	world: float,
 	zoom: float = 1.0
 ) -> void:
-	_update_segment_trail(
-		_streak_trail, _streaks_mm, streak_segs, streak_cols, STREAK_TTL, 1.0, 0.85, world
-	)
 	var close := zoom >= CLOSE_ZOOM
+	# Up close a combat streak is a thin, near-white shaft (the boards'
+	# arrows in flight), not a species-hued bar four pixels wide.
+	_update_segment_trail(
+		_streak_trail,
+		_streaks_mm,
+		streak_segs,
+		streak_palette(streak_cols, zoom),
+		STREAK_TTL,
+		STREAK_CLOSE_WIDTH if close else 1.0,
+		0.85,
+		world
+	)
 	_update_segment_trail(
 		_trade_trail,
 		_trade_mm,
