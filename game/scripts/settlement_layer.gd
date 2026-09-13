@@ -401,6 +401,15 @@ static func tone_swing(sid: int, cell: Vector2i) -> float:
 	return 1.0 + (VillageLayout.hash2(sid * 7 + 3, cell.x, cell.y) - 0.5) * 2.0 * TONE_SWING
 
 
+# The communal hall stands a notch bigger than the dwellings around it
+# (the boards' central building dominates its village).
+const HALL_SCALE := 1.25
+
+
+static func kind_scale(kind: int) -> float:
+	return HALL_SCALE if kind == StructureSprites.HALL else 1.0
+
+
 static func yard_scale(kind: int) -> float:
 	if kind == StructureSprites.HEARTH or kind == StructureSprites.HALL:
 		return HEARTH_YARD_SCALE
@@ -588,7 +597,7 @@ func _redraw() -> void:
 			var flip: bool = bool(p.get("flip", false))
 			var base_scale: float = float(StructureSprites.CELL_PX) * STRUCTURE_SCALE
 			var pop: float = FxMath.pop_scale((_now - born) / POP_SECS)
-			var s: float = base_scale * pop
+			var s: float = base_scale * pop * kind_scale(kind)
 			var sx: float = -s if flip else s
 			# A tall kind's quad is half again as high, its base kept on the
 			# footprint, so the extra wall rises up-screen.
