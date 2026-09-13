@@ -11,6 +11,19 @@ extends RefCounted
 const SPLIT_FRAC := 0.6
 
 
+# A MultiMesh QuadMesh draws image row 0 at the BOTTOM of the quad (probe-
+# verified in a rendered capture: an unflipped red-top/blue-bottom image
+# came out blue on top; a Sprite2D of the same image came out red on top).
+# Row-string art is authored top-down, so every texture bound to a plain
+# quad goes through here. ape_sprites.gd, building_sprites.gd and
+# biome_props.gd already flip inline for the same reason.
+static func for_quad(img: Image) -> ImageTexture:
+	var out := Image.create(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8)
+	out.copy_from(img)
+	out.flip_y()
+	return ImageTexture.create_from_image(out)
+
+
 # First opaque row, last opaque row (inclusive), or [-1, -1] when empty.
 static func opaque_span(img: Image) -> PackedInt32Array:
 	var first := -1

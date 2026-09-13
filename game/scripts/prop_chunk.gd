@@ -178,7 +178,7 @@ func _make_mmis() -> void:
 		mm.mesh = quad
 		var mmi := MultiMeshInstance2D.new()
 		mmi.multimesh = mm
-		mmi.texture = ImageTexture.create_from_image(TerrainSprites.prop_image(k))
+		mmi.texture = SpriteSplit.for_quad(TerrainSprites.prop_image(k))
 		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		mmi.name = "Prop%s" % TerrainSprites.PROP_NAMES[k]
 		add_child(mmi)
@@ -204,7 +204,7 @@ func _make_canopy_mmis() -> void:
 		var row: int = FloraSprites.trunk_row(k)
 		var mmi := MultiMeshInstance2D.new()
 		mmi.multimesh = mm
-		mmi.texture = ImageTexture.create_from_image(SpriteSplit.lower(img, row))
+		mmi.texture = SpriteSplit.for_quad(SpriteSplit.lower(img, row))
 		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		mmi.name = "Canopy%s" % FloraSprites.NAMES[k]
 		# Above the 16 px props so a tree overlaps the bush at its foot.
@@ -213,7 +213,7 @@ func _make_canopy_mmis() -> void:
 		_canopy.append(mmi)
 		var crown := MultiMeshInstance2D.new()
 		crown.multimesh = mm
-		crown.texture = ImageTexture.create_from_image(SpriteSplit.upper(img, row))
+		crown.texture = SpriteSplit.for_quad(SpriteSplit.upper(img, row))
 		crown.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		crown.name = "Crown%s" % FloraSprites.NAMES[k]
 		crown.z_index = CROWN_Z

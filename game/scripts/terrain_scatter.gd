@@ -10,6 +10,7 @@ extends Node2D
 # terrain-id grid actually changes; biome_renderer drives the cadence.
 
 const TerrainSprites = preload("res://scripts/terrain_sprites.gd")
+const SpriteSplit = preload("res://scripts/sprite_split.gd")
 
 # Fraction of cells of each terrain that grow a prop (indexed by TerrainType
 # id). Water is bare; forests read denser than steppe and tundra.
@@ -105,7 +106,7 @@ func _make_mmis() -> void:
 		mm.mesh = quad
 		var mmi := MultiMeshInstance2D.new()
 		mmi.multimesh = mm
-		mmi.texture = ImageTexture.create_from_image(TerrainSprites.prop_image(k))
+		mmi.texture = SpriteSplit.for_quad(TerrainSprites.prop_image(k))
 		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		mmi.name = "Prop%s" % TerrainSprites.PROP_NAMES[k]
 		add_child(mmi)

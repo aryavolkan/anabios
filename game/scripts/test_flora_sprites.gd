@@ -121,6 +121,14 @@ func _init() -> void:
 	var empty := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	_check(SpriteSplit.opaque_span(empty) == PackedInt32Array([-1, -1]), "empty span")
 	_check(SpriteSplit.split_row(empty) == 0, "empty image splits at row 0")
+	# --- quad binding flips row 0 to the bottom (MultiMesh QuadMesh V axis) ---
+	var probe := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	probe.fill(Color(0, 0, 1))
+	probe.set_pixel(0, 0, Color(1, 0, 0))
+	var bound: Image = SpriteSplit.for_quad(probe).get_image()
+	_check(bound.get_pixel(0, 3).r > 0.9, "for_quad moves row 0 to the last row")
+	_check(probe.get_pixel(0, 0).r > 0.9, "for_quad leaves the source untouched")
+
 	# --- contact shadow texture: opaque core, transparent rim ---
 	var sh: Image = AgentLayer.shadow_image(16)
 	_check(sh.get_pixel(8, 8).a > 0.9, "shadow core is opaque")

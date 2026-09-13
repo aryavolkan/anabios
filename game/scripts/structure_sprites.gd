@@ -4,9 +4,10 @@ extends RefCounted
 # palette keys plus an auto 1px dark outline -- the same painter technique as
 # TerrainSprites._sprite (row-string + palette) with the auto-outline pass of
 # ApeSprites._build_cell (any transparent pixel touching an opaque one is
-# outlined). Rows are authored top-down and left as painted: the plain
-# MultiMesh quad the village layer draws with shows them upright as-is
-# (verified in a rendered capture; a flip_y() here drew every tent apex-down).
+# outlined). Rows are authored top-down and left as painted here; the
+# village layer flips them through SpriteSplit.for_quad when it binds them,
+# because a plain MultiMesh quad draws image row 0 at the bottom (probe-
+# verified; an earlier note claiming the opposite was wrong).
 #
 # This is the Phase 4 step 2 "era sets" contract from
 # docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md section 6:

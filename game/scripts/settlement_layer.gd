@@ -131,14 +131,12 @@ func _ready() -> void:
 	for k in StructureSprites.KIND_COUNT:
 		var img0: Image = StructureSprites.build_variant_image(k, 0)
 		if k == StructureSprites.FIELD:
-			_structure_mmis.append(
-				_make_layer("Structure_%d" % k, ImageTexture.create_from_image(img0), -6)
-			)
+			_structure_mmis.append(_make_layer("Structure_%d" % k, SpriteSplit.for_quad(img0), -6))
 			_structure_top_mmis.append(null)
 			continue
 		var row: int = SpriteSplit.split_row(img0)
-		var base_tex := ImageTexture.create_from_image(SpriteSplit.lower(img0, row))
-		var top_tex := ImageTexture.create_from_image(SpriteSplit.upper(img0, row))
+		var base_tex := SpriteSplit.for_quad(SpriteSplit.lower(img0, row))
+		var top_tex := SpriteSplit.for_quad(SpriteSplit.upper(img0, row))
 		var smmi := _make_layer("Structure_%d" % k, base_tex, -1)
 		_structure_mmis.append(smmi)
 		var top := MultiMeshInstance2D.new()
@@ -152,11 +150,11 @@ func _ready() -> void:
 		if StructureSprites.is_animated(k):
 			var img1: Image = StructureSprites.build_variant_image(k, 1)
 			_building_frames["s%d" % k] = [
-				base_tex, ImageTexture.create_from_image(SpriteSplit.lower(img1, row))
+				base_tex, SpriteSplit.for_quad(SpriteSplit.lower(img1, row))
 			]
 			_building_nodes["s%d" % k] = [smmi]
 			_building_frames["t%d" % k] = [
-				top_tex, ImageTexture.create_from_image(SpriteSplit.upper(img1, row))
+				top_tex, SpriteSplit.for_quad(SpriteSplit.upper(img1, row))
 			]
 			_building_nodes["t%d" % k] = [top]
 	for inv in sim.invention_catalog():
