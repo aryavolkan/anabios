@@ -285,6 +285,24 @@ void fragment() {
 			float lip = step(0.44, across) * (1.0 - step(0.56, across));
 			outc = mix(outc, vec3(1.0), lip * 0.9 * detail);
 		}
+		// Splash pool: the narrow cell a fall pours into churns white in the
+		// half nearest the drop (speckled per texel, flickering with time),
+		// so a fall reads as a two-cell event with foam at its foot.
+		float uN = water_cell(cell0 - vec2(0.0, 1.0), cU) ? texture(TEXTURE, UV - vec2(0.0, px.y)).a - e_here : 0.0;
+		float uS = water_cell(cell0 + vec2(0.0, 1.0), cD) ? texture(TEXTURE, UV + vec2(0.0, px.y)).a - e_here : 0.0;
+		float uE = water_cell(cell0 + vec2(1.0, 0.0), cR) ? texture(TEXTURE, UV + vec2(px.x, 0.0)).a - e_here : 0.0;
+		float uW = water_cell(cell0 - vec2(1.0, 0.0), cL) ? texture(TEXTURE, UV - vec2(px.x, 0.0)).a - e_here : 0.0;
+		float above = max(max(uN, uS), max(uE, uW));
+		if (above >= fall_step && coast >= 0.49 && detail > 0.05) {
+			vec2 fc1 = fract(cellf);
+			vec2 texel1 = floor(world_pos / max(texel_w, 1e-4));
+			bool from_vertical = above == uN || above == uS;
+			bool from_low = above == uS || above == uE;  // the drop comes from the south/east side
+			float along1 = from_vertical ? fc1.y : fc1.x;
+			float near = from_low ? step(0.5, along1) : 1.0 - step(0.5, along1);
+			float speck = step(0.62, hash2(texel1 + vec2(floor(TIME * 6.0), 0.0)));
+			outc = mix(outc, vec3(0.95, 0.98, 1.0), near * speck * 0.85 * detail);
+		}
 	} else {
 		// Pixel-art tile detail: pick this cell's tile family from its exact
 		// terrain id, a variant from a per-cell hash (same hash family as
