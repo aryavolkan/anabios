@@ -10,6 +10,7 @@ const Buildings = preload("res://scripts/building_sprites.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
 const SettlementLayer = preload("res://scripts/settlement_layer.gd")
 const SpriteSplit = preload("res://scripts/sprite_split.gd")
+const Clearings = preload("res://scripts/clearings.gd")
 
 const CARAVAN_NEIGHBORS := 2  # edges added per hub (undirected, deduped)
 const CARTS_PER_ROUTE := 3
@@ -134,10 +135,14 @@ func _build_routes() -> void:
 func _lay_roads() -> void:
 	var is_water := Callable(_biome, "is_water_at") if _biome != null else Callable()
 	var xfs: Array = []
+	var strips: Array[PackedVector2Array] = []
 	for r in _routes:
 		for p in road_steps(r["pa"], r["pb"], ROAD_STEP, is_water):
 			xfs.append(Transform2D(0.0, Vector2(ROAD_SCALE, ROAD_SCALE * 0.8), 0.0, p))
+		strips.append(PackedVector2Array([r["pa"], r["pb"]]))
 	_write(_road_mmi.multimesh, xfs)
+	# The scatter keeps off the road (trees stood in the middle of it).
+	Clearings.publish_segments("roads", strips)
 
 
 # Patch centres for a road from `pa` to `pb`: one every `step` units,

@@ -17,6 +17,12 @@ const SNAP := 8.0
 
 static var rects: Array[Rect2] = []
 static var version: int = 0
+# Road strips: [from, to] segment pairs (world space) with ROAD_HALF of
+# clear ground either side, published by the caravan layer; a strip is a
+# poorer fit for a rectangle than a village is.
+static var segments: Array[PackedVector2Array] = []
+const ROAD_HALF := 5.0
+static var _seg_by_source: Dictionary = {}
 # Source name -> Array[Rect2]; each layer owns one entry and `rects` is
 # their union, so the settlement and hub layers can publish independently.
 static var _by_source: Dictionary = {}
@@ -68,18 +74,43 @@ static func _same(a: Array[Rect2], b: Array[Rect2]) -> bool:
 	return true
 
 
+# Replace one source's road strips (see `publish`).
+static func publish_segments(source: String, segs: Array[PackedVector2Array]) -> void:
+	var old: Array[PackedVector2Array] = _seg_by_source.get(source, [] as Array[PackedVector2Array])
+	if segs == old:
+		return
+	_seg_by_source[source] = segs.duplicate()
+	var merged: Array[PackedVector2Array] = []
+	for key in _seg_by_source:
+		merged.append_array(_seg_by_source[key])
+	segments = merged
+	version += 1
+
+
 static func contains(p: Vector2) -> bool:
 	for r in rects:
 		if r.has_point(p):
 			return true
+	for s in segments:
+		if _segment_dist_sq(p, s[0], s[1]) < ROAD_HALF * ROAD_HALF:
+			return true
 	return false
+
+
+static func _segment_dist_sq(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var l2 := ab.length_squared()
+	if l2 <= 0.0:
+		return p.distance_squared_to(a)
+	var f := clampf((p - a).dot(ab) / l2, 0.0, 1.0)
+	return p.distance_squared_to(a + ab * f)
 
 
 # Drop every position that falls inside a clearing. Returns the input
 # unchanged (same object) when nothing is published, so the streaming
 # planners pay nothing on a world without villages.
 static func filter(positions: PackedVector2Array) -> PackedVector2Array:
-	if rects.is_empty():
+	if rects.is_empty() and segments.is_empty():
 		return positions
 	var out := PackedVector2Array()
 	for p in positions:
@@ -90,5 +121,7 @@ static func filter(positions: PackedVector2Array) -> PackedVector2Array:
 
 static func reset() -> void:
 	rects = []
+	segments = []
 	_by_source = {}
+	_seg_by_source = {}
 	version = 0

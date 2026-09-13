@@ -53,6 +53,22 @@ func _init() -> void:
 	var r2 := C.bounds_of(PackedVector2Array([Vector2(20.4, 30.3)]), 14.0)
 	_check(r1 == r2, "sub-snap drift is absorbed")
 
+	# Road strips clear a band either side of the segment, and merge with
+	# the rectangles under their own source.
+	C.reset()
+	C.publish("villages", [Rect2(0, 0, 10, 10)] as Array[Rect2])
+	var v1 := C.version
+	C.publish_segments("roads", [PackedVector2Array([Vector2(100, 100), Vector2(200, 100)])])
+	_check(C.version == v1 + 1, "publishing road strips bumps the version")
+	_check(C.contains(Vector2(150, 100 + C.ROAD_HALF - 0.5)), "inside the road band")
+	_check(not C.contains(Vector2(150, 100 + C.ROAD_HALF + 0.5)), "outside the road band")
+	_check(not C.contains(Vector2(210, 100)), "past the road's end")
+	_check(C.contains(Vector2(5, 5)), "village rectangle survives the road publish")
+	C.publish_segments("roads", [PackedVector2Array([Vector2(100, 100), Vector2(200, 100)])])
+	_check(C.version == v1 + 1, "the same strips are not a change")
+	C.publish_segments("roads", [] as Array[PackedVector2Array])
+	_check(not C.contains(Vector2(150, 100)), "roads can be cleared")
+
 	C.reset()
 	if _failed:
 		quit(1)
