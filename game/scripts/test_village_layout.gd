@@ -155,7 +155,12 @@ func _init() -> void:
 	for p in milled:
 		if int(p["kind"]) == L.MILL:
 			mill_pos = p["pos"]
-	_check(mill_pos == Vector2(32.0, 0.0), "mill sits on the nearest water-adjacent land cell")
+	# The bank column is x = 2 (the river fills column 3); the hut lattice
+	# takes (2, 0), so the mill lands on the nearest free bank cell beside it.
+	_check(
+		mill_pos.x == 32.0 and absf(mill_pos.y) <= 16.0,
+		"mill sits on the nearest free water-adjacent land cell (got %s)" % mill_pos
+	)
 	var dry := L.plan(9, Vector2.ZERO, 5, 2, L.FLAG_MACHINERY, no_water)
 	_check(_count_kind(dry, L.MILL) == 0, "machinery with no water in range places no mill")
 

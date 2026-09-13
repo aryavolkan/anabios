@@ -32,7 +32,14 @@ const FxMath = preload("res://scripts/fx_math.gd")
 # default cluster-framed zoom — not just when zoomed all the way in.
 # Figures at ~60% of a canopy tree's height, the reference boards' ratio
 # (24 px hero art at 10 world units; the 32 px trees stand 16 units tall).
-const BODY_SCALE: float = 10.0
+const BODY_SCALE: float = 8.5
+# Body ceiling in world units: a structure cell is 16, and a figure taller
+# than the hut it stands beside breaks the scale the reference boards keep.
+const BODY_CAP: float = 16.0
+# Close-zoom crowd cap (see refresh): one drawn figure per CROWD_CELL world
+# units once the camera zoom reaches CROWD_ZOOM.
+const CROWD_ZOOM := 2.0
+const CROWD_CELL := 10.0
 const BODY_MIN: float = 6.0
 # World units of margin added on every side of the camera's world rect before
 # querying alive_in_rect(): keeps an agent walking toward the edge of the
@@ -457,6 +464,14 @@ func refresh(
 		buckets.append(PackedInt32Array())
 	var bucket_ix := PackedInt32Array()
 	bucket_ix.resize(n)
+	# Crowd cap at close zoom: a settlement square can hold a hundred
+	# agents in a few cells, and drawn one per sim position they pile into
+	# a solid heap of overlapping figures. From CROWD_ZOOM on, at most one
+	# figure is drawn per CROWD_CELL world units (the first in id order), so
+	# a crowd reads as a crowd. Presentation only: the sim, the visible-set
+	# report, bucket bookkeeping and the death ghosts are untouched.
+	var crowd_cap: bool = _cam != null and _cam.zoom.x >= CROWD_ZOOM
+	var crowd_occupied: Dictionary = {}
 	for i in n:
 		if visible_mask[i]:
 			var tags: int = body_tags[i] if have_tags else 0
@@ -467,6 +482,11 @@ func refresh(
 			)
 			var b := MammalSprites.bucket_of(arch, sp_ids[i]) if have_sp else 0
 			bucket_ix[i] = b
+			if crowd_cap:
+				var key := Vector2i((smooth[i] / CROWD_CELL).floor())
+				if crowd_occupied.has(key):
+					continue
+				crowd_occupied[key] = true
 			buckets[b].append(i)
 		else:
 			var pm: int = _match_prev[i] if i < _match_prev.size() else -1
@@ -500,7 +520,7 @@ func refresh(
 		mm.visible_instance_count = m
 		for j in m:
 			var i: int = idx[j]
-			var sz: float = maxf(sizes[i] * BODY_SCALE, min_body)
+			var sz: float = clampf(sizes[i] * BODY_SCALE, min_body, BODY_CAP)
 			# New agents squash in, then spring to full size with an overshoot
 			# (anticipation-then-pop) instead of blinking into existence;
 			# after BIRTH_POP seconds the scale is exactly 1.
@@ -665,7 +685,7 @@ func _kill(
 	if prev_idx < _prev_bucket.size():
 		sp = _prev_bucket[prev_idx]
 	if prev_idx < _prev_sizes.size():
-		sz = maxf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN)
+		sz = clampf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN, BODY_CAP)
 	# Inherit the agent's body colour so a quadruped ghost keeps its coat hue
 	# instead of the neutral-grey value-ramp; hominin atlases are self-coloured
 	# (white here) so their ghosts are unchanged.

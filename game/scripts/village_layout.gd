@@ -212,6 +212,15 @@ static func plan(
 	var occupied: Dictionary = {}
 	var out: Array = []
 	var spiral_cells: Array[Vector2i] = spiral(_SEARCH_CELLS)
+	# Dwellings sit on every other cell of the spiral in both axes, so each
+	# hut or tent keeps a hut-width of open ground around it (paths, yards,
+	# the space the reference villages breathe through) instead of the
+	# spiral packing them into one solid heap; single structures (well,
+	# forge, scriptorium) still take the first free cell and fill the gaps.
+	var lattice_cells: Array[Vector2i] = []
+	for c in spiral_cells:
+		if c.x % 2 == 0 and c.y % 2 == 0:
+			lattice_cells.append(c)
 
 	# --- centrepiece: hearth (camp/thatch) or hall (timber/stone) ---
 	var center_kind := HEARTH if era < 2 else HALL
@@ -222,8 +231,8 @@ static func plan(
 		var count := clampi(1 + members / 8, 1, 6)
 		var i := 0
 		var placed := 0
-		while placed < count and i < spiral_cells.size():
-			var c: Vector2i = spiral_cells[i]
+		while placed < count and i < lattice_cells.size():
+			var c: Vector2i = lattice_cells[i]
 			i += 1
 			if _place(c, TENT, _flip_bit(sid, c), occupied, anchor, is_water, out):
 				placed += 1
@@ -235,8 +244,8 @@ static func plan(
 		var huts: Array[Vector2i] = []
 		var i := 0
 		var placed := 0
-		while placed < count and i < spiral_cells.size():
-			var c: Vector2i = spiral_cells[i]
+		while placed < count and i < lattice_cells.size():
+			var c: Vector2i = lattice_cells[i]
 			i += 1
 			if _place(c, HUT, _flip_bit(sid, c), occupied, anchor, is_water, out):
 				huts.append(c)

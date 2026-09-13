@@ -129,8 +129,10 @@ func _make_ember_pool() -> void:
 		m.gravity = Vector3(0, -16, 0)
 		m.damping_min = 5.0
 		m.damping_max = 12.0
-		m.scale_min = 0.7
-		m.scale_max = 1.5
+		# Small motes: the disc is sized in world units, so at 4x zoom a
+		# full-size spray read as one blurry fireball over the village.
+		m.scale_min = 0.25
+		m.scale_max = 0.5
 		var grad := Gradient.new()
 		grad.set_color(0, Color(1.0, 0.72, 0.30))
 		grad.set_color(1, Color(1.0, 0.30, 0.08, 0.0))
