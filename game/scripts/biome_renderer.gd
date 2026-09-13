@@ -252,8 +252,10 @@ func _process(_delta: float) -> void:
 		_scatter.visible = _tiles_on and mode == -1 and not streaming_enabled()
 	if _tiles_on and _frame % _redraw_interval == 0:
 		_refresh_terrain_ids()
-	# Scenery follows the same rule: props only over the real terrain.
+	# Scenery follows the same rule: props only over the real terrain; with
+	# the tiles on, only the shoreline reeds (the tile scatter grows the rest).
 	_props.set_terrain_visible(mode == -1)
+	_props.set_reeds_only(_tiles_on)
 	# While a data overlay owns the ground texture, keep the minimap's biome copy
 	# current on its own (much slower) cadence — the minimap is 200px wide and
 	# the terrain creeps. `== 1` refreshes on the first frame after the switch so

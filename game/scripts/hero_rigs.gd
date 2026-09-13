@@ -378,13 +378,16 @@ static func pose_recipe(index: int) -> Dictionary:
 			}
 		11:
 			return {Part.FRONT: [-1, 0], Part.BACK: [1, 0], Part.HEAD: [1, 0], Part.NECK: [1, 0]}
+		# Rest: legs folded under the lowered body, head still carried up
+		# (a resting deer keeps watch); B nods and closes its eyes. With the
+		# head dropped level with the back the pair read as a plank at 2x.
 		12:
-			return {"fold": 0.4, Part.HEAD: [0, 2], Part.NECK: [0, 2], "extend": [Part.NECK]}
+			return {"fold": 0.4}
 		13:
 			return {
 				"fold": 0.4,
-				Part.HEAD: [0, 3],
-				Part.NECK: [0, 3],
+				Part.HEAD: [0, 1],
+				Part.NECK: [0, 1],
 				"extend": [Part.NECK],
 				"eyes_closed": true,
 			}

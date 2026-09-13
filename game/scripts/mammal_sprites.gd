@@ -222,19 +222,24 @@ static func hominin_portrait(species: int) -> ImageTexture:
 	return ApeSprites.build(species)
 
 
+# Pose cell the death ghosts draw: the eyes-closed lying pose (sleep B) of
+# both rig families.
+const FALLEN_POSE := 13
+
+
 static func bucket_fallen(b: int) -> ImageTexture:
 	if b < SKIN_COUNT:
 		if HomininRigs.has(b):
-			var hcell: Image = HomininRigs.build_cell(b, 0)
-			hcell.rotate_90(CLOCKWISE)
+			# The eyes-closed sleep cell, pre-flipped like the atlas cells: a
+			# figure collapsed on the ground. (The standing master turned on
+			# its side read as a plank with a head at 2x.)
+			var hcell: Image = HomininRigs.build_cell(b, FALLEN_POSE)
 			hcell.flip_y()
 			return ImageTexture.create_from_image(hcell)
 		return ApeSprites.build_fallen_texture(b)
 	var arch: int = QUAD_ORDER[b - SKIN_COUNT]
 	if HeroRigs.has(NAMES[arch]):
-		# The standing master on its side, pre-flipped like the atlas cells.
-		var cell: Image = HeroRigs.build_cell(HeroRigs.MASTERS[NAMES[arch].to_upper()], 0)
-		cell.rotate_90(CLOCKWISE)
+		var cell: Image = HeroRigs.build_cell(HeroRigs.MASTERS[NAMES[arch].to_upper()], FALLEN_POSE)
 		cell.flip_y()
 		return ImageTexture.create_from_image(cell)
 	if _QUAD_DATA.has(arch):

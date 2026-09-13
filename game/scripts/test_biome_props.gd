@@ -41,6 +41,7 @@ func _terrain() -> PackedColorArray:
 
 func _init() -> void:
 	_check_registry()
+	_check_reeds_only()
 	_check_classifier()
 	_check_sampling()
 	_check_layer()
@@ -49,6 +50,23 @@ func _init() -> void:
 		return
 	print("test_biome_props: all passed")
 	quit(0)
+
+
+func _check_reeds_only() -> void:
+	var props := Props.new()
+	props.setup(null)
+	props.set_reeds_only(true)
+	for k in Props.KIND_COUNT:
+		_check(props.layers()[k].visible == (k == Props.REEDS), "reeds-only hides kind %d" % k)
+	var hidden_clones := 0
+	for clone in props.clones():
+		if not clone.visible:
+			hidden_clones += 1
+	_check(hidden_clones == 8 * (Props.KIND_COUNT - 1), "reeds-only hides the other clones")
+	props.set_reeds_only(false)
+	for k in Props.KIND_COUNT:
+		_check(props.layers()[k].visible, "all kinds back when reeds-only is off")
+	props.free()
 
 
 func _check_registry() -> void:
