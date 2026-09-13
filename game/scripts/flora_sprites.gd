@@ -32,7 +32,7 @@ const FAMILY: PackedInt32Array = [
 const _TERRAIN_KIND: PackedInt32Array = [-1, OAK, OAK, -1, BOULDERS, ACACIA, JUNGLE, PINE, PINE]
 # Fraction of cells of each terrain that grow a canopy tree (the 16 px props
 # keep their own, lower table). Forests are dense; grass and tundra sparse.
-const DENSITY: PackedFloat32Array = [0.0, 0.03, 0.42, 0.0, 0.16, 0.05, 0.5, 0.36, 0.02]
+const DENSITY: PackedFloat32Array = [0.0, 0.03, 0.42, 0.0, 0.10, 0.05, 0.5, 0.36, 0.02]
 
 const PAL := {
 	"k": "14100f",  # outline

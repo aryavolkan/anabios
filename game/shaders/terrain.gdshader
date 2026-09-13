@@ -290,20 +290,26 @@ void fragment() {
 		// Terraces and cliff faces (D9). Levels are integers; a drop of one
 		// or more levels toward a neighbour paints that edge of the cell.
 		float e0 = texture(TEXTURE, UV).a;
-		float lv = floor(e0 * terrace_levels);
-		float lvD = floor(eD * terrace_levels);
-		float lvU = floor(eU * terrace_levels);
-		float lvL = floor(eL * terrace_levels);
-		float lvR = floor(eR * terrace_levels);
+		// Soil steps only where the elevation really jumps between two
+		// cells (at least 0.6 of a level): the per-cell field is noisy at
+		// the level scale, and gentle grass used to sprout stray bars. Rock
+		// terrain skips these per-cell faces entirely and gets contour
+		// ledges from the smoothed field below, plus snow on top.
+		float tid0 = tiles_enabled > 0.5 ? tid_at(floor(cellf)) : 1.0;
+		float on_rock = step(3.5, tid0) * (1.0 - step(4.5, tid0));
+		float levels = terrace_levels;
+		float lv = floor(e0 * levels);
+		float lvD = floor(eD * levels);
+		float lvU = floor(eU * levels);
+		float lvL = floor(eL * levels);
+		float lvR = floor(eR * levels);
 		vec2 fc = fract(cellf);
 		// Southern cliff face: the higher the drop, the darker and browner.
 		float drop = clamp((lv - lvD) / 3.0, 0.0, 1.0);
-		// A level crossing only paints where the elevation really steps (at
-		// least 0.6 of a level between the two cells): gentle slopes cross
-		// levels with tiny differences and used to sprout stray bars.
-		float real = 0.6 / terrace_levels;
+		float real = mix(0.6, 9.0, on_rock) / levels;
 		float face = drop * step(1.0 - cliff_band, fc.y) * step(0.5, lv - lvD) * step(real, e0 - eD);
-		vec3 cliff = mix(outc * 0.45, vec3(0.30, 0.23, 0.17), 0.5);
+		vec3 face_col = mix(vec3(0.30, 0.23, 0.17), vec3(0.36, 0.37, 0.42), on_rock);
+		vec3 cliff = mix(outc * 0.45, face_col, 0.5);
 		// A lit lip along the top of the face.
 		float lip = step(1.0 - cliff_band, fc.y) * (1.0 - step(1.0 - cliff_band + 0.08, fc.y));
 		outc = mix(outc, cliff, face * cliff_strength);
@@ -317,6 +323,30 @@ void fragment() {
 		outc = mix(outc, outc * 0.6, clamp(ledge, 0.0, 1.0) * cliff_strength * 0.3);
 		// Altitude: highlands sit a touch brighter than the lowlands.
 		float es = elev_bilin(TEXTURE, cellf);
+		if (on_rock > 0.5) {
+			// Stacked stone: contour ledges of the smoothed elevation (a
+			// five-tap box over the interpolated field so the lines follow
+			// the ridge rather than the per-cell noise). Just above each
+			// contour a dark stone face, just below the next a lit rim, so
+			// the mountain reads as terraces the way the reference boards'
+			// crags do; lines crowd where the slope is steep.
+			float esm = (
+				es
+				+ elev_bilin(TEXTURE, cellf + vec2(1.0, 0.0))
+				+ elev_bilin(TEXTURE, cellf - vec2(1.0, 0.0))
+				+ elev_bilin(TEXTURE, cellf + vec2(0.0, 1.0))
+				+ elev_bilin(TEXTURE, cellf - vec2(0.0, 1.0))
+			) * 0.2;
+			float f = fract(esm * terrace_levels * 3.0);
+			float ledge_dark = 1.0 - smoothstep(0.0, 0.18, f);
+			float ledge_lit = smoothstep(0.84, 1.0, f);
+			vec3 stone = mix(outc * 0.55, vec3(0.30, 0.31, 0.36), 0.5);
+			outc = mix(outc, stone, ledge_dark * cliff_strength * 0.8);
+			outc = mix(outc, outc * 1.22 + 0.05, ledge_lit * 0.7);
+			// Snow caps: the top of the rock band whitens with altitude.
+			float snow = smoothstep(0.78, 0.95, es);
+			outc = mix(outc, vec3(0.90, 0.93, 0.97), snow * 0.85);
+		}
 		outc *= 1.0 + height_lift * clamp((es - sea_level) / max(1.0 - sea_level, 1e-3), 0.0, 1.0);
 
 		// Sandy shoreline on the land side: a thin warm beach band right at the
