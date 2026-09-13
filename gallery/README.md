@@ -50,7 +50,8 @@ pins an agent in the unit card.
 | scale-settlement-t1591-1x.png | `settlement` t1591 1× | The same world at 1×. |
 | scale-settlement-t691-overview.png | `settlement` t691, `ANABIOS_CAM_FIT=1` | Whole-world framing: the overview mip with the density dots. |
 | scale-settlement-t891-market-8x.png | `settlement` t891 8× at (1060, 298) | The market square up close: stalls, goods on the counters, carts, the square's earth at the ground tiles' grain. |
-| scale-trade-hubs-t600-market-4x.png | `trade-hubs` t600 4× at (1060, 298) | A trade hub as a market square in the woods, a snow patch with an ordered-dither edge on the outcrop behind it. |
+| scale-trade-hubs-t600-roads-2x.png | `trade-hubs` t600 2× at (1060, 298) | Dirt roads worn along the caravan routes from the market square through the woods, stopping at the water. |
+| scale-trade-hubs-t600-market-4x.png | `trade-hubs` t600 4× at (1060, 298) | A trade hub as a market square in the woods with its roads leading off, a snow patch with an ordered-dither edge on the outcrop behind it. |
 | scale-riverlands-t291-relief-2x.png | `riverlands` t291 2× | Rivers with waterfalls on their steep stretches, contour-ledged mountains in warm olive stone with a dithered snow line, forests mixing three oaks, clutter on the grass. |
 | scale-riverlands-t291-river-4x.png | `riverlands` t291 4× at (2367, 1017) | A one-cell river running diagonally through the oaks as one stream: the diagonal coast tiles carry a channel instead of pinching the cells into beads. |
 | scale-riverlands-t291-clutter-4x.png | `riverlands` t291 4× at (2500, 1200) | Flowers, tufts, mushrooms and stumps at 4×. |

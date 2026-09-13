@@ -8,6 +8,8 @@ extends Node2D
 
 const Buildings = preload("res://scripts/building_sprites.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
+const SettlementLayer = preload("res://scripts/settlement_layer.gd")
+const SpriteSplit = preload("res://scripts/sprite_split.gd")
 
 const CARAVAN_NEIGHBORS := 2  # edges added per hub (undirected, deduped)
 const CARTS_PER_ROUTE := 3
@@ -28,6 +30,15 @@ const GATE_MARGIN := 34.0
 const CART_MID := (CARTS_PER_ROUTE - 1) * 0.5
 
 var _cart_mmi: MultiMeshInstance2D
+# Dirt roads: the yard-earth patch laid every ROAD_STEP units along each
+# route (skipping water cells, with a little side-to-side wander), so the
+# caravan routes read as the boards' worn tracks between settlements
+# instead of a dashed line. Built once with the route network.
+var _road_mmi: MultiMeshInstance2D
+const ROAD_STEP := 6.0
+const ROAD_SCALE := 9.0
+const ROAD_WANDER := 1.5
+const ROAD_ALPHA := 0.8
 var _good_mmis: Array[MultiMeshInstance2D] = []
 var _hubs: Array = []
 var _routes: Array = []  # each: {a, b, pa: Vector2, pb: Vector2, cargo: PackedInt32Array}
@@ -36,9 +47,14 @@ var _frame: int = 0
 var _built: bool = false  # route network built once (hubs are immutable at runtime)
 
 @onready var sim = get_node("../Simulation")
+@onready var _biome = get_node_or_null("../Biome")
 
 
 func _ready() -> void:
+	_road_mmi = _make_layer(
+		"Caravan_Road", SpriteSplit.for_quad(SettlementLayer.yard_image()), SettlementLayer.YARD_Z
+	)
+	_road_mmi.modulate = Color(1, 1, 1, ROAD_ALPHA)
 	_cart_mmi = _make_layer("Caravan_Cart", Buildings.build_cart(), 2)
 	for g in Buildings.GOOD_COUNT:
 		_good_mmis.append(_make_layer("Caravan_Good_%d" % g, Buildings.build_good(g), 3))
@@ -61,7 +77,7 @@ func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2
 
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
-	for src in [_cart_mmi] + _good_mmis:
+	for src in [_road_mmi, _cart_mmi] + _good_mmis:
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
 				if gx == 0 and gy == 0:
@@ -71,6 +87,7 @@ func _make_wrap_clones() -> void:
 				clone.texture = src.texture
 				clone.texture_filter = src.texture_filter
 				clone.z_index = src.z_index
+				clone.modulate = src.modulate
 				clone.position = Vector2(gx * world, gy * world)
 				add_child(clone)
 
@@ -110,6 +127,40 @@ func _build_routes() -> void:
 			_routes.append(
 				{"a": i, "b": j, "pa": ends[0], "pb": ends[1], "cargo": PackedInt32Array()}
 			)
+	_lay_roads()
+
+
+# Road patches along every route, the water cells left bare.
+func _lay_roads() -> void:
+	var is_water := Callable(_biome, "is_water_at") if _biome != null else Callable()
+	var xfs: Array = []
+	for r in _routes:
+		for p in road_steps(r["pa"], r["pb"], ROAD_STEP, is_water):
+			xfs.append(Transform2D(0.0, Vector2(ROAD_SCALE, ROAD_SCALE * 0.8), 0.0, p))
+	_write(_road_mmi.multimesh, xfs)
+
+
+# Patch centres for a road from `pa` to `pb`: one every `step` units,
+# wandering up to ROAD_WANDER sideways on a stable hash, none on a water
+# cell (`is_water` may be an empty Callable: every step is land).
+static func road_steps(
+	pa: Vector2, pb: Vector2, step: float, is_water: Callable
+) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var d := pb - pa
+	var len := d.length()
+	if len < step or step <= 0.0:
+		return out
+	var dir := d / len
+	var side := Vector2(-dir.y, dir.x)
+	var n := int(len / step)
+	for i in range(1, n):
+		var h := fposmod(sin(float(i) * 12.9898 + pa.x * 0.37 + pa.y * 0.73) * 43758.5453, 1.0)
+		var p := pa + dir * (step * i) + side * ((h - 0.5) * 2.0 * ROAD_WANDER)
+		if is_water.is_valid() and bool(is_water.call(p)):
+			continue
+		out.append(p)
+	return out
 
 
 # The route's endpoints pulled in by `margin` from each hub centre (the

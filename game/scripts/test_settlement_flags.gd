@@ -47,6 +47,21 @@ func _init() -> void:
 	_check(
 		short[0] == Vector2(0, 0) and short[1] == Vector2(40, 0), "a short route keeps its centres"
 	)
+	# --- dirt roads: a patch every step along the route, none on water ---
+	var road: PackedVector2Array = CaravanLayer.road_steps(
+		Vector2(0, 0), Vector2(60, 0), 6.0, Callable()
+	)
+	_check(road.size() == 9, "a 60-unit road gets nine 6-unit patches clear of both ends")
+	for p in road:
+		_check(
+			absf(p.y) <= CaravanLayer.ROAD_WANDER + 0.001, "road patch %s stays near the line" % p
+		)
+	var wet := func(p: Vector2) -> bool: return p.x > 20.0 and p.x < 40.0
+	var dry: PackedVector2Array = CaravanLayer.road_steps(Vector2(0, 0), Vector2(60, 0), 6.0, wet)
+	_check(dry.size() == 6, "road patches skip the water cells (%d)" % dry.size())
+	_check(
+		CaravanLayer.road_steps(Vector2.ZERO, Vector2(3, 0), 6.0, Callable()).is_empty(), "no road"
+	)
 	# --- dirt yards: a 32 px earth patch, solid centre, clear corners ---
 	var yard: Image = SettlementLayer.yard_image()
 	_check(yard.get_width() == 32 and yard.get_height() == 32, "yard patch is 32x32")
