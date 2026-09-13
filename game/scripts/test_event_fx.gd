@@ -303,11 +303,21 @@ func _check_pixel_bursts() -> void:
 	var first: GPUParticles2D = fx.pixel_bursts()[0]
 	_check(first.position == Vector2(30, 40), "burst lands on the event")
 	_check(first.texture == PixelFx.build(PixelFx.IMPACT), "raid burst wears the impact star")
+	# Dedupe: the same event again at the same square within the window is
+	# swallowed (a busy settlement raises it every tick), a distant one and
+	# one after the window fire.
+	fx.apply_event_fx(7, Vector2(31, 41))
+	_check(fx.pixel_bursts_spawned() == 1, "a repeat raid at the same square spawns nothing")
+	fx.apply_event_fx(7, Vector2(300, 400))
+	_check(fx.pixel_bursts_spawned() == 2, "a raid elsewhere still spawns")
+	fx.update_rings(ViewerEffects.FX_DEDUPE_SECS + 0.1)
+	fx.apply_event_fx(7, Vector2(30, 40))
+	_check(fx.pixel_bursts_spawned() == 3, "the same square fires again after the window")
 	# Round-robin: 25 spawns wrap the ten-element pool without growing it.
 	for i in 25:
 		fx.spawn_pixel_burst(Vector2(i, i), PixelFx.EMBER, Color(1, 1, 1, 1))
 	_check(fx.pixel_bursts().size() == ViewerEffects.PIXEL_BURST_POOL, "pool never grows")
-	_check(fx.pixel_bursts_spawned() == 26, "every spawn is counted")
+	_check(fx.pixel_bursts_spawned() == 28, "every spawn is counted")
 	fx.free()
 	cam.free()
 
