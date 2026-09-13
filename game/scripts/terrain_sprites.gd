@@ -19,10 +19,21 @@ const NAMES: PackedStringArray = [
 # Variants 0 and 1 are hand-authored; variant 2 is variant 0 mirrored.
 const VARIANTS := 3
 
-enum { BUSH, OAK, CACTUS, BOULDER, ACACIA, JUNGLE, PINE, SHRUB }
-const PROP_COUNT := 8
+enum { BUSH, OAK, CACTUS, BOULDER, ACACIA, JUNGLE, PINE, SHRUB, FLOWERS, TUFT, MUSHROOM, STUMP }
+const PROP_COUNT := 12
 const PROP_NAMES: PackedStringArray = [
-	"Bush", "Oak", "Cactus", "Boulder", "Acacia", "Jungle", "Pine", "Shrub"
+	"Bush",
+	"Oak",
+	"Cactus",
+	"Boulder",
+	"Acacia",
+	"Jungle",
+	"Pine",
+	"Shrub",
+	"Flowers",
+	"Tuft",
+	"Mushroom",
+	"Stump",
 ]
 
 const ATLAS_COLS := 8
@@ -408,6 +419,10 @@ const _PROP_PALS: Array = [
 	{"d": "07331a", "m": "1d7a38", "l": "36a35c", "t": "5a4426", "v": "3fae62"},
 	{"e": "1f4634", "m": "37795a", "g": "4f9a6a", "t": "5f4128"},
 	{"t": "6a5a44", "s": "b8c2b8"},
+	{"g": "3f7a34", "l": "55964a", "r": "d24a4a", "y": "f0c850", "w": "f2f0dc"},
+	{"g": "3f7a34", "d": "2c5f28", "l": "55964a"},
+	{"r": "c24a3a", "w": "f2ebd8", "t": "d9c8a0", "d": "7a4a30"},
+	{"t": "8a6a42", "b": "5a3c22", "r": "a88a5a", "g": "3f7a34"},
 ]
 
 const _PROP_MAPS: Array = [
@@ -555,11 +570,95 @@ const _PROP_MAPS: Array = [
 		"................",
 		"................",
 	],
+	[
+		"................",
+		"................",
+		"................",
+		"................",
+		"................",
+		"......r.........",
+		".....rrr...y....",
+		"..w...r...yyy...",
+		".www..g....y....",
+		"..w...g....g....",
+		"..g...g.l..g....",
+		"..g..lg.g..g....",
+		".lggglgggglggl..",
+		"................",
+		"................",
+		"................",
+	],
+	[
+		"................",
+		"................",
+		"................",
+		"................",
+		"................",
+		"................",
+		".......l........",
+		"..l....l..l.....",
+		"..l.l..l..l.l...",
+		"...ll.ll.ll.l...",
+		"...dl.dl.dl.d...",
+		"....ddddddd.....",
+		"................",
+		"................",
+		"................",
+		"................",
+	],
+	[
+		"................",
+		"................",
+		"................",
+		"................",
+		"......rrrr......",
+		".....rwrrrr.....",
+		"....rrrrrwrr....",
+		"....rrwrrrrr....",
+		"....dddddddd....",
+		".....ttttt......",
+		".....tttt.......",
+		".....ttttrr.....",
+		".....tttrwrr....",
+		"....ddtddddd....",
+		"................",
+		"................",
+	],
+	[
+		"................",
+		"................",
+		"................",
+		"................",
+		"................",
+		"......rrrrr.....",
+		".....rttttrr....",
+		".....rtrrrtr....",
+		".....rtrrrtr....",
+		".....bttttrb....",
+		".....bbbbbbb....",
+		".....bbbbbbb....",
+		"....gbbbbbbbg...",
+		"....gg.....gg...",
+		"................",
+		"................",
+	],
 ]
 
-# Suggested scatter prop per terrain; water stays bare.
-const _TERRAIN_PROP: PackedInt32Array = [
-	-1, BUSH, OAK, CACTUS, BOULDER, ACACIA, JUNGLE, PINE, SHRUB
+# Scatter props per terrain (water stays bare): the first entry is the
+# terrain's head prop, the rest are the clutter a cell may grow instead
+# (flowers and tufts on grass, mushrooms and stumps under the trees), picked
+# per cell by prop_variant_for() so the ground reads as lived-in rather than
+# one bush repeated.
+const _TERRAIN_PROPS: Array = [
+	[],
+	[BUSH, FLOWERS, TUFT],
+	[OAK, MUSHROOM, STUMP],
+	[CACTUS],
+	[BOULDER],
+	[ACACIA, TUFT],
+	[JUNGLE, MUSHROOM],
+	[PINE, STUMP],
+	[SHRUB, TUFT],
 ]
 
 # ---------------------------------------------------------------------------
@@ -596,7 +695,28 @@ static func prop_image(kind: int) -> Image:
 
 
 static func prop_for_terrain(terrain: int) -> int:
-	return _TERRAIN_PROP[terrain]
+	if terrain < 0 or terrain >= _TERRAIN_PROPS.size():
+		return -1
+	var kinds: Array = _TERRAIN_PROPS[terrain]
+	return -1 if kinds.is_empty() else int(kinds[0])
+
+
+# All the props a terrain may grow (empty for water).
+static func props_for_terrain(terrain: int) -> Array:
+	if terrain < 0 or terrain >= _TERRAIN_PROPS.size():
+		return []
+	return _TERRAIN_PROPS[terrain]
+
+
+# The prop a cell with hash `h` grows on `terrain`: an even pick from the
+# terrain's list on a re-scrambled hash (h itself already decided that the
+# cell grows anything at all).
+static func prop_variant_for(terrain: int, h: float) -> int:
+	var kinds: Array = props_for_terrain(terrain)
+	if kinds.is_empty():
+		return -1
+	var v := fposmod(h * 977.0, 1.0)
+	return int(kinds[mini(int(v * kinds.size()), kinds.size() - 1)])
 
 
 # Atlas cell index for a tile variant: tiles fill the grid first, row-major.

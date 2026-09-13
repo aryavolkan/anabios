@@ -14,7 +14,7 @@ const SpriteSplit = preload("res://scripts/sprite_split.gd")
 
 # Fraction of cells of each terrain that grow a prop (indexed by TerrainType
 # id). Water is bare; forests read denser than steppe and tundra.
-const _DENSITY: PackedFloat32Array = [0.0, 0.05, 0.14, 0.03, 0.05, 0.06, 0.16, 0.12, 0.04]
+const _DENSITY: PackedFloat32Array = [0.0, 0.14, 0.18, 0.03, 0.05, 0.10, 0.16, 0.14, 0.08]
 # Hard cap on planned props (pre torus wrap) so continental res-512 worlds
 # stay bounded; lowest-hash cells win deterministically.
 const PROP_BUDGET := 12000
@@ -55,6 +55,7 @@ static func plan(ids: PackedByteArray, res: int, world: float, budget: int) -> A
 			var h := _hash2(x, y)
 			if h >= _DENSITY[id]:
 				continue
+			kind = TerrainSprites.prop_variant_for(id, h)
 			var jx := fposmod(h * 13.37, 1.0)
 			var jy := fposmod(h * 7.77, 1.0)
 			var pos := Vector2(x + 0.2 + 0.6 * jx, y + 0.2 + 0.6 * jy) * cell_w

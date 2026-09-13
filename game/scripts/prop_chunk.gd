@@ -23,7 +23,7 @@ const _APRON := CHUNK_CELLS + 2
 # Copied from terrain_scatter.gd's `_DENSITY` (fraction of cells of each
 # terrain that grow a prop, indexed by TerrainType id). MUST stay in sync
 # with that copy by hand; terrain_scatter.gd is owned by another module.
-const _DENSITY: PackedFloat32Array = [0.0, 0.05, 0.14, 0.03, 0.05, 0.06, 0.16, 0.12, 0.04]
+const _DENSITY: PackedFloat32Array = [0.0, 0.14, 0.18, 0.03, 0.05, 0.10, 0.16, 0.14, 0.08]
 # 16px prop art drawn at ~10 world units — same constant as terrain_scatter.gd.
 const PROP_SCALE := 0.625
 
@@ -68,6 +68,7 @@ static func plan(cx: int, cy: int, ids66: PackedByteArray, res: int, world: floa
 			var h := _hash2(gx, gy)
 			if h >= _DENSITY[id]:
 				continue
+			kind = TerrainSprites.prop_variant_for(id, h)
 			var jx := fposmod(h * 13.37, 1.0)
 			var jy := fposmod(h * 7.77, 1.0)
 			var pos := Vector2(gx + 0.2 + 0.6 * jx, gy + 0.2 + 0.6 * jy) * cell_w

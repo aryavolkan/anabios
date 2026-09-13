@@ -123,6 +123,19 @@ func _init() -> void:
 	for t in range(1, T.TERRAIN_COUNT):
 		var p: int = T.prop_for_terrain(t)
 		_check(p >= 0 and p < T.PROP_COUNT, "%s suggests a valid prop" % T.NAMES[t])
+		for i in 20:
+			var v: int = T.prop_variant_for(t, float(i) / 20.0)
+			_check(
+				T.props_for_terrain(t).has(v), "%s variant %d is one of its props" % [T.NAMES[t], v]
+			)
+	_check(T.prop_variant_for(T.WATER, 0.5) == -1, "water grows no prop variant")
+	var grass_kinds: Dictionary = {}
+	for i in 60:
+		grass_kinds[T.prop_variant_for(T.GRASS, float(i) / 60.0)] = true
+	_check(
+		grass_kinds.size() == T.props_for_terrain(T.GRASS).size(),
+		"grass grows every one of its props"
+	)
 
 	# --- atlas layout: tile cells land where the mapping says ---
 	var aimg := atlas.get_image()
