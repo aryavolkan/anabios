@@ -16,6 +16,7 @@ const FxMath = preload("res://scripts/fx_math.gd")
 # and its per-kind sprite atlas. Preloaded by path so this file keeps
 # compiling against the agreed contract even before those files land.
 const StructureSprites = preload("res://scripts/structure_sprites.gd")
+const SpriteSplit = preload("res://scripts/sprite_split.gd")
 const VillageLayout = preload("res://scripts/village_layout.gd")
 
 const REDRAW_EVERY := 20
@@ -69,6 +70,8 @@ var _smoke: Array[GPUParticles2D] = []
 # StructureSprites kinds as "s<kind>" so the two enums can't collide.
 var _building_frames: Dictionary = {}
 var _building_nodes: Dictionary = {}
+# Roof layers per structure kind (null for the flat FIELD), see _ready.
+var _structure_top_mmis: Array = []
 var _flicker_elapsed := 0.0
 var _flicker_phase := 0
 var _era_of: Dictionary = {}  # invention key -> era, cached once
@@ -120,17 +123,42 @@ func _ready() -> void:
 			_building_nodes[bkey] = [mmi]
 	# Village-footprint structures: one plain MultiMesh layer per kind, same
 	# Metal-safe contract. Fields draw below agents like the old farm patches;
-	# every other structure kind (huts, halls, fences, palisade, landmarks…)
-	# draws above agents like the old huts.
+	# every other structure kind is cut in two (sprite_split.gd, D9): walls
+	# below the figures (z -1, still above the ground props) and the roof
+	# above them (z 1) on a second layer sharing the same MultiMesh, so a
+	# figure south of a hut stands in front of it and one north of it is
+	# hidden behind the roof.
 	for k in StructureSprites.KIND_COUNT:
-		var z: int = -6 if k == StructureSprites.FIELD else 1
-		var stex: ImageTexture = StructureSprites.build_variant(k, 0)
-		var smmi := _make_layer("Structure_%d" % k, stex, z)
+		var img0: Image = StructureSprites.build_variant_image(k, 0)
+		if k == StructureSprites.FIELD:
+			_structure_mmis.append(
+				_make_layer("Structure_%d" % k, ImageTexture.create_from_image(img0), -6)
+			)
+			_structure_top_mmis.append(null)
+			continue
+		var row: int = SpriteSplit.split_row(img0)
+		var base_tex := ImageTexture.create_from_image(SpriteSplit.lower(img0, row))
+		var top_tex := ImageTexture.create_from_image(SpriteSplit.upper(img0, row))
+		var smmi := _make_layer("Structure_%d" % k, base_tex, -1)
 		_structure_mmis.append(smmi)
+		var top := MultiMeshInstance2D.new()
+		top.name = "StructureTop_%d" % k
+		top.multimesh = smmi.multimesh
+		top.texture = top_tex
+		top.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		top.z_index = 1
+		add_child(top)
+		_structure_top_mmis.append(top)
 		if StructureSprites.is_animated(k):
-			var skey := "s%d" % k
-			_building_frames[skey] = [stex, StructureSprites.build_variant(k, 1)]
-			_building_nodes[skey] = [smmi]
+			var img1: Image = StructureSprites.build_variant_image(k, 1)
+			_building_frames["s%d" % k] = [
+				base_tex, ImageTexture.create_from_image(SpriteSplit.lower(img1, row))
+			]
+			_building_nodes["s%d" % k] = [smmi]
+			_building_frames["t%d" % k] = [
+				top_tex, ImageTexture.create_from_image(SpriteSplit.upper(img1, row))
+			]
+			_building_nodes["t%d" % k] = [top]
 	for inv in sim.invention_catalog():
 		_era_of[String(inv["key"])] = int(inv["era"])
 	_make_smoke_pool()
@@ -159,6 +187,8 @@ func _make_wrap_clones() -> void:
 		_clone_layer(_building_mmis[k], "b%d" % k, world)
 	for k in StructureSprites.KIND_COUNT:
 		_clone_layer(_structure_mmis[k], "s%d" % k, world)
+		if _structure_top_mmis[k] != null:
+			_clone_layer(_structure_top_mmis[k], "t%d" % k, world)
 
 
 func _clone_layer(src: MultiMeshInstance2D, key: String, world: float) -> void:

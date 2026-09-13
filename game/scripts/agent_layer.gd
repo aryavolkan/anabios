@@ -102,6 +102,14 @@ var _perf_lookup_done: bool = false
 # from the alive list. They sit above the carcass discs (z -4, set by the
 # caller) but below living bodies.
 var _death_mmis: Array[MultiMeshInstance2D] = []
+# Contact shadows (D9): one soft ellipse under every visible figure, drawn
+# just below the bodies so a figure reads as standing on the ground rather
+# than pasted onto it.
+var _shadow_mmi: MultiMeshInstance2D
+const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.34)
+const SHADOW_W := 0.95  # of the body size
+const SHADOW_H := 0.36
+const SHADOW_DROP := 0.40  # centre offset below the body centre, of the body size
 var _death_effects: Array = []
 
 var _prev_ids: PackedInt32Array = PackedInt32Array()
@@ -172,6 +180,33 @@ func setup(
 		dmi.z_index = -4
 		add_child(dmi)
 		_death_mmis.append(dmi)
+	var smm := MultiMesh.new()
+	smm.transform_format = MultiMesh.TRANSFORM_2D
+	smm.mesh = _body_mmis[0].multimesh.mesh
+	_shadow_mmi = MultiMeshInstance2D.new()
+	_shadow_mmi.name = "Shadows"
+	_shadow_mmi.multimesh = smm
+	_shadow_mmi.texture = ImageTexture.create_from_image(shadow_image(16))
+	_shadow_mmi.modulate = SHADOW_COLOR
+	_shadow_mmi.z_index = -1
+	add_child(_shadow_mmi)
+
+
+# Torus wrap clone source for the contact shadows.
+func shadow_mmi() -> MultiMeshInstance2D:
+	return _shadow_mmi
+
+
+# A soft white ellipse (alpha falls off toward the rim) filling the cell.
+static func shadow_image(res: int) -> Image:
+	var img := Image.create(res, res, false, Image.FORMAT_RGBA8)
+	var c := (res - 1) * 0.5
+	for y in res:
+		for x in res:
+			var d := Vector2((x - c) / c, (y - c) / c).length()
+			var a := clampf(1.0 - smoothstep(0.55, 1.0, d), 0.0, 1.0)
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, a))
+	return img
 
 
 # Torus wrap clone sources (see main.gd::_make_wrap_clones): the death-ghost
@@ -252,6 +287,7 @@ func refresh(
 	if n == 0:
 		for mmi in _body_mmis:
 			mmi.multimesh.visible_instance_count = 0
+		_shadow_mmi.multimesh.visible_instance_count = 0
 		_prev_ids = PackedInt32Array()
 		_prev_smooth = PackedVector2Array()
 		_prev_sizes = PackedFloat32Array()
@@ -445,6 +481,13 @@ func refresh(
 	if have_ids:
 		_prev_bucket = bucket_ix
 
+	var shadows: MultiMesh = _shadow_mmi.multimesh
+	var shadow_n := 0
+	var total_vis := 0
+	for b in MammalSprites.BUCKET_COUNT:
+		total_vis += buckets[b].size()
+	if total_vis > shadows.instance_count:
+		shadows.instance_count = total_vis
 	for b in MammalSprites.BUCKET_COUNT:
 		var mm: MultiMesh = _body_mmis[b].multimesh
 		var idx: PackedInt32Array = buckets[b]
@@ -467,6 +510,16 @@ func refresh(
 			# walk shader (walk weight + facing), not the transform rotation.
 			var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
 			mm.set_instance_transform_2d(j, t)
+			shadows.set_instance_transform_2d(
+				shadow_n,
+				Transform2D(
+					0.0,
+					Vector2(sz * SHADOW_W, sz * SHADOW_H),
+					0.0,
+					smooth[i] + Vector2(0.0, sz * SHADOW_DROP)
+				)
+			)
+			shadow_n += 1
 			mm.set_instance_color(j, body_colors[i])
 			# Per-instance animation state for the field_agent shader. The sim
 			# reports heading exactly 0.0 when velocity ≈ 0, which doubles as
@@ -568,6 +621,7 @@ func refresh(
 				if act == ACT_DRINK and _effects != null:
 					_effects.tick_sip(ids[i], smooth[i], sz)
 			mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))
+	shadows.visible_instance_count = shadow_n
 
 	_emote_layer.refresh(animation_time, delta)
 	_refresh_death_effects(delta)

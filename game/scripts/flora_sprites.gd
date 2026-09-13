@@ -206,6 +206,18 @@ static func kind_image(kind: int) -> Image:
 	return img
 
 
+# The first trunk row (a row painting trunk keys), where the 2.5D crown /
+# trunk cut lands (sprite_split.gd, D9): the crown above covers figures, the
+# trunk below draws under them.
+static func trunk_row(kind: int) -> int:
+	var rows: Array = _ROWS[kind]
+	for y in rows.size():
+		var row: String = rows[y]
+		if row.contains("T") or row.contains("t"):
+			return y
+	return CELL_PX
+
+
 static func kind_texture(kind: int) -> ImageTexture:
 	if _cache.has(kind):
 		return _cache[kind]

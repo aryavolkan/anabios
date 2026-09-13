@@ -15,6 +15,7 @@ extends Node2D
 
 const TerrainSprites = preload("res://scripts/terrain_sprites.gd")
 const FloraSprites = preload("res://scripts/flora_sprites.gd")
+const SpriteSplit = preload("res://scripts/sprite_split.gd")
 
 const CHUNK_CELLS := 64
 const _APRON := CHUNK_CELLS + 2
@@ -184,6 +185,14 @@ func _make_mmis() -> void:
 		_mmis.append(mmi)
 
 
+# Canopy trees are cut into a trunk layer below the figures and a crown
+# layer above them (sprite_split.gd, D9): both halves share one MultiMesh,
+# so the crown sits exactly over its trunk and a figure walking north of the
+# tree disappears under the crown. The crown's z lifts it past the ground
+# (-10), this layer (+1 +4) and the figures (0): -10 + 1 + 4 + 6 = 1.
+const CROWN_Z := 6
+
+
 func _make_canopy_mmis() -> void:
 	for k in FloraSprites.KIND_COUNT:
 		var mm := MultiMesh.new()
@@ -191,12 +200,21 @@ func _make_canopy_mmis() -> void:
 		var quad := QuadMesh.new()
 		quad.size = Vector2(FloraSprites.CELL_PX, FloraSprites.CELL_PX)
 		mm.mesh = quad
+		var img: Image = FloraSprites.kind_image(k)
+		var row: int = FloraSprites.trunk_row(k)
 		var mmi := MultiMeshInstance2D.new()
 		mmi.multimesh = mm
-		mmi.texture = FloraSprites.kind_texture(k)
+		mmi.texture = ImageTexture.create_from_image(SpriteSplit.lower(img, row))
 		mmi.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		mmi.name = "Canopy%s" % FloraSprites.NAMES[k]
 		# Above the 16 px props so a tree overlaps the bush at its foot.
 		mmi.z_index = 1
 		add_child(mmi)
 		_canopy.append(mmi)
+		var crown := MultiMeshInstance2D.new()
+		crown.multimesh = mm
+		crown.texture = ImageTexture.create_from_image(SpriteSplit.upper(img, row))
+		crown.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		crown.name = "Crown%s" % FloraSprites.NAMES[k]
+		crown.z_index = CROWN_Z
+		add_child(crown)

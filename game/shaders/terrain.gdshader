@@ -24,6 +24,17 @@ uniform float vignette = 0.06;         // corner darkening on terrain (0 = off)
 // shore passes so the muted sim palette reads as pixel art, not a heatmap.
 uniform float vibrance = 0.35;
 uniform float land_lift = 1.22;
+// 2.5D relief (D9): land elevation is quantised into terraces; where a cell
+// stands a terrace above its southern neighbour the bottom band of the cell
+// wears a dark cliff face, a plateau's northern edge a lit rim, and the
+// east/west edges a thin dark line, so highlands read as stacked ledges the
+// way the reference boards' cliffs do. `terrace_levels` counts levels over
+// the full 0..1 elevation range; `cliff_strength` scales the face darkening;
+// `height_lift` brightens land with altitude.
+uniform float terrace_levels = 14.0;
+uniform float cliff_strength = 0.75;
+uniform float cliff_band = 0.42;   // fraction of a cell the face occupies
+uniform float height_lift = 0.22;
 
 // Pixel-art ground tiles (terrain_sprites.gd atlas), blended into the land
 // branch only — water keeps its living treatment, and the data-overlay
@@ -201,6 +212,33 @@ void fragment() {
 		float shade = dot(normalize(light_dir), grad) * relief_strength;
 		// Brighten slopes facing the light, darken those facing away.
 		outc = land_base * (1.0 + clamp(shade, -0.5, 0.5));
+
+		// Terraces and cliff faces (D9). Levels are integers; a drop of one
+		// or more levels toward a neighbour paints that edge of the cell.
+		float e0 = texture(TEXTURE, UV).a;
+		float lv = floor(e0 * terrace_levels);
+		float lvD = floor(eD * terrace_levels);
+		float lvU = floor(eU * terrace_levels);
+		float lvL = floor(eL * terrace_levels);
+		float lvR = floor(eR * terrace_levels);
+		vec2 fc = fract(cellf);
+		// Southern cliff face: the higher the drop, the darker and browner.
+		float drop = clamp((lv - lvD) / 3.0, 0.0, 1.0);
+		float face = drop * step(1.0 - cliff_band, fc.y) * step(0.5, lv - lvD);
+		vec3 cliff = mix(outc * 0.45, vec3(0.30, 0.23, 0.17), 0.5);
+		// A lit lip along the top of the face.
+		float lip = step(1.0 - cliff_band, fc.y) * (1.0 - step(1.0 - cliff_band + 0.08, fc.y));
+		outc = mix(outc, cliff, face * cliff_strength);
+		outc = mix(outc, outc * 1.35 + 0.08, face * lip * cliff_strength);
+		// Northern rim of a plateau: a thin bright line.
+		float rim = step(0.5, lv - lvU) * (1.0 - step(0.10, fc.y));
+		outc = mix(outc, outc * 1.25 + 0.06, rim * cliff_strength * 0.8);
+		// East/west ledges: a thin dark line where the cell stands higher.
+		float ledge = step(0.5, lv - lvL) * (1.0 - step(0.08, fc.x))
+			+ step(0.5, lv - lvR) * step(0.92, fc.x);
+		outc = mix(outc, outc * 0.6, clamp(ledge, 0.0, 1.0) * cliff_strength * 0.7);
+		// Altitude: highlands sit a touch brighter than the lowlands.
+		outc *= 1.0 + height_lift * clamp((e0 - sea_level) / max(1.0 - sea_level, 1e-3), 0.0, 1.0);
 
 		// Sandy shoreline on the land side: a thin warm beach band right at the
 		// waterline, fading inland, so coasts read as coast rather than a hard

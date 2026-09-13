@@ -319,6 +319,7 @@ func _make_wrap_clones() -> void:
 	move_child(wrap_box, module_layers.get_index() + 1)
 	var sources: Array[MultiMeshInstance2D] = _body_mmis.duplicate()
 	sources.append_array(_agent_layer.death_mmis())
+	sources.append(_agent_layer.shadow_mmi())
 	sources.append_array([carcasses, flashes, streaks, trade_routes, _trail_layer.tracks_mmi()])
 	for src in sources:
 		for gy in range(-1, 2):
@@ -329,6 +330,7 @@ func _make_wrap_clones() -> void:
 				clone.multimesh = src.multimesh
 				clone.texture = src.texture
 				clone.material = src.material  # keep additive glow at the seams
+				clone.modulate = src.modulate  # keep the shadow tint at the seams
 				clone.texture_filter = src.texture_filter  # keep the crisp 8-bit body
 				clone.z_index = src.z_index
 				clone.position = Vector2(gx * world, gy * world)

@@ -152,6 +152,38 @@ bridge queries plus opt-in scenario fields (`biome_step_interval`, larger
 `biome_res`). No default path changes; `FORMAT_VERSION` moves only if a
 scenario field is persisted.
 
+**D9 — 2.5D is layering plus relief, not projection.** The reference boards
+are top-down ground with front-facing objects (the Zelda/Stardew "3/4" read),
+so the world stays a flat 2D plane with the camera unchanged and depth comes
+from three cheap cues, all presentation-only:
+
+1. *Occlusion by height.* Every standing sprite (canopy tree, hut, hall,
+   fence, landmark) is cut at ~60% of its opaque height (`sprite_split.gd`)
+   into a crown/roof layer drawn **above** the figures (z ≥ 1) and a
+   trunk/wall layer drawn **below** them (z ≤ −1). Both halves share one
+   MultiMesh, so the cut costs one extra draw and no per-frame work. A figure
+   north of a tree vanishes under its crown; a figure south of a hut stands
+   in front of its wall. This is the classic split-sprite approximation of a
+   y-sort; the residual error (a figure exactly at the cut line) is a few
+   pixels and accepted. A true cross-layer y-sort (§6 Phase 3, deferred)
+   would replace it only if the split shows in play.
+2. *Contact shadows.* One soft ellipse under every visible figure
+   (`agent_layer.gd`, z −1, 34% black), sized to the body, so figures stand
+   on the ground instead of floating over it. Trees and huts already bake
+   their ground shadow into the sprite.
+3. *Terraced relief.* The terrain shader quantises the packed elevation
+   (texture alpha) into `terrace_levels` steps; where a cell stands a step
+   above its southern neighbour the cell's bottom band wears a dark cliff
+   face with a lit lip, a plateau's northern edge a bright rim, and east/west
+   ledges a thin dark line; land brightens with altitude. Mountains and river
+   valleys read as stacked ledges. All of it is per-cell arithmetic on
+   existing chunk data — no new bridge queries, no sim change.
+
+Rejected: an isometric or oblique projection (every atlas, the hash-grid
+picking, the chunk streaming and the torus wrap would need re-deriving for a
+look the reference boards do not use), and a normal-mapped 2D lighting pass
+(Godot 2D lights work per-sprite and would not touch the MultiMesh figures).
+
 ## 5. Scale tiers and budgets
 
 | Tier | `world_size` | `biome_res` (cells) | `hash_res` | Cells | Biome memory | Chunks | Status |
