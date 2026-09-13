@@ -54,9 +54,9 @@ const PAL := {
 	"J": "3fa050",  # jungle
 	"L": "6fd06a",  # jungle lit
 	"s": "0b1a12",  # shadow
-	"r": "8b8f97",  # rock
-	"R": "b9bcc2",  # rock lit
-	"q": "5b5e66",  # rock shade
+	"r": "8c8a78",  # rock
+	"R": "b8b6a4",  # rock lit
+	"q": "5e5c4c",  # rock shade
 	"m": "5f8a3a",  # moss
 }
 

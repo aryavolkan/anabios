@@ -433,7 +433,15 @@ func _process(delta: float) -> void:
 	var world: float = sim.world_size()
 	var moving_sample: PackedVector2Array = _agent_layer.moving_sample()
 	_trail_layer.update(
-		delta, moving_sample, paused, streak_segs, streak_cols, trade_segs, trade_cols, world
+		delta,
+		moving_sample,
+		paused,
+		streak_segs,
+		streak_cols,
+		trade_segs,
+		trade_cols,
+		world,
+		($Camera2D as Camera2D).zoom.x
 	)
 	_effects.update(delta, moving_sample, paused)
 	# Hearth smoke: settled sites breathe an occasional ember wisp.

@@ -381,7 +381,7 @@ void fragment() {
 		float drop = clamp((lv - lvD) / 3.0, 0.0, 1.0);
 		float real = mix(0.6, 9.0, on_rock) / levels;
 		float face = drop * step(1.0 - cliff_band, fc.y) * step(0.5, lv - lvD) * step(real, e0 - eD);
-		vec3 face_col = mix(vec3(0.30, 0.23, 0.17), vec3(0.36, 0.37, 0.42), on_rock);
+		vec3 face_col = mix(vec3(0.30, 0.23, 0.17), vec3(0.34, 0.33, 0.28), on_rock);
 		vec3 cliff = mix(outc * 0.45, face_col, 0.5);
 		// A lit lip along the top of the face.
 		float lip = step(1.0 - cliff_band, fc.y) * (1.0 - step(1.0 - cliff_band + 0.08, fc.y));
@@ -418,7 +418,7 @@ void fragment() {
 			float f = fract(esm * terrace_levels * 3.0);
 			float ledge_dark = 1.0 - smoothstep(0.0, 0.18, f);
 			float ledge_lit = smoothstep(0.84, 1.0, f);
-			vec3 stone = mix(outc * 0.55, vec3(0.30, 0.31, 0.36), 0.5);
+			vec3 stone = mix(outc * 0.55, vec3(0.31, 0.30, 0.25), 0.5);
 			outc = mix(outc, stone, ledge_dark * cliff_strength * 0.8);
 			outc = mix(outc, outc * 1.22 + 0.05, ledge_lit * 0.7);
 			// Snow caps: the top of the rock band whitens with altitude.

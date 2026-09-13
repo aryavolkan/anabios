@@ -42,7 +42,7 @@ pins an agent in the unit card.
 
 | File | Scenario / tick / zoom | What you're seeing |
 |---|---|---|
-| scale-settlement-t891-village-4x.png | `settlement` t891 4× (default camera, `ANABIOS_INSPECT=1`) | A camp on packed-earth yards with paths to the hearth, tents spaced a hut-width apart, the crowd capped to one figure per 10 units, a market square with awning stalls beside it, the unit card. |
+| scale-settlement-t891-village-4x.png | `settlement` t891 4× (default camera, `ANABIOS_INSPECT=1`) | A camp on packed-earth yards with paths to the hearth, tents spaced a hut-width apart, the crowd capped to one figure per 12 units, a market square with awning stalls beside it, pixel-puff hearth smoke, the outcrop east of the camp as warm stone, the unit card. |
 | scale-settlement-t891-fortified-2x.png | `settlement` t891 2× (`ANABIOS_VILLAGE_ERA=2 ANABIOS_VILLAGE_FLAGS=123`) | The same camp forced into its fortified era: a log palisade hugging the huts, a gate with banners to the south, a watchtower, fenced fields outside the wall, the forest standing back from the clearing. |
 | scale-settlement-t3120-camp-4x.png | `settlement` t3120 4× | The same camp later: hearth smoke, herds at the square, codex species page. |
 | scale-settlement-t1020-codex-species-2x.png | `settlement` t1020 2× (`ANABIOS_CODEX_TAB=1`) | The settlement peninsula: flat lake water with block ripples, dithered biome borders, mixed oak silhouettes, the pixel-font HUD. |
@@ -50,7 +50,7 @@ pins an agent in the unit card.
 | scale-settlement-t691-overview.png | `settlement` t691, `ANABIOS_CAM_FIT=1` | Whole-world framing: the overview mip with the density dots. |
 | scale-settlement-t891-market-8x.png | `settlement` t891 8× at (1060, 298) | The market square up close: stalls, goods on the counters, carts. |
 | scale-trade-hubs-t600-market-4x.png | `trade-hubs` t600 4× at (1060, 298) | A trade hub as a market square in the woods. |
-| scale-riverlands-t291-relief-2x.png | `riverlands` t291 2× | Rivers with waterfalls on their steep stretches, contour-ledged snowy mountains, forests mixing three oaks, clutter on the grass. |
+| scale-riverlands-t291-relief-2x.png | `riverlands` t291 2× | Rivers with waterfalls on their steep stretches, contour-ledged snowy mountains in warm olive stone, forests mixing three oaks, clutter on the grass. |
 | scale-riverlands-t291-clutter-4x.png | `riverlands` t291 4× at (2500, 1200) | Flowers, tufts, mushrooms and stumps at 4×. |
 | scale-riverlands-t291-lake-4x.png | `riverlands` t291 4× at (2427, 1357) | A desert lake: one flat blue, sparse strokes, foam and beach from the coast autotile. |
 | scale-inventions-t2620-coast-2x.png | `inventions` t2620 2× (`ANABIOS_CODEX_TAB=1`) | Hominin bands along a coast. |

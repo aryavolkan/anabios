@@ -40,7 +40,7 @@ const BODY_CAP: float = 16.0
 # Close-zoom crowd cap (see refresh): one drawn figure per CROWD_CELL world
 # units once the camera zoom reaches CROWD_ZOOM.
 const CROWD_ZOOM := 2.0
-const CROWD_CELL := 10.0
+const CROWD_CELL := 12.0
 const BODY_MIN: float = 6.0
 # World units of margin added on every side of the camera's world rect before
 # querying alive_in_rect(): keeps an agent walking toward the edge of the

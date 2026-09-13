@@ -29,6 +29,14 @@ const TRACK_CAP: int = 256
 # in wall-clock at 30 fps. Values match the old 8 and 24 frames at 60 fps.
 const STREAK_TTL: float = 0.133
 const TRADE_TTL: float = 0.4
+# At the pixel-art zooms (CLOSE_ZOOM and in) the trade lanes stop being
+# genome-hued tracers and become the earth they are worn into: the same
+# dark trodden brown as the footstep tracks, thin and faint, no pulse. At
+# 4x a busy hub's hundreds of pale hue-lines used to fuse into a lavender
+# haze with cracks across the whole market square.
+const CLOSE_ZOOM: float = 2.0
+const TRADE_EARTH := Color(0.22, 0.18, 0.13, 1.0)
+const TRADE_EARTH_ALPHA: float = 0.28
 
 var _tracks_mmi: MultiMeshInstance2D = null
 var _tracks: Array = []  # entries: [pos: Vector2, ttl: float]
@@ -63,6 +71,17 @@ func tracks_mmi() -> MultiMeshInstance2D:
 	return _tracks_mmi
 
 
+# Lane colours for this zoom: the genome hues as given at far zoom, one
+# trodden-earth brown per lane from CLOSE_ZOOM in.
+static func trade_palette(trade_cols: PackedColorArray, zoom: float) -> PackedColorArray:
+	if zoom < CLOSE_ZOOM:
+		return trade_cols
+	var earth := PackedColorArray()
+	earth.resize(trade_cols.size())
+	earth.fill(TRADE_EARTH)
+	return earth
+
+
 # Per-frame tick, driven from main._process. The walker sample and pause flag
 # live in main (written during the body pass), so they are passed in rather
 # than read back; the segment endpoints/colors are this tick's sim fetch, which
@@ -75,13 +94,23 @@ func update(
 	streak_cols: PackedColorArray,
 	trade_segs: PackedVector2Array,
 	trade_cols: PackedColorArray,
-	world: float
+	world: float,
+	zoom: float = 1.0
 ) -> void:
 	_update_segment_trail(
 		_streak_trail, _streaks_mm, streak_segs, streak_cols, STREAK_TTL, 1.0, 0.85, world
 	)
+	var close := zoom >= CLOSE_ZOOM
 	_update_segment_trail(
-		_trade_trail, _trade_mm, trade_segs, trade_cols, TRADE_TTL, 0.5, 0.6, world, true
+		_trade_trail,
+		_trade_mm,
+		trade_segs,
+		trade_palette(trade_cols, zoom),
+		TRADE_TTL,
+		0.5,
+		TRADE_EARTH_ALPHA if close else 0.6,
+		world,
+		not close
 	)
 	_update_tracks(delta, moving_sample, is_paused)
 

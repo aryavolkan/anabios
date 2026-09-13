@@ -12,6 +12,7 @@ const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const Buildings = preload("res://scripts/building_sprites.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
+const PixelFxSprites = preload("res://scripts/pixel_fx_sprites.gd")
 # Landed separately by parallel agents (D5/D7): the village footprint planner
 # and its per-kind sprite atlas. Preloaded by path so this file keeps
 # compiling against the agreed contract even before those files land.
@@ -655,16 +656,19 @@ func _place_invention_landmarks(
 # village's plan has one. Not wrap-cloned (particle emitters can't share the
 # MultiMesh trick; same tradeoff as the ember/dust effects).
 func _make_smoke_pool() -> void:
-	var tex := FxMath.radial_texture(16)
+	# Hard-edged pixel puffs (drawn unfiltered): the radial disc this used
+	# blurred into a grey fog over the hearth at 4x.
+	var tex := PixelFxSprites.build(PixelFxSprites.SMOKE)
 	for i in SMOKE_POOL:
 		var p := GPUParticles2D.new()
 		p.name = "Smoke%d" % i
-		p.amount = 12
+		p.amount = 10
 		p.lifetime = 3.0
 		p.emitting = false
 		p.z_index = 2
 		p.visibility_rect = Rect2(-100, -160, 200, 220)
 		p.texture = tex
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var m := ParticleProcessMaterial.new()
 		m.direction = Vector3(0, -1, 0)
 		m.spread = 10.0
@@ -674,11 +678,11 @@ func _make_smoke_pool() -> void:
 		m.gravity = Vector3(1.5, -5.0, 0)
 		# Compact puffs (the disc is sized in world units; at 2x a two-unit
 		# scale read as a grey haze over half the village).
-		m.scale_min = 0.45
-		m.scale_max = 0.8
+		m.scale_min = 0.35
+		m.scale_max = 0.6
 		var grad := Gradient.new()
-		grad.set_color(0, Color(0.66, 0.63, 0.60, 0.40))
-		grad.set_color(1, Color(0.55, 0.55, 0.58, 0.0))
+		grad.set_color(0, Color(1.0, 1.0, 1.0, 0.85))
+		grad.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
 		var gt := GradientTexture1D.new()
 		gt.gradient = grad
 		m.color_ramp = gt
