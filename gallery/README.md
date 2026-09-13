@@ -50,7 +50,8 @@ pins an agent in the unit card.
 | scale-settlement-t691-overview.png | `settlement` t691, `ANABIOS_CAM_FIT=1` | Whole-world framing: the overview mip with the density dots. |
 | scale-settlement-t891-market-8x.png | `settlement` t891 8× at (1060, 298) | The market square up close: stalls, goods on the counters, carts, the square's earth at the ground tiles' grain. |
 | scale-trade-hubs-t600-market-4x.png | `trade-hubs` t600 4× at (1060, 298) | A trade hub as a market square in the woods, a snow patch with an ordered-dither edge on the outcrop behind it. |
-| scale-riverlands-t291-relief-2x.png | `riverlands` t291 2× | Rivers with waterfalls on their steep stretches, contour-ledged snowy mountains in warm olive stone, forests mixing three oaks, clutter on the grass. |
+| scale-riverlands-t291-relief-2x.png | `riverlands` t291 2× | Rivers with waterfalls on their steep stretches, contour-ledged mountains in warm olive stone with a dithered snow line, forests mixing three oaks, clutter on the grass. |
+| scale-riverlands-t291-river-4x.png | `riverlands` t291 4× at (2367, 1017) | A one-cell river running diagonally through the oaks as one stream: the diagonal coast tiles carry a channel instead of pinching the cells into beads. |
 | scale-riverlands-t291-clutter-4x.png | `riverlands` t291 4× at (2500, 1200) | Flowers, tufts, mushrooms and stumps at 4×. |
 | scale-riverlands-t291-lake-4x.png | `riverlands` t291 4× at (2427, 1357) | A desert lake: one flat blue, sparse strokes, foam and beach from the coast autotile. |
 | scale-inventions-t2620-coast-2x.png | `inventions` t2620 2× (`ANABIOS_CODEX_TAB=1`) | Hominin bands along a coast. |

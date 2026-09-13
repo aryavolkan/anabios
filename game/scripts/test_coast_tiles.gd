@@ -89,6 +89,10 @@ func _init() -> void:
 		_check(img.get_width() == 16 and img.get_height() == 16, "mask %d tile is 16x16" % mask)
 		for i in 4:
 			var px: Vector2i = corner_px[i]
+			# A diagonal pair's water corners are painted: the channel
+			# core runs through them (their cell is water either way).
+			if T.is_diagonal(mask) and bool(mask & (1 << i)):
+				continue
 			_check(
 				img.get_pixel(px.x, px.y).a == 0.0,
 				"mask %d corner %s is transparent" % [mask, corner_name[i]]
@@ -111,6 +115,8 @@ func _init() -> void:
 				elif is_equal_approx(c.r, T.SHALLOW.r) and is_equal_approx(c.b, T.SHALLOW.b):
 					shallow += 1
 					band_ok = band_ok and w >= 0.5
+				elif c.is_equal_approx(T.CHANNEL_DEEP):
+					band_ok = band_ok and T.is_diagonal(mask) and w >= T.BAND_SHALLOW
 		_check(
 			sand > 0 and foam > 0 and shallow > 0, "mask %d carries sand, foam and shallow" % mask
 		)
@@ -124,7 +130,16 @@ func _init() -> void:
 	_check(T.water_weight(1, 0, 0) > 0.85, "TL-only weight is near 1 at the TL pixel")
 	_check(T.water_weight(1, 15, 15) < 0.15, "TL-only weight is near 0 at the BR pixel")
 	_check(absf(T.water_weight(3, 7, 7) - 0.53) < 0.05, "top-edge weight is ~0.5 mid-tile")
-	_check(absf(T.water_weight(9, 7, 7) - 0.5) < 0.01, "diagonal pair balances at the centre")
+	# The diagonal pairs carry a channel: water along the diagonal, land at
+	# the two other corners, and the core painted where the cell is land.
+	_check(T.water_weight(9, 7, 7) > 0.9, "TL+BR pair is water at the centre")
+	_check(T.water_weight(9, 15, 0) < 0.1, "TL+BR pair is land at the TR corner")
+	_check(T.water_weight(6, 7, 7) > 0.9, "TR+BL pair is water at the centre")
+	_check(T.water_weight(6, 0, 0) < 0.1, "TR+BL pair is land at the TL corner")
+	var diag: Image = T.tile_image(9)
+	_check(diag.get_pixel(7, 7).is_equal_approx(T.CHANNEL_DEEP), "channel core is painted water")
+	_check(diag.get_pixel(15, 0).a == 0.0, "channel leaves the land corners clear")
+	_check(T.is_diagonal(9) and T.is_diagonal(6) and not T.is_diagonal(3), "diagonal masks")
 
 	# --- rotation consistency at the art level: rotating a tile 90 degrees
 	# clockwise yields the tile of the rotated mask, pixel for pixel ---

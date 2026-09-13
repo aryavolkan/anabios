@@ -388,14 +388,22 @@ void fragment() {
 		float lvL = floor(eL * levels);
 		float lvR = floor(eR * levels);
 		vec2 fc = fract(cellf);
-		// Southern cliff face: the higher the drop, the darker and browner.
-		float drop = clamp((lv - lvD) / 3.0, 0.0, 1.0);
+		// Southern cliff face: the higher the drop, the darker, browner and
+		// TALLER — a one-level step wears the thin soil band, a drop of
+		// three or more levels a face most of a cell high, striated into
+		// stone columns (a per-texel column hash) the way the boards' crags
+		// and river gorges are drawn.
+		float drop_lv = clamp(lv - lvD, 0.0, 4.0);
+		float drop = clamp(drop_lv / 3.0, 0.0, 1.0);
+		float band_h = min(cliff_band * (0.5 + 0.6 * drop_lv), 0.85);
 		float real = mix(0.6, 9.0, on_rock) / levels;
-		float face = drop * step(1.0 - cliff_band, fc.y) * step(0.5, lv - lvD) * step(real, e0 - eD);
+		float face = drop * step(1.0 - band_h, fc.y) * step(0.5, lv - lvD) * step(real, e0 - eD);
 		vec3 face_col = mix(vec3(0.30, 0.23, 0.17), vec3(0.34, 0.33, 0.28), on_rock);
 		vec3 cliff = mix(outc * 0.45, face_col, 0.5);
+		float col_hash = hash2(vec2(floor(world_pos.x / max(texel_w, 1e-4)), floor(cellf.y)) + vec2(1.7, 4.3));
+		cliff *= 0.82 + 0.28 * step(0.45, col_hash);
 		// A lit lip along the top of the face.
-		float lip = step(1.0 - cliff_band, fc.y) * (1.0 - step(1.0 - cliff_band + 0.08, fc.y));
+		float lip = step(1.0 - band_h, fc.y) * (1.0 - step(1.0 - band_h + 0.08, fc.y));
 		outc = mix(outc, cliff, face * cliff_strength);
 		outc = mix(outc, outc * 1.35 + 0.08, face * lip * cliff_strength);
 		// Bank face: land standing a level above the water south of it wears

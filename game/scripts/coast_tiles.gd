@@ -53,11 +53,35 @@ static func rotate_mask_cw(mask: int) -> int:
 	return mask_of(bl, tl, br, tr)
 
 
-# Bilinear water weight of pixel (x, y) (0..CELL_PX-1, pixel centres) for
-# `mask`: 1.0 at a water corner, 0.0 at a land corner, the shoreline at 0.5.
+# The two diagonal-pair masks (TL+BR, TR+BL): two water cells touching only
+# at a corner. Bilinear weights pinch them apart at the centre, and a
+# one-cell river running diagonally rendered as a chain of beads with a
+# land waist between every pair; these masks carry a channel instead.
+const MASK_DIAG_TL_BR := 9
+const MASK_DIAG_TR_BL := 6
+# Channel: how fast the weight falls off with distance from the diagonal
+# (water where |u - v| < ~0.36, sand out to ~0.53).
+const CHANNEL_FALLOFF := 1.4
+# Flat river blue the channel core wears where the underlying cell is land
+# (the water cells' own shader fill never reaches a land cell's corner).
+const CHANNEL_DEEP := Color("3681c1")
+
+
+static func is_diagonal(mask: int) -> bool:
+	return mask == MASK_DIAG_TL_BR or mask == MASK_DIAG_TR_BL
+
+
+# Water weight of pixel (x, y) (0..CELL_PX-1, pixel centres) for `mask`:
+# 1.0 at a water corner, 0.0 at a land corner, the shoreline at 0.5.
+# Bilinear in the corner bits, except the diagonal pairs, which carry a
+# channel along their water diagonal so the pair reads as one stream.
 static func water_weight(mask: int, x: int, y: int) -> float:
 	var u := (float(x) + 0.5) / float(CELL_PX)
 	var v := (float(y) + 0.5) / float(CELL_PX)
+	if mask == MASK_DIAG_TL_BR:
+		return clampf(1.0 - CHANNEL_FALLOFF * absf(u - v), 0.0, 1.0)
+	if mask == MASK_DIAG_TR_BL:
+		return clampf(1.0 - CHANNEL_FALLOFF * absf(u + v - 1.0), 0.0, 1.0)
 	var tl := 1.0 if mask & 1 else 0.0
 	var tr := 1.0 if mask & 2 else 0.0
 	var bl := 1.0 if mask & 4 else 0.0
@@ -87,9 +111,15 @@ static func tile_image(mask: int) -> Image:
 	img.fill(Color(0, 0, 0, 0))
 	if mask <= 0 or mask >= 15:
 		return img
+	var channel := is_diagonal(mask)
 	for y in CELL_PX:
 		for x in CELL_PX:
-			img.set_pixel(x, y, band_color(water_weight(mask, x, y)))
+			var w := water_weight(mask, x, y)
+			var c := band_color(w)
+			# The channel core crosses the two land corners: paint it.
+			if channel and w >= BAND_SHALLOW:
+				c = CHANNEL_DEEP
+			img.set_pixel(x, y, c)
 	return img
 
 
