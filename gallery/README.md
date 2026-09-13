@@ -47,7 +47,7 @@ pins an agent in the unit card.
 | scale-settlement-t891-raided-4x.png | `settlement` t891 4× (`ANABIOS_VILLAGE_ERA=1 ANABIOS_VILLAGE_FLAGS=127`) | The same camp as a raided thatch village: burnt ruins with pixel flames and black smoke over them, the palisade, the fenced field. |
 | scale-settlement-t3120-camp-4x.png | `settlement` t3120 4× | The same camp later: hearth smoke, herds at the square, codex species page. |
 | scale-settlement-t1020-codex-species-2x.png | `settlement` t1020 2× (`ANABIOS_CODEX_TAB=1`) | The settlement peninsula: flat lake water with block ripples, dithered biome borders, mixed oak silhouettes, olive savanna, resting herds with their heads up, the HUD. |
-| scale-settlement-t1591-1x.png | `settlement` t1591 1× | The same world at 1×. |
+| scale-settlement-t1591-1x.png | `settlement` t1591 1× | The same world at 1×: dirt roads threading between the market squares. |
 | scale-settlement-t691-overview.png | `settlement` t691, `ANABIOS_CAM_FIT=1` | Whole-world framing: the overview mip with the density dots. |
 | scale-settlement-t891-market-8x.png | `settlement` t891 8× at (1060, 298) | The market square up close: stalls, goods on the counters, carts, the square's earth at the ground tiles' grain. |
 | scale-trade-hubs-t600-roads-2x.png | `trade-hubs` t600 2× at (1060, 298) | Dirt roads worn along the caravan routes from the market square through the woods, stopping at the water. |
