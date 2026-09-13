@@ -143,10 +143,11 @@ const WALK_FRAME_COUNT := 4
 # Per-hominin gait cadence (frames/sec), read by mammal_sprites.bucket_gait_fps.
 const WALK_FPS: PackedFloat32Array = [5.0, 4.2, 4.6, 4.8, 5.6]
 # The atlas stacks WALK_FRAME_COUNT gait poses, then TWO frames per action
-# (eat / fight / trade / flee / sleep / celebrate / spear / bow / steel) that
-# main.gd derives from combat, trade, fire-intent, mood, energy and invention
-# signals; the shader cycles each pair when INSTANCE_CUSTOM.a != 0.
-const POSE_COUNT := 22
+# (eat / fight / trade / flee / sleep / celebrate / spear / bow / steel /
+# spear-ready) that main.gd derives from combat, trade, fire-intent, mood,
+# energy and invention signals; the shader cycles each pair when
+# INSTANCE_CUSTOM.a != 0.
+const POSE_COUNT := 24
 const POSE_EAT := 4
 const POSE_FIGHT := 6
 const POSE_TRADE := 8
@@ -155,7 +156,8 @@ const POSE_SLEEP := 12
 const POSE_SPEAR := 16
 const POSE_BOW := 18
 const POSE_STEEL := 20
-# Atlas layout: the 22 poses fill a SQUARE 128x128 grid (8 cols x 8 rows),
+const POSE_SPEAR_READY := 22
+# Atlas layout: the 24 poses fill a SQUARE 128x128 grid (8 cols x 8 rows),
 # NOT a 16x192 vertical strip. On Metal (Apple GPUs) an
 # extreme-aspect texture sampled through a canvas_item ShaderMaterial on the
 # MultiMesh2D path corrupts into torn horizontal streaks — a square

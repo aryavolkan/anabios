@@ -2,9 +2,10 @@ extends SceneTree
 # Headless unit test for agent_layer.gd's pure static helpers: the
 # view-rect arithmetic behind the Phase 3 visible-set culling
 # (docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md, §6
-# Phase 3), the torus-aware death-ghost rect check, and the two-pointer id
-# merge that the smoothing pass is built on — the piece most likely to
-# regress. AgentLayer itself references no autoload (see camera_controller.gd
+# Phase 3), the torus-aware death-ghost rect check, the two-pointer id
+# merge that the smoothing pass is built on, and the idle-spear-ready act
+# pick — the pieces most likely to regress. AgentLayer itself references no
+# autoload (see camera_controller.gd
 # and main.gd, which cannot compile under -s for that reason — noted in
 # test_event_fx.gd), so the whole script preloads cleanly here. Run with:
 #   godot --headless --rendering-driver dummy --path game \
@@ -157,11 +158,42 @@ func _check_crowd_cells() -> void:
 	_check(k_odd_a.y == 1 and k_even_a.y == 0, "row index is the plain cell row")
 
 
+func _check_idle_weapon_act() -> void:
+	# Genuinely idle (act still 0, not walking) with Hafted Spears researched:
+	# carry the spear at rest instead of standing bare-handed.
+	var spear_mask := 1 << 10  # FxMath.INV_HAFTED_SPEARS
+	_check(
+		is_equal_approx(
+			AgentLayer.idle_weapon_act(0.0, false, spear_mask), AgentLayer.ACT_SPEAR_READY
+		),
+		"idle + spear tech -> ACT_SPEAR_READY"
+	)
+	# No spear tech: stays bare-handed (act unchanged at 0).
+	_check(
+		is_equal_approx(AgentLayer.idle_weapon_act(0.0, false, 0), 0.0),
+		"idle + no spear tech -> unchanged 0.0"
+	)
+	# Walking, even with spear tech: not idle, so the pick does not apply.
+	_check(
+		is_equal_approx(AgentLayer.idle_weapon_act(0.0, true, spear_mask), 0.0),
+		"walking + spear tech -> unchanged since not idle"
+	)
+	# A higher-priority act already picked (e.g. fighting): never overridden.
+	_check(
+		is_equal_approx(
+			AgentLayer.idle_weapon_act(AgentLayer.ACT_FIGHT, false, spear_mask),
+			AgentLayer.ACT_FIGHT
+		),
+		"a non-zero act (e.g. fight) is left alone even with spear tech"
+	)
+
+
 func _init() -> void:
 	_check_view_rect()
 	_check_pos_in_rect()
 	_check_merge_prev()
 	_check_crowd_cells()
+	_check_idle_weapon_act()
 
 	if _failed:
 		quit(1)

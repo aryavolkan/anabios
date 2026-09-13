@@ -35,7 +35,7 @@ func _cell_opaque(img: Image, cell: int) -> int:
 # must carry them, every quadruped atlas must leave them empty (inventions
 # never reach quads, so the shader never samples there).
 func _check_weapon_cells() -> void:
-	_check(A.POSE_COUNT == 22, "field grid holds the spear/bow/steel pairs")
+	_check(A.POSE_COUNT == 24, "field grid holds the spear/bow/steel/spear-ready pairs")
 	var pairs := [A.POSE_SPEAR, A.POSE_BOW, A.POSE_STEEL]
 	for sp in A.SPECIES_COUNT:
 		var img: Image = A.build_species_atlas(sp).get_image()
@@ -135,7 +135,7 @@ func _check_hero_art() -> void:
 		_check(_bottom_row(stand) >= H.PX - 4, "%s stands on the ground rows" % name)
 
 
-# Hominin masters: one per hominin, valid keys, feet on the ground, 22
+# Hominin masters: one per hominin, valid keys, feet on the ground, 24
 # derived cells with the weapon overlays where the shader samples them and
 # the arms above the head when celebrating.
 func _check_hominin_masters() -> void:
@@ -153,7 +153,13 @@ func _check_hominin_masters() -> void:
 		var stand: Image = cells[0]
 		_check(_bottom_row(stand) >= HM.PX - 4, "%s stands on the ground rows" % name)
 		_check(_top_row(cells[14]) < _top_row(stand), "%s raises its arms to celebrate" % name)
-		for cell in [A.POSE_SPEAR, A.POSE_BOW, A.POSE_STEEL]:
+		for cell in [
+			A.POSE_SPEAR,
+			A.POSE_BOW,
+			A.POSE_STEEL,
+			A.POSE_SPEAR_READY,
+			A.POSE_SPEAR_READY + 1,
+		]:
 			var img: Image = cells[cell]
 			var blade := 0
 			for y in HM.PX:

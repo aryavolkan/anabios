@@ -4,9 +4,10 @@ extends RefCounted
 # right, feet on row 21, two rows of headroom for raised arms. Pixels carry
 # a PART tag (head, torso, front/back arm, front/back leg) and a zone key
 # resolved through the species' FIELD_ZONE_COLORS, so a chimp and a sapiens
-# share the recipes but keep their own coats, skin and accents. The 22 pose
+# share the recipes but keep their own coats, skin and accents. The 24 pose
 # cells the field shader expects are derived by moving parts; the spear,
-# bow and steel poses draw their weapon from the front hand's position.
+# bow, steel and spear-ready poses draw their weapon from the front hand's
+# position.
 #
 # Key legend: c torso coat / a torso accent; H head coat / S face skin /
 # e eye; R front arm / r front hand; L back arm / l back hand; F front leg /
@@ -295,6 +296,14 @@ static func pose_recipe(index: int) -> Dictionary:
 				"weapon": "steel_b",
 				"shield": true,
 			}
+		# Spear ready: a relaxed, standing "at ease" hold, not the poised
+		# 16/17 combat angles — the arm barely lifts off the hanging rest
+		# pose, so the spear rides near-vertical beside the body. No
+		# "shield" key: this is a stand, not a fight pose.
+		22:
+			return {Part.ARM_F: [0, -1, -10], "weapon": "spear_a"}
+		23:
+			return {Part.ARM_F: [0, -1, -16], "weapon": "spear_a"}
 		_:
 			return {}
 

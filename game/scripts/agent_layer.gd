@@ -70,7 +70,11 @@ const ACT_SCAN := 8.0
 const ACT_CELEBRATE := 9.0
 const ACT_SPEAR := 10.0
 const ACT_BOW := 11.0
-const ACT_SCALE := 13.0
+# Relaxed "spear ready" idle: a hominin that has researched Hafted Spears but
+# is standing rather than fighting still carries its spear (poses 22/23 —
+# see idle_weapon_act and hominin_rigs.pose_recipe).
+const ACT_SPEAR_READY := 13.0
+const ACT_SCALE := 14.0
 # Mood discriminants from the sim's mood.rs (alive_moods) that drive poses.
 # All-CONTENT when the scenario's affect layer is off.
 const MOOD_CONTENT := 0
@@ -314,6 +318,17 @@ static func crowd_key(pos: Vector2, cell: float) -> Vector2i:
 	var row := int(floor(pos.y / cell))
 	var xs: float = pos.x + (cell * 0.5 if (row & 1) == 1 else 0.0)
 	return Vector2i(int(floor(xs / cell)), row)
+
+
+# Lowest-priority pose pick: a genuinely idle hominin (act still 0, not just
+# walking with a neutral gait) that has researched Hafted Spears carries its
+# spear at rest instead of standing bare-handed. Pulled out as a pure
+# function (unlike the rest of refresh()'s act chain) so it can be unit
+# tested headlessly — see test_agent_layer.gd.
+static func idle_weapon_act(act: float, walking: bool, inv_mask: int) -> float:
+	if is_equal_approx(act, 0.0) and not walking and inv_mask & (1 << FxMath.INV_HAFTED_SPEARS):
+		return ACT_SPEAR_READY
+	return act
 
 
 func refresh(
@@ -691,6 +706,7 @@ func refresh(
 				act = ACT_EAT
 		if i < inv_masks.size():
 			act = FxMath.weapon_action(act, inv_masks[i])
+			act = idle_weapon_act(act, walking, inv_masks[i])
 		if have_ids:
 			var action_state := FxMath.step_action(
 				Vector2(_anim.action_pose[s], _anim.action_hold[s]), act, delta
