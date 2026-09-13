@@ -997,6 +997,12 @@ static func kind_image(kind: int) -> Image:
 	return _paint(rows_of(kind), [])
 
 
+# Paint any 32-row map in the structure palette (for art authored outside
+# the kind table, e.g. BuildingSprites' workshop front).
+static func paint_rows(rows: Array) -> Image:
+	return _paint(rows, [])
+
+
 static func build_variant_image(kind: int, phase: int) -> Image:
 	if phase % 2 == 0 or not is_animated(kind):
 		return kind_image(kind)

@@ -5,6 +5,8 @@ extends SceneTree
 # Exits 0 on success, 1 on the first failed assertion.
 
 const B = preload("res://scripts/building_sprites.gd")
+const T = preload("res://scripts/structure_tall.gd")
+const StructureSprites = preload("res://scripts/structure_sprites.gd")
 const INV_KEYS := [
 	"stone_tools",
 	"fire",
@@ -47,10 +49,7 @@ func _init() -> void:
 	# Every kind builds a 16x16 image with at least one opaque (figure) pixel.
 	for k in B.KIND_COUNT:
 		var img: Image = B.build_image(k)
-		if B.is_hi_res(k):
-			_check(img.get_width() == 32 and img.get_height() == 44, "%s is 32x44" % B.NAMES[k])
-		else:
-			_check(img.get_width() == 16 and img.get_height() == 16, "%s is 16x16" % B.NAMES[k])
+		_check(img.get_width() == 32 and img.get_height() == 44, "%s is 32x44" % B.NAMES[k])
 		var opaque := 0
 		for y in img.get_height():
 			for x in img.get_width():
@@ -114,14 +113,11 @@ func _init() -> void:
 	_check(B.GOOD_NAMES.size() == B.GOOD_COUNT, "GOOD_NAMES parallels GOOD_COUNT")
 	for k in B.KIND_COUNT:
 		var tex: ImageTexture = B.build(k)
-		var want := Vector2i(32, 44) if B.is_hi_res(k) else Vector2i(16, 16)
 		_check(
-			tex != null and tex.get_size() == Vector2(want),
-			"%s texture is %dx%d" % [B.NAMES[k], want.x, want.y]
+			tex != null and tex.get_size() == Vector2(32, 44), "%s texture is 32x44" % B.NAMES[k]
 		)
 		_check(
-			is_equal_approx(B.height_ratio(k), float(want.y) / float(want.x)),
-			"%s height ratio matches its art" % B.NAMES[k]
+			is_equal_approx(B.height_ratio(k), 44.0 / 32.0), "%s height ratio is 44/32" % B.NAMES[k]
 		)
 	for g in B.GOOD_COUNT:
 		var gtex: ImageTexture = B.build_good(g)
@@ -146,8 +142,8 @@ func _init() -> void:
 	for k in B.ANIMATED_KINDS:
 		var low: Image = B.build_variant(k, 0).get_image()
 		var high: Image = B.build_variant(k, 1).get_image()
-		_check(low.get_size() == Vector2i(16, 16), "%s flicker frame stays 16x16" % B.NAMES[k])
-		_check(high.get_size() == Vector2i(16, 16), "%s lifted frame stays 16x16" % B.NAMES[k])
+		_check(low.get_size() == Vector2i(32, 44), "%s flicker frame stays 32x44" % B.NAMES[k])
+		_check(high.get_size() == Vector2i(32, 44), "%s lifted frame stays 32x44" % B.NAMES[k])
 		_check(low.get_data() == B.build_image(k).get_data(), "%s phase 0 is the base" % B.NAMES[k])
 		_check(low.get_data() != high.get_data(), "%s flicker frames differ" % B.NAMES[k])
 		_check(
@@ -157,8 +153,8 @@ func _init() -> void:
 		# The lift only touches a few flame pixels: the silhouette survives.
 		var changed := 0
 		var lit := 0
-		for y in 16:
-			for x in 16:
+		for y in 44:
+			for x in 32:
 				if low.get_pixel(x, y) != high.get_pixel(x, y):
 					changed += 1
 				if high.get_pixel(x, y).a > 0.5:
@@ -182,6 +178,29 @@ func _init() -> void:
 		B.is_hi_res(B.MARKET) and B.is_hi_res(B.WAREHOUSE) and not B.is_hi_res(B.FIRE),
 		"only the hub centrepieces are hi-res"
 	)
+	# An invention landmark is the workshop front with its icon as the sign:
+	# the icon's pixels land on the wall at SIGN_POS (pushed down by the
+	# extruded band), plaster shows around the sign, and a plain wall row
+	# is the one extruded (no icon pixel repeats down the band).
+	var fire_icon: Image = B.icon_image(B._BLOCKS[B.FIRE])
+	var fire: Image = B.topdown_image(B.FIRE)
+	var lift: int = T.EXTRA_ROWS - B.WORKSHOP_TALL_ROWS + B.WORKSHOP_TALL_ROWS
+	var sign_ok := true
+	for y in 16:
+		for x in 16:
+			var ip := fire_icon.get_pixel(x, y)
+			if ip.a > 0.5:
+				var wp := fire.get_pixel(B.SIGN_POS.x + x, B.SIGN_POS.y + y + lift)
+				sign_ok = sign_ok and wp.is_equal_approx(ip)
+	_check(sign_ok, "the fire icon hangs on the workshop wall")
+	var plaster := StructureSprites.PAL["h"]
+	_check(fire.get_pixel(6, 20 + lift).to_html(false) == plaster, "plaster shows beside the sign")
+	var band_ok := true
+	for i in B.WORKSHOP_TALL_ROWS:
+		for x in 32:
+			var y0: int = B.WORKSHOP_EXTRUDE_ROW + (T.EXTRA_ROWS - B.WORKSHOP_TALL_ROWS)
+			band_ok = band_ok and fire.get_pixel(x, y0 + i) == fire.get_pixel(x, y0 - 1)
+	_check(band_ok, "the workshop band repeats the plain wall row")
 	# A static kind returns its base art for every phase.
 	_check(
 		B.build_variant(B.MARKET, 1).get_image().get_data() == B.build_image(B.MARKET).get_data(),

@@ -39,11 +39,9 @@ const MEMBERS_BUCKET := 6
 # Landmark/trade buildings sit a notch bigger than huts so a village's
 # invention history and trade role read at a glance from the ring around it.
 const BUILDING_SCALE := 20.0
-# Invention landmarks are 16 px markers: drawn at 12 units so their pixels
-# match the 32 px structures' grain (0.75 vs 0.625 world units per texel)
-# rather than doubling it.
-const LANDMARK_SCALE := 12.0
 const LANDMARK2_MIN_MEMBERS := 32
+# Radius of the ring an invention-holding lineage's workshops stand on.
+const LANDMARK_RING := 22.0
 # Invention landmarks are anchored to the SPECIES that hold inventions, not to
 # settlements: in organic runs the settling lineages are asocial foragers with
 # no tech, while the inventive (cultural) lineages rarely settle. So a lineage
@@ -652,7 +650,7 @@ func _redraw() -> void:
 					var tp := pos + Vector2(0.0, -26.0 - (th - ts) * 0.5)
 					build_xf[tkind].append(Transform2D(0.0, Vector2(ts, th), 0.0, tp))
 					build_col[tkind].append(Color(1, 1, 1, fade))
-	_place_invention_landmarks(stats_by_sid, build_xf, build_col)
+	_place_invention_landmarks(stats_by_sid, build_xf, build_col, yard_xf, yard_col, clearings)
 	_assign_smoke()
 	_assign_fires(fire_pos)
 	for k in Buildings.KIND_COUNT:
@@ -676,7 +674,12 @@ func _redraw() -> void:
 # head-count; qualifying lineages fold into the linger/fade memory, then draw
 # below into the shared per-kind build accumulators.
 func _place_invention_landmarks(
-	stats_by_sid: Dictionary, build_xf: Array, build_col: Array
+	stats_by_sid: Dictionary,
+	build_xf: Array,
+	build_col: Array,
+	yard_xf: Array,
+	yard_col: Array,
+	clearings: Array[Rect2]
 ) -> void:
 	var sp_ids: PackedInt32Array = sim.alive_species_ids()
 	var sp_pos: PackedVector2Array = sim.alive_positions()
@@ -720,15 +723,25 @@ func _place_invention_landmarks(
 			continue
 		var fade: float = clampf((LINGER - stale) / FADE, 0.0, 1.0)
 		var grow: float = clampf((_now - float(m["born"])) / POP_SECS, 0.0, 1.0)
-		var lscale := LANDMARK_SCALE * FxMath.pop_scale(grow)
+		var lscale := BUILDING_SCALE * FxMath.pop_scale(grow)
 		var lcol := Color(1, 1, 1, fade)
 		var pos: Vector2 = m["pos"]
 		var msig: PackedInt32Array = m["sig"]
+		# The ring of workshops stands in a clearing, like a village.
+		var half := Vector2(LANDMARK_RING + lscale, LANDMARK_RING + lscale)
+		clearings.append(Clearings.snap(Rect2(pos - half, half * 2.0)))
 		for slot in msig.size():
 			var kind: int = msig[slot]
 			var ang: float = float(s) * 2.39996 + float(slot) * 2.0
-			var lp := pos + Vector2.from_angle(ang) * 22.0
-			build_xf[kind].append(Transform2D(0.0, Vector2(lscale, lscale), 0.0, lp))
+			var lp := pos + Vector2.from_angle(ang) * LANDMARK_RING
+			# Each workshop stands on its own dirt yard ...
+			var yw: float = lscale * YARD_SCALE
+			yard_xf.append(Transform2D(0.0, Vector2(yw, yw), 0.0, lp + Vector2(0.0, 3.0)))
+			yard_col.append(Color(1, 1, 1, 0.9 * fade))
+			# ... as a 32x44 walled front, base on the ring.
+			var lh: float = lscale * Buildings.height_ratio(kind)
+			lp.y -= (lh - lscale) * 0.5
+			build_xf[kind].append(Transform2D(0.0, Vector2(lscale, lh), 0.0, lp))
 			build_col[kind].append(lcol)
 
 

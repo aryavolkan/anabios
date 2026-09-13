@@ -28,6 +28,7 @@ const TALL_ROWS: Dictionary = {
 	StructureSprites.GATE: 6,
 	StructureSprites.MARKET_HALL: 6,
 	StructureSprites.WAREHOUSE: 8,
+	StructureSprites.TENT_B: 4,
 }
 
 
@@ -40,26 +41,31 @@ static func tall_rows(kind: int) -> int:
 	return int(TALL_ROWS.get(kind, 0))
 
 
+# `img` (32x32, top-down) grown to 32x44: `extra` copies of the row above
+# `at_row` are inserted at `at_row`, the rows above lifted so the spare
+# rows stay clear at the top, the rows from `at_row` down kept on the base.
+static func extrude(img: Image, extra: int, at_row: int) -> Image:
+	var dup: int = clampi(at_row - 1, 0, CELL_PX - 1)
+	var lift: int = EXTRA_ROWS - extra
+	var out := Image.create(CELL_PX, TALL_PX, false, Image.FORMAT_RGBA8)
+	out.fill(Color(0, 0, 0, 0))
+	for y in CELL_PX:
+		var oy: int = y + lift if y < at_row else y + EXTRA_ROWS
+		for x in CELL_PX:
+			out.set_pixel(x, oy, img.get_pixel(x, y))
+	for i in extra:
+		for x in CELL_PX:
+			out.set_pixel(x, at_row + lift + i, img.get_pixel(x, dup))
+	return out
+
+
 # The 32x44 tall variant of `kind` at `phase` (see TALL_ROWS); a non-tall
 # kind comes back as its plain 32x32 image.
 static func tall_image(kind: int, phase: int = 0) -> Image:
 	var img: Image = StructureSprites.build_variant_image(kind, phase)
 	if not is_tall(kind):
 		return img
-	var cut: int = SpriteSplit.split_row(img)
-	var dup: int = clampi(cut - 1, 0, CELL_PX - 1)
-	var extra: int = tall_rows(kind)
-	var lift: int = EXTRA_ROWS - extra
-	var out := Image.create(CELL_PX, TALL_PX, false, Image.FORMAT_RGBA8)
-	out.fill(Color(0, 0, 0, 0))
-	for y in CELL_PX:
-		var oy: int = y + lift if y < cut else y + EXTRA_ROWS
-		for x in CELL_PX:
-			out.set_pixel(x, oy, img.get_pixel(x, y))
-	for i in extra:
-		for x in CELL_PX:
-			out.set_pixel(x, cut + lift + i, img.get_pixel(x, dup))
-	return out
+	return extrude(img, tall_rows(kind), SpriteSplit.split_row(img))
 
 
 # Roof/wall split row of the tall variant: the plain split, pushed down by

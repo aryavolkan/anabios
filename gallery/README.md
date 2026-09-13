@@ -42,7 +42,7 @@ pins an agent in the unit card.
 
 | File | Scenario / tick / zoom | What you're seeing |
 |---|---|---|
-| scale-settlement-t891-village-4x.png | `settlement` t891 4× (default camera, `ANABIOS_INSPECT=1`) | A camp on packed-earth yards with paths to the hearth, tents spaced a hut-width apart on 20-unit tiles, the crowd capped to one figure per 17 units at 4× (12 at 2×, staggered rows), a market square with awning stalls beside it, pixel-puff hearth smoke, the outcrop east of the camp as warm stone, the unit card. |
+| scale-settlement-t891-village-4x.png | `settlement` t891 4× (default camera, `ANABIOS_INSPECT=1`) | A camp on packed-earth yards with paths to the hearth, tents and walled hide yurts spaced a hut-width apart on 20-unit tiles, the crowd capped to one figure per 17 units at 4× (12 at 2×, staggered rows), a market square with awning stalls beside it, pixel-puff hearth smoke, the outcrop east of the camp as warm stone, the unit card. |
 | scale-settlement-t891-fortified-2x.png | `settlement` t891 2× (`ANABIOS_VILLAGE_ERA=2 ANABIOS_VILLAGE_FLAGS=123`) | The same camp forced into its fortified era: timber-frame houses with slate roofs over a front wall about a figure high (the 32×44 tall variants, roughly two figures tall on a 20-unit tile), a log palisade hugging them, a gate with banners and a catapult to the south, a watchtower, fenced fields outside the wall, the forest standing back from the clearing. |
 | scale-settlement-t891-raided-4x.png | `settlement` t891 4× (`ANABIOS_VILLAGE_ERA=1 ANABIOS_VILLAGE_FLAGS=127`) | The same camp as a raided thatch village: thatch huts with walled fronts, burnt ruins with pixel flames and black smoke over them, the palisade, the fenced field. |
 | scale-settlement-t3120-camp-4x.png | `settlement` t3120 4× | The same camp later: hearth smoke, herds at the square, codex species page. |
@@ -56,8 +56,8 @@ pins an agent in the unit card.
 | scale-riverlands-t291-river-4x.png | `riverlands` t291 4× at (2367, 1017) | A one-cell river running diagonally through the oaks as one stream between mud banks: the diagonal coast tiles carry a channel instead of pinching the cells into beads, and a river shore is bank, not beach. |
 | scale-riverlands-t291-clutter-4x.png | `riverlands` t291 4× at (2500, 1200) | Flowers, tufts, mushrooms and stumps at 4×. |
 | scale-riverlands-t291-lake-4x.png | `riverlands` t291 4× at (2427, 1357) | A desert lake: one flat blue, sparse strokes, foam and beach from the coast autotile. |
-| scale-inventions-t2620-coast-2x.png | `inventions` t2620 2× (`ANABIOS_CODEX_TAB=1`) | Hominin bands along a coast. |
-| scale-inventions-t2620-hominins-4x.png | `inventions` t2620 4× (`ANABIOS_INSPECT=1`, `ANABIOS_CODEX_TAB=0`) | Hand-authored hominins in the field (one wading offshore, cut at the waterline), the research list with an icon per invention, the unit card; the species, adaptation and tech tables stay hidden until `[P]`. |
+| scale-inventions-t2620-coast-2x.png | `inventions` t2620 2× (`ANABIOS_CODEX_TAB=1`) | Hominin bands along a coast; an invention-holding band's workshops (32 px walled fronts with the invention icon as the shop sign) on dirt yards in a clearing of the wood. |
+| scale-inventions-t2620-hominins-4x.png | `inventions` t2620 4× (`ANABIOS_INSPECT=1`, `ANABIOS_CODEX_TAB=0`) | Hand-authored hominins in the field (one wading offshore, cut at the waterline) among their workshops, each a slate-roofed plaster front at the structures' pixel grain with its invention hung as a sign, the research list with an icon per invention, the unit card; the species, adaptation and tech tables stay hidden until `[P]`. |
 | scale-inventions-t2620-unit-card-1x.png | `inventions` t2620 1× (`ANABIOS_INSPECT=1`) | The same at 1×. |
 | scale-huge-steppe-t191-2x.png | `huge-steppe` t191 2× | The 8192-unit Huge tier streaming its ground chunks. |
 | scale-minimal-t111-shoreline-8x.png | `minimal` t111 8× | Shoreline autotile at 8×. |
