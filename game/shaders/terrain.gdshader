@@ -369,7 +369,13 @@ void fragment() {
 		// Brighten slopes facing the light, darken those facing away.
 		// Kept gentle: at the old strength a slope facing away from the
 		// light read as a large dark smear across open grass.
-		outc = land_base * (1.0 + clamp(shade, -0.22, 0.22));
+		// Quantised to four steps a side through the ordered dither, so the
+		// relief reads as pixel-art shading bands rather than a smooth
+		// gradient washing across the tiles.
+		float shade_n = clamp(shade, -0.22, 0.22) / 0.22;
+		vec2 shade_tex = floor(world_pos / max(texel_w, 1e-4));
+		float shade_q = floor(shade_n * 4.0 + bayer4(shade_tex + vec2(2.0, 9.0))) / 4.0;
+		outc = land_base * (1.0 + shade_q * 0.22);
 
 		// Terraces and cliff faces (D9). Levels are integers; a drop of one
 		// or more levels toward a neighbour paints that edge of the cell.
@@ -450,7 +456,10 @@ void fragment() {
 			float snow_px = step(bayer4(stex), snow);
 			outc = mix(outc, vec3(0.90, 0.93, 0.97), snow_px * 0.9);
 		}
-		outc *= 1.0 + height_lift * clamp((es - sea_level) / max(1.0 - sea_level, 1e-3), 0.0, 1.0);
+		// Altitude lift in the same dithered steps.
+		float lift_n = clamp((es - sea_level) / max(1.0 - sea_level, 1e-3), 0.0, 1.0);
+		float lift_q = floor(lift_n * 4.0 + bayer4(shade_tex + vec2(6.0, 3.0))) / 4.0;
+		outc *= 1.0 + height_lift * lift_q;
 
 		// Sandy shoreline on the land side: a thin warm beach band right at the
 		// waterline, fading inland, so coasts read as coast rather than a hard
