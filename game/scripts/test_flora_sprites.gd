@@ -44,25 +44,31 @@ func _init() -> void:
 		# and the cut lands inside the trunk rows so the crown covers a figure
 		# standing north of the tree.
 		var row: int = Flora.trunk_row(k)
+		var is_rock: bool = k == Flora.BOULDERS or k == Flora.CRAG
+		if is_rock:
+			_check(row >= Flora.CELL_PX, "%s has no trunk row" % Flora.NAMES[k])
+			row = SpriteSplit.split_row(img)
 		var crown: Image = SpriteSplit.upper(img, row)
 		var trunk: Image = SpriteSplit.lower(img, row)
 		_check(
 			Flora.opaque_pixels(crown) + Flora.opaque_pixels(trunk) == Flora.opaque_pixels(img),
 			"%s split partitions the sprite" % Flora.NAMES[k]
 		)
-		_check(
-			Flora.opaque_pixels(crown) > Flora.opaque_pixels(trunk),
-			"%s crown is the larger half" % Flora.NAMES[k]
-		)
-		var trunk_row: String = rows[row]
-		_check(
-			trunk_row.contains("T") or trunk_row.contains("t"),
-			"%s cut row is a trunk row" % Flora.NAMES[k]
-		)
-		_check(
-			row > 0 and not (rows[row - 1] as String).contains("T"),
-			"%s cut is the first trunk row" % Flora.NAMES[k]
-		)
+		if not is_rock:
+			_check(
+				Flora.opaque_pixels(crown) > Flora.opaque_pixels(trunk),
+				"%s crown is the larger half" % Flora.NAMES[k]
+			)
+		if not is_rock:
+			var trunk_row: String = rows[row]
+			_check(
+				trunk_row.contains("T") or trunk_row.contains("t"),
+				"%s cut row is a trunk row" % Flora.NAMES[k]
+			)
+			_check(
+				row > 0 and not (rows[row - 1] as String).contains("T"),
+				"%s cut is the first trunk row" % Flora.NAMES[k]
+			)
 	for a in Flora.KIND_COUNT:
 		for b in range(a + 1, Flora.KIND_COUNT):
 			_check(
@@ -72,6 +78,13 @@ func _init() -> void:
 	_check(Flora.kind_for_terrain(0) == -1, "water grows no tree")
 	_check(Flora.kind_for_terrain(2) == Flora.OAK, "forest grows oaks")
 	_check(Flora.kind_for_terrain(7) == Flora.PINE, "taiga grows pines")
+	_check(Flora.kind_for_terrain(4) == Flora.BOULDERS, "rock terrain grows outcrops")
+	_check(Flora.variant_for(Flora.OAK, 0.1) == Flora.OAK, "trees keep their kind")
+	var crags := 0
+	for i in 100:
+		if Flora.variant_for(Flora.BOULDERS, float(i) / 100.0) == Flora.CRAG:
+			crags += 1
+	_check(crags > 20 and crags < 60, "rock cells split between boulders and crags")
 	_check(Flora.kind_for_terrain(99) == -1, "unknown terrain grows nothing")
 
 	# --- canopy planner: dense on forest, empty on water, deterministic ---

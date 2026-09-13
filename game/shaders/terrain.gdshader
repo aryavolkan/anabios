@@ -14,7 +14,7 @@ shader_type canvas_item;
 // passes the colors straight through so heatmaps stay faithful.
 
 uniform float biome_mode = 1.0;        // 1 = terrain treatment, 0 = passthrough
-uniform float relief_strength = 12.0;  // hillshade intensity on land (elevation gradient)
+uniform float relief_strength = 7.0;   // hillshade intensity on land (elevation gradient)
 uniform float soften = 0.10;           // 0 = crisp blocks, 1 = fully smoothed
 uniform vec2 light_dir = vec2(-0.65, -0.75); // light from upper-left
 uniform float world_size = 512.0;      // sim world extent, for seamless shimmer
@@ -22,8 +22,8 @@ uniform float sea_level = 0.35;        // viewer-derived water line, for depth s
 uniform float vignette = 0.06;         // corner darkening on terrain (0 = off)
 // Land finish: a saturation lift and brightness gain applied after relief and
 // shore passes so the muted sim palette reads as pixel art, not a heatmap.
-uniform float vibrance = 0.35;
-uniform float land_lift = 1.22;
+uniform float vibrance = 0.12;
+uniform float land_lift = 0.92;
 // 2.5D relief (D9): land elevation is quantised into terraces; where a cell
 // stands a terrace above its southern neighbour the bottom band of the cell
 // wears a dark cliff face, a plateau's northern edge a lit rim, and the
@@ -86,9 +86,16 @@ uniform float coast_atlas_px = 64.0;
 // shimmer from world position instead of per-tile UV keeps the wave continuous
 // across tile seams (no phase jump where copies abut).
 varying vec2 world_pos;
+// The node's modulate, captured in the vertex stage. In the fragment stage
+// Godot 4 hands COLOR already multiplied by the texture sample — and this
+// texture's alpha is the packed ELEVATION, not opacity — so multiplying the
+// result by the fragment COLOR used to make deep water nearly transparent
+// and every land cell partially see-through over the black clear colour.
+varying vec4 modulate_v;
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
+	modulate_v = COLOR;
 }
 
 float luma(vec3 c) {
@@ -104,9 +111,22 @@ bool is_water(vec3 c) {
 	return c.b > c.r + 0.05 && c.b > c.g + 0.05 && c.b > 0.20 && max(c.r, c.g) < 0.45;
 }
 
+// Exact terrain id of a cell (Water = 0) from the id texture.
+float tid_at(vec2 cell) {
+	return floor(texture(terrain_ids, (cell + 0.5) / biome_res).r * 255.0 + 0.5);
+}
+
+// Water test for a cell: the exact id when the id texture is wired (rivers
+// report Water there too), the colour heuristic on the legacy path. The sim's
+// water colour is dark enough to fail the heuristic's blue floor, which used
+// to send every lake through the land branch.
+bool water_cell(vec2 cell, vec3 col) {
+	return tiles_enabled > 0.5 ? tid_at(cell) < 0.5 : is_water(col);
+}
+
 void fragment() {
-	// Incoming COLOR carries the node's modulate (dim/cool tint) — preserve it.
-	vec4 tint = COLOR;
+	// The node's modulate (dim/cool tint), from the vertex stage — see above.
+	vec4 tint = modulate_v;
 	vec2 px = TEXTURE_PIXEL_SIZE;
 	vec3 c = texture(TEXTURE, UV).rgb;
 
@@ -121,14 +141,15 @@ void fragment() {
 	vec3 soft_c = (c * 4.0 + cL + cR + cU + cD) / 8.0;
 	vec3 base = mix(c, soft_c, soften);
 
-	bool water = is_water(base);
+	vec2 cell0 = floor(UV * biome_res);
+	bool water = water_cell(cell0, base);
 
 	// Coast proximity: how many neighbours differ in water-ness from center.
 	float coast = 0.0;
-	coast += is_water(cL) != water ? 1.0 : 0.0;
-	coast += is_water(cR) != water ? 1.0 : 0.0;
-	coast += is_water(cU) != water ? 1.0 : 0.0;
-	coast += is_water(cD) != water ? 1.0 : 0.0;
+	coast += water_cell(cell0 - vec2(1.0, 0.0), cL) != water ? 1.0 : 0.0;
+	coast += water_cell(cell0 + vec2(1.0, 0.0), cR) != water ? 1.0 : 0.0;
+	coast += water_cell(cell0 - vec2(0.0, 1.0), cU) != water ? 1.0 : 0.0;
+	coast += water_cell(cell0 + vec2(0.0, 1.0), cD) != water ? 1.0 : 0.0;
 	coast *= 0.25; // 0..1
 
 	// Tile-space cell coordinate and the LOD weight, shared by the land tiles
@@ -147,8 +168,11 @@ void fragment() {
 	if (water) {
 		// Depth gradient: deeper (darker, more saturated) water in open sea,
 		// brighter teal shallows toward the coast.
-		vec3 deep = base * vec3(0.95, 1.05, 1.30);
-		vec3 shallow = mix(base, vec3(0.34, 0.68, 0.78), 0.60);
+		// Lake blue rather than the sim's navy: pull both ends of the depth
+		// ramp toward the reference boards' bright water (is_water() still
+		// keys off the untouched `base`, so detection is unchanged).
+		vec3 deep = mix(base, vec3(0.14, 0.42, 0.80), 0.62);
+		vec3 shallow = mix(base, vec3(0.42, 0.78, 0.92), 0.78);
 		// Real depth: elevation (packed in alpha, C2) relative to the water line.
 		// ~1 at the shoreline (elevation just below sea level), →0 in the deepest
 		// basin, so open-ocean trenches read dark and shelves read bright teal.
@@ -236,7 +260,7 @@ void fragment() {
 		// East/west ledges: a thin dark line where the cell stands higher.
 		float ledge = step(0.5, lv - lvL) * (1.0 - step(0.08, fc.x))
 			+ step(0.5, lv - lvR) * step(0.92, fc.x);
-		outc = mix(outc, outc * 0.6, clamp(ledge, 0.0, 1.0) * cliff_strength * 0.7);
+		outc = mix(outc, outc * 0.6, clamp(ledge, 0.0, 1.0) * cliff_strength * 0.3);
 		// Altitude: highlands sit a touch brighter than the lowlands.
 		outc *= 1.0 + height_lift * clamp((e0 - sea_level) / max(1.0 - sea_level, 1e-3), 0.0, 1.0);
 

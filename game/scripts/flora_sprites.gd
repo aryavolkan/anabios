@@ -10,16 +10,19 @@ extends RefCounted
 
 const CELL_PX := 32
 
-enum { OAK, PINE, ACACIA, JUNGLE }
-const KIND_COUNT := 4
-const NAMES: PackedStringArray = ["Oak", "Pine", "Acacia", "Jungle"]
+# Kinds 4 and 5 are rock outcrops: the same 32 px, y-sorted, split-layered
+# pipeline as the trees, planted on Rock terrain so mountains read as grey
+# crags rather than flat purple tiles (the reference boards' outcrops).
+enum { OAK, PINE, ACACIA, JUNGLE, BOULDERS, CRAG }
+const KIND_COUNT := 6
+const NAMES: PackedStringArray = ["Oak", "Pine", "Acacia", "Jungle", "Boulders", "Crag"]
 
 # Terrain ids (biome.rs / terrain_sprites.gd): Water 0, Grass 1, Forest 2,
 # Desert 3, Rock 4, Savanna 5, Rainforest 6, Taiga 7, Tundra 8.
-const _TERRAIN_KIND: PackedInt32Array = [-1, OAK, OAK, -1, -1, ACACIA, JUNGLE, PINE, PINE]
+const _TERRAIN_KIND: PackedInt32Array = [-1, OAK, OAK, -1, BOULDERS, ACACIA, JUNGLE, PINE, PINE]
 # Fraction of cells of each terrain that grow a canopy tree (the 16 px props
 # keep their own, lower table). Forests are dense; grass and tundra sparse.
-const DENSITY: PackedFloat32Array = [0.0, 0.03, 0.42, 0.0, 0.0, 0.05, 0.5, 0.36, 0.02]
+const DENSITY: PackedFloat32Array = [0.0, 0.03, 0.42, 0.0, 0.30, 0.05, 0.5, 0.36, 0.02]
 
 const PAL := {
 	"k": "14100f",  # outline
@@ -37,6 +40,10 @@ const PAL := {
 	"J": "3fa050",  # jungle
 	"L": "6fd06a",  # jungle lit
 	"s": "0b1a12",  # shadow
+	"r": "8b8f97",  # rock
+	"R": "b9bcc2",  # rock lit
+	"q": "5b5e66",  # rock shade
+	"m": "5f8a3a",  # moss
 }
 
 const _ROWS := {
@@ -180,6 +187,76 @@ const _ROWS := {
 		"................................",
 		"................................",
 	],
+	BOULDERS:
+	[
+		"................................",
+		"................................",
+		"................................",
+		"..........kkkkkk................",
+		"........kkRRRRRRkk..............",
+		".......kRRRRRRRRRRk.............",
+		"......kRRRRrrrrrRRrk............",
+		".....kRRRrrrrrrrrrrrk...........",
+		".....kRRrrrrrrrrrrrrk.kkkkk.....",
+		"....kRRrrrrrmrrrrrrrkkRRRRkk....",
+		"....kRrrrrrmmrrrrrrrkRRrrrrRk...",
+		"....kRrrrrrrrrrrrqqrkRrrrrrrrk..",
+		"...kRrrrrrrrrrrrqqqrkRrrrrrrrk..",
+		"...kRrrrrrrrrrrqqqqqkrrrrrrqrk..",
+		"...krrrrrrrrrrqqqqqqkrrrrrqqrk..",
+		"...krrrrrrrrrqqqqqqqkrrrrqqqqk..",
+		"...kqrrrrrrrqqqqqqqqkrrrqqqqqk..",
+		"....kqrrrrrqqqqqqqqqkrrqqqqqqk..",
+		"....kqqrrrqqqqqqqqqqkqqqqqqqk...",
+		".....kqqqqqqqqqqqqqkkqqqqqqk....",
+		"......kkqqqqqqqqqqkk.kkqqqkk....",
+		"........kkkkkkkkkk.....kkk......",
+		".....ssssssssssssssssssssss.....",
+		"...ssssssssssssssssssssssssss...",
+		".....ssssssssssssssssssssss.....",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+	],
+	CRAG:
+	[
+		"................................",
+		"................................",
+		"............kk..................",
+		"...........kRRk.................",
+		"..........kRRRRk................",
+		".........kRRRRRrk...............",
+		"........kRRRRrrrrk..............",
+		"........kRRRrrrrrrk.............",
+		".......kRRRrrrrrrrrk............",
+		".......kRRrrrrrrrrrk............",
+		"......kRRrrrrrrrrrrrk...........",
+		"......kRrrrrrrrrrqqrk...........",
+		".....kRrrrrrrrrrqqqqrk..........",
+		".....kRrrrrrrrrqqqqqqk..........",
+		"....kRrrrrrrrrqqqqqqqqk.........",
+		"....krrrrrrrrqqqqqqqqqk.........",
+		"...kRrrrrrrrqqqqqqqqqqqk........",
+		"...krrrrrrrqqqqqqqqqqqqk........",
+		"..kmrrrrrrqqqqqqqqqqqqqqk.......",
+		"..kmmrrrrqqqqqqqqqqqqqqqk.......",
+		"..kqmrrrqqqqqqqqqqqqqqqqk.......",
+		"..kqqqrqqqqqqqqqqqqqqqqqk.......",
+		"...kqqqqqqqqqqqqqqqqqqqk........",
+		"....kkqqqqqqqqqqqqqqqkk.........",
+		"......kkkkkkkkkkkkkkk...........",
+		"....ssssssssssssssssssss........",
+		"..ssssssssssssssssssssssss......",
+		"....ssssssssssssssssssss........",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+	],
 }
 
 static var _cache: Dictionary = {}
@@ -189,6 +266,14 @@ static func kind_for_terrain(terrain: int) -> int:
 	if terrain < 0 or terrain >= _TERRAIN_KIND.size():
 		return -1
 	return _TERRAIN_KIND[terrain]
+
+
+# Per-cell variety within a family: the rock family alternates boulder
+# clusters and crags on the planner's cell hash. Trees keep one kind each.
+static func variant_for(kind: int, h: float) -> int:
+	if kind == BOULDERS and fposmod(h * 977.0, 1.0) < 0.4:
+		return CRAG
+	return kind
 
 
 static func kind_image(kind: int) -> Image:

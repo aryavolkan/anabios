@@ -96,6 +96,11 @@ func _init() -> void:
 		"no modules -> zero pips"
 	)
 
+	# --- top bar population delta ---
+	_check(TopBar.delta_text(120, 100) == " (+20)", "positive delta")
+	_check(TopBar.delta_text(90, 100) == " (-10)", "negative delta")
+	_check(TopBar.delta_text(100, 100) == "", "no change, no delta")
+
 	# --- hotbar tools resolve to real keys and icons; meters clamp ---
 	for tool in TimeControls.TOOLS:
 		var ev: InputEventKey = TimeControls.key_event(String(tool[0]))

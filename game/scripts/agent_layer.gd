@@ -30,7 +30,9 @@ const FxMath = preload("res://scripts/fx_math.gd")
 # Bodies are 0.5–3.0 world units across (genome size). Scale them up generously
 # with a floor so the hominin silhouette (head, limbs) reads as a figure at the
 # default cluster-framed zoom — not just when zoomed all the way in.
-const BODY_SCALE: float = 7.0
+# Figures at ~60% of a canopy tree's height, the reference boards' ratio
+# (16 px art at 9 world units; the 32 px trees stand 16 units tall).
+const BODY_SCALE: float = 9.0
 const BODY_MIN: float = 6.0
 # World units of margin added on every side of the camera's world rect before
 # querying alive_in_rect(): keeps an agent walking toward the edge of the

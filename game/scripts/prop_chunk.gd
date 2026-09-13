@@ -104,7 +104,7 @@ static func plan_canopy(cx: int, cy: int, ids66: PackedByteArray, res: int, worl
 			var jx := fposmod(h * 17.17, 1.0)
 			var jy := fposmod(h * 5.55, 1.0)
 			var pos := Vector2(gx + 0.1 + 0.8 * jx, gy + 0.1 + 0.8 * jy) * cell_w
-			buckets[kind].append(pos)
+			buckets[FloraSprites.variant_for(kind, h)].append(pos)
 	var out: Array = []
 	for k in FloraSprites.KIND_COUNT:
 		var positions: Array = buckets[k]
@@ -201,7 +201,11 @@ func _make_canopy_mmis() -> void:
 		quad.size = Vector2(FloraSprites.CELL_PX, FloraSprites.CELL_PX)
 		mm.mesh = quad
 		var img: Image = FloraSprites.kind_image(k)
+		# Trees cut at their first trunk row; rocks (no trunk) at the
+		# generic 60% line, so the crag's top still covers a figure behind it.
 		var row: int = FloraSprites.trunk_row(k)
+		if row >= FloraSprites.CELL_PX:
+			row = SpriteSplit.split_row(img)
 		var mmi := MultiMeshInstance2D.new()
 		mmi.multimesh = mm
 		mmi.texture = SpriteSplit.for_quad(SpriteSplit.lower(img, row))

@@ -12,7 +12,20 @@ const MAX_ROWS := 7
 var _frame: int = 0
 
 
+func _ready() -> void:
+	# The species table is a debugging readout the reference boards do not
+	# carry; it starts hidden and [P] shows it.
+	visible = false
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_P:
+		visible = not visible
+
+
 func _process(_delta: float) -> void:
+	if not visible:
+		return
 	_frame += 1
 	if _frame % REFRESH_EVERY != 0:
 		return

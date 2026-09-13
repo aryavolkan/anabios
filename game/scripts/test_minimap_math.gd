@@ -92,6 +92,13 @@ func _init() -> void:
 	)
 	_check(MinimapPanel.overview_size_for(0) == 256, "res 0 (no world yet) falls back to 256")
 
+	# --- overview alpha is elevation; the panel forces it opaque ---
+	var packed := PackedByteArray([1, 2, 3, 40, 5, 6, 7, 0])
+	var op: PackedByteArray = MinimapPanel.opaque_rgba(packed)
+	_check(op[3] == 255 and op[7] == 255, "alpha forced opaque")
+	_check(op[0] == 1 and op[6] == 7, "colour bytes untouched")
+	_check(packed[3] == 40, "source bytes untouched")
+
 	if _failed:
 		quit(1)
 		return

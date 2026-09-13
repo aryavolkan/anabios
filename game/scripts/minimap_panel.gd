@@ -75,7 +75,9 @@ func _maybe_refresh_overview(dt: float) -> void:
 	var bytes: PackedByteArray = sim.biome_overview(sz)
 	if bytes.size() != sz * sz * 4:
 		return  # no world loaded yet
-	var img := Image.create_from_data(sz, sz, false, Image.FORMAT_RGBA8, bytes)
+	# The overview's alpha channel is the packed elevation (see the bridge's
+	# cell_view_rgba), not opacity: force it opaque or the map draws dim.
+	var img := Image.create_from_data(sz, sz, false, Image.FORMAT_RGBA8, opaque_rgba(bytes))
 	if _overview_tex != null and _overview_size == sz:
 		_overview_tex.update(img)
 	else:
@@ -86,6 +88,16 @@ func _maybe_refresh_overview(dt: float) -> void:
 # The overview texture's side length: OVERVIEW_PX, clamped down to `res` when
 # the source biome grid is coarser than that (asking for more pixels than the
 # source has is meaningless — the bridge would clamp it anyway).
+# RGBA8 bytes with every alpha set to 255 (the source packs elevation there).
+static func opaque_rgba(bytes: PackedByteArray) -> PackedByteArray:
+	var out := bytes.duplicate()
+	var i := 3
+	while i < out.size():
+		out[i] = 255
+		i += 4
+	return out
+
+
 static func overview_size_for(res: int) -> int:
 	if res <= 0:
 		return OVERVIEW_PX

@@ -238,6 +238,8 @@ const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "EventLog"
 # Glued to both the right and the bottom edge: the unit card and the meters
 # that share its corner.
 const HUD_CORNER: PackedStringArray = ["Inspector", "EcoMeters"]
+# Glued to the right edge without joining the rail: the top bar.
+const HUD_TOP: PackedStringArray = ["TopBar"]
 # The right rail, top to bottom. Every panel here is content-sized, so the stack
 # is laid out live rather than at fixed offsets (see _layout_rail).
 const RAIL_TOP := 10.0
@@ -301,6 +303,10 @@ func _layout_hud() -> void:
 		var c3 := $UI.get_node_or_null(n) as Control
 		if c3 != null:
 			c3.position += shift
+	for n in HUD_TOP:
+		var c4 := $UI.get_node_or_null(n) as Control
+		if c4 != null:
+			c4.position.x += shift.x
 
 
 # The world is a torus but rendering is not: a camera near a seam sees agents

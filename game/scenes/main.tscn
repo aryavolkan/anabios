@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="MultiMesh" path="res://resources/body_multimesh.tres" id="2_mm"]
@@ -17,6 +17,7 @@
 [ext_resource type="Script" path="res://scripts/top_bar.gd" id="16_topbar"]
 [ext_resource type="Script" path="res://scripts/event_log.gd" id="17_eventlog"]
 [ext_resource type="Script" path="res://scripts/eco_meters.gd" id="18_meters"]
+[ext_resource type="Script" path="res://scripts/brand_panel.gd" id="19_brand"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_glyph"]
 size = Vector2(1, 1)
@@ -214,17 +215,24 @@ text = "tick=0 alive=0"
 theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
 theme_override_font_sizes/font_size = 16
 
-[node name="TopBar" type="PanelContainer" parent="UI"]
+[node name="Brand" type="PanelContainer" parent="UI"]
 offset_left = 10.0
 offset_top = 10.0
-offset_right = 420.0
+offset_right = 300.0
+offset_bottom = 52.0
+script = ExtResource("19_brand")
+
+[node name="TopBar" type="PanelContainer" parent="UI"]
+offset_left = 560.0
+offset_top = 10.0
+offset_right = 1060.0
 offset_bottom = 44.0
 script = ExtResource("16_topbar")
 
 [node name="CodexPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("8_codex")
 offset_left = 10.0
-offset_top = 54.0
+offset_top = 60.0
 offset_right = 300.0
 offset_bottom = 80.0
 

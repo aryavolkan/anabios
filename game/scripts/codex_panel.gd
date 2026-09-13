@@ -235,6 +235,12 @@ func _ready() -> void:
 		var b := Button.new()
 		b.text = TAB_NAMES[i]
 		b.icon = HudIcons.kind_texture(TAB_ICONS[i])
+		# Icon over label, the reference's tab shape.
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.custom_minimum_size = Vector2(62, 44)
+		b.focus_mode = Control.FOCUS_NONE
 		b.add_theme_font_size_override("font_size", 11)
 		b.pressed.connect(_select_tab.bind(i))
 		tabs.add_child(b)
