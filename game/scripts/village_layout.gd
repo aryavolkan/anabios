@@ -35,6 +35,7 @@ enum {
 	RUIN_BURNT,
 	HUT_B,
 	HUT_C,
+	STALL,
 }
 # The three hut silhouettes an era-1 dwelling cell may take.
 const HUT_KINDS: PackedInt32Array = [HUT, HUT_B, HUT_C]

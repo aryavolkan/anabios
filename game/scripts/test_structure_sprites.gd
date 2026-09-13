@@ -32,7 +32,7 @@ func _row_has_opaque(img: Image, y: int) -> bool:
 
 func _init() -> void:
 	# --- enum / NAMES / constants coherence -------------------------------
-	_check(S.KIND_COUNT == 22, "22 structure kinds")
+	_check(S.KIND_COUNT == 23, "23 structure kinds")
 	_check(S.NAMES.size() == S.KIND_COUNT, "NAMES parallels the enum")
 	_check(S.CELL_PX == 32, "cell size is 32px")
 	_check(S.ATLAS_COLS == 8, "atlas is an 8x8 grid")
@@ -127,7 +127,16 @@ func _init() -> void:
 	for k in [S.TENT, S.WINDBREAK, S.HEARTH]:
 		_check(S.era_of(k) == 0, "%s is era 0 (camp)" % S.NAMES[k])
 	for k in [
-		S.HUT, S.HUT_B, S.HUT_C, S.FENCE_H, S.FENCE_V, S.FIELD, S.GRANARY, S.WELL, S.RUIN_BURNT
+		S.HUT,
+		S.HUT_B,
+		S.HUT_C,
+		S.FENCE_H,
+		S.FENCE_V,
+		S.FIELD,
+		S.GRANARY,
+		S.WELL,
+		S.RUIN_BURNT,
+		S.STALL,
 	]:
 		_check(S.era_of(k) == 1, "%s is era 1 (thatch)" % S.NAMES[k])
 	for k in [

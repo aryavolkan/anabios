@@ -13,6 +13,7 @@ extends SceneTree
 # test only compiles once those files exist alongside it.
 
 const SettlementLayer = preload("res://scripts/settlement_layer.gd")
+const HubLayer = preload("res://scripts/hub_layer.gd")
 const VillageLayout = preload("res://scripts/village_layout.gd")
 
 var _failed := false
@@ -25,6 +26,16 @@ func _check(cond: bool, msg: String) -> void:
 
 
 func _init() -> void:
+	# --- market square: stalls ring the hub at a fixed radius, none on it ---
+	var slots: PackedVector2Array = HubLayer.stall_slots(Vector2(100, 100), 3)
+	_check(slots.size() == 3, "three stall slots")
+	for sl in slots:
+		_check(
+			is_equal_approx(sl.distance_to(Vector2(100, 100)), HubLayer.STALL_RADIUS),
+			"stall %s sits on the ring" % sl
+		)
+	_check(slots[0] != slots[1] and slots[1] != slots[2], "stall slots are distinct")
+	_check(HubLayer.stall_slots(Vector2.ZERO, 0).is_empty(), "no stalls, no slots")
 	# --- dirt yards: a 32 px earth patch, solid centre, clear corners ---
 	var yard: Image = SettlementLayer.yard_image()
 	_check(yard.get_width() == 32 and yard.get_height() == 32, "yard patch is 32x32")

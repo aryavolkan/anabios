@@ -38,8 +38,9 @@ enum {
 	RUIN_BURNT,
 	HUT_B,
 	HUT_C,
+	STALL,
 }
-const KIND_COUNT := 22
+const KIND_COUNT := 23
 const CELL_PX := 32
 const ATLAS_COLS := 8  # 8x8 grid of 32px cells = a square 256x256 atlas; cell index == kind
 
@@ -66,6 +67,7 @@ const NAMES: PackedStringArray = [
 	"RuinBurnt",
 	"HutRound",
 	"Longhouse",
+	"Stall",
 ]
 
 # 32x32 row-string pixel maps per kind, indexed by the enum. '.' is
@@ -844,6 +846,41 @@ const _ROWS: Array = [
 		"..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
 		"................................",
 	],
+	# STALL
+	[
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		".......KKKKKKKKKKKKKKKKKK.......",
+		".....KKrrhhrrhhrrhhrrhhrrKK.....",
+		"....KrrhhrrhhrrhhrrhhrrhhrrK....",
+		"...KrrhhrrhhrrhhrrhhrrhhrrhhK...",
+		"..KrrhhrrhhrrhhrrhhrrhhrrhhrrK..",
+		"..KhhrrhhrrhhrrhhrrhhrrhhrrhhK..",
+		"..KKKKKKKKKKKKKKKKKKKKKKKKKKKK..",
+		"...KbK....................KbK...",
+		"...KbK....................KbK...",
+		"...KbK.....ooo....yyy.....KbK...",
+		"...KbK....ooooo..yyyyy....KbK...",
+		"...KbKKKKKKKKKKKKKKKKKKKKKKbK...",
+		"...KBBBBBBBBBBBBBBBBBBBBBBBBK...",
+		"...KttttttttttttttttttttttttK...",
+		"...KBBBBBBBBBBBBBBBBBBBBBBBBK...",
+		"...KKbbKKKKKKKKKKKKKKKKKKbbKK...",
+		"....KbK..................KbK....",
+		"....KbK..................KbK....",
+		"....KKK..................KKK....",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+		"................................",
+	],
 ]
 
 const PAL: Dictionary = {
@@ -993,7 +1030,7 @@ static func era_of(kind: int) -> int:
 	match kind:
 		TENT, WINDBREAK, HEARTH:
 			return 0
-		HUT, HUT_B, HUT_C, FENCE_H, FENCE_V, FIELD, GRANARY, WELL, RUIN_BURNT:
+		HUT, HUT_B, HUT_C, FENCE_H, FENCE_V, FIELD, GRANARY, WELL, RUIN_BURNT, STALL:
 			return 1
 		_:
 			return 2
