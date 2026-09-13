@@ -605,6 +605,13 @@ static func _build_cell(blocks: Array, px: int = CELL_PX, hero: bool = false) ->
 		img.fill_rect(Rect2i(b[0], b[1], b[2], b[3]), col)
 	if hero:
 		shade(img, px)
+	outline(img, px)
+	return img
+
+
+# The 1px dark outline: every empty pixel touching the figure (collected
+# first, then written, so outline pixels don't seed more outline).
+static func outline(img: Image, px: int) -> void:
 	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	var edges: Array = []
 	for y in px:
@@ -619,7 +626,21 @@ static func _build_cell(blocks: Array, px: int = CELL_PX, hero: bool = false) ->
 					break
 	for e in edges:
 		img.set_pixel(e.x, e.y, Color(0.34, 0.34, 0.34, 1.0))
-	return img
+
+
+# Pre-built hero cells (hero_rigs.gd) packed into the square hero grid, each
+# flipped for the QuadMesh's V axis like _pack_grid does.
+static func pack_cells(cells: Array) -> ImageTexture:
+	var atlas := Image.create(HERO_ATLAS_PX, HERO_ATLAS_PX, false, Image.FORMAT_RGBA8)
+	atlas.fill(Color(0, 0, 0, 0))
+	for fr in cells.size():
+		var cell := Image.create(HERO_PX, HERO_PX, false, Image.FORMAT_RGBA8)
+		cell.copy_from(cells[fr])
+		cell.flip_y()
+		var cx := (fr % ATLAS_COLS) * HERO_PX
+		var cy := int(fr / float(ATLAS_COLS)) * HERO_PX
+		atlas.blit_rect(cell, Rect2i(0, 0, HERO_PX, HERO_PX), Vector2i(cx, cy))
+	return ImageTexture.create_from_image(atlas)
 
 
 # One pose, zone colours applied. `hero` scales the 16 px blocks onto the

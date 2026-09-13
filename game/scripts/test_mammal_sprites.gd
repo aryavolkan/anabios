@@ -6,6 +6,7 @@ extends SceneTree
 
 const M = preload("res://scripts/mammal_sprites.gd")
 const A = preload("res://scripts/ape_sprites.gd")
+const H = preload("res://scripts/hero_rigs.gd")
 
 var _failed := false
 
@@ -112,6 +113,41 @@ func _check_hero_art() -> void:
 	_check(lit >= 4, "shading lightens the crown (%d lit px)" % lit)
 	var hare: Image = M.portrait(M.HARE).get_image()
 	_check(hare.get_data() != deer.get_data(), "accents differ per archetype")
+	# Hand-authored masters: every quad archetype has one, 24 rows of 24
+	# valid keys, feet on the ground; the derived poses move the parts.
+	for arch in M.QUAD_ORDER:
+		var name: String = M.NAMES[arch]
+		_check(H.has(name), "%s has a hand-authored master" % name)
+		var rows: Array = H.MASTERS[name.to_upper()]
+		_check(rows.size() == H.PX, "%s master has 24 rows" % name)
+		for r in rows:
+			_check((r as String).length() == H.PX, "%s master rows are 24 wide" % name)
+			for ch in r:
+				_check(ch == "." or H.KEYS.has(ch), "%s master uses known keys (%s)" % [name, ch])
+		var cells: Array = H.build_cells(name)
+		_check(cells.size() == H.CELL_COUNT, "%s derives 16 cells" % name)
+		var stand: Image = cells[0]
+		_check(H.opaque_pixels(stand) > 60, "%s stand has art" % name)
+		_check(cells[4].get_data() != stand.get_data(), "%s graze differs from stand" % name)
+		_check(cells[1].get_data() != cells[3].get_data(), "%s gait contacts differ" % name)
+		_check(_top_row(cells[12]) > _top_row(stand), "%s sleeps lower than it stands" % name)
+		_check(_bottom_row(stand) >= H.PX - 4, "%s stands on the ground rows" % name)
+
+
+func _top_row(img: Image) -> int:
+	for y in img.get_height():
+		for x in img.get_width():
+			if img.get_pixel(x, y).a > 0.5:
+				return y
+	return img.get_height()
+
+
+func _bottom_row(img: Image) -> int:
+	for y in range(img.get_height() - 1, -1, -1):
+		for x in img.get_width():
+			if img.get_pixel(x, y).a > 0.5:
+				return y
+	return -1
 
 
 func _init() -> void:

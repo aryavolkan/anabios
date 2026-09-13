@@ -6,6 +6,7 @@ extends RefCounted
 # it delegates to ape_sprites.gd, which bakes the five hominins' own colours.
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
+const HeroRigs = preload("res://scripts/hero_rigs.gd")
 
 enum {
 	HARE,
@@ -141,6 +142,10 @@ static func bucket_atlas(b: int) -> ImageTexture:
 	if b < SKIN_COUNT:
 		return ApeSprites.build_species_atlas(b)
 	var arch: int = QUAD_ORDER[b - SKIN_COUNT]
+	# Hand-authored 24 px silhouettes first (hero_rigs.gd); the scaled rect
+	# rig is the fallback for an archetype without a master.
+	if HeroRigs.has(NAMES[arch]):
+		return ApeSprites.pack_cells(HeroRigs.build_cells(NAMES[arch]))
 	if _QUAD_DATA.has(arch):
 		return build_quad_atlas(_with_celebration_poses(_QUAD_DATA[arch].POSES), arch)
 	return ApeSprites.build_species_atlas(0)  # fallback until the rig lands
@@ -152,6 +157,10 @@ static func bucket_atlas(b: int) -> ImageTexture:
 # inspector used to fall back to an ape portrait for every quadruped, labelling
 # a chimp silhouette "Deer". Pair with coat_hue() as the TextureRect modulate.
 static func portrait(archetype: int) -> ImageTexture:
+	if archetype >= 0 and archetype < NAMES.size() and HeroRigs.has(NAMES[archetype]):
+		return ImageTexture.create_from_image(
+			HeroRigs.build_cell(HeroRigs.MASTERS[NAMES[archetype].to_upper()], 0)
+		)
 	if not _QUAD_DATA.has(archetype):
 		return ApeSprites.build(0)
 	return ImageTexture.create_from_image(
@@ -163,6 +172,12 @@ static func bucket_fallen(b: int) -> ImageTexture:
 	if b < SKIN_COUNT:
 		return ApeSprites.build_fallen_texture(b)
 	var arch: int = QUAD_ORDER[b - SKIN_COUNT]
+	if HeroRigs.has(NAMES[arch]):
+		# The standing master on its side, pre-flipped like the atlas cells.
+		var cell: Image = HeroRigs.build_cell(HeroRigs.MASTERS[NAMES[arch].to_upper()], 0)
+		cell.rotate_90(CLOCKWISE)
+		cell.flip_y()
+		return ImageTexture.create_from_image(cell)
 	if _QUAD_DATA.has(arch):
 		return build_quad_fallen(_QUAD_DATA[arch].POSES)
 	return ApeSprites.build_fallen_texture(0)
