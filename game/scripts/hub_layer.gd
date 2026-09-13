@@ -9,6 +9,7 @@ extends Node2D
 
 const Buildings = preload("res://scripts/building_sprites.gd")
 const Clearings = preload("res://scripts/clearings.gd")
+const AgentLayer = preload("res://scripts/agent_layer.gd")
 const SettlementLayer = preload("res://scripts/settlement_layer.gd")
 const SpriteSplit = preload("res://scripts/sprite_split.gd")
 const StructureSprites = preload("res://scripts/structure_sprites.gd")
@@ -33,6 +34,9 @@ var _market_mmi: MultiMeshInstance2D
 var _warehouse_mmi: MultiMeshInstance2D
 var _good_mmis: Array[MultiMeshInstance2D] = []
 var _square_mmi: MultiMeshInstance2D
+# Contact shadows under the building and the stalls (same ellipse and
+# offsets as the settlement dwellings), over the square, under the walls.
+var _shadow_mmi: MultiMeshInstance2D
 var _stall_mmi: MultiMeshInstance2D
 var _stall_top_mmi: MultiMeshInstance2D
 var _hubs: Array = []
@@ -47,6 +51,12 @@ func _ready() -> void:
 		SpriteSplit.for_quad(SettlementLayer.yard_image(SQUARE_PX)),
 		SettlementLayer.YARD_Z
 	)
+	_shadow_mmi = _make_layer(
+		"Hub_Shadow",
+		ImageTexture.create_from_image(AgentLayer.shadow_image(16)),
+		SettlementLayer.SHADOW_Z
+	)
+	_shadow_mmi.modulate = SettlementLayer.SHADOW_COLOR
 	var stall: Image = StructureSprites.kind_image(StructureSprites.STALL)
 	var cut: int = SpriteSplit.split_row(stall)
 	_stall_mmi = _make_layer("Hub_Stall", SpriteSplit.for_quad(SpriteSplit.lower(stall, cut)), -1)
@@ -78,6 +88,15 @@ static func stall_slots(
 	return out
 
 
+static func _shadow_xf(pos: Vector2, size: float) -> Transform2D:
+	return Transform2D(
+		0.0,
+		Vector2(size * SettlementLayer.SHADOW_W, size * SettlementLayer.SHADOW_H),
+		0.0,
+		pos + SettlementLayer.SHADOW_OFFSET * size
+	)
+
+
 func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_2D
@@ -94,7 +113,10 @@ func _make_layer(pname: String, tex: ImageTexture, z: int) -> MultiMeshInstance2
 
 func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
-	for src in [_square_mmi, _stall_mmi, _stall_top_mmi, _market_mmi, _warehouse_mmi] + _good_mmis:
+	for src in (
+		[_square_mmi, _shadow_mmi, _stall_mmi, _stall_top_mmi, _market_mmi, _warehouse_mmi]
+		+ _good_mmis
+	):
 		for gy in range(-1, 2):
 			for gx in range(-1, 2):
 				if gx == 0 and gy == 0:
@@ -104,6 +126,7 @@ func _make_wrap_clones() -> void:
 				clone.texture = src.texture
 				clone.texture_filter = src.texture_filter
 				clone.z_index = src.z_index
+				clone.modulate = src.modulate
 				clone.position = Vector2(gx * world, gy * world)
 				add_child(clone)
 
@@ -129,6 +152,7 @@ func _redraw() -> void:
 	var warehouse_xf: Array = []
 	var square_xf: Array = []
 	var stall_xf: Array = []
+	var shadow_xf: Array = []
 	var good_xf: Array = []
 	var clearings: Array[Rect2] = []
 	for g in Buildings.GOOD_COUNT:
@@ -145,6 +169,7 @@ func _redraw() -> void:
 			# counters open onto the square.
 			var sx: float = -STALL_SCALE if slots[i].x > pos.x else STALL_SCALE
 			stall_xf.append(Transform2D(0.0, Vector2(sx, STALL_SCALE), 0.0, slots[i]))
+			shadow_xf.append(_shadow_xf(slots[i], STALL_SCALE))
 		# Busy hub (hot market cell) -> warehouse, else market.
 		var busy := false
 		if not market_field.is_empty():
@@ -152,6 +177,7 @@ func _redraw() -> void:
 			if ci >= 0 and ci < market_field.size():
 				busy = market_field[ci].r >= Buildings.MARKET_MIN
 		var xf := Transform2D(0.0, Vector2(HUB_SCALE, HUB_SCALE), 0.0, pos)
+		shadow_xf.append(_shadow_xf(pos, HUB_SCALE))
 		if busy:
 			warehouse_xf.append(xf)
 		else:
@@ -171,6 +197,7 @@ func _redraw() -> void:
 	_write(_square_mmi.multimesh, square_xf)
 	Clearings.publish("hubs", clearings)
 	_write(_stall_mmi.multimesh, stall_xf)
+	_write(_shadow_mmi.multimesh, shadow_xf)
 	_write(_market_mmi.multimesh, market_xf)
 	_write(_warehouse_mmi.multimesh, warehouse_xf)
 	for g in Buildings.GOOD_COUNT:

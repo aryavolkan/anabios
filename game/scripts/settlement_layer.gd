@@ -12,6 +12,7 @@ const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const Buildings = preload("res://scripts/building_sprites.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
+const AgentLayer = preload("res://scripts/agent_layer.gd")
 const PixelFxSprites = preload("res://scripts/pixel_fx_sprites.gd")
 # Landed separately by parallel agents (D5/D7): the village footprint planner
 # and its per-kind sprite atlas. Preloaded by path so this file keeps
@@ -73,6 +74,15 @@ var _structure_mmis: Array[MultiMeshInstance2D] = []
 # Trampled dirt yards under every dwelling and around the hearth, drawn under
 # the fields (the reference villages stand on packed earth, not on grass).
 var _yard_mmi: MultiMeshInstance2D = null
+# Contact shadows under the dwellings: a soft ellipse cast to the lower
+# right, drawn over the yard and under the walls, so a hut sits on its
+# ground the way the boards' do instead of floating on the dirt patch.
+var _shadow_mmi: MultiMeshInstance2D = null
+const SHADOW_Z := -6
+const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.30)
+const SHADOW_W := 0.80  # of the structure's drawn size
+const SHADOW_H := 0.34
+const SHADOW_OFFSET := Vector2(0.12, 0.30)  # of the drawn size, centre from the sprite centre
 const YARD_PX := 32
 const YARD_Z := -7
 const YARD_SCALE := 1.7  # in structure widths; the hearth's yard is wider
@@ -152,6 +162,10 @@ func _ready() -> void:
 			_building_frames[bkey] = [tex, Buildings.build_variant(k, 1)]
 			_building_nodes[bkey] = [mmi]
 	_yard_mmi = _make_layer("Yard", SpriteSplit.for_quad(yard_image()), YARD_Z)
+	_shadow_mmi = _make_layer(
+		"StructureShadow", ImageTexture.create_from_image(AgentLayer.shadow_image(16)), SHADOW_Z
+	)
+	_shadow_mmi.modulate = SHADOW_COLOR
 	# Village-footprint structures: one plain MultiMesh layer per kind, same
 	# Metal-safe contract. Fields draw below agents like the old farm patches;
 	# every other structure kind is cut in two (sprite_split.gd, D9): walls
@@ -216,6 +230,7 @@ func _make_wrap_clones() -> void:
 	for k in Buildings.KIND_COUNT:
 		_clone_layer(_building_mmis[k], "b%d" % k, world)
 	_clone_layer(_yard_mmi, "y", world)
+	_clone_layer(_shadow_mmi, "sh", world)
 	for k in StructureSprites.KIND_COUNT:
 		_clone_layer(_structure_mmis[k], "s%d" % k, world)
 		if _structure_top_mmis[k] != null:
@@ -232,6 +247,7 @@ func _clone_layer(src: MultiMeshInstance2D, key: String, world: float) -> void:
 			clone.texture = src.texture
 			clone.texture_filter = src.texture_filter
 			clone.z_index = src.z_index
+			clone.modulate = src.modulate
 			clone.position = Vector2(gx * world, gy * world)
 			add_child(clone)
 			if _building_nodes.has(key):
@@ -488,6 +504,8 @@ func _redraw() -> void:
 		struct_col.append([])
 	var yard_xf: Array = []
 	var yard_col: Array = []
+	var shadow_xf: Array = []
+	var shadow_col: Array = []
 	var clearings: Array[Rect2] = []
 	var fire_pos: PackedVector2Array = PackedVector2Array()
 	for sid in _villages.keys():
@@ -550,6 +568,12 @@ func _redraw() -> void:
 			struct_col[kind].append(tint)
 			var ys: float = yard_scale(kind)
 			if ys > 0.0:
+				shadow_xf.append(
+					Transform2D(
+						0.0, Vector2(s * SHADOW_W, s * SHADOW_H), 0.0, ppos + SHADOW_OFFSET * s
+					)
+				)
+				shadow_col.append(Color(1, 1, 1, fade))
 				var yw: float = base_scale * ys
 				# Sits a little below the sprite's centre, under its footprint.
 				yard_xf.append(Transform2D(0.0, Vector2(yw, yw), 0.0, ppos + Vector2(0.0, 3.0)))
@@ -596,6 +620,7 @@ func _redraw() -> void:
 	for k in StructureSprites.KIND_COUNT:
 		_write(_structure_mmis[k].multimesh, struct_xf[k], struct_col[k])
 	_write(_yard_mmi.multimesh, yard_xf, yard_col)
+	_write(_shadow_mmi.multimesh, shadow_xf, shadow_col)
 	Clearings.publish("villages", clearings)
 
 
