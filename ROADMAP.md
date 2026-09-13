@@ -166,7 +166,7 @@ the invasion margin or gets honestly closed.*
   tiles with clutter, mixed tree silhouettes, hand-authored 24 px quadruped
   and hominin masters y-sorted across species in one MultiMesh, spaced
   villages in clearings on dirt yards with paths (camps, thatch huts,
-  timber-frame houses, palisades, fields, burning ruins), market squares
+  timber-frame houses, palisades, catapults, fields, burning ruins), market squares
   joined by dirt roads, the themed HUD, and captures in
   `gallery/scale-*.png`. Still open: the SubViewport pixel pipeline and the
   Huge-tier fps gate (only measured here on software Vulkan, see
