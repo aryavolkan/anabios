@@ -161,6 +161,14 @@ the invasion margin or gets honestly closed.*
   tier streams at ≥ 55 fps with 10k agents, every reference panel is bound to
   live data, and goldens are unchanged. Phased plan:
   [`docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md`](docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md).
+  *Status (PR #169):* Phases 0–5 landed — chunked bridge export and streamed
+  ground, autotiled coasts, waterfalls, contour-ledged mountains, mottled
+  tiles with clutter, mixed tree silhouettes, hand-authored 24 px quadruped
+  and hominin masters, spaced villages on dirt yards with paths, market
+  squares, the pixel-font HUD, and captures in `gallery/scale-*.png`. Still
+  open: a true cross-layer y-sort, the SubViewport pixel pipeline, caravan
+  endpoints at village gates, and the Huge-tier fps gate (only measured here
+  on software Vulkan, see `docs/perf-notes.md`).
 
 **Horizon-1 exit:** the era-3 climb is either emergent on the Earth map or closed
 with a named, measured blocker; O4's demographic claim is adjudicated; one new
