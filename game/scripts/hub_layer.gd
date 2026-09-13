@@ -176,7 +176,12 @@ func _redraw() -> void:
 			var ci := Buildings.market_cell(pos, world_sz, res)
 			if ci >= 0 and ci < market_field.size():
 				busy = market_field[ci].r >= Buildings.MARKET_MIN
-		var xf := Transform2D(0.0, Vector2(HUB_SCALE, HUB_SCALE), 0.0, pos)
+		# The building is the 32x44 tall art, its base kept on the square.
+		var bkind: int = Buildings.WAREHOUSE if busy else Buildings.MARKET
+		var bh: float = HUB_SCALE * Buildings.height_ratio(bkind)
+		var xf := Transform2D(
+			0.0, Vector2(HUB_SCALE, bh), 0.0, pos - Vector2(0.0, (bh - HUB_SCALE) * 0.5)
+		)
 		shadow_xf.append(_shadow_xf(pos, HUB_SCALE))
 		if busy:
 			warehouse_xf.append(xf)

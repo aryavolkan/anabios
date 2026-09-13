@@ -26,6 +26,8 @@ const TALL_ROWS: Dictionary = {
 	StructureSprites.MILL: 4,
 	StructureSprites.TOWER: 12,
 	StructureSprites.GATE: 6,
+	StructureSprites.MARKET_HALL: 6,
+	StructureSprites.WAREHOUSE: 8,
 }
 
 

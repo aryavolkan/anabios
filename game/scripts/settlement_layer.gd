@@ -39,6 +39,10 @@ const MEMBERS_BUCKET := 6
 # Landmark/trade buildings sit a notch bigger than huts so a village's
 # invention history and trade role read at a glance from the ring around it.
 const BUILDING_SCALE := 20.0
+# Invention landmarks are 16 px markers: drawn at 12 units so their pixels
+# match the 32 px structures' grain (0.75 vs 0.625 world units per texel)
+# rather than doubling it.
+const LANDMARK_SCALE := 12.0
 const LANDMARK2_MIN_MEMBERS := 32
 # Invention landmarks are anchored to the SPECIES that hold inventions, not to
 # settlements: in organic runs the settling lineages are asocial foragers with
@@ -640,10 +644,13 @@ func _redraw() -> void:
 			if ci >= 0 and ci < market_field.size():
 				var tkind := Buildings.trade_kind(market_field[ci].r, members)
 				if tkind >= 0:
-					var tp := pos + Vector2(0.0, -26.0)
 					var pop_grow := clampf((_now - float(v["born"])) / POP_SECS, 0.0, 1.0)
 					var ts := BUILDING_SCALE * FxMath.pop_scale(pop_grow)
-					build_xf[tkind].append(Transform2D(0.0, Vector2(ts, ts), 0.0, tp))
+					# The hi-res trade buildings draw their tall art with the
+					# base kept where the square icon's was.
+					var th := ts * Buildings.height_ratio(tkind)
+					var tp := pos + Vector2(0.0, -26.0 - (th - ts) * 0.5)
+					build_xf[tkind].append(Transform2D(0.0, Vector2(ts, th), 0.0, tp))
 					build_col[tkind].append(Color(1, 1, 1, fade))
 	_place_invention_landmarks(stats_by_sid, build_xf, build_col)
 	_assign_smoke()
@@ -713,7 +720,7 @@ func _place_invention_landmarks(
 			continue
 		var fade: float = clampf((LINGER - stale) / FADE, 0.0, 1.0)
 		var grow: float = clampf((_now - float(m["born"])) / POP_SECS, 0.0, 1.0)
-		var lscale := BUILDING_SCALE * FxMath.pop_scale(grow)
+		var lscale := LANDMARK_SCALE * FxMath.pop_scale(grow)
 		var lcol := Color(1, 1, 1, fade)
 		var pos: Vector2 = m["pos"]
 		var msig: PackedInt32Array = m["sig"]

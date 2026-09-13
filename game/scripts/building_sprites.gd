@@ -9,6 +9,8 @@ extends RefCounted
 # landmarks (build_variant), swapped as whole textures by the layer.
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
+const StructureSprites = preload("res://scripts/structure_sprites.gd")
+const StructureTall = preload("res://scripts/structure_tall.gd")
 
 enum {
 	MARKET,
@@ -453,9 +455,38 @@ const _BLOCKS: Array = [
 	],
 ]
 
+# The hub centrepieces are drawn at the structures' texel size: their art
+# is the 32 px MarketHall / Warehouse structure (in its 32x44 tall variant),
+# not the 16 px icon block list, so a market square's building keeps the
+# same pixel grain as the stalls around it. The other kinds stay 16 px
+# invention markers.
+const HI_RES_KINDS: PackedInt32Array = [MARKET, WAREHOUSE]
+const _HI_RES_STRUCTURE: Dictionary = {
+	MARKET: StructureSprites.MARKET_HALL,
+	WAREHOUSE: StructureSprites.WAREHOUSE,
+}
 
+
+static func is_hi_res(kind: int) -> bool:
+	return HI_RES_KINDS.has(kind)
+
+
+# Height over width of a kind's image (1 for the square icons, the tall
+# ratio for the hi-res buildings).
+static func height_ratio(kind: int) -> float:
+	if not is_hi_res(kind):
+		return 1.0
+	return float(StructureTall.TALL_PX) / float(StructureSprites.CELL_PX)
+
+
+# Bottom-up (quad-ready) image for `kind`: 16x16 from the block list, or
+# the 32x44 structure art for the hi-res kinds.
 static func build_image(kind: int) -> Image:
-	var img: Image = ApeSprites._build_cell(_BLOCKS[kind])
+	var img: Image
+	if is_hi_res(kind):
+		img = StructureTall.tall_image(_HI_RES_STRUCTURE[kind], 0)
+	else:
+		img = ApeSprites._build_cell(_BLOCKS[kind])
 	img.flip_y()
 	return img
 

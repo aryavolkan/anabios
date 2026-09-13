@@ -47,10 +47,13 @@ func _init() -> void:
 	# Every kind builds a 16x16 image with at least one opaque (figure) pixel.
 	for k in B.KIND_COUNT:
 		var img: Image = B.build_image(k)
-		_check(img.get_width() == 16 and img.get_height() == 16, "%s is 16x16" % B.NAMES[k])
+		if B.is_hi_res(k):
+			_check(img.get_width() == 32 and img.get_height() == 44, "%s is 32x44" % B.NAMES[k])
+		else:
+			_check(img.get_width() == 16 and img.get_height() == 16, "%s is 16x16" % B.NAMES[k])
 		var opaque := 0
-		for y in 16:
-			for x in 16:
+		for y in img.get_height():
+			for x in img.get_width():
 				if img.get_pixel(x, y).a > 0.5:
 					opaque += 1
 		_check(opaque >= 8, "%s has a visible figure" % B.NAMES[k])
@@ -111,9 +114,14 @@ func _init() -> void:
 	_check(B.GOOD_NAMES.size() == B.GOOD_COUNT, "GOOD_NAMES parallels GOOD_COUNT")
 	for k in B.KIND_COUNT:
 		var tex: ImageTexture = B.build(k)
+		var want := Vector2i(32, 44) if B.is_hi_res(k) else Vector2i(16, 16)
 		_check(
-			tex != null and tex.get_width() == 16 and tex.get_height() == 16,
-			"%s texture is 16x16" % B.NAMES[k]
+			tex != null and tex.get_size() == Vector2(want),
+			"%s texture is %dx%d" % [B.NAMES[k], want.x, want.y]
+		)
+		_check(
+			is_equal_approx(B.height_ratio(k), float(want.y) / float(want.x)),
+			"%s height ratio matches its art" % B.NAMES[k]
 		)
 	for g in B.GOOD_COUNT:
 		var gtex: ImageTexture = B.build_good(g)
@@ -160,6 +168,20 @@ func _init() -> void:
 			"%s lift moves a few pixels (%d)" % [B.NAMES[k], changed]
 		)
 		_check(lit >= 8, "%s lifted frame keeps a visible figure" % B.NAMES[k])
+	# The hub centrepieces are the 32 px structure art, bottom-up like the
+	# icons: the market hall's awning (row 4 of the top-down art) lands in
+	# the upper half of the flipped image.
+	var market: Image = B.build_image(B.MARKET)
+	var mid_top := 0
+	for y in range(22, 44):
+		for x in 32:
+			if market.get_pixel(x, y).a > 0.5:
+				mid_top += 1
+	_check(mid_top > 0, "market hall art fills the upper half of its flipped cell")
+	_check(
+		B.is_hi_res(B.MARKET) and B.is_hi_res(B.WAREHOUSE) and not B.is_hi_res(B.FIRE),
+		"only the hub centrepieces are hi-res"
+	)
 	# A static kind returns its base art for every phase.
 	_check(
 		B.build_variant(B.MARKET, 1).get_image().get_data() == B.build_image(B.MARKET).get_data(),

@@ -42,8 +42,10 @@ enum {
 	TENT_B,
 	HOUSE,
 	CATAPULT,
+	MARKET_HALL,
+	WAREHOUSE,
 }
-const KIND_COUNT := 26
+const KIND_COUNT := 28
 
 # Walled kinds also have a taller 2.5D variant, see structure_tall.gd.
 const ExtraRows = preload("res://scripts/structure_rows_extra.gd")
@@ -77,6 +79,8 @@ const NAMES: PackedStringArray = [
 	"Yurt",
 	"House",
 	"Catapult",
+	"MarketHall",
+	"Warehouse",
 ]
 
 # 32x32 row-string pixel maps per kind, indexed by the enum. '.' is
@@ -1011,7 +1015,7 @@ static func era_of(kind: int) -> int:
 	match kind:
 		TENT, TENT_B, WINDBREAK, HEARTH:
 			return 0
-		HUT, HUT_B, HUT_C, FENCE_H, FENCE_V, FIELD, GRANARY, WELL, RUIN_BURNT, STALL:
+		HUT, HUT_B, HUT_C, FENCE_H, FENCE_V, FIELD, GRANARY, WELL, RUIN_BURNT, STALL, MARKET_HALL:
 			return 1
 		_:
 			return 2
