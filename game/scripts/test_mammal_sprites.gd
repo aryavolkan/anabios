@@ -170,12 +170,13 @@ func _check_hominin_masters() -> void:
 	)
 
 
-# Topmost figure row, ignoring the auto outline (a neutral 0.34 grey).
+# Topmost figure row, ignoring the auto outline (near-black "14100f").
 func _top_row(img: Image) -> int:
+	var outline_color := Color("14100f")
 	for y in img.get_height():
 		for x in img.get_width():
 			var c := img.get_pixel(x, y)
-			if c.a > 0.5 and not (absf(c.r - 0.34) < 0.01 and absf(c.g - 0.34) < 0.01):
+			if c.a > 0.5 and not c.is_equal_approx(outline_color):
 				return y
 	return img.get_height()
 

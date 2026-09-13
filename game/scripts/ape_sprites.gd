@@ -625,7 +625,7 @@ static func outline(img: Image, px: int) -> void:
 					edges.append(Vector2i(x, y))
 					break
 	for e in edges:
-		img.set_pixel(e.x, e.y, Color(0.34, 0.34, 0.34, 1.0))
+		img.set_pixel(e.x, e.y, Color("14100f"))
 
 
 # Pre-built hero cells (hero_rigs.gd) packed into the square hero grid, each
