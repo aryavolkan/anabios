@@ -238,6 +238,7 @@ void fragment() {
 		// The depth cue in dithered steps, like the land's relief.
 		vec2 depth_tex = floor(world_pos / max(texel_w, 1e-4));
 		float shallow_q = floor(shallowness * 4.0 + bayer4(depth_tex + vec2(4.0, 1.0))) / 4.0;
+		shallow_q = mix(shallowness, shallow_q, detail);
 		outc = mix(deep, shallow, 0.22 * shallow_q + 0.06 * step(0.01, coast));
 
 		// Pixel ripples: the water tile family's light dashes and dark
@@ -378,6 +379,9 @@ void fragment() {
 		float shade_n = clamp(shade, -0.22, 0.22) / 0.22;
 		vec2 shade_tex = floor(world_pos / max(texel_w, 1e-4));
 		float shade_q = floor(shade_n * 4.0 + bayer4(shade_tex + vec2(2.0, 9.0))) / 4.0;
+		// Far out a texel is under a screen pixel and the dither would only
+		// be noise: fall back to the smooth value as the detail dissolves.
+		shade_q = mix(shade_n, shade_q, detail);
 		outc = land_base * (1.0 + shade_q * 0.22);
 
 		// Terraces and cliff faces (D9). Levels are integers; a drop of one
@@ -462,7 +466,7 @@ void fragment() {
 		// Altitude lift in the same dithered steps.
 		float lift_n = clamp((es - sea_level) / max(1.0 - sea_level, 1e-3), 0.0, 1.0);
 		float lift_q = floor(lift_n * 4.0 + bayer4(shade_tex + vec2(6.0, 3.0))) / 4.0;
-		outc *= 1.0 + height_lift * lift_q;
+		outc *= 1.0 + height_lift * mix(lift_n, lift_q, detail);
 
 		// Sandy shoreline on the land side: a thin warm beach band right at the
 		// waterline, fading inland, so coasts read as coast rather than a hard
