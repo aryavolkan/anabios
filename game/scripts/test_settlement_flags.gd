@@ -31,6 +31,16 @@ func _init() -> void:
 	_check(yard.get_pixel(16, 16).a > 0.9, "yard centre is packed earth")
 	_check(yard.get_pixel(0, 0).a == 0.0, "yard corners stay clear")
 	_check(SettlementLayer.yard_scale(VillageLayout.HUT) > 0.0, "huts stand on a yard")
+	var steps: PackedVector2Array = SettlementLayer.path_steps(Vector2.ZERO, Vector2(70, 0), 7.0)
+	_check(steps.size() == 7, "a 70-unit path gets seven 7-unit steps clear of both yards")
+	_check(
+		steps[0] == Vector2(14, 0) and steps[-1] == Vector2(56, 0),
+		"path steps stay between the yards"
+	)
+	_check(
+		SettlementLayer.path_steps(Vector2.ZERO, Vector2(10, 0), 7.0).is_empty(),
+		"no path for next-door yards"
+	)
 	_check(SettlementLayer.yard_scale(VillageLayout.FENCE_H) == 0.0, "fences keep the ground")
 	_check(
 		(

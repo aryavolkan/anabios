@@ -69,6 +69,10 @@ const YARD_PX := 32
 const YARD_Z := -7
 const YARD_SCALE := 1.7  # in structure widths; the hearth's yard is wider
 const HEARTH_YARD_SCALE := 2.6
+# Trodden paths: small yard patches stepped from every dwelling toward the
+# village centre, so the square's dirt runs out to each door.
+const PATH_STEP := 7.0
+const PATH_SCALE := 0.55
 var _smoke: Array[GPUParticles2D] = []
 # Animated kinds only: key -> [phase-0 texture, phase-1 texture] and key ->
 # every MultiMeshInstance2D showing it (the source layer plus its eight torus
@@ -351,6 +355,17 @@ static func yard_scale(kind: int) -> float:
 	return 0.0
 
 
+# Points every `step` world units along the open stretch from `from` toward
+# `to`, leaving the first and last step clear of the two yards.
+static func path_steps(from: Vector2, to: Vector2, step: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var d := from.distance_to(to)
+	var n := int(d / step)
+	for i in range(2, n - 1):
+		out.append(from.lerp(to, float(i) / float(n)))
+	return out
+
+
 # A 32 px patch of packed earth: an ellipse with a dithered rim and a few
 # darker specks, top-down like every other structure sprite.
 static func yard_image() -> Image:
@@ -503,6 +518,11 @@ func _redraw() -> void:
 				# Sits a little below the sprite's centre, under its footprint.
 				yard_xf.append(Transform2D(0.0, Vector2(yw, yw), 0.0, ppos + Vector2(0.0, 3.0)))
 				yard_col.append(Color(1, 1, 1, 0.9 * fade))
+				if ys < HEARTH_YARD_SCALE:
+					var pw: float = base_scale * PATH_SCALE
+					for step_pos in path_steps(ppos + Vector2(0.0, 3.0), pos, PATH_STEP):
+						yard_xf.append(Transform2D(0.0, Vector2(pw, pw), 0.0, step_pos))
+						yard_col.append(Color(1, 1, 1, 0.75 * fade))
 			var rank: int = _smoke_rank(kind)
 			if rank >= 0 and rank < smoke_rank:
 				smoke_rank = rank
