@@ -127,7 +127,10 @@ func _make_ember_pool() -> void:
 		p.explosiveness = 0.85
 		p.z_index = 6
 		p.visibility_rect = Rect2(-200, -200, 400, 400)
-		p.texture = _disc
+		# The pixel ember mark, unfiltered: the radial disc read as soft
+		# orange blobs the size of a hut at 16x.
+		p.texture = PixelFxSprites.build(PixelFxSprites.EMBER)
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var m := ParticleProcessMaterial.new()
 		m.direction = Vector3(0, -1, 0)
 		m.spread = 38.0
@@ -136,10 +139,10 @@ func _make_ember_pool() -> void:
 		m.gravity = Vector3(0, -16, 0)
 		m.damping_min = 5.0
 		m.damping_max = 12.0
-		# Small motes: the disc is sized in world units, so at 4x zoom a
-		# full-size spray read as one blurry fireball over the village.
-		m.scale_min = 0.25
-		m.scale_max = 0.5
+		# Small motes (the 16 px mark is sized in world units): at 4x a
+		# full-size spray read as one fireball over the village.
+		m.scale_min = 0.14
+		m.scale_max = 0.28
 		var grad := Gradient.new()
 		grad.set_color(0, Color(1.0, 0.72, 0.30))
 		grad.set_color(1, Color(1.0, 0.30, 0.08, 0.0))
@@ -176,7 +179,8 @@ func _make_dust_pool() -> void:
 		p.explosiveness = 0.7
 		p.z_index = 6
 		p.visibility_rect = Rect2(-100, -100, 200, 200)
-		p.texture = _disc
+		p.texture = PixelFxSprites.build(PixelFxSprites.SMOKE)
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var m := ParticleProcessMaterial.new()
 		m.direction = Vector3(0, -1, 0)
 		m.spread = 160.0
@@ -185,11 +189,12 @@ func _make_dust_pool() -> void:
 		m.gravity = Vector3(0, 9, 0)
 		m.damping_min = 8.0
 		m.damping_max = 16.0
-		m.scale_min = 1.2
-		m.scale_max = 2.2
+		m.scale_min = 0.5
+		m.scale_max = 0.9
 		var grad := Gradient.new()
-		grad.set_color(0, Color(0.72, 0.66, 0.52, 0.30))
-		grad.set_color(1, Color(0.72, 0.66, 0.52, 0.0))
+		# The puff is grey; tint it to a tan dust.
+		grad.set_color(0, Color(1.2, 1.05, 0.8, 0.45))
+		grad.set_color(1, Color(1.2, 1.05, 0.8, 0.0))
 		var gt := GradientTexture1D.new()
 		gt.gradient = grad
 		m.color_ramp = gt
@@ -302,7 +307,8 @@ func _make_spark_pool() -> void:
 		p.explosiveness = 0.85
 		p.z_index = 6
 		p.visibility_rect = Rect2(-200, -200, 400, 400)
-		p.texture = _disc
+		p.texture = PixelFxSprites.build(PixelFxSprites.EMBER)
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var m := ParticleProcessMaterial.new()
 		m.direction = Vector3(0, -1, 0)
 		m.spread = 48.0
@@ -311,8 +317,8 @@ func _make_spark_pool() -> void:
 		m.gravity = Vector3(0, -14, 0)
 		m.damping_min = 5.0
 		m.damping_max = 12.0
-		m.scale_min = 0.6
-		m.scale_max = 1.3
+		m.scale_min = 0.3
+		m.scale_max = 0.65
 		var grad := Gradient.new()
 		grad.set_color(0, Color(1.0, 1.0, 1.0))
 		grad.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
