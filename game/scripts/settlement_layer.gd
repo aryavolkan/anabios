@@ -659,7 +659,9 @@ func _redraw() -> void:
 					var tp := pos + Vector2(0.0, -26.0 - (th - ts) * 0.5)
 					build_xf[tkind].append(Transform2D(0.0, Vector2(ts, th), 0.0, tp))
 					build_col[tkind].append(Color(1, 1, 1, fade))
-	_place_invention_landmarks(stats_by_sid, build_xf, build_col, yard_xf, yard_col, clearings)
+	_place_invention_landmarks(
+		stats_by_sid, build_xf, build_col, yard_xf, yard_col, shadow_xf, shadow_col, clearings
+	)
 	_assign_smoke()
 	_assign_fires(fire_pos)
 	for k in Buildings.KIND_COUNT:
@@ -688,6 +690,8 @@ func _place_invention_landmarks(
 	build_col: Array,
 	yard_xf: Array,
 	yard_col: Array,
+	shadow_xf: Array,
+	shadow_col: Array,
 	clearings: Array[Rect2]
 ) -> void:
 	var sp_ids: PackedInt32Array = sim.alive_species_ids()
@@ -743,10 +747,19 @@ func _place_invention_landmarks(
 			var kind: int = msig[slot]
 			var ang: float = float(s) * 2.39996 + float(slot) * 2.0
 			var lp := pos + Vector2.from_angle(ang) * LANDMARK_RING
-			# Each workshop stands on its own dirt yard ...
+			# Each workshop stands on its own dirt yard with a contact shadow ...
 			var yw: float = lscale * YARD_SCALE
 			yard_xf.append(Transform2D(0.0, Vector2(yw, yw), 0.0, lp + Vector2(0.0, 3.0)))
 			yard_col.append(Color(1, 1, 1, 0.9 * fade))
+			shadow_xf.append(
+				Transform2D(
+					0.0,
+					Vector2(lscale * SHADOW_W, lscale * SHADOW_H),
+					0.0,
+					lp + SHADOW_OFFSET * lscale
+				)
+			)
+			shadow_col.append(lcol)
 			# ... as a 32x44 walled front, base on the ring.
 			var lh: float = lscale * Buildings.height_ratio(kind)
 			lp.y -= (lh - lscale) * 0.5
