@@ -25,6 +25,20 @@ func _check(cond: bool, msg: String) -> void:
 
 
 func _init() -> void:
+	# --- dirt yards: a 32 px earth patch, solid centre, clear corners ---
+	var yard: Image = SettlementLayer.yard_image()
+	_check(yard.get_width() == 32 and yard.get_height() == 32, "yard patch is 32x32")
+	_check(yard.get_pixel(16, 16).a > 0.9, "yard centre is packed earth")
+	_check(yard.get_pixel(0, 0).a == 0.0, "yard corners stay clear")
+	_check(SettlementLayer.yard_scale(VillageLayout.HUT) > 0.0, "huts stand on a yard")
+	_check(SettlementLayer.yard_scale(VillageLayout.FENCE_H) == 0.0, "fences keep the ground")
+	_check(
+		(
+			SettlementLayer.yard_scale(VillageLayout.HEARTH)
+			> SettlementLayer.yard_scale(VillageLayout.HUT)
+		),
+		"the hearth's yard is the widest"
+	)
 	# --- era_for --------------------------------------------------------
 	_check(
 		SettlementLayer.era_for(PackedStringArray(), {}) == 0,

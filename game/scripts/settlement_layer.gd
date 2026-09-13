@@ -62,6 +62,13 @@ const FLICKER_PERIOD := 1.0 / 3.0
 
 var _building_mmis: Array[MultiMeshInstance2D] = []
 var _structure_mmis: Array[MultiMeshInstance2D] = []
+# Trampled dirt yards under every dwelling and around the hearth, drawn under
+# the fields (the reference villages stand on packed earth, not on grass).
+var _yard_mmi: MultiMeshInstance2D = null
+const YARD_PX := 32
+const YARD_Z := -7
+const YARD_SCALE := 1.7  # in structure widths; the hearth's yard is wider
+const HEARTH_YARD_SCALE := 2.6
 var _smoke: Array[GPUParticles2D] = []
 # Animated kinds only: key -> [phase-0 texture, phase-1 texture] and key ->
 # every MultiMeshInstance2D showing it (the source layer plus its eight torus
@@ -121,6 +128,7 @@ func _ready() -> void:
 			var bkey := "b%d" % k
 			_building_frames[bkey] = [tex, Buildings.build_variant(k, 1)]
 			_building_nodes[bkey] = [mmi]
+	_yard_mmi = _make_layer("Yard", SpriteSplit.for_quad(yard_image()), YARD_Z)
 	# Village-footprint structures: one plain MultiMesh layer per kind, same
 	# Metal-safe contract. Fields draw below agents like the old farm patches;
 	# every other structure kind is cut in two (sprite_split.gd, D9): walls
@@ -183,6 +191,7 @@ func _make_wrap_clones() -> void:
 	var world: float = sim.world_size()
 	for k in Buildings.KIND_COUNT:
 		_clone_layer(_building_mmis[k], "b%d" % k, world)
+	_clone_layer(_yard_mmi, "y", world)
 	for k in StructureSprites.KIND_COUNT:
 		_clone_layer(_structure_mmis[k], "s%d" % k, world)
 		if _structure_top_mmis[k] != null:
@@ -320,6 +329,51 @@ static func _smoke_rank(kind: int) -> int:
 	return -1
 
 
+# Structure kinds that stand on a dirt yard (dwellings, work buildings and
+# the hearth); fences, fields and walls keep the ground they are on.
+const _YARD_KINDS: PackedInt32Array = [
+	StructureSprites.TENT,
+	StructureSprites.HUT,
+	StructureSprites.WELL,
+	StructureSprites.FORGE,
+	StructureSprites.SCRIPTORIUM,
+	StructureSprites.GRANARY,
+	StructureSprites.MILL,
+	StructureSprites.RUIN_BURNT,
+]
+
+
+static func yard_scale(kind: int) -> float:
+	if kind == StructureSprites.HEARTH or kind == StructureSprites.HALL:
+		return HEARTH_YARD_SCALE
+	if _YARD_KINDS.has(kind):
+		return YARD_SCALE
+	return 0.0
+
+
+# A 32 px patch of packed earth: an ellipse with a dithered rim and a few
+# darker specks, top-down like every other structure sprite.
+static func yard_image() -> Image:
+	var img := Image.create(YARD_PX, YARD_PX, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var earth := Color("8a6a42")
+	var dark := Color("735634")
+	var c := (YARD_PX - 1) * 0.5
+	for y in YARD_PX:
+		for x in YARD_PX:
+			var dx := (x - c) / 15.5
+			var dy := (y - c) / 11.5
+			var d := dx * dx + dy * dy
+			if d > 1.0:
+				continue
+			# Dithered rim: alternate pixels drop out over the outer band.
+			if d > 0.72 and (x + y) % 2 == 1:
+				continue
+			var speck := (x * 7 + y * 13) % 17 == 0
+			img.set_pixel(x, y, dark if speck else earth)
+	return img
+
+
 # Cluster settlement sites whose anchors lie within `radius` of an already
 # accepted (larger) site: the accepted site keeps its species id and position
 # and absorbs the smaller site's members. Pure; sorted by members descending
@@ -388,6 +442,8 @@ func _redraw() -> void:
 	for k in StructureSprites.KIND_COUNT:
 		struct_xf.append([])
 		struct_col.append([])
+	var yard_xf: Array = []
+	var yard_col: Array = []
 	for sid in _villages.keys():
 		var v: Dictionary = _villages[sid]
 		var stale: float = _now - float(v["seen"])
@@ -424,7 +480,13 @@ func _redraw() -> void:
 			var kind: int = int(p["kind"])
 			var base_pos: Vector2 = p["pos"]
 			var ppos: Vector2 = base_pos + delta
-			var pk: String = "%d:%s" % [kind, base_pos]
+			# Keyed by kind and grid cell, not by the absolute position: the
+			# anchor eases every redraw and a crowded square re-plans often,
+			# and a key built from the exact position restarted every
+			# structure's pop-in each time, leaving the whole village at
+			# scale zero.
+			var cell: Vector2i = Vector2i(((base_pos - plan_anchor) / VillageLayout.GRID).round())
+			var pk: String = "%d:%d,%d" % [kind, cell.x, cell.y]
 			var first_seen: bool = not old_born.has(pk)
 			var born: float = float(old_born.get(pk, _now))
 			new_born[pk] = born
@@ -435,6 +497,12 @@ func _redraw() -> void:
 			var sx: float = -s if flip else s
 			struct_xf[kind].append(Transform2D(0.0, Vector2(sx, s), 0.0, ppos))
 			struct_col[kind].append(tint)
+			var ys: float = yard_scale(kind)
+			if ys > 0.0:
+				var yw: float = base_scale * ys
+				# Sits a little below the sprite's centre, under its footprint.
+				yard_xf.append(Transform2D(0.0, Vector2(yw, yw), 0.0, ppos + Vector2(0.0, 3.0)))
+				yard_col.append(Color(1, 1, 1, 0.9 * fade))
 			var rank: int = _smoke_rank(kind)
 			if rank >= 0 and rank < smoke_rank:
 				smoke_rank = rank
@@ -463,6 +531,7 @@ func _redraw() -> void:
 		_write(_building_mmis[k].multimesh, build_xf[k], build_col[k])
 	for k in StructureSprites.KIND_COUNT:
 		_write(_structure_mmis[k].multimesh, struct_xf[k], struct_col[k])
+	_write(_yard_mmi.multimesh, yard_xf, yard_col)
 
 
 # Invention landmarks mark tech-holding lineages that have NO settlement of
