@@ -22,7 +22,7 @@ uniform float sea_level = 0.35;        // viewer-derived water line, for depth s
 uniform float vignette = 0.06;         // corner darkening on terrain (0 = off)
 // Land finish: a saturation lift and brightness gain applied after relief and
 // shore passes so the muted sim palette reads as pixel art, not a heatmap.
-uniform float vibrance = 0.12;
+uniform float vibrance = 0.18;
 uniform float land_lift = 0.92;
 // 2.5D relief (D9): land elevation is quantised into terraces; where a cell
 // stands a terrace above its southern neighbour the bottom band of the cell

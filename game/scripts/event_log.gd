@@ -7,7 +7,6 @@ extends PanelContainer
 # replay and showcase scripts already read; this panel only renders them.
 
 const Codex = preload("res://scripts/codex_panel.gd")
-const PixelFont = preload("res://scripts/pixel_font.gd")
 const HudIcons = preload("res://scripts/hud_icons.gd")
 const SpeciesNames = preload("res://scripts/species_names.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
@@ -185,7 +184,7 @@ func _process(_delta: float) -> void:
 
 
 func _draw_rows() -> void:
-	var font: Font = PixelFont.build()
+	var font: Font = UiTheme.font()
 	var y := 0
 	for ev in _recent:
 		var t: int = int(ev["type"])

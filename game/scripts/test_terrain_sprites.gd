@@ -132,10 +132,10 @@ func _init() -> void:
 	var grass_kinds: Dictionary = {}
 	for i in 60:
 		grass_kinds[T.prop_variant_for(T.GRASS, float(i) / 60.0)] = true
-	_check(
-		grass_kinds.size() == T.props_for_terrain(T.GRASS).size(),
-		"grass grows every one of its props"
-	)
+	var distinct: Dictionary = {}
+	for k in T.props_for_terrain(T.GRASS):
+		distinct[k] = true
+	_check(grass_kinds.size() == distinct.size(), "grass grows every one of its props")
 
 	# --- atlas layout: tile cells land where the mapping says ---
 	var aimg := atlas.get_image()

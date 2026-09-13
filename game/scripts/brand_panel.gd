@@ -25,7 +25,7 @@ func _ready() -> void:
 	row.add_child(col)
 	var name := Label.new()
 	name.text = "ANABIOS"
-	name.add_theme_font_size_override("font_size", 18)
+	name.add_theme_font_size_override("font_size", 20)
 	name.add_theme_color_override("font_color", UiTheme.TEXT)
 	col.add_child(name)
 	var tag := Label.new()

@@ -23,18 +23,26 @@ const TEXT := Color(0.86, 0.92, 0.93)
 const TEXT_DIM := Color(0.56, 0.67, 0.69)
 
 
+# The HUD font every panel draws with: Godot's smooth fallback sans unless
+# ANABIOS_PIXEL_FONT=1 opts into the 5x7 bitmap font.
+static func font() -> Font:
+	if OS.has_environment("ANABIOS_PIXEL_FONT"):
+		return PixelFont.build()
+	return ThemeDB.fallback_font
+
+
 static func build() -> Theme:
 	var theme := Theme.new()
-	# Pixel HUD text: the fixed-size bitmap font scales by whole steps, so
-	# the 11-13 px sizes below all render at 9 px per line and the brand
-	# name at 18.
-	theme.default_font = PixelFont.build()
-	theme.default_font_size = PixelFont.CELL_H
+	# The reference boards set their HUD in a smooth sans at ~14 px, so that
+	# is the default; ANABIOS_PIXEL_FONT=1 swaps in the 5x7 bitmap font
+	# (pixel_font.gd) for a fully pixel HUD.
+	theme.default_font = font()
+	theme.default_font_size = 14
 
 	theme.set_stylebox("panel", "PanelContainer", pixel_frame(BG_PANEL, ACCENT_DIM, 9, 7))
 
 	theme.set_color("font_color", "Label", TEXT)
-	theme.set_font_size("font_size", "Label", 12)
+	theme.set_font_size("font_size", "Label", 13)
 
 	theme.set_stylebox("normal", "Button", pixel_frame(BG_ELEV, ACCENT_DIM, 8, 4))
 	theme.set_stylebox("hover", "Button", pixel_frame(BG_HOVER, ACCENT, 8, 4))
@@ -49,7 +57,7 @@ static func build() -> Theme:
 	theme.set_color("font_hover_color", "Button", ACCENT)
 	theme.set_color("font_pressed_color", "Button", ACCENT)
 	theme.set_color("font_focus_color", "Button", TEXT)
-	theme.set_font_size("font_size", "Button", 12)
+	theme.set_font_size("font_size", "Button", 13)
 
 	# --- Form controls (menu screen) ---
 	theme.set_stylebox("normal", "OptionButton", _button_box(BG_ELEV, ACCENT_DIM))

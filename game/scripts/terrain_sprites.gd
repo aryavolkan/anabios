@@ -53,11 +53,11 @@ const CELL_PX := 16
 
 const _TILE_PALS: Array = [
 	{"w": "173070", "k": "12265c", "h": "2a4a94"},
-	{"a": "4a8a3a", "d": "3d7530", "l": "5fa84a", "f": "e6cc60", "w": "f2f0dc"},
-	{"b": "236a2e", "d": "1a5223", "l": "2f8a3c", "m": "3fa04a"},
+	{"a": "5a9c40", "d": "4a8434", "l": "76b850", "f": "e6cc60", "w": "f2f0dc"},
+	{"b": "2c7a36", "d": "215f2a", "l": "3c9a46", "m": "4fb056"},
 	{"e": "ad9454", "d": "947c42", "r": "c4ac68", "t": "7a6a4a"},
 	{"r": "6f7278", "d": "585b62", "l": "868a90", "k": "45484e"},
-	{"s": "b8a85c", "d": "9c8c48", "l": "ccbc70", "t": "857a3a"},
+	{"s": "bcae5e", "d": "a0904a", "l": "d0c272", "t": "857a3a"},
 	{"j": "1f7a3a", "d": "166030", "l": "2c9a4c", "m": "45b45e"},
 	{"g": "3a7a5c", "d": "2c604a", "l": "4a9270", "n": "245240"},
 	{"u": "9ea89e", "d": "8a948a", "l": "b2bcb2", "k": "76806f"},
@@ -652,11 +652,11 @@ const _PROP_MAPS: Array = [
 # an accent under the trees, not a polka dot over the whole wood).
 const _TERRAIN_PROPS: Array = [
 	[],
-	[BUSH, FLOWERS, TUFT],
+	[BUSH, BUSH, FLOWERS, FLOWERS, TUFT, TUFT, BOULDER],
 	[OAK, OAK, STUMP, MUSHROOM],
 	[CACTUS],
 	[BOULDER],
-	[ACACIA, TUFT],
+	[ACACIA, ACACIA, TUFT, TUFT, BOULDER],
 	[JUNGLE, JUNGLE, MUSHROOM],
 	[PINE, PINE, STUMP],
 	[SHRUB, TUFT],

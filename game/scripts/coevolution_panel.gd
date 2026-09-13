@@ -1,6 +1,6 @@
 extends Control
 
-const PixelFont = preload("res://scripts/pixel_font.gd")
+const UiTheme = preload("res://scripts/ui_theme.gd")
 
 # Gene↔culture co-evolution time-series. Reads the Rust per-tick history and
 # draws a vertical stack of small-multiple charts sharing one time axis.
@@ -180,7 +180,7 @@ var _mark_cursor: int = 0  # own cursor over the shared event log
 
 func _ready() -> void:
 	visible = false
-	_font = PixelFont.build()
+	_font = UiTheme.font()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
