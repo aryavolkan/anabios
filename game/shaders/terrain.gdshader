@@ -206,20 +206,23 @@ void fragment() {
 		float es = elev_bilin(TEXTURE, cellf);
 		float shallowness = clamp(es / max(sea_level, 1e-3), 0.0, 1.0);
 		shallowness *= shallowness;
-		outc = mix(deep, shallow, 0.22 * shallowness + 0.18 * step(0.01, coast));
+		outc = mix(deep, shallow, 0.22 * shallowness + 0.06 * step(0.01, coast));
 
 		// Pixel ripples: the water tile family's light dashes and dark
 		// specks, cycled through its variants on a per-cell phase so the
 		// surface twinkles slowly; dissolves with the tile LOD like land.
 		if (tiles_enabled > 0.5) {
-			vec2 wcell = cell_origin + cell0 - ids_offset;
-			float h = hash2(wcell);
-			float variant = mod(floor(h * tile_variants + TIME * 1.1 + h * 7.0), tile_variants);
-			vec3 tile = tile_at(0.0, variant, cellf);
-			// Roughly a third of the cells stay calm so the ripples read as
-			// scattered strokes rather than a hatch.
-			float calm = step(0.35, hash2(wcell + vec2(13.0, 5.0)));
-			outc += (tile - WATER_TILE_BASE) * 1.4 * detail * calm;
+			// The tile spans two cells (twice the texel) so the strokes are
+			// chunky and sparse, its variant and phase come from the 2x2
+			// block, and each block's weight varies smoothly so the surface
+			// never shows the cell grid.
+			vec2 wcellf = cell_origin + cellf - ids_offset;
+			vec2 block = floor(wcellf * 0.5);
+			float h = hash2(block);
+			float variant = mod(floor(h * tile_variants + TIME * 0.9 + h * 7.0), tile_variants);
+			vec3 tile = tile_at(0.0, variant, wcellf * 0.5);
+			float weight = 0.35 + 0.65 * hash2(block + vec2(13.0, 5.0));
+			outc += (tile - WATER_TILE_BASE) * 1.3 * detail * weight;
 		}
 		// A soft, slow swell in seamless world coordinates keeps far zoom
 		// (where the ripples have dissolved) from going dead flat.
