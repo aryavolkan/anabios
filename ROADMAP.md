@@ -166,7 +166,8 @@ the invasion margin or gets honestly closed.*
   tiles with clutter, mixed tree silhouettes, hand-authored 24 px quadruped
   and hominin masters y-sorted across species in one MultiMesh, spaced
   villages in clearings on dirt yards with paths, their walled buildings
-  about two figures tall in the 3/4-view convention (camps, thatch huts,
+  about two figures tall in the 3/4-view convention, every building at one
+  pixel grain (camps, thatch huts, invention workshops,
   timber-frame houses, palisades, catapults, fields, burning ruins), market squares
   joined by dirt roads, the themed HUD, and captures in
   `gallery/scale-*.png`. Still open: the SubViewport pixel pipeline and the
