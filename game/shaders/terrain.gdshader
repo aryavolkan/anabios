@@ -296,18 +296,22 @@ void fragment() {
 		vec2 fc = fract(cellf);
 		// Southern cliff face: the higher the drop, the darker and browner.
 		float drop = clamp((lv - lvD) / 3.0, 0.0, 1.0);
-		float face = drop * step(1.0 - cliff_band, fc.y) * step(0.5, lv - lvD);
+		// A level crossing only paints where the elevation really steps (at
+		// least 0.6 of a level between the two cells): gentle slopes cross
+		// levels with tiny differences and used to sprout stray bars.
+		float real = 0.6 / terrace_levels;
+		float face = drop * step(1.0 - cliff_band, fc.y) * step(0.5, lv - lvD) * step(real, e0 - eD);
 		vec3 cliff = mix(outc * 0.45, vec3(0.30, 0.23, 0.17), 0.5);
 		// A lit lip along the top of the face.
 		float lip = step(1.0 - cliff_band, fc.y) * (1.0 - step(1.0 - cliff_band + 0.08, fc.y));
 		outc = mix(outc, cliff, face * cliff_strength);
 		outc = mix(outc, outc * 1.35 + 0.08, face * lip * cliff_strength);
 		// Northern rim of a plateau: a thin bright line.
-		float rim = step(0.5, lv - lvU) * (1.0 - step(0.10, fc.y));
+		float rim = step(0.5, lv - lvU) * step(real, e0 - eU) * (1.0 - step(0.10, fc.y));
 		outc = mix(outc, outc * 1.25 + 0.06, rim * cliff_strength * 0.8);
 		// East/west ledges: a thin dark line where the cell stands higher.
-		float ledge = step(0.5, lv - lvL) * (1.0 - step(0.08, fc.x))
-			+ step(0.5, lv - lvR) * step(0.92, fc.x);
+		float ledge = step(0.5, lv - lvL) * step(real, e0 - eL) * (1.0 - step(0.08, fc.x))
+			+ step(0.5, lv - lvR) * step(real, e0 - eR) * step(0.92, fc.x);
 		outc = mix(outc, outc * 0.6, clamp(ledge, 0.0, 1.0) * cliff_strength * 0.3);
 		// Altitude: highlands sit a touch brighter than the lowlands.
 		float es = elev_bilin(TEXTURE, cellf);
