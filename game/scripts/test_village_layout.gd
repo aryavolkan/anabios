@@ -116,6 +116,13 @@ func _init() -> void:
 		"era 0 tent count matches formula"
 	)
 	var big_camp := L.plan(12, Vector2.ZERO, 60, 0, 0, no_water)
+	_check(_count_kind(big_camp, L.FIELD) == 2, "a big camp tends a two-cell plot")
+	_check(
+		_count_kind(big_camp, L.FENCE_H) + _count_kind(big_camp, L.FENCE_V) >= 6,
+		"the plot is fenced"
+	)
+	_check(_count_kind(big_camp, L.GRANARY) == 0, "no granary before farming")
+	_check(_count_kind(camp, L.FIELD) == 0, "a small camp has no plot")
 	_check(
 		_count_kind(big_camp, L.TENT) > 0 and _count_kind(big_camp, L.TENT_B) > 0,
 		"a large camp mixes tents and yurts"

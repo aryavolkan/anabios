@@ -211,6 +211,50 @@ static func _nearest_water_adjacent_cell(
 	return best
 
 
+# A fenced block of `fields` FIELD cells two columns east of the dwellings
+# (two per row), ringed by fences: top/bottom edges corner to corner (so
+# the corners come out FENCE_H), left/right edges on the interior rows. A
+# granary sits east of the fence when the village farms.
+static func _place_fields(
+	fields: int,
+	dwellings: Array[Vector2i],
+	granary: bool,
+	occupied: Dictionary,
+	anchor: Vector2,
+	is_water: Callable,
+	out: Array
+) -> void:
+	var max_gx := 0
+	for h in dwellings:
+		max_gx = maxi(max_gx, h.x)
+	var fx0 := max_gx + 2
+	var fx1 := fx0 + 1
+	var rows := int(ceil(float(fields) / 2.0))
+	var fy0 := 0
+	var fy1 := rows - 1
+	var placed_fields := 0
+	for row in rows:
+		for col in range(2):
+			if placed_fields >= fields:
+				break
+			_place(Vector2i(fx0 + col, row), FIELD, false, occupied, anchor, is_water, out)
+			placed_fields += 1
+		if placed_fields >= fields:
+			break
+	for gx in range(fx0 - 1, fx1 + 2):
+		_place(Vector2i(gx, fy0 - 1), FENCE_H, false, occupied, anchor, is_water, out)
+		_place(Vector2i(gx, fy1 + 1), FENCE_H, false, occupied, anchor, is_water, out)
+	for gy in range(fy0, fy1 + 1):
+		_place(Vector2i(fx0 - 1, gy), FENCE_V, false, occupied, anchor, is_water, out)
+		_place(Vector2i(fx1 + 1, gy), FENCE_V, false, occupied, anchor, is_water, out)
+	if granary:
+		var granary_candidates: Array[Vector2i] = []
+		for extra_x in range(1, 4):
+			for gy2 in range(fy0, fy1 + 1):
+				granary_candidates.append(Vector2i(fx1 + 1 + extra_x, gy2))
+		_place_first_free(granary_candidates, GRANARY, occupied, anchor, is_water, out, false)
+
+
 # Pure village layout plan. Returns an Array of {"kind": int, "pos": Vector2,
 # "flip": bool} in draw order (y ascending, ties by x). Deterministic from
 # its arguments alone: no RNG object, no time, only `hash2(sid, ...)`.
@@ -249,6 +293,14 @@ static func plan(
 				placed += 1
 		if members >= 16:
 			_place_first_free(spiral_cells, WINDBREAK, occupied, anchor, is_water, out, true)
+		# A big camp tends a small fenced plot east of the tents (the boards'
+		# garden patch), with no granary before farming.
+		if members >= 24:
+			var tents: Array[Vector2i] = []
+			for p in out:
+				if TENT_KINDS.has(int(p["kind"])):
+					tents.append(p["cell"])
+			_place_fields(2, tents, false, occupied, anchor, is_water, out)
 	else:
 		# --- Era >= 1 (thatch): huts on the spiral, well, fields, granary ---
 		var count := clampi(2 + members / 6, 2, 14)
@@ -269,41 +321,9 @@ static func plan(
 
 		var farming := (flags & FLAG_FARMING) != 0
 		if farming or members >= 24:
-			var fields := clampi(members / 12, 2, 6)
-			var max_gx := 0
-			for h in huts:
-				max_gx = maxi(max_gx, h.x)
-			var fx0 := max_gx + 2
-			var fx1 := fx0 + 1
-			var rows := int(ceil(float(fields) / 2.0))
-			var fy0 := 0
-			var fy1 := rows - 1
-			var placed_fields := 0
-			for row in rows:
-				for col in range(2):
-					if placed_fields >= fields:
-						break
-					_place(Vector2i(fx0 + col, row), FIELD, false, occupied, anchor, is_water, out)
-					placed_fields += 1
-				if placed_fields >= fields:
-					break
-			# Fence ring one cell out from the field block; top/bottom edges
-			# run corner to corner (so the corners come out FENCE_H, as
-			# specified), left/right edges fill only the interior rows.
-			for gx in range(fx0 - 1, fx1 + 2):
-				_place(Vector2i(gx, fy0 - 1), FENCE_H, false, occupied, anchor, is_water, out)
-				_place(Vector2i(gx, fy1 + 1), FENCE_H, false, occupied, anchor, is_water, out)
-			for gy in range(fy0, fy1 + 1):
-				_place(Vector2i(fx0 - 1, gy), FENCE_V, false, occupied, anchor, is_water, out)
-				_place(Vector2i(fx1 + 1, gy), FENCE_V, false, occupied, anchor, is_water, out)
-			if farming:
-				var granary_candidates: Array[Vector2i] = []
-				for extra_x in range(1, 4):
-					for gy2 in range(fy0, fy1 + 1):
-						granary_candidates.append(Vector2i(fx1 + 1 + extra_x, gy2))
-				_place_first_free(
-					granary_candidates, GRANARY, occupied, anchor, is_water, out, false
-				)
+			_place_fields(
+				clampi(members / 12, 2, 6), huts, farming, occupied, anchor, is_water, out
+			)
 
 		if era >= 2:
 			# --- Era >= 2 (timber/stone): forge, scriptorium, mill ---
