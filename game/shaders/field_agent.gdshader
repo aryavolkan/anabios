@@ -309,5 +309,11 @@ void fragment() {
 		}
 		float rim = 1.0 - smoothstep(0.0, 2.0 / cell_px, UV.y - waterline);
 		COLOR.rgb = mix(COLOR.rgb, vec3(0.78, 0.88, 0.96), rim * 0.7 * COLOR.a);
+		// A pale wake: one texel row of foam along the waterline either
+		// side of the body, so the cut reads as the water's surface.
+		float wake_row = step(UV.y - waterline, 1.0 / cell_px);
+		float wake_span = step(abs(UV.x - 0.5), 0.34);
+		float wake = wake_row * wake_span * (1.0 - step(0.5, COLOR.a));
+		COLOR = mix(COLOR, vec4(0.86, 0.93, 0.98, 0.85), wake);
 	}
 }
