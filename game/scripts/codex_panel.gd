@@ -209,7 +209,7 @@ func _ready() -> void:
 	if _font == null:
 		_font = ThemeDB.fallback_font
 	for i in ApeSprites.NAMES.size():
-		_ape_tex.append(ApeSprites.build(i))
+		_ape_tex.append(MammalSprites.hominin_portrait(i))
 	for t in TerrainSprites.NAMES.size():
 		_tile_tex.append(ImageTexture.create_from_image(TerrainSprites.tile_image(t, 0)))
 	var box := VBoxContainer.new()

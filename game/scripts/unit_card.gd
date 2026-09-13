@@ -44,7 +44,7 @@ func _ready() -> void:
 	if _font == null:
 		_font = ThemeDB.fallback_font
 	for i in ApeSprites.NAMES.size():
-		_ape_tex.append(ApeSprites.build(i))
+		_ape_tex.append(MammalSprites.hominin_portrait(i))
 	_card = Control.new()
 	_card.custom_minimum_size = Vector2(CARD_W, CARD_H)
 	_card.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

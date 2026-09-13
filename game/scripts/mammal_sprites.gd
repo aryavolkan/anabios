@@ -7,6 +7,7 @@ extends RefCounted
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 const HeroRigs = preload("res://scripts/hero_rigs.gd")
+const HomininRigs = preload("res://scripts/hominin_rigs.gd")
 
 enum {
 	HARE,
@@ -140,6 +141,8 @@ static func bucket_of(archetype: int, species_id: int) -> int:
 
 static func bucket_atlas(b: int) -> ImageTexture:
 	if b < SKIN_COUNT:
+		if HomininRigs.has(b):
+			return ApeSprites.pack_cells(HomininRigs.build_cells(b))
 		return ApeSprites.build_species_atlas(b)
 	var arch: int = QUAD_ORDER[b - SKIN_COUNT]
 	# Hand-authored 24 px silhouettes first (hero_rigs.gd); the scaled rect
@@ -168,8 +171,20 @@ static func portrait(archetype: int) -> ImageTexture:
 	)
 
 
+# A hominin's standing master as a HUD portrait (unit card, codex).
+static func hominin_portrait(species: int) -> ImageTexture:
+	if HomininRigs.has(species):
+		return ImageTexture.create_from_image(HomininRigs.build_cell(species, 0))
+	return ApeSprites.build(species)
+
+
 static func bucket_fallen(b: int) -> ImageTexture:
 	if b < SKIN_COUNT:
+		if HomininRigs.has(b):
+			var hcell: Image = HomininRigs.build_cell(b, 0)
+			hcell.rotate_90(CLOCKWISE)
+			hcell.flip_y()
+			return ImageTexture.create_from_image(hcell)
 		return ApeSprites.build_fallen_texture(b)
 	var arch: int = QUAD_ORDER[b - SKIN_COUNT]
 	if HeroRigs.has(NAMES[arch]):

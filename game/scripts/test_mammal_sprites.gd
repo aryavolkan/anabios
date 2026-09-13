@@ -7,6 +7,7 @@ extends SceneTree
 const M = preload("res://scripts/mammal_sprites.gd")
 const A = preload("res://scripts/ape_sprites.gd")
 const H = preload("res://scripts/hero_rigs.gd")
+const HM = preload("res://scripts/hominin_rigs.gd")
 
 var _failed := false
 
@@ -134,10 +135,47 @@ func _check_hero_art() -> void:
 		_check(_bottom_row(stand) >= H.PX - 4, "%s stands on the ground rows" % name)
 
 
+# Hominin masters: one per hominin, valid keys, feet on the ground, 22
+# derived cells with the weapon overlays where the shader samples them and
+# the arms above the head when celebrating.
+func _check_hominin_masters() -> void:
+	_check(HM.MASTERS.size() == A.SPECIES_COUNT, "one hominin master per species")
+	for sp in A.SPECIES_COUNT:
+		var name: String = A.NAMES[sp]
+		var rows: Array = HM.MASTERS[sp]
+		_check(rows.size() == HM.PX, "%s master has 24 rows" % name)
+		for r in rows:
+			_check((r as String).length() == HM.PX, "%s master rows are 24 wide" % name)
+			for ch in r:
+				_check(ch == "." or HM.KEYS.has(ch), "%s master uses known keys (%s)" % [name, ch])
+		var cells: Array = HM.build_cells(sp)
+		_check(cells.size() == A.POSE_COUNT, "%s derives every pose cell" % name)
+		var stand: Image = cells[0]
+		_check(_bottom_row(stand) >= HM.PX - 4, "%s stands on the ground rows" % name)
+		_check(_top_row(cells[14]) < _top_row(stand), "%s raises its arms to celebrate" % name)
+		for cell in [A.POSE_SPEAR, A.POSE_BOW, A.POSE_STEEL]:
+			var img: Image = cells[cell]
+			var blade := 0
+			for y in HM.PX:
+				for x in HM.PX:
+					var c := img.get_pixel(x, y)
+					# Flint/blade is the only light, blue-leaning grey in the
+					# hominin palettes (shaded variants included).
+					if c.a > 0.5 and c.r > 0.6 and c.b > c.r + 0.02:
+						blade += 1
+			_check(blade >= 2, "%s pose %d carries its weapon (%d px)" % [name, cell, blade])
+	_check(
+		HM.build_cell(0, 0).get_data() != HM.build_cell(1, 0).get_data(),
+		"hominins differ in silhouette"
+	)
+
+
+# Topmost figure row, ignoring the auto outline (a neutral 0.34 grey).
 func _top_row(img: Image) -> int:
 	for y in img.get_height():
 		for x in img.get_width():
-			if img.get_pixel(x, y).a > 0.5:
+			var c := img.get_pixel(x, y)
+			if c.a > 0.5 and not (absf(c.r - 0.34) < 0.01 and absf(c.g - 0.34) < 0.01):
 				return y
 	return img.get_height()
 
@@ -191,6 +229,7 @@ func _init() -> void:
 	_check_weapon_cells()
 	_check_quad_archetypes()
 	_check_hero_art()
+	_check_hominin_masters()
 	if _failed:
 		quit(1)
 		return
