@@ -25,7 +25,7 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 - **Anthropogenic arms race** — scenario-tagged `culture_bearer` lineages ("humans") are perceptible to wild agents as tool-bearing threats (new sensor + evolvable `SenseCultureThreat` program node + the `Vigilance` gene's FEAR gain); the `HuntedAdaptation` codex event fires when a hunted prey lineage's armor/speed/vigilance co-rises with its culture predator's tech era/weapon damage. Opt-in per scenario (`anthro_race_enabled`, spec: `docs/superpowers/specs/2026-08-19-anthro-arms-race-design.md`)
 - **Disease & epidemiology (H1)** — crowding-seeded SIS pathogen: zoonotic spillover in dense populations, proximity spread, energy-drain mortality via the normal starve path; Medicine finally has a counter-pressure (holders are 0.25× as susceptible and recover 3×). `EpidemicOutbreak`/`MedicineContainment` codex events (61/62). Opt-in per scenario (`disease_enabled`, spec: `docs/superpowers/specs/2026-09-01-disease-epidemiology-design.md`)
 - **Vertebrate classes** — mammal/reptile founder archetypes (`mammal_grazer`, `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`) pairing class body plans with affect/cognition genome profiles: endotherm-approximated mammals (high metabolism, big-brained, social, bold) vs ectotherm-approximated reptiles (cheap idle, armored, hair-trigger freeze-fight-flight, ambush Jaws). Demo: `scenarios/mammals-vs-reptiles.toml`
-- **Viewer** — Godot 4.6+ client: biome/species/pheromone overlays, inspector, codex panel, co-evolution charts, per-species tech panel
+- **Viewer** — Godot 4.6+ client in the pixel-art style of the reference boards: streamed, autotiled ground with hand-drawn tiles, flora and 24 px creature figures, 2.5D-scaled buildings in the open-source 3/4-view convention (a roof over a front wall about a figure high, trees a little taller than the houses), village footprints in clearings (camps, thatch huts, timber-frame houses, a dominant hall, palisades, catapults, fields, burning ruins), invention workshops with the invention hung as the shop sign, market squares joined by dirt roads, a themed HUD (smooth sans by default, a 5×7 pixel font as an opt-in) with biome/species/pheromone overlays, unit card, tabbed codex (research, species, biomes, culture), event log, co-evolution charts, per-species tables behind `[P]`
 - **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV) with archive-weighted emergence scoring (`docs/emergence-corpus.md`), save/load snapshots (`docs/determinism-contract.md`), criterion benchmark suite
 
 ## Scenarios
@@ -74,6 +74,28 @@ Deterministic (bit-identical per seed) and fast enough for long runs — measure
 cargo bench -p anabios-core          # tick, stages, and scavenge groups
 ```
 
+### Viewer bench
+
+The Godot viewer has its own frame-time readout, separate from the core
+criterion suite above: press **F3** in a running viewer for a small HUD panel
+(fps, frame/process ms, alive/visible agent counts, draw calls, primitives,
+video memory, and the Phase 2 chunk-streaming counters, which stay 0 until
+that work lands).
+
+`scripts/viewer-bench.sh` drives the same readout headlessly-ish (it still
+needs a real window — Godot's render/performance monitors read back nothing
+useful under `--headless`): it boots a scenario, samples N frames without
+pausing the sim, and writes + prints the mean:
+
+```bash
+scripts/viewer-bench.sh predator-prey            # 300 frames, default seed
+scripts/viewer-bench.sh continental 600 3         # 600 frames, seed 3
+cat runs/viewer-bench.csv                         # header + one row/frame + a "mean" row
+```
+
+This is the number quoted as the Phase 0 baseline and every later phase's
+budget check in `docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md`.
+
 ## Running a sweep (headless)
 
 Run N seeds of a scenario in parallel and dump per-run codex events + a CSV summary:
@@ -112,11 +134,15 @@ cargo build --release --bin anabios-headless
    ```
 2. Open `game/project.godot` in Godot 4.6+ (or import via `godot --headless --import --path game/`).
 3. Press F5 to run the main scene.
-   - Mouse wheel: zoom; middle-drag or WASD/arrow keys: pan
+   - Mouse wheel: zoom, snapping to fixed steps with an eased, cursor-anchored
+     transition — integer texel multiples 1×–8× above 1×, an overview range
+     (down to 0.0625×) for framing large worlds below 1×. Middle-drag or
+     WASD/arrow keys: pan
    - Bottom-left buttons: pause + speed (1× / 4× / 16× / 64×)
-   - Left-click an agent (within 4 world units) to pin its stats in the inspector panel
+   - Left-click an agent (within 4 world units) to pin it in the unit card (portrait, HP, stamina, module pips)
    - Scrolling list at bottom-right shows codex events as they fire
     - **R**: replay the latest codex event (rewind to a snapshot, fast-forward, pause at the moment; R/Esc resumes live) · **U**: run at max speed until the next event fires · **V**: event camera — auto-cut tour of recent event locations
+   - **F**: frame the whole world · **F3**: frame-time readout · **B**: toggle the pixel-art ground (tiles + props) · **N**: toggle chunk streaming (A/B against the whole-world sprite) · **P**: species, adaptation and tech tables · **H**: overlay legend · **T** / **Y**: evolution and co-evolution panels
 
 ## Recording a showcase video
 

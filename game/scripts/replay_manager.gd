@@ -308,7 +308,8 @@ func _set_banner(text: String, _pin: bool) -> void:
 	_banner.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.75))
 	_banner.add_theme_constant_override("outline_size", 5)
 	_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_banner.position.y = 12
+	# Sits just under the top bar (UI/TopBar spans y 10..44) rather than over it.
+	_banner.position.y = 52
 	main.get_node("UI").add_child(_banner)
 
 

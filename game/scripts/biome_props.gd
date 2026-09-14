@@ -329,6 +329,27 @@ func set_terrain_visible(shown: bool) -> void:
 	visible = shown
 
 
+# With the pixel-art ground on, the per-terrain tile scatter (bushes, trees,
+# tufts, boulders, clutter) owns the scenery and this legacy set draws only
+# its shoreline reeds, which that scatter has no equivalent for: the fallen
+# logs it grew all over the savanna read as planks among the tile props.
+func set_reeds_only(reeds_only: bool) -> void:
+	for k in KIND_COUNT:
+		if k < _layers.size():
+			_layers[k].visible = k == REEDS or not reeds_only
+	for clone in _clones:
+		var k: int = _kind_of_clone(clone)
+		clone.visible = k == REEDS or not reeds_only
+
+
+# Which kind a wrap clone mirrors (it shares that layer's MultiMesh).
+func _kind_of_clone(clone: MultiMeshInstance2D) -> int:
+	for k in _layers.size():
+		if _layers[k].multimesh == clone.multimesh:
+			return k
+	return NONE
+
+
 # Re-scatter from the current terrain colours. No-op unless the grid size,
 # world size or quantised terrain checksum changed (and the rescan throttle
 # has elapsed for a colour-only change).

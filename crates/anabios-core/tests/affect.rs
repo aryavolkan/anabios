@@ -96,7 +96,10 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // meme channels widened 24->32 and INVENTION_COUNT grew 14->20.
     // inventions_enabled is off here ⇒ layout growth only, trajectory
     // byte-identical.
-    &[(0, 0x4dce8fa629642185), (100, 0x0040b7131170d80b), (300, 0xde499cea653834a8)];
+    // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
+    // 42→43): World.biome_step_interval added (default/absent 1) — layout
+    // growth only, trajectory byte-identical.
+    &[(0, 0x592744c670a62f84), (100, 0x211330b7b6fe11ca), (300, 0x7ff3e050f37ef21d)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -199,7 +202,10 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // invention count 20->22 shifted the discovery table and practice
     // channels. inventions_enabled is off here ⇒ layout growth only; only
     // tick 300 moved.
-    &[(0, 0xe9467932b084e516), (100, 0x8a01b4bb5d218fd1), (300, 0x3aff50a59b43b487)];
+    // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
+    // 42→43): World.biome_step_interval added (default/absent 1) — layout
+    // growth only, trajectory byte-identical.
+    &[(0, 0x1271bc628d476247), (100, 0x1e605593b2da0158), (300, 0xd28793e8278c873a)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

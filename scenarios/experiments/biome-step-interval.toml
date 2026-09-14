@@ -1,0 +1,17 @@
+name = "biome-step-interval"
+seed = 3
+living_biome = true
+biome_step_interval = 4
+
+# Cheap carrier for the opt-in `biome_step_interval` flag (Phase-1 "scale
+# fields", docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md):
+# a default-size world whose biome steps every 40 ticks instead of every 10.
+# Exists so the save/load round-trip suite can exercise the flag's
+# persistence without instantiating the 2048² `vast-steppe.toml` grid a
+# second time in the (debug, instrumented) coverage shards — vast-steppe
+# stays the throughput probe; this file is only the flag's regression carrier.
+
+[[agents]]
+count = 200
+placement = { kind = "uniform" }
+archetype = "grazer"

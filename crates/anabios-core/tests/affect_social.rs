@@ -104,7 +104,10 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // meme channels widened 24->32 and INVENTION_COUNT grew 14->20.
     // inventions_enabled is off here ⇒ layout growth only, trajectory
     // byte-identical.
-    &[(0, 0xa4536f1935f98e32), (100, 0x3f9a2dcd4503b1e1), (300, 0x5e7bec3c3955993e)];
+    // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
+    // 42→43): World.biome_step_interval added (default/absent 1) — layout
+    // growth only, trajectory byte-identical.
+    &[(0, 0xf98938cc3b57bb23), (100, 0x1eddc1e20321c6fc), (300, 0xdacf09d3da49a127)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

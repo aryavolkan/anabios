@@ -536,6 +536,22 @@ impl Simulation {
         self.inner.as_ref().map(|w| w.domestication_enabled).unwrap_or(false)
     }
 
+    /// Body-plan bitmask per alive agent, same order as `alive_positions`:
+    /// bit 0 = has >=1 Armor module, bit 1 = >=1 Spines, bit 2 = >=1 Jaws,
+    /// bit 3 = >=1 Storage, bit 4 = >=2 Locomotor modules. Used by the
+    /// viewer to pick module-keyed archetypes (tortoise, porcupine, mammoth,
+    /// wader) on top of the diet/size table.
+    #[func]
+    fn alive_body_tags(&self) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for t in body_tags_of(w) {
+                out.push(t);
+            }
+        }
+        out
+    }
+
     /// Dialect hue per alive agent in `[0,1)`, same order as `alive_positions`.
     #[func]
     fn alive_dialect_hue(&self) -> PackedFloat32Array {
@@ -633,6 +649,57 @@ impl Simulation {
             }
         }
         out
+    }
+
+    /// Alive-array indices (position in `iter_alive()` order — the same
+    /// index space `alive_positions()` and the other `alive_*` exports use)
+    /// of every alive agent whose torus-wrapped position falls inside the
+    /// axis-aligned rect `[x0, x1) x [y0, y1)`. Torus-aware: the rect may
+    /// extend past `[0, world_size)` (e.g. `x0` negative) or be wider than
+    /// the world, in which case that axis always matches. Ascending order.
+    #[func]
+    fn alive_in_rect(&self, x0: f32, y0: f32, x1: f32, y1: f32) -> PackedInt32Array {
+        let mut out = PackedInt32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for i in alive_in_rect_of(w, x0, y0, x1, y1) {
+                out.push(i);
+            }
+        }
+        out
+    }
+
+    /// `res×res` (`res` clamped `1..=512`) row-major counts of alive agents
+    /// per cell (cell size = `world_size / res`), saturating at 255. Row =
+    /// y, col = x, like `biome_colors`/`biome_terrain_ids`. Used by the
+    /// far-zoom dot layer and the minimap.
+    #[func]
+    fn agent_density(&self, res: i64) -> PackedByteArray {
+        let counts = self.inner.as_ref().map(|w| agent_density_of(w, res)).unwrap_or_default();
+        PackedByteArray::from(counts.as_slice())
+    }
+
+    /// `render_state_stride()` floats per alive agent (in `alive_positions`
+    /// order): `[x, y, size, diet, livestock, mood, fire_intent, body_tags]`
+    /// — the same source columns and scenario-flag fallbacks as
+    /// `alive_positions`, `alive_sizes`, `alive_diet`,
+    /// `alive_livestock_flags`, `alive_moods`, `alive_fire_intent` and
+    /// `alive_body_tags`, packed into one array so the viewer can read it
+    /// instead of eight separate ones.
+    #[func]
+    fn alive_render_state(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for v in alive_render_state_of(w) {
+                out.push(v);
+            }
+        }
+        out
+    }
+
+    /// Number of `f32` values per alive agent in `alive_render_state()`.
+    #[func]
+    fn render_state_stride(&self) -> i64 {
+        RENDER_STATE_STRIDE as i64
     }
 
     /// Look up one alive agent by id. Returns a Dictionary; empty if dead.
@@ -958,24 +1025,15 @@ impl Simulation {
         let mut out = PackedColorArray::new();
         let Some(w) = self.inner.as_ref() else { return out };
         for cell in w.biome.cells.iter() {
-            // Terrain base -> lushness -> succession -> pollution is the shared
-            // ground mapping (`anabios_core::biome::cell_color`); the headless
-            // recorder renders the same bytes from it. Only the two bridge-only
-            // layers below are applied here.
-            let [r, g, b] = anabios_core::biome::cell_color(cell);
-            // Rivers (river_flow > 0) are a passable moisture field, not Water
-            // terrain, so they'd render as ordinary wet land. Tint them toward a
-            // river-blue that trips the terrain shader's is_water() shimmer.
-            let (r, g, b) = if cell.river_flow > 0.0 {
-                river_tint((r, g, b), cell.river_flow)
-            } else {
-                (r, g, b)
-            };
+            // Terrain base -> lushness -> succession -> pollution -> river tint
+            // -> elevation alpha is `cell_view_rgba` (shared with the chunk and
+            // overview exports so all three stay byte-identical by construction).
+            let (r, g, b, a) = cell_view_rgba(cell);
             let mut c = Color::from_rgb(r, g, b);
             // Pack real elevation into alpha for the terrain shader's hillshade
             // (C2). The shader forces opaque output, so alpha never affects
             // rendering — it is a free data channel. RGB is unchanged.
-            c.a = cell.elevation.clamp(0.0, 1.0);
+            c.a = a;
             out.push(c);
         }
         out
@@ -993,14 +1051,89 @@ impl Simulation {
         let mut out = PackedByteArray::new();
         let Some(w) = self.inner.as_ref() else { return out };
         for cell in w.biome.cells.iter() {
-            let id = if cell.river_flow > 0.0 {
-                anabios_core::biome::TerrainType::Water as u8
-            } else {
-                cell.terrain as u8
-            };
-            out.push(id);
+            out.push(cell_terrain_id(cell));
         }
         out
+    }
+
+    /// Chunks per axis at the current biome resolution
+    /// (`ceil(res / CHUNK_CELLS)`), or 0 with no loaded world. See
+    /// `biome_chunk_bytes` for the chunk layout.
+    #[func]
+    fn biome_chunk_count(&self) -> i64 {
+        let res = self.inner.as_ref().map(|w| w.biome.res).unwrap_or(0);
+        chunk_count_for(res) as i64
+    }
+
+    /// `(CHUNK_CELLS + 2) × (CHUNK_CELLS + 2)` RGBA8 bytes for chunk
+    /// `(cx, cy)`, row-major: the chunk plus a 1-cell torus-wrapped apron on
+    /// every side, same apron rule as `biome_chunk_ids` (D3, `docs/
+    /// superpowers/specs/2026-09-12-pixel-world-at-scale-design.md` §4/§6
+    /// Phase 2) so the ground shader can take neighbour taps (softening,
+    /// relief, coast) at a chunk's edges without a seam against the next
+    /// chunk. The centre `CHUNK_CELLS × CHUNK_CELLS` (offset `[1..65)` on each
+    /// axis) is byte-identical to slicing the same cells out of a whole-world
+    /// RGBA8 image built from `biome_colors()` with the GDScript
+    /// `int(clampf(v,0,1)*255.0)` conversion — see `cell_view_rgba8`. Cells
+    /// past the grid edge (the last chunk row/column when `res` is not a
+    /// multiple of `CHUNK_CELLS`, or the apron itself) wrap on the torus, so
+    /// every exported chunk is full-size. Returns an empty array for an
+    /// out-of-range chunk index or no loaded world.
+    #[func]
+    fn biome_chunk_bytes(&self, cx: i64, cy: i64) -> PackedByteArray {
+        let Some(w) = self.inner.as_ref() else { return PackedByteArray::new() };
+        match chunk_bytes_of(&w.biome, cx, cy) {
+            Some(buf) => PackedByteArray::from(buf.as_slice()),
+            None => PackedByteArray::new(),
+        }
+    }
+
+    /// `(CHUNK_CELLS + 2) × (CHUNK_CELLS + 2)` terrain ids for chunk
+    /// `(cx, cy)`: the chunk plus a 1-cell torus-wrapped apron on every side
+    /// (so viewer-side autotiling never needs to fetch a neighbouring chunk),
+    /// row-major, same id rule as `biome_terrain_ids` (river cells report
+    /// `Water`). Returns an empty array for an out-of-range chunk index or no
+    /// loaded world.
+    #[func]
+    fn biome_chunk_ids(&self, cx: i64, cy: i64) -> PackedByteArray {
+        let Some(w) = self.inner.as_ref() else { return PackedByteArray::new() };
+        match chunk_ids_of(&w.biome, cx, cy) {
+            Some(buf) => PackedByteArray::from(buf.as_slice()),
+            None => PackedByteArray::new(),
+        }
+    }
+
+    /// Content hash of chunk `(cx, cy)`, folded to a non-negative `i64`; 0 for
+    /// an out-of-range chunk index or no loaded world. This is a HASH, not a
+    /// counter that some mutation path bumps: the fields it covers (terrain,
+    /// biomass, succession, pollution, river flow, elevation) are written
+    /// from many places across `anabios-core` (regrowth, grazing,
+    /// disturbance, succession, pollution deposition/decay), and wiring a
+    /// per-chunk dirty flag through every one of them would be a core change
+    /// this crate must not make (bridge-only, per the design doc). Hashing
+    /// the current bit patterns on demand is the cheapest implementation that
+    /// is still correct: the viewer only calls this for chunks it already
+    /// keeps resident (a small, bounded set), and a hash can never miss or
+    /// over-report a change — any bit flip in a tracked field changes it. See
+    /// `chunk_version_of` for the exact field list.
+    #[func]
+    fn biome_chunk_version(&self, cx: i64, cy: i64) -> i64 {
+        let Some(w) = self.inner.as_ref() else { return 0 };
+        chunk_version_of(&w.biome, cx, cy).unwrap_or(0)
+    }
+
+    /// Area-averaged whole-world RGBA8 downsample to `size × size`, `size`
+    /// clamped to `1..=512` and further down to `res` when `res < size` (an
+    /// overview coarser than the source grid is meaningless). Averages the
+    /// exact `cell_view_rgba8` bytes the chunk export uses, over the box of
+    /// source cells mapping to each output pixel (`res` need not divide
+    /// `size`: source ranges are `floor(i*res/size)..floor((i+1)*res/size)`
+    /// per axis, an integer box filter). Row-major RGBA8; empty with no
+    /// loaded world.
+    #[func]
+    fn biome_overview(&self, size: i64) -> PackedByteArray {
+        let Some(w) = self.inner.as_ref() else { return PackedByteArray::new() };
+        PackedByteArray::from(overview_of(&w.biome, size).as_slice())
     }
 
     /// Number of pheromone channels (for the overlay cycling loop).
@@ -1521,6 +1654,109 @@ fn livestock_flags_of(w: &anabios_core::World) -> Vec<i32> {
         .collect()
 }
 
+/// Per-alive-agent body-plan bitmask, same order as `alive_positions`: bit 0
+/// = has >=1 Armor module, bit 1 = >=1 Spines, bit 2 = >=1 Jaws, bit 3 = >=1
+/// Storage, bit 4 = >=2 Locomotor modules. Module composition is always
+/// populated (no scenario flag gates it), unlike `livestock_flags_of` /
+/// `invention_masks_of`. The viewer layers module-keyed archetype picks
+/// (tortoise, porcupine, mammoth, wader) on top of these tags.
+fn body_tags_of(w: &anabios_core::World) -> Vec<i32> {
+    use anabios_core::module::ModuleType;
+    w.agents
+        .iter_alive()
+        .map(|id| {
+            let modules = &w.agents.modules[id as usize];
+            let count_of = |t: ModuleType| modules.iter().filter(|m| m.module_type() == t).count();
+            let mut tag = 0i32;
+            if count_of(ModuleType::Armor) >= 1 {
+                tag |= 1 << 0;
+            }
+            if count_of(ModuleType::Spines) >= 1 {
+                tag |= 1 << 1;
+            }
+            if count_of(ModuleType::Jaws) >= 1 {
+                tag |= 1 << 2;
+            }
+            if count_of(ModuleType::Storage) >= 1 {
+                tag |= 1 << 3;
+            }
+            if count_of(ModuleType::Locomotor) >= 2 {
+                tag |= 1 << 4;
+            }
+            tag
+        })
+        .collect()
+}
+
+/// Number of `f32` values per alive agent in `alive_render_state_of`.
+const RENDER_STATE_STRIDE: usize = 8;
+
+/// Alive-array indices (see the `alive_in_rect` doc comment) of alive
+/// agents whose torus-wrapped position falls inside `[x0,x1) x [y0,y1)`. A
+/// point is inside on one axis iff `fposmod(p - lo, world_size) <= (hi -
+/// lo)` when `hi - lo < world_size`; a span at least as wide as the world
+/// always matches on that axis. `iter_alive()` is already ascending, so the
+/// filtered indices come out ascending too.
+fn alive_in_rect_of(w: &anabios_core::World, x0: f32, y0: f32, x1: f32, y1: f32) -> Vec<i32> {
+    let ws = w.world_size;
+    let sx = x1 - x0;
+    let sy = y1 - y0;
+    let in_span = |p: f32, lo: f32, span: f32| span >= ws || (p - lo).rem_euclid(ws) <= span;
+    w.agents
+        .iter_alive()
+        .enumerate()
+        .filter_map(|(i, id)| {
+            let p = w.agents.position[id as usize];
+            (in_span(p.x, x0, sx) && in_span(p.y, y0, sy)).then_some(i as i32)
+        })
+        .collect()
+}
+
+/// `res×res` (`res` clamped `1..=512`) row-major alive-agent counts,
+/// saturating at 255 per cell. Cell size = `world_size / res`; row = y,
+/// col = x, torus-wrapped.
+fn agent_density_of(w: &anabios_core::World, res: i64) -> Vec<u8> {
+    let res = res.clamp(1, 512) as usize;
+    let mut counts = vec![0u8; res * res];
+    let ws = w.world_size;
+    let cell = ws / res as f32;
+    for id in w.agents.iter_alive() {
+        let p = w.agents.position[id as usize];
+        let col = (p.x.rem_euclid(ws) / cell) as usize;
+        let row = (p.y.rem_euclid(ws) / cell) as usize;
+        let idx = row.min(res - 1) * res + col.min(res - 1);
+        counts[idx] = counts[idx].saturating_add(1);
+    }
+    counts
+}
+
+/// Flat `[x, y, size, diet, livestock, mood, fire_intent, body_tags]` per
+/// alive agent (`RENDER_STATE_STRIDE` floats each), reading exactly the same
+/// source columns and scenario-flag fallbacks as `alive_positions`,
+/// `alive_sizes`, `alive_diet`, `livestock_flags_of`,
+/// `alive_moods`/`alive_fire_intent` and `body_tags_of`.
+fn alive_render_state_of(w: &anabios_core::World) -> Vec<f32> {
+    use anabios_core::genome::GenomeSlot;
+    let livestock = livestock_flags_of(w);
+    let tags = body_tags_of(w);
+    let mut out = Vec::with_capacity(w.agents.iter_alive().count() * RENDER_STATE_STRIDE);
+    for (i, id) in w.agents.iter_alive().enumerate() {
+        let idx = id as usize;
+        let p = w.agents.position[idx];
+        let size = 0.5 + 2.5 * w.agents.genome[idx].get(GenomeSlot::Size);
+        let diet = anabios_core::module::effective_diet_carnivory(&w.agents.modules[idx]);
+        out.push(p.x);
+        out.push(p.y);
+        out.push(size);
+        out.push(diet);
+        out.push(livestock[i] as f32);
+        out.push(w.agents.mood[idx] as f32);
+        out.push(w.actions[idx].fire_intent);
+        out.push(tags[i] as f32);
+    }
+    out
+}
+
 /// Per-alive-agent held-invention bitmask (`invention::held_mask` over the
 /// meme vector). All-zero when inventions are disabled — the channels never
 /// charge then, but the short-circuit keeps flag-off viewers allocation-cheap
@@ -1602,6 +1838,179 @@ fn river_tint(rgb: (f32, f32, f32), river_flow: f32) -> (f32, f32, f32) {
         (RIVER_MIX_MIN + RIVER_MIX_GAIN * river_flow.max(0.0).sqrt()).clamp(0.0, RIVER_MIX_MAX);
     let lerp = |a: f32, b: f32| a + (b - a) * mix;
     (lerp(rgb.0, RIVER_BLUE.0), lerp(rgb.1, RIVER_BLUE.1), lerp(rgb.2, RIVER_BLUE.2))
+}
+
+/// Post-`cell_color` view RGBA for one biome cell: river tint applied to
+/// RGB, elevation clamped into alpha — exactly what `biome_colors` renders.
+/// Shared by `biome_colors`, the chunk export and the overview mip so all
+/// three stay byte-identical by construction. Pure (no `godot` types).
+fn cell_view_rgba(cell: &anabios_core::biome::BiomeCell) -> (f32, f32, f32, f32) {
+    let [r, g, b] = anabios_core::biome::cell_color(cell);
+    // Rivers (river_flow > 0) are a passable moisture field, not Water
+    // terrain, so they'd render as ordinary wet land. Tint them toward a
+    // river-blue that trips the terrain shader's is_water() shimmer.
+    let (r, g, b) =
+        if cell.river_flow > 0.0 { river_tint((r, g, b), cell.river_flow) } else { (r, g, b) };
+    (r, g, b, cell.elevation.clamp(0.0, 1.0))
+}
+
+/// `cell_view_rgba`, packed as RGBA8 bytes: the same truncating conversion
+/// GDScript's `int(clampf(v,0,1)*255.0)` performs (Rust's `as u8` on a
+/// non-negative float also truncates), so viewer-side pixels built from
+/// `biome_colors()` and from a chunk/overview byte buffer are identical.
+fn cell_view_rgba8(cell: &anabios_core::biome::BiomeCell) -> [u8; 4] {
+    let (r, g, b, a) = cell_view_rgba(cell);
+    let to_u8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0) as u8;
+    [to_u8(r), to_u8(g), to_u8(b), to_u8(a)]
+}
+
+/// `TerrainType` id for one biome cell, matching `biome_terrain_ids` and the
+/// id half of `biome_chunk_ids`: river cells report `Water`.
+fn cell_terrain_id(cell: &anabios_core::biome::BiomeCell) -> u8 {
+    if cell.river_flow > 0.0 {
+        anabios_core::biome::TerrainType::Water as u8
+    } else {
+        cell.terrain as u8
+    }
+}
+
+/// Cell edge length of one streamed ground chunk (D3, `docs/superpowers/
+/// specs/2026-09-12-pixel-world-at-scale-design.md` §4/§6 Phase 1) — matches
+/// the viewer's 64×64-texel `GroundChunk`.
+pub const CHUNK_CELLS: usize = 64;
+
+/// Chunks per axis at biome resolution `res`: `ceil(res / CHUNK_CELLS)`, or 0
+/// for `res == 0`.
+fn chunk_count_for(res: usize) -> usize {
+    if res == 0 {
+        0
+    } else {
+        res.div_ceil(CHUNK_CELLS)
+    }
+}
+
+/// `true` iff `(cx, cy)` names a chunk that exists at biome resolution `res`.
+fn chunk_in_range(res: usize, cx: i64, cy: i64) -> bool {
+    let n = chunk_count_for(res);
+    n > 0 && cx >= 0 && cy >= 0 && (cx as usize) < n && (cy as usize) < n
+}
+
+/// Pure builder behind `biome_chunk_bytes`: `(CHUNK_CELLS + 2)²` RGBA8
+/// bytes, row-major, the chunk plus a 1-cell torus-wrapped apron on every
+/// side (same shape as `chunk_ids_of`). `None` for an out-of-range chunk
+/// index.
+fn chunk_bytes_of(biome: &anabios_core::biome::BiomeField, cx: i64, cy: i64) -> Option<Vec<u8>> {
+    let res = biome.res;
+    if !chunk_in_range(res, cx, cy) {
+        return None;
+    }
+    let (cx, cy) = (cx as usize, cy as usize);
+    let res_i = res as isize;
+    let mut buf = Vec::with_capacity((CHUNK_CELLS + 2) * (CHUNK_CELLS + 2) * 4);
+    for ry in -1..=(CHUNK_CELLS as isize) {
+        let row = ((cy * CHUNK_CELLS) as isize + ry).rem_euclid(res_i) as usize;
+        for rx in -1..=(CHUNK_CELLS as isize) {
+            let col = ((cx * CHUNK_CELLS) as isize + rx).rem_euclid(res_i) as usize;
+            buf.extend_from_slice(&cell_view_rgba8(&biome.cells[row * res + col]));
+        }
+    }
+    Some(buf)
+}
+
+/// Pure builder behind `biome_chunk_ids`: `(CHUNK_CELLS + 2)²` terrain ids,
+/// row-major, the chunk plus a 1-cell torus-wrapped apron on every side.
+/// `None` for an out-of-range chunk index.
+fn chunk_ids_of(biome: &anabios_core::biome::BiomeField, cx: i64, cy: i64) -> Option<Vec<u8>> {
+    let res = biome.res;
+    if !chunk_in_range(res, cx, cy) {
+        return None;
+    }
+    let (cx, cy) = (cx as usize, cy as usize);
+    let res_i = res as isize;
+    let mut buf = Vec::with_capacity((CHUNK_CELLS + 2) * (CHUNK_CELLS + 2));
+    for ry in -1..=(CHUNK_CELLS as isize) {
+        let row = ((cy * CHUNK_CELLS) as isize + ry).rem_euclid(res_i) as usize;
+        for rx in -1..=(CHUNK_CELLS as isize) {
+            let col = ((cx * CHUNK_CELLS) as isize + rx).rem_euclid(res_i) as usize;
+            buf.push(cell_terrain_id(&biome.cells[row * res + col]));
+        }
+    }
+    Some(buf)
+}
+
+/// FNV-1a basis and prime (64-bit) — see <https://isthe.com/chongo/tech/comp/fnv/>.
+const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+/// Mix an 8-byte value into an FNV-1a accumulator, byte by byte.
+fn fnv_mix(h: &mut u64, v: u64) {
+    for b in v.to_le_bytes() {
+        *h ^= b as u64;
+        *h = h.wrapping_mul(FNV_PRIME);
+    }
+}
+
+/// Pure builder behind `biome_chunk_version`: an FNV-1a hash over the fields
+/// that affect `cell_view_rgba8`/`cell_terrain_id` for chunk `(cx, cy)`'s own
+/// `CHUNK_CELLS × CHUNK_CELLS` cells (not its apron, which belongs to the
+/// neighbouring chunks' own versions), folded to a non-negative `i64`. `None`
+/// for an out-of-range chunk index.
+fn chunk_version_of(biome: &anabios_core::biome::BiomeField, cx: i64, cy: i64) -> Option<i64> {
+    let res = biome.res;
+    if !chunk_in_range(res, cx, cy) {
+        return None;
+    }
+    let (cx, cy) = (cx as usize, cy as usize);
+    let mut h = FNV_OFFSET;
+    for ry in 0..CHUNK_CELLS {
+        let row = (cy * CHUNK_CELLS + ry) % res;
+        for rx in 0..CHUNK_CELLS {
+            let col = (cx * CHUNK_CELLS + rx) % res;
+            let cell = &biome.cells[row * res + col];
+            fnv_mix(&mut h, cell.terrain as u8 as u64);
+            fnv_mix(&mut h, cell.plant_biomass.to_bits() as u64);
+            fnv_mix(&mut h, cell.succession as u64);
+            fnv_mix(&mut h, cell.pollution.to_bits() as u64);
+            fnv_mix(&mut h, cell.river_flow.to_bits() as u64);
+            fnv_mix(&mut h, cell.elevation.to_bits() as u64);
+        }
+    }
+    Some((h & 0x7fff_ffff_ffff_ffff) as i64)
+}
+
+/// Pure builder behind `biome_overview`: area-averaged RGBA8 downsample to
+/// `size × size` (already clamped by the caller to `1..=min(512, res)`),
+/// row-major. Empty when `res == 0`.
+fn overview_of(biome: &anabios_core::biome::BiomeField, size: i64) -> Vec<u8> {
+    let res = biome.res;
+    if res == 0 {
+        return Vec::new();
+    }
+    let size = (size.clamp(1, 512) as usize).min(res);
+    let mut out = Vec::with_capacity(size * size * 4);
+    for oy in 0..size {
+        let y0 = oy * res / size;
+        let y1 = ((oy + 1) * res / size).max(y0 + 1);
+        for ox in 0..size {
+            let x0 = ox * res / size;
+            let x1 = ((ox + 1) * res / size).max(x0 + 1);
+            let mut sum = [0u32; 4];
+            let mut count = 0u32;
+            for row in y0..y1 {
+                for col in x0..x1 {
+                    let bytes = cell_view_rgba8(&biome.cells[row * res + col]);
+                    for (k, b) in bytes.iter().enumerate() {
+                        sum[k] += *b as u32;
+                    }
+                    count += 1;
+                }
+            }
+            for s in sum {
+                out.push((s / count) as u8);
+            }
+        }
+    }
+    out
 }
 
 fn hsv_to_color(h: f32, s: f32, v: f32) -> Color {
@@ -1763,6 +2172,22 @@ fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A world with agents for the query tests below: the shipped minimal
+    /// scenario (200 agents, uniform placement), stepped a few ticks so
+    /// positions, moods and fire intent are non-trivial.
+    fn minimal_world() -> anabios_core::World {
+        let toml = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scenarios/minimal.toml"
+        ))
+        .expect("read minimal.toml");
+        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
+        for _ in 0..25 {
+            anabios_core::tick::step(&mut w);
+        }
+        w
+    }
 
     #[test]
     fn water_line_separates_sea_from_land() {
@@ -1952,5 +2377,385 @@ mod tests {
         assert_eq!(masks.len(), w.agents.iter_alive().count());
         let spear_bit = 1i32 << anabios_core::invention::HAFTED_SPEARS;
         assert!(masks.iter().any(|&m| m & spear_bit != 0), "seeded spears missing");
+    }
+
+    #[test]
+    fn alive_in_rect_whole_world_and_empty_rect() {
+        let w = minimal_world();
+        let ws = w.world_size;
+        let n = w.agents.iter_alive().count();
+        assert!(n > 0, "minimal.toml should still have live agents after 25 ticks");
+
+        // A rect covering the whole world matches every alive index, ascending.
+        let all = super::alive_in_rect_of(&w, 0.0, 0.0, ws, ws);
+        assert_eq!(all, (0..n as i32).collect::<Vec<_>>());
+
+        // A wider-than-world rect also matches everything on both axes.
+        let over = super::alive_in_rect_of(&w, -ws, -ws, 2.0 * ws, 2.0 * ws);
+        assert_eq!(over, (0..n as i32).collect::<Vec<_>>());
+
+        // A zero-span rect covers nothing (agents sit at generic float
+        // positions; landing exactly on one point has probability 0).
+        let empty = super::alive_in_rect_of(&w, 1.0, 1.0, 1.0, 1.0);
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn alive_in_rect_wraps_the_seam() {
+        use anabios_core::prelude_test::Vec2;
+
+        let mut w = minimal_world();
+        let ws = w.world_size;
+        let ids: Vec<u32> = w.agents.iter_alive().collect();
+        assert!(ids.len() >= 3, "need at least 3 live agents for the seam test");
+
+        // Pin three alive agents to known positions: two just inside the
+        // world edge near x = world_size, one dead center on the x axis.
+        w.agents.position[ids[0] as usize] = Vec2::new(ws - 1.0, 5.0);
+        w.agents.position[ids[1] as usize] = Vec2::new(ws - 0.25, 500.0);
+        w.agents.position[ids[2] as usize] = Vec2::new(ws / 2.0, 500.0);
+
+        // x in [-5, 5) wrapped covers [world_size-5, world_size) ∪ [0, 5);
+        // y spans the whole world so only x matters here.
+        let seam = super::alive_in_rect_of(&w, -5.0, 0.0, 5.0, ws);
+        assert!(seam.contains(&0), "agent at x=world_size-1 must be included");
+        assert!(seam.contains(&1), "agent at x=world_size-0.25 must be included");
+        assert!(!seam.contains(&2), "agent at x=world_size/2 must be excluded");
+
+        // Every returned index is really inside the wrapped rect, every
+        // excluded one is really outside, and the result is ascending.
+        let positions: Vec<Vec2> =
+            w.agents.iter_alive().map(|id| w.agents.position[id as usize]).collect();
+        let x_inside = |x: f32| (x - -5.0_f32).rem_euclid(ws) <= 10.0;
+        let mut prev = -1i32;
+        let seam_set: std::collections::HashSet<i32> = seam.iter().copied().collect();
+        for (i, p) in positions.iter().enumerate() {
+            let expect_in = x_inside(p.x);
+            assert_eq!(seam_set.contains(&(i as i32)), expect_in, "index {i} at x={}", p.x);
+        }
+        for &idx in &seam {
+            assert!(idx > prev, "alive_in_rect_of must return ascending indices");
+            prev = idx;
+        }
+    }
+
+    #[test]
+    fn agent_density_sums_and_places_a_cluster() {
+        use anabios_core::prelude_test::Vec2;
+
+        let mut w = minimal_world();
+        let ws = w.world_size;
+        let res: i64 = 8;
+        let n = w.agents.iter_alive().count();
+        assert!(n < (255 * res * res) as usize, "test assumes no cell can saturate");
+
+        let counts = super::agent_density_of(&w, res);
+        assert_eq!(counts.len(), (res * res) as usize);
+        let total: u32 = counts.iter().map(|&c| c as u32).sum();
+        assert_eq!(total, n as u32, "density grid must account for every alive agent");
+
+        // Hand-place a small cluster inside cell (col=1, row=3) of an 8x8
+        // grid (cell size = world_size/8) and confirm it lands there.
+        let cell = ws / res as f32;
+        let ids: Vec<u32> = w.agents.iter_alive().take(5).collect();
+        for &id in &ids {
+            w.agents.position[id as usize] = Vec2::new(1.5 * cell, 3.5 * cell);
+        }
+        let counts2 = super::agent_density_of(&w, res);
+        let idx = 3 * res as usize + 1;
+        assert!(counts2[idx] as usize >= ids.len(), "cluster must land in cell (1,3)");
+    }
+
+    #[test]
+    fn alive_render_state_matches_the_individual_columns() {
+        let w = minimal_world();
+        let n = w.agents.iter_alive().count();
+
+        let state = super::alive_render_state_of(&w);
+        assert_eq!(state.len(), super::RENDER_STATE_STRIDE * n);
+
+        let positions: Vec<(f32, f32)> = w
+            .agents
+            .iter_alive()
+            .map(|id| {
+                let p = w.agents.position[id as usize];
+                (p.x, p.y)
+            })
+            .collect();
+        let sizes = {
+            use anabios_core::genome::GenomeSlot;
+            w.agents
+                .iter_alive()
+                .map(|id| 0.5 + 2.5 * w.agents.genome[id as usize].get(GenomeSlot::Size))
+                .collect::<Vec<f32>>()
+        };
+        let diets: Vec<f32> = w
+            .agents
+            .iter_alive()
+            .map(|id| {
+                anabios_core::module::effective_diet_carnivory(&w.agents.modules[id as usize])
+            })
+            .collect();
+        let livestock = super::livestock_flags_of(&w);
+        let moods: Vec<i32> =
+            w.agents.iter_alive().map(|id| w.agents.mood[id as usize] as i32).collect();
+        let fire_intent: Vec<f32> =
+            w.agents.iter_alive().map(|id| w.actions[id as usize].fire_intent).collect();
+        let tags = super::body_tags_of(&w);
+
+        for i in 0..n {
+            let base = i * super::RENDER_STATE_STRIDE;
+            assert_eq!(state[base], positions[i].0);
+            assert_eq!(state[base + 1], positions[i].1);
+            assert_eq!(state[base + 2], sizes[i]);
+            assert_eq!(state[base + 3], diets[i]);
+            assert_eq!(state[base + 4], livestock[i] as f32);
+            assert_eq!(state[base + 5], moods[i] as f32);
+            assert_eq!(state[base + 6], fire_intent[i]);
+            assert_eq!(state[base + 7], tags[i] as f32);
+        }
+    }
+
+    #[test]
+    fn body_tags_match_module_counts() {
+        use anabios_core::module::ModuleType;
+        let w = minimal_world();
+        let ids: Vec<u32> = w.agents.iter_alive().collect();
+        let tags = super::body_tags_of(&w);
+        assert_eq!(tags.len(), ids.len());
+
+        for (i, &id) in ids.iter().enumerate() {
+            let modules = &w.agents.modules[id as usize];
+            let count_of = |t: ModuleType| modules.iter().filter(|m| m.module_type() == t).count();
+            let want_armor = count_of(ModuleType::Armor) >= 1;
+            let want_spines = count_of(ModuleType::Spines) >= 1;
+            let want_jaws = count_of(ModuleType::Jaws) >= 1;
+            let want_storage = count_of(ModuleType::Storage) >= 1;
+            let want_locomotor2 = count_of(ModuleType::Locomotor) >= 2;
+
+            let tag = tags[i];
+            assert_eq!(tag & (1 << 0) != 0, want_armor, "agent {id} armor bit");
+            assert_eq!(tag & (1 << 1) != 0, want_spines, "agent {id} spines bit");
+            assert_eq!(tag & (1 << 2) != 0, want_jaws, "agent {id} jaws bit");
+            assert_eq!(tag & (1 << 3) != 0, want_storage, "agent {id} storage bit");
+            assert_eq!(tag & (1 << 4) != 0, want_locomotor2, "agent {id} locomotor bit");
+            // No stray bits beyond the five defined ones.
+            assert_eq!(tag & !0b11111, 0, "agent {id} unexpected extra bits: {tag}");
+        }
+    }
+
+    /// Builds a world at the given `biome_res` (default resolution if `None`)
+    /// via the same `Scenario::parse_toml(...).instantiate()` path the other
+    /// tests in this module use.
+    fn world_with_res(res: Option<usize>) -> anabios_core::World {
+        let toml = match res {
+            None => "name = \"t\"\nseed = 1\n".to_string(),
+            Some(res) => format!("name = \"t\"\nseed = 1\nbiome_res = {res}\n"),
+        };
+        anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate()
+    }
+
+    #[test]
+    fn chunk_bytes_center_matches_whole_world_buffer_default_and_non_multiple() {
+        // Default resolution (a multiple of CHUNK_CELLS) and res=200 (not a
+        // multiple of 64, so the last chunk row/column overhangs and wraps).
+        for res in [None, Some(200usize)] {
+            let w = world_with_res(res);
+            let res = w.biome.res;
+            let whole: Vec<[u8; 4]> = w.biome.cells.iter().map(cell_view_rgba8).collect();
+            let n = chunk_count_for(res);
+            let side = CHUNK_CELLS + 2;
+            assert!(n > 0);
+            for cy in 0..n {
+                for cx in 0..n {
+                    let got = chunk_bytes_of(&w.biome, cx as i64, cy as i64)
+                        .expect("in-range chunk index");
+                    assert_eq!(got.len(), side * side * 4);
+                    // Centre (offset by 1 into the apron buffer) equals the
+                    // whole-world slice.
+                    for ry in 0..CHUNK_CELLS {
+                        let row = (cy * CHUNK_CELLS + ry) % res;
+                        for rx in 0..CHUNK_CELLS {
+                            let col = (cx * CHUNK_CELLS + rx) % res;
+                            let expected = whole[row * res + col];
+                            let i = ((ry + 1) * side + (rx + 1)) * 4;
+                            assert_eq!(
+                                &got[i..i + 4],
+                                &expected[..],
+                                "res={res} chunk=({cx},{cy}) local=({rx},{ry})"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn chunk_bytes_apron_wraps_on_the_torus() {
+        // res=200 with CHUNK_CELLS=64 gives an overhanging last chunk
+        // (192..256 source range on a 200-wide grid), so the last chunk's
+        // apron genuinely wraps around the torus rather than staying
+        // in-range — same case the ids apron test exercises.
+        let w = world_with_res(Some(200));
+        let res = w.biome.res;
+        let whole: Vec<[u8; 4]> = w.biome.cells.iter().map(cell_view_rgba8).collect();
+        let n = chunk_count_for(res);
+        let (cx, cy) = (n - 1, n - 1);
+        let got = chunk_bytes_of(&w.biome, cx as i64, cy as i64).expect("in-range chunk");
+        let side = CHUNK_CELLS + 2;
+        assert_eq!(got.len(), side * side * 4);
+
+        let origin_row = cy * CHUNK_CELLS;
+        let origin_col = cx * CHUNK_CELLS;
+        let tl_row = (origin_row + res - 1) % res;
+        let tl_col = (origin_col + res - 1) % res;
+        assert_eq!(&got[0..4], &whole[tl_row * res + tl_col][..], "top-left apron corner wraps");
+        let br_row = (origin_row + CHUNK_CELLS) % res;
+        let br_col = (origin_col + CHUNK_CELLS) % res;
+        let last = (side - 1) * side + (side - 1);
+        assert_eq!(
+            &got[last * 4..last * 4 + 4],
+            &whole[br_row * res + br_col][..],
+            "bottom-right apron corner wraps"
+        );
+    }
+
+    #[test]
+    fn chunk_ids_center_matches_whole_world_and_apron_wraps() {
+        // res=200 with CHUNK_CELLS=64 gives an overhanging last chunk
+        // (192..256 source range on a 200-wide grid), so the last chunk's
+        // apron genuinely wraps around the torus rather than staying in-range.
+        let w = world_with_res(Some(200));
+        let res = w.biome.res;
+        let ids: Vec<u8> = w.biome.cells.iter().map(cell_terrain_id).collect();
+        let n = chunk_count_for(res);
+        let (cx, cy) = (n - 1, n - 1);
+        let got = chunk_ids_of(&w.biome, cx as i64, cy as i64).expect("in-range chunk");
+        let side = CHUNK_CELLS + 2;
+        assert_eq!(got.len(), side * side);
+
+        // Centre (offset by 1 into the apron buffer) equals biome_terrain_ids.
+        for ry in 0..CHUNK_CELLS {
+            let row = (cy * CHUNK_CELLS + ry) % res;
+            for rx in 0..CHUNK_CELLS {
+                let col = (cx * CHUNK_CELLS + rx) % res;
+                let expected = ids[row * res + col];
+                let got_id = got[(ry + 1) * side + (rx + 1)];
+                assert_eq!(got_id, expected, "centre id mismatch at local ({rx},{ry})");
+            }
+        }
+
+        // Corner apron cells wrap on the torus.
+        let origin_row = cy * CHUNK_CELLS;
+        let origin_col = cx * CHUNK_CELLS;
+        let tl_row = (origin_row + res - 1) % res;
+        let tl_col = (origin_col + res - 1) % res;
+        assert_eq!(got[0], ids[tl_row * res + tl_col], "top-left apron corner wraps");
+        let br_row = (origin_row + CHUNK_CELLS) % res;
+        let br_col = (origin_col + CHUNK_CELLS) % res;
+        assert_eq!(
+            got[(side - 1) * side + (side - 1)],
+            ids[br_row * res + br_col],
+            "bottom-right apron corner wraps"
+        );
+    }
+
+    #[test]
+    fn chunk_version_stable_and_local_to_the_chunk() {
+        let mut w = world_with_res(Some(200));
+        let res = w.biome.res;
+
+        let v1 = chunk_version_of(&w.biome, 0, 0).unwrap();
+        let v1_again = chunk_version_of(&w.biome, 0, 0).unwrap();
+        assert_eq!(v1, v1_again, "stable across calls with no mutation");
+
+        let neighbor_before = chunk_version_of(&w.biome, 1, 0).unwrap();
+
+        // Mutate a cell strictly inside chunk (0,0) (local row/col 5,5).
+        let idx = 5 * res + 5;
+        w.biome.cells[idx].plant_biomass += 0.37;
+
+        let v2 = chunk_version_of(&w.biome, 0, 0).unwrap();
+        assert_ne!(v1, v2, "version must move after an in-chunk mutation");
+
+        let neighbor_after = chunk_version_of(&w.biome, 1, 0).unwrap();
+        assert_eq!(neighbor_before, neighbor_after, "unrelated chunk must be unaffected");
+    }
+
+    #[test]
+    fn overview_equals_full_image_at_size_eq_res() {
+        let w = world_with_res(Some(37)); // small, odd resolution
+        let res = w.biome.res;
+        let got = overview_of(&w.biome, res as i64);
+        assert_eq!(got.len(), res * res * 4);
+        for (i, cell) in w.biome.cells.iter().enumerate() {
+            let expected = cell_view_rgba8(cell);
+            let o = i * 4;
+            assert_eq!(&got[o..o + 4], &expected[..], "cell {i} mismatch at size == res");
+        }
+    }
+
+    #[test]
+    fn overview_2x_downsample_of_checker_averages_correctly() {
+        use anabios_core::biome::{BiomeCell, BiomeField, TerrainType};
+        // Build two distinct, fully-specified cells and read back their exact
+        // RGBA8 bytes via the same conversion `overview_of` uses — the test
+        // stays correct regardless of `cell_color`'s internal mapping.
+        let a = BiomeCell {
+            terrain: TerrainType::Grass,
+            plant_biomass: 0.8,
+            env: 0.5,
+            moisture: 0.6,
+            pollution: 0.0,
+            succession: 0,
+            nutrient_quality: 1.0,
+            fertility: 1.0,
+            elevation: 0.6,
+            river_flow: 0.0,
+        };
+        let b = BiomeCell {
+            terrain: TerrainType::Desert,
+            plant_biomass: 0.1,
+            env: 0.9,
+            moisture: 0.1,
+            pollution: 0.0,
+            succession: 0,
+            nutrient_quality: 1.0,
+            fertility: 1.0,
+            elevation: 0.2,
+            river_flow: 0.0,
+        };
+        let bytes_a = cell_view_rgba8(&a);
+        let bytes_b = cell_view_rgba8(&b);
+
+        // 4x4 checkerboard by cell parity: every 2x2 downsample box then
+        // holds exactly two `a` cells and two `b` cells.
+        let mut field = BiomeField::generate(1, 4, 256.0);
+        for row in 0..4 {
+            for col in 0..4 {
+                field.cells[row * 4 + col] = if (row + col) % 2 == 0 { a } else { b };
+            }
+        }
+
+        let got = overview_of(&field, 2); // 2x downsample: 4 -> 2
+        assert_eq!(got.len(), 2 * 2 * 4);
+        let expected_px: Vec<u8> =
+            (0..4).map(|k| ((bytes_a[k] as u32 + bytes_b[k] as u32) / 2) as u8).collect();
+        for px in 0..4 {
+            let o = px * 4;
+            assert_eq!(&got[o..o + 4], &expected_px[..], "output pixel {px}");
+        }
+    }
+
+    #[test]
+    fn chunk_queries_out_of_range_return_none() {
+        let w = world_with_res(Some(200));
+        let n = chunk_count_for(w.biome.res) as i64;
+        for (cx, cy) in [(-1, 0), (0, -1), (n, 0), (0, n), (n, n)] {
+            assert!(chunk_bytes_of(&w.biome, cx, cy).is_none(), "bytes ({cx},{cy})");
+            assert!(chunk_ids_of(&w.biome, cx, cy).is_none(), "ids ({cx},{cy})");
+            assert!(chunk_version_of(&w.biome, cx, cy).is_none(), "version ({cx},{cy})");
+        }
     }
 }

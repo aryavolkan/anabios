@@ -193,7 +193,15 @@ use crate::world::World;
 ///     left by v41 (`MEME_CHANNELS` stays 32). Serialized meme-vector layout
 ///     unchanged in width, but the invention/practice channel split moved —
 ///     an old reader would misread practice adoption as invention adoption.
-pub const FORMAT_VERSION: u32 = 42;
+/// 43: pixel-world-at-scale Phase 1 — `World.biome_step_interval` (u32,
+///     multiplies `tick::BIOME_STEP_INTERVAL`; default/absent 1). Unlike
+///     `codex_interval` it is genuine path-dependent simulation state (it
+///     gates which ticks regrow/recolonize/seasonal-regrow the biome and
+///     spawn resources), so it is serialized, not `#[serde(skip)]` — a
+///     reloaded huge/vast-scale world must keep regrowing at the cadence it
+///     was saved at. `1` in every pre-existing scenario ⇒ trajectories
+///     byte-identical; only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 43;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

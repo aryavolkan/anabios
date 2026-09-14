@@ -45,15 +45,19 @@ func _init() -> void:
 	for k in T.PROP_COUNT:
 		_check(forest[k] == again[k], "plan is deterministic (kind %d)" % k)
 
-	# --- terrain -> prop mapping: all-forest places only oaks ---
+	# --- terrain -> prop mapping: all-forest places only forest props ---
+	var forest_kinds: Array = T.props_for_terrain(T.FOREST)
+	var placed_total := 0
 	for k in T.PROP_COUNT:
-		if k == T.OAK:
-			_check(forest[k].size() > 0, "forest world places oaks")
+		placed_total += forest[k].size()
+		if forest_kinds.has(k):
+			_check(forest[k].size() > 0, "forest world places %s" % T.PROP_NAMES[k])
 		else:
 			_check(forest[k].size() == 0, "forest world places no %s" % T.PROP_NAMES[k])
+	_check(forest[T.OAK].size() > 0, "forest world places oaks")
 
 	# --- density sanity: a plausible fraction of cells, not none, not all ---
-	var frac: float = forest[T.OAK].size() / float(res * res)
+	var frac: float = placed_total / float(res * res)
 	_check(frac > 0.02 and frac < 0.40, "forest density plausible (frac=%.3f)" % frac)
 
 	# --- bounds: every position inside [0, world) ---

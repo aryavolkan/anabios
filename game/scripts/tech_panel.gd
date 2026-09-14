@@ -40,8 +40,18 @@ func _tech_summary(adopted: Array) -> String:
 	return best if adopted.size() == 1 else "%s +%d" % [best, adopted.size() - 1]
 
 
+# Like the species table, this readout is debugging the reference boards do
+# not carry: it starts hidden and [P] shows all three tables together.
+var _open: bool = false
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_P:
+		_open = not _open
+
+
 func _process(_delta: float) -> void:
-	if not bool(sim.inventions_enabled()):
+	if not _open or not bool(sim.inventions_enabled()):
 		visible = false
 		return
 	visible = true

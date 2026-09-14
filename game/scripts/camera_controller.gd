@@ -1,8 +1,32 @@
 extends Camera2D
 
-const ZOOM_STEP: float = 1.2
-const ZOOM_MIN: float = 0.25
-const ZOOM_MAX: float = 8.0
+# Pixel-perfect pipeline (D4, docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md
+# §4). Two project.godot [rendering] settings this camera's stepped zoom
+# depends on (project.godot cannot hold comments, so they're documented here):
+#   2d/snap/snap_2d_transforms_to_pixel=true   - node positions snap to whole
+#       pixels, so an integer-zoomed world never shimmers.
+#   2d/snap/snap_2d_vertices_to_pixel=false    - vertices stay unsnapped; the
+#       MultiMesh prop/agent quads would distort if their corners snapped
+#       independently of their transform.
+# The project's default texture filter is deliberately left at linear: every
+# pixel-art node sets TEXTURE_FILTER_NEAREST itself, and the disc sprites,
+# footstep tracks and showcase vignette still want the smooth default.
+#
+# Wheel zoom now snaps to a fixed step table instead of an endless
+# multiplicative ramp: steps >= 1.0 are integer texel multiples (the D4
+# contract — 1 texel = 0.5 world unit at 1x, so 2x/3x/4x/6x/8x are exact
+# integer upscales); steps < 1.0 are the overview range for worlds wider than
+# the viewport can frame at 1x. The table and the two pure step functions
+# live in zoom_steps.gd (not here) so test_camera_steps.gd can preload and
+# exercise them headless: this script extends Camera2D and reads the
+# GameConfig autoload below, which does not compile when preloaded from a
+# `-s` test script (see test_event_fx.gd's StubCam note) — ZoomSteps has
+# neither problem. ZOOM_STEPS and next_step/nearest_step_at_most are
+# re-exported here so callers keep using CameraController.* as before.
+const ZoomSteps = preload("res://scripts/zoom_steps.gd")
+const ZOOM_STEPS: PackedFloat32Array = ZoomSteps.ZOOM_STEPS
+const ZOOM_MIN: float = 0.0625  # ZOOM_STEPS[0]
+const ZOOM_MAX: float = 8.0  # ZOOM_STEPS[ZOOM_STEPS.size() - 1]
 const PAN_SPEED_KEYS: float = 600.0
 const ZOOM_DAMP: float = 12.0
 const PAN_INERTIA_DAMP: float = 5.0
@@ -21,6 +45,39 @@ func _ready() -> void:
 	_target_zoom = zoom.x
 
 
+# The step relative to z on the ZOOM_STEPS table: dir +1 is the smallest step
+# strictly greater than z, dir -1 the largest strictly smaller, both clamped to
+# the table ends. Applied to the CURRENT (possibly off-table) zoom on every
+# wheel event, so a zoom left mid-ease by a fast scroll still lands on the
+# table on the very next step. (See zoom_steps.gd for the implementation.)
+static func next_step(z: float, dir: int) -> float:
+	return ZoomSteps.next_step(z, dir)
+
+
+# The largest step <= z, or the smallest step if z undercuts the whole table.
+# Used to open a fresh fit (world or agent-cluster) on a crisp step rather
+# than an arbitrary continuous zoom. (See zoom_steps.gd for the implementation.)
+static func nearest_step_at_most(z: float) -> float:
+	return ZoomSteps.nearest_step_at_most(z)
+
+
+# Index of the step the current zoom sits on exactly, or -1 when an external
+# writer (showcase_director.gd, debug_capture.gd, main.gd's ANABIOS_ZOOM)
+# has set an off-table zoom — those writes are honoured as-is and never
+# snapped, so the ground layer can tell "on a step" from "in between".
+func zoom_step_index() -> int:
+	for i in range(ZOOM_STEPS.size()):
+		if is_equal_approx(zoom.x, ZOOM_STEPS[i]):
+			return i
+	return -1
+
+
+# Below 1x the world no longer fits at an integer texel multiple; the ground
+# layer switches to the whole-world overview mip in that range (D4).
+func is_overview() -> bool:
+	return zoom.x < 1.0
+
+
 # Frame the whole world: fill the viewport (larger ratio wins, so there are no
 # empty gutters) and center on the world's midpoint.
 func _fit_to_world() -> void:
@@ -32,7 +89,7 @@ func _fit_to_world() -> void:
 		return
 	var vp: Vector2 = get_viewport_rect().size
 	var z: float = maxf(vp.x / world, vp.y / world)
-	z = clampf(z, ZOOM_MIN, ZOOM_MAX)
+	z = nearest_step_at_most(clampf(z, ZOOM_MIN, ZOOM_MAX))
 	zoom = Vector2(z, z)
 	_target_zoom = z
 	position = Vector2(world * 0.5, world * 0.5)
@@ -62,7 +119,7 @@ func fit_to_agents() -> void:
 	var world: float = float(sim.world_size())
 	var span: float = maxf(world * 0.35, 1.0)
 	var vp: Vector2 = get_viewport_rect().size
-	var z: float = clampf(vp.y / span, ZOOM_MIN, ZOOM_MAX)
+	var z: float = nearest_step_at_most(clampf(vp.y / span, ZOOM_MIN, ZOOM_MAX))
 	zoom = Vector2(z, z)
 	_target_zoom = z
 	position = c
@@ -91,12 +148,12 @@ func _input(event: InputEvent) -> void:
 			if not _zoom_easing:
 				_target_zoom = zoom.x
 				_zoom_easing = true
-			_target_zoom = clampf(_target_zoom * ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+			_target_zoom = next_step(_target_zoom, 1)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
 			if not _zoom_easing:
 				_target_zoom = zoom.x
 				_zoom_easing = true
-			_target_zoom = clampf(_target_zoom / ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+			_target_zoom = next_step(_target_zoom, -1)
 		elif mb.button_index == MOUSE_BUTTON_MIDDLE:
 			_dragging = mb.pressed
 			if mb.pressed:

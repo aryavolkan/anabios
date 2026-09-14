@@ -44,6 +44,13 @@ var _pixel_bursts: Array[GPUParticles2D] = []
 var _pixel_burst_idx: int = 0
 var _pixel_bursts_spawned: int = 0
 var _event_cursor: int = 0
+# Positional event effects seen recently: [type, loc, time]. A busy
+# settlement raises the same codex event every tick at the same square, and
+# a ring per event buried it under pulses; an effect within FX_DEDUPE_SECS
+# and FX_DEDUPE_DIST of a recent one of the same type is skipped.
+var _recent_fx: Array = []
+const FX_DEDUPE_SECS := 2.0
+const FX_DEDUPE_DIST := 48.0
 # Water ripples under drinking agents (own pool so a shoreline of sippers
 # can't starve the codex-event rings). _sip_last maps id -> the _fx_time of
 # that agent's previous ripple; _fx_time is this subsystem's own real-time
@@ -120,7 +127,10 @@ func _make_ember_pool() -> void:
 		p.explosiveness = 0.85
 		p.z_index = 6
 		p.visibility_rect = Rect2(-200, -200, 400, 400)
-		p.texture = _disc
+		# The pixel ember mark, unfiltered: the radial disc read as soft
+		# orange blobs the size of a hut at 16x.
+		p.texture = PixelFxSprites.build(PixelFxSprites.EMBER)
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var m := ParticleProcessMaterial.new()
 		m.direction = Vector3(0, -1, 0)
 		m.spread = 38.0
@@ -129,8 +139,10 @@ func _make_ember_pool() -> void:
 		m.gravity = Vector3(0, -16, 0)
 		m.damping_min = 5.0
 		m.damping_max = 12.0
-		m.scale_min = 0.7
-		m.scale_max = 1.5
+		# Small motes (the 16 px mark is sized in world units): at 4x a
+		# full-size spray read as one fireball over the village.
+		m.scale_min = 0.14
+		m.scale_max = 0.28
 		var grad := Gradient.new()
 		grad.set_color(0, Color(1.0, 0.72, 0.30))
 		grad.set_color(1, Color(1.0, 0.30, 0.08, 0.0))
@@ -167,7 +179,8 @@ func _make_dust_pool() -> void:
 		p.explosiveness = 0.7
 		p.z_index = 6
 		p.visibility_rect = Rect2(-100, -100, 200, 200)
-		p.texture = _disc
+		p.texture = PixelFxSprites.build(PixelFxSprites.SMOKE)
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var m := ParticleProcessMaterial.new()
 		m.direction = Vector3(0, -1, 0)
 		m.spread = 160.0
@@ -176,11 +189,12 @@ func _make_dust_pool() -> void:
 		m.gravity = Vector3(0, 9, 0)
 		m.damping_min = 8.0
 		m.damping_max = 16.0
-		m.scale_min = 1.2
-		m.scale_max = 2.2
+		m.scale_min = 0.5
+		m.scale_max = 0.9
 		var grad := Gradient.new()
-		grad.set_color(0, Color(0.72, 0.66, 0.52, 0.30))
-		grad.set_color(1, Color(0.72, 0.66, 0.52, 0.0))
+		# The puff is grey; tint it to a tan dust.
+		grad.set_color(0, Color(1.2, 1.05, 0.8, 0.45))
+		grad.set_color(1, Color(1.2, 1.05, 0.8, 0.0))
 		var gt := GradientTexture1D.new()
 		gt.gradient = grad
 		m.color_ramp = gt
@@ -293,7 +307,8 @@ func _make_spark_pool() -> void:
 		p.explosiveness = 0.85
 		p.z_index = 6
 		p.visibility_rect = Rect2(-200, -200, 400, 400)
-		p.texture = _disc
+		p.texture = PixelFxSprites.build(PixelFxSprites.EMBER)
+		p.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		var m := ParticleProcessMaterial.new()
 		m.direction = Vector3(0, -1, 0)
 		m.spread = 48.0
@@ -302,8 +317,8 @@ func _make_spark_pool() -> void:
 		m.gravity = Vector3(0, -14, 0)
 		m.damping_min = 5.0
 		m.damping_max = 12.0
-		m.scale_min = 0.6
-		m.scale_max = 1.3
+		m.scale_min = 0.3
+		m.scale_max = 0.65
 		var grad := Gradient.new()
 		grad.set_color(0, Color(1.0, 1.0, 1.0))
 		grad.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
@@ -526,11 +541,30 @@ func watch_events() -> void:
 	_event_cursor = count
 
 
+# True (and recorded) when no effect of this type fired near `loc` within
+# the dedupe window; stale entries age out as they are checked.
+func _fx_fresh(event_type: int, loc: Vector2) -> bool:
+	var keep: Array = []
+	var fresh := true
+	for e in _recent_fx:
+		if _fx_time - float(e[2]) > FX_DEDUPE_SECS:
+			continue
+		keep.append(e)
+		if int(e[0]) == event_type and (e[1] as Vector2).distance_to(loc) < FX_DEDUPE_DIST:
+			fresh = false
+	if fresh:
+		keep.append([event_type, loc, _fx_time])
+	_recent_fx = keep
+	return fresh
+
+
 # Apply one event's effects. Positional kinds need a real location (ZERO is
 # the sim's "no location" sentinel); trauma is global and always lands.
 # `value` is the event's payload — invention-carrying events tint their motes
 # per invention through spec_with_value; -1 means "no payload".
 func apply_event_fx(event_type: int, loc: Vector2, value: float = -1.0) -> void:
+	if loc != Vector2.ZERO and not _fx_fresh(event_type, loc):
+		return
 	for s in EventFx.spec_with_value(event_type, value):
 		match s["kind"]:
 			"fire":

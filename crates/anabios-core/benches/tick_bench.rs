@@ -1,6 +1,6 @@
 //! Per-tick benchmarks at 1k and 10k agents, plus stage-level microbenches.
 
-use anabios_core::biome::WORLD_SIZE;
+use anabios_core::biome::{BiomeField, WORLD_SIZE};
 use anabios_core::genome::{Genome, GenomeSlot};
 use anabios_core::prelude_test::Vec2;
 use anabios_core::tick::step;
@@ -192,5 +192,46 @@ fn bench_scavenge(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_tick, bench_stages, bench_culture, bench_scavenge);
+/// Phase-1 "scale fields": the raw per-call cost of `regrow_step` and
+/// `recolonize_step` at the biome resolutions the Huge/Vast scale tiers use
+/// (512 ≈ sandbox-xlarge, 1024 ≈ huge-steppe, 2048 ≈ vast-steppe), each at
+/// the `world_size` those scenarios pair it with (the `world_size/biome_res
+/// ≈ 8` convention). This is Stage 10's whole-grid cost — the thing
+/// `biome_step_interval` amortizes by running it less often on the largest
+/// tiers. `recolonize_step` is benched with one depleted cell per field so
+/// its neighbour-scan branch is exercised the way `living_biome` scenarios
+/// hit it, not just the empty-scratch fast path.
+fn bench_biome(c: &mut Criterion) {
+    let mut group = c.benchmark_group("biome");
+    group.sample_size(20);
+    for &res in &[512_usize, 1024, 2048] {
+        let world_size = (res as f32) * 8.0;
+        group.bench_function(BenchmarkId::new("regrow_step", res), |b| {
+            let template = BiomeField::generate(1, res, world_size);
+            b.iter_batched(
+                || template.clone(),
+                |mut f| {
+                    f.regrow_step(false);
+                    f
+                },
+                criterion::BatchSize::LargeInput,
+            );
+        });
+        group.bench_function(BenchmarkId::new("recolonize_step", res), |b| {
+            let mut template = BiomeField::generate(1, res, world_size);
+            template.cells[0].plant_biomass = 0.0;
+            b.iter_batched(
+                || template.clone(),
+                |mut f| {
+                    f.recolonize_step(false);
+                    f
+                },
+                criterion::BatchSize::LargeInput,
+            );
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_tick, bench_stages, bench_culture, bench_scavenge, bench_biome);
 criterion_main!(benches);

@@ -1,5 +1,7 @@
 extends Control
 
+const UiTheme = preload("res://scripts/ui_theme.gd")
+
 # Dual-inheritance helix — the two inheritance channels of DIT drawn as a
 # double helix. Left strand: genome slots (population means). Right strand:
 # meme channels (adoption levels). Rungs are the couplings between them:
@@ -47,7 +49,7 @@ var _meme_channels: Array = []
 
 func _ready() -> void:
 	visible = false
-	_font = ThemeDB.fallback_font
+	_font = UiTheme.font()
 	position = Vector2(392, 20)
 	# Right edge at 1035, matching the co-evolution panel: at 600 wide it stopped
 	# 38px short of the codex panel behind it, leaving a sliver of event buttons
