@@ -6,11 +6,15 @@ the sim's elevation field under a painterly ground shader (noise-jittered cell
 borders, rock on the steep slopes, snow on the peaks, a beach band and a
 darkened seabed at the water line), the biome map lushing and scarring in real
 time, instanced forests planted from the terrain grid that shrink where a cell
-is scarred bare, depth-shaded water with sun glints and a foam fringe, sun
-shadows over everything, every agent as an instanced grazer or hunter figure
-coloured by its genome and bobbing as it walks, combat volleys and trade lanes
-as fading light, hut villages at settlement sites, markets at the trade hubs,
-and the codex streaming "first emergence" events as rings on the map. The same page also plays the **recorded replay** the showcase deck ships
+is scarred bare and sway in the wind, depth-shaded water with sun glints,
+river sparkle, seabed caustics and a foam fringe, sun shadows over everything,
+a gentle day cycle that sweeps the sun round the plate toward a golden dusk,
+every agent as an instanced grazer or hunter figure coloured by its genome and
+walking on articulated legs, combat volleys and trade lanes as fading light
+with impact sparks, hut villages with hearth smoke at settlement sites,
+markets at the trade hubs, the codex streaming "first emergence" events as
+rings, light pillars and ember bursts on the map, and a soft bloom over the
+hot pixels. The same page also plays the **recorded replay** the showcase deck ships
 (`showcase/replay.js`), so the hosted deep-time story and the live sandbox are
 one product.
 
@@ -36,15 +40,19 @@ Deep links: `?scenario=inventions&seed=3&speed=4`, `?replay=out-of-africa-saga`,
 **Controls:** drag orbits, right-drag pans, wheel zooms · click an agent for its
 inspector (energy, age, diet, mood, body plan, held inventions, genome-driven
 learning flags) · **space** pause · **1–5** speed (¼× … 64× ticks per frame) ·
-**C** cycle colour mode · **F** frame the world · **L** follow the selected
-agent · **H** hide the HUD · click a codex line to fly to the event · click a
-species row to fly to a member.
+**C** cycle colour mode · **F** frame the world · **V** event tour (a slow
+orbit that cuts to each fresh codex event) · **L** follow the selected agent ·
+**H** hide the HUD · click a codex line to fly to the event · click a species
+row to fly to a member.
 
 Colour modes: species (genome hue/sat/val, livestock bleached), diet, dialect
 hue, energy, and — when the scenario enables the subsystem — mood, arousal and
 infection. Layers: relief, water, forests, shadows, combat, trade, villages,
-markets, event rings, wireframe (forests and shadows are the two to switch off
-on a weak GPU: up to 60k trees per kind and one 2048² shadow cascade).
+markets, events & sparks, wireframe, day cycle, bloom (forests, shadows and
+bloom are the three to switch off on a weak GPU: up to 60k trees per kind, one
+2048² shadow cascade and a five-level bloom chain). The day cycle is on when
+viewing live and off under `capture=1` so gallery stills stay at noon; `&day=1`
+opts a capture in.
 
 ## How it fits together
 
@@ -59,8 +67,9 @@ crates/anabios-wasm  ── cargo build --target wasm32-unknown-unknown ──�
 web/src/sources.js   LiveSource (wasm)  ·  ReplaySource (showcase/replay.js format)
       │  one interface: agents(), biomeRgba(), elevation(), streaks(), trades(), sites(), hubs(), events(), species(), agent(id), meta()
       ▼
-web/src/terrain.js   heightmap, ground shader, water, forests   web/src/layers.js   instanced figures, segments, villages, hubs, event rings
-web/src/scene.js     renderer / camera / lights  web/src/main.js     loop, HUD, picking, URL state
+web/src/terrain.js   heightmap, ground shader, water, forests   web/src/layers.js   instanced figures + gait, segments, villages, hubs, event rings + pillars
+web/src/scene.js     renderer / bloom / camera / lights / daylight  web/src/particles.js   ember, spark, mote and smoke pools
+web/src/main.js      loop, HUD, picking, URL state, event tour
 ```
 
 ### Why a hand-rolled ABI
