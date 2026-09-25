@@ -97,6 +97,25 @@ Small and mid-size worlds run live at 1×–64×. The flagship saga at ~3k agent
 runs at roughly a tick per frame; for it the recorded replay stays the smoother
 option, which is why the page keeps both sources.
 
+## Reproducible captures (the gallery harness)
+
+`?tick=N` fast-forwards a fresh world to exactly tick N and pauses there;
+`?cam=fit | event | x,y,zoom[,polar]` frames it (`zoom` is the Godot viewer's
+pixels-per-world-unit at 1280 px, so `gallery/README.md`'s `ANABIOS_CAM_*`
+values map 1:1); `?inspect=<id> | sp<species>` pins an agent; `&hud=0` hides
+the HUD. `web/scripts/capture.mjs` drives a headless Chromium through a list
+of such shots and writes PNGs — `gallery/atlas/` is the atlas counterpart of
+the Godot gallery, rendered from `gallery/atlas/shots.json`:
+
+```sh
+scripts/web.sh serve &
+npm --prefix web i -D playwright && npx --prefix web playwright install chromium   # once
+node web/scripts/capture.mjs gallery/atlas/shots.json          # → gallery/atlas/*.png
+```
+
+Every shot reproduces from its params alone (the world is deterministic per
+seed), so the pinned tick, camera and agent id are the whole recipe.
+
 ## Tests
 
 - `cargo test -p anabios-wasm` — pure view builders (well-formed buffers,

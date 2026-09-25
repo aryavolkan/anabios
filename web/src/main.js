@@ -40,6 +40,16 @@ const state = {
   speed: Number(params.get("speed")) || 1,          // ticks per 60 Hz frame
   paused: params.get("paused") === "1",
   colorMode: params.get("color") || "species",
+  /** Capture harness (see web/scripts/capture.mjs): `?tick=N&cam=…&inspect=…`. */
+  shot: {
+    tick: params.has("tick") ? Math.max(0, Number(params.get("tick"))) : null,
+    cam: params.get("cam"),
+    inspect: params.get("inspect"),
+    stage: 0,       // 0 idle · 1 waiting for the first frame at the target tick · 2 camera/inspect applied
+  },
+  ready: false,     // true once the requested tick, camera and selection are all on screen
+  fastForwarding: false,
+  lastEventLoc: null,
   selected: -1,
   follow: false,
   lastColorTick: -1,
@@ -62,7 +72,8 @@ async function loadScenario(entry, seed) {
     const src = await openLive("wasm/anabios.wasm", text, seed);
     attach(src, entry);
     document.body.classList.remove("replay");
-    history.replaceState(null, "", `?scenario=${encodeURIComponent(entry.id)}${seed !== undefined && seed !== "" ? `&seed=${seed}` : ""}`);
+    if (!params.has("capture")) history.replaceState(null, "", `?scenario=${encodeURIComponent(entry.id)}${seed !== undefined && seed !== "" ? `&seed=${seed}` : ""}`);
+    await prepareShot();
   } catch (e) {
     fail("Could not start the live world", e);
     return;
@@ -76,7 +87,8 @@ async function loadReplay(entry) {
     const src = await openReplay(entry.file);
     attach(src, entry);
     document.body.classList.add("replay");
-    history.replaceState(null, "", `?replay=${encodeURIComponent(entry.id)}`);
+    if (!params.has("capture")) history.replaceState(null, "", `?replay=${encodeURIComponent(entry.id)}`);
+    await prepareShot();
   } catch (e) {
     fail("Could not load the replay", e);
     return;
@@ -112,12 +124,121 @@ function attach(source, entry) {
 
 function heightAt(x, y) { return state.terrain ? state.terrain.heightAt(x, y) : 0; }
 
+const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
+
+/**
+ * Capture harness: `?tick=N` fast-forwards the fresh world to exactly tick N
+ * (paused there unless `&paused=0`), then `?cam=fit | event | x,y,zoom[,polar]`
+ * frames it and `?inspect=<id> | sp<species>` pins an agent. The loop flips
+ * `state.ready` once all of that is on screen; `web/scripts/capture.mjs`
+ * waits for it. `zoom` follows the Godot viewer's convention (screen pixels
+ * per world unit at a 1280 px wide viewport), so `gallery/README.md` env
+ * values map 1:1.
+ */
+async function prepareShot() {
+  const src = state.source, shot = state.shot;
+  state.ready = false;
+  if (shot.tick === null && !shot.cam && !shot.inspect) { state.ready = true; return; }
+  if (shot.tick !== null) {
+    if (src.kind === "replay") {
+      src.seek(shot.tick);
+    } else {
+      setPaused(true);
+      const fxWas = layers.fx.enabled;
+      layers.fx.enabled = false;
+      cover("Fast-forwarding…", `${src.meta().scenario} → tick ${shot.tick.toLocaleString()}`);
+      state.fastForwarding = true;
+      let lastPaint = performance.now();
+      while (src.tick < shot.tick) {
+        const remaining = shot.tick - src.tick;
+        // The last 40 ticks step one at a time so combat/trade trails and
+        // villages accumulate exactly as they would in live play.
+        const batch = remaining > 40 ? Math.min(50, remaining - 40) : 1;
+        src.advance(batch);
+        const tick = src.tick;
+        if (remaining <= 40) {
+          layers.streaks.push(src.streaks(), tick);
+          layers.trades.push(src.trades(), tick);
+          layers.villages.update(src.sites(), tick, heightAt);
+        }
+        for (const ev of src.events()) onEvent(ev, performance.now() / 1000);
+        if (performance.now() - lastPaint > 250) {
+          $("cover-body").textContent = `tick ${Math.floor(tick).toLocaleString()} / ${shot.tick.toLocaleString()} · ${src.sim.alive().toLocaleString()} alive`;
+          await nextFrame();
+          lastPaint = performance.now();
+        }
+      }
+      state.fastForwarding = false;
+      layers.fx.enabled = fxWas;
+      if (params.get("paused") === "0") setPaused(false);
+    }
+  }
+  if (params.get("hud") === "0") document.body.classList.add("hide-hud");
+  state.sinceStep = 0;          // force one full layer update at this tick
+  state.lastStatsTick = -1;
+  shot.stage = 1;
+}
+
+/** Apply `?cam=` once the world is on screen (needs terrain heights + last event). */
+function applyShotCamera(spec) {
+  const src = state.source;
+  if (!spec || spec === "fit") { stage.frame(); return; }
+  if (spec === "event") {
+    const p = state.lastEventLoc || { x: src.worldSize / 2, y: src.worldSize / 2 };
+    stage.lookAt(p.x, heightAt(p.x, p.y), p.y, stage.distanceForWidth(1280 / 2), 0.8);
+    return;
+  }
+  // `site,<zoom>` aims at the largest settlement on screen, `hub,<zoom>` at
+  // the busiest-looking market (the hub nearest the world centre): the Godot
+  // gallery frames these by torus-wrapped coordinates the atlas can't wrap.
+  if (spec.startsWith("site") || spec.startsWith("hub")) {
+    const zoom = Number(spec.split(",")[1]) || 4;
+    let best = null;
+    if (spec.startsWith("site")) {
+      for (const v of layers.villages.sites.values()) if (!best || v.n > best.n) best = v;
+    } else {
+      const h = src.hubs(), c = src.worldSize / 2;
+      for (let k = 0; k < h.count; k++) {
+        const hx = h.data[k * 3], hy = h.data[k * 3 + 1], d = Math.hypot(hx - c, hy - c);
+        if (!best || d < best.d) best = { x: hx, y: hy, d };
+      }
+    }
+    if (!best) { stage.frame(); return; }
+    stage.lookAt(best.x, heightAt(best.x, best.y), best.y, stage.distanceForWidth(1280 / zoom), zoom >= 3 ? 0.8 : 0.95);
+    return;
+  }
+  let [x, y, zoom = 2, polar] = spec.split(",").map(Number);
+  // Gallery coordinates may sit past the seam (the Godot viewer wraps the
+  // ground); fold them back onto the plate.
+  const ws = src.worldSize;
+  x = ((x % ws) + ws) % ws;
+  y = ((y % ws) + ws) % ws;
+  const worldWidth = 1280 / Math.max(0.05, zoom);
+  stage.lookAt(x, heightAt(x, y), y, stage.distanceForWidth(worldWidth), polar || (zoom >= 3 ? 0.8 : 0.95));
+}
+
+/** Resolve `?inspect=` against the agents now on screen. */
+function applyShotInspect(spec) {
+  if (!spec) return;
+  const a = state.source.agents();
+  const m = /^sp(\d+)$/.exec(spec);
+  if (m) {
+    const sid = Number(m[1]);
+    for (let k = 0; k < a.count; k++) if (a.data[k * a.stride + 11] === sid) { select(a.data[k * a.stride]); return; }
+  } else {
+    const id = Number(spec);
+    for (let k = 0; k < a.count; k++) if (a.data[k * a.stride] === id) { select(id); return; }
+  }
+  if (a.count) select(a.data[0]);   // requested agent is dead: pin the lowest live slot instead
+}
+
 // ---------------------------------------------------------------------------
 // Frame loop
 // ---------------------------------------------------------------------------
 let last = performance.now();
 function loop(now) {
   requestAnimationFrame(loop);
+  if (state.fastForwarding) { last = now; return; }   // the harness owns the frame budget while it steps
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const src = state.source;
   stage.tick(dt);
@@ -152,6 +273,15 @@ function loop(now) {
         state.lastStatsTick = tick;
       }
       state.sinceStep = 1;
+      if (state.shot.stage === 1) {
+        applyShotCamera(state.shot.cam);
+        applyShotInspect(state.shot.inspect);
+        state.shot.stage = 2;
+      }
+    } else if (state.shot.stage === 2) {
+      // One frame has been rendered with the camera and selection applied.
+      state.shot.stage = 0;
+      state.ready = true;
     }
     layers.streaks.update(src.tick, heightAt);
     layers.trades.update(src.tick, heightAt);
@@ -234,6 +364,7 @@ function renderLegend() {
 
 function onEvent(ev, now) {
   const kind = kindOf(ev.type);
+  if (ev.x || ev.y) state.lastEventLoc = { x: ev.x, y: ev.y };
   layers.fx.spawn(ev, now, heightAt);
   const line = document.createElement("div");
   line.className = "codex-line";

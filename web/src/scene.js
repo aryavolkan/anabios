@@ -53,6 +53,26 @@ export function createStage(canvas) {
       camera.position.set(ws / 2 + ws * 0.5, ws * 0.95, ws / 2 + ws * 1.05);
       controls.update();
     },
+    /**
+     * Snap the camera to look at world (x, h, z) from `distance`, at `polar`
+     * radians off vertical and `azimuth` radians east of due south. Used by
+     * the capture harness (`?cam=x,y,zoom`) so gallery shots are reproducible.
+     */
+    lookAt(x, h, z, distance, polar = 0.85, azimuth = 0.4) {
+      this._fly = null;
+      controls.target.set(x, h, z);
+      camera.position.set(
+        x + distance * Math.sin(polar) * Math.sin(azimuth),
+        h + distance * Math.cos(polar),
+        z + distance * Math.sin(polar) * Math.cos(azimuth),
+      );
+      controls.update();
+    },
+    /** Camera distance at which `worldWidth` world units span the viewport width. */
+    distanceForWidth(worldWidth) {
+      const vfov = (camera.fov * Math.PI) / 180;
+      return worldWidth / (2 * Math.tan(vfov / 2) * camera.aspect);
+    },
     /** Smoothly move the orbit target to (x, h, z) keeping the camera offset. */
     flyTo(x, h, z, distance) {
       this._fly = { to: new THREE.Vector3(x, h, z), distance, t: 0 };
