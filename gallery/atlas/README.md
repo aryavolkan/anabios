@@ -24,17 +24,20 @@ differ from the older prose in the Godot gallery exactly as its header warns.
 **What the atlas draws instead of the pixel viewer.** Terrain relief from the
 elevation field under a painterly ground shader (noise-softened cell borders,
 rock on steep slopes, snow on the peaks, a beach band and darkened seabed at
-the shore), instanced forests and rock scatter planted from the terrain grid,
-depth-shaded water with sun glints, river sparkle, seabed caustics and a foam
-fringe, sun shadows, a soft bloom over the hot pixels; agents as instanced
-grazer or hunter figures on articulated legs, coloured by genome (species mode)
-or by diet / dialect / energy / mood / arousal / infection; combat volleys and
-trade lanes as fading light; hut villages at settlement sites and stalls at
-trade hubs; codex events as expanding rings and light pillars plus the feed at
-the bottom right; the species table in the rail; a click-to-inspect agent
-card. Stills are shot at noon: the day cycle is off under `capture=1`, and the
-short-lived motion (gait, wind, sparks, smoke, pillars) is mostly between
-frames at software-GL frame rates.
+the shore, wet sand at the water line), instanced forests, grass tufts and
+rock scatter planted from the terrain grid, depth-shaded water with sun
+glints, river sparkle, seabed caustics and a foam fringe, sun shadows and
+drifting cloud shadows, a sky dome, bird flocks, a soft bloom over the hot
+pixels; agents as instanced grazer or hunter figures on articulated legs,
+coloured by genome (species mode) or by diet / dialect / energy / mood /
+arousal / infection; combat volleys and trade lanes as fading light;
+pitched-roof hut villages at settlement sites and awninged stalls at trade
+hubs; codex events as expanding rings and light pillars plus the feed at the
+bottom right; the species table in the rail; a click-to-inspect agent card.
+Stills are shot at noon: the day cycle is off under `capture=1`, and the
+short-lived motion (gait, wind, sparks, smoke, pillars, birth and death
+puffs) is mostly between frames at software-GL frame rates; the cloud shade
+is wherever the clouds happened to be at the moment of capture.
 
 **What has no counterpart yet** (the still is captured anyway, framed on the
 same world at the same tick, and the gap is noted in its row): the codex tabs,

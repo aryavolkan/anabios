@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { createStage } from "./scene.js";
 import { Terrain } from "./terrain.js";
-import { Agents, Segments, Villages, Hubs, EventFx, COLOR_MODES } from "./layers.js";
+import { Agents, Segments, Villages, Hubs, EventFx, COLOR_MODES, Birds } from "./layers.js";
 import { Particles, KIND } from "./particles.js";
 import { openLive, openReplay } from "./sources.js";
 import { kindOf, KIND_CSS, KIND_COLOR, TERRAIN, MOOD_COLORS, cssHex, hsv, speciesHue } from "./palette.js";
@@ -29,10 +29,11 @@ const layers = {
   hubs: new Hubs(),
   fx: new EventFx(),
   particles: new Particles(),
+  birds: new Birds(),
 };
 const world = new THREE.Group();
 stage.scene.add(world, ...layers.agents.meshes, layers.agents.marker, layers.streaks.lines, layers.trades.lines,
-  layers.villages.mesh, layers.hubs.mesh, layers.fx.group, layers.particles.group);
+  layers.villages.mesh, layers.hubs.mesh, layers.fx.group, layers.particles.group, layers.birds.mesh);
 layers.fx.enabled = !reduceMotion;
 layers.particles.enabled = !reduceMotion;
 
@@ -118,6 +119,8 @@ function attach(source, entry) {
   for (const l of [layers.agents, layers.villages, layers.fx, layers.particles]) l.setWorldSize(ws, state.terrain.cell);
   layers.streaks.clear(); layers.trades.clear(); layers.villages.clear(); layers.particles.clear();
   layers.hubs.set(source.hubs(), state.terrain.cell, heightAt);
+  layers.birds.setWorld(ws, source.biomeRes, state.terrain.cell, heightAt);
+  layers.agents.reset();
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
   state.lastColorTick = -1; state.lastStatsTick = -1;
   $("codex").innerHTML = "";
@@ -168,7 +171,7 @@ async function prepareShot() {
         if (remaining <= 40) {
           layers.streaks.push(src.streaks(), tick);
           layers.trades.push(src.trades(), tick);
-          layers.villages.update(src.sites(), tick, heightAt);
+          layers.villages.update(src.sites(), tick, heightAt, 4, true);
         }
         for (const ev of src.events()) onEvent(ev, performance.now() / 1000);
         if (performance.now() - lastPaint > 250) {
@@ -177,7 +180,7 @@ async function prepareShot() {
           lastPaint = performance.now();
         }
       }
-      state.fastForwarding = false;
+      state.fastForwarding = false; layers.agents.reset();
       layers.fx.enabled = fxWas;
       if (params.get("paused") === "0") setPaused(false);
     }
@@ -254,6 +257,7 @@ function loop(now) {
   const clock = reduceMotion ? 0 : now / 1000;
   if (state.terrain) { state.terrain.water.update(clock); state.terrain.forest.setTime(clock); state.terrain.setTime(clock); }
   layers.agents.setTime(clock);
+  layers.birds.update(clock);
   layers.fx.update(now / 1000);
   layers.particles.update(reduceMotion ? 0 : dt, $("view").clientHeight / (2 * Math.tan((stage.camera.fov * Math.PI) / 360)));
   if (layers.agents.marker.visible) {
@@ -282,6 +286,13 @@ function loop(now) {
         for (let k = 0, n = Math.min(streaks.count, 150); k < n; k++) {
           const o = k * 5, x2 = streaks.data[o + 2], y2 = streaks.data[o + 3];
           layers.particles.spawn(KIND.SPARK, x2, heightAt(x2, y2) + layers.agents.baseScale * 0.5, y2, 3);
+        }
+        // A glimmer where an agent was born, a grey puff where one died (skipped
+        // at the fastest speeds, where whole generations pass between frames).
+        if (state.speed <= 16) {
+          const born = layers.agents.born, died = layers.agents.died, lift = layers.agents.baseScale * 0.6;
+          for (let k = 0, n = Math.min(born.length, 240); k < n; k += 2) layers.particles.spawn(KIND.MOTE, born[k], heightAt(born[k], born[k + 1]) + lift, born[k + 1], 3, 0xfff2c8);
+          for (let k = 0, n = Math.min(died.length, 400); k < n; k += 2) layers.particles.spawn(KIND.SMOKE, died[k], heightAt(died[k], died[k + 1]) + lift, died[k + 1], 2);
         }
         layers.trades.push(src.trades(), tick);
         layers.villages.update(src.sites(), tick, heightAt);
@@ -473,6 +484,8 @@ function applyLayerToggles() {
       case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
       case "wire": if (state.terrain) state.terrain.material.wireframe = on; break;
       case "bloom": stage.post = on; break;
+      case "clouds": if (state.terrain) state.terrain.uniforms.uCloud.value = on ? 1 : 0; break;
+      case "birds": layers.birds.mesh.visible = on; break;
       case "day": state.dayCycle = on; if (!on) { stage.setDaylight(0); state.terrain?.water.uniforms.uSun.value.copy(stage.sunDir); } break;
     }
   }

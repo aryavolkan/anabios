@@ -6,15 +6,19 @@ the sim's elevation field under a painterly ground shader (noise-jittered cell
 borders, rock on the steep slopes, snow on the peaks, a beach band and a
 darkened seabed at the water line), the biome map lushing and scarring in real
 time, instanced forests planted from the terrain grid that shrink where a cell
-is scarred bare and sway in the wind, depth-shaded water with sun glints,
-river sparkle, seabed caustics and a foam fringe, sun shadows over everything,
-a gentle day cycle that sweeps the sun round the plate toward a golden dusk,
-every agent as an instanced grazer or hunter figure coloured by its genome and
-walking on articulated legs, combat volleys and trade lanes as fading light
-with impact sparks, hut villages with hearth smoke at settlement sites,
-markets at the trade hubs, the codex streaming "first emergence" events as
-rings, light pillars and ember bursts on the map, and a soft bloom over the
-hot pixels. The same page also plays the **recorded replay** the showcase deck ships
+is scarred bare and sway in the wind (multi-lobed canopies, three-tier
+conifers, grass tufts on the open ground, rock scatter), depth-shaded water
+with sun glints, river sparkle, seabed caustics, wet sand and a foam fringe,
+sun shadows and drifting cloud shadows over everything, a sky dome whose sun
+glow swells as a gentle day cycle sweeps the sun round the plate toward a
+golden dusk, bird flocks circling overhead, every agent as an instanced grazer
+or hunter figure coloured by its genome and walking (or sprinting, when it
+flees or fights) on articulated legs, a glimmer where an agent is born and a
+grey puff where one dies, combat volleys and trade lanes as fading light with
+impact sparks, pitched-roof hut villages with hearth smoke at settlement
+sites, awninged market stalls at the trade hubs, the codex streaming "first
+emergence" events as rings, light pillars and ember bursts on the map, and a
+soft bloom over the hot pixels. The same page also plays the **recorded replay** the showcase deck ships
 (`showcase/replay.js`), so the hosted deep-time story and the live sandbox are
 one product.
 
@@ -48,9 +52,9 @@ row to fly to a member.
 Colour modes: species (genome hue/sat/val, livestock bleached), diet, dialect
 hue, energy, and — when the scenario enables the subsystem — mood, arousal and
 infection. Layers: relief, water, forests, shadows, combat, trade, villages,
-markets, events & sparks, wireframe, day cycle, bloom (forests, shadows and
-bloom are the three to switch off on a weak GPU: up to 60k trees per kind, one
-2048² shadow cascade and a five-level bloom chain). The day cycle is on when
+markets, events & sparks, wireframe, day cycle, bloom, clouds, birds (forests,
+shadows and bloom are the three to switch off on a weak GPU: up to 60k trees
+and 60k grass tufts, one 2048² shadow cascade and a five-level bloom chain). The day cycle is on when
 viewing live and off under `capture=1` so gallery stills stay at noon; `&day=1`
 opts a capture in.
 
@@ -67,8 +71,8 @@ crates/anabios-wasm  ── cargo build --target wasm32-unknown-unknown ──�
 web/src/sources.js   LiveSource (wasm)  ·  ReplaySource (showcase/replay.js format)
       │  one interface: agents(), biomeRgba(), elevation(), streaks(), trades(), sites(), hubs(), events(), species(), agent(id), meta()
       ▼
-web/src/terrain.js   heightmap, ground shader, water, forests   web/src/layers.js   instanced figures + gait, segments, villages, hubs, event rings + pillars
-web/src/scene.js     renderer / bloom / camera / lights / daylight  web/src/particles.js   ember, spark, mote and smoke pools
+web/src/terrain.js   heightmap, ground shader (clouds, shore), water, forests + grass   web/src/layers.js   figures + gait, segments, villages, hubs, birds, event rings + pillars
+web/src/scene.js     renderer / bloom / sky dome / camera / lights / daylight  web/src/particles.js   ember, spark, mote and smoke pools
 web/src/main.js      loop, HUD, picking, URL state, event tour
 ```
 

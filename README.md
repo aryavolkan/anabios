@@ -151,14 +151,16 @@ The browser front end in [`web/`](web/README.md) runs the same core **in the
 browser** — `anabios-core` compiled to WebAssembly through the
 `anabios-wasm` C-ABI bridge — and renders it in 3D with three.js: terrain
 relief from the sim's elevation field under a painterly ground shader, the
-biome map lushing and scarring live, instanced wind-swayed forests planted
-from the terrain grid, depth-shaded water with a foam shoreline and river
-sparkle, sun shadows under a gentle day cycle, instanced grazer/hunter figures
-walking on articulated legs and coloured by genome (or diet, dialect, energy,
-mood, arousal, infection), combat volleys and trade lanes with impact sparks,
-smoking hut villages at settlement sites, markets at the trade hubs, codex
-events as rings, light pillars and ember bursts on the map plus a live feed
-and an event-tour camera, a soft bloom, and a click-to-inspect agent card. It also plays the
+biome map lushing and scarring live, instanced wind-swayed forests and grass
+planted from the terrain grid, depth-shaded water with a foam shoreline and
+river sparkle, sun and cloud shadows under a sky dome and a gentle day cycle,
+bird flocks overhead, instanced grazer/hunter figures walking on articulated
+legs and coloured by genome (or diet, dialect, energy, mood, arousal,
+infection), birth glimmers and death puffs, combat volleys and trade lanes
+with impact sparks, smoking pitched-roof villages at settlement sites, market
+stalls at the trade hubs, codex events as rings, light pillars and ember
+bursts on the map plus a live feed and an event-tour camera, a soft bloom,
+and a click-to-inspect agent card. It also plays the
 recorded showcase replay (`showcase/replay.js`) through the same scene.
 
 ```bash

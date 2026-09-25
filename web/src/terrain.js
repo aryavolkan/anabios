@@ -40,6 +40,15 @@ export function classifyTerrain(rgba, res) {
   return ids;
 }
 
+/** Drifting cloud shade over world (x, z) in units: two octaves of slow noise thresholded to soft patches. */
+const GLSL_CLOUD = /* glsl */ `
+  float atlasCloud(vec2 w, float t) {
+    vec2 p = w / 110.0;
+    float n = atlasNoise(p + vec2(t * 0.011, t * 0.005)) * 0.6 + atlasNoise(p * 2.1 - vec2(t * 0.008, t * 0.004)) * 0.4;
+    return smoothstep(0.58, 0.80, n);
+  }
+`;
+
 const GLSL_NOISE = /* glsl */ `
   float atlasHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
   float atlasNoise(vec2 p) {
@@ -124,6 +133,8 @@ export class Terrain {
       uRelief: { value: this.reliefOn ? 1 : 0 },
       uSnow: { value: (0.9 - seaLevel) * this.heightScale },
       uBeach: { value: this.heightScale * 0.02 },
+      uWorld: { value: worldSize },
+      uCloud: { value: 1 },
     };
     this.material = new THREE.MeshStandardMaterial({ map: this.texture, roughness: 0.94, metalness: 0.0 });
     this.material.customProgramCacheKey = () => "atlas-terrain";
@@ -134,7 +145,7 @@ export class Terrain {
         .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvSlope = objectNormal.y;")
         .replace("#include <begin_vertex>", "#include <begin_vertex>\nvHeight = transformed.y;");
       shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", `#include <common>\nuniform float uRes; uniform float uTime; uniform float uRelief; uniform float uSnow; uniform float uBeach;\nvarying float vSlope; varying float vHeight;\n${GLSL_NOISE}`)
+        .replace("#include <common>", `#include <common>\nuniform float uRes; uniform float uTime; uniform float uRelief; uniform float uSnow; uniform float uBeach; uniform float uWorld; uniform float uCloud;\nvarying float vSlope; varying float vHeight;\n${GLSL_NOISE}\n${GLSL_CLOUD}`)
         .replace("#include <map_fragment>", /* glsl */ `
           vec2 cuv = vMapUv * uRes;
           // Organic cell borders: jitter the sample point by low-frequency noise.
@@ -152,6 +163,9 @@ export class Terrain {
           // Shore: a sandy band just above the water line, a darker blue-green bed below it.
           float beach = (1.0 - smoothstep(0.0, uBeach * 3.0, vHeight)) * step(0.0, vHeight) * uRelief;
           col = mix(col, vec3(0.78, 0.70, 0.48) * (0.85 + 0.4 * fine), beach * 0.7);
+          // Wet sand: the strip the last wave reached is darker.
+          float wetsand = (1.0 - smoothstep(0.0, uBeach * 0.9, vHeight)) * step(0.0, vHeight) * uRelief;
+          col *= 1.0 - 0.22 * wetsand;
           float bed = clamp(-vHeight / (uBeach * 8.0), 0.0, 1.0) * uRelief;
           col = mix(col, col * vec3(0.40, 0.55, 0.62), bed);
           // Wet cells (rivers, and water on flat worlds) glitter with a slow drifting sparkle;
@@ -162,6 +176,8 @@ export class Terrain {
           col += vec3(0.55, 0.62, 0.7) * glit * 3.0 * wet;
           float caus = atlasNoise(cuv * 5.0 + vec2(uTime * 0.4, uTime * 0.1)) * atlasNoise(cuv * 4.3 - vec2(uTime * 0.25, uTime * 0.35));
           col += vec3(0.35, 0.5, 0.55) * pow(caus, 2.5) * 1.6 * bed;
+          // Cloud shadows drifting over the plate.
+          col *= 1.0 - 0.22 * atlasCloud(vMapUv * uWorld, uTime) * uCloud;
           diffuseColor.rgb *= col;
         `);
     };
@@ -332,31 +348,53 @@ export class Water {
 }
 
 // ---------------------------------------------------------------------------
-/** Broadleaf tree: trunk + squashed icosahedron canopy; vertex colours tint
- *  the trunk brown and leave the canopy white for the instance colour. */
+/** Broadleaf tree: trunk + a cluster of canopy lobes; vertex colours tint the
+ *  trunk brown and leave the canopy white for the instance colour. */
 function broadleafGeometry() {
-  const trunk = new THREE.CylinderGeometry(0.07, 0.11, 0.55, 5);
-  trunk.translate(0, 0.27, 0);
+  const trunk = new THREE.CylinderGeometry(0.06, 0.12, 0.6, 5);
+  trunk.translate(0, 0.3, 0);
   paint(trunk, 0.42, 0.30, 0.20);
   // (Indexed like the trunk — a polyhedron would be non-indexed and refuse to merge.)
-  const canopy = new THREE.SphereGeometry(0.46, 6, 5);
-  canopy.scale(1, 0.85, 1);
-  canopy.translate(0, 0.78, 0);
-  paint(canopy, 1, 1, 1);
-  return mergeGeometries([trunk, canopy], false);
+  const lobes = [];
+  for (const [x, y, z, r] of [[0, 0.84, 0, 0.42], [0.24, 0.66, 0.12, 0.3], [-0.2, 0.7, -0.16, 0.28], [0.02, 0.62, 0.27, 0.24]]) {
+    const lobe = new THREE.SphereGeometry(r, 6, 5);
+    lobe.scale(1, 0.85, 1);
+    lobe.translate(x, y, z);
+    paint(lobe, 1, 1, 1);
+    lobes.push(lobe);
+  }
+  return mergeGeometries([trunk, ...lobes], false);
 }
-/** Conifer: trunk + two stacked cones. */
+/** Conifer: trunk + three stacked cones. */
 function coniferGeometry() {
-  const trunk = new THREE.CylinderGeometry(0.06, 0.09, 0.4, 5);
-  trunk.translate(0, 0.2, 0);
+  const trunk = new THREE.CylinderGeometry(0.05, 0.09, 0.45, 5);
+  trunk.translate(0, 0.22, 0);
   paint(trunk, 0.38, 0.26, 0.18);
-  const lower = new THREE.ConeGeometry(0.38, 0.8, 6);
-  lower.translate(0, 0.7, 0);
-  paint(lower, 1, 1, 1);
-  const upper = new THREE.ConeGeometry(0.26, 0.6, 6);
-  upper.translate(0, 1.15, 0);
-  paint(upper, 1, 1, 1);
-  return mergeGeometries([trunk, lower, upper], false);
+  const tiers = [];
+  for (const [r, h, y] of [[0.40, 0.75, 0.62], [0.30, 0.6, 1.0], [0.19, 0.45, 1.33]]) {
+    const cone = new THREE.ConeGeometry(r, h, 6);
+    cone.translate(0, y, 0);
+    paint(cone, 1, 1, 1);
+    tiers.push(cone);
+  }
+  return mergeGeometries([trunk, ...tiers], false);
+}
+/** Grass tuft: three crossed, tapered blades; darker at the root, lighter at the tips. */
+function tuftGeometry() {
+  const parts = [];
+  for (let i = 0; i < 3; i++) {
+    const g = new THREE.PlaneGeometry(0.55, 0.62, 1, 2);
+    g.translate(0, 0.31, 0);
+    g.rotateY((i * Math.PI) / 3);
+    const pos = g.attributes.position.array;
+    for (let v = 0; v < pos.length; v += 3) { const t = pos[v + 1] / 0.62; pos[v] *= 1.0 - 0.55 * t; pos[v + 2] *= 1.0 - 0.55 * t; }
+    parts.push(g);
+  }
+  const g = mergeGeometries(parts, false);
+  const n = g.attributes.position.count, pos = g.attributes.position.array, col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const v = 0.55 + 0.55 * (pos[i * 3 + 1] / 0.62); col[i * 3] = v; col[i * 3 + 1] = v; col[i * 3 + 2] = v; }
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return g;
 }
 /** A squat boulder: a flattened, slightly jittered icosahedron (non-indexed, so it stays unmerged). */
 function rockGeometry() {
@@ -385,6 +423,9 @@ const PLANTING = {
   [T.SAVANNA]: [0.16, "leaf", 0x8a8a3c, 0.65],
   [T.TUNDRA]: [0.06, "cone", 0x5c7060, 0.6],
 };
+/** Grass tufts per cell (fractional = probability), with their blade colour. */
+const TUFTS = { [T.GRASS]: 2.4, [T.SAVANNA]: 1.8, [T.FOREST]: 0.6, [T.TUNDRA]: 0.7, [T.RAINFOREST]: 0.4 };
+const TUFT_COLOR = { [T.GRASS]: 0x78b544, [T.SAVANNA]: 0xb9a94e, [T.FOREST]: 0x5a9a44, [T.TUNDRA]: 0x8c9c72, [T.RAINFOREST]: 0x3f8f4a };
 /** Extra rock scatter on cells whose main planting is something else. */
 const ROCKS = { [T.TUNDRA]: 0.22, [T.DESERT]: 0.05, [T.SAVANNA]: 0.03, [T.GRASS]: 0.015 };
 const hash2 = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -394,16 +435,18 @@ export class Forest {
   constructor(terrain, maxPerKind = 60000) {
     this.terrain = terrain;
     this.max = maxPerKind;
-    this.uniforms = { uTime: { value: 0 } };
+    this.uniforms = { uTime: { value: 0 }, uCloud: terrain.uniforms.uCloud };
     // Wind: canopies sway with a slow wave keyed on the instance's world
-    // position, so a forest ripples instead of nodding in unison.
-    const mat = () => {
-      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
-      m.customProgramCacheKey = () => "atlas-tree";
+    // position, so a forest ripples instead of nodding in unison. The same
+    // cloud shade as the ground passes over the canopies.
+    const mat = (side = THREE.FrontSide) => {
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, side });
+      m.customProgramCacheKey = () => `atlas-tree-${side}`;
       m.onBeforeCompile = (shader) => {
         shader.uniforms.uTime = this.uniforms.uTime;
+        shader.uniforms.uCloud = this.uniforms.uCloud;
         shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", "#include <common>\nuniform float uTime;")
+          .replace("#include <common>", "#include <common>\nuniform float uTime; varying vec2 vWxz;")
           .replace("#include <begin_vertex>", `#include <begin_vertex>
             {
               #ifdef USE_INSTANCING
@@ -411,23 +454,29 @@ export class Forest {
               #else
                 vec2 wp = vec2(0.0);
               #endif
+              vWxz = wp;
               float lift = smoothstep(0.35, 1.3, position.y);
               float w = sin(uTime * 1.1 + wp.x * 0.045 + wp.y * 0.07) + 0.5 * sin(uTime * 2.3 + wp.x * 0.11);
               transformed.x += w * 0.045 * lift;
               transformed.z += w * 0.025 * lift;
             }`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace("#include <common>", `#include <common>\nuniform float uTime; uniform float uCloud; varying vec2 vWxz;\n${GLSL_NOISE}\n${GLSL_CLOUD}`)
+          .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.22 * atlasCloud(vWxz, uTime) * uCloud;");
       };
       return m;
     };
     this.leaf = new THREE.InstancedMesh(broadleafGeometry(), mat(), maxPerKind);
     this.cone = new THREE.InstancedMesh(coniferGeometry(), mat(), maxPerKind);
+    this.tuft = new THREE.InstancedMesh(tuftGeometry(), mat(THREE.DoubleSide), maxPerKind);
     this.rock = new THREE.InstancedMesh(rockGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), maxPerKind);
-    for (const m of [this.leaf, this.cone, this.rock]) {
+    for (const m of [this.leaf, this.cone, this.tuft, this.rock]) {
       m.count = 0; m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; m.name = "forest";
     }
+    this.tuft.castShadow = false;   // thousands of blades: their shadow is noise, not grounding
     this.group = new THREE.Group();
-    this.group.add(this.leaf, this.cone, this.rock);
-    this.items = [];     // {mesh, index, cell, x, z, rot, base, dead}
+    this.group.add(this.leaf, this.cone, this.tuft, this.rock);
+    this.items = [];     // {mesh, index, kind, cell, x, z, rot, tx, tz, base}
     this.scar = null;    // per-cell 0/1 "bare" flags from the last colour refresh
     this.rebuild();
   }
@@ -436,31 +485,36 @@ export class Forest {
   rebuild() {
     const t = this.terrain, ids = t.terrainIds, res = t.res, cell = t.cell;
     this.items.length = 0;
-    const counts = { leaf: 0, cone: 0, rock: 0 };
+    const counts = { leaf: 0, cone: 0, tuft: 0, rock: 0 };
     if (ids) {
-      // Budget: keep every world under the instance cap by thinning uniformly.
-      let want = 0;
-      for (let k = 0; k < res * res; k++) { const p = PLANTING[ids[k]]; if (p) want += p[0]; want += ROCKS[ids[k]] || 0; }
+      // Budget: keep every world under the instance cap by thinning uniformly
+      // (trees and rocks share one budget, grass has its own).
+      let want = 0, wantTuft = 0;
+      for (let k = 0; k < res * res; k++) { const p = PLANTING[ids[k]]; if (p) want += p[0]; want += ROCKS[ids[k]] || 0; wantTuft += TUFTS[ids[k]] || 0; }
       const keep = Math.min(1, this.max / Math.max(1, want));
+      const keepTuft = Math.min(1, this.max / Math.max(1, wantTuft));
       const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(), c = new THREE.Color();
-      const up = new THREE.Vector3(0, 1, 0);
-      const meshes = { leaf: this.leaf, cone: this.cone, rock: this.rock };
-      const plant = (k, cx, cy, density, kind, colour, hf, salt) => {
+      const e = new THREE.Euler();
+      const meshes = { leaf: this.leaf, cone: this.cone, tuft: this.tuft, rock: this.rock };
+      const plant = (k, cx, cy, density, kind, colour, hf, salt, keepK = keep) => {
         const n = Math.floor(density) + (hash2(k, salt) < density % 1 ? 1 : 0);
         for (let i = 0; i < n; i++) {
-          if (hash2(k, salt + 100 + i) > keep) continue;
+          if (hash2(k, salt + 100 + i) > keepK) continue;
           const mesh = meshes[kind];
           const index = counts[kind]++;
           if (index >= this.max) continue;
           const x = (cx + hash2(k, salt + 200 + i)) * cell, z = (cy + hash2(k, salt + 300 + i)) * cell;
           const base = cell * hf * (0.55 + 0.5 * hash2(k, salt + 400 + i));
           const rot = hash2(k, salt + 500 + i) * Math.PI * 2;
-          this.items.push({ mesh, index, kind, cell: k, x, z, rot, base });
+          // Trees lean a little; grass and rocks sit square.
+          const lean = kind === "leaf" || kind === "cone" ? 0.16 : 0;
+          const tx = (hash2(k, salt + 700 + i) - 0.5) * lean, tz = (hash2(k, salt + 800 + i) - 0.5) * lean;
+          this.items.push({ mesh, index, kind, cell: k, x, z, rot, tx, tz, base });
           p.set(x, t.heightAt(x, z), z);
-          q.setFromAxisAngle(up, rot);
+          q.setFromEuler(e.set(tx, rot, tz));
           s.set(base, base, base);
           mesh.setMatrixAt(index, m.compose(p, q, s));
-          c.setHex(colour).offsetHSL(0, 0, (hash2(k, salt + 600 + i) - 0.5) * 0.12);
+          c.setHex(colour).offsetHSL((hash2(k, salt + 900 + i) - 0.5) * 0.05, (hash2(k, salt + 1000 + i) - 0.5) * 0.18, (hash2(k, salt + 600 + i) - 0.5) * 0.14);
           mesh.setColorAt(index, c);
         }
       };
@@ -470,12 +524,15 @@ export class Forest {
         if (plan) plant(k, cx, cy, plan[0], plan[1], plan[2], plan[3], 7);
         const rocks = ROCKS[ids[k]];
         if (rocks) plant(k, cx, cy, rocks, "rock", 0x6e6a70, 0.4, 9);
+        const tufts = TUFTS[ids[k]];
+        if (tufts) plant(k, cx, cy, tufts, "tuft", TUFT_COLOR[ids[k]], 0.42, 11, keepTuft);
       }
     }
     this.leaf.count = Math.min(counts.leaf, this.max);
     this.cone.count = Math.min(counts.cone, this.max);
+    this.tuft.count = Math.min(counts.tuft, this.max);
     this.rock.count = Math.min(counts.rock, this.max);
-    for (const mesh of [this.leaf, this.cone, this.rock]) {
+    for (const mesh of [this.leaf, this.cone, this.tuft, this.rock]) {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
@@ -493,7 +550,7 @@ export class Forest {
       scar[k] = r > g * 1.05 ? 1 : 0;   // browner than green: bare earth / pioneer brown / pollution smudge
     }
     const prev = this.scar;
-    const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(), e = new THREE.Euler();
     let dirty = false;
     for (const it of this.items) {
       if (it.kind === "rock") continue;
@@ -501,12 +558,12 @@ export class Forest {
       if (prev && prev[it.cell] === bare) continue;
       const sc = bare ? it.base * 0.12 : it.base;
       p.set(it.x, this.terrain.heightAt(it.x, it.z), it.z);
-      q.setFromAxisAngle(up, it.rot);
+      q.setFromEuler(e.set(it.tx, it.rot, it.tz));
       s.set(sc, sc, sc);
       it.mesh.setMatrixAt(it.index, m.compose(p, q, s));
       dirty = true;
     }
-    if (dirty) { this.leaf.instanceMatrix.needsUpdate = true; this.cone.instanceMatrix.needsUpdate = true; }
+    if (dirty) for (const mesh of [this.leaf, this.cone, this.tuft]) mesh.instanceMatrix.needsUpdate = true;
     this.scar = scar;
   }
 
@@ -514,6 +571,6 @@ export class Forest {
   setTime(t) { this.uniforms.uTime.value = t; }
 
   dispose() {
-    for (const m of [this.leaf, this.cone, this.rock]) { m.geometry.dispose(); m.material.dispose(); m.dispose(); }
+    for (const m of [this.leaf, this.cone, this.tuft, this.rock]) { m.geometry.dispose(); m.material.dispose(); m.dispose(); }
   }
 }

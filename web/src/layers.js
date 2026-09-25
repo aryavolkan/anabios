@@ -116,8 +116,8 @@ function gaitMaterial(uniforms) {
         vec3 swingXZ(vec3 p, vec3 pv, float a) { vec2 d = p.xz - pv.xz; float c = cos(a), s = sin(a); return vec3(pv.x + c * d.x - s * d.y, p.y, pv.z + s * d.x + c * d.y); }`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>
         {
-          float g = aGait.y;
-          float ph = uTime * 11.0 + aGait.x;
+          float g = min(aGait.y, 1.0);                             // stride amplitude
+          float ph = uTime * 11.0 * max(aGait.y, 1.0) + aGait.x;   // fleeing / fighting figures sprint
           float sw = sin(ph);
           if (aPart > 0.5 && aPart < 4.5) {
             float sgn = (aPart < 1.5 || aPart > 3.5) ? 1.0 : -1.0;      // FL + BR vs FR + BL
@@ -134,26 +134,40 @@ function gaitMaterial(uniforms) {
   return mat;
 }
 
-/** Thatched hut: cylinder wall + cone roof. Unit footprint, ~1.3 tall. */
-function hutGeometry() {
-  const wall = new THREE.CylinderGeometry(0.42, 0.46, 0.55, 8);
-  wall.translate(0, 0.275, 0);
-  const roof = new THREE.ConeGeometry(0.62, 0.7, 8);
-  roof.translate(0, 0.55 + 0.35, 0);
-  return mergeGeometries([wall, roof], false);
+/** Fill a geometry's vertex colours with one tint (multiplied by the instance colour). */
+function tint(geo, r, g, b) {
+  const n = geo.attributes.position.count, col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { col[i * 3] = r; col[i * 3 + 1] = g; col[i * 3 + 2] = b; }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return geo;
 }
 
-/** Market stall: a box on stilts with a pennant pole. */
+/** Hut: mud walls under a pitched thatch roof with a dark doorway. Unit footprint, ~1.1 tall. */
+function hutGeometry() {
+  const wall = tint(new THREE.BoxGeometry(0.9, 0.5, 0.75).translate(0, 0.25, 0), 0.82, 0.72, 0.58);
+  const roof = new THREE.CylinderGeometry(0, 0.75, 0.55, 4, 1);
+  roof.rotateY(Math.PI / 4);
+  roof.scale(1, 1, 0.85);
+  roof.translate(0, 0.5 + 0.275, 0);
+  tint(roof, 0.62, 0.48, 0.26);
+  const door = tint(new THREE.BoxGeometry(0.06, 0.32, 0.22).translate(0.44, 0.16, 0), 0.18, 0.13, 0.10);
+  return mergeGeometries([wall, roof, door], false);
+}
+
+/** Market stall: a counter with goods under a sloped awning on four poles, and a pennant. */
 function stallGeometry() {
-  const roof = new THREE.BoxGeometry(1.4, 0.16, 1.1);
-  roof.translate(0, 0.85, 0);
-  const base = new THREE.BoxGeometry(1.1, 0.35, 0.8);
-  base.translate(0, 0.18, 0);
-  const pole = new THREE.CylinderGeometry(0.05, 0.05, 1.9, 5);
-  pole.translate(0.55, 0.95, 0.4);
-  const flag = new THREE.BoxGeometry(0.4, 0.22, 0.03);
-  flag.translate(0.75, 1.75, 0.4);
-  return mergeGeometries([roof, base, pole, flag], false);
+  const counter = tint(new THREE.BoxGeometry(1.2, 0.4, 0.7).translate(0, 0.2, 0), 0.55, 0.38, 0.22);
+  const awning = new THREE.BoxGeometry(1.5, 0.06, 1.1);
+  awning.rotateX(0.28);
+  awning.translate(0, 1.05, 0.1);
+  tint(awning, 0.85, 0.42, 0.22);
+  const poles = [[-0.62, 0.52], [0.62, 0.52], [-0.62, -0.42], [0.62, -0.42]]
+    .map(([x, z]) => tint(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 5).translate(x, 0.5, z), 0.45, 0.32, 0.2));
+  const goods = [[-0.3, 0, 0.85, 0.65, 0.25], [0.05, 0.1, 0.6, 0.2, 0.2], [0.35, -0.08, 0.3, 0.55, 0.3]]
+    .map(([x, z, r, g, b]) => tint(new THREE.SphereGeometry(0.13, 6, 5).translate(x, 0.5, z), r, g, b));
+  const pole = tint(new THREE.CylinderGeometry(0.04, 0.04, 1.9, 5).translate(0.62, 0.95, -0.42), 0.45, 0.32, 0.2);
+  const flag = tint(new THREE.BoxGeometry(0.4, 0.22, 0.03).translate(0.82, 1.75, -0.42), 0.9, 0.85, 0.7);
+  return mergeGeometries([counter, awning, ...poles, ...goods, pole, flag], false);
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +196,13 @@ export class Agents {
     }
     this.mode = "species";
     this.baseScale = 1;
+    /** Ids seen by the previous update (id → slot in `prevBuf`), for birth / death effects. */
+    this.prev = null;
+    this.buf = new Float32Array(max * 2);
+    this.prevBuf = new Float32Array(max * 2);
+    /** Flat [x, y, …] of agents that appeared / vanished since the previous update. */
+    this.born = [];
+    this.died = [];
     /** Selected agent id, or -1. */
     this.selected = -1;
     this.selectedPos = null;
@@ -220,11 +241,16 @@ export class Agents {
   /** Advance the gait clock (seconds). */
   setTime(t) { this.uniforms.uTime.value = t; }
 
+  /** Forget the previous population (new world, or a jump in time) so nothing reads as born or dead. */
+  reset() { this.prev = null; this.born.length = 0; this.died.length = 0; }
+
   update(a, heightAt, live) {
     const n = Math.min(a.count, this.max), d = a.data, s = a.stride;
     const counts = [0, 0];
     this.selectedPos = null;
     const gaits = this.meshes.map((m) => m.geometry.attributes.aGait.array);
+    const prev = this.prev, cur = new Map(), buf = this.buf, born = this.born, died = this.died;
+    born.length = 0; died.length = 0;
     for (let k = 0; k < n; k++) {
       const o = k * s, x = d[o + AGENT.X], y = d[o + AGENT.Y];
       const h = heightAt(x, y);
@@ -243,10 +269,15 @@ export class Agents {
       mesh.userData.ids[i] = id;
       // Per-instance gait: a phase from the id (herds never march in step) and
       // whether the figure is moving (rotation is only written for movers).
+      const mood = d[o + AGENT.MOOD] | 0;
       gaits[kind][i * 2] = (id * 1.7) % 6.283;
-      gaits[kind][i * 2 + 1] = rot !== 0 && !asleep ? 1 : 0;
+      gaits[kind][i * 2 + 1] = asleep || rot === 0 ? 0 : (mood === 4 || mood === 5 ? 1.7 : 1);   // flee / fight: sprint
       if (id === this.selected) this.selectedPos = _p.clone();
+      cur.set(id, k); buf[k * 2] = x; buf[k * 2 + 1] = y;
+      if (prev && !prev.has(id)) born.push(x, y);
     }
+    if (prev) { const pb = this.prevBuf; for (const [id, j] of prev) if (!cur.has(id)) died.push(pb[j * 2], pb[j * 2 + 1]); }
+    this.prev = cur; this.buf = this.prevBuf; this.prevBuf = buf;
     for (let kind = 0; kind < 2; kind++) {
       const mesh = this.meshes[kind];
       mesh.count = counts[kind];
@@ -315,18 +346,24 @@ export class Segments {
 export class Villages {
   constructor(max = 1024) {
     this.max = max;
-    this.mesh = new THREE.InstancedMesh(hutGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), max);
+    this.mesh = new THREE.InstancedMesh(hutGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true, vertexColors: true }), max);
     this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.name = "villages";
     this.mesh.castShadow = true; this.mesh.receiveShadow = true;
     this.sites = new Map(); // sid → {x,y,n,born,seen}
     this.scale = 1;
     this.LINGER = 300; this.FADE = 100; this.GROW = 40;
+    this.lastTick = -1;
   }
   setWorldSize(ws, cell = ws / 128) { this.scale = Math.max(2.6, cell * 0.58); }
-  update(sites, tick, heightAt, stride = 4) {
+  /** `instant`: sites first seen now are drawn fully grown (the capture harness's fast-forward). */
+  update(sites, tick, heightAt, stride = 4, instant = false) {
+    // After a jump in time (a fast-forward, or the first frame of a world) a
+    // site that is already there was not founded this tick: draw it grown.
+    const jump = instant || this.lastTick < 0 || tick - this.lastTick > 8;
+    this.lastTick = tick;
     for (let k = 0; k < sites.count; k++) {
       const o = k * stride, sid = sites.data[o];
-      const v = this.sites.get(sid) || { born: tick };
+      const v = this.sites.get(sid) || { born: jump ? tick - this.GROW : tick };
       v.x = sites.data[o + 1]; v.y = sites.data[o + 2]; v.n = sites.data[o + 3]; v.seen = tick;
       this.sites.set(sid, v);
     }
@@ -359,14 +396,14 @@ export class Villages {
   }
   /** Live sites for the hearth-smoke emitter: `[{x, y, n, ease}]`. */
   centers() { return [...this.sites.values()].filter((v) => v.ease > 0.6); }
-  clear() { this.sites.clear(); this.mesh.count = 0; }
+  clear() { this.sites.clear(); this.mesh.count = 0; this.lastTick = -1; }
 }
 
 // ---------------------------------------------------------------------------
 /** Fixed trade hubs (markets) — static after load. */
 export class Hubs {
   constructor(max = 128) {
-    this.mesh = new THREE.InstancedMesh(stallGeometry(), new THREE.MeshStandardMaterial({ color: 0xce7c36, roughness: 0.8, flatShading: true }), max);
+    this.mesh = new THREE.InstancedMesh(stallGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true, vertexColors: true }), max);
     this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.name = "hubs";
     this.mesh.castShadow = true; this.mesh.receiveShadow = true;
     this.max = max;
@@ -382,6 +419,86 @@ export class Hubs {
       this.mesh.setMatrixAt(k, _m.compose(_p, _q, _s));
     }
     this.mesh.count = n;
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+const hashf = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+/** Two wing triangles meeting at the body, facing +x; `aWing` is the span fraction the flap lifts. */
+function birdGeometry() {
+  const g = new THREE.BufferGeometry();
+  // Wing tips ride 0.3 above the body (a dihedral) so the V reads from a low camera too.
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
+    0.18, 0, 0, -0.18, 0, 0, -0.05, 0.3, 0.55,
+    0.18, 0, 0, -0.05, 0.3, -0.55, -0.18, 0, 0,
+  ]), 3));
+  g.setAttribute("aWing", new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 0]), 1));
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Bird flocks: dark V shapes circling over the map, wings flapping in the vertex shader. */
+export class Birds {
+  constructor(max = 600) {
+    this.max = max;
+    this.uniforms = { uTime: { value: 0 } };
+    const mat = new THREE.MeshStandardMaterial({ color: 0x6a5c50, roughness: 0.9, flatShading: true, side: THREE.DoubleSide });
+    mat.customProgramCacheKey = () => "atlas-bird";
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = this.uniforms.uTime;
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nuniform float uTime; attribute float aWing;")
+        .replace("#include <begin_vertex>", `#include <begin_vertex>
+          {
+            #ifdef USE_INSTANCING
+              float ph = instanceMatrix[3].x * 0.7 + instanceMatrix[3].z * 0.3;
+            #else
+              float ph = 0.0;
+            #endif
+            transformed.y += sin(uTime * 9.0 + ph) * aWing * 0.55;
+          }`);
+    };
+    this.mesh = new THREE.InstancedMesh(birdGeometry(), mat, max);
+    this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.name = "birds";
+    this.flocks = [];
+    this.scale = 1;
+  }
+  /** Seed flocks for a world: a few per 128² of cells, each circling a spot above the map. */
+  setWorld(ws, res, cell, heightAt) {
+    const n = Math.max(3, Math.min(40, Math.round(7 * (res * res) / (128 * 128))));
+    this.flocks.length = 0;
+    this.scale = cell * 0.55;
+    let birds = 0;
+    for (let f = 0; f < n; f++) {
+      const h = (k) => hashf(f + 1, k);
+      const cx = h(1) * ws, cz = h(2) * ws;
+      const size = 5 + Math.floor(h(3) * 7);
+      if (birds + size > this.max) break;
+      const flock = {
+        cx, cz, base: Math.max(0, heightAt(cx, cz)) + cell * (2.5 + 1.5 * h(4)), r: cell * (1.6 + 1.6 * h(5)),
+        w: (0.22 + 0.2 * h(6)) * (h(7) < 0.5 ? 1 : -1), a0: h(8) * 6.283, birds: [],
+      };
+      for (let b = 0; b < size; b++) flock.birds.push({ da: (b - size / 2) * 0.12 + (h(20 + b) - 0.5) * 0.05, dr: (h(40 + b) - 0.5) * 0.5 * cell, dy: (h(60 + b) - 0.5) * 0.5 * cell });
+      birds += size;
+      this.flocks.push(flock);
+    }
+  }
+  update(t) {
+    this.uniforms.uTime.value = t;
+    let i = 0;
+    for (const f of this.flocks) {
+      const a = f.a0 + f.w * t;
+      for (const b of f.birds) {
+        const ang = a + b.da, r = f.r + b.dr;
+        _p.set(f.cx + Math.cos(ang) * r, f.base + b.dy + Math.sin(t * 0.7 + b.da * 9.0) * 0.3 * this.scale, f.cz + Math.sin(ang) * r);
+        _q.setFromAxisAngle(Y_AXIS, -(ang + (f.w > 0 ? Math.PI / 2 : -Math.PI / 2)));   // heading along the circle
+        _s.setScalar(this.scale);
+        this.mesh.setMatrixAt(i++, _m.compose(_p, _q, _s));
+      }
+    }
+    this.mesh.count = i;
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 }

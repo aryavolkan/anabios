@@ -8,21 +8,46 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { UI } from "./palette.js";
 
-/** A soft dusk gradient behind the plate: indigo overhead falling to the warm basalt of the fog. */
-function skyGradient() {
-  const c = document.createElement("canvas");
-  c.width = 2; c.height = 256;
-  const g = c.getContext("2d");
-  const grad = g.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0.0, "#171626");
-  grad.addColorStop(0.45, "#241c2a");
-  grad.addColorStop(0.75, "#2b2019");
-  grad.addColorStop(1.0, "#1c1611");
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 2, 256);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+/**
+ * Sky dome: a camera-centred sphere shaded by view direction — indigo overhead
+ * falling to the warm basalt of the fog, with a sun glow that swells and
+ * reddens as the day cycle lowers the sun. Drawn at the far plane under
+ * everything else.
+ */
+function skyDome() {
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
+    uniforms: {
+      uSun: { value: new THREE.Vector3(0.55, 1.0, 0.35).normalize() },
+      uUp: { value: 1 },
+      uZenith: { value: new THREE.Color(0x171626) },
+      uHorizon: { value: new THREE.Color(0x2b2019) },
+      uGround: { value: new THREE.Color(0x1c1611) },
+    },
+    vertexShader: /* glsl */ `varying vec3 vDir;
+      void main() { vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`,
+    fragmentShader: /* glsl */ `uniform vec3 uSun; uniform float uUp; uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uGround; varying vec3 vDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        float y = d.y;
+        vec3 col = y >= 0.0 ? mix(uHorizon, uZenith, pow(y, 0.55)) : mix(uHorizon, uGround, pow(-y, 0.5));
+        float s = max(dot(d, uSun), 0.0);
+        float dusk = 1.0 - uUp;
+        vec3 warm = mix(vec3(0.95, 0.80, 0.55), vec3(1.0, 0.55, 0.22), dusk);
+        col += warm * (0.10 + 0.22 * dusk) * pow(s, 3.0);      // broad haze toward the sun
+        col += warm * (0.35 + 0.55 * dusk) * pow(s, 24.0);     // the sun's glow
+        col += uHorizon * 0.6 * exp(-abs(y) * 5.0);            // a band along the horizon
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), mat);
+  mesh.scale.setScalar(100);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = -10;
+  mesh.name = "sky";
+  return mesh;
 }
 
 export function createStage(canvas) {
@@ -35,7 +60,8 @@ export function createStage(canvas) {
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = skyGradient();
+  const sky = skyDome();
+  scene.add(sky);
 
   const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 20000);
   const controls = new OrbitControls(camera, canvas);
@@ -67,7 +93,7 @@ export function createStage(canvas) {
   composer.addPass(new OutputPass());
 
   const stage = {
-    renderer, scene, camera, controls, sun, composer, bloom,
+    renderer, scene, camera, controls, sun, sky, composer, bloom,
     /** Bloom on: render through the composer; off: straight to the canvas. */
     post: true,
     render() {
@@ -111,6 +137,8 @@ export function createStage(canvas) {
       fill.intensity = 0.26 + 0.06 * up;
       renderer.toneMappingExposure = 1.02 + 0.1 * up;
       this.sunDir.copy(sun.position).sub(sun.target.position).normalize();
+      sky.material.uniforms.uSun.value.copy(this.sunDir);
+      sky.material.uniforms.uUp.value = up;
     },
     sunDir: new THREE.Vector3(0.55, 1.0, 0.35).normalize(),
     /** Frame the whole world from a three-quarter view. */
@@ -156,6 +184,7 @@ export function createStage(canvas) {
         if (f.t >= 1 && controls.target.distanceTo(f.to) < 0.5) this._fly = null;
       }
       controls.update();
+      sky.position.copy(camera.position);
     },
     resize() {
       const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
