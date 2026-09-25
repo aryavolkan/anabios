@@ -8,8 +8,9 @@ import * as THREE from "three";
 import { createStage } from "./scene.js";
 import { Terrain } from "./terrain.js";
 import { Agents, Segments, Villages, Hubs, EventFx, COLOR_MODES } from "./layers.js";
+import { Particles, KIND } from "./particles.js";
 import { openLive, openReplay } from "./sources.js";
-import { kindOf, KIND_CSS, TERRAIN, MOOD_COLORS, cssHex, hsv, speciesHue } from "./palette.js";
+import { kindOf, KIND_CSS, KIND_COLOR, TERRAIN, MOOD_COLORS, cssHex, hsv, speciesHue } from "./palette.js";
 import { WORLD_FLAG } from "./sim.js";
 
 const $ = (id) => document.getElementById(id);
@@ -27,11 +28,13 @@ const layers = {
   villages: new Villages(),
   hubs: new Hubs(),
   fx: new EventFx(),
+  particles: new Particles(),
 };
 const world = new THREE.Group();
 stage.scene.add(world, ...layers.agents.meshes, layers.agents.marker, layers.streaks.lines, layers.trades.lines,
-  layers.villages.mesh, layers.hubs.mesh, layers.fx.group);
+  layers.villages.mesh, layers.hubs.mesh, layers.fx.group, layers.particles.group);
 layers.fx.enabled = !reduceMotion;
+layers.particles.enabled = !reduceMotion;
 
 const state = {
   source: null,
@@ -106,8 +109,8 @@ function attach(source, entry) {
   world.add(state.terrain.group);
   stage.fit(ws);
   stage.frame();
-  for (const l of [layers.agents, layers.villages, layers.fx]) l.setWorldSize(ws);
-  layers.streaks.clear(); layers.trades.clear(); layers.villages.clear();
+  for (const l of [layers.agents, layers.villages, layers.fx, layers.particles]) l.setWorldSize(ws);
+  layers.streaks.clear(); layers.trades.clear(); layers.villages.clear(); layers.particles.clear();
   layers.hubs.set(source.hubs(), ws, heightAt);
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
   state.lastColorTick = -1; state.lastStatsTick = -1;
@@ -246,6 +249,7 @@ function loop(now) {
   if (state.terrain) { state.terrain.water.update(clock); state.terrain.forest.setTime(clock); }
   layers.agents.setTime(clock);
   layers.fx.update(now / 1000);
+  layers.particles.update(reduceMotion ? 0 : dt, $("view").clientHeight / (2 * Math.tan((stage.camera.fov * Math.PI) / 360)));
   if (layers.agents.marker.visible) {
     const pulse = 0.5 + 0.5 * Math.sin(clock * 5);
     layers.agents.marker.scale.setScalar(layers.agents.baseScale * (1.3 + 0.25 * pulse));
@@ -266,7 +270,13 @@ function loop(now) {
       const tick = src.tick;
       layers.agents.update(src.agents(), heightAt, src.kind === "live");
       if (stepped > 0 || src.kind === "replay") {
-        layers.streaks.push(src.streaks(), tick);
+        const streaks = src.streaks();
+        layers.streaks.push(streaks, tick);
+        // Impact sparks at the struck end of each volley.
+        for (let k = 0, n = Math.min(streaks.count, 150); k < n; k++) {
+          const o = k * 5, x2 = streaks.data[o + 2], y2 = streaks.data[o + 3];
+          layers.particles.spawn(KIND.SPARK, x2, heightAt(x2, y2) + layers.agents.baseScale * 0.5, y2, 3);
+        }
         layers.trades.push(src.trades(), tick);
         layers.villages.update(src.sites(), tick, heightAt);
         for (const ev of src.events()) onEvent(ev, now / 1000);
@@ -292,6 +302,12 @@ function loop(now) {
     }
     layers.streaks.update(src.tick, heightAt);
     layers.trades.update(src.tick, heightAt);
+    // Hearth smoke drifts up from every settled village while the world runs.
+    if (!state.paused && layers.villages.mesh.visible) {
+      for (const v of layers.villages.centers()) {
+        if (Math.random() < dt * 1.8) layers.particles.spawn(KIND.SMOKE, v.x, heightAt(v.x, v.y) + layers.villages.scale * 1.25, v.y, 1);
+      }
+    }
     if (state.follow && layers.agents.selectedPos) {
       const p = layers.agents.selectedPos, before = stage.controls.target.clone();
       stage.controls.target.lerp(p, 0.15);
@@ -373,6 +389,12 @@ function onEvent(ev, now) {
   const kind = kindOf(ev.type);
   if (ev.x || ev.y) state.lastEventLoc = { x: ev.x, y: ev.y };
   layers.fx.spawn(ev, now, heightAt);
+  if ((ev.x || ev.y) && layers.fx.enabled) {
+    const h = heightAt(ev.x, ev.y) + 0.6;
+    if (kind === "fire") layers.particles.spawn(KIND.EMBER, ev.x, h, ev.y, 16);
+    else if (kind === "war") layers.particles.spawn(KIND.SPARK, ev.x, h, ev.y, 22);
+    else layers.particles.spawn(KIND.MOTE, ev.x, h, ev.y, 10, KIND_COLOR[kind]);
+  }
   const line = document.createElement("div");
   line.className = "codex-line";
   const who = ev.sid == null ? "" : ` — ${esc(state.source.labels.get(ev.sid) || "species " + ev.sid)}`;
@@ -431,7 +453,7 @@ function applyLayerToggles() {
       case "trades": layers.trades.lines.visible = on; break;
       case "villages": layers.villages.mesh.visible = on; break;
       case "hubs": layers.hubs.mesh.visible = on; break;
-      case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; break;
+      case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
       case "wire": if (state.terrain) state.terrain.material.wireframe = on; break;
     }
   }

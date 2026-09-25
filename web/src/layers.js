@@ -336,6 +336,7 @@ export class Villages {
       const fade = Math.min(1, (this.LINGER - stale) / this.FADE);
       const grow = Math.min(1, Math.max(0, (tick - v.born) / this.GROW));
       const ease = (1 - Math.pow(1 - grow, 3)) * fade;
+      v.ease = ease;
       const huts = Math.max(1, Math.min(Math.floor(v.n / 8), 9));
       _c.setHex(mix(hsv(speciesHue(sid), 0.5, 0.8), 0x8a6a3c, 0.55));
       for (let h = 0; h < huts && i < this.max; h++) {
@@ -355,6 +356,8 @@ export class Villages {
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
+  /** Live sites for the hearth-smoke emitter: `[{x, y, n, ease}]`. */
+  centers() { return [...this.sites.values()].filter((v) => v.ease > 0.6); }
   clear() { this.sites.clear(); this.mesh.count = 0; }
 }
 
@@ -383,19 +386,33 @@ export class Hubs {
 }
 
 // ---------------------------------------------------------------------------
-/** Expanding rings at codex-event locations, coloured by narrative kind. */
+/** A column of light fading upward: an open cylinder with a vertical alpha ramp. */
+function pillarMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(0xffffff) }, uAlpha: { value: 0 } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `uniform vec3 uColor; uniform float uAlpha; varying vec2 vUv;
+      void main() { float a = pow(1.0 - vUv.y, 1.6) * uAlpha; gl_FragColor = vec4(uColor, a); }`,
+  });
+}
+
+/** Expanding rings and light pillars at codex-event locations, coloured by narrative kind. */
 export class EventFx {
   constructor(pool = 48) {
     this.group = new THREE.Group();
     this.rings = [];
+    const pillarGeo = new THREE.CylinderGeometry(1, 1, 1, 18, 1, true).translate(0, 0.5, 0);
     for (let i = 0; i < pool; i++) {
       const m = new THREE.Mesh(
         new THREE.RingGeometry(0.82, 1.0, 40).rotateX(-Math.PI / 2),
         new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
       );
       m.visible = false;
-      this.group.add(m);
-      this.rings.push({ mesh: m, t0: 0, life: 0, kind: "mind", size: 1 });
+      const pillar = new THREE.Mesh(pillarGeo, pillarMaterial());
+      pillar.visible = false;
+      this.group.add(m, pillar);
+      this.rings.push({ mesh: m, pillar, t0: 0, life: 0, kind: "mind", size: 1 });
     }
     this.next = 0;
     this.scale = 1;
@@ -407,18 +424,25 @@ export class EventFx {
     const r = this.rings[this.next++ % this.rings.length];
     const kind = kindOf(ev.type);
     r.kind = kind; r.t0 = now; r.life = kind === "war" ? 2.2 : 3.0; r.size = kind === "war" || kind === "fire" ? 1.4 : 1;
-    r.mesh.position.set(ev.x, heightAt(ev.x, ev.y) + 0.8, ev.y);
+    const h = heightAt(ev.x, ev.y);
+    r.mesh.position.set(ev.x, h + 0.8, ev.y);
     r.mesh.material.color.setHex(KIND_COLOR[kind]);
     r.mesh.visible = true;
+    r.pillar.position.set(ev.x, h, ev.y);
+    r.pillar.material.uniforms.uColor.value.setHex(KIND_COLOR[kind]);
+    r.pillar.visible = true;
   }
   update(now) {
     for (const r of this.rings) {
       if (!r.mesh.visible) continue;
       const t = (now - r.t0) / r.life;
-      if (t >= 1) { r.mesh.visible = false; continue; }
+      if (t >= 1) { r.mesh.visible = false; r.pillar.visible = false; continue; }
       const s = this.scale * r.size * (0.15 + 0.85 * Math.sqrt(t));
       r.mesh.scale.set(s, 1, s);
       r.mesh.material.opacity = (1 - t) * (1 - t) * 0.95;
+      const pr = this.scale * r.size * 0.22 * (1 + 0.6 * t), ph = this.scale * r.size * (2.2 + 1.5 * t);
+      r.pillar.scale.set(pr, ph, pr);
+      r.pillar.material.uniforms.uAlpha.value = Math.min(1, t * 6) * (1 - t) * 0.55;
     }
   }
 }
