@@ -6,7 +6,7 @@ compiled to WebAssembly. Every still here is the *same world* as its Godot
 counterpart: same scenario, seed and HUD tick, framed by the same camera recipe
 (`ANABIOS_CAM_FIT` → `cam=fit`, `ANABIOS_CAM_ZOOM/X/Y` → `cam=x,y,zoom`, the
 viewer's pixels-per-world-unit at 1280 px), pinned on the same agent id where
-the original pinned one. Rendered headless (Chromium, software GL via
+the original pinned one. All 62 rendered headless (Chromium, software GL via
 swiftshader) at 1280×800 on 2026-09-25 by:
 
 ```sh
