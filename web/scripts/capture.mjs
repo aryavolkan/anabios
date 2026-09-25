@@ -70,7 +70,7 @@ for (const shot of shots) {
       const g = (id) => document.getElementById(id).textContent;
       return { tick: g("stat-tick"), alive: g("stat-alive"), species: g("stat-species"), era: g("stat-era") };
     });
-    await page.screenshot({ path: resolve(out, `${shot.name}.png`) });
+    await page.screenshot({ path: resolve(out, `${shot.name}.png`), timeout: 300000 });   // software GL can take minutes on the huge tiers
     console.log(`${shot.name}.png  tick=${stats.tick} alive=${stats.alive} species=${stats.species} era=${stats.era}  (${((Date.now() - t0) / 1000).toFixed(0)}s)${errors.length ? `  console: ${errors.join(" | ")}` : ""}`);
   } catch (e) {
     failed++;

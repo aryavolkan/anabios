@@ -22,17 +22,27 @@ at those ticks (e.g. `predator-prey` now runs under a 2,000-agent cap), so they
 differ from the older prose in the Godot gallery exactly as its header warns.
 
 **What the atlas draws instead of the pixel viewer.** Terrain relief from the
-elevation field with the biome colours as a crisp per-cell texture and water
-at sea level; agents as instanced figures coloured by genome (species mode)
-or by diet / dialect / energy / mood / arousal / infection; combat volleys and
-trade lanes as fading light; hut villages at settlement sites and stalls at
-trade hubs; codex events as expanding rings plus the feed at the bottom right;
-the species table in the rail; a click-to-inspect agent card.
+elevation field under a painterly ground shader (noise-softened cell borders,
+rock on steep slopes, snow on the peaks, a beach band and darkened seabed at
+the shore, wet sand at the water line), instanced forests, grass tufts and
+rock scatter planted from the terrain grid, depth-shaded water with sun
+glints, river sparkle, seabed caustics and a foam fringe, sun shadows and
+drifting cloud shadows, a sky dome, bird flocks, a soft bloom over the hot
+pixels; agents as instanced grazer or hunter figures on articulated legs,
+coloured by genome (species mode) or by diet / dialect / energy / mood /
+arousal / infection; combat volleys and trade lanes as fading light;
+pitched-roof hut villages at settlement sites and awninged stalls at trade
+hubs; codex events as expanding rings and light pillars plus the feed at the
+bottom right; the species table in the rail; a click-to-inspect agent card.
+Stills are shot at noon: the day cycle is off under `capture=1`, and the
+short-lived motion (gait, wind, sparks, smoke, pillars, birth and death
+puffs) is mostly between frames at software-GL frame rates; the cloud shade
+is wherever the clouds happened to be at the moment of capture.
 
 **What has no counterpart yet** (the still is captured anyway, framed on the
 same world at the same tick, and the gap is noted in its row): the codex tabs,
 the evolution / co-evolution / helix charts, pheromone ground overlays, the
-replay and event-camera *modes* (the atlas flies to the latest event instead),
+replay *mode* (the atlas has an event tour, **V**, but no rewind-to-snapshot),
 village era/flag overrides, hand-drawn tiles, flora and 24 px figures, and the
 two pose sheets. The ground does not wrap across the torus seam, so recipes
 that sit on the seam (`x=948,y=4`, `x=1060`) look at the plate edge; the
@@ -51,15 +61,15 @@ and `cam=hub,<zoom>` (a market) to frame what the original framed.
 | scale-settlement-t891-market-8x.png | `settlement` 424242 t891, `cam=hub,8` | A market stall up close at 8×, traders around it. |
 | scale-trade-hubs-t600-roads-2x.png | `trade-hubs` 424242 t600, `cam=hub,2` | A trade hub with the lanes of recent swaps fading around it (no worn dirt roads in the atlas — lanes are per-trade light). |
 | scale-trade-hubs-t600-market-4x.png | `trade-hubs` 424242 t600, `cam=hub,4` | The same hub at 4×: the stall with its pennant, caravan lanes. |
-| scale-riverlands-t291-relief-2x.png | `riverlands` 12345 t291, `cam=2048,2048,2` | The 4096² world with its 512² biome grid: mountains in real relief, rivers blue-tinted along the carved channels, herds on the watered forage. |
+| scale-riverlands-t291-relief-2x.png | `riverlands` 12345 t291, `cam=2048,2048,2` | The 4096² world with its 512² biome grid: forested banks around a lake, rivers blue-tinted along the carved channels, mountains in real relief with rock and snow from the ground shader. |
 | scale-riverlands-t291-river-4x.png | `riverlands` 12345 t291, `cam=2367,1017,4` | A river running through the forest cells at 4×. |
-| scale-riverlands-t291-clutter-4x.png | `riverlands` 12345 t291, `cam=2500,1200,4` | Grassland at 4× (no flora clutter in the atlas — a flat crisp-cell ground). |
+| scale-riverlands-t291-clutter-4x.png | `riverlands` 12345 t291, `cam=2500,1200,4` | Grassland at 4×: painterly ground grain and the scattered trees of the grass planting (no flowers, tufts or stumps). |
 | scale-riverlands-t291-lake-4x.png | `riverlands` 12345 t291, `cam=2427,1357,4` | A desert lake: the translucent water plane over the sunken cells, the beach as the sand cells around it. |
 | scale-inventions-t2620-coast-2x.png | `inventions` 12345 t2620, `cam=512,512,2` | Hominin bands at era 3: 400 alive, 73 species, the tech era in the readout. |
 | scale-inventions-t2620-hominins-4x.png | `inventions` 12345 t2620, `cam=512,512,4`, `inspect=sp1` | The bands at 4× with the inspector pinned on an innovator: its held inventions as chips (the research list's counterpart). |
 | scale-inventions-t2620-unit-card-1x.png | `inventions` 12345 t2620, `cam=512,512,1`, `inspect=sp1` | The same at 1×. |
 | scale-huge-steppe-t191-2x.png | `huge-steppe` 12345 t191, `cam=4096,4096,2` | The 8192² Huge tier: a 1024² biome grid as one relief mesh, 1,531 alive. |
-| scale-minimal-t111-shoreline-8x.png | `minimal` 12345 t111, `cam=512,512,8` | The shoreline at 8×: crisp biome cells meeting the water plane (no autotile). |
+| scale-minimal-t111-shoreline-8x.png | `minimal` 12345 t111, `cam=512,512,8` | The shoreline at 8×: the beach band, the foam fringe and the turquoise shallows of the water shader meeting the ground (no autotile). |
 
 Not reproduced: `scale-settlement-t891-fortified-2x` / `-raided-4x` (viewer-side
 era/flag overrides), `scale-hero-pose-sheet` / `scale-hominin-pose-sheet`

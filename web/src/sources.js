@@ -9,6 +9,7 @@
 //   source.agents()        {count, data, stride}   rows per AGENT columns (sim.js)
 //   source.biomeRgba()     Uint8Array res²×4 (elevation in alpha) or null
 //   source.elevation()     Float32Array res² or null (static)
+//   source.terrain()       Uint8Array res² TerrainType ids or null (static)
 //   source.streaks() / .trades()   {count, data} rows [x1,y1,x2,y2,hue]
 //   source.sites()         {count, data} rows [sid,x,y,members]
 //   source.hubs()          {count, data} rows [x,y,goods_mask]
@@ -59,6 +60,8 @@ export class LiveSource {
   /** Static after worldgen, so hand out a copy: a raw view would be detached
    *  by the next call that grows wasm memory. */
   elevation() { return this.sim.elevation().slice(); }
+  /** TerrainType id per cell (static). */
+  terrain() { return this.sim.terrain().slice(); }
   streaks() { return this.sim.streaks(); }
   trades() { return this.sim.trades(); }
   sites() { return this.sim.sites(); }
@@ -188,6 +191,8 @@ export class ReplaySource {
     return out;
   }
   elevation() { return this._elev; }
+  /** Recordings carry colours only; the terrain classifies them itself. */
+  terrain() { return null; }
   _segments(arr) {
     if (!arr || !arr.length || this._lastFrac > 0.5) return EMPTY; // per-tick streaks fade within the interval
     const n = arr.length >> 2, data = new Float32Array(n * 5);

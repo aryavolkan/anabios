@@ -19,6 +19,7 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--basalt);color:var(--bone);font-family:var(--sans);-webkit-font-smoothing:antialiased}
   #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(125% 95% at 50% 42%,transparent 58%,rgba(6,4,3,.55) 100%)}
   .hud{position:fixed;z-index:2;font-family:var(--mono);font-size:12px;letter-spacing:.02em}
   body.hide-hud .hud,body.hide-hud .rail{opacity:0;pointer-events:none}
   .hud,.rail{transition:opacity .35s ease}
@@ -126,6 +127,7 @@
 </head>
 <body>
 <canvas id="view"></canvas>
+<div class="vignette" aria-hidden="true"></div>
 
 <div class="hud brand">
   <h1 class="wordmark">ANA<span class="glow">BIOS</span> <small>atlas</small></h1>
@@ -157,12 +159,18 @@
   <div class="toggles" id="layers">
     <label><input type="checkbox" data-layer="relief" checked> relief</label>
     <label><input type="checkbox" data-layer="water" checked> water</label>
+    <label><input type="checkbox" data-layer="forest" checked> forests</label>
+    <label><input type="checkbox" data-layer="shadows" checked> shadows</label>
     <label><input type="checkbox" data-layer="streaks" checked> combat</label>
     <label><input type="checkbox" data-layer="trades" checked> trade</label>
     <label><input type="checkbox" data-layer="villages" checked> villages</label>
     <label><input type="checkbox" data-layer="hubs" checked> markets</label>
-    <label><input type="checkbox" data-layer="events" checked> event rings</label>
+    <label><input type="checkbox" data-layer="events" checked> events &amp; sparks</label>
     <label><input type="checkbox" data-layer="wire"> wireframe</label>
+    <label><input type="checkbox" data-layer="day" checked> day cycle</label>
+    <label><input type="checkbox" data-layer="bloom" checked> bloom</label>
+    <label><input type="checkbox" data-layer="clouds" checked> clouds</label>
+    <label><input type="checkbox" data-layer="birds" checked> birds</label>
   </div>
   <h4>species</h4>
   <table class="species" id="species"></table>
@@ -186,9 +194,10 @@
     <button class="speed" data-speed="16">16×</button>
     <button class="speed" data-speed="64">64×</button>
     <button id="frame" title="Frame the whole world (F)">frame</button>
+    <button id="tour" title="Event tour: orbit slowly and cut to each fresh codex event (V)">tour</button>
   </div>
   <div class="progress" id="progress"><div class="fill" id="progress-fill"></div></div>
-  <div class="hint"><b>drag</b> orbit · <b>right-drag</b> pan · <b>wheel</b> zoom · <b>click</b> an agent · <b>space</b> pause · <b>1–5</b> speed · <b>C</b> colour · <b>F</b> frame · <b>H</b> hide HUD</div>
+  <div class="hint"><b>drag</b> orbit · <b>right-drag</b> pan · <b>wheel</b> zoom · <b>click</b> an agent · <b>space</b> pause · <b>1–5</b> speed · <b>C</b> colour · <b>F</b> frame · <b>V</b> tour · <b>H</b> hide HUD</div>
 </div>
 
 <div class="hud codex">

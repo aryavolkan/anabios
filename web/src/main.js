@@ -7,9 +7,10 @@
 import * as THREE from "three";
 import { createStage } from "./scene.js";
 import { Terrain } from "./terrain.js";
-import { Agents, Segments, Villages, Hubs, EventFx, COLOR_MODES } from "./layers.js";
+import { Agents, Segments, Villages, Hubs, EventFx, COLOR_MODES, Birds } from "./layers.js";
+import { Particles, KIND } from "./particles.js";
 import { openLive, openReplay } from "./sources.js";
-import { kindOf, KIND_CSS, TERRAIN, MOOD_COLORS, cssHex, hsv, speciesHue } from "./palette.js";
+import { kindOf, KIND_CSS, KIND_COLOR, TERRAIN, MOOD_COLORS, cssHex, hsv, speciesHue } from "./palette.js";
 import { WORLD_FLAG } from "./sim.js";
 
 const $ = (id) => document.getElementById(id);
@@ -27,11 +28,14 @@ const layers = {
   villages: new Villages(),
   hubs: new Hubs(),
   fx: new EventFx(),
+  particles: new Particles(),
+  birds: new Birds(),
 };
 const world = new THREE.Group();
-stage.scene.add(world, layers.agents.mesh, layers.agents.marker, layers.streaks.lines, layers.trades.lines,
-  layers.villages.mesh, layers.hubs.mesh, layers.fx.group);
+stage.scene.add(world, ...layers.agents.meshes, layers.agents.marker, layers.streaks.lines, layers.trades.lines,
+  layers.villages.mesh, layers.hubs.mesh, layers.fx.group, layers.particles.group, layers.birds.mesh);
 layers.fx.enabled = !reduceMotion;
+layers.particles.enabled = !reduceMotion;
 
 const state = {
   source: null,
@@ -40,6 +44,12 @@ const state = {
   speed: Number(params.get("speed")) || 1,          // ticks per 60 Hz frame
   paused: params.get("paused") === "1",
   colorMode: params.get("color") || "species",
+  /** Day cycle: on for live viewing, off under capture unless `&day=1` (gallery stills stay at noon). */
+  dayCycle: params.has("day") ? params.get("day") === "1" : !params.has("capture"),
+  DAY_TICKS: 1500,
+  /** Event tour (V): fly to fresh codex events while slowly orbiting. */
+  tour: false,
+  lastFlyAt: 0,
   /** Capture harness (see web/scripts/capture.mjs): `?tick=N&cam=…&inspect=…`. */
   shot: {
     tick: params.has("tick") ? Math.max(0, Number(params.get("tick"))) : null,
@@ -101,14 +111,16 @@ function attach(source, entry) {
   if (state.terrain) { world.remove(state.terrain.group); state.terrain.dispose(); }
   state.source = source;
   const ws = source.worldSize;
-  state.terrain = new Terrain(source.biomeRes, ws, source.seaLevel, source.elevation());
+  state.terrain = new Terrain(source.biomeRes, ws, source.seaLevel, source.elevation(), source.terrain());
   state.terrain.updateColors(source.biomeRgba());
   world.add(state.terrain.group);
   stage.fit(ws);
   stage.frame();
-  for (const l of [layers.agents, layers.villages, layers.fx]) l.setWorldSize(ws);
-  layers.streaks.clear(); layers.trades.clear(); layers.villages.clear();
-  layers.hubs.set(source.hubs(), ws, heightAt);
+  for (const l of [layers.agents, layers.villages, layers.fx, layers.particles]) l.setWorldSize(ws, state.terrain.cell);
+  layers.streaks.clear(); layers.trades.clear(); layers.villages.clear(); layers.particles.clear();
+  layers.hubs.set(source.hubs(), state.terrain.cell, heightAt);
+  layers.birds.setWorld(ws, source.biomeRes, state.terrain.cell, heightAt);
+  layers.agents.reset();
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
   state.lastColorTick = -1; state.lastStatsTick = -1;
   $("codex").innerHTML = "";
@@ -159,7 +171,7 @@ async function prepareShot() {
         if (remaining <= 40) {
           layers.streaks.push(src.streaks(), tick);
           layers.trades.push(src.trades(), tick);
-          layers.villages.update(src.sites(), tick, heightAt);
+          layers.villages.update(src.sites(), tick, heightAt, 4, true);
         }
         for (const ev of src.events()) onEvent(ev, performance.now() / 1000);
         if (performance.now() - lastPaint > 250) {
@@ -168,7 +180,7 @@ async function prepareShot() {
           lastPaint = performance.now();
         }
       }
-      state.fastForwarding = false;
+      state.fastForwarding = false; layers.agents.reset();
       layers.fx.enabled = fxWas;
       if (params.get("paused") === "0") setPaused(false);
     }
@@ -242,8 +254,17 @@ function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const src = state.source;
   stage.tick(dt);
-  if (state.terrain) state.terrain.water.update(reduceMotion ? 0 : now / 1000);
+  const clock = reduceMotion ? 0 : now / 1000;
+  if (state.terrain) { state.terrain.water.update(clock); state.terrain.forest.setTime(clock); state.terrain.setTime(clock); }
+  layers.agents.setTime(clock);
+  layers.birds.update(clock);
   layers.fx.update(now / 1000);
+  layers.particles.update(reduceMotion ? 0 : dt, $("view").clientHeight / (2 * Math.tan((stage.camera.fov * Math.PI) / 360)));
+  if (layers.agents.marker.visible) {
+    const pulse = 0.5 + 0.5 * Math.sin(clock * 5);
+    layers.agents.marker.scale.setScalar(layers.agents.baseScale * (1.3 + 0.25 * pulse));
+    layers.agents.marker.material.opacity = 0.55 + 0.4 * pulse;
+  }
 
   if (src) {
     let stepped = 0;
@@ -259,7 +280,20 @@ function loop(now) {
       const tick = src.tick;
       layers.agents.update(src.agents(), heightAt, src.kind === "live");
       if (stepped > 0 || src.kind === "replay") {
-        layers.streaks.push(src.streaks(), tick);
+        const streaks = src.streaks();
+        layers.streaks.push(streaks, tick);
+        // Impact sparks at the struck end of each volley.
+        for (let k = 0, n = Math.min(streaks.count, 150); k < n; k++) {
+          const o = k * 5, x2 = streaks.data[o + 2], y2 = streaks.data[o + 3];
+          layers.particles.spawn(KIND.SPARK, x2, heightAt(x2, y2) + layers.agents.baseScale * 0.5, y2, 3);
+        }
+        // A glimmer where an agent was born, a grey puff where one died (skipped
+        // at the fastest speeds, where whole generations pass between frames).
+        if (state.speed <= 16) {
+          const born = layers.agents.born, died = layers.agents.died, lift = layers.agents.baseScale * 0.6;
+          for (let k = 0, n = Math.min(born.length, 240); k < n; k += 2) layers.particles.spawn(KIND.MOTE, born[k], heightAt(born[k], born[k + 1]) + lift, born[k + 1], 3, 0xfff2c8);
+          for (let k = 0, n = Math.min(died.length, 400); k < n; k += 2) layers.particles.spawn(KIND.SMOKE, died[k], heightAt(died[k], died[k + 1]) + lift, died[k + 1], 2);
+        }
         layers.trades.push(src.trades(), tick);
         layers.villages.update(src.sites(), tick, heightAt);
         for (const ev of src.events()) onEvent(ev, now / 1000);
@@ -285,15 +319,25 @@ function loop(now) {
     }
     layers.streaks.update(src.tick, heightAt);
     layers.trades.update(src.tick, heightAt);
+    // Hearth smoke drifts up from every settled village while the world runs.
+    if (!state.paused && layers.villages.mesh.visible) {
+      for (const v of layers.villages.centers()) {
+        if (Math.random() < dt * 1.8) layers.particles.spawn(KIND.SMOKE, v.x, heightAt(v.x, v.y) + layers.villages.scale * 1.25, v.y, 1);
+      }
+    }
     if (state.follow && layers.agents.selectedPos) {
       const p = layers.agents.selectedPos, before = stage.controls.target.clone();
       stage.controls.target.lerp(p, 0.15);
       stage.camera.position.add(stage.controls.target.clone().sub(before)); // keep the camera offset
     }
     if (src.kind === "replay") $("progress-fill").style.width = `${(100 * src.tick / src.endTick).toFixed(2)}%`;
+    if (state.dayCycle) {
+      stage.setDaylight((src.tick % state.DAY_TICKS) / state.DAY_TICKS);
+      state.terrain.water.uniforms.uSun.value.copy(stage.sunDir);
+    }
   }
 
-  stage.renderer.render(stage.scene, stage.camera);
+  stage.render();
 
   state.frames++;
   const span = now - state.windowStart;
@@ -364,8 +408,20 @@ function renderLegend() {
 
 function onEvent(ev, now) {
   const kind = kindOf(ev.type);
-  if (ev.x || ev.y) state.lastEventLoc = { x: ev.x, y: ev.y };
+  if (ev.x || ev.y) {
+    state.lastEventLoc = { x: ev.x, y: ev.y };
+    if (state.tour && now - state.lastFlyAt > 3 && !state.fastForwarding) {
+      state.lastFlyAt = now;
+      stage.flyTo(ev.x, heightAt(ev.x, ev.y), ev.y, state.source.worldSize * (kind === "war" ? 0.12 : 0.18));
+    }
+  }
   layers.fx.spawn(ev, now, heightAt);
+  if ((ev.x || ev.y) && layers.fx.enabled) {
+    const h = heightAt(ev.x, ev.y) + 0.6;
+    if (kind === "fire") layers.particles.spawn(KIND.EMBER, ev.x, h, ev.y, 16);
+    else if (kind === "war") layers.particles.spawn(KIND.SPARK, ev.x, h, ev.y, 22);
+    else layers.particles.spawn(KIND.MOTE, ev.x, h, ev.y, 10, KIND_COLOR[kind]);
+  }
   const line = document.createElement("div");
   line.className = "codex-line";
   const who = ev.sid == null ? "" : ` — ${esc(state.source.labels.get(ev.sid) || "species " + ev.sid)}`;
@@ -414,16 +470,23 @@ function deselect() { state.selected = -1; layers.agents.selected = -1; state.fo
 
 function applyLayerToggles() {
   for (const cb of document.querySelectorAll("#layers input")) {
+    if (cb.dataset.layer === "day" && !state.dayInit) { cb.checked = state.dayCycle; state.dayInit = true; }
     const on = cb.checked;
     switch (cb.dataset.layer) {
       case "relief": state.terrain?.setRelief(on); break;
-      case "water": if (state.terrain) state.terrain.water.mesh.visible = on; break;
+      case "water": if (state.terrain) state.terrain.water.mesh.visible = on && state.terrain.reliefOn; break;
+      case "forest": if (state.terrain) state.terrain.forest.group.visible = on; break;
+      case "shadows": stage.renderer.shadowMap.enabled = on; stage.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; }); break;
       case "streaks": layers.streaks.lines.visible = on; break;
       case "trades": layers.trades.lines.visible = on; break;
       case "villages": layers.villages.mesh.visible = on; break;
       case "hubs": layers.hubs.mesh.visible = on; break;
-      case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; break;
+      case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
       case "wire": if (state.terrain) state.terrain.material.wireframe = on; break;
+      case "bloom": stage.post = on; break;
+      case "clouds": if (state.terrain) state.terrain.uniforms.uCloud.value = on ? 1 : 0; break;
+      case "birds": layers.birds.mesh.visible = on; break;
+      case "day": state.dayCycle = on; if (!on) { stage.setDaylight(0); state.terrain?.water.uniforms.uSun.value.copy(stage.sunDir); } break;
     }
   }
 }
@@ -434,6 +497,14 @@ function setSpeed(s) {
 }
 
 function setPaused(p) { state.paused = p; $("play").textContent = p ? "▶" : "❚❚"; }
+/** Event tour: the camera drifts in a slow orbit and cuts to each fresh codex event. */
+function setTour(on) {
+  state.tour = on;
+  stage.controls.autoRotate = on;
+  stage.controls.autoRotateSpeed = 0.35;
+  $("tour").classList.toggle("on", on);
+  if (on && state.lastEventLoc) { const p = state.lastEventLoc; stage.flyTo(p.x, heightAt(p.x, p.y), p.y, state.source.worldSize * 0.18); }
+}
 
 function cover(title, body, code) {
   const c = $("cover");
@@ -463,8 +534,8 @@ canvas.addEventListener("pointerup", (e) => {
   const r = canvas.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   raycaster.setFromCamera(ndc, stage.camera);
-  const hits = raycaster.intersectObject(layers.agents.mesh, false);
-  if (hits.length && hits[0].instanceId !== undefined) select(layers.agents.ids[hits[0].instanceId]);
+  const hits = raycaster.intersectObjects(layers.agents.meshes, false);
+  if (hits.length && hits[0].instanceId !== undefined) select(hits[0].object.userData.ids[hits[0].instanceId]);
   else deselect();
 });
 
@@ -477,6 +548,7 @@ window.addEventListener("keydown", (e) => {
     case "KeyH": document.body.classList.toggle("hide-hud"); break;
     case "KeyC": { const opts = Array.from($("color-mode").options).map((o) => o.value); state.colorMode = opts[(opts.indexOf(state.colorMode) + 1) % opts.length]; $("color-mode").value = state.colorMode; layers.agents.mode = state.colorMode; renderLegend(); break; }
     case "KeyL": if (state.selected >= 0) { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); } break;
+    case "KeyV": setTour(!state.tour); break;
     case "Escape": deselect(); break;
     default: if (/^Digit[1-5]$/.test(e.code)) setSpeed(speeds[Number(e.code[5]) - 1]);
   }
@@ -484,6 +556,7 @@ window.addEventListener("keydown", (e) => {
 
 $("play").onclick = () => setPaused(!state.paused);
 $("frame").onclick = () => stage.frame();
+$("tour").onclick = () => setTour(!state.tour);
 for (const b of document.querySelectorAll(".speed")) b.onclick = () => setSpeed(Number(b.dataset.speed));
 $("color-mode").onchange = (e) => { state.colorMode = e.target.value; layers.agents.mode = state.colorMode; renderLegend(); };
 $("layers").addEventListener("change", applyLayerToggles);

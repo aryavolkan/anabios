@@ -1,27 +1,78 @@
-// Terrain + water for the atlas. The biome grid (res² cells, row = y) becomes a
-// (res+1)² vertex heightmap in the XZ plane: world x → three x, world y → three
-// z, elevation → three y, with the sea level at y = 0 so the translucent water
-// plane sits exactly on it. Cell colours are the sim's own `cell_color` view
-// bytes (river-tinted, biomass-lushed) uploaded as a nearest-filtered data
-// texture, so the ground keeps the crisp per-cell pixel look of the showcase
-// player while the relief and lighting come from the mesh. The torus wraps:
-// the last vertex row/column samples the first cell.
+// Terrain, water and forests for the atlas. The biome grid (res² cells, row =
+// y) becomes a (res+1)² vertex heightmap in the XZ plane: world x → three x,
+// world y → three z, elevation → three y, with the sea level at y = 0 so the
+// water plane sits exactly on it. Cell colours are the sim's own `cell_color`
+// view bytes (river-tinted, biomass-lushed, succession-scarred) in a res²
+// texture; a small shader patch on the standard material turns the hard cell
+// grid into painterly ground — noise-jittered borders, broad patchiness and
+// fine grain, rock on steep slopes, snow on the peaks, a beach band at the
+// water line and a darkened seabed — while lighting, shadows and relief come
+// from the mesh. Forests are instanced trees placed from the terrain ids, one
+// deterministic jitter per cell, scaled down where a cell is scarred bare.
+// The torus wraps: the last vertex row/column samples the first cell.
 
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+
+/** TerrainType ids (anabios_core::biome::TerrainType). */
+export const T = Object.freeze({ WATER: 0, GRASS: 1, FOREST: 2, DESERT: 3, ROCK: 4, SAVANNA: 5, RAINFOREST: 6, TAIGA: 7, TUNDRA: 8 });
+
+/** Base colours of `cell_color` (linear RGB 0..1), used to classify a colour
+ *  back to a terrain id when a source has no id grid (recorded replays). */
+const BASE = [
+  [0.09, 0.19, 0.44], [0.21, 0.44, 0.19], [0.07, 0.26, 0.11], [0.68, 0.58, 0.33], [0.42, 0.40, 0.45],
+  [0.72, 0.66, 0.36], [0.06, 0.34, 0.16], [0.16, 0.34, 0.26], [0.62, 0.66, 0.62],
+];
+
+/** Nearest base-colour terrain id for an sRGB8 cell (lushness moves grass /
+ *  forest / desert within their own hue family, so nearest-base still lands). */
+export function classifyTerrain(rgba, res) {
+  const ids = new Uint8Array(res * res);
+  for (let k = 0; k < res * res; k++) {
+    const r = rgba[k * 4] / 255, g = rgba[k * 4 + 1] / 255, b = rgba[k * 4 + 2] / 255;
+    let best = 0, bd = Infinity;
+    for (let t = 0; t < BASE.length; t++) {
+      const d = (r - BASE[t][0]) ** 2 + (g - BASE[t][1]) ** 2 + (b - BASE[t][2]) ** 2;
+      if (d < bd) { bd = d; best = t; }
+    }
+    ids[k] = best;
+  }
+  return ids;
+}
+
+/** Drifting cloud shade over world (x, z) in units: two octaves of slow noise thresholded to soft patches. */
+const GLSL_CLOUD = /* glsl */ `
+  float atlasCloud(vec2 w, float t) {
+    vec2 p = w / 110.0;
+    float n = atlasNoise(p + vec2(t * 0.011, t * 0.005)) * 0.6 + atlasNoise(p * 2.1 - vec2(t * 0.008, t * 0.004)) * 0.4;
+    return smoothstep(0.58, 0.80, n);
+  }
+`;
+
+const GLSL_NOISE = /* glsl */ `
+  float atlasHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float atlasNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    float a = atlasHash(i), b = atlasHash(i + vec2(1.0, 0.0)), c = atlasHash(i + vec2(0.0, 1.0)), d = atlasHash(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  }
+`;
 
 export class Terrain {
   /**
-   * @param {number} res       biome cells per axis
-   * @param {number} worldSize world units per axis
-   * @param {number} seaLevel  normalized elevation of the water line
-   * @param {Float32Array|null} elevation res² normalized heights (null → flat)
+   * @param {number} res        biome cells per axis
+   * @param {number} worldSize  world units per axis
+   * @param {number} seaLevel   normalized elevation of the water line
+   * @param {Float32Array|null} elevation  res² normalized heights (null → flat)
+   * @param {Uint8Array|null} terrainIds   res² TerrainType ids (null → classified from colour)
    */
-  constructor(res, worldSize, seaLevel, elevation) {
+  constructor(res, worldSize, seaLevel, elevation, terrainIds = null) {
     this.res = res;
     this.worldSize = worldSize;
     this.cell = worldSize / res;
     this.seaLevel = seaLevel;
     this.elevation = elevation;
+    this.terrainIds = terrainIds;
     /** Vertical exaggeration: 1 elevation unit → this many world units. */
     this.heightScale = worldSize * 0.075;
     this.reliefOn = !!elevation;
@@ -54,23 +105,85 @@ export class Terrain {
     geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
     geo.setIndex(new THREE.BufferAttribute(idx, 1));
     this.geometry = geo;
-    // Colour lives in a res² RGBA8 texture (row 0 = world y 0, so no flip);
-    // nearest magnification keeps cells crisp, linear minification keeps the
-    // overview from shimmering.
+
+    // Colour lives in a res² RGBA8 texture (row 0 = world y 0, so no flip).
+    // Linear filtering + the shader's border jitter give organic edges.
     this.texels = new Uint8Array(res * res * 4).fill(255);
     this.texture = new THREE.DataTexture(this.texels, res, res, THREE.RGBAFormat, THREE.UnsignedByteType);
     this.texture.colorSpace = THREE.SRGBColorSpace;
-    this.texture.magFilter = THREE.NearestFilter;
+    this.texture.magFilter = THREE.LinearFilter;
     this.texture.minFilter = THREE.LinearFilter;
     this.texture.generateMipmaps = false;
     this.texture.flipY = false;
     this.texture.needsUpdate = true;
-    this.material = new THREE.MeshStandardMaterial({
-      map: this.texture, roughness: 0.92, metalness: 0.0, flatShading: false,
-    });
+
+    // Elevation as an 8-bit texture for the water's depth shading.
+    this.elevTexels = new Uint8Array(res * res);
+    if (elevation) for (let i = 0; i < res * res; i++) this.elevTexels[i] = Math.round(Math.min(1, Math.max(0, elevation[i])) * 255);
+    this.elevTexture = new THREE.DataTexture(this.elevTexels, res, res, THREE.RedFormat, THREE.UnsignedByteType);
+    this.elevTexture.magFilter = THREE.LinearFilter;
+    this.elevTexture.minFilter = THREE.LinearFilter;
+    this.elevTexture.generateMipmaps = false;
+    this.elevTexture.flipY = false;
+    this.elevTexture.needsUpdate = true;
+
+    this.uniforms = {
+      uRes: { value: res },
+      uTime: { value: 0 },
+      uRelief: { value: this.reliefOn ? 1 : 0 },
+      uSnow: { value: (0.9 - seaLevel) * this.heightScale },
+      uBeach: { value: this.heightScale * 0.02 },
+      uWorld: { value: worldSize },
+      uCloud: { value: 1 },
+    };
+    this.material = new THREE.MeshStandardMaterial({ map: this.texture, roughness: 0.94, metalness: 0.0 });
+    this.material.customProgramCacheKey = () => "atlas-terrain";
+    this.material.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, this.uniforms);
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying float vSlope; varying float vHeight;")
+        .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nvSlope = objectNormal.y;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvHeight = transformed.y;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", `#include <common>\nuniform float uRes; uniform float uTime; uniform float uRelief; uniform float uSnow; uniform float uBeach; uniform float uWorld; uniform float uCloud;\nvarying float vSlope; varying float vHeight;\n${GLSL_NOISE}\n${GLSL_CLOUD}`)
+        .replace("#include <map_fragment>", /* glsl */ `
+          vec2 cuv = vMapUv * uRes;
+          // Organic cell borders: jitter the sample point by low-frequency noise.
+          vec2 jit = vec2(atlasNoise(cuv * 2.3 + 13.1), atlasNoise(cuv * 2.3 + 71.7)) - 0.5;
+          vec4 sampledDiffuseColor = texture2D(map, (cuv + jit * 0.75) / uRes);
+          float macro = atlasNoise(cuv * 0.37) - 0.5;
+          float fine = atlasNoise(cuv * 7.0) - 0.5;
+          vec3 col = sampledDiffuseColor.rgb * (1.0 + 0.18 * macro + 0.12 * fine);
+          // Steep ground reads as rock, high ground as snow (relief only).
+          float steep = smoothstep(0.30, 0.75, 1.0 - vSlope) * uRelief;
+          vec3 rock = vec3(0.30, 0.27, 0.26) * (0.85 + 0.5 * fine);
+          col = mix(col, rock, steep);
+          float snow = smoothstep(uSnow, uSnow * 1.25, vHeight) * (1.0 - steep * 0.6) * uRelief;
+          col = mix(col, vec3(0.90, 0.92, 0.95) * (0.9 + 0.2 * fine), snow);
+          // Shore: a sandy band just above the water line, a darker blue-green bed below it.
+          float beach = (1.0 - smoothstep(0.0, uBeach * 3.0, vHeight)) * step(0.0, vHeight) * uRelief;
+          col = mix(col, vec3(0.78, 0.70, 0.48) * (0.85 + 0.4 * fine), beach * 0.7);
+          // Wet sand: the strip the last wave reached is darker.
+          float wetsand = (1.0 - smoothstep(0.0, uBeach * 0.9, vHeight)) * step(0.0, vHeight) * uRelief;
+          col *= 1.0 - 0.22 * wetsand;
+          float bed = clamp(-vHeight / (uBeach * 8.0), 0.0, 1.0) * uRelief;
+          col = mix(col, col * vec3(0.40, 0.55, 0.62), bed);
+          // Wet cells (rivers, and water on flat worlds) glitter with a slow drifting sparkle;
+          // the seabed under the water plane ripples with a soft caustic.
+          vec3 sc = sampledDiffuseColor.rgb;
+          float wet = smoothstep(0.05, 0.25, sc.b - max(sc.r, sc.g) * 1.05);
+          float glit = pow(atlasNoise(cuv * 9.0 + vec2(uTime * 0.35, -uTime * 0.22)), 7.0) * pow(atlasNoise(cuv * 6.5 - vec2(uTime * 0.18, uTime * 0.27)), 2.0);
+          col += vec3(0.55, 0.62, 0.7) * glit * 3.0 * wet;
+          float caus = atlasNoise(cuv * 5.0 + vec2(uTime * 0.4, uTime * 0.1)) * atlasNoise(cuv * 4.3 - vec2(uTime * 0.25, uTime * 0.35));
+          col += vec3(0.35, 0.5, 0.55) * pow(caus, 2.5) * 1.6 * bed;
+          // Cloud shadows drifting over the plate.
+          col *= 1.0 - 0.22 * atlasCloud(vMapUv * uWorld, uTime) * uCloud;
+          diffuseColor.rgb *= col;
+        `);
+    };
     this.mesh = new THREE.Mesh(geo, this.material);
     this.mesh.name = "terrain";
-    this.mesh.receiveShadow = false;
+    this.mesh.receiveShadow = true;
     this.rebuildHeights();
 
     // The plate: a dark slab under the map so the world reads as an object on
@@ -83,9 +196,11 @@ export class Terrain {
     slab.position.set(worldSize / 2, -depth / 2 - this.heightScale * seaLevel + 0.5, worldSize / 2);
     this.slab = slab;
 
-    this.water = new Water(worldSize);
+    this.water = new Water(worldSize, this.elevTexture, seaLevel, this.heightScale);
+    this.water.mesh.visible = this.reliefOn;   // flat worlds paint water cells in the ground texture instead
+    this.forest = new Forest(this);
     this.group = new THREE.Group();
-    this.group.add(this.mesh, this.slab, this.water.mesh);
+    this.group.add(this.mesh, this.slab, this.water.mesh, this.forest.group);
   }
 
   /** Recompute vertex heights from the elevation grid (or flatten). */
@@ -110,11 +225,17 @@ export class Terrain {
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.computeVertexNormals();
     this.geometry.computeBoundingSphere();
+    this.uniforms.uRelief.value = scale > 0 ? 1 : 0;
   }
+
+  /** Advance the ground shader's clock (sparkle and caustics). */
+  setTime(t) { this.uniforms.uTime.value = t; }
 
   setRelief(on) {
     this.reliefOn = on && !!this.elevation;
     this.rebuildHeights();
+    this.water.mesh.visible = this.reliefOn;
+    this.forest?.rebuild();
   }
 
   /** Bilinear terrain height at world (x, y), torus-wrapped. */
@@ -135,26 +256,40 @@ export class Terrain {
     t.set(rgba);
     for (let i = 3; i < t.length; i += 4) t[i] = 255;
     this.texture.needsUpdate = true;
+    if (!this.terrainIds) { this.terrainIds = classifyTerrain(rgba, this.res); this.forest.rebuild(); }
+    this.forest.refresh(rgba);
   }
 
   dispose() {
     this.geometry.dispose();
     this.material.dispose();
     this.texture.dispose();
+    this.elevTexture.dispose();
     this.slab.geometry.dispose();
     this.slab.material.dispose();
     this.water.dispose();
+    this.forest.dispose();
   }
 }
 
-/** Translucent water plane at y = 0 with a cheap animated ripple + fresnel. */
+// ---------------------------------------------------------------------------
+/** Water plane at y = 0: depth-shaded from the elevation texture (turquoise
+ *  shallows, navy deeps), animated ripple normals with a sun glint, a foam
+ *  fringe along the shore and a fresnel rim. */
 export class Water {
-  constructor(worldSize) {
+  constructor(worldSize, elevTexture, seaLevel, heightScale) {
     this.uniforms = {
       uTime: { value: 0 },
-      uColor: { value: new THREE.Color(0x173a6e) },
-      uDeep: { value: new THREE.Color(0x0a1a3a) },
+      // The tuned palette, authored for a raw (unencoded) write: converted a
+      // second time so it survives the output transfer the same.
+      uShallow: { value: new THREE.Color(0x2a7a86).convertSRGBToLinear() },
+      uColor: { value: new THREE.Color(0x1c4a86).convertSRGBToLinear() },
+      uDeep: { value: new THREE.Color(0x0c2148).convertSRGBToLinear() },
       uSize: { value: worldSize },
+      uElev: { value: elevTexture },
+      uSea: { value: seaLevel },
+      uHs: { value: heightScale },
+      uSun: { value: new THREE.Vector3(0.55, 1.0, 0.35).normalize() },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
@@ -162,27 +297,43 @@ export class Water {
       depthWrite: false,
       vertexShader: /* glsl */ `
         varying vec3 vWorld;
-        varying vec3 vNormalW;
         void main() {
           vec4 w = modelMatrix * vec4(position, 1.0);
           vWorld = w.xyz;
-          vNormalW = normalize(mat3(modelMatrix) * normal);
           gl_Position = projectionMatrix * viewMatrix * w;
         }`,
       fragmentShader: /* glsl */ `
-        uniform float uTime; uniform vec3 uColor; uniform vec3 uDeep; uniform float uSize;
-        varying vec3 vWorld; varying vec3 vNormalW;
+        uniform float uTime; uniform vec3 uShallow; uniform vec3 uColor; uniform vec3 uDeep; uniform float uSize;
+        uniform sampler2D uElev; uniform float uSea; uniform float uHs; uniform vec3 uSun;
+        varying vec3 vWorld;
+        ${GLSL_NOISE}
+        float ripple(vec2 p, float t) {
+          return 0.6 * sin(p.x * 0.08 + t * 0.9) * sin(p.y * 0.11 - t * 0.7) + 0.4 * sin((p.x + p.y) * 0.05 + t * 0.5)
+               + 0.5 * (atlasNoise(p * 0.06 + vec2(t * 0.05, -t * 0.03)) - 0.5);
+        }
         void main() {
-          // two travelling sine sets → a soft moving shimmer
-          float s = sin(vWorld.x * 0.08 + uTime * 0.9) * sin(vWorld.z * 0.11 - uTime * 0.7);
-          float t = sin((vWorld.x + vWorld.z) * 0.05 + uTime * 0.5);
-          float ripple = 0.5 + 0.5 * (0.6 * s + 0.4 * t);
+          vec2 uv = vWorld.xz / uSize;
+          float e = texture2D(uElev, uv).r;
+          float depth = max(0.0, (uSea - e) * uHs);
+          vec2 p = vWorld.xz;
+          float r = ripple(p, uTime);
+          float rx = ripple(p + vec2(1.5, 0.0), uTime) - r, rz = ripple(p + vec2(0.0, 1.5), uTime) - r;
+          vec3 n = normalize(vec3(-rx * 0.35, 1.0, -rz * 0.35));
           vec3 viewDir = normalize(cameraPosition - vWorld);
-          float fres = pow(1.0 - max(dot(viewDir, vNormalW), 0.0), 2.0);
-          vec3 col = mix(uDeep, uColor, 0.35 + 0.65 * ripple);
-          col += vec3(0.25, 0.32, 0.36) * fres * 0.6;
-          float alpha = 0.62 + 0.25 * fres + 0.05 * ripple;
-          gl_FragColor = vec4(col, alpha);
+          float fres = pow(1.0 - max(dot(viewDir, n), 0.0), 2.5);
+          vec3 col = mix(uShallow, uColor, clamp(depth / 2.5, 0.0, 1.0));
+          col = mix(col, uDeep, clamp(depth / 12.0, 0.0, 1.0));
+          col *= 0.9 + 0.2 * r;
+          float spec = pow(max(dot(reflect(-uSun, n), viewDir), 0.0), 48.0);
+          col += vec3(1.0, 0.95, 0.85) * spec * 0.55;
+          col += vec3(0.22, 0.30, 0.34) * fres * 0.7;
+          float foamBand = 1.0 - smoothstep(0.0, 0.9, depth);
+          float foam = foamBand * smoothstep(0.45, 0.75, atlasNoise(p * 0.5 + vec2(uTime * 0.6, uTime * 0.2)) + 0.25 * r);
+          col = mix(col, vec3(0.92, 0.94, 0.96), foam * 0.75);
+          float alpha = mix(0.45, 0.88, clamp(depth / 3.0, 0.0, 1.0)) + fres * 0.1 + foam * 0.3;
+          gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.96));
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
         }`,
     });
     const geo = new THREE.PlaneGeometry(worldSize, worldSize, 1, 1);
@@ -194,4 +345,232 @@ export class Water {
   }
   update(seconds) { this.uniforms.uTime.value = seconds; }
   dispose() { this.mesh.geometry.dispose(); this.material.dispose(); }
+}
+
+// ---------------------------------------------------------------------------
+/** Broadleaf tree: trunk + a cluster of canopy lobes; vertex colours tint the
+ *  trunk brown and leave the canopy white for the instance colour. */
+function broadleafGeometry() {
+  const trunk = new THREE.CylinderGeometry(0.06, 0.12, 0.6, 5);
+  trunk.translate(0, 0.3, 0);
+  paint(trunk, 0.42, 0.30, 0.20);
+  // (Indexed like the trunk — a polyhedron would be non-indexed and refuse to merge.)
+  const lobes = [];
+  for (const [x, y, z, r] of [[0, 0.84, 0, 0.42], [0.24, 0.66, 0.12, 0.3], [-0.2, 0.7, -0.16, 0.28], [0.02, 0.62, 0.27, 0.24]]) {
+    const lobe = new THREE.SphereGeometry(r, 6, 5);
+    lobe.scale(1, 0.85, 1);
+    lobe.translate(x, y, z);
+    paint(lobe, 1, 1, 1);
+    lobes.push(lobe);
+  }
+  return mergeGeometries([trunk, ...lobes], false);
+}
+/** Conifer: trunk + three stacked cones. */
+function coniferGeometry() {
+  const trunk = new THREE.CylinderGeometry(0.05, 0.09, 0.45, 5);
+  trunk.translate(0, 0.22, 0);
+  paint(trunk, 0.38, 0.26, 0.18);
+  const tiers = [];
+  for (const [r, h, y] of [[0.40, 0.75, 0.62], [0.30, 0.6, 1.0], [0.19, 0.45, 1.33]]) {
+    const cone = new THREE.ConeGeometry(r, h, 6);
+    cone.translate(0, y, 0);
+    paint(cone, 1, 1, 1);
+    tiers.push(cone);
+  }
+  return mergeGeometries([trunk, ...tiers], false);
+}
+/** Grass tuft: three crossed, tapered blades; darker at the root, lighter at the tips. */
+function tuftGeometry() {
+  const parts = [];
+  for (let i = 0; i < 3; i++) {
+    const g = new THREE.PlaneGeometry(0.55, 0.62, 1, 2);
+    g.translate(0, 0.31, 0);
+    g.rotateY((i * Math.PI) / 3);
+    const pos = g.attributes.position.array;
+    for (let v = 0; v < pos.length; v += 3) { const t = pos[v + 1] / 0.62; pos[v] *= 1.0 - 0.55 * t; pos[v + 2] *= 1.0 - 0.55 * t; }
+    parts.push(g);
+  }
+  const g = mergeGeometries(parts, false);
+  const n = g.attributes.position.count, pos = g.attributes.position.array, col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const v = 0.55 + 0.55 * (pos[i * 3 + 1] / 0.62); col[i * 3] = v; col[i * 3 + 1] = v; col[i * 3 + 2] = v; }
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return g;
+}
+/** A squat boulder: a flattened, slightly jittered icosahedron (non-indexed, so it stays unmerged). */
+function rockGeometry() {
+  const g = new THREE.IcosahedronGeometry(0.5, 0);
+  g.scale(1, 0.62, 0.85);
+  const pos = g.attributes.position.array;
+  for (let i = 0; i < pos.length; i += 3) { const j = 0.85 + 0.3 * hash2(i, 91); pos[i] *= j; pos[i + 2] *= j; }
+  g.translate(0, 0.2, 0);
+  g.computeVertexNormals();
+  paint(g, 1, 1, 1);
+  return g;
+}
+function paint(geo, r, g, b) {
+  const n = geo.attributes.position.count, col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { col[i * 3] = r; col[i * 3 + 1] = g; col[i * 3 + 2] = b; }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+}
+
+/** Per-terrain planting: [trees per cell (fractional = probability), kind, canopy colour, height factor]. */
+const PLANTING = {
+  [T.ROCK]: [0.9, "rock", 0x6e6a70, 0.55],
+  [T.FOREST]: [1.7, "leaf", 0x2f7a32, 0.82],
+  [T.RAINFOREST]: [2.6, "leaf", 0x1f6b3a, 1.0],
+  [T.TAIGA]: [1.7, "cone", 0x2b5b45, 0.95],
+  [T.GRASS]: [0.08, "leaf", 0x4c9a3c, 0.7],
+  [T.SAVANNA]: [0.16, "leaf", 0x8a8a3c, 0.65],
+  [T.TUNDRA]: [0.06, "cone", 0x5c7060, 0.6],
+};
+/** Grass tufts per cell (fractional = probability), with their blade colour. */
+const TUFTS = { [T.GRASS]: 2.4, [T.SAVANNA]: 1.8, [T.FOREST]: 0.6, [T.TUNDRA]: 0.7, [T.RAINFOREST]: 0.4 };
+const TUFT_COLOR = { [T.GRASS]: 0x78b544, [T.SAVANNA]: 0xb9a94e, [T.FOREST]: 0x5a9a44, [T.TUNDRA]: 0x8c9c72, [T.RAINFOREST]: 0x3f8f4a };
+/** Extra rock scatter on cells whose main planting is something else. */
+const ROCKS = { [T.TUNDRA]: 0.22, [T.DESERT]: 0.05, [T.SAVANNA]: 0.03, [T.GRASS]: 0.015 };
+const hash2 = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+/** Instanced forests over the terrain's cells. */
+export class Forest {
+  constructor(terrain, maxPerKind = 60000) {
+    this.terrain = terrain;
+    this.max = maxPerKind;
+    this.uniforms = { uTime: { value: 0 }, uCloud: terrain.uniforms.uCloud };
+    // Wind: canopies sway with a slow wave keyed on the instance's world
+    // position, so a forest ripples instead of nodding in unison. The same
+    // cloud shade as the ground passes over the canopies.
+    const mat = (side = THREE.FrontSide) => {
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, side });
+      m.customProgramCacheKey = () => `atlas-tree-${side}`;
+      m.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = this.uniforms.uTime;
+        shader.uniforms.uCloud = this.uniforms.uCloud;
+        shader.vertexShader = shader.vertexShader
+          .replace("#include <common>", "#include <common>\nuniform float uTime; varying vec2 vWxz;")
+          .replace("#include <begin_vertex>", `#include <begin_vertex>
+            {
+              #ifdef USE_INSTANCING
+                vec2 wp = instanceMatrix[3].xz;
+              #else
+                vec2 wp = vec2(0.0);
+              #endif
+              vWxz = wp;
+              float lift = smoothstep(0.35, 1.3, position.y);
+              float w = sin(uTime * 1.1 + wp.x * 0.045 + wp.y * 0.07) + 0.5 * sin(uTime * 2.3 + wp.x * 0.11);
+              transformed.x += w * 0.045 * lift;
+              transformed.z += w * 0.025 * lift;
+            }`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace("#include <common>", `#include <common>\nuniform float uTime; uniform float uCloud; varying vec2 vWxz;\n${GLSL_NOISE}\n${GLSL_CLOUD}`)
+          .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.22 * atlasCloud(vWxz, uTime) * uCloud;");
+      };
+      return m;
+    };
+    this.leaf = new THREE.InstancedMesh(broadleafGeometry(), mat(), maxPerKind);
+    this.cone = new THREE.InstancedMesh(coniferGeometry(), mat(), maxPerKind);
+    this.tuft = new THREE.InstancedMesh(tuftGeometry(), mat(THREE.DoubleSide), maxPerKind);
+    this.rock = new THREE.InstancedMesh(rockGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), maxPerKind);
+    for (const m of [this.leaf, this.cone, this.tuft, this.rock]) {
+      m.count = 0; m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; m.name = "forest";
+    }
+    this.tuft.castShadow = false;   // thousands of blades: their shadow is noise, not grounding
+    this.group = new THREE.Group();
+    this.group.add(this.leaf, this.cone, this.tuft, this.rock);
+    this.items = [];     // {mesh, index, kind, cell, x, z, rot, tx, tz, base}
+    this.scar = null;    // per-cell 0/1 "bare" flags from the last colour refresh
+    this.rebuild();
+  }
+
+  /** Place trees from the terrain ids (deterministic per cell). */
+  rebuild() {
+    const t = this.terrain, ids = t.terrainIds, res = t.res, cell = t.cell;
+    this.items.length = 0;
+    const counts = { leaf: 0, cone: 0, tuft: 0, rock: 0 };
+    if (ids) {
+      // Budget: keep every world under the instance cap by thinning uniformly
+      // (trees and rocks share one budget, grass has its own).
+      let want = 0, wantTuft = 0;
+      for (let k = 0; k < res * res; k++) { const p = PLANTING[ids[k]]; if (p) want += p[0]; want += ROCKS[ids[k]] || 0; wantTuft += TUFTS[ids[k]] || 0; }
+      const keep = Math.min(1, this.max / Math.max(1, want));
+      const keepTuft = Math.min(1, this.max / Math.max(1, wantTuft));
+      const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(), c = new THREE.Color();
+      const e = new THREE.Euler();
+      const meshes = { leaf: this.leaf, cone: this.cone, tuft: this.tuft, rock: this.rock };
+      const plant = (k, cx, cy, density, kind, colour, hf, salt, keepK = keep) => {
+        const n = Math.floor(density) + (hash2(k, salt) < density % 1 ? 1 : 0);
+        for (let i = 0; i < n; i++) {
+          if (hash2(k, salt + 100 + i) > keepK) continue;
+          const mesh = meshes[kind];
+          const index = counts[kind]++;
+          if (index >= this.max) continue;
+          const x = (cx + hash2(k, salt + 200 + i)) * cell, z = (cy + hash2(k, salt + 300 + i)) * cell;
+          const base = cell * hf * (0.55 + 0.5 * hash2(k, salt + 400 + i));
+          const rot = hash2(k, salt + 500 + i) * Math.PI * 2;
+          // Trees lean a little; grass and rocks sit square.
+          const lean = kind === "leaf" || kind === "cone" ? 0.16 : 0;
+          const tx = (hash2(k, salt + 700 + i) - 0.5) * lean, tz = (hash2(k, salt + 800 + i) - 0.5) * lean;
+          this.items.push({ mesh, index, kind, cell: k, x, z, rot, tx, tz, base });
+          p.set(x, t.heightAt(x, z), z);
+          q.setFromEuler(e.set(tx, rot, tz));
+          s.set(base, base, base);
+          mesh.setMatrixAt(index, m.compose(p, q, s));
+          c.setHex(colour).offsetHSL((hash2(k, salt + 900 + i) - 0.5) * 0.05, (hash2(k, salt + 1000 + i) - 0.5) * 0.18, (hash2(k, salt + 600 + i) - 0.5) * 0.14);
+          mesh.setColorAt(index, c);
+        }
+      };
+      for (let k = 0; k < res * res; k++) {
+        const cx = k % res, cy = (k / res) | 0;
+        const plan = PLANTING[ids[k]];
+        if (plan) plant(k, cx, cy, plan[0], plan[1], plan[2], plan[3], 7);
+        const rocks = ROCKS[ids[k]];
+        if (rocks) plant(k, cx, cy, rocks, "rock", 0x6e6a70, 0.4, 9);
+        const tufts = TUFTS[ids[k]];
+        if (tufts) plant(k, cx, cy, tufts, "tuft", TUFT_COLOR[ids[k]], 0.42, 11, keepTuft);
+      }
+    }
+    this.leaf.count = Math.min(counts.leaf, this.max);
+    this.cone.count = Math.min(counts.cone, this.max);
+    this.tuft.count = Math.min(counts.tuft, this.max);
+    this.rock.count = Math.min(counts.rock, this.max);
+    for (const mesh of [this.leaf, this.cone, this.tuft, this.rock]) {
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+    this.scar = null;
+  }
+
+  /** Shrink trees on cells the biome has scarred bare (succession/pollution),
+   *  restore them as the cell greens again. Cheap: only cells that flipped. */
+  refresh(rgba) {
+    if (!this.items.length) return;
+    const res = this.terrain.res, n = res * res;
+    const scar = new Uint8Array(n);
+    for (let k = 0; k < n; k++) {
+      const r = rgba[k * 4], g = rgba[k * 4 + 1];
+      scar[k] = r > g * 1.05 ? 1 : 0;   // browner than green: bare earth / pioneer brown / pollution smudge
+    }
+    const prev = this.scar;
+    const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(), e = new THREE.Euler();
+    let dirty = false;
+    for (const it of this.items) {
+      if (it.kind === "rock") continue;
+      const bare = scar[it.cell];
+      if (prev && prev[it.cell] === bare) continue;
+      const sc = bare ? it.base * 0.12 : it.base;
+      p.set(it.x, this.terrain.heightAt(it.x, it.z), it.z);
+      q.setFromEuler(e.set(it.tx, it.rot, it.tz));
+      s.set(sc, sc, sc);
+      it.mesh.setMatrixAt(it.index, m.compose(p, q, s));
+      dirty = true;
+    }
+    if (dirty) for (const mesh of [this.leaf, this.cone, this.tuft]) mesh.instanceMatrix.needsUpdate = true;
+    this.scar = scar;
+  }
+
+  /** Advance the wind clock (seconds). */
+  setTime(t) { this.uniforms.uTime.value = t; }
+
+  dispose() {
+    for (const m of [this.leaf, this.cone, this.tuft, this.rock]) { m.geometry.dispose(); m.material.dispose(); m.dispose(); }
+  }
 }

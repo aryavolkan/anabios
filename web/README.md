@@ -2,11 +2,23 @@
 
 A 3D, in-browser front end for the anabios core: the deterministic simulation
 compiled to **WebAssembly** and rendered with **three.js** — terrain relief from
-the sim's own elevation field, the biome map lushing and scarring in real time,
-every agent as an instanced figure coloured by its genome, combat volleys and
-trade lanes as fading light, hut villages at settlement sites, markets at the
-trade hubs, and the codex streaming "first emergence" events as rings on the
-map. The same page also plays the **recorded replay** the showcase deck ships
+the sim's elevation field under a painterly ground shader (noise-jittered cell
+borders, rock on the steep slopes, snow on the peaks, a beach band and a
+darkened seabed at the water line), the biome map lushing and scarring in real
+time, instanced forests planted from the terrain grid that shrink where a cell
+is scarred bare and sway in the wind (multi-lobed canopies, three-tier
+conifers, grass tufts on the open ground, rock scatter), depth-shaded water
+with sun glints, river sparkle, seabed caustics, wet sand and a foam fringe,
+sun shadows and drifting cloud shadows over everything, a sky dome whose sun
+glow swells as a gentle day cycle sweeps the sun round the plate toward a
+golden dusk, bird flocks circling overhead, every agent as an instanced grazer
+or hunter figure coloured by its genome and walking (or sprinting, when it
+flees or fights) on articulated legs, a glimmer where an agent is born and a
+grey puff where one dies, combat volleys and trade lanes as fading light with
+impact sparks, pitched-roof hut villages with hearth smoke at settlement
+sites, awninged market stalls at the trade hubs, the codex streaming "first
+emergence" events as rings, light pillars and ember bursts on the map, and a
+soft bloom over the hot pixels. The same page also plays the **recorded replay** the showcase deck ships
 (`showcase/replay.js`), so the hosted deep-time story and the live sandbox are
 one product.
 
@@ -32,14 +44,19 @@ Deep links: `?scenario=inventions&seed=3&speed=4`, `?replay=out-of-africa-saga`,
 **Controls:** drag orbits, right-drag pans, wheel zooms · click an agent for its
 inspector (energy, age, diet, mood, body plan, held inventions, genome-driven
 learning flags) · **space** pause · **1–5** speed (¼× … 64× ticks per frame) ·
-**C** cycle colour mode · **F** frame the world · **L** follow the selected
-agent · **H** hide the HUD · click a codex line to fly to the event · click a
-species row to fly to a member.
+**C** cycle colour mode · **F** frame the world · **V** event tour (a slow
+orbit that cuts to each fresh codex event) · **L** follow the selected agent ·
+**H** hide the HUD · click a codex line to fly to the event · click a species
+row to fly to a member.
 
 Colour modes: species (genome hue/sat/val, livestock bleached), diet, dialect
 hue, energy, and — when the scenario enables the subsystem — mood, arousal and
-infection. Layers: relief, water, combat, trade, villages, markets, event rings,
-wireframe.
+infection. Layers: relief, water, forests, shadows, combat, trade, villages,
+markets, events & sparks, wireframe, day cycle, bloom, clouds, birds (forests,
+shadows and bloom are the three to switch off on a weak GPU: up to 60k trees
+and 60k grass tufts, one 2048² shadow cascade and a five-level bloom chain). The day cycle is on when
+viewing live and off under `capture=1` so gallery stills stay at noon; `&day=1`
+opts a capture in.
 
 ## How it fits together
 
@@ -54,8 +71,9 @@ crates/anabios-wasm  ── cargo build --target wasm32-unknown-unknown ──�
 web/src/sources.js   LiveSource (wasm)  ·  ReplaySource (showcase/replay.js format)
       │  one interface: agents(), biomeRgba(), elevation(), streaks(), trades(), sites(), hubs(), events(), species(), agent(id), meta()
       ▼
-web/src/terrain.js   heightmap + water          web/src/layers.js   instanced agents, segments, villages, hubs, event rings
-web/src/scene.js     renderer / camera / lights  web/src/main.js     loop, HUD, picking, URL state
+web/src/terrain.js   heightmap, ground shader (clouds, shore), water, forests + grass   web/src/layers.js   figures + gait, segments, villages, hubs, birds, event rings + pillars
+web/src/scene.js     renderer / bloom / sky dome / camera / lights / daylight  web/src/particles.js   ember, spark, mote and smoke pools
+web/src/main.js      loop, HUD, picking, URL state, event tour
 ```
 
 ### Why a hand-rolled ABI
