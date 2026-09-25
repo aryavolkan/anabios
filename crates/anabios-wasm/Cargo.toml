@@ -1,0 +1,23 @@
+[package]
+name = "anabios-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "WebAssembly bridge exposing anabios-core to the three.js web frontend over a plain C ABI."
+
+[lib]
+# `cdylib` is what `--target wasm32-unknown-unknown` turns into the `.wasm`
+# module; `rlib` keeps the pure view helpers unit-testable and lets the
+# native workspace gates (clippy/doc/test) cover the crate too.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anabios-core = { path = "../anabios-core" }
+glam = { workspace = true }
+serde_json = { workspace = true }
+
+# `cargo llvm-cov` sets `--cfg coverage` for the whole build (see the other
+# crates); declare it so `-D warnings` doesn't trip `unexpected_cfgs`.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

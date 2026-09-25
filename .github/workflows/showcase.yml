@@ -60,6 +60,21 @@ jobs:
             --out showcase/replay.js | tee record.log
           echo "::notice title=state_hash::$(grep -o 'state_hash=[^ ]*' record.log)"
 
+      # The three.js atlas (web/) is published alongside the deck at
+      # /atlas/: the same core compiled to WebAssembly, running live in the
+      # browser, plus the freshly regenerated replay through the same scene.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: build the web atlas (wasm + vendored three.js + staged scenarios)
+        run: |
+          set -euo pipefail
+          rustup target add wasm32-unknown-unknown
+          scripts/web.sh build
+          scripts/web.sh test predator-prey 300 7
+          mkdir -p showcase/atlas
+          cp -r web/index.html web/src web/vendor web/wasm web/scenarios web/replays showcase/atlas/
+
       - uses: actions/upload-pages-artifact@v5
         with:
           path: showcase

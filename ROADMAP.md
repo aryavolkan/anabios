@@ -204,11 +204,18 @@ Horizon-1 exit.*
   spike shows neural cognition is genuinely required, that is the arc's one
   sanctioned exception to the won't-do list — decision recorded, not taken
   silently.
-- **[T, M] WASM core spike → web-player fork decision.** The Q3 open question,
-  now with data (the perf verdict: `culture_step` ≈73% of step at 12k agents).
-  Compile `anabios-core` to WASM, measure tick rate in-browser, then decide:
-  curated replay viewer vs live in-browser simulation. *Depends:* none.
-  *Done when:* the decision is recorded with measured numbers either way.
+- ~~**[T, M] WASM core spike → web-player fork decision.**~~ *Spike landed
+  early (2026-09-25): `crates/anabios-wasm` compiles the core to
+  `wasm32-unknown-unknown` behind a plain C ABI, and `web/` is a three.js
+  frontend that runs it live in the browser AND plays the recorded showcase
+  deck through the same scene (so the fork is "both", not either/or). Measured
+  single-threaded wasm tick rates: ≈1.8k ticks/s at ~270 agents
+  (`predator-prey`), ≈625 at 400 (`inventions`), ≈15 at ~2.9k
+  (`out-of-africa-saga`); native/wasm trajectories are bit-identical
+  (`scripts/web.sh test`). Numbers + design: `web/README.md`. Open follow-ups:
+  wasm threads/SIMD for the ≥3k-agent worlds, a Web Worker for the sim loop,
+  and a pointer-width-independent `state_hash` (the bincode receipt hashes
+  `BitVec<usize>` store words, so it is not comparable across wasm32/x86-64).*
 
 **Horizon-2 exit:** novelty decay measurably slowed (or the pressure mechanism
 honestly closed), the O6 feasibility verdict written, the web player's future

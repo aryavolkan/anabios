@@ -90,11 +90,16 @@ struct BiomeGrid {
 }
 
 /// The biome layer: a sequence of colour grids over time (the map lushes,
-/// pollutes, and scars as the run proceeds).
+/// pollutes, and scars as the run proceeds), plus the static relief.
 #[derive(Serialize)]
 struct BiomeSeq {
     res: usize,
     grids: Vec<BiomeGrid>,
+    /// Normalized elevation per cell at `res`² (block-averaged, quantised to
+    /// one byte), base64-encoded. Static after worldgen, so captured once.
+    /// The three.js frontend (`web/`) displaces its terrain mesh with it;
+    /// the 2D showcase player ignores it.
+    elev: String,
 }
 
 #[derive(Serialize)]
@@ -220,7 +225,11 @@ pub fn run(
             state_hash: format!("0x{hash:016x}"),
         },
         species,
-        biome: BiomeSeq { res: biome_res, grids: biome_grids },
+        biome: BiomeSeq {
+            res: biome_res,
+            grids: biome_grids,
+            elev: capture_elevation(&world, biome_res),
+        },
         frames,
         sites,
         events,
@@ -356,6 +365,32 @@ fn capture_biome(world: &World, out_res: usize) -> BiomeGrid {
     BiomeGrid { t: world.tick, b64: base64_encode(&bytes) }
 }
 
+/// Downsample the static elevation field to `out_res`² bytes (block-averaged
+/// `elevation * 255`), base64-encoded. Same block layout as `capture_biome`.
+fn capture_elevation(world: &World, out_res: usize) -> String {
+    let src_res = world.biome.res;
+    let out_res = out_res.max(1);
+    let mut bytes = Vec::with_capacity(out_res * out_res);
+    for oy in 0..out_res {
+        let y0 = oy * src_res / out_res;
+        let y1 = ((oy + 1) * src_res / out_res).max(y0 + 1).min(src_res);
+        for ox in 0..out_res {
+            let x0 = ox * src_res / out_res;
+            let x1 = ((ox + 1) * src_res / out_res).max(x0 + 1).min(src_res);
+            let (mut e, mut n) = (0.0f32, 0.0f32);
+            for row in y0..y1 {
+                for col in x0..x1 {
+                    e += world.biome.at(col, row).elevation;
+                    n += 1.0;
+                }
+            }
+            let inv = if n > 0.0 { 1.0 / n } else { 0.0 };
+            bytes.push((e * inv * 255.0).round().clamp(0.0, 255.0) as u8);
+        }
+    }
+    base64_encode(&bytes)
+}
+
 /// Thin the event stream to at most `max_events`, always keeping the first
 /// occurrence of each event type (the "first emergence" milestones the
 /// showcase is built around) and uniformly sampling the remainder. Chronology
@@ -473,6 +508,16 @@ mod tests {
                 assert!((0..=ws).contains(&y), "y {y} out of 0..={ws}");
             }
         }
+    }
+
+    /// The elevation grid decodes to exactly out_res² bytes, all in range.
+    #[test]
+    fn elevation_grid_has_expected_size() {
+        let world = minimal_world();
+        let e = capture_elevation(&world, 40);
+        // base64 of 1600 bytes → 2136 chars (1600 % 3 == 1 → one padding pair).
+        assert_eq!(e.len(), 1600usize.div_ceil(3) * 4);
+        assert!(e.ends_with("=="));
     }
 
     /// A biome grid decodes to exactly out_res² RGB triples.

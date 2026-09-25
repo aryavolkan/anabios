@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>anabios — atlas</title>
+<meta name="description" content="Live, deterministic evolutionary ecosystems rendered in 3D: the anabios core running in the browser, plus recorded deep-time replays.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23CE7C36'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --basalt:#16110D; --basalt-2:#1F1813; --bone:#E9E1D2; --bone-dim:#B7AC98; --muted:#8A7E6C;
+    --ochre:#CE7C36; --glacial:#6E9BB5; --ember:#C0432C; --chloro:#7A9A54;
+    --line:rgba(233,225,210,0.10); --line-2:rgba(233,225,210,0.18); --panel:rgba(22,17,13,0.78);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,"Cascadia Mono",Consolas,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--basalt);color:var(--bone);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .hud{position:fixed;z-index:2;font-family:var(--mono);font-size:12px;letter-spacing:.02em}
+  body.hide-hud .hud,body.hide-hud .rail{opacity:0;pointer-events:none}
+  .hud,.rail{transition:opacity .35s ease}
+  button,select,input{font:inherit;color:var(--bone);background:var(--basalt-2);border:1px solid var(--line-2);border-radius:3px;padding:5px 9px;cursor:pointer}
+  button:hover,select:hover{border-color:var(--ochre)}
+  button.on{background:var(--ochre);color:var(--basalt);border-color:var(--ochre);font-weight:600}
+  button:disabled{opacity:.45;cursor:default}
+  input[type=number]{width:10ch;cursor:text}
+  .label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+
+  /* top-left: identity + loader */
+  .brand{top:18px;left:18px;display:flex;flex-direction:column;gap:9px;max-width:min(440px,calc(100vw - 36px))}
+  .wordmark{font-family:var(--sans);font-weight:800;font-size:22px;letter-spacing:.14em;text-transform:uppercase;margin:0;line-height:1;display:flex;align-items:baseline;gap:10px}
+  .wordmark .glow{color:var(--ochre)}
+  .wordmark small{font-family:var(--mono);font-weight:400;font-size:11px;letter-spacing:.22em;color:var(--muted)}
+  .loader{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .loader select{max-width:280px}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:99px;border:1px solid var(--line-2);color:var(--bone-dim);font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+  .badge .dot{width:6px;height:6px;border-radius:50%;background:var(--ochre);box-shadow:0 0 8px var(--ochre)}
+  .badge.replay .dot{background:var(--glacial);box-shadow:0 0 8px var(--glacial)}
+  .desc{color:var(--bone-dim);font-family:var(--serif);font-size:14px;line-height:1.45;max-width:min(46ch,calc(100vw - 36px));margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* top-right: readout */
+  .readout{top:18px;right:18px;display:flex;gap:18px;text-align:right}
+  .stat .n{font-size:20px;font-variant-numeric:tabular-nums;color:var(--bone)}
+  .stat .l{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+
+  /* bottom-left: transport */
+  .transport{bottom:18px;left:18px;display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .speed{min-width:44px;text-align:center;padding:5px 6px}
+  .progress{height:3px;width:100%;background:rgba(233,225,210,.08);border-radius:2px;overflow:hidden;display:none}
+  .progress .fill{height:100%;width:0;background:linear-gradient(90deg,var(--glacial),var(--bone))}
+  body.replay .progress{display:block}
+  .hint{color:var(--muted);font-size:10.5px;letter-spacing:.04em}
+  .hint b{color:var(--bone-dim);font-weight:600}
+
+  /* bottom-right: codex */
+  .codex{bottom:18px;right:18px;width:min(460px,calc(100vw - 36px))}
+  .codex-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .codex-head .dot{width:6px;height:6px;border-radius:50%;background:var(--ochre);box-shadow:0 0 8px var(--ochre);animation:pulse 2.2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+  .codex-feed{display:flex;flex-direction:column-reverse;gap:3px;text-align:right}
+  .codex-line{color:var(--bone-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;opacity:0;transform:translateY(6px);transition:opacity .4s ease,transform .4s ease}
+  .codex-line.show{opacity:1;transform:none}
+  .codex-line:hover{color:var(--bone)}
+  .codex-line .tick{color:var(--muted)}
+  .codex-line .sw{display:inline-block;width:7px;height:7px;border-radius:2px;margin:0 6px 0 2px;vertical-align:1px}
+
+  /* left rail: view controls */
+  .rail{position:fixed;z-index:3;left:18px;top:150px;width:250px;max-height:calc(100vh - 300px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px 14px;font-family:var(--mono);font-size:12px;backdrop-filter:blur(8px)}
+  .rail.collapsed{width:auto;max-height:none;overflow:hidden;padding:6px 8px}
+  .rail.collapsed>*:not(.rail-head){display:none}
+  .rail-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .rail-head button{padding:2px 8px;font-size:11px}
+  .rail h4{margin:14px 0 6px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toggles{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+  .toggles label{display:flex;align-items:center;gap:6px;color:var(--bone-dim);cursor:pointer}
+  .toggles input{accent-color:var(--ochre);margin:0}
+  .legend{display:flex;flex-wrap:wrap;gap:5px 12px;color:var(--bone-dim);font-size:11px}
+  .legend .item{display:flex;align-items:center;gap:6px}
+  .legend .sw{width:10px;height:10px;border-radius:2px}
+  .legend .grad{width:70px;height:8px;border-radius:2px}
+  table.species{width:100%;border-collapse:collapse;font-size:11px;color:var(--bone-dim)}
+  table.species td{padding:2px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.species td:nth-child(2),table.species td:nth-child(3){text-align:right;font-variant-numeric:tabular-nums}
+  table.species td .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:0}
+  table.species tr:hover td{color:var(--bone)}
+  .receipt{margin-top:10px;color:var(--muted);font-size:10px;line-height:1.6;overflow-wrap:anywhere}
+  .receipt b{color:var(--bone-dim);font-weight:600}
+
+  /* agent card */
+  .card{position:fixed;z-index:3;right:18px;top:96px;width:min(330px,calc(100vw - 36px));background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--ochre);border-radius:4px;padding:12px 14px;font-family:var(--mono);font-size:12px;display:none;backdrop-filter:blur(8px)}
+  .card.show{display:block}
+  .card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .card-head h3{margin:0;font-family:var(--serif);font-weight:600;font-size:18px;color:var(--bone)}
+  .card dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:10px 0 0;color:var(--bone-dim)}
+  .card dt{color:var(--muted);font-size:10px;letter-spacing:.14em;text-transform:uppercase;align-self:center}
+  .card dd{margin:0;font-variant-numeric:tabular-nums}
+  .bar{height:6px;background:rgba(233,225,210,.08);border-radius:2px;overflow:hidden;margin-top:4px}
+  .bar i{display:block;height:100%;background:var(--chloro)}
+  .card .row{margin-top:10px}
+  .chips{display:flex;flex-wrap:wrap;gap:4px}
+  .chip{padding:1px 6px;border-radius:99px;border:1px solid var(--line-2);color:var(--bone-dim);font-size:10px}
+
+  /* overlays */
+  .cover{position:fixed;inset:0;z-index:9;display:none;align-items:center;justify-content:center;text-align:center;padding:40px;background:var(--basalt)}
+  .cover.show{display:flex}
+  .cover>div{max-width:60ch}
+  .cover h2{font-family:var(--serif);font-weight:600;margin:0 0 12px}
+  .cover p{color:var(--bone-dim);line-height:1.6}
+  .cover code,.cover pre{font-family:var(--mono);color:var(--ochre);background:var(--basalt-2);padding:2px 6px;border-radius:3px;text-align:left}
+  .cover pre{padding:12px 16px;overflow:auto}
+  .toast{position:fixed;z-index:4;left:50%;top:18px;transform:translateX(-50%);background:var(--basalt-2);border:1px solid var(--line-2);border-left:2px solid var(--ember);padding:8px 14px;border-radius:3px;font-family:var(--mono);font-size:12px;color:var(--bone);display:none;max-width:min(720px,90vw)}
+  .toast.show{display:block}
+
+  @media (max-width:820px){
+    .readout{display:none}.desc{display:none}.rail{top:120px;width:220px}.codex{width:calc(100vw - 36px);bottom:82px}.card{top:auto;bottom:82px;right:18px}
+  }
+  @media (prefers-reduced-motion:reduce){.codex-line{transition:none}.codex-head .dot{animation:none}}
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div class="hud brand">
+  <h1 class="wordmark">ANA<span class="glow">BIOS</span> <small>atlas</small></h1>
+  <div class="loader">
+    <select id="scenario" aria-label="Scenario"></select>
+    <input id="seed" type="number" min="0" step="1" placeholder="seed" aria-label="Seed">
+    <button id="load" title="Instantiate the scenario at this seed">Load</button>
+    <button id="reseed" title="Load again with a fresh random seed">Random seed</button>
+    <span class="badge" id="badge"><span class="dot"></span><span id="badge-text">live · wasm</span></span>
+  </div>
+  <p class="desc" id="desc"></p>
+</div>
+
+<div class="hud readout">
+  <div class="stat"><div class="n" id="stat-tick">0</div><div class="l">tick</div></div>
+  <div class="stat"><div class="n" id="stat-alive">0</div><div class="l">alive</div></div>
+  <div class="stat"><div class="n" id="stat-species">0</div><div class="l">species</div></div>
+  <div class="stat"><div class="n" id="stat-era">0</div><div class="l">tech era</div></div>
+  <div class="stat"><div class="n" id="stat-rate">0</div><div class="l">ticks/s</div></div>
+  <div class="stat"><div class="n" id="stat-fps">0</div><div class="l">fps</div></div>
+</div>
+
+<aside class="rail" id="rail">
+  <div class="rail-head"><span class="label">view</span><button id="rail-toggle" title="Collapse (H hides the whole HUD)">−</button></div>
+  <h4>colour by</h4>
+  <select id="color-mode" style="width:100%"></select>
+  <div class="legend" id="legend" style="margin-top:8px"></div>
+  <h4>layers</h4>
+  <div class="toggles" id="layers">
+    <label><input type="checkbox" data-layer="relief" checked> relief</label>
+    <label><input type="checkbox" data-layer="water" checked> water</label>
+    <label><input type="checkbox" data-layer="streaks" checked> combat</label>
+    <label><input type="checkbox" data-layer="trades" checked> trade</label>
+    <label><input type="checkbox" data-layer="villages" checked> villages</label>
+    <label><input type="checkbox" data-layer="hubs" checked> markets</label>
+    <label><input type="checkbox" data-layer="events" checked> event rings</label>
+    <label><input type="checkbox" data-layer="wire"> wireframe</label>
+  </div>
+  <h4>species</h4>
+  <table class="species" id="species"></table>
+  <h4>terrain</h4>
+  <div class="legend" id="terrain-legend"></div>
+  <div class="receipt" id="receipt"></div>
+</aside>
+
+<div class="card" id="card">
+  <div class="card-head"><h3 id="card-title">agent</h3><button id="card-close" title="Deselect (Esc)">×</button></div>
+  <div id="card-body"></div>
+  <div class="row"><button id="follow" title="Keep the camera on this agent (L)">follow</button><button id="card-fly" title="Fly to this agent">fly to</button></div>
+</div>
+
+<div class="hud transport">
+  <div class="row">
+    <button id="play" title="Pause / resume (space)">❚❚</button>
+    <button class="speed" data-speed="0.25" title="¼ tick per frame">¼×</button>
+    <button class="speed on" data-speed="1" title="1 tick per frame">1×</button>
+    <button class="speed" data-speed="4">4×</button>
+    <button class="speed" data-speed="16">16×</button>
+    <button class="speed" data-speed="64">64×</button>
+    <button id="frame" title="Frame the whole world (F)">frame</button>
+  </div>
+  <div class="progress" id="progress"><div class="fill" id="progress-fill"></div></div>
+  <div class="hint"><b>drag</b> orbit · <b>right-drag</b> pan · <b>wheel</b> zoom · <b>click</b> an agent · <b>space</b> pause · <b>1–5</b> speed · <b>C</b> colour · <b>F</b> frame · <b>H</b> hide HUD</div>
+</div>
+
+<div class="hud codex">
+  <div class="codex-head"><span class="dot"></span><span class="label">codex · emergence</span></div>
+  <div class="codex-feed" id="codex"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="cover" id="cover"><div>
+  <h2 id="cover-title">Loading the world…</h2>
+  <p id="cover-body">Fetching the wasm core and the scenario list.</p>
+  <pre id="cover-code" style="display:none"></pre>
+</div></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

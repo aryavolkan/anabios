@@ -185,6 +185,30 @@ jobs:
           echo "b=$b"
           [ "$a" = "$b" ] || (echo "non-deterministic output" && exit 1)
 
+  web:
+    name: web frontend (wasm build + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-rust
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The three.js frontend (web/) runs `anabios-core` compiled to wasm via
+      # the `anabios-wasm` C-ABI bridge. clippy/test cover that crate natively
+      # in the `rust` job; this job proves the wasm32 build itself links (no
+      # imports, every export present) and that the module reproduces the
+      # native trajectory bit-for-bit: `scripts/web.sh test` runs the node smoke
+      # test and asserts the wasm fingerprint equals the native one.
+      - name: add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: build wasm module
+        run: scripts/web.sh wasm
+      - name: wasm smoke + native/wasm determinism
+        run: scripts/web.sh test predator-prey 300 7
+      - name: stage scenarios + manifest
+        run: npm --prefix web run manifest
+
   godot:
     name: godot viewer (headless smoke)
     runs-on: ubuntu-latest

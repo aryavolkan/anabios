@@ -25,6 +25,7 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 - **Anthropogenic arms race** — scenario-tagged `culture_bearer` lineages ("humans") are perceptible to wild agents as tool-bearing threats (new sensor + evolvable `SenseCultureThreat` program node + the `Vigilance` gene's FEAR gain); the `HuntedAdaptation` codex event fires when a hunted prey lineage's armor/speed/vigilance co-rises with its culture predator's tech era/weapon damage. Opt-in per scenario (`anthro_race_enabled`, spec: `docs/superpowers/specs/2026-08-19-anthro-arms-race-design.md`)
 - **Disease & epidemiology (H1)** — crowding-seeded SIS pathogen: zoonotic spillover in dense populations, proximity spread, energy-drain mortality via the normal starve path; Medicine finally has a counter-pressure (holders are 0.25× as susceptible and recover 3×). `EpidemicOutbreak`/`MedicineContainment` codex events (61/62). Opt-in per scenario (`disease_enabled`, spec: `docs/superpowers/specs/2026-09-01-disease-epidemiology-design.md`)
 - **Vertebrate classes** — mammal/reptile founder archetypes (`mammal_grazer`, `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`) pairing class body plans with affect/cognition genome profiles: endotherm-approximated mammals (high metabolism, big-brained, social, bold) vs ectotherm-approximated reptiles (cheap idle, armored, hair-trigger freeze-fight-flight, ambush Jaws). Demo: `scenarios/mammals-vs-reptiles.toml`
+- **Web atlas** — three.js frontend (`web/`) over a WebAssembly build of the core (`crates/anabios-wasm`): live in-browser worlds with terrain relief, genome-coloured instanced agents, combat/trade lanes, villages, markets, codex rings + feed, agent inspector, and playback of the recorded showcase replay through the same scene; the wasm run is asserted bit-identical to native (`scripts/web.sh test`)
 - **Viewer** — Godot 4.6+ client in the pixel-art style of the reference boards: streamed, autotiled ground with hand-drawn tiles, flora and 24 px creature figures, 2.5D-scaled buildings in the open-source 3/4-view convention (a roof over a front wall about a figure high, trees a little taller than the houses), village footprints in clearings (camps, thatch huts, timber-frame houses, a dominant hall, palisades, catapults, fields, burning ruins), invention workshops with the invention hung as the shop sign, market squares joined by dirt roads, a themed HUD (smooth sans by default, a 5×7 pixel font as an opt-in) with biome/species/pheromone overlays, unit card, tabbed codex (research, species, biomes, culture), event log, co-evolution charts, per-species tables behind `[P]`
 - **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV) with archive-weighted emergence scoring (`docs/emergence-corpus.md`), save/load snapshots (`docs/determinism-contract.md`), criterion benchmark suite
 
@@ -144,6 +145,29 @@ cargo build --release --bin anabios-headless
     - **R**: replay the latest codex event (rewind to a snapshot, fast-forward, pause at the moment; R/Esc resumes live) · **U**: run at max speed until the next event fires · **V**: event camera — auto-cut tour of recent event locations
    - **F**: frame the whole world · **F3**: frame-time readout · **B**: toggle the pixel-art ground (tiles + props) · **N**: toggle chunk streaming (A/B against the whole-world sprite) · **P**: species, adaptation and tech tables · **H**: overlay legend · **T** / **Y**: evolution and co-evolution panels
 
+## Running the web atlas (three.js + WASM)
+
+The browser front end in [`web/`](web/README.md) runs the same core **in the
+browser** — `anabios-core` compiled to WebAssembly through the
+`anabios-wasm` C-ABI bridge — and renders it in 3D with three.js: terrain
+relief from the sim's elevation field, the biome map lushing and scarring
+live, instanced agents coloured by genome (or diet, dialect, energy, mood,
+arousal, infection), combat volleys and trade lanes, hut villages at
+settlement sites, markets at the trade hubs, codex events as rings on the map
+plus a live feed, and a click-to-inspect agent card. It also plays the
+recorded showcase replay (`showcase/replay.js`) through the same scene.
+
+```bash
+rustup target add wasm32-unknown-unknown
+scripts/web.sh build        # wasm core → web/wasm, three.js → web/vendor, scenarios → web/scenarios
+scripts/web.sh serve        # http://127.0.0.1:8080/  (?scenario=inventions&seed=3, ?replay=out-of-africa-saga)
+scripts/web.sh test         # node smoke test + native-vs-wasm trajectory fingerprint (bit-identical)
+```
+
+The wasm build is single-threaded (rayon falls back to sequential) and
+reproduces the native trajectory bit-for-bit; measured in-browser tick rates
+are in `web/README.md` (≈1.8k ticks/s at 270 agents, ≈15 ticks/s at 2.9k).
+
 ## Recording a showcase video
 
 The viewer has a cinematic **showcase director**: a JSON beat timeline (camera moves, chapter title cards, event-triggered cuts, overlay switches) played over the live sim and captured with Godot's Movie Maker:
@@ -170,6 +194,8 @@ The saga timeline (`game/showcase/out-of-africa-saga.json`) narrates the out-of-
 - **`anabios-core`** — pure Rust simulation crate (no Godot, no I/O, deterministic)
 - **`anabios-godot`** — gdext wrapper for use from the Godot project
 - **`anabios-headless`** — CLI for batch runs, W&B sweeps, codex mining
+- **`anabios-wasm`** — WebAssembly bridge (plain C ABI, no wasm-bindgen) exposing the core to the browser
+- **`web/`** — three.js frontend: live wasm worlds + recorded replays in one 3D scene (`scripts/web.sh`)
 - **`game/`** — Godot 4.6+ project (viewer, codex UI, world setup, scenario authoring)
 
 See the design doc for the full architecture and agent model. **Roadmap & plans:** [`ROADMAP.md`](ROADMAP.md) (the long-horizon open-ended arc; the Q3 2026 quarterly plan's status record lives in [`docs/superpowers/specs/2026-08-07-detailed-roadmap.md`](docs/superpowers/specs/2026-08-07-detailed-roadmap.md)) + [`docs/superpowers/plans/2026-08-01-roadmap-plans-index.md`](docs/superpowers/plans/2026-08-01-roadmap-plans-index.md) (per-item implementation plans). The milestone arcs: [`docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md`](docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md) (E1–E10, complete) and [`docs/superpowers/specs/2026-08-02-open-ended-complexity-arc-design.md`](docs/superpowers/specs/2026-08-02-open-ended-complexity-arc-design.md) (O1–O8, in progress).

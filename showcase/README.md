@@ -19,6 +19,11 @@ when idle).
 
 **Controls:** scroll to move through time · **space** pauses/resumes · `?era=N` deep-links.
 
+The same recording also plays in 3D in the **atlas** (`web/`, published at
+`/atlas/` next to this deck): a three.js scene over the sim's elevation field,
+which additionally runs the core *live* in the browser via WebAssembly. See
+[`web/README.md`](../web/README.md).
+
 ## View it
 
 Open `index.html` in any browser — no server, no build, no Godot:
@@ -59,6 +64,10 @@ Useful flags (defaults tuned to keep the committed file ~1.7 MB):
 | `--max-events` | 1000 | cap codex events, keeping each type's first + a uniform sample (0 = all) |
 | `--biome-res` | 96 | biome-map resolution per axis (downsampled from the sim's 128² grid) |
 | `--biome-frames` | 6 | biome-map keyframes across the run (0 disables the map) |
+
+The biome block also carries `elev` — the static elevation field at `--biome-res`,
+one byte per cell — which the 3D atlas uses for terrain relief (this 2D player
+ignores it; older recordings without it still play in both).
 | `--out` | `showcase/replay.js` | `.js` wraps `window.ANABIOS_REPLAY=…`; `.json` writes raw JSON |
 
 Any scenario works. The player derives the six era boundaries from the run's real event
@@ -128,6 +137,8 @@ anabios-headless record   ──►  showcase/replay.js  (compact frames + event
                                      │  <script>
                                      ▼
                           showcase/index.html  (canvas player + scrollytelling)
+                                     │
+                                     └─►  web/index.html  (three.js atlas: same replay in 3D + live wasm worlds)
 ```
 
 `index.html` is self-contained (inline CSS/JS); `replay.js` is the only data dependency.
