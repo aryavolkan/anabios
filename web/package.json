@@ -1,0 +1,16 @@
+{
+  "name": "anabios-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "three.js frontend for anabios: live in-browser simulation (wasm) and recorded replays.",
+  "type": "module",
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs",
+    "manifest": "node scripts/manifest.mjs",
+    "test": "node test/wasm-smoke.mjs",
+    "serve": "python3 -m http.server 8080 --bind 127.0.0.1"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  }
+}

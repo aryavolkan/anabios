@@ -278,6 +278,155 @@ pub enum EventType {
 /// arrays against this at boot to catch a forgotten GDScript-side update.
 pub const EVENT_TYPE_COUNT: usize = EventType::MedicineContainment as usize + 1;
 
+impl EventType {
+    /// Every variant in discriminant order (`ALL[i] as usize == i`, pinned by
+    /// a unit test). The array length is `EVENT_TYPE_COUNT`, so appending a
+    /// variant without listing it here is a compile error.
+    pub const ALL: [EventType; EVENT_TYPE_COUNT] = [
+        EventType::Extinction,
+        EventType::PopulationCrash,
+        EventType::SpeciationEvent,
+        EventType::Migration,
+        EventType::NovelModuleAppeared,
+        EventType::NovelBehaviorPattern,
+        EventType::Predation,
+        EventType::CombatRaid,
+        EventType::ArmsRace,
+        EventType::TerritoryFormation,
+        EventType::NichePartitioning,
+        EventType::DialectFormed,
+        EventType::MemeSweep,
+        EventType::AlarmCall,
+        EventType::EvolvedCooperation,
+        EventType::PackHunting,
+        EventType::HerdCohesion,
+        EventType::InventionDiscovered,
+        EventType::InventionAdopted,
+        EventType::PracticeDiscovered,
+        EventType::PracticeAdopted,
+        EventType::ResourceTraded,
+        EventType::MaterialLearning,
+        EventType::PopulationCycleDetected,
+        EventType::BoomAndBust,
+        EventType::CarryingCapacityReached,
+        EventType::TrophicCascade,
+        EventType::RangeExpansion,
+        EventType::SegregationEmerged,
+        EventType::CorridorUse,
+        EventType::Succession,
+        EventType::TraitFixation,
+        EventType::RapidAdaptation,
+        EventType::ConvergentEvolution,
+        EventType::EvolvedAmbush,
+        EventType::EvolvedTool,
+        EventType::EvolvedFlight,
+        EventType::StructuredSignaling,
+        EventType::WarOrRaid,
+        EventType::WarEnded,
+        EventType::AllianceFormed,
+        EventType::KinNetworkStable,
+        EventType::SettlementFormed,
+        EventType::MarketEmerged,
+        EventType::SpecializationSplit,
+        EventType::TraditionPreserved,
+        EventType::CulturalRadiation,
+        EventType::InstitutionalRatchet,
+        EventType::MaladaptationLag,
+        EventType::SexualSelection,
+        EventType::SexRatioCollapse,
+        EventType::AnimalDomesticated,
+        EventType::LivestockHerd,
+        EventType::KnowledgeRatchet,
+        EventType::MassFright,
+        EventType::PanicCascade,
+        EventType::FeedingFrenzy,
+        EventType::TerritorialRage,
+        EventType::MassGrief,
+        EventType::HuntedAdaptation,
+        EventType::Dehydration,
+        EventType::EpidemicOutbreak,
+        EventType::MedicineContainment,
+    ];
+
+    /// The variant with discriminant `i`, or `None` past the end.
+    pub fn from_index(i: usize) -> Option<EventType> {
+        Self::ALL.get(i).copied()
+    }
+
+    /// Stable snake_case machine name for this event type, shared by every
+    /// front end that writes or displays events (sweep CSV columns, the JSONL
+    /// event stream, the web replay recorder, the wasm bridge). Names are
+    /// append-only: a renamed variant keeps its name here so archived corpora
+    /// stay comparable.
+    pub const fn name(self) -> &'static str {
+        match self {
+            EventType::Extinction => "extinction",
+            EventType::PopulationCrash => "pop_crash",
+            EventType::SpeciationEvent => "speciation",
+            EventType::Migration => "migration",
+            EventType::NovelModuleAppeared => "novel_module",
+            EventType::NovelBehaviorPattern => "novel_behavior",
+            EventType::Predation => "predation",
+            EventType::CombatRaid => "combat_raid",
+            EventType::ArmsRace => "arms_race",
+            EventType::TerritoryFormation => "territory_formation",
+            EventType::NichePartitioning => "niche_partitioning",
+            EventType::DialectFormed => "dialect_formed",
+            EventType::MemeSweep => "meme_sweep",
+            EventType::AlarmCall => "alarm_call",
+            EventType::EvolvedCooperation => "evolved_cooperation",
+            EventType::PackHunting => "pack_hunting",
+            EventType::HerdCohesion => "herd_cohesion",
+            EventType::InventionDiscovered => "invention_discovered",
+            EventType::InventionAdopted => "invention_adopted",
+            EventType::PracticeDiscovered => "practice_discovered",
+            EventType::PracticeAdopted => "practice_adopted",
+            EventType::ResourceTraded => "resource_traded",
+            EventType::MaterialLearning => "material_learning",
+            EventType::PopulationCycleDetected => "pop_cycle",
+            EventType::BoomAndBust => "boom_bust",
+            EventType::CarryingCapacityReached => "carrying_capacity",
+            EventType::TrophicCascade => "trophic_cascade",
+            EventType::RangeExpansion => "range_expansion",
+            EventType::SegregationEmerged => "segregation",
+            EventType::CorridorUse => "corridor_use",
+            EventType::Succession => "succession",
+            EventType::TraitFixation => "trait_fixation",
+            EventType::RapidAdaptation => "rapid_adaptation",
+            EventType::ConvergentEvolution => "convergent_evolution",
+            EventType::EvolvedAmbush => "evolved_ambush",
+            EventType::EvolvedTool => "evolved_tool",
+            EventType::EvolvedFlight => "evolved_flight",
+            EventType::StructuredSignaling => "structured_signaling",
+            EventType::WarOrRaid => "war",
+            EventType::WarEnded => "war_ended",
+            EventType::AllianceFormed => "alliance",
+            EventType::KinNetworkStable => "kin_network",
+            EventType::SettlementFormed => "settlement",
+            EventType::MarketEmerged => "market",
+            EventType::SpecializationSplit => "specialization_split",
+            EventType::TraditionPreserved => "tradition",
+            EventType::CulturalRadiation => "cultural_radiation",
+            EventType::InstitutionalRatchet => "institutional_ratchet",
+            EventType::MaladaptationLag => "maladaptation_lag",
+            EventType::SexualSelection => "sexual_selection",
+            EventType::SexRatioCollapse => "sex_ratio_collapse",
+            EventType::AnimalDomesticated => "animal_domesticated",
+            EventType::LivestockHerd => "livestock_herd",
+            EventType::KnowledgeRatchet => "knowledge_ratchet",
+            EventType::MassFright => "mass_fright",
+            EventType::PanicCascade => "panic_cascade",
+            EventType::FeedingFrenzy => "feeding_frenzy",
+            EventType::TerritorialRage => "territorial_rage",
+            EventType::MassGrief => "mass_grief",
+            EventType::HuntedAdaptation => "hunted_adaptation",
+            EventType::Dehydration => "dehydration",
+            EventType::EpidemicOutbreak => "epidemic_outbreak",
+            EventType::MedicineContainment => "medicine_containment",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexEvent {
     pub event_type: EventType,
@@ -349,5 +498,29 @@ mod affect_event_tests {
         assert_eq!(EventType::EpidemicOutbreak as u8, 61);
         assert_eq!(EventType::MedicineContainment as u8, 62);
         assert_eq!(EVENT_TYPE_COUNT, EventType::MedicineContainment as usize + 1);
+    }
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::*;
+
+    #[test]
+    fn all_is_in_discriminant_order() {
+        for (i, t) in EventType::ALL.iter().enumerate() {
+            assert_eq!(*t as usize, i, "{t:?} listed out of order in EventType::ALL");
+            assert_eq!(EventType::from_index(i), Some(*t));
+        }
+        assert_eq!(EventType::from_index(EVENT_TYPE_COUNT), None);
+    }
+
+    #[test]
+    fn names_are_unique_snake_case() {
+        let mut seen = std::collections::BTreeSet::new();
+        for t in EventType::ALL {
+            let n = t.name();
+            assert!(n.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'), "{n}");
+            assert!(seen.insert(n), "duplicate event name {n}");
+        }
     }
 }

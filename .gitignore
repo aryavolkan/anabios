@@ -51,3 +51,12 @@ trace-*.json
 # Godot resource UID caches (regenerated on import)
 *.gd.uid
 *.gdshader.uid
+
+# Web frontend (web/): generated at build time by scripts/web.sh — the wasm
+# module, the vendored three.js runtime, the staged scenario copies + manifest,
+# and the staged replay. package-lock.json is kept (pins three).
+/web/node_modules/
+/web/vendor/
+/web/wasm/
+/web/scenarios/
+/web/replays/

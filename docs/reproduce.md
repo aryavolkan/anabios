@@ -88,7 +88,9 @@ measured unreachable at grand scale, `docs/showcase-plan.md` §2), downstream
 tech emergent. Or watch the same story in a browser, no install:
 <https://aryavolkan.github.io/anabios/> (reproducible:
 `scripts/emergence.sh record-web out-of-africa-saga --seed 318` regenerates
-the hosted deck bit-for-bit).
+the hosted deck bit-for-bit). The deck's `/atlas/` runs the same core *live*
+in the browser (WebAssembly + three.js) — `scripts/web.sh build && scripts/web.sh serve`
+locally, see [`web/README.md`](../web/README.md).
 
 ## Which scenario shows what
 
