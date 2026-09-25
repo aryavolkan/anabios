@@ -43,6 +43,12 @@ const state = {
   speed: Number(params.get("speed")) || 1,          // ticks per 60 Hz frame
   paused: params.get("paused") === "1",
   colorMode: params.get("color") || "species",
+  /** Day cycle: on for live viewing, off under capture unless `&day=1` (gallery stills stay at noon). */
+  dayCycle: params.has("day") ? params.get("day") === "1" : !params.has("capture"),
+  DAY_TICKS: 1500,
+  /** Event tour (V): fly to fresh codex events while slowly orbiting. */
+  tour: false,
+  lastFlyAt: 0,
   /** Capture harness (see web/scripts/capture.mjs): `?tick=N&cam=…&inspect=…`. */
   shot: {
     tick: params.has("tick") ? Math.max(0, Number(params.get("tick"))) : null,
@@ -314,6 +320,10 @@ function loop(now) {
       stage.camera.position.add(stage.controls.target.clone().sub(before)); // keep the camera offset
     }
     if (src.kind === "replay") $("progress-fill").style.width = `${(100 * src.tick / src.endTick).toFixed(2)}%`;
+    if (state.dayCycle) {
+      stage.setDaylight((src.tick % state.DAY_TICKS) / state.DAY_TICKS);
+      state.terrain.water.uniforms.uSun.value.copy(stage.sunDir);
+    }
   }
 
   stage.renderer.render(stage.scene, stage.camera);
@@ -387,7 +397,13 @@ function renderLegend() {
 
 function onEvent(ev, now) {
   const kind = kindOf(ev.type);
-  if (ev.x || ev.y) state.lastEventLoc = { x: ev.x, y: ev.y };
+  if (ev.x || ev.y) {
+    state.lastEventLoc = { x: ev.x, y: ev.y };
+    if (state.tour && now - state.lastFlyAt > 3 && !state.fastForwarding) {
+      state.lastFlyAt = now;
+      stage.flyTo(ev.x, heightAt(ev.x, ev.y), ev.y, state.source.worldSize * (kind === "war" ? 0.12 : 0.18));
+    }
+  }
   layers.fx.spawn(ev, now, heightAt);
   if ((ev.x || ev.y) && layers.fx.enabled) {
     const h = heightAt(ev.x, ev.y) + 0.6;
@@ -443,6 +459,7 @@ function deselect() { state.selected = -1; layers.agents.selected = -1; state.fo
 
 function applyLayerToggles() {
   for (const cb of document.querySelectorAll("#layers input")) {
+    if (cb.dataset.layer === "day" && !state.dayInit) { cb.checked = state.dayCycle; state.dayInit = true; }
     const on = cb.checked;
     switch (cb.dataset.layer) {
       case "relief": state.terrain?.setRelief(on); break;
@@ -455,6 +472,7 @@ function applyLayerToggles() {
       case "hubs": layers.hubs.mesh.visible = on; break;
       case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
       case "wire": if (state.terrain) state.terrain.material.wireframe = on; break;
+      case "day": state.dayCycle = on; if (!on) { stage.setDaylight(0); state.terrain?.water.uniforms.uSun.value.copy(stage.sunDir); } break;
     }
   }
 }
@@ -465,6 +483,14 @@ function setSpeed(s) {
 }
 
 function setPaused(p) { state.paused = p; $("play").textContent = p ? "▶" : "❚❚"; }
+/** Event tour: the camera drifts in a slow orbit and cuts to each fresh codex event. */
+function setTour(on) {
+  state.tour = on;
+  stage.controls.autoRotate = on;
+  stage.controls.autoRotateSpeed = 0.35;
+  $("tour").classList.toggle("on", on);
+  if (on && state.lastEventLoc) { const p = state.lastEventLoc; stage.flyTo(p.x, heightAt(p.x, p.y), p.y, state.source.worldSize * 0.18); }
+}
 
 function cover(title, body, code) {
   const c = $("cover");
@@ -508,6 +534,7 @@ window.addEventListener("keydown", (e) => {
     case "KeyH": document.body.classList.toggle("hide-hud"); break;
     case "KeyC": { const opts = Array.from($("color-mode").options).map((o) => o.value); state.colorMode = opts[(opts.indexOf(state.colorMode) + 1) % opts.length]; $("color-mode").value = state.colorMode; layers.agents.mode = state.colorMode; renderLegend(); break; }
     case "KeyL": if (state.selected >= 0) { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); } break;
+    case "KeyV": setTour(!state.tour); break;
     case "Escape": deselect(); break;
     default: if (/^Digit[1-5]$/.test(e.code)) setSpeed(speeds[Number(e.code[5]) - 1]);
   }
@@ -515,6 +542,7 @@ window.addEventListener("keydown", (e) => {
 
 $("play").onclick = () => setPaused(!state.paused);
 $("frame").onclick = () => stage.frame();
+$("tour").onclick = () => setTour(!state.tour);
 for (const b of document.querySelectorAll(".speed")) b.onclick = () => setSpeed(Number(b.dataset.speed));
 $("color-mode").onchange = (e) => { state.colorMode = e.target.value; layers.agents.mode = state.colorMode; renderLegend(); };
 $("layers").addEventListener("change", applyLayerToggles);

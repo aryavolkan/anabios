@@ -76,6 +76,25 @@ export function createStage(canvas) {
       sun.shadow.normalBias = ws * 0.0015;
       sun.shadow.needsUpdate = true;
     },
+    /**
+     * Daylight for day-fraction `u` in [0,1): noon at 0, dusk at 0.5. The sun
+     * sweeps around the plate, sinks toward the horizon and warms; the fill
+     * and exposure follow. Never darker than dusk so the map stays readable.
+     */
+    setDaylight(u) {
+      const ws = this.worldSize, t = u * Math.PI * 2;
+      const up = 0.5 + 0.5 * Math.cos(t);            // 1 noon … 0 midnight
+      const az = 0.57 + t * 0.85;                    // slow sweep, starting where the fixed sun sat
+      const r = ws * (0.55 + 0.3 * (1 - up)), h = ws * (0.5 + 0.5 * up);
+      sun.position.set(ws / 2 + Math.cos(az) * r, h, ws / 2 + Math.sin(az) * r);
+      sun.intensity = 2.0 + 0.6 * up;
+      sun.color.setHex(0xffb070).lerp(new THREE.Color(0xffdcae), Math.pow(up, 0.6));
+      hemi.intensity = 0.6 + 0.1 * up;
+      fill.intensity = 0.26 + 0.06 * up;
+      renderer.toneMappingExposure = 1.02 + 0.1 * up;
+      this.sunDir.copy(sun.position).sub(sun.target.position).normalize();
+    },
+    sunDir: new THREE.Vector3(0.55, 1.0, 0.35).normalize(),
     /** Frame the whole world from a three-quarter view. */
     frame() {
       const ws = this.worldSize;
