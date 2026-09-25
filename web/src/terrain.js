@@ -364,7 +364,31 @@ export class Forest {
   constructor(terrain, maxPerKind = 60000) {
     this.terrain = terrain;
     this.max = maxPerKind;
-    const mat = () => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
+    this.uniforms = { uTime: { value: 0 } };
+    // Wind: canopies sway with a slow wave keyed on the instance's world
+    // position, so a forest ripples instead of nodding in unison.
+    const mat = () => {
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
+      m.customProgramCacheKey = () => "atlas-tree";
+      m.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = this.uniforms.uTime;
+        shader.vertexShader = shader.vertexShader
+          .replace("#include <common>", "#include <common>\nuniform float uTime;")
+          .replace("#include <begin_vertex>", `#include <begin_vertex>
+            {
+              #ifdef USE_INSTANCING
+                vec2 wp = instanceMatrix[3].xz;
+              #else
+                vec2 wp = vec2(0.0);
+              #endif
+              float lift = smoothstep(0.35, 1.3, position.y);
+              float w = sin(uTime * 1.1 + wp.x * 0.045 + wp.y * 0.07) + 0.5 * sin(uTime * 2.3 + wp.x * 0.11);
+              transformed.x += w * 0.045 * lift;
+              transformed.z += w * 0.025 * lift;
+            }`);
+      };
+      return m;
+    };
     this.leaf = new THREE.InstancedMesh(broadleafGeometry(), mat(), maxPerKind);
     this.cone = new THREE.InstancedMesh(coniferGeometry(), mat(), maxPerKind);
     for (const m of [this.leaf, this.cone]) {
@@ -448,6 +472,9 @@ export class Forest {
     if (dirty) { this.leaf.instanceMatrix.needsUpdate = true; this.cone.instanceMatrix.needsUpdate = true; }
     this.scar = scar;
   }
+
+  /** Advance the wind clock (seconds). */
+  setTime(t) { this.uniforms.uTime.value = t; }
 
   dispose() {
     for (const m of [this.leaf, this.cone]) { m.geometry.dispose(); m.material.dispose(); m.dispose(); }

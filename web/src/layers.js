@@ -12,15 +12,40 @@ const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quatern
 const _c = new THREE.Color();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
-/** Four stubby legs under a body: shared by both figures. */
+/** Figure part ids baked into `aPart` for the gait shader. */
+const PART = Object.freeze({ BODY: 0, FL: 1, FR: 2, BL: 3, BR: 4, HEAD: 5, TAIL: 6 });
+
+/** Tag every vertex of `geo` with a part id and the pivot it swings about. */
+function tag(geo, part, pivot = [0, 0, 0]) {
+  const n = geo.attributes.position.count;
+  const parts = new Float32Array(n).fill(part);
+  const pivots = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { pivots[i * 3] = pivot[0]; pivots[i * 3 + 1] = pivot[1]; pivots[i * 3 + 2] = pivot[2]; }
+  geo.setAttribute("aPart", new THREE.BufferAttribute(parts, 1));
+  geo.setAttribute("aPivot", new THREE.BufferAttribute(pivots, 3));
+  return geo;
+}
+
+/** Four legs under a body, each tagged with its corner so diagonal pairs swing together. */
 function legs(spread, len, r = 0.075) {
   const out = [];
-  for (const [x, z] of [[spread, 0.28], [spread, -0.28], [-spread, 0.28], [-spread, -0.28]]) {
+  for (const [x, z, part] of [[spread, 0.28, PART.FL], [spread, -0.28, PART.FR], [-spread, 0.28, PART.BL], [-spread, -0.28, PART.BR]]) {
     const l = new THREE.CylinderGeometry(r, r * 0.8, len, 5);
     l.translate(x, len / 2, z);
-    out.push(l);
+    out.push(tag(l, part, [x, len, z]));
   }
   return out;
+}
+
+/** Bake a soft top-down shade into vertex colours (multiplied by the instance colour). */
+function shade(geo) {
+  const n = geo.attributes.position.count, nrm = geo.attributes.normal.array, col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const v = 0.74 + 0.26 * Math.min(1, Math.max(0, nrm[i * 3 + 1] * 0.5 + 0.5));
+    col[i * 3] = v; col[i * 3 + 1] = v; col[i * 3 + 2] = v;
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return geo;
 }
 
 /** Grazer facing +x: a rounded body on legs, a lowered head with two ears, a stub tail. */
@@ -28,6 +53,7 @@ function grazerGeometry() {
   const body = new THREE.SphereGeometry(0.5, 10, 7);
   body.scale(1.3, 0.78, 0.88);
   body.translate(0, 0.72, 0);
+  tag(body, PART.BODY);
   const neck = new THREE.CylinderGeometry(0.16, 0.22, 0.5, 6);
   neck.rotateZ(-Math.PI / 3);
   neck.translate(0.62, 0.78, 0);
@@ -38,9 +64,12 @@ function grazerGeometry() {
   earL.translate(0.82, 1.2, 0.16);
   const earR = earL.clone();
   earR.translate(0, 0, -0.32);
+  const neckPivot = [0.5, 0.72, 0];
+  for (const g of [neck, head, earL, earR]) tag(g, PART.HEAD, neckPivot);
   const tail = new THREE.SphereGeometry(0.11, 6, 5);
   tail.translate(-0.66, 0.8, 0);
-  return mergeGeometries([body, neck, head, earL, earR, tail, ...legs(0.42, 0.45)], false);
+  tag(tail, PART.TAIL, [-0.6, 0.8, 0]);
+  return shade(mergeGeometries([body, neck, head, earL, earR, tail, ...legs(0.42, 0.45)], false));
 }
 
 /** Hunter facing +x: a long low body, a pointed muzzle, pricked ears, a trailing tail. */
@@ -48,6 +77,7 @@ function hunterGeometry() {
   const body = new THREE.SphereGeometry(0.5, 10, 7);
   body.scale(1.55, 0.6, 0.62);
   body.translate(0, 0.62, 0);
+  tag(body, PART.BODY);
   const head = new THREE.SphereGeometry(0.24, 8, 6);
   head.scale(1.1, 0.95, 0.9);
   head.translate(0.78, 0.74, 0);
@@ -58,10 +88,50 @@ function hunterGeometry() {
   earL.translate(0.72, 0.98, 0.13);
   const earR = earL.clone();
   earR.translate(0, 0, -0.26);
+  const neckPivot = [0.6, 0.68, 0];
+  for (const g of [head, muzzle, earL, earR]) tag(g, PART.HEAD, neckPivot);
   const tail = new THREE.ConeGeometry(0.1, 0.8, 5);
   tail.rotateZ(Math.PI / 2 + 0.5);
   tail.translate(-0.98, 0.72, 0);
-  return mergeGeometries([body, head, muzzle, earL, earR, tail, ...legs(0.5, 0.42, 0.065)], false);
+  tag(tail, PART.TAIL, [-0.7, 0.66, 0]);
+  return shade(mergeGeometries([body, head, muzzle, earL, earR, tail, ...legs(0.5, 0.42, 0.065)], false));
+}
+
+/**
+ * Gait shader: a vertex-shader patch on the figure material. Each instance
+ * carries `aGait = (phase, moving)`; legs swing about their hips in diagonal
+ * pairs, the head nods (or grazes when standing), the tail wags and the body
+ * bobs — all in object space before the instance matrix, so 10k figures
+ * animate for free.
+ */
+function gaitMaterial(uniforms) {
+  const mat = new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.04, flatShading: true, vertexColors: true });
+  mat.customProgramCacheKey = () => "atlas-gait";
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = uniforms.uTime;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `#include <common>
+        uniform float uTime; attribute float aPart; attribute vec3 aPivot; attribute vec2 aGait;
+        vec3 swingXY(vec3 p, vec3 pv, float a) { vec2 d = p.xy - pv.xy; float c = cos(a), s = sin(a); return vec3(pv.x + c * d.x - s * d.y, pv.y + s * d.x + c * d.y, p.z); }
+        vec3 swingXZ(vec3 p, vec3 pv, float a) { vec2 d = p.xz - pv.xz; float c = cos(a), s = sin(a); return vec3(pv.x + c * d.x - s * d.y, p.y, pv.z + s * d.x + c * d.y); }`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>
+        {
+          float g = aGait.y;
+          float ph = uTime * 11.0 + aGait.x;
+          float sw = sin(ph);
+          if (aPart > 0.5 && aPart < 4.5) {
+            float sgn = (aPart < 1.5 || aPart > 3.5) ? 1.0 : -1.0;      // FL + BR vs FR + BL
+            transformed = swingXY(transformed, aPivot, sw * sgn * 0.55 * g);
+          } else if (aPart > 4.5 && aPart < 5.5) {
+            float nod = g > 0.5 ? sin(ph * 2.0) * 0.07 : (-0.22 + 0.18 * sin(uTime * 1.1 + aGait.x));   // trot nod, or graze
+            transformed = swingXY(transformed, aPivot, nod);
+          } else if (aPart > 5.5) {
+            transformed = swingXZ(transformed, aPivot, sin(ph * 1.3 + aGait.x) * (0.15 + 0.3 * g));
+          }
+          if (aPart < 0.5 || aPart > 4.5) transformed.y += abs(sw) * 0.05 * g;
+        }`);
+  };
+  return mat;
 }
 
 /** Thatched hut: cylinder wall + cone roof. Unit footprint, ~1.3 tall. */
@@ -92,9 +162,13 @@ export const COLOR_MODES = ["species", "diet", "dialect", "energy", "mood", "aro
 export class Agents {
   constructor(max = 16384) {
     this.max = max;
-    const mat = () => new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.04, flatShading: true });
-    this.grazers = new THREE.InstancedMesh(grazerGeometry(), mat(), max);
-    this.hunters = new THREE.InstancedMesh(hunterGeometry(), mat(), max);
+    this.uniforms = { uTime: { value: 0 } };
+    const withGait = (geo) => {
+      geo.setAttribute("aGait", new THREE.InstancedBufferAttribute(new Float32Array(max * 2), 2).setUsage(THREE.DynamicDrawUsage));
+      return geo;
+    };
+    this.grazers = new THREE.InstancedMesh(withGait(grazerGeometry()), gaitMaterial(this.uniforms), max);
+    this.hunters = new THREE.InstancedMesh(withGait(hunterGeometry()), gaitMaterial(this.uniforms), max);
     /** Both figure meshes; each carries its own `userData.ids` (instance → agent id) for picking. */
     this.meshes = [this.grazers, this.hunters];
     for (const m of this.meshes) {
@@ -141,24 +215,24 @@ export class Agents {
    * @param {{count:number,data:Float32Array,stride:number}} a
    * @param {(x:number,y:number)=>number} heightAt
    * @param {boolean} live  whether genome colour columns are populated
-   * @param {number} time   seconds, for the gait bob
    */
-  update(a, heightAt, live, time = 0) {
+  /** Advance the gait clock (seconds). */
+  setTime(t) { this.uniforms.uTime.value = t; }
+
+  update(a, heightAt, live) {
     const n = Math.min(a.count, this.max), d = a.data, s = a.stride;
     const counts = [0, 0];
     this.selectedPos = null;
+    const gaits = this.meshes.map((m) => m.geometry.attributes.aGait.array);
     for (let k = 0; k < n; k++) {
       const o = k * s, x = d[o + AGENT.X], y = d[o + AGENT.Y];
       const h = heightAt(x, y);
       const sc = this.baseScale * (0.55 + 0.45 * d[o + AGENT.SIZE]);
       const id = d[o + AGENT.ID] | 0;
       const rot = d[o + AGENT.ROT];
-      const moving = rot !== 0;
-      // A light gait bob for movers, phase-offset per id so herds don't march in step.
-      const bob = moving ? Math.abs(Math.sin(time * 9 + id * 1.7)) * sc * 0.07 : 0;
-      _p.set(x, Math.max(h, 0) + 0.02 + bob, y);
-      _q.setFromAxisAngle(Y_AXIS, -rot);
       const asleep = (d[o + AGENT.FLAGS] & AGENT_FLAG.ASLEEP) !== 0;
+      _p.set(x, Math.max(h, 0) + 0.02, y);
+      _q.setFromAxisAngle(Y_AXIS, -rot);
       _s.set(sc, asleep ? sc * 0.6 : sc, sc);
       _m.compose(_p, _q, _s);
       const kind = d[o + AGENT.DIET] >= 0.5 ? 1 : 0;
@@ -166,12 +240,17 @@ export class Agents {
       mesh.setMatrixAt(i, _m);
       mesh.setColorAt(i, _c.setHex(this.color(d, o, live)));
       mesh.userData.ids[i] = id;
+      // Per-instance gait: a phase from the id (herds never march in step) and
+      // whether the figure is moving (rotation is only written for movers).
+      gaits[kind][i * 2] = (id * 1.7) % 6.283;
+      gaits[kind][i * 2 + 1] = rot !== 0 && !asleep ? 1 : 0;
       if (id === this.selected) this.selectedPos = _p.clone();
     }
     for (let kind = 0; kind < 2; kind++) {
       const mesh = this.meshes[kind];
       mesh.count = counts[kind];
       mesh.instanceMatrix.needsUpdate = true;
+      mesh.geometry.attributes.aGait.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
     if (this.selectedPos) {

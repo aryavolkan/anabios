@@ -242,8 +242,15 @@ function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const src = state.source;
   stage.tick(dt);
-  if (state.terrain) state.terrain.water.update(reduceMotion ? 0 : now / 1000);
+  const clock = reduceMotion ? 0 : now / 1000;
+  if (state.terrain) { state.terrain.water.update(clock); state.terrain.forest.setTime(clock); }
+  layers.agents.setTime(clock);
   layers.fx.update(now / 1000);
+  if (layers.agents.marker.visible) {
+    const pulse = 0.5 + 0.5 * Math.sin(clock * 5);
+    layers.agents.marker.scale.setScalar(layers.agents.baseScale * (1.3 + 0.25 * pulse));
+    layers.agents.marker.material.opacity = 0.55 + 0.4 * pulse;
+  }
 
   if (src) {
     let stepped = 0;
@@ -257,7 +264,7 @@ function loop(now) {
     const fractional = src.kind === "replay" || state.speed < 1;
     if (stepped > 0 || fractional || state.sinceStep === 0) {
       const tick = src.tick;
-      layers.agents.update(src.agents(), heightAt, src.kind === "live", reduceMotion ? 0 : now / 1000);
+      layers.agents.update(src.agents(), heightAt, src.kind === "live");
       if (stepped > 0 || src.kind === "replay") {
         layers.streaks.push(src.streaks(), tick);
         layers.trades.push(src.trades(), tick);
