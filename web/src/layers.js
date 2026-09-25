@@ -198,6 +198,7 @@ export class Agents {
     this.baseScale = 1;
     /** Ids seen by the previous update (id → slot in `prevBuf`), for birth / death effects. */
     this.prev = null;
+    this.spare = new Map();   // the other id map, reused frame to frame instead of reallocated
     this.buf = new Float32Array(max * 2);
     this.prevBuf = new Float32Array(max * 2);
     /** Flat [x, y, …] of agents that appeared / vanished since the previous update. */
@@ -242,15 +243,15 @@ export class Agents {
   setTime(t) { this.uniforms.uTime.value = t; }
 
   /** Forget the previous population (new world, or a jump in time) so nothing reads as born or dead. */
-  reset() { this.prev = null; this.born.length = 0; this.died.length = 0; }
+  reset() { if (this.prev) { this.prev.clear(); this.spare = this.prev; } this.prev = null; this.born.length = 0; this.died.length = 0; }
 
   update(a, heightAt, live) {
     const n = Math.min(a.count, this.max), d = a.data, s = a.stride;
     const counts = [0, 0];
     this.selectedPos = null;
     const gaits = this.meshes.map((m) => m.geometry.attributes.aGait.array);
-    const prev = this.prev, cur = new Map(), buf = this.buf, born = this.born, died = this.died;
-    born.length = 0; died.length = 0;
+    const prev = this.prev, cur = this.spare, buf = this.buf, born = this.born, died = this.died;
+    cur.clear(); born.length = 0; died.length = 0;
     for (let k = 0; k < n; k++) {
       const o = k * s, x = d[o + AGENT.X], y = d[o + AGENT.Y];
       const h = heightAt(x, y);
@@ -277,7 +278,7 @@ export class Agents {
       if (prev && !prev.has(id)) born.push(x, y);
     }
     if (prev) { const pb = this.prevBuf; for (const [id, j] of prev) if (!cur.has(id)) died.push(pb[j * 2], pb[j * 2 + 1]); }
-    this.prev = cur; this.buf = this.prevBuf; this.prevBuf = buf;
+    this.spare = prev || new Map(); this.prev = cur; this.buf = this.prevBuf; this.prevBuf = buf;
     for (let kind = 0; kind < 2; kind++) {
       const mesh = this.meshes[kind];
       mesh.count = counts[kind];
