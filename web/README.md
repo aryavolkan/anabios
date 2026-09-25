@@ -2,11 +2,15 @@
 
 A 3D, in-browser front end for the anabios core: the deterministic simulation
 compiled to **WebAssembly** and rendered with **three.js** — terrain relief from
-the sim's own elevation field, the biome map lushing and scarring in real time,
-every agent as an instanced figure coloured by its genome, combat volleys and
-trade lanes as fading light, hut villages at settlement sites, markets at the
-trade hubs, and the codex streaming "first emergence" events as rings on the
-map. The same page also plays the **recorded replay** the showcase deck ships
+the sim's elevation field under a painterly ground shader (noise-jittered cell
+borders, rock on the steep slopes, snow on the peaks, a beach band and a
+darkened seabed at the water line), the biome map lushing and scarring in real
+time, instanced forests planted from the terrain grid that shrink where a cell
+is scarred bare, depth-shaded water with sun glints and a foam fringe, sun
+shadows over everything, every agent as an instanced grazer or hunter figure
+coloured by its genome and bobbing as it walks, combat volleys and trade lanes
+as fading light, hut villages at settlement sites, markets at the trade hubs,
+and the codex streaming "first emergence" events as rings on the map. The same page also plays the **recorded replay** the showcase deck ships
 (`showcase/replay.js`), so the hosted deep-time story and the live sandbox are
 one product.
 
@@ -38,8 +42,9 @@ species row to fly to a member.
 
 Colour modes: species (genome hue/sat/val, livestock bleached), diet, dialect
 hue, energy, and — when the scenario enables the subsystem — mood, arousal and
-infection. Layers: relief, water, combat, trade, villages, markets, event rings,
-wireframe.
+infection. Layers: relief, water, forests, shadows, combat, trade, villages,
+markets, event rings, wireframe (forests and shadows are the two to switch off
+on a weak GPU: up to 60k trees per kind and one 2048² shadow cascade).
 
 ## How it fits together
 
@@ -54,7 +59,7 @@ crates/anabios-wasm  ── cargo build --target wasm32-unknown-unknown ──�
 web/src/sources.js   LiveSource (wasm)  ·  ReplaySource (showcase/replay.js format)
       │  one interface: agents(), biomeRgba(), elevation(), streaks(), trades(), sites(), hubs(), events(), species(), agent(id), meta()
       ▼
-web/src/terrain.js   heightmap + water          web/src/layers.js   instanced agents, segments, villages, hubs, event rings
+web/src/terrain.js   heightmap, ground shader, water, forests   web/src/layers.js   instanced figures, segments, villages, hubs, event rings
 web/src/scene.js     renderer / camera / lights  web/src/main.js     loop, HUD, picking, URL state
 ```
 

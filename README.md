@@ -150,9 +150,11 @@ cargo build --release --bin anabios-headless
 The browser front end in [`web/`](web/README.md) runs the same core **in the
 browser** — `anabios-core` compiled to WebAssembly through the
 `anabios-wasm` C-ABI bridge — and renders it in 3D with three.js: terrain
-relief from the sim's elevation field, the biome map lushing and scarring
-live, instanced agents coloured by genome (or diet, dialect, energy, mood,
-arousal, infection), combat volleys and trade lanes, hut villages at
+relief from the sim's elevation field under a painterly ground shader, the
+biome map lushing and scarring live, instanced forests planted from the
+terrain grid, depth-shaded water with a foam shoreline, sun shadows,
+instanced grazer/hunter figures coloured by genome (or diet, dialect, energy,
+mood, arousal, infection), combat volleys and trade lanes, hut villages at
 settlement sites, markets at the trade hubs, codex events as rings on the map
 plus a live feed, and a click-to-inspect agent card. It also plays the
 recorded showcase replay (`showcase/replay.js`) through the same scene.

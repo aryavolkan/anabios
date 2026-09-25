@@ -12,18 +12,56 @@ const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quatern
 const _c = new THREE.Color();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
-/** Low-poly critter facing +x: ellipsoid body, head, tail fin. */
-function critterGeometry() {
+/** Four stubby legs under a body: shared by both figures. */
+function legs(spread, len, r = 0.075) {
+  const out = [];
+  for (const [x, z] of [[spread, 0.28], [spread, -0.28], [-spread, 0.28], [-spread, -0.28]]) {
+    const l = new THREE.CylinderGeometry(r, r * 0.8, len, 5);
+    l.translate(x, len / 2, z);
+    out.push(l);
+  }
+  return out;
+}
+
+/** Grazer facing +x: a rounded body on legs, a lowered head with two ears, a stub tail. */
+function grazerGeometry() {
   const body = new THREE.SphereGeometry(0.5, 10, 7);
-  body.scale(1.35, 0.7, 0.9);
-  const head = new THREE.SphereGeometry(0.3, 8, 6);
-  head.translate(0.72, 0.18, 0);
-  const tail = new THREE.ConeGeometry(0.22, 0.6, 5);
-  tail.rotateZ(Math.PI / 2);
-  tail.translate(-0.85, 0.05, 0);
-  const g = mergeGeometries([body, head, tail], false);
-  g.translate(0, 0.35, 0);
-  return g;
+  body.scale(1.3, 0.78, 0.88);
+  body.translate(0, 0.72, 0);
+  const neck = new THREE.CylinderGeometry(0.16, 0.22, 0.5, 6);
+  neck.rotateZ(-Math.PI / 3);
+  neck.translate(0.62, 0.78, 0);
+  const head = new THREE.SphereGeometry(0.26, 8, 6);
+  head.scale(1.25, 0.9, 0.85);
+  head.translate(0.92, 0.9, 0);
+  const earL = new THREE.ConeGeometry(0.09, 0.26, 4);
+  earL.translate(0.82, 1.2, 0.16);
+  const earR = earL.clone();
+  earR.translate(0, 0, -0.32);
+  const tail = new THREE.SphereGeometry(0.11, 6, 5);
+  tail.translate(-0.66, 0.8, 0);
+  return mergeGeometries([body, neck, head, earL, earR, tail, ...legs(0.42, 0.45)], false);
+}
+
+/** Hunter facing +x: a long low body, a pointed muzzle, pricked ears, a trailing tail. */
+function hunterGeometry() {
+  const body = new THREE.SphereGeometry(0.5, 10, 7);
+  body.scale(1.55, 0.6, 0.62);
+  body.translate(0, 0.62, 0);
+  const head = new THREE.SphereGeometry(0.24, 8, 6);
+  head.scale(1.1, 0.95, 0.9);
+  head.translate(0.78, 0.74, 0);
+  const muzzle = new THREE.ConeGeometry(0.17, 0.5, 6);
+  muzzle.rotateZ(-Math.PI / 2);
+  muzzle.translate(1.08, 0.7, 0);
+  const earL = new THREE.ConeGeometry(0.08, 0.24, 4);
+  earL.translate(0.72, 0.98, 0.13);
+  const earR = earL.clone();
+  earR.translate(0, 0, -0.26);
+  const tail = new THREE.ConeGeometry(0.1, 0.8, 5);
+  tail.rotateZ(Math.PI / 2 + 0.5);
+  tail.translate(-0.98, 0.72, 0);
+  return mergeGeometries([body, head, muzzle, earL, earR, tail, ...legs(0.5, 0.42, 0.065)], false);
 }
 
 /** Thatched hut: cylinder wall + cone roof. Unit footprint, ~1.3 tall. */
@@ -54,16 +92,20 @@ export const COLOR_MODES = ["species", "diet", "dialect", "energy", "mood", "aro
 export class Agents {
   constructor(max = 16384) {
     this.max = max;
-    this.mesh = new THREE.InstancedMesh(
-      critterGeometry(),
-      new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0.05, flatShading: true }),
-      max,
-    );
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.mesh.count = 0;
-    this.mesh.frustumCulled = false;
-    this.mesh.name = "agents";
-    this.ids = new Int32Array(max);
+    const mat = () => new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.04, flatShading: true });
+    this.grazers = new THREE.InstancedMesh(grazerGeometry(), mat(), max);
+    this.hunters = new THREE.InstancedMesh(hunterGeometry(), mat(), max);
+    /** Both figure meshes; each carries its own `userData.ids` (instance → agent id) for picking. */
+    this.meshes = [this.grazers, this.hunters];
+    for (const m of this.meshes) {
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.count = 0;
+      m.frustumCulled = false;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.name = "agents";
+      m.userData.ids = new Int32Array(max);
+    }
     this.mode = "species";
     this.baseScale = 1;
     /** Selected agent id, or -1. */
@@ -99,28 +141,39 @@ export class Agents {
    * @param {{count:number,data:Float32Array,stride:number}} a
    * @param {(x:number,y:number)=>number} heightAt
    * @param {boolean} live  whether genome colour columns are populated
+   * @param {number} time   seconds, for the gait bob
    */
-  update(a, heightAt, live) {
+  update(a, heightAt, live, time = 0) {
     const n = Math.min(a.count, this.max), d = a.data, s = a.stride;
-    this.mesh.count = n;
+    const counts = [0, 0];
     this.selectedPos = null;
     for (let k = 0; k < n; k++) {
       const o = k * s, x = d[o + AGENT.X], y = d[o + AGENT.Y];
       const h = heightAt(x, y);
       const sc = this.baseScale * (0.55 + 0.45 * d[o + AGENT.SIZE]);
-      _p.set(x, Math.max(h, 0) + 0.05, y);
-      _q.setFromAxisAngle(Y_AXIS, -d[o + AGENT.ROT]);
+      const id = d[o + AGENT.ID] | 0;
+      const rot = d[o + AGENT.ROT];
+      const moving = rot !== 0;
+      // A light gait bob for movers, phase-offset per id so herds don't march in step.
+      const bob = moving ? Math.abs(Math.sin(time * 9 + id * 1.7)) * sc * 0.07 : 0;
+      _p.set(x, Math.max(h, 0) + 0.02 + bob, y);
+      _q.setFromAxisAngle(Y_AXIS, -rot);
       const asleep = (d[o + AGENT.FLAGS] & AGENT_FLAG.ASLEEP) !== 0;
       _s.set(sc, asleep ? sc * 0.6 : sc, sc);
       _m.compose(_p, _q, _s);
-      this.mesh.setMatrixAt(k, _m);
-      this.mesh.setColorAt(k, _c.setHex(this.color(d, o, live)));
-      const id = d[o + AGENT.ID] | 0;
-      this.ids[k] = id;
+      const kind = d[o + AGENT.DIET] >= 0.5 ? 1 : 0;
+      const mesh = this.meshes[kind], i = counts[kind]++;
+      mesh.setMatrixAt(i, _m);
+      mesh.setColorAt(i, _c.setHex(this.color(d, o, live)));
+      mesh.userData.ids[i] = id;
       if (id === this.selected) this.selectedPos = _p.clone();
     }
-    this.mesh.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    for (let kind = 0; kind < 2; kind++) {
+      const mesh = this.meshes[kind];
+      mesh.count = counts[kind];
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
     if (this.selectedPos) {
       this.marker.position.copy(this.selectedPos).setY(this.selectedPos.y + 0.15);
       this.marker.visible = true;
@@ -184,6 +237,7 @@ export class Villages {
     this.max = max;
     this.mesh = new THREE.InstancedMesh(hutGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), max);
     this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.name = "villages";
+    this.mesh.castShadow = true; this.mesh.receiveShadow = true;
     this.sites = new Map(); // sid → {x,y,n,born,seen}
     this.scale = 1;
     this.LINGER = 300; this.FADE = 100; this.GROW = 40;
@@ -231,6 +285,7 @@ export class Hubs {
   constructor(max = 128) {
     this.mesh = new THREE.InstancedMesh(stallGeometry(), new THREE.MeshStandardMaterial({ color: 0xce7c36, roughness: 0.8, flatShading: true }), max);
     this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.name = "hubs";
+    this.mesh.castShadow = true; this.mesh.receiveShadow = true;
     this.max = max;
   }
   set(hubs, ws, heightAt, stride = 3) {

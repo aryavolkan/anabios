@@ -4,15 +4,34 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { UI } from "./palette.js";
 
+/** A soft dusk gradient behind the plate: indigo overhead falling to the warm basalt of the fog. */
+function skyGradient() {
+  const c = document.createElement("canvas");
+  c.width = 2; c.height = 256;
+  const g = c.getContext("2d");
+  const grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0.0, "#12111c");
+  grad.addColorStop(0.45, "#1c1620");
+  grad.addColorStop(0.75, "#211913");
+  grad.addColorStop(1.0, "#16110d");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 2, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export function createStage(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.12;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(UI.basalt);
+  scene.background = skyGradient();
 
   const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 20000);
   const controls = new OrbitControls(camera, canvas);
@@ -24,12 +43,15 @@ export function createStage(canvas) {
   controls.zoomSpeed = 0.9;
   controls.panSpeed = 0.9;
 
-  const hemi = new THREE.HemisphereLight(0xdcd2be, 0x2a2118, 0.9);
-  const sun = new THREE.DirectionalLight(0xffe2b8, 2.0);
+  const hemi = new THREE.HemisphereLight(0xd9d0c0, 0x2a2118, 0.7);
+  const sun = new THREE.DirectionalLight(0xffdcae, 2.6);
   sun.position.set(0.55, 1.0, 0.35);
-  const fill = new THREE.DirectionalLight(0x6e9bb5, 0.35);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0004;
+  const fill = new THREE.DirectionalLight(0x6e9bb5, 0.3);
   fill.position.set(-0.6, 0.5, -0.7);
-  scene.add(hemi, sun, fill);
+  scene.add(hemi, sun, sun.target, fill);
 
   const stage = {
     renderer, scene, camera, controls, sun,
@@ -41,10 +63,18 @@ export function createStage(canvas) {
       controls.maxDistance = ws * 2.2;
       camera.far = ws * 8;
       camera.updateProjectionMatrix();
-      scene.fog = new THREE.FogExp2(UI.basalt, 0.55 / ws);
-      sun.position.set(ws * 0.55, ws * 1.0, ws * 0.35);
+      scene.fog = new THREE.FogExp2(UI.basalt, 0.5 / ws);
+      sun.position.set(ws / 2 + ws * 0.55, ws * 1.0, ws / 2 + ws * 0.35);
       sun.target.position.set(ws / 2, 0, ws / 2);
       sun.target.updateMatrixWorld();
+      // One shadow cascade over the whole plate: crisp enough for a 1024² world,
+      // soft on the huge tiers where it mostly adds grounding.
+      const sc = sun.shadow.camera;
+      sc.left = -ws * 0.72; sc.right = ws * 0.72; sc.top = ws * 0.72; sc.bottom = -ws * 0.72;
+      sc.near = ws * 0.2; sc.far = ws * 2.6;
+      sc.updateProjectionMatrix();
+      sun.shadow.normalBias = ws * 0.0015;
+      sun.shadow.needsUpdate = true;
     },
     /** Frame the whole world from a three-quarter view. */
     frame() {

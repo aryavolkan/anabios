@@ -19,6 +19,7 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--basalt);color:var(--bone);font-family:var(--sans);-webkit-font-smoothing:antialiased}
   #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(125% 95% at 50% 42%,transparent 58%,rgba(6,4,3,.55) 100%)}
   .hud{position:fixed;z-index:2;font-family:var(--mono);font-size:12px;letter-spacing:.02em}
   body.hide-hud .hud,body.hide-hud .rail{opacity:0;pointer-events:none}
   .hud,.rail{transition:opacity .35s ease}
@@ -126,6 +127,7 @@
 </head>
 <body>
 <canvas id="view"></canvas>
+<div class="vignette" aria-hidden="true"></div>
 
 <div class="hud brand">
   <h1 class="wordmark">ANA<span class="glow">BIOS</span> <small>atlas</small></h1>
@@ -157,6 +159,8 @@
   <div class="toggles" id="layers">
     <label><input type="checkbox" data-layer="relief" checked> relief</label>
     <label><input type="checkbox" data-layer="water" checked> water</label>
+    <label><input type="checkbox" data-layer="forest" checked> forests</label>
+    <label><input type="checkbox" data-layer="shadows" checked> shadows</label>
     <label><input type="checkbox" data-layer="streaks" checked> combat</label>
     <label><input type="checkbox" data-layer="trades" checked> trade</label>
     <label><input type="checkbox" data-layer="villages" checked> villages</label>

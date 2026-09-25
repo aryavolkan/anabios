@@ -29,7 +29,7 @@ const layers = {
   fx: new EventFx(),
 };
 const world = new THREE.Group();
-stage.scene.add(world, layers.agents.mesh, layers.agents.marker, layers.streaks.lines, layers.trades.lines,
+stage.scene.add(world, ...layers.agents.meshes, layers.agents.marker, layers.streaks.lines, layers.trades.lines,
   layers.villages.mesh, layers.hubs.mesh, layers.fx.group);
 layers.fx.enabled = !reduceMotion;
 
@@ -101,7 +101,7 @@ function attach(source, entry) {
   if (state.terrain) { world.remove(state.terrain.group); state.terrain.dispose(); }
   state.source = source;
   const ws = source.worldSize;
-  state.terrain = new Terrain(source.biomeRes, ws, source.seaLevel, source.elevation());
+  state.terrain = new Terrain(source.biomeRes, ws, source.seaLevel, source.elevation(), source.terrain());
   state.terrain.updateColors(source.biomeRgba());
   world.add(state.terrain.group);
   stage.fit(ws);
@@ -257,7 +257,7 @@ function loop(now) {
     const fractional = src.kind === "replay" || state.speed < 1;
     if (stepped > 0 || fractional || state.sinceStep === 0) {
       const tick = src.tick;
-      layers.agents.update(src.agents(), heightAt, src.kind === "live");
+      layers.agents.update(src.agents(), heightAt, src.kind === "live", reduceMotion ? 0 : now / 1000);
       if (stepped > 0 || src.kind === "replay") {
         layers.streaks.push(src.streaks(), tick);
         layers.trades.push(src.trades(), tick);
@@ -417,7 +417,9 @@ function applyLayerToggles() {
     const on = cb.checked;
     switch (cb.dataset.layer) {
       case "relief": state.terrain?.setRelief(on); break;
-      case "water": if (state.terrain) state.terrain.water.mesh.visible = on; break;
+      case "water": if (state.terrain) state.terrain.water.mesh.visible = on && state.terrain.reliefOn; break;
+      case "forest": if (state.terrain) state.terrain.forest.group.visible = on; break;
+      case "shadows": stage.renderer.shadowMap.enabled = on; stage.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; }); break;
       case "streaks": layers.streaks.lines.visible = on; break;
       case "trades": layers.trades.lines.visible = on; break;
       case "villages": layers.villages.mesh.visible = on; break;
@@ -463,8 +465,8 @@ canvas.addEventListener("pointerup", (e) => {
   const r = canvas.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   raycaster.setFromCamera(ndc, stage.camera);
-  const hits = raycaster.intersectObject(layers.agents.mesh, false);
-  if (hits.length && hits[0].instanceId !== undefined) select(layers.agents.ids[hits[0].instanceId]);
+  const hits = raycaster.intersectObjects(layers.agents.meshes, false);
+  if (hits.length && hits[0].instanceId !== undefined) select(hits[0].object.userData.ids[hits[0].instanceId]);
   else deselect();
 });
 
