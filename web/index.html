@@ -39,7 +39,7 @@
   .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:99px;border:1px solid var(--line-2);color:var(--bone-dim);font-size:10px;letter-spacing:.16em;text-transform:uppercase}
   .badge .dot{width:6px;height:6px;border-radius:50%;background:var(--ochre);box-shadow:0 0 8px var(--ochre)}
   .badge.replay .dot{background:var(--glacial);box-shadow:0 0 8px var(--glacial)}
-  .desc{color:var(--bone-dim);font-family:var(--serif);font-size:14px;line-height:1.45;max-width:46ch;text-wrap:pretty}
+  .desc{color:var(--bone-dim);font-family:var(--serif);font-size:14px;line-height:1.45;max-width:min(46ch,calc(100vw - 36px));margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* top-right: readout */
   .readout{top:18px;right:18px;display:flex;gap:18px;text-align:right}
