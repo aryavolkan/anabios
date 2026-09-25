@@ -2,6 +2,10 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { UI } from "./palette.js";
 
 /** A soft dusk gradient behind the plate: indigo overhead falling to the warm basalt of the fog. */
@@ -10,10 +14,10 @@ function skyGradient() {
   c.width = 2; c.height = 256;
   const g = c.getContext("2d");
   const grad = g.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0.0, "#12111c");
-  grad.addColorStop(0.45, "#1c1620");
-  grad.addColorStop(0.75, "#211913");
-  grad.addColorStop(1.0, "#16110d");
+  grad.addColorStop(0.0, "#171626");
+  grad.addColorStop(0.45, "#241c2a");
+  grad.addColorStop(0.75, "#2b2019");
+  grad.addColorStop(1.0, "#1c1611");
   g.fillStyle = grad;
   g.fillRect(0, 0, 2, 256);
   const tex = new THREE.CanvasTexture(c);
@@ -53,8 +57,22 @@ export function createStage(canvas) {
   fill.position.set(-0.6, 0.5, -0.7);
   scene.add(hemi, sun, sun.target, fill);
 
+  // Post: a soft bloom lifts the additive layers (event pillars, sparks,
+  // sun glint) without washing the ground; the OutputPass applies tone
+  // mapping and the sRGB transfer that the direct path gets for free.
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.4, 1.15);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+
   const stage = {
-    renderer, scene, camera, controls, sun,
+    renderer, scene, camera, controls, sun, composer, bloom,
+    /** Bloom on: render through the composer; off: straight to the canvas. */
+    post: true,
+    render() {
+      if (this.post) composer.render(); else renderer.render(scene, camera);
+    },
     worldSize: 1024,
     /** Fit the camera limits, fog and lights to a world of side `ws`. */
     fit(ws) {
@@ -142,6 +160,8 @@ export function createStage(canvas) {
     resize() {
       const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
       renderer.setSize(w, h, false);
+      composer.setPixelRatio(renderer.getPixelRatio());
+      composer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     },

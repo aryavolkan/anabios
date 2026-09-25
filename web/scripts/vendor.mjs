@@ -18,6 +18,8 @@ if (!existsSync(src)) {
 const out = resolve(web, "vendor");
 mkdirSync(resolve(out, "addons/controls"), { recursive: true });
 mkdirSync(resolve(out, "addons/utils"), { recursive: true });
+mkdirSync(resolve(out, "addons/postprocessing"), { recursive: true });
+mkdirSync(resolve(out, "addons/shaders"), { recursive: true });
 
 // three.module.js re-exports three.core.js; both are needed. The addons are
 // plain ES modules importing from 'three', which the import map resolves.
@@ -26,6 +28,11 @@ const files = [
   ["build/three.core.js", "three.core.js"],
   ["examples/jsm/controls/OrbitControls.js", "addons/controls/OrbitControls.js"],
   ["examples/jsm/utils/BufferGeometryUtils.js", "addons/utils/BufferGeometryUtils.js"],
+  // Bloom: EffectComposer → RenderPass → UnrealBloomPass → OutputPass, and their shaders.
+  ...["Pass", "EffectComposer", "RenderPass", "ShaderPass", "MaskPass", "UnrealBloomPass", "OutputPass"]
+    .map((n) => [`examples/jsm/postprocessing/${n}.js`, `addons/postprocessing/${n}.js`]),
+  ...["CopyShader", "LuminosityHighPassShader", "OutputShader"]
+    .map((n) => [`examples/jsm/shaders/${n}.js`, `addons/shaders/${n}.js`]),
   ["LICENSE", "LICENSE.three"],
 ];
 for (const [from, to] of files) copyFileSync(resolve(src, from), resolve(out, to));

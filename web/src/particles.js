@@ -28,6 +28,8 @@ const FRAG = /* glsl */ `
     float d = length(gl_PointCoord - 0.5) * 2.0;
     float a = smoothstep(1.0, 0.25, d);
     gl_FragColor = vec4(vCol.rgb, vCol.a * a);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }`;
 
 class Cloud {
@@ -114,7 +116,7 @@ export class Particles {
         case KIND.SMOKE:
           vx = (0.4 + Math.random() * 0.4) * u; vz = (Math.random() - 0.5) * 0.3 * u; vy = (1.2 + Math.random() * 0.8) * u;
           life = 2.8 + Math.random() * 1.6; size = (0.8 + Math.random() * 0.5) * u;
-          cr = cg = cb = 0.42 + Math.random() * 0.12;
+          cr = cg = cb = 0.14 + Math.random() * 0.06;
           break;
       }
       const spread = kind === KIND.SPARK ? 0.6 : kind === KIND.SMOKE ? 1.0 : 3.0;

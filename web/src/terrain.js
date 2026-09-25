@@ -264,9 +264,11 @@ export class Water {
   constructor(worldSize, elevTexture, seaLevel, heightScale) {
     this.uniforms = {
       uTime: { value: 0 },
-      uShallow: { value: new THREE.Color(0x2a7a86) },
-      uColor: { value: new THREE.Color(0x1c4a86) },
-      uDeep: { value: new THREE.Color(0x0c2148) },
+      // The tuned palette, authored for a raw (unencoded) write: converted a
+      // second time so it survives the output transfer the same.
+      uShallow: { value: new THREE.Color(0x2a7a86).convertSRGBToLinear() },
+      uColor: { value: new THREE.Color(0x1c4a86).convertSRGBToLinear() },
+      uDeep: { value: new THREE.Color(0x0c2148).convertSRGBToLinear() },
       uSize: { value: worldSize },
       uElev: { value: elevTexture },
       uSea: { value: seaLevel },
@@ -314,6 +316,8 @@ export class Water {
           col = mix(col, vec3(0.92, 0.94, 0.96), foam * 0.75);
           float alpha = mix(0.45, 0.88, clamp(depth / 3.0, 0.0, 1.0)) + fres * 0.1 + foam * 0.3;
           gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.96));
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
         }`,
     });
     const geo = new THREE.PlaneGeometry(worldSize, worldSize, 1, 1);

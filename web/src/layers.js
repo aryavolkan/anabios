@@ -394,7 +394,10 @@ function pillarMaterial() {
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `uniform vec3 uColor; uniform float uAlpha; varying vec2 vUv;
-      void main() { float a = pow(1.0 - vUv.y, 1.6) * uAlpha; gl_FragColor = vec4(uColor, a); }`,
+      void main() { float a = pow(1.0 - vUv.y, 1.6) * uAlpha; gl_FragColor = vec4(uColor, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
   });
 }
 

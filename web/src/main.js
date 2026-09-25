@@ -326,7 +326,7 @@ function loop(now) {
     }
   }
 
-  stage.renderer.render(stage.scene, stage.camera);
+  stage.render();
 
   state.frames++;
   const span = now - state.windowStart;
@@ -472,6 +472,7 @@ function applyLayerToggles() {
       case "hubs": layers.hubs.mesh.visible = on; break;
       case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
       case "wire": if (state.terrain) state.terrain.material.wireframe = on; break;
+      case "bloom": stage.post = on; break;
       case "day": state.dayCycle = on; if (!on) { stage.setDaylight(0); state.terrain?.water.uniforms.uSun.value.copy(stage.sunDir); } break;
     }
   }
