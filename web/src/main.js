@@ -109,9 +109,9 @@ function attach(source, entry) {
   world.add(state.terrain.group);
   stage.fit(ws);
   stage.frame();
-  for (const l of [layers.agents, layers.villages, layers.fx, layers.particles]) l.setWorldSize(ws);
+  for (const l of [layers.agents, layers.villages, layers.fx, layers.particles]) l.setWorldSize(ws, state.terrain.cell);
   layers.streaks.clear(); layers.trades.clear(); layers.villages.clear(); layers.particles.clear();
-  layers.hubs.set(source.hubs(), ws, heightAt);
+  layers.hubs.set(source.hubs(), state.terrain.cell, heightAt);
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
   state.lastColorTick = -1; state.lastStatsTick = -1;
   $("codex").innerHTML = "";
@@ -246,7 +246,7 @@ function loop(now) {
   const src = state.source;
   stage.tick(dt);
   const clock = reduceMotion ? 0 : now / 1000;
-  if (state.terrain) { state.terrain.water.update(clock); state.terrain.forest.setTime(clock); }
+  if (state.terrain) { state.terrain.water.update(clock); state.terrain.forest.setTime(clock); state.terrain.setTime(clock); }
   layers.agents.setTime(clock);
   layers.fx.update(now / 1000);
   layers.particles.update(reduceMotion ? 0 : dt, $("view").clientHeight / (2 * Math.tan((stage.camera.fov * Math.PI) / 360)));

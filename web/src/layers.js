@@ -192,8 +192,9 @@ export class Agents {
     this.marker.visible = false;
   }
 
-  /** Base scale grows with the world so a 1024² and a 4096² map both read. */
-  setWorldSize(ws) { this.baseScale = Math.max(2.0, ws / 330); this.marker.scale.setScalar(this.baseScale * 1.4); }
+  /** Base scale follows the biome cell size (8 units on every standard tier), so a
+   *  1024² and a 4096² world with the same cell draw the same figure. */
+  setWorldSize(ws, cell = ws / 128) { this.baseScale = Math.max(1.6, cell * 0.39); this.marker.scale.setScalar(this.baseScale * 1.4); }
 
   color(row, o, live) {
     switch (this.mode) {
@@ -321,7 +322,7 @@ export class Villages {
     this.scale = 1;
     this.LINGER = 300; this.FADE = 100; this.GROW = 40;
   }
-  setWorldSize(ws) { this.scale = Math.max(3.2, ws / 220); }
+  setWorldSize(ws, cell = ws / 128) { this.scale = Math.max(2.6, cell * 0.58); }
   update(sites, tick, heightAt, stride = 4) {
     for (let k = 0; k < sites.count; k++) {
       const o = k * stride, sid = sites.data[o];
@@ -370,8 +371,8 @@ export class Hubs {
     this.mesh.castShadow = true; this.mesh.receiveShadow = true;
     this.max = max;
   }
-  set(hubs, ws, heightAt, stride = 3) {
-    const sc = Math.max(4, ws / 180);
+  set(hubs, cell, heightAt, stride = 3) {
+    const sc = Math.max(3.5, cell * 0.72);
     const n = Math.min(hubs.count, this.max);
     for (let k = 0; k < n; k++) {
       const x = hubs.data[k * stride], y = hubs.data[k * stride + 1];
@@ -418,7 +419,7 @@ export class EventFx {
     this.scale = 1;
     this.enabled = true;
   }
-  setWorldSize(ws) { this.scale = Math.max(6, ws / 50); }
+  setWorldSize(ws, cell = ws / 128) { this.scale = Math.max(5, cell * 2.5); }
   spawn(ev, now, heightAt) {
     if (!this.enabled || (!ev.x && !ev.y)) return;
     const r = this.rings[this.next++ % this.rings.length];

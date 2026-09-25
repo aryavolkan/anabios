@@ -77,10 +77,10 @@ export class Particles {
     this.group = new THREE.Group();
     this.group.add(this.glow.points, this.smoke.points);
     this.enabled = true;
-    this.unit = 1;   // world units per "1024-world unit"
+    this.unit = 1;   // world units per unit of a standard 8-unit biome cell
     this._c = new THREE.Color();
   }
-  setWorldSize(ws) { this.unit = ws / 1024; }
+  setWorldSize(ws, cell = ws / 128) { this.unit = cell / 8; }
 
   /**
    * Spawn `n` particles of `kind` at world (x, h, z). `color` is a packed hex
