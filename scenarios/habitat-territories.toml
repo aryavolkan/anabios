@@ -31,17 +31,20 @@
 # and Air (fewest founders) never survived. Shares below leave headroom for
 # all three (0.45 + 0.35 + 0.20 = 1.0, roughly the founder-count ratio).
 #
-# seed = 1 is a validated showcase seed, not a typical run: at 20k ticks it
-# holds all three classes alive at their `max_share` caps (674/525/300
-# Land/Water/Air) with 99.7% of the population inside its species territory.
-# Across the 8-seed probe (findings doc, Round 4 table), only 2/8 seeds keep
-# Land alive and 5/8 keep Water alive by 20k ticks — Air's larger, effective
-# range increasingly outcompetes them for the shared world on most seeds.
-# That land/air ecology imbalance is an open finding, not fixed here; the
-# candidate follow-up (a flight metabolic premium for Air) is not
-# implemented.
+# seed = 4 is a validated showcase seed, not a typical run: at 20k ticks it
+# holds all three classes alive at their `max_share` caps (675/525/300
+# Land/Water/Air) with 91.6% of the population inside its species territory
+# (Land 100%, Water 88.6%, Air 78.0%), zero habitat violations and a single
+# deep overlap. Outcomes are seed-sensitive: across the 8-seed probe
+# (findings doc, post-review table) Land survives on 4/8 seeds, Water on
+# 6/8 and Air on 7/8 by 20k ticks, and 7/8 seeds keep >= 80% of members
+# inside their range. Seed 1 also keeps all three classes but ends with a
+# crowded shoreline (197 deep overlaps, every one a coast-adjacent Land
+# pair whose seaward push the resolve dropped). The land/air ecology
+# imbalance is an open finding, not fixed here; the candidate follow-up (a
+# flight metabolic premium for Air) is not implemented.
 name = "habitat-territories"
-seed = 1
+seed = 4
 max_population = 1500
 territory_enabled = true
 

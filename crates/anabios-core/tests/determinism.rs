@@ -277,20 +277,15 @@ fn minimal_scenario_matches_golden_hashes() {
 }
 
 const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territories.toml");
-// Re-pinned 2026-09-26 for the flagship seed change (11 -> 1, F1 of the
-// final fix wave): seed 1 is the validated showcase seed, holding all three
-// locomotion classes alive at their `max_share` caps through 20k ticks
-// (674/525/300 Land/Water/Air, 99.7% inside territory), where seed 11 lets
-// Land die out by ~5k ticks and ends birds-only.
-// Re-pinned 2026-09-26 after the review fixes: a splinter species now starts
-// its territory at its own members' centroid (was: an EMA from the parent's
-// centre), `gate_move` samples the wrapped destination and the path of a
-// long step, relocation searches the whole torus, and a seaward collision
-// push slides along the coast instead of being dropped (this last one is
-// what moves tick 100: the founders start crowded on a shoreline). Tick 0
-// is unchanged.
+// Re-pinned 2026-09-26 after the review fixes (a splinter species starts its
+// territory at its own members' centroid, `gate_move` samples the wrapped
+// destination and the path of a long step, relocation searches the whole
+// torus) and the showcase seed change 1 -> 4: under the fixed code seed 4
+// holds all three classes at their caps through 20k ticks (675/525/300,
+// 91.6% inside, one deep overlap) where seed 1 ends with a crowded
+// shoreline (197 deep overlaps).
 const HABITAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xc24fe92b548eecd8), (100, 0xff7a187b3b2ada08), (1000, 0xa8b1791186d69b7c)];
+    &[(0, 0x2c407bf59a50d2f1), (100, 0xf7e48697d9a045be), (1000, 0xc4675529251f5022)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {

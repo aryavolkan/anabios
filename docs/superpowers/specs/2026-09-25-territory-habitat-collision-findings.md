@@ -76,6 +76,41 @@ can no longer out-vote a unit-length outward intent. This is intended
 behaviour (Territoriality is a heritable gene the pull is scaled by), not a
 bug, and it bounds any "≥ 80% on every seed" target.
 
+### Post-review probe (2026-09-26, shipped code)
+
+`territory_measurement_probe`, 8 seeds × 20k ticks, after the review fixes
+(wrapped-destination + segment-sampled gate, whole-torus relocation,
+splinter territories seeded at their own centroid, aquatic IQ nutrition,
+sparse collision rebuild + bbox query). All readings are final-tick.
+
+| seed | alive | Land | Water | Air | violations | deep | shallow | inside % (L/W/A) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 1500 | 675 | 525 | 300 | 0 | 197 | 1289 | 86.7 (99.0/88.4/56.3) |
+| 2 | 300 | 0 | 0 | 300 | 0 | 0 | 5 | 79.7 (-/-/79.7) |
+| 3 | 825 | 0 | 525 | 300 | 0 | 1 | 324 | 85.8 (-/94.7/70.3) |
+| 4 | 1500 | 675 | 525 | 300 | 0 | 1 | 768 | 91.6 (100.0/88.6/78.0) |
+| 5 | 525 | 0 | 525 | 0 | 0 | 0 | 7 | 99.0 (-/99.0/-) |
+| 6 | 825 | 0 | 525 | 300 | 0 | 0 | 566 | 91.8 (-/100.0/77.3) |
+| 7 | 973 | 674 | 0 | 299 | 0 | 9 | 277 | 91.0 (100.0/-/70.6) |
+| 8 | 1498 | 673 | 525 | 300 | 0 | 2 | 788 | 89.2 (100.0/98.7/48.3) |
+
+Class survival: Land 4/8, Water 6/8, Air 7/8; ≥ 80% inside: 7/8 (seed 2 at
+79.7). Habitat violations: 0 on every seed at 20k, and the per-tick
+invariant test holds on seeds 1, 2 and 7 over 2000 ticks. The showcase seed
+moved 1 → 4: seed 1 also keeps all three classes but ends with a crowded
+shoreline — an autopsy showed all 197 deep overlaps are coast-adjacent Land
+pairs whose seaward push the resolve drops (a push into invalid terrain is
+discarded whole). A coastline slide for the resolve (keep the axis
+component that stays on land) was prototyped and measured: it did not
+reduce deep overlaps on dense shorelines (133 on its full-population seed)
+and flipped seed 1 to an Air-only outcome, so it was not shipped.
+
+Tick cost, `bench_territory` warmed to tick 5 (10k agents in the bench's
+dense strip; both templates at the same tick): off 2.93 ms, on 4.02 ms —
+**1.37×**, measured at HEAD on the dev laptop (thermally noisy; treat as
+±5%). The strip is a stress layout (≈18 collision candidates per query);
+the flagship scenario at tick 1000 carries ~1.35k agents.
+
 ### Review caveats (2026-09-26)
 
 Two of this doc's headline statements are narrower than they read. Both are

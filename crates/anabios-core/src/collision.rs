@@ -161,8 +161,7 @@ pub fn separation_steer(
 /// Rebuilds the fine hash from post-integrate positions, then runs
 /// `RESOLVE_PASSES` Jacobi passes: each alive agent sums half of each overlap
 /// along `away_dir` (read from the pass's snapshot), caps the push at
-/// `MAX_PUSH`, and applies it if the destination is valid for its class —
-/// else the x-only or y-only component that is (a coastline slide).
+/// `MAX_PUSH`, and applies it only if the destination is valid for its class.
 /// Between passes positions move ≤ `MAX_PUSH`, so a neighbour within the
 /// max gap (1.5) is still within one hash cell (4.0) of the stale bucket.
 /// No-op with the flag off.
@@ -212,25 +211,17 @@ pub fn resolve_overlaps(world: &mut World) {
             if len > MAX_PUSH {
                 push *= MAX_PUSH / len;
             }
+            // A push into terrain the class can't occupy is dropped whole.
+            // Every deep overlap in a 20k-tick flagship run is a coast-
+            // adjacent Land pair whose seaward push was discarded this way;
+            // a coastline slide (keep the axis component that stays on land,
+            // as `habitat::gate_move` does) was prototyped and measured: it
+            // did not reduce deep overlaps in dense shoreline crowds (133 on
+            // the full-population seed) and flipped the showcase seed's
+            // outcome, so it is not shipped. Follow-up: measure it on its own.
             let target = wrap_torus(p + push, Vec2::splat(ws));
             if ci.can_occupy(biome.sample(target).terrain) {
                 *pos = target;
-                return;
-            }
-            // Coastline slide (as in `habitat::gate_move`): a push that would
-            // leave the class's terrain keeps the axis component that stays on
-            // it. Dropping the whole push let shoreline crowds stack up —
-            // every deep overlap in a 20k-tick flagship run was a coast-
-            // adjacent Land pair whose seaward push had been discarded.
-            for comp in [Vec2::new(push.x, 0.0), Vec2::new(0.0, push.y)] {
-                if comp == Vec2::ZERO {
-                    continue;
-                }
-                let t = wrap_torus(p + comp, Vec2::splat(ws));
-                if ci.can_occupy(biome.sample(t).terrain) {
-                    *pos = t;
-                    return;
-                }
             }
         });
         world.collision_scratch = snap;
@@ -334,31 +325,6 @@ mod tests {
         resolve_overlaps(&mut w);
         let t = w.biome.sample(w.agents.position[a as usize]).terrain;
         assert_ne!(t, crate::biome::TerrainType::Water, "land agent pushed into the sea");
-    }
-
-    #[test]
-    fn a_seaward_push_slides_along_the_coast_instead_of_being_dropped() {
-        let mut w = flat_world();
-        // Water east of x = 304 (cell col 38), as above.
-        let res = w.biome.res;
-        for row in 0..res {
-            for col in 38..res {
-                w.biome.at_mut(col, row).terrain = crate::biome::TerrainType::Water;
-            }
-        }
-        // `a` sits on the shore; `b` overlaps it from just south of due west,
-        // so the away push on `a` points east with a small northward part in
-        // BOTH passes: its x part would enter the sea, its y part stays on
-        // land. Dropping the whole push leaves `a` exactly where it started.
-        let a = w.spawn_agent(Vec2::new(303.9, 300.0), Genome::neutral());
-        let _b = w.spawn_agent(Vec2::new(303.4, 299.9), Genome::neutral());
-        let before = w.agents.position[a as usize];
-        resolve_overlaps(&mut w);
-        let after = w.agents.position[a as usize];
-        assert_ne!(after, before, "the push must not be dropped wholesale");
-        assert_eq!(after.x, before.x, "the seaward x component is dropped");
-        assert!(after.y > before.y, "the y component slides north: {before:?} -> {after:?}");
-        assert_ne!(w.biome.sample(after).terrain, crate::biome::TerrainType::Water);
     }
 
     #[test]
