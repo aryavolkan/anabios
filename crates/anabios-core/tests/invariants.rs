@@ -7,6 +7,8 @@ use anabios_core::tick::step;
 use anabios_core::world::World;
 use proptest::prelude::*;
 
+mod common;
+
 fn build_world(seed: u64, agent_count: usize) -> World {
     let mut w = World::new(seed);
     // Invariants hold regardless of scale; cap population so the proptest cases
@@ -235,4 +237,32 @@ proptest! {
 fn combined_energy(w: &World) -> f32 {
     use anabios_core::interact::FOOD_ENERGY_PER_BIOMASS;
     w.alive_energy_total() + w.plant_biomass_total() * FOOD_ENERGY_PER_BIOMASS
+}
+
+/// Territory layer: over a long flag-on run, no Land agent is ever on a Water
+/// cell and no Water agent is ever on land (checked every 50 ticks).
+#[test]
+fn habitat_classes_never_leave_their_terrain() {
+    use anabios_core::biome::TerrainType;
+    use anabios_core::habitat::Locomotion;
+    let mut w = common::world(include_str!("../../../scenarios/habitat-territories.toml"));
+    assert!(w.territory_enabled);
+    let horizon = common::ticks(2000);
+    while w.tick < horizon {
+        common::run(&mut w, 50);
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            let class = Locomotion::of(&w.agents.genome[i]);
+            let t = w.biome.sample(w.agents.position[i]).terrain;
+            match class {
+                Locomotion::Land => {
+                    assert_ne!(t, TerrainType::Water, "tick {} land agent {id} in water", w.tick)
+                }
+                Locomotion::Water => {
+                    assert_eq!(t, TerrainType::Water, "tick {} water agent {id} on {t:?}", w.tick)
+                }
+                Locomotion::Air => {}
+            }
+        }
+    }
 }

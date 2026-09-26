@@ -98,6 +98,11 @@ roundtrip_tests! {
         // debug coverage shards) and the flag's persistence needs only one
         // full biome_step_interval=4 period (effective cadence 40 ticks).
         "../../../scenarios/experiments/biome-step-interval.toml", 120, |w: &World| w.biome_step_interval > 1, "biome_step_interval";
+    territory_roundtrip:
+        // Warm past two species steps (ticks 0/200/400) so territory EMA state
+        // is non-trivial when saved.
+        "../../../scenarios/habitat-territories.toml", 420,
+        |w: &World| w.territory_enabled, "territory_enabled";
 }
 
 /// The strongest single guard: grand-theater warms every subsystem at once.

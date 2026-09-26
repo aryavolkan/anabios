@@ -241,6 +241,7 @@ fn parallel_matches_serial_across_thread_counts() {
         // Both flags on: exercises the PLAY affect par_iter AND the PLAY→iq
         // enrichment coupling in the cognition par_iter across thread counts (M-E).
         include_str!("../../../scenarios/affect-play.toml"),
+        include_str!("../../../scenarios/habitat-territories.toml"),
     ] {
         let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
         const TICKS: u64 = 300;
@@ -273,6 +274,15 @@ fn parallel_matches_serial_across_thread_counts() {
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
     common::assert_golden("minimal", SCENARIO, GOLDEN);
+}
+
+const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territories.toml");
+const HABITAT_GOLDEN: &[(u64, u64)] =
+    &[(0, 0x481c5068b56d95ee), (100, 0x1091b788d8c9aa78), (1000, 0x4687defce1d1bd61)];
+
+#[test]
+fn habitat_territories_matches_golden_hashes() {
+    common::assert_golden("habitat-territories", HABITAT_SCENARIO, HABITAT_GOLDEN);
 }
 
 /// FNV-1a over `bincode(agents) ++ bincode(biome)`: the simulation trajectory
