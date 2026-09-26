@@ -57,12 +57,14 @@ impl Locomotion {
     }
 
     /// Whether this class may graze biomass in a cell of terrain `t`
-    /// (flyers feed on land only).
+    /// (flyers feed over land AND sea — a seabird niche — Land and Water are
+    /// each confined to their own terrain).
     #[inline]
     pub fn can_graze(self, t: TerrainType) -> bool {
         match self {
             Locomotion::Water => t == TerrainType::Water,
-            Locomotion::Land | Locomotion::Air => t != TerrainType::Water,
+            Locomotion::Land => t != TerrainType::Water,
+            Locomotion::Air => true,
         }
     }
 
@@ -199,7 +201,7 @@ mod tests {
         assert!(Air.can_occupy(TerrainType::Water) && Air.can_occupy(TerrainType::Rock));
         assert!(Water.can_graze(TerrainType::Water) && !Water.can_graze(TerrainType::Grass));
         assert!(Land.can_graze(TerrainType::Grass) && !Land.can_graze(TerrainType::Water));
-        assert!(Air.can_graze(TerrainType::Grass) && !Air.can_graze(TerrainType::Water));
+        assert!(Air.can_graze(TerrainType::Grass) && Air.can_graze(TerrainType::Water));
         assert!(Land.collides_with(Water) && Land.collides_with(Land));
         assert!(Air.collides_with(Air));
         assert!(!Air.collides_with(Land) && !Water.collides_with(Air));

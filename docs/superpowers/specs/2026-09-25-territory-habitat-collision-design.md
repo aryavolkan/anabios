@@ -79,10 +79,21 @@ all existing goldens byte-identical.
   (0.4 × Grass; tuned by the probe), seeded at instantiate and regrown by a
   dedicated `BiomeField::aquatic_regrow_step` (logistic, with a reseed floor).
   `TerrainType::carrying_capacity` (a `const fn`) stays 0.0 for Water.
-- Grazing gate: Water-class agents graze only Water cells; Land and Air
-  agents graze only non-Water cells. Predation is unrestricted by class but
-  physically limited by reach (a land predator can take a water agent only
-  within contact range at the shoreline).
+- Grazing gate: Water-class agents graze only Water cells; Land agents graze
+  only non-Water cells; Air agents graze both (a seabird niche — see the
+  amendment note below). Predation is unrestricted by class but physically
+  limited by reach (a land predator can take a water agent only within
+  contact range at the shoreline).
+
+> **Amended 2026-09-25 after the Task 9 probe: Air grazes land and aquatic
+> biomass.** The original "Air agents feed on land only" rule, combined with
+> a habitat mask that lets Air occupy any terrain, meant Air spent most of
+> its range over ungrazeable sea while directly competing with Land for the
+> same land-only forage — the Task 9 measurement probe found Air going
+> extinct in every seed tried (24/24 runs across three constant
+> configurations, and again after a `max_share` per-lineage population-cap
+> fix). `Locomotion::can_graze` now returns `true` for Air on every terrain,
+> matching its already-unrestricted `can_occupy`.
 
 ### 4. Species territory
 

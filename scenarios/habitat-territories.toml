@@ -1,12 +1,22 @@
 # Territory / habitat / collision showcase (docs/superpowers/specs/
 # 2026-09-25-territory-habitat-collision-design.md): three grazer species
 # that differ only in their Locomotion gene — land walkers, water swimmers
-# (graze aquatic biomass), and flyers (roam over land AND sea, feed on land).
+# (graze aquatic biomass), and flyers (roam AND feed over land and sea — a
+# seabird niche, amended 2026-09-25 after the Task 9 probe: flyers used to
+# feed on land only, which starved them out against Land's shared forage).
 # Each keeps a species territory and bodies never overlap.
 #
 # sea_level 0.45 + continentality carve real oceans at the default 1024 world,
-# so all three classes have habitat. Uniform placement is relocated to the
-# nearest valid cell for each founder's class at instantiate.
+# so all three classes have habitat.
+#
+# One coherent founding region (Task 9 round 2): Land founds a single habitat
+# herd, and Water/Air scatter around that SAME herd (`near_spec`, spec 0) so
+# all three species start in one place and each forms one territory, rather
+# than three uniformly-scattered, spatially disjoint populations that would
+# never cohere into a shared territory story. `instantiate` still relocates
+# every founder to the nearest valid cell for its own Locomotion class, so
+# the near_spec-scattered Water founders land in the coastal sea beside the
+# herd and Air founders scatter freely (any terrain is valid for Air).
 #
 # `max_share` on every spec: each `archetype = "grazer"` line below gets its
 # own fresh species id, so without a per-lineage cap the three classes race
@@ -30,7 +40,7 @@ sea_level = 0.45
 [[agents]]
 count = 150
 archetype = "grazer"
-placement = { kind = "uniform" }
+placement = { kind = "habitat", herds = 1, radius = 80.0 }
 max_share = 0.45
 [agents.traits]
 locomotion = 0.5
@@ -41,7 +51,7 @@ reproduction_threshold = 0.5
 [[agents]]
 count = 100
 archetype = "grazer"
-placement = { kind = "uniform" }
+placement = { kind = "near_spec", spec = 0, radius = 160.0 }
 max_share = 0.35
 [agents.traits]
 locomotion = 0.1
@@ -52,7 +62,7 @@ reproduction_threshold = 0.5
 [[agents]]
 count = 60
 archetype = "grazer"
-placement = { kind = "uniform" }
+placement = { kind = "near_spec", spec = 0, radius = 120.0 }
 max_share = 0.20
 [agents.traits]
 locomotion = 0.9

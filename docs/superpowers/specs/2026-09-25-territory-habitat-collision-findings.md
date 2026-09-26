@@ -7,15 +7,18 @@ tuning), closing out the territory/habitat/collision layer (Tasks 2–8).
 1024-wide world, `max_population = 1500`, three grazer species differing only
 in Locomotion: Land, Water, Air).
 
-> **Superseded in part — see "Update 2026-09-25: `max_share` fix" at the
-> bottom of this doc.** The diversity miss below (water/air survival) was
-> diagnosed as a scenario authoring bug, not a substrate/constant problem: the
-> three grazer specs shared one population cap with no per-lineage ceiling,
-> so the fastest breeder always won. `max_share` was added to
-> `habitat-territories.toml`; the update section has the corrected diagnosis,
-> a new probe table, and the final per-target verdicts. The bench-overhead
-> section below stands as the accepted, final result (controller ruling: no
-> further tuning).
+> **Superseded — see "Round 2" at the very bottom of this doc for the current
+> state.** In order: this original doc found a diversity collapse (water/air
+> survival); "Update 2026-09-25: `max_share` fix" diagnosed it as a scenario
+> authoring bug (one shared population cap, no per-lineage ceiling) and fixed
+> Water but not Air; "Round 2" diagnosed Air's remaining extinction as a
+> second scenario/substrate issue (Air's food mask was land-only despite an
+> unrestricted habitat mask) and fixed it (Air now grazes land and sea), plus
+> clustered the three founders into one coherent region. Read Round 2 first
+> for the final numbers and verdicts; the sections above are kept as the
+> historical record of how the diagnosis narrowed. The bench-overhead
+> conclusion (accepted, not fixable by constant tuning) stands unchanged
+> throughout.
 
 ## Headline
 
@@ -351,3 +354,140 @@ unexplained beyond the hypothesis above). The ~20% tick overhead is accepted
 per controller ruling and is not a defect to chase further. Recommendation
 remains **DONE_WITH_CONCERNS**, with a narrower and more precisely diagnosed
 set of open items than before this update.
+
+## Round 2 (controller rulings A + B)
+
+Two rulings, both decided by the controller and implemented as specified
+(not further tuned):
+
+- **Ruling A — spec amendment**: `Locomotion::can_graze` now returns `true`
+  for Air on every terrain (was: non-Water only), matching Air's already-
+  unrestricted `can_occupy`. Flag-off behavior is unaffected — `can_graze` is
+  only consulted in `feed_pass` under `if world.territory_enabled && ...`, so
+  a flag-off world never reaches it (confirmed: both trajectory guards below
+  pass untouched). Doc comments in `habitat.rs`, `interact.rs`, the design
+  spec (§3), and the scenario header comment all updated to describe Air as a
+  seabird-niche grazer (land and sea), not land-only.
+- **Ruling B — clustered founders**: `scenarios/habitat-territories.toml`
+  placements changed from three independent `uniform` scatters to one
+  coherent founding region — Land founds a single `habitat` herd
+  (`herds = 1, radius = 80.0`), Water and Air both scatter `near_spec` around
+  that same herd (`spec = 0`, radius 160.0 / 120.0 respectively). `instantiate`
+  still relocates every founder to the nearest valid cell for its own class,
+  so Water lands in the coastal sea beside the herd. `max_share`
+  (0.45/0.35/0.20), `AQUATIC_CAPACITY` (6.0), and `RESOLVE_PASSES` (2) are
+  unchanged.
+
+### What changed, concretely
+
+- `crates/anabios-core/src/habitat.rs`: `can_graze` match arm split (`Land`
+  gets its own arm; `Air => true`); doc comment updated; `terrain_rules` test
+  updated (`Air.can_graze(TerrainType::Water)` is now asserted `true`).
+- `crates/anabios-core/src/interact.rs`: `feed_pass`'s grazing-gate comment
+  updated; `flyers_do_not_graze_aquatic_biomass` **replaced** with
+  `grazing_is_gated_by_locomotion_class` (positive: an Air agent over water
+  DOES graze; negative: a Water-class agent stranded on a Grass cell with
+  real biomass does NOT graze it).
+- `docs/superpowers/specs/2026-09-25-territory-habitat-collision-design.md`:
+  §3 grazing-gate bullet updated (Air grazes both), amendment note added.
+- `scenarios/habitat-territories.toml`: placements changed as above; header
+  comment rewritten (seabird niche, one coherent founding region rationale).
+- `crates/anabios-core/tests/determinism.rs`: `HABITAT_GOLDEN` re-pinned
+  (both the grazing-rule change and the placement change move the flag-on
+  trajectory):
+  ```
+  // before (post max_share fix)
+  &[(0, 0xef14595f5fc0deac), (100, 0xa509d7958da4c0ea), (1000, 0x09a4ab4af4b3c021)]
+  // after (UPDATE_HASHES=1 cargo test -p anabios-core --release --test determinism
+  // habitat_territories_matches_golden_hashes -- --nocapture)
+  &[(0, 0xd5f4fc2e1dbb698b), (100, 0xe46500acb65d195f), (1000, 0x5f2ba7a66421b6e6)]
+  ```
+
+### Tests run (each its own command, `--release` where it matters)
+
+`cargo test -p anabios-core --lib habitat` (15 tests) and `--lib interact`
+(14 tests, including the new `grazing_is_gated_by_locomotion_class`): all ok.
+Then, in order: `--test determinism habitat_territories_matches_golden_hashes`
+(ok, new pin), `--test determinism minimal_trajectory_unchanged_by_territory_substrate`
+(ok, **untouched** — no hash change needed), `--test determinism
+grand_theater_trajectory_unchanged_by_territory_substrate` (ok, **untouched**),
+`--test determinism parallel_matches_serial_across_thread_counts` (ok),
+`--test save_load_roundtrip territory_roundtrip` (ok), `--test invariants
+habitat_classes` → `habitat_classes_never_leave_their_terrain` (ok), `--test
+all_scenarios` (3/3 ok), and `cargo test -p anabios-core --lib` (517/517 ok).
+
+### New probe (verbatim)
+
+`cargo test -p anabios-core --release --test invariants territory_measurement_probe -- --ignored --nocapture`, 200.75s:
+
+```
+seed=1 alive=824 land=0 water=524 air=300 violations=0 deep_overlaps=7 inside_territory=54.7% water_cells_with_biomass=3301
+seed=2 alive=300 land=0 water=0 air=300 violations=0 deep_overlaps=0 inside_territory=27.7% water_cells_with_biomass=9133
+seed=3 alive=824 land=0 water=524 air=300 violations=0 deep_overlaps=75 inside_territory=49.4% water_cells_with_biomass=2058
+seed=4 alive=1197 land=674 water=523 air=0 violations=0 deep_overlaps=9 inside_territory=66.2% water_cells_with_biomass=5549
+seed=5 alive=1498 land=675 water=524 air=299 violations=0 deep_overlaps=5 inside_territory=83.6% water_cells_with_biomass=9084
+seed=6 alive=702 land=0 water=522 air=180 violations=0 deep_overlaps=39 inside_territory=59.0% water_cells_with_biomass=9810
+seed=7 alive=236 land=0 water=0 air=236 violations=0 deep_overlaps=0 inside_territory=7.2% water_cells_with_biomass=1630
+seed=8 alive=824 land=0 water=524 air=300 violations=0 deep_overlaps=0 inside_territory=63.0% water_cells_with_biomass=6462
+```
+
+**Air's fix worked, decisively: air > 0 on 7/8 seeds** (was 0/8 before Ruling
+A, 8/8 tries across two prior rounds). Air reaches its 300-agent share
+ceiling outright on 5 of those 7 seeds. **Water also improved: water > 0 on
+6/8 seeds** (was 5/8 after the `max_share`-only fix). Seed 5 is the standout:
+all three classes alive simultaneously, two at their exact ceiling (Land 675,
+Water 524) and Air one shy of its ceiling (299/300) — proof the three-species
+coexistence the scenario was designed for is achievable with this
+constant/placement set.
+
+**But this reads as an overcorrection, honestly reported, not chased
+further**: **Land now survives on only 2/8 seeds** (4, 5) — down from 6/8
+before Ruling A. Air grazing both land and sea gives it access to
+Water's food pool as a fallback AND full competitive parity with Land on the
+shared land-forage pool (rather than Air being disadvantaged there as
+before), so in most seeds Air (and/or Water, insulated by its own aquatic
+pool) now out-competes Land for land vegetation instead of the reverse. This
+is not a target this task tracks acceptance against (the brief's diversity
+target is water/air survival specifically), but it is a new, real dynamic
+worth naming rather than leaving implicit.
+
+`deep_overlaps` (0–75) has the same character as prior rounds — mostly small,
+with occasional outliers on seeds with larger total live population (seed 3:
+75 agents alive=824; seed 6: 39, alive=702) — not investigated further, out
+of this round's scope. `inside_territory` remains mostly below 80% (1/8 ≥80%,
+seed 5 at 83.6%), essentially unchanged from the post-`max_share` round
+despite the founder-clustering intended to help it — clustering founders at
+spawn doesn't keep them clustered 20,000 ticks later once population dynamics
+(caps, competition, deaths, births) take over. Recorded, not tuned.
+
+### Per-target verdicts (Round 2, final)
+
+| Target | Result | Verdict |
+|---|---|---|
+| `violations == 0` every seed | 0/8 | **PASS** |
+| `deep_overlaps ≈ 0` (handful OK at ~1500 agents) | 0–75, mostly single digits | **MOSTLY PASS**, occasional outliers on higher-population seeds, unchanged character from prior rounds |
+| `inside_territory ≥ 80%` on most seeds | 1/8 (seed 5, 83.6%) | **MISS**, unchanged from the post-`max_share` round — founder clustering didn't fix it |
+| `water > 0` and `air > 0` on ≥ 6/8 seeds | water 6/8, **air 7/8** | **PASS** — both individually clear the ≥6/8 bar for the first time this task |
+| (new, unrequested) `land > 0` | 2/8 | Not an original target; recorded because Ruling A's fix inverted which class is now the rare one |
+| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (unchanged; neither ruling touches tick-cost code paths, not re-measured) | **MISS — accepted per controller ruling** (round 1), final number |
+
+### Round 2 verdict
+
+Both controller rulings landed cleanly and did what they were meant to do:
+Air's structural food-access disadvantage (identified in the prior round's
+diagnosis) is resolved by letting it graze both land and sea, and it now
+clears the diversity bar on 7 of 8 seeds; the founder-clustering ruling gives
+the scenario one coherent starting region as intended, though it did not
+measurably improve `inside_territory` at the 20k-tick horizon. The `water >
+0 and air > 0 on ≥ 6/8 seeds` target — the one target that had failed in
+every round up to now — **passes for the first time**. The cost is an
+unrequested but real overcorrection: Land, previously the dominant class,
+now survives only 2/8 seeds, because Air's widened food access makes it (and
+Water, insulated in its own aquatic pool) the stronger competitor for shared
+land forage in most seeds. `inside_territory` and the occasional
+`deep_overlaps` outlier remain open, unchanged from the prior round. The
+tick-overhead miss (~20%) is accepted per controller ruling and not
+re-measured this round. Per the instruction not to iterate further this
+round, no additional changes were made. Recommendation: **DONE_WITH_CONCERNS**
+— narrower again than the prior round, with the Land-survival trade-off as
+the one genuinely new concern.
