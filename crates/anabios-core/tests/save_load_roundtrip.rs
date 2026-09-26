@@ -105,6 +105,33 @@ roundtrip_tests! {
         |w: &World| w.territory_enabled, "territory_enabled";
 }
 
+/// Territory layer on a NON-default world extent. `collision_spatial` is
+/// `#[serde(skip)]`, so a loaded world comes back with serde's `Default` hash
+/// (1024-wide, res 64) — and a 256-wide world's collision grid ALSO resolves
+/// to res 64, so only the extent check in `collision::rebuild_hash` can heal
+/// it; a stale extent would bucket a seam-straddling pair in unrelated cells
+/// and the resolve would diverge after the load. No shipped scenario has
+/// this extent, so the world is hand-built here rather than in the table.
+#[test]
+fn territory_roundtrip_on_a_256_world_heals_the_collision_hash() {
+    use anabios_core::biome::TerrainType;
+    use anabios_core::genome::Genome;
+    use anabios_core::prelude_test::Vec2;
+    let mut w = World::with_dims(7, 256.0, 32, 16);
+    w.territory_enabled = true;
+    for c in w.biome.cells.iter_mut() {
+        c.terrain = TerrainType::Grass;
+    }
+    // A pair straddling the x = 256 seam plus a small herd.
+    w.spawn_agent(Vec2::new(255.8, 128.0), Genome::neutral());
+    w.spawn_agent(Vec2::new(0.1, 128.0), Genome::neutral());
+    for k in 0..20 {
+        w.spawn_agent(Vec2::new(100.0 + k as f32 * 0.7, 100.0), Genome::neutral());
+    }
+    common::run(&mut w, 30);
+    common::assert_roundtrip_world(&mut w, "territory_enabled on a 256-wide world");
+}
+
 /// The strongest single guard: grand-theater warms every subsystem at once.
 #[test]
 fn grand_theater_everything_on_roundtrip() {

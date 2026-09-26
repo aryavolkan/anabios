@@ -22,9 +22,15 @@ use crate::prelude::{wrap_torus, Vec2};
 use crate::spatial::{torus_delta, UniformSpatialHash};
 use crate::world::World;
 
-/// Collision hash cell size (world units); also the query reach.
+/// Collision hash cell size (world units); the one-ring query guarantee
+/// covers any reach up to this (the sweeps query smaller boxes, see
+/// `STEER_QUERY_R` / `RESOLVE_QUERY_R`).
 pub const COLLISION_CELL: f32 = 4.0;
 /// Body radius at Size 0; `+ BODY_R_SIZE · Size` on top (`Size ∈ [0,1]`).
+/// Invariant: `2 · (BODY_R_BASE + BODY_R_SIZE)` (the largest pair gap, 1.5)
+/// stays below `reproduce::MATING_RANGE` and `interact::SHARE_RANGE` (2.0),
+/// or the resolve would push mates and sharers out of contact; pinned by
+/// `body_radius_spans_base_to_base_plus_size_term`.
 pub const BODY_R_BASE: f32 = 0.4;
 pub const BODY_R_SIZE: f32 = 0.35;
 /// Steering starts at `STEER_MARGIN × (r_i + r_j)` — just before contact.
@@ -35,6 +41,15 @@ pub const SEP_PULL: f32 = 2.0;
 pub const RESOLVE_PASSES: usize = 2;
 /// Largest per-pass push (keeps a pass inside the one-ring hash guarantee).
 pub const MAX_PUSH: f32 = 1.0;
+/// Hash query radius of the separation steer (`UniformSpatialHash::query_bbox`):
+/// above its largest accept reach, `STEER_MARGIN · 2 · (BODY_R_BASE +
+/// BODY_R_SIZE)` = 1.875, by a margin that dwarfs f32 seam rounding.
+pub const STEER_QUERY_R: f32 = 2.0;
+/// Hash query radii of the resolve passes: above the largest gap (1.5) for
+/// the first pass, whose snapshot IS the hash, and above gap + `MAX_PUSH`
+/// (2.5) for later passes, whose neighbours moved ≤ `MAX_PUSH` since the
+/// hash was built. Both stay under the 4-unit cell the bbox query needs.
+pub const RESOLVE_QUERY_R: [f32; 2] = [1.75, 2.75];
 
 /// Fixed unit directions for exactly coincident pairs (no RNG).
 const TIE_DIRS: [(f32, f32); 8] = [
@@ -72,7 +87,11 @@ fn away_dir(i: u32, j: u32, d: Vec2, dist: f32) -> Vec2 {
 }
 
 /// Grid resolution for a world of extent `ws`: cells of side `COLLISION_CELL`,
-/// at least 3 wide, capped at 1024. The flagship (1024-wide world) resolves
+/// at least 3 wide, capped at 1024. The floor of 3 is the one-ring query's
+/// minimum grid; below `ws = 3 · COLLISION_CELL` (12 units) the cell shrinks
+/// under `COLLISION_CELL` and `UniformSpatialHash::query`'s radius guard
+/// trips in debug builds — such a world is smaller than a handful of bodies
+/// and is not supported by this layer. The flagship (1024-wide world) resolves
 /// to 256, well under the cap and unaffected by it. Above the cap,
 /// `cell_size = ws / res` grows past `COLLISION_CELL` instead of the grid
 /// (and its `res²` buckets) growing without bound, which keeps rebuild and
@@ -103,7 +122,10 @@ pub fn rebuild_hash(world: &mut World) {
         world.collision_spatial = UniformSpatialHash::with_dims(world.world_size, res);
     }
     let agents = &world.agents;
-    world.collision_spatial.rebuild(&agents.position, |i| agents.is_alive(i as u32));
+    // Sparse: the grid (65k cells on the flagship, 1M at the cap) is far
+    // larger than the population, and a dense rebuild's per-cell sweep would
+    // dominate the flag-on cost on big worlds. Per-cell contents are the same.
+    world.collision_spatial.rebuild_sparse(&agents.position, |i| agents.is_alive(i as u32));
 }
 
 /// Separation steering for agent `i`: Σ over colliding neighbours within
@@ -119,7 +141,7 @@ pub fn separation_steer(
     let ri = body_radius(&agents.genome[i]);
     let ci = Locomotion::of(&agents.genome[i]);
     let mut acc = Vec2::ZERO;
-    spatial.query(pos, COLLISION_CELL, |oid| {
+    spatial.query_bbox(pos, STEER_QUERY_R, |oid| {
         let j = oid as usize;
         if j == i || !ci.collides_with(Locomotion::of(&agents.genome[j])) {
             return;
@@ -139,7 +161,8 @@ pub fn separation_steer(
 /// Rebuilds the fine hash from post-integrate positions, then runs
 /// `RESOLVE_PASSES` Jacobi passes: each alive agent sums half of each overlap
 /// along `away_dir` (read from the pass's snapshot), caps the push at
-/// `MAX_PUSH`, and applies it only if the destination is valid for its class.
+/// `MAX_PUSH`, and applies it if the destination is valid for its class —
+/// else the x-only or y-only component that is (a coastline slide).
 /// Between passes positions move ≤ `MAX_PUSH`, so a neighbour within the
 /// max gap (1.5) is still within one hash cell (4.0) of the stale bucket.
 /// No-op with the flag off.
@@ -151,7 +174,8 @@ pub fn resolve_overlaps(world: &mut World) {
     rebuild_hash(world);
     let ws = world.world_size;
     let cap = world.agents.capacity();
-    for _ in 0..RESOLVE_PASSES {
+    for pass in 0..RESOLVE_PASSES {
+        let query_r = RESOLVE_QUERY_R[pass.min(RESOLVE_QUERY_R.len() - 1)];
         let mut snap = std::mem::take(&mut world.collision_scratch);
         snap.clear();
         snap.extend_from_slice(&world.agents.position[..cap]);
@@ -168,7 +192,7 @@ pub fn resolve_overlaps(world: &mut World) {
             let ci = Locomotion::of(&genome[i]);
             let ri = body_radius(&genome[i]);
             let mut push = Vec2::ZERO;
-            spatial.query(p, COLLISION_CELL, |oid| {
+            spatial.query_bbox(p, query_r, |oid| {
                 let j = oid as usize;
                 if j == i || !ci.collides_with(Locomotion::of(&genome[j])) {
                     return;
@@ -191,6 +215,22 @@ pub fn resolve_overlaps(world: &mut World) {
             let target = wrap_torus(p + push, Vec2::splat(ws));
             if ci.can_occupy(biome.sample(target).terrain) {
                 *pos = target;
+                return;
+            }
+            // Coastline slide (as in `habitat::gate_move`): a push that would
+            // leave the class's terrain keeps the axis component that stays on
+            // it. Dropping the whole push let shoreline crowds stack up —
+            // every deep overlap in a 20k-tick flagship run was a coast-
+            // adjacent Land pair whose seaward push had been discarded.
+            for comp in [Vec2::new(push.x, 0.0), Vec2::new(0.0, push.y)] {
+                if comp == Vec2::ZERO {
+                    continue;
+                }
+                let t = wrap_torus(p + comp, Vec2::splat(ws));
+                if ci.can_occupy(biome.sample(t).terrain) {
+                    *pos = t;
+                    return;
+                }
             }
         });
         world.collision_scratch = snap;
@@ -241,7 +281,16 @@ mod tests {
         assert_eq!(body_radius(&g), BODY_R_BASE);
         g.set(GenomeSlot::Size, 1.0);
         assert!((body_radius(&g) - (BODY_R_BASE + BODY_R_SIZE)).abs() < 1e-6);
-        assert!(2.0 * body_radius(&g) <= 1.5 + 1e-6, "max pair gap stays under contact range 2.0");
+        // The whole premise of the resolve: the largest pair gap must stay
+        // below the mating / food-sharing contact ranges, or the min-gap push
+        // would hold mates and sharers out of contact every tick.
+        let contact = crate::reproduce::MATING_RANGE.min(crate::interact::SHARE_RANGE);
+        let max_gap = 2.0 * (BODY_R_BASE + BODY_R_SIZE);
+        assert!(2.0 * body_radius(&g) <= max_gap + 1e-6);
+        assert!(
+            max_gap < contact,
+            "max pair gap {max_gap} must stay under contact range {contact}"
+        );
     }
 
     #[test]
@@ -285,6 +334,31 @@ mod tests {
         resolve_overlaps(&mut w);
         let t = w.biome.sample(w.agents.position[a as usize]).terrain;
         assert_ne!(t, crate::biome::TerrainType::Water, "land agent pushed into the sea");
+    }
+
+    #[test]
+    fn a_seaward_push_slides_along_the_coast_instead_of_being_dropped() {
+        let mut w = flat_world();
+        // Water east of x = 304 (cell col 38), as above.
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 38..res {
+                w.biome.at_mut(col, row).terrain = crate::biome::TerrainType::Water;
+            }
+        }
+        // `a` sits on the shore; `b` overlaps it from just south of due west,
+        // so the away push on `a` points east with a small northward part in
+        // BOTH passes: its x part would enter the sea, its y part stays on
+        // land. Dropping the whole push leaves `a` exactly where it started.
+        let a = w.spawn_agent(Vec2::new(303.9, 300.0), Genome::neutral());
+        let _b = w.spawn_agent(Vec2::new(303.4, 299.9), Genome::neutral());
+        let before = w.agents.position[a as usize];
+        resolve_overlaps(&mut w);
+        let after = w.agents.position[a as usize];
+        assert_ne!(after, before, "the push must not be dropped wholesale");
+        assert_eq!(after.x, before.x, "the seaward x component is dropped");
+        assert!(after.y > before.y, "the y component slides north: {before:?} -> {after:?}");
+        assert_ne!(w.biome.sample(after).terrain, crate::biome::TerrainType::Water);
     }
 
     #[test]

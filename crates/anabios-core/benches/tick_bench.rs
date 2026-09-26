@@ -240,7 +240,7 @@ fn bench_biome(c: &mut Criterion) {
 fn bench_territory(c: &mut Criterion) {
     let mut group = c.benchmark_group("territory");
     group.sample_size(20);
-    let off = build_population(10_000, 1);
+    let mut off = build_population(10_000, 1);
     let mut on = off.clone();
     on.territory_enabled = true;
     for id in on.agents.iter_alive().collect::<Vec<_>>() {
@@ -252,6 +252,12 @@ fn bench_territory(c: &mut Criterion) {
             on.agents.position[i] = p;
         }
     }
+    // Warm both templates past tick 0 (like the other A/B benches) so the
+    // measured tick is a steady-state one: the collision hash and scratch are
+    // already sized, and neither the species/territory step (every 200 ticks)
+    // nor the biome step (every 10) lands on the measured tick.
+    warm(&mut off, 5);
+    warm(&mut on, 5);
     for (label, template) in [("off", off), ("on", on)] {
         group.bench_function(label, |b| {
             b.iter_batched(

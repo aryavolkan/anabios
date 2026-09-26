@@ -282,23 +282,49 @@ const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territor
 // locomotion classes alive at their `max_share` caps through 20k ticks
 // (674/525/300 Land/Water/Air, 99.7% inside territory), where seed 11 lets
 // Land die out by ~5k ticks and ends birds-only.
+// Re-pinned 2026-09-26 after the review fixes: a splinter species now starts
+// its territory at its own members' centroid (was: an EMA from the parent's
+// centre), `gate_move` samples the wrapped destination and the path of a
+// long step, relocation searches the whole torus, and a seaward collision
+// push slides along the coast instead of being dropped (this last one is
+// what moves tick 100: the founders start crowded on a shoreline). Tick 0
+// is unchanged.
 const HABITAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xc24fe92b548eecd8), (100, 0x77c4a23110fbdced), (1000, 0x8e380edcd29de170)];
+    &[(0, 0xc24fe92b548eecd8), (100, 0xff7a187b3b2ada08), (1000, 0xa8b1791186d69b7c)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {
     common::assert_golden("habitat-territories", HABITAT_SCENARIO, HABITAT_GOLDEN);
 }
 
-/// FNV-1a over `bincode(agents) ++ bincode(biome)`: the simulation trajectory
-/// WITHOUT the `World` envelope. Adding a serialized `World` field (a layout
-/// change) moves every `state_hash` golden but leaves this untouched, so it
-/// separates "only the snapshot layout grew" from "behaviour changed".
-/// Pinned before the territory/habitat/collision layer landed (flag off in
-/// both scenarios); it must never move while that layer is off.
+/// FNV-1a over the bincode of every serialized `World` sub-state that IS the
+/// simulation trajectory — agents, biome, rng, codex (events + detector
+/// accumulators), the species tables, pheromones, disasters, the market
+/// field, trade hubs and culture roots — WITHOUT the `World` envelope itself.
+/// Adding a serialized `World` field (a layout change) moves every
+/// `state_hash` golden but leaves this untouched, so it separates "only the
+/// snapshot layout grew" from "behaviour changed" — and, unlike a hash of
+/// agents + biome alone, it also catches a flag-off regression confined to
+/// stage-8/9 bookkeeping (an extra codex event, a perturbed detector
+/// accumulator, an extra RNG draw). The sub-states' own layouts must not
+/// change between the pin and the check; when one does, re-pin from the
+/// merge base (`UPDATE_HASHES=1` prints the values) rather than from HEAD.
+/// Pinned at the merge base of the territory/habitat/collision layer (flag
+/// off in both scenarios) and re-derived identical at its head; it must
+/// never move while that layer is off.
 fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
     let mut bytes = bincode::serialize(&w.agents).expect("agents serialize");
     bytes.extend(bincode::serialize(&w.biome).expect("biome serialize"));
+    bytes.extend(bincode::serialize(&w.rng).expect("rng serialize"));
+    bytes.extend(bincode::serialize(&w.codex).expect("codex serialize"));
+    bytes.extend(bincode::serialize(&w.species_centroids).expect("centroids serialize"));
+    bytes.extend(bincode::serialize(&w.species_member_counts).expect("counts serialize"));
+    bytes.extend(bincode::serialize(&w.species_parents).expect("parents serialize"));
+    bytes.extend(bincode::serialize(&w.pheromones).expect("pheromones serialize"));
+    bytes.extend(bincode::serialize(&w.disasters).expect("disasters serialize"));
+    bytes.extend(bincode::serialize(&w.market_field).expect("market serialize"));
+    bytes.extend(bincode::serialize(&w.trade_hubs).expect("hubs serialize"));
+    bytes.extend(bincode::serialize(&w.culture_roots).expect("culture roots serialize"));
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in bytes {
         h ^= b as u64;
@@ -307,8 +333,8 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
     h
 }
 
-const MINIMAL_TRAJECTORY_AT_1000: u64 = 0x2aef3e5125791e3a;
-const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x86655e507670d579;
+const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xd1133dd8d119e894;
+const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x56819428b6cd2bf0;
 
 fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
     let mut w = common::world(src);

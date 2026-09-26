@@ -213,14 +213,18 @@ pub const SEA_LEVEL: f32 = 0.35;
 pub const ROCK_LINE: f32 = 0.78;
 /// Temperature drop per unit elevation above sea level.
 pub const TEMP_LAPSE: f32 = 0.55;
-/// Aquatic biomass capacity of a Water cell when `World::territory_enabled`
-/// (0.6 × Grass; raised from 0.4× — see the territory-habitat-collision
-/// findings doc — to reduce aquatic-lineage collapse in the measurement
-/// probe). `TerrainType::carrying_capacity` stays 0.0 for Water — the aquatic
-/// pool is maintained only by `seed_aquatic`/`aquatic_regrow_step`.
-pub const AQUATIC_CAPACITY: f32 = 6.0;
+/// Aquatic biomass capacity of a Water cell when `World::territory_enabled`:
+/// 0.6 × Grass (a lower ratio let aquatic lineages collapse in the
+/// measurement probe — see the territory-habitat-collision findings doc).
+/// Expressed through `TerrainType::Grass.carrying_capacity()` so a grassland
+/// rebalance keeps the ratio; `aquatic_constants_pin_their_values` pins the
+/// resulting numbers so a drift is a deliberate, golden-moving change.
+/// `TerrainType::carrying_capacity` stays 0.0 for Water — the aquatic pool is
+/// maintained only by `seed_aquatic`/`aquatic_regrow_step`; readers that
+/// need a Water cell's capacity use `effective_capacity`.
+pub const AQUATIC_CAPACITY: f32 = TerrainType::Grass.carrying_capacity() * 3.0 / 5.0;
 /// Logistic regrowth rate of aquatic biomass per biome step (Grass's rate).
-pub const AQUATIC_REGROWTH_RATE: f32 = 0.01;
+pub const AQUATIC_REGROWTH_RATE: f32 = TerrainType::Grass.regrowth_rate();
 /// Floor a grazed-out Water cell reseeds from, as a fraction of capacity, so
 /// the aquatic pool can never go permanently extinct.
 pub const AQUATIC_RESEED_FRAC: f32 = 0.01;
@@ -764,6 +768,21 @@ impl BiomeField {
                 |c| 1.0 + SEASON_AMPLITUDE * season_match(c.env, phase),
                 fert,
             );
+        }
+    }
+
+    /// The biomass a cell can hold: `TerrainType::carrying_capacity`, except
+    /// that with the territory layer on a Water cell holds the aquatic pool
+    /// (`AQUATIC_CAPACITY`). Use this — not the terrain constant — wherever a
+    /// cell's food is normalized by its capacity (e.g. juvenile nutrition in
+    /// `iq::develop_all`), so aquatic biomass counts as food for the classes
+    /// that graze it. Flag off ⇒ exactly the terrain constant.
+    #[inline]
+    pub fn effective_capacity(cell: &BiomeCell, territory_enabled: bool) -> f32 {
+        if territory_enabled && cell.terrain == TerrainType::Water {
+            AQUATIC_CAPACITY
+        } else {
+            cell.terrain.carrying_capacity()
         }
     }
 
@@ -1903,6 +1922,25 @@ mod tests {
         };
         field.regrow_step(false);
         assert_eq!(field.cells[0].succession, SUCCESSION_BARE);
+    }
+
+    #[test]
+    fn aquatic_constants_pin_their_values() {
+        // The goldens with the flag on depend on these exact numbers.
+        assert_eq!(AQUATIC_CAPACITY, 6.0);
+        assert_eq!(AQUATIC_REGROWTH_RATE, 0.01);
+        assert_eq!(AQUATIC_RESEED_FRAC * AQUATIC_CAPACITY, 0.06);
+    }
+
+    #[test]
+    fn effective_capacity_is_aquatic_only_for_water_with_the_flag_on() {
+        let mut water = grass_cell(0.0, SUCCESSION_CLIMAX);
+        water.terrain = TerrainType::Water;
+        let grass = grass_cell(0.0, SUCCESSION_CLIMAX);
+        assert_eq!(BiomeField::effective_capacity(&water, false), 0.0);
+        assert_eq!(BiomeField::effective_capacity(&water, true), AQUATIC_CAPACITY);
+        assert_eq!(BiomeField::effective_capacity(&grass, false), 10.0);
+        assert_eq!(BiomeField::effective_capacity(&grass, true), 10.0);
     }
 
     #[test]

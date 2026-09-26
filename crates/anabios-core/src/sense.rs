@@ -798,4 +798,40 @@ mod tests {
             "flag on: land agent ignores water"
         );
     }
+
+    #[test]
+    fn a_stranded_agent_reads_zero_local_biomass_when_territory_on() {
+        // A Water-class agent standing on vegetated Grass (only possible when
+        // its class has no habitat on the map) must not be told there is food
+        // under it — `feed_pass` refuses to graze there, and the program
+        // would otherwise keep trying to eat.
+        let mut w = World::new(9);
+        let pos = Vec2::new(500.0, 500.0);
+        let (col, row) = w.biome.cell_coords(pos);
+        w.biome.at_mut(col, row).terrain = crate::biome::TerrainType::Grass;
+        w.biome.at_mut(col, row).plant_biomass = 5.0;
+        let mut g = crate::genome::Genome::neutral();
+        g.set(crate::genome::GenomeSlot::Locomotion, 0.1); // Water
+        let id = w.spawn_agent(pos, g);
+        w.resize_scratch();
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let run = |w: &mut World, on: bool| {
+            sense_all(
+                &w.agents,
+                &w.biome,
+                &w.pheromones,
+                &w.spatial,
+                &w.codex.hostility,
+                &w.culture_mask,
+                &mut w.sensors,
+                w.world_size,
+                false,
+                false,
+                on,
+            );
+            w.sensors[id as usize]
+        };
+        assert_eq!(run(&mut w, false).local_plant_biomass, 5.0, "flag off: biomass visible");
+        assert_eq!(run(&mut w, true).local_plant_biomass, 0.0, "flag on: stranded reads zero");
+    }
 }

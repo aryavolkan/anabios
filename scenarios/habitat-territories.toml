@@ -1,11 +1,11 @@
 # Territory / habitat / collision showcase (docs/superpowers/specs/
 # 2026-09-25-territory-habitat-collision-design.md): three grazer species
 # that differ only in their Locomotion gene — land walkers, water swimmers
-# (graze aquatic biomass), and flyers (roam AND feed over land and sea — a
-# seabird niche, amended 2026-09-25 after a probe run found flyers used to
-# feed on land only, which starved them out against Land's shared forage).
-# Each keeps a species territory; bodies are kept apart (separation steering
-# plus a best-effort 2-pass min-gap resolve — see collision.rs), not
+# (graze aquatic biomass), and flyers, which roam AND feed over land and sea
+# (a seabird niche: `Locomotion::can_graze` lets Air graze both terrains
+# because a land-only flyer diet starves them out against Land's shared
+# forage). Each keeps a species territory; bodies are kept apart (separation
+# steering plus a best-effort 2-pass min-gap resolve — see collision.rs), not
 # guaranteed to never touch.
 #
 # sea_level 0.45 + continentality carve real oceans at the default 1024 world,

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::biome::{BiomeField, TerrainType};
 use crate::genome::{Genome, GenomeSlot};
-use crate::prelude::Vec2;
+use crate::prelude::{wrap_torus, Vec2};
 
 /// Genes below this read as Water.
 pub const WATER_MAX: f32 = 0.25;
@@ -17,8 +17,6 @@ pub const AIR_MIN: f32 = 0.75;
 /// Scale applied to the Locomotion slot's per-birth mutation delta, so class
 /// flips are rare (same RNG draw count — only the magnitude shrinks).
 pub const LOCOMOTION_MUTATION_SCALE: f32 = 0.1;
-/// Farthest ring (in biome cells) `nearest_valid` searches.
-pub const RELOCATE_MAX_RING: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[repr(u8)]
@@ -30,6 +28,10 @@ pub enum Locomotion {
 }
 
 impl Locomotion {
+    /// Every class, in `index()` order (the majority vote in
+    /// `territory::territory_step` and the viewer's byte codes rely on it).
+    pub const ALL: [Locomotion; 3] = [Locomotion::Land, Locomotion::Water, Locomotion::Air];
+
     #[inline]
     pub fn from_gene(v: f32) -> Self {
         if v < WATER_MAX {
@@ -56,16 +58,15 @@ impl Locomotion {
         }
     }
 
-    /// Whether this class may graze biomass in a cell of terrain `t`
-    /// (flyers feed over land AND sea — a seabird niche — Land and Water are
-    /// each confined to their own terrain).
+    /// Whether this class may graze biomass in a cell of terrain `t`. A class
+    /// grazes exactly where it may stand (`can_occupy`): flyers feed over land
+    /// AND sea — a seabird niche — while Land and Water are each confined to
+    /// their own terrain. Kept as a separate name so the feeding call sites
+    /// (`interact::feed_pass`, `sense::best_plant_direction`) read as intent;
+    /// `graze_matches_occupy` pins the two tables equal.
     #[inline]
     pub fn can_graze(self, t: TerrainType) -> bool {
-        match self {
-            Locomotion::Water => t == TerrainType::Water,
-            Locomotion::Land => t != TerrainType::Water,
-            Locomotion::Air => true,
-        }
+        self.can_occupy(t)
     }
 
     /// Air bodies only collide with Air; Land and Water collide with each other.
@@ -81,14 +82,37 @@ impl Locomotion {
 }
 
 /// Apply a proposed displacement `v` from `pos` under the habitat rule:
-/// the full move if its destination is valid, else the x-only move, else the
+/// the full move if its path is valid, else the x-only move, else the
 /// y-only move (a slide along the coastline), else no move. Air is never
 /// gated. Returns the displacement actually applied.
+///
+/// Every sample is taken on the torus-wrapped point — exactly the coordinate
+/// `integrate_all` stores — so the cell the gate validates is the cell the
+/// agent is later read in. (Sampling the raw `pos + d` is not the same: for
+/// an overshoot of less than ~3e-5 past the seam, f32 `rem_euclid` rounds the
+/// stored coordinate to exactly `world_size`, which `cell_coords` reads as
+/// row/column 0 while the raw value clamps to the last row/column — a
+/// habitat violation the gate could not see.) A displacement longer than
+/// half a cell is sampled along its segment at ≤ half-cell spacing, so a
+/// fast agent (speed multipliers stack to ~9 units/tick against 8-unit
+/// cells) cannot tunnel through a one-cell strip of forbidden terrain.
 pub fn gate_move(biome: &BiomeField, class: Locomotion, pos: Vec2, v: Vec2) -> Vec2 {
     if class == Locomotion::Air {
         return v;
     }
-    let ok = |d: Vec2| class.can_occupy(biome.sample(pos + d).terrain);
+    let ws = Vec2::splat(biome.world_size);
+    let half_cell = 0.5 * biome.cell_size;
+    let ok = |d: Vec2| {
+        let steps = if d.length_squared() <= half_cell * half_cell {
+            1
+        } else {
+            (d.length() / half_cell).ceil() as u32
+        };
+        (1..=steps).all(|k| {
+            let p = wrap_torus(pos + d * (k as f32 / steps as f32), ws);
+            class.can_occupy(biome.sample(p).terrain)
+        })
+    };
     if ok(v) {
         v
     } else if ok(Vec2::new(v.x, 0.0)) {
@@ -101,17 +125,24 @@ pub fn gate_move(biome: &BiomeField, class: Locomotion, pos: Vec2, v: Vec2) -> V
 }
 
 /// `pos` itself when its cell is valid for `class`; otherwise the centre of
-/// the closest valid cell on the first ring (Chebyshev radius 1, 2, …, up to
-/// `RELOCATE_MAX_RING`) that has one. Within a ring the Euclidean-closest
-/// cell wins, first-seen on ties (fixed scan order ⇒ deterministic, no RNG).
-/// `None` if no valid cell is within reach.
+/// the closest valid cell on the first ring (Chebyshev radius 1, 2, …) that
+/// has one. Within a ring the Euclidean-closest cell wins, first-seen on ties
+/// (fixed scan order ⇒ deterministic, no RNG). The search covers the whole
+/// torus (`res / 2` rings), so `None` means the class has NO habitat on this
+/// map at all — not merely none nearby. The cost is paid only on the failure
+/// path: a valid `pos` returns immediately and a same-class newborn between
+/// two parents stops at ring 1; a class-flipped newborn or a founder placed
+/// far from its habitat pays up to `res²` cell reads once. Both callers
+/// (`Scenario::instantiate`, `reproduce_all`) keep the original position on
+/// `None`, which strands the agent (immobile, cannot graze) — a scenario
+/// that seeds a class without habitat is a scenario-authoring error.
 pub fn nearest_valid(biome: &BiomeField, pos: Vec2, class: Locomotion) -> Option<Vec2> {
     if class.can_occupy(biome.sample(pos).terrain) {
         return Some(pos);
     }
     let (cx, cy) = biome.cell_coords(pos);
     let res = biome.res as i32;
-    let max_ring = RELOCATE_MAX_RING.min(biome.res / 2) as i32;
+    let max_ring = (biome.res / 2) as i32;
     for k in 1..=max_ring {
         let mut best: Option<(f32, Vec2)> = None;
         for dy in -k..=k {
@@ -244,6 +275,104 @@ mod tests {
             c.terrain = TerrainType::Grass;
         }
         assert_eq!(nearest_valid(&w.biome, Vec2::new(10.0, 10.0), Locomotion::Water), None);
+    }
+
+    #[test]
+    fn nearest_valid_searches_the_whole_torus_on_a_large_grid() {
+        // 512-cell grid (a continental-scale map): the only Water is column 0,
+        // and the agent sits ~200 cells away — far beyond any fixed ring cap.
+        let mut w = World::with_dims(1, 4096.0, 512, 16);
+        for c in w.biome.cells.iter_mut() {
+            c.terrain = TerrainType::Grass;
+        }
+        let res = w.biome.res;
+        for row in 0..res {
+            w.biome.at_mut(0, row).terrain = TerrainType::Water;
+        }
+        let pos = Vec2::new(200.5 * w.biome.cell_size, 100.0);
+        let got = nearest_valid(&w.biome, pos, Locomotion::Water).expect("water exists");
+        assert_eq!(w.biome.sample(got).terrain, TerrainType::Water);
+        assert!((got.x - 0.5 * w.biome.cell_size).abs() < 1e-3, "column 0 centre, got {}", got.x);
+    }
+
+    #[test]
+    fn graze_matches_occupy() {
+        use TerrainType::*;
+        for t in [Water, Grass, Forest, Desert, Rock, Savanna, Rainforest, Taiga, Tundra] {
+            for c in [Locomotion::Land, Locomotion::Water, Locomotion::Air] {
+                assert_eq!(c.can_graze(t), c.can_occupy(t), "{c:?} on {t:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn gate_samples_the_wrapped_destination_at_the_seam() {
+        // The seed-7 case from the flagship (1024-wide, 8-unit cells): a
+        // Water agent in row 0 at y = 0.3134766 steps north by 0.3134973. The
+        // raw destination y is -2.07e-5, which f32 `rem_euclid` rounds to
+        // exactly 1024.0 — the coordinate integrate stores, and one that
+        // every later `cell_coords` maps to row 0. Sampling the RAW value
+        // instead clamps to row 127, a different cell.
+        let mut w = World::new(1);
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 0..res {
+                w.biome.at_mut(col, row).terrain = TerrainType::Water;
+            }
+        }
+        // Destination column (51) is land in row 0; row 127 is water there.
+        w.biome.at_mut(51, 0).terrain = TerrainType::Grass;
+        let pos = Vec2::new(416.945, 0.3134766);
+        let v = Vec2::new(-2.8718, -0.3134973);
+        let raw = pos + v;
+        assert!(raw.y < 0.0 && raw.y > -3e-5, "overshoot must be tiny: {}", raw.y);
+        assert_eq!(raw.y.rem_euclid(1024.0), 1024.0, "f32 rem_euclid rounds to world_size");
+        assert_eq!(w.biome.sample(raw).terrain, TerrainType::Water, "raw sample reads row 127");
+        assert_eq!(
+            w.biome.sample(wrap_torus(raw, Vec2::splat(1024.0))).terrain,
+            TerrainType::Grass,
+            "the stored coordinate reads row 0"
+        );
+        // The gate must judge the stored cell: the full move and the x-only
+        // slide both land on (51, 0) = Grass, so only the y-only slide
+        // (staying in column 52) is valid.
+        let applied = gate_move(&w.biome, Locomotion::Water, pos, v);
+        assert_eq!(applied, Vec2::new(0.0, v.y), "y-only slide expected, got {applied:?}");
+        let stored = wrap_torus(pos + applied, Vec2::splat(w.world_size));
+        assert!(Locomotion::Water.can_occupy(w.biome.sample(stored).terrain));
+    }
+
+    #[test]
+    fn gate_does_not_tunnel_through_a_one_cell_strip() {
+        // Water only in column 16 (x ∈ [128, 136)); Land agent at x = 127 with
+        // a 9-unit eastward step: the destination (x = 136, column 17) is
+        // valid land, but the path crosses the water strip ⇒ blocked.
+        let mut w = World::with_dims(1, 256.0, 32, 16);
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 0..res {
+                w.biome.at_mut(col, row).terrain =
+                    if col == 16 { TerrainType::Water } else { TerrainType::Grass };
+            }
+        }
+        let pos = Vec2::new(127.0, 100.0);
+        assert_eq!(gate_move(&w.biome, Locomotion::Land, pos, Vec2::new(9.0, 0.0)), Vec2::ZERO);
+        // The diagonal slides along the strip instead.
+        assert_eq!(
+            gate_move(&w.biome, Locomotion::Land, pos, Vec2::new(9.0, 3.0)),
+            Vec2::new(0.0, 3.0)
+        );
+        // A Water agent can't hop the land isthmus between two water columns.
+        for row in 0..res {
+            w.biome.at_mut(18, row).terrain = TerrainType::Water;
+        }
+        let wpos = Vec2::new(135.9, 100.0);
+        assert_eq!(gate_move(&w.biome, Locomotion::Water, wpos, Vec2::new(9.0, 0.0)), Vec2::ZERO);
+        // Short moves are unaffected (single destination sample).
+        assert_eq!(
+            gate_move(&w.biome, Locomotion::Land, pos, Vec2::new(-3.0, 0.0)),
+            Vec2::new(-3.0, 0.0)
+        );
     }
 
     #[test]

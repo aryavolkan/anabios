@@ -697,7 +697,7 @@ mod tests {
             w.world_size,
             false,
             w.cognition_enabled,
-            false,
+            w.territory_enabled,
         );
     }
 

@@ -72,10 +72,17 @@ pub enum GenomeSlot {
     Extraversion = 13,
     /// Reserved; formerly `KinPreference`. No live behavior reads this slot.
     _Reserved14 = 14,
-    /// Read by the invention tree's gene-tech coupling: Metalworking's
-    /// affinity/requirement slot (`invention::INVENTIONS`), so it gates and
-    /// scales that tech under `gene_tech_coupling`/`gene_requirements`.
-    /// Inert with both flags off. No behavior reads it directly.
+    /// Territoriality drive in `[0,1]`. Read directly by two opt-in homing
+    /// pulls: `settlement::anchor_step` / `anchor_pull_parts` (E8, under
+    /// `settlement_enabled`: the anchor learning rate and the per-agent home
+    /// pull) and `territory::territory_pull` (under `territory_enabled`:
+    /// scales the species-range pull; a non-zero pull also switches on the
+    /// move-intent unit-cap in `territory::apply_territory_pull`, so 0
+    /// disables the territory pull entirely). Also the gene-tech affinity
+    /// slot of the weapon line — Hafted Spears, Metalworking, Steel Arms in
+    /// `invention::INVENTIONS` — and the requirement slot of the latter two,
+    /// under `gene_tech_coupling` / `gene_requirements`. Inert with all four
+    /// flags off.
     Territoriality = 15,
     /// Heritable cognitive potential in `[0,1]` — the *nature* baseline for an
     /// agent's realized IQ (`iq.rs`). Unlike the personality slots this counts
