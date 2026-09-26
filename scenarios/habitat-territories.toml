@@ -7,6 +7,17 @@
 # sea_level 0.45 + continentality carve real oceans at the default 1024 world,
 # so all three classes have habitat. Uniform placement is relocated to the
 # nearest valid cell for each founder's class at instantiate.
+#
+# `max_share` on every spec: each `archetype = "grazer"` line below gets its
+# own fresh species id, so without a per-lineage cap the three classes race
+# for the ONE shared `max_population` — first-come, whichever class breeds up
+# to the cap first sterilizes the other two for the rest of the run (the same
+# global-cap effect documented on `AgentSpec::max_share` and demonstrated in
+# riverlands.toml). Measured on the territory measurement probe
+# (docs/superpowers/specs/2026-09-25-territory-habitat-collision-findings.md):
+# every one of 8 seeds collapsed to a single class at alive ≈ max_population,
+# and Air (fewest founders) never survived. Shares below leave headroom for
+# all three (0.45 + 0.35 + 0.20 = 1.0, roughly the founder-count ratio).
 name = "habitat-territories"
 seed = 11
 max_population = 1500
@@ -20,6 +31,7 @@ sea_level = 0.45
 count = 150
 archetype = "grazer"
 placement = { kind = "uniform" }
+max_share = 0.45
 [agents.traits]
 locomotion = 0.5
 size = 0.5
@@ -30,6 +42,7 @@ reproduction_threshold = 0.5
 count = 100
 archetype = "grazer"
 placement = { kind = "uniform" }
+max_share = 0.35
 [agents.traits]
 locomotion = 0.1
 size = 0.4
@@ -40,6 +53,7 @@ reproduction_threshold = 0.5
 count = 60
 archetype = "grazer"
 placement = { kind = "uniform" }
+max_share = 0.20
 [agents.traits]
 locomotion = 0.9
 size = 0.3

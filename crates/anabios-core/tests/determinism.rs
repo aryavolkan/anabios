@@ -278,7 +278,7 @@ fn minimal_scenario_matches_golden_hashes() {
 
 const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territories.toml");
 const HABITAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x277cfe66233e8bee), (100, 0xb4ba3b47063bee50), (1000, 0x375941eb60915cc0)];
+    &[(0, 0xef14595f5fc0deac), (100, 0xa509d7958da4c0ea), (1000, 0x09a4ab4af4b3c021)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {
