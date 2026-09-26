@@ -333,6 +333,31 @@ func _init() -> void:
 		"livestock still wins over locomotion"
 	)
 
+	# Coat colour must track the same locomotion-aware archetype as the
+	# silhouette (review finding on task-11b: agent_layer.gd's _body_colors()
+	# called archetype_for() without the locomotion argument, so a Water/Air
+	# agent got the right shape but a stale land-based tint). _body_colors()
+	# itself depends on the live sim and can't be unit-tested headless, so
+	# this pins the pure contract it must respect: an agent whose diet/size
+	# would otherwise read as Hare/Deer gets the Wader/Tortoise coat hue once
+	# its locomotion overrides the archetype, exactly as coat_hue would pick
+	# for that archetype directly.
+	var coat_sp := 7
+	_check(
+		(
+			M.coat_hue(M.archetype_for(0.1, 0.8, false, 0, M.LOCO_AIR), coat_sp)
+			== M.coat_hue(M.WADER, coat_sp)
+		),
+		"air locomotion's coat hue matches the Wader band"
+	)
+	_check(
+		(
+			M.coat_hue(M.archetype_for(0.1, 2.0, false, 0, M.LOCO_WATER), coat_sp)
+			== M.coat_hue(M.TORTOISE, coat_sp)
+		),
+		"water locomotion's coat hue matches the Tortoise band"
+	)
+
 	_check_weapon_cells()
 	_check_quad_archetypes()
 	_check_hero_art()

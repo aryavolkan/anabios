@@ -420,7 +420,7 @@ func refresh(
 	# scope as a hard parse error, not just a shadow warning.
 	var locomotion: PackedByteArray = sim.alive_locomotion()
 	var have_locomotion: bool = locomotion.size() == n
-	var body_colors: PackedColorArray = _body_colors(n)
+	var body_colors: PackedColorArray = _body_colors(n, locomotion, have_locomotion)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n
 	var have_ids: bool = ids.size() == n
@@ -834,7 +834,7 @@ func _refresh_death_effects(delta: float) -> void:
 			mm.set_instance_color(j, c)
 
 
-func _body_colors(n: int) -> PackedColorArray:
+func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) -> PackedColorArray:
 	var out := PackedColorArray()
 	out.resize(n)
 	match _overlay.body_mode:
@@ -858,7 +858,11 @@ func _body_colors(n: int) -> PackedColorArray:
 			# Species mode: Primate atlases carry their own coat/skin colours, so
 			# white; quadruped atlases are neutral grayscale, so each agent gets
 			# its per-species coat hue here. Diet/size come from the same batches
-			# refresh() already fetched.
+			# refresh() already fetched. `locomotion`/`have_locomotion` (passed in
+			# by refresh(), which fetches them before calling this) must feed the
+			# SAME archetype_for() call refresh() uses to pick the render bucket —
+			# otherwise a Water/Air agent gets the right silhouette but a stale
+			# land-based coat tint (review finding on task-11b).
 			var diet: PackedFloat32Array = sim.alive_diet()
 			var sizes: PackedFloat32Array = sim.alive_sizes()
 			var sp_ids: PackedInt32Array = sim.alive_species_ids()
@@ -867,7 +871,10 @@ func _body_colors(n: int) -> PackedColorArray:
 			var have_tags: bool = body_tags.size() == n
 			for i in n:
 				var tags: int = body_tags[i] if have_tags else 0
-				var arch := MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags)
+				var loco_i: int = locomotion[i] if have_locomotion else 0
+				var arch := MammalSprites.archetype_for(
+					diet[i], sizes[i], live[i] != 0, tags, loco_i
+				)
 				out[i] = MammalSprites.coat_hue(arch, sp_ids[i])
 	return out
 
