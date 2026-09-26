@@ -6,6 +6,8 @@
 
 #![allow(dead_code)]
 
+pub mod fixtures;
+
 use anabios_core::codex::EventType;
 use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};

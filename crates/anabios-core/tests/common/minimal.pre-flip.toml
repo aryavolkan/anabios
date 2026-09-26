@@ -1,0 +1,14 @@
+name = "minimal"
+seed = 12345
+# Pin the cap so the golden-hash determinism test stays fast and stable.
+max_population = 2000
+
+[[agents]]
+count = 200
+placement = { kind = "uniform" }
+
+[agents.traits]
+size = 0.4
+basal_metabolism = 0.4
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

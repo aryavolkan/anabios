@@ -306,7 +306,10 @@ fn habitat_territories_matches_golden_hashes() {
 /// merge base (`UPDATE_HASHES=1` prints the values) rather than from HEAD.
 /// Pinned at the merge base of the territory/habitat/collision layer (flag
 /// off in both scenarios) and re-derived identical at its head; it must
-/// never move while that layer is off.
+/// never move while that layer is off. The pins below are computed on the
+/// inline flag-off fixtures in `common::fixtures` (the scenario schema now
+/// defaults every knob on, so the live scenario files no longer reproduce
+/// this configuration), not on the live scenario files.
 fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
     let mut bytes = bincode::serialize(&w.agents).expect("agents serialize");
     bytes.extend(bincode::serialize(&w.biome).expect("biome serialize"));
@@ -343,15 +346,20 @@ fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
 }
 
 #[test]
-fn minimal_trajectory_unchanged_by_territory_substrate() {
-    assert_trajectory("minimal", SCENARIO, 1000, MINIMAL_TRAJECTORY_AT_1000);
+fn minimal_flag_off_trajectory_is_pinned() {
+    assert_trajectory(
+        "minimal (all knobs off)",
+        &common::fixtures::minimal_flag_off(),
+        1000,
+        MINIMAL_TRAJECTORY_AT_1000,
+    );
 }
 
 #[test]
-fn grand_theater_trajectory_unchanged_by_territory_substrate() {
+fn grand_theater_pre_flip_trajectory_is_pinned() {
     assert_trajectory(
-        "grand-theater",
-        include_str!("../../../scenarios/grand-theater.toml"),
+        "grand-theater (pre-flip flags)",
+        &common::fixtures::grand_theater_flag_off(),
         200,
         GRAND_THEATER_TRAJECTORY_AT_200,
     );
