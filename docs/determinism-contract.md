@@ -53,6 +53,18 @@ Every `#[serde(skip)]` field must be justifiable in exactly one of:
 | `hub_trade_tally` | (b) viewer-only per-hub tally; re-lengthens itself in `trade_pass` |
 | `agents.deaths_scratch` | (a) drained every tick by `resource::conserve_goods_step` |
 | `biome.recolonize_scratch` | (a) cleared and resized at the top of every `recolonize_step` |
+| `collision_spatial` | (a) fine (`COLLISION_CELL`-res) collision hash; `collision::rebuild_hash` rebuilds it before every read and re-sizes it whenever its resolution OR its world extent no longer matches the live `World::world_size` — so a post-load `Default` hash (wrong res/extent) self-heals on first use, same self-healing shape as (c) without needing an explicit `load_from_bytes` step |
+| `collision_scratch` | (a) Jacobi position snapshot reused by `collision::resolve_overlaps`; taken and restored within the stage-4' resolve each tick |
+
+`World.species_territories` is **serialized, not skipped**: it is
+path-dependent EMA territory state (grown lazily by `territory::territory_step`
+only when `territory_enabled`), so dropping it on load would diverge
+restore-and-continue exactly like the v13 `still_ticks` footgun.
+
+Locomotion class (Land/Water/Air) is derived from the genome
+(`Locomotion::of`, reading `GenomeSlot::Locomotion`) every time it's needed —
+it is never stored on `Agent` or `World`, so there is nothing to skip or
+re-derive for it.
 
 `CodexState` has **zero** skips — detector state is always serialized.
 `still_ticks` and `prev_desired_direction` are path-dependent accumulators
