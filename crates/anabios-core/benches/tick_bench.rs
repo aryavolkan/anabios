@@ -234,5 +234,46 @@ fn bench_biome(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_tick, bench_stages, bench_culture, bench_scavenge, bench_biome);
+/// Territory layer overhead: the 10k tick with `territory_enabled` on vs the
+/// same population off (founders relocated onto valid ground first, so the
+/// comparison measures steady-state cost, not stranded agents).
+fn bench_territory(c: &mut Criterion) {
+    let mut group = c.benchmark_group("territory");
+    group.sample_size(20);
+    let off = build_population(10_000, 1);
+    let mut on = off.clone();
+    on.territory_enabled = true;
+    for id in on.agents.iter_alive().collect::<Vec<_>>() {
+        let i = id as usize;
+        let class = anabios_core::habitat::Locomotion::of(&on.agents.genome[i]);
+        if let Some(p) =
+            anabios_core::habitat::nearest_valid(&on.biome, on.agents.position[i], class)
+        {
+            on.agents.position[i] = p;
+        }
+    }
+    for (label, template) in [("off", off), ("on", on)] {
+        group.bench_function(label, |b| {
+            b.iter_batched(
+                || template.clone(),
+                |mut w| {
+                    step(&mut w);
+                    w
+                },
+                criterion::BatchSize::SmallInput,
+            );
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_tick,
+    bench_stages,
+    bench_culture,
+    bench_scavenge,
+    bench_biome,
+    bench_territory
+);
 criterion_main!(benches);

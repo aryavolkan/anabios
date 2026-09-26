@@ -266,3 +266,70 @@ fn habitat_classes_never_leave_their_terrain() {
         }
     }
 }
+
+/// Measurement probe (not a gate): 8 seeds × 20k ticks of the flagship
+/// scenario, reporting per-class populations, habitat violations, deep
+/// overlaps (colliding pairs closer than half their gap), and the share of
+/// members inside their species' territory. Run:
+///   cargo test -p anabios-core --release --test invariants \
+///     territory_measurement_probe -- --ignored --nocapture
+#[test]
+#[ignore]
+fn territory_measurement_probe() {
+    use anabios_core::biome::TerrainType;
+    use anabios_core::collision::body_radius;
+    use anabios_core::habitat::Locomotion;
+    use anabios_core::scenario::Scenario;
+    let base = include_str!("../../../scenarios/habitat-territories.toml");
+    for seed in 1..=8u64 {
+        let mut s = Scenario::parse_toml(base).expect("parse");
+        s.seed = seed;
+        let mut w = s.instantiate();
+        common::run(&mut w, 20_000);
+        let ids: Vec<u32> = w.agents.iter_alive().collect();
+        let mut pop = [0u32; 3];
+        let (mut violations, mut deep, mut inside) = (0u32, 0u32, 0u32);
+        for &id in &ids {
+            let i = id as usize;
+            let c = Locomotion::of(&w.agents.genome[i]);
+            pop[c.index()] += 1;
+            let t = w.biome.sample(w.agents.position[i]).terrain;
+            if !c.can_occupy(t) {
+                violations += 1;
+            }
+            if let Some(tr) = w.species_territories.get(w.agents.species_id[i] as usize) {
+                let d = anabios_core::spatial::torus_distance(
+                    tr.centre(),
+                    w.agents.position[i],
+                    w.world_size,
+                );
+                if tr.is_set() && d <= tr.r {
+                    inside += 1;
+                }
+            }
+        }
+        for (k, &a) in ids.iter().enumerate() {
+            for &b in &ids[k + 1..] {
+                let (ga, gb) = (&w.agents.genome[a as usize], &w.agents.genome[b as usize]);
+                if !Locomotion::of(ga).collides_with(Locomotion::of(gb)) {
+                    continue;
+                }
+                let gap = body_radius(ga) + body_radius(gb);
+                let d = anabios_core::spatial::torus_distance(
+                    w.agents.position[a as usize],
+                    w.agents.position[b as usize],
+                    w.world_size,
+                );
+                if d < 0.5 * gap {
+                    deep += 1;
+                }
+            }
+        }
+        let n = ids.len().max(1) as f32;
+        println!(
+            "seed={seed} alive={} land={} water={} air={} violations={violations} deep_overlaps={deep} inside_territory={:.1}% water_cells_with_biomass={}",
+            ids.len(), pop[0], pop[1], pop[2], 100.0 * inside as f32 / n,
+            w.biome.cells.iter().filter(|c| c.terrain == TerrainType::Water && c.plant_biomass > 0.1).count(),
+        );
+    }
+}

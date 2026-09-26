@@ -214,9 +214,11 @@ pub const ROCK_LINE: f32 = 0.78;
 /// Temperature drop per unit elevation above sea level.
 pub const TEMP_LAPSE: f32 = 0.55;
 /// Aquatic biomass capacity of a Water cell when `World::territory_enabled`
-/// (0.4 × Grass). `TerrainType::carrying_capacity` stays 0.0 for Water — the
-/// aquatic pool is maintained only by `seed_aquatic`/`aquatic_regrow_step`.
-pub const AQUATIC_CAPACITY: f32 = 4.0;
+/// (0.6 × Grass; raised from 0.4× — see the territory-habitat-collision
+/// findings doc — to reduce aquatic-lineage collapse in the measurement
+/// probe). `TerrainType::carrying_capacity` stays 0.0 for Water — the aquatic
+/// pool is maintained only by `seed_aquatic`/`aquatic_regrow_step`.
+pub const AQUATIC_CAPACITY: f32 = 6.0;
 /// Logistic regrowth rate of aquatic biomass per biome step (Grass's rate).
 pub const AQUATIC_REGROWTH_RATE: f32 = 0.01;
 /// Floor a grazed-out Water cell reseeds from, as a fraction of capacity, so
