@@ -42,22 +42,21 @@ all existing goldens byte-identical.
 
 - Rename `GenomeSlot::_Reserved7` → `Locomotion` in place (`GENOME_LEN`
   stays 50; old saves remain readable). Counts toward speciation distance.
-- Bands: `v < 0.4` ⇒ **Land**, `0.4 ≤ v < 0.7` ⇒ **Water**, `v ≥ 0.7` ⇒ **Air**.
+- Bands: `v < 0.25` ⇒ **Water**, `0.25 ≤ v < 0.75` ⇒ **Land**, `v ≥ 0.75` ⇒ **Air**.
+  `Genome::neutral()` (0.5) is therefore Land.
 - Mutation: slot 7 uses the same RNG draw as today, but the delta is scaled
   ×0.1 when the flag is on (no extra draws; class stable across generations,
   flips rare).
-- Spawn: flag on and no archetype pin ⇒ slot 7 written to `0.2` (Land),
-  no RNG draw. Scenario archetypes may pin `locomotion = "land"|"water"|"air"`
-  (writes band midpoints 0.2 / 0.55 / 0.85).
-- New `AgentBuffers.locomotion: Vec<u8>` cache, derived from the genome at
-  spawn/birth (added to spawn push, slot-reuse reset, kill reset). Not
-  serialized; recomputed from genomes on load.
+- Spawn: no override needed — unpinned agents are Land (neutral 0.5).
+  Scenarios pin a spec's class via the existing trait-override table:
+  `[agents.traits] locomotion = 0.1` (water) / `0.5` (land) / `0.9` (air).
+- No per-agent cache column: the class is `habitat::Locomotion::of(&genome)`
+  (one slot read), so `AgentBuffers` keeps its layout.
 - Spawn/birth relocation: if the spawn cell is invalid for the class, move to
   the nearest valid cell via a deterministic ring search over biome cells
   (no RNG). If no valid cell exists (e.g. water class on an all-land map),
-  the agent spawns in place and the habitat gate simply keeps it stationary;
-  scenarios are responsible for providing the habitat they pin (a scenario
-  validation warning is emitted at `instantiate`).
+  the agent spawns in place and the habitat gate keeps it stationary;
+  scenarios are responsible for providing the habitat they pin.
 
 ### 2. Habitat constraint
 
@@ -65,16 +64,21 @@ all existing goldens byte-identical.
 - Integrate gate (`integrate_all`, per-agent, own-slot write): compute the
   proposed wrapped position; if invalid, try x-only move, then y-only move
   (coastline slide); if both invalid, stay put (velocity zeroed).
-- Decide masking: with the flag on, the water pull (for Water class — they
-  are already in water), EnvAffinity habitat pull and terrain habitat pull
-  are zeroed when their target direction's `REACH` probe cell is invalid for
-  the agent's class. Land/Air agents keep the water pull (drinking at shore).
+- Decide masking: with the flag on, the EnvAffinity and terrain habitat
+  pulls are skipped when the cell one cell-width along the pull is invalid
+  for the agent's class (`habitat::pull_allowed`). The water pull is kept:
+  Land/Air drink at the shore (`drinkable_near`), Water agents already sit in
+  water.
+- Plant sensing is class-aware: `best_plant_direction` and
+  `local_plant_biomass` ignore cells the agent's class can't graze, so land
+  agents don't chase aquatic biomass into the shoreline.
 
 ### 3. Aquatic biomass
 
-- Flag on ⇒ `TerrainType::Water` carrying capacity = `AQUATIC_CAPACITY`
-  (initial value 0.4 × Grass; tuned by the probe). Regrowth uses the existing
-  plant path unchanged.
+- Flag on ⇒ Water cells hold aquatic biomass up to `AQUATIC_CAPACITY`
+  (0.4 × Grass; tuned by the probe), seeded at instantiate and regrown by a
+  dedicated `BiomeField::aquatic_regrow_step` (logistic, with a reseed floor).
+  `TerrainType::carrying_capacity` (a `const fn`) stays 0.0 for Water.
 - Grazing gate: Water-class agents graze only Water cells; Land and Air
   agents graze only non-Water cells. Predation is unrestricted by class but
   physically limited by reach (a land predator can take a water agent only
@@ -89,16 +93,14 @@ all existing goldens byte-identical.
   ```
 - `territory_step` runs immediately after `species_step` (every
   `SPECIES_STEP_INTERVAL` = 200 ticks):
-  - centre: EMA (`TERRITORY_CENTRE_RATE`) toward the torus-aware circular
-    mean of members' `anchor` positions;
+  - centre: EMA (`TERRITORY_CENTRE_RATE`) toward the members' torus-safe
+    mean position (mean offset from a reference point — the current centre,
+    or the first member for a new row; no trig);
   - radius: `clamp(TERRITORY_K · √n, R_MIN, R_MAX)`;
   - class: members' majority locomotion class;
   - new species inherit the parent species' record (no parent ⇒ seeded from
     the members' current centroid); extinct species' records retained but
     inert (index-aligned with `species_*` vectors).
-- Anchors are maintained under `territory_enabled` even if
-  `settlement_enabled` is off (anchor learn step runs when either flag is on;
-  with both off behavior is unchanged).
 - Pull (in `decide_all`, next to the anchor pull):
   `d = torus_distance(pos, centre)`; `d ≤ r` ⇒ 0 (free roam);
   `d > r` ⇒ `min((d − r) / r, 1) · TERRITORY_PULL · Territoriality ·
@@ -108,30 +110,34 @@ all existing goldens byte-identical.
 
 ### 5. Separation
 
-- Body radius `r_i = BODY_R_BASE + BODY_R_SIZE · Size` (so the pair gap
-  `r_i + r_j` is capped at `MIN_GAP_MAX` = 1.5, below the 2-unit
-  `MATING_RANGE` / `SHARE_RANGE` / `HARVEST_RANGE`).
+- Body radius `r_i = BODY_R_BASE + BODY_R_SIZE · Size` with `Size ∈ [0,1]`,
+  so the pair gap `r_i + r_j` is at most 1.5, below the 2-unit
+  `MATING_RANGE` / `SHARE_RANGE` / `HARVEST_RANGE`.
+- A dedicated fine collision hash (`COLLISION_CELL` = 4-unit cells), rebuilt
+  at stage 1 and inside the resolve, serves both layers — the sense hot loop
+  is left untouched.
 - Collision rule: Air collides only with Air; Land and Water collide with
   each other and themselves; nothing collides with Air except Air.
-- **Steering (sense → decide):** `NearestNeighbors::consider` accumulates
-  `sep += (r_i + r_j − d) · unit(self − other)` for overlapping, colliding
-  neighbours, into a new non-serialized `SensorRegister` field. `decide_all`
-  adds `sep · SEP_PULL` before normalization.
+- **Steering (decide):** `collision::separation_steer` sums
+  `unit(self − other) · (reach − d)/reach` over colliding neighbours within
+  `reach = STEER_MARGIN·(r_i + r_j)` on the collision hash; `decide_all` adds
+  `sep · SEP_PULL` last, before normalization.
 - **Hard resolve (new stage 4d, after integrate / needs):** snapshot
   positions; K = 2 Jacobi passes; each agent sums push-out from overlapping
-  colliding neighbours (one-ring `query` on the stage-1 hash — positions are
-  stale by ≤ `SPEED_MAX_CAP` = 4, within the one-ring guarantee), applies
-  half the correction, drops the push if the resulting cell is invalid for
-  its class, writes only its own slot. Fixed iteration order, no RNG ⇒
+  colliding neighbours (one-ring `query` on the collision hash rebuilt from
+  post-integrate positions; between passes positions move ≤ `MAX_PUSH`),
+  applies half the correction, drops the push if the resulting cell is invalid
+  for its class, writes only its own slot. Fixed iteration order, no RNG ⇒
   deterministic and rayon-safe.
 
 ## Per-tick data flow (flag on)
 
 | Stage | New work |
 |---|---|
-| spawn / reproduce | locomotion cache; habitat relocation; archetype pin |
+| spawn / reproduce | habitat relocation (founders + newborns) |
 | mutate | slot-7 delta ×0.1 |
-| 2 sense | separation vector accumulation |
+| 1 hash | + fine collision hash rebuild |
+| 2 sense | class-aware plant sensing |
 | 3 decide | + separation pull, + territory pull, habitat masking of pulls |
 | 4 integrate | habitat gate with coastline slide |
 | 4d resolve (new) | Jacobi min-gap resolve |
@@ -143,8 +149,8 @@ all existing goldens byte-identical.
 
 - `species_territories` serialized ⇒ `FORMAT_VERSION` 43 → 44 with history
   note in `snapshot.rs`. `territory_enabled` field added to `World`.
-- `locomotion` cache, separation vector, and resolve snapshot are
-  non-serialized scratch (derived or per-tick; none path-dependent).
+- `collision_spatial` and the resolve snapshot are non-serialized per-tick
+  scratch; the locomotion class is derived from the genome, never stored.
 - No new `EventType` in v1.
 
 ## Viewer
@@ -186,7 +192,7 @@ all existing goldens byte-identical.
 isolated stage bench against a saved baseline.
 
 **Measurement probe (before freezing constants):**
-`scenarios/territories_habitat.toml` — continental worldgen, pinned
+`scenarios/habitat-territories.toml` — continental worldgen, pinned
 Land/Water/Air archetypes; 20k ticks × 8 seeds, headless. Report:
 - pairwise overlap rate (target: 0 colliding-pair overlaps at tick end),
 - % members inside own territory (target ≥ 80%),
@@ -209,7 +215,7 @@ and 3× zoom via the `running-the-viewer` skill.
 | `R_MIN` / `R_MAX` | 48 / 256 |
 | `TERRITORY_PULL` | 1.0 |
 | `SEP_PULL` | 2.0 |
-| `BODY_R_BASE` / `BODY_R_SIZE` | 0.35 / 0.13 (⇒ pair gap ≤ 1.5 at Size ≤ ~3) |
+| `BODY_R_BASE` / `BODY_R_SIZE` | 0.4 / 0.35 (⇒ pair gap ≤ 1.5 at Size = 1) |
 | Resolve passes K | 2 |
 
 ## Out of scope (v1)
