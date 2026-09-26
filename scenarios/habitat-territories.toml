@@ -1,0 +1,83 @@
+# Territory / habitat / collision showcase (docs/superpowers/specs/
+# 2026-09-25-territory-habitat-collision-design.md): three grazer species
+# that differ only in their Locomotion gene — land walkers, water swimmers
+# (graze aquatic biomass), and flyers (roam AND feed over land and sea — a
+# seabird niche, amended 2026-09-25 after a probe run found flyers used to
+# feed on land only, which starved them out against Land's shared forage).
+# Each keeps a species territory; bodies are kept apart (separation steering
+# plus a best-effort 2-pass min-gap resolve — see collision.rs), not
+# guaranteed to never touch.
+#
+# sea_level 0.45 + continentality carve real oceans at the default 1024 world,
+# so all three classes have habitat.
+#
+# One coherent founding region: Land founds a single habitat herd, and
+# Water/Air scatter around that SAME herd (`near_spec`, spec 0) so all three
+# species start in one place and each forms one territory, rather than three
+# uniformly-scattered, spatially disjoint populations that would never cohere
+# into a shared territory story. `instantiate` still relocates every founder
+# to the nearest valid cell for its own Locomotion class, so the
+# near_spec-scattered Water founders land in the coastal sea beside the herd
+# and Air founders scatter freely (any terrain is valid for Air).
+#
+# `max_share` on every spec: each `archetype = "grazer"` line below gets its
+# own fresh species id, so without a per-lineage cap the three classes race
+# for the ONE shared `max_population` — first-come, whichever class breeds up
+# to the cap first sterilizes the other two for the rest of the run (the same
+# global-cap effect documented on `AgentSpec::max_share` and demonstrated in
+# riverlands.toml). Measured on the territory measurement probe
+# (docs/superpowers/specs/2026-09-25-territory-habitat-collision-findings.md):
+# every one of 8 seeds collapsed to a single class at alive ≈ max_population,
+# and Air (fewest founders) never survived. Shares below leave headroom for
+# all three (0.45 + 0.35 + 0.20 = 1.0, roughly the founder-count ratio).
+#
+# seed = 1 is a validated showcase seed, not a typical run: at 20k ticks it
+# holds all three classes alive at their `max_share` caps (674/525/300
+# Land/Water/Air) with 99.7% of the population inside its species territory.
+# Across the 8-seed probe (findings doc, Round 4 table), only 2/8 seeds keep
+# Land alive and 5/8 keep Water alive by 20k ticks — Air's larger, effective
+# range increasingly outcompetes them for the shared world on most seeds.
+# That land/air ecology imbalance is an open finding, not fixed here; the
+# candidate follow-up (a flight metabolic premium for Air) is not
+# implemented.
+name = "habitat-territories"
+seed = 1
+max_population = 1500
+territory_enabled = true
+
+[climate]
+continentality = 0.8
+sea_level = 0.45
+
+[[agents]]
+count = 150
+archetype = "grazer"
+placement = { kind = "habitat", herds = 1, radius = 80.0 }
+max_share = 0.45
+[agents.traits]
+locomotion = 0.5
+size = 0.5
+lifespan_bias = 0.6
+reproduction_threshold = 0.5
+
+[[agents]]
+count = 100
+archetype = "grazer"
+placement = { kind = "near_spec", spec = 0, radius = 160.0 }
+max_share = 0.35
+[agents.traits]
+locomotion = 0.1
+size = 0.4
+lifespan_bias = 0.6
+reproduction_threshold = 0.5
+
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "near_spec", spec = 0, radius = 120.0 }
+max_share = 0.20
+[agents.traits]
+locomotion = 0.9
+size = 0.3
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

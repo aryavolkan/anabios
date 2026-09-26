@@ -188,12 +188,20 @@ func _check_idle_weapon_act() -> void:
 	)
 
 
+func _check_air_lift() -> void:
+	_check(AgentLayer.air_lift(10.0, false) == Vector2.ZERO, "ground figures are not lifted")
+	var lift: Vector2 = AgentLayer.air_lift(10.0, true)
+	_check(lift.x == 0.0 and lift.y < 0.0, "flyers ride above their ground point")
+	_check(is_equal_approx(lift.y, -10.0 * AgentLayer.AIR_LIFT), "lift scales with body size")
+
+
 func _init() -> void:
 	_check_view_rect()
 	_check_pos_in_rect()
 	_check_merge_prev()
 	_check_crowd_cells()
 	_check_idle_weapon_act()
+	_check_air_lift()
 
 	if _failed:
 		quit(1)

@@ -39,8 +39,13 @@ pub enum GenomeSlot {
     LifespanBias = 4,
     BasalMetabolism = 5,
     MutationRate = 6,
-    /// Reserved; formerly `ImmuneStrength`. No live behavior reads this slot.
-    _Reserved7 = 7,
+    /// Heritable locomotion class (territory/habitat/collision layer), read as
+    /// Water `< 0.25`, Land `[0.25, 0.75)`, Air `>= 0.75` by
+    /// `habitat::Locomotion::from_gene`; neutral 0.5 is Land. Renamed in place
+    /// from `_Reserved7` (formerly `ImmuneStrength`). Read only when
+    /// `World::territory_enabled`; inert otherwise. Counts toward speciation
+    /// distance, so lineages that change class split into their own species.
+    Locomotion = 7,
     /// Heritable thirst tolerance in `[0,1]` (basic needs): scales thirst
     /// accumulation by `1.5 − v` (neutral 0.5 ⇒ exactly ×1.0). Renamed in
     /// place from `_BodyReserved8`. Read only when
@@ -185,7 +190,7 @@ pub const SLOT_NAMES: [&str; GENOME_LEN] = [
     "LifespanBias",
     "BasalMetabolism",
     "MutationRate",
-    "reserved_7",
+    "Locomotion",
     "ThirstTolerance",
     "SleepNeed",
     "Agreeableness",
@@ -504,6 +509,7 @@ mod tests {
         assert_eq!(SLOT_NAMES[GenomeSlot::MutationRate.idx()], "MutationRate");
         assert_eq!(SLOT_NAMES[GenomeSlot::Agreeableness.idx()], "Agreeableness");
         assert_eq!(SLOT_NAMES[GenomeSlot::Openness.idx()], "Openness");
+        assert_eq!(SLOT_NAMES[GenomeSlot::Locomotion.idx()], "Locomotion");
         assert_eq!(SLOT_NAMES[GenomeSlot::Territoriality.idx()], "Territoriality");
         assert_eq!(SLOT_NAMES[GenomeSlot::CognitivePotential.idx()], "CognitivePotential");
         assert_eq!(SLOT_NAMES[GenomeSlot::ExploreVsExploit.idx()], "ExploreVsExploit");

@@ -158,6 +158,9 @@ pub fn sense_all(
     world_size: f32,
     gene_tech_coupling: bool,
     cognition_enabled: bool,
+    // Territory layer: plant sensing only sees terrain the agent's
+    // Locomotion class can graze. `false` ⇒ identical to before.
+    territory_enabled: bool,
 ) {
     use rayon::prelude::*;
     debug_assert!(registers.len() >= agents.capacity());
@@ -188,6 +191,7 @@ pub fn sense_all(
             world_size,
             gene_tech_coupling,
             cognition_enabled,
+            territory_enabled,
         );
     });
 }
@@ -291,10 +295,13 @@ fn sense_one(
     world_size: f32,
     gene_tech_coupling: bool,
     cognition_enabled: bool,
+    territory_enabled: bool,
 ) -> SensorRegister {
     let i = id as usize;
     let pos = agents.position[i];
     let genome = &agents.genome[i];
+    // Territory layer: which terrain this agent may graze (None = any, flag off).
+    let graze = territory_enabled.then(|| crate::habitat::Locomotion::of(genome));
     // IQ-driven perception (cognition on) or hardcoded neutral fallback.
     let radius =
         perception_radius(&agents.modules[i], genome, agents.iq[i], max_radius, cognition_enabled)
@@ -309,7 +316,7 @@ fn sense_one(
     }
 
     let local_cell = biome.sample(pos);
-    let plant_direction = best_plant_direction(biome, pos, radius);
+    let plant_direction = best_plant_direction(biome, pos, radius, graze);
 
     let self_species = agents.species_id[i];
     let self_size = genome.get(GenomeSlot::Size).max(1e-3);
@@ -375,7 +382,10 @@ fn sense_one(
     };
 
     let mut reg = SensorRegister {
-        local_plant_biomass: local_cell.plant_biomass,
+        local_plant_biomass: match graze {
+            Some(c) if !c.can_graze(local_cell.terrain) => 0.0,
+            _ => local_cell.plant_biomass,
+        },
         plant_direction,
         // Recover the actual distances with one `sqrt` per winner. Bit-
         // identical to the former per-neighbor `torus_distance`, and
@@ -446,7 +456,12 @@ fn sense_one(
 
 /// Find the direction toward the best-biomass biome cell within `radius`.
 /// Returns `Vec2::ZERO` if no cell in range has positive biomass.
-fn best_plant_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 {
+fn best_plant_direction(
+    biome: &BiomeField,
+    pos: Vec2,
+    radius: f32,
+    graze: Option<crate::habitat::Locomotion>,
+) -> Vec2 {
     let mut best_biomass = 0.0_f32;
     let mut best_offset = Vec2::ZERO;
     let cell_reach = (radius / biome.cell_size).ceil() as i32 + 1;
@@ -467,6 +482,11 @@ fn best_plant_direction(biome: &BiomeField, pos: Vec2, radius: f32) -> Vec2 {
             let cell: &BiomeCell = biome.at(col, row);
             if cell.plant_biomass <= 0.0 {
                 continue;
+            }
+            if let Some(c) = graze {
+                if !c.can_graze(cell.terrain) {
+                    continue;
+                }
             }
             let cell_center = Vec2::new((col as f32 + 0.5) * biome.cell_size, center_y);
             let offset = wrap_torus(
@@ -519,6 +539,7 @@ mod tests {
             w.world_size,
             false,
             w.cognition_enabled,
+            false,
         );
         regs
     }
@@ -583,6 +604,7 @@ mod tests {
             w.world_size,
             false,
             w.cognition_enabled,
+            false,
         );
         assert!(!regs[me as usize].has_neighbor, "iq=0 should not see 8 units away");
 
@@ -599,6 +621,7 @@ mod tests {
             w.world_size,
             false,
             w.cognition_enabled,
+            false,
         );
         assert!(regs[me as usize].has_neighbor, "iq=1 should see 8 units away");
         assert!((regs[me as usize].nearest_neighbor_dist - 8.0).abs() < 1e-3);
@@ -641,6 +664,7 @@ mod tests {
             w.world_size,
             false,
             w.cognition_enabled,
+            false,
         );
         assert_eq!(
             format!("{:?}", regs[a as usize]),
@@ -716,5 +740,62 @@ mod tests {
         let _ = w.spawn_agent(Vec2::new(300.0, 303.0), Genome::neutral());
         let regs = sense(&mut w);
         assert_eq!(regs[me as usize].crowding, 2);
+    }
+
+    #[test]
+    fn land_agents_do_not_sense_aquatic_biomass_when_territory_on() {
+        let mut w = World::new(9);
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 0..res {
+                let c = w.biome.at_mut(col, row);
+                // Water everywhere (full aquatic biomass) except a bare grass cell
+                // under the agent.
+                c.terrain = crate::biome::TerrainType::Water;
+                c.plant_biomass = crate::biome::AQUATIC_CAPACITY;
+            }
+        }
+        let pos = Vec2::new(500.0, 500.0);
+        let (col, row) = w.biome.cell_coords(pos);
+        w.biome.at_mut(col, row).terrain = crate::biome::TerrainType::Grass;
+        w.biome.at_mut(col, row).plant_biomass = 0.0;
+        let id = w.spawn_agent(pos, crate::genome::Genome::neutral()); // Land
+                                                                       // Widen the starter Sensor to max radius: the starter kit's default
+                                                                       // (0.6) yields an effective perception radius (6.0, cognition off)
+                                                                       // smaller than one biome cell (8.0), so it can never reach a
+                                                                       // neighbouring cell at all — too small to exercise plant sensing.
+        for m in w.agents.modules[id as usize].iter_mut() {
+            if let crate::module::Module::Sensor { radius, .. } = m {
+                *radius = 1.0;
+            }
+        }
+        w.resize_scratch();
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        let run = |w: &mut World, on: bool| {
+            sense_all(
+                &w.agents,
+                &w.biome,
+                &w.pheromones,
+                &w.spatial,
+                &w.codex.hostility,
+                &w.culture_mask,
+                &mut w.sensors,
+                w.world_size,
+                false,
+                false,
+                on,
+            );
+            w.sensors[id as usize]
+        };
+        assert_ne!(
+            run(&mut w, false).plant_direction,
+            Vec2::ZERO,
+            "flag off: water biomass visible"
+        );
+        assert_eq!(
+            run(&mut w, true).plant_direction,
+            Vec2::ZERO,
+            "flag on: land agent ignores water"
+        );
     }
 }

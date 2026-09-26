@@ -229,6 +229,12 @@ const SCENARIOS: Array[Dictionary] = [
 		"body": 5
 	},
 	{
+		"label": "Behavior — Habitat & territories (land/sea/air)",
+		"path": "res://../scenarios/habitat-territories.toml",
+		"ground": 8,
+		"body": 0
+	},
+	{
 		"label": "Cognitive — Knowledge ratchet (writing)",
 		"path": "res://../scenarios/knowledge-ratchet.toml",
 		"ground": 0,

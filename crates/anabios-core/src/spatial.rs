@@ -70,6 +70,18 @@ impl UniformSpatialHash {
         self.cell_size
     }
 
+    /// Grid resolution per axis.
+    #[inline]
+    pub fn res(&self) -> usize {
+        self.res
+    }
+
+    /// World extent per axis (torus size) this hash is sized for.
+    #[inline]
+    pub fn world_size(&self) -> f32 {
+        self.world_size
+    }
+
     /// Rebuild from the alive agent positions. Agents whose `alive` bit is
     /// false are skipped. `positions[i]` and `alive_iter` are indexed by
     /// agent id.

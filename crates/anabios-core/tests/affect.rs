@@ -99,7 +99,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
     // 42→43): World.biome_step_interval added (default/absent 1) — layout
     // growth only, trajectory byte-identical.
-    &[(0, 0x592744c670a62f84), (100, 0x211330b7b6fe11ca), (300, 0x7ff3e050f37ef21d)];
+    // Refreshed 2026-09-25 (territory/habitat/collision layer, FORMAT_VERSION
+    // 43→44): added World.territory_enabled + World.species_territories
+    // (empty with the flag off). Layout growth only — trajectory proven
+    // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
+    &[(0, 0x294511998f5d8a0c), (100, 0x65a23d91f3c90ff0), (300, 0x318553368f295a61)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
@@ -205,7 +209,11 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
     // 42→43): World.biome_step_interval added (default/absent 1) — layout
     // growth only, trajectory byte-identical.
-    &[(0, 0x1271bc628d476247), (100, 0x1e605593b2da0158), (300, 0xd28793e8278c873a)];
+    // Refreshed 2026-09-25 (territory/habitat/collision layer, FORMAT_VERSION
+    // 43→44): added World.territory_enabled + World.species_territories
+    // (empty with the flag off). Layout growth only — trajectory proven
+    // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
+    &[(0, 0x92acf02b57d95b09), (100, 0x27b4df4a74f6686e), (300, 0x77099a348fad1094)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

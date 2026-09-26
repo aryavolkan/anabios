@@ -64,6 +64,16 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         if world.agents.asleep[i] {
             continue;
         }
+        // Territory layer: graze only terrain this agent's Locomotion class
+        // may feed on (a stranded Land/Water agent on invalid terrain doesn't
+        // graze; Air grazes anywhere — land and sea, a seabird niche). Flag
+        // off ⇒ skipped.
+        if world.territory_enabled
+            && !crate::habitat::Locomotion::of(&world.agents.genome[i])
+                .can_graze(world.biome.sample(world.agents.position[i]).terrain)
+        {
+            continue;
+        }
         if !module::has(&world.agents.modules[i], ModuleType::Mouth) {
             continue;
         }
@@ -687,6 +697,51 @@ mod tests {
             w.world_size,
             false,
             w.cognition_enabled,
+            false,
+        );
+    }
+
+    /// `feed_pass`'s territory-layer grazing gate: Air grazes over both land
+    /// and sea (a seabird niche — `Locomotion::can_graze`
+    /// is unconditionally true for Air, matching its unrestricted
+    /// `can_occupy`), while Land/Water are each confined to their own
+    /// terrain, so a stranded agent on the wrong terrain doesn't graze.
+    #[test]
+    fn grazing_is_gated_by_locomotion_class() {
+        let mut w = World::new(5);
+        w.territory_enabled = true;
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 0..res {
+                let c = w.biome.at_mut(col, row);
+                c.terrain = crate::biome::TerrainType::Water;
+                c.plant_biomass = crate::biome::AQUATIC_CAPACITY;
+            }
+        }
+        // One Grass cell (with real biomass) a Water-class agent could only
+        // reach by being stranded there — the negative control.
+        let grass = w.biome.at_mut(0, 0);
+        grass.terrain = crate::biome::TerrainType::Grass;
+        grass.plant_biomass = crate::biome::TerrainType::Grass.carrying_capacity();
+        let grass_pos = Vec2::new(0.5 * w.biome.cell_size, 0.5 * w.biome.cell_size);
+
+        let mut g = crate::genome::Genome::neutral();
+        g.set(crate::genome::GenomeSlot::Locomotion, 0.9); // Air
+        let bird = w.spawn_agent(crate::prelude::Vec2::new(500.0, 500.0), g); // over water
+        g.set(crate::genome::GenomeSlot::Locomotion, 0.1); // Water
+        let stranded_fish = w.spawn_agent(grass_pos, g); // stranded on Grass
+        let before_bird = w.biome.sample(w.agents.position[bird as usize]).plant_biomass;
+        let before_fish = w.biome.sample(w.agents.position[stranded_fish as usize]).plant_biomass;
+        refresh_sensors(&mut w);
+        interact_all(&mut w);
+        assert!(
+            w.biome.sample(w.agents.position[bird as usize]).plant_biomass < before_bird,
+            "an Air agent over water DOES graze aquatic biomass"
+        );
+        assert_eq!(
+            w.biome.sample(w.agents.position[stranded_fish as usize]).plant_biomass,
+            before_fish,
+            "a Water agent stranded on Grass must not graze it"
         );
     }
 

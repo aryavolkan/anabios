@@ -211,7 +211,11 @@ const GOLDEN: &[(u64, u64)] =
     // `tests/biome_step_interval.rs::interval_one_is_byte_identical_to_the_
     // field_absent`); only the serialized layout grew, moving all three
     // hashes once.
-    &[(0, 0x1f0833df5551cb75), (100, 0x3bf5b90f0c20a792), (1000, 0xfda6a2cf52557694)];
+    // Refreshed 2026-09-25 (territory/habitat/collision layer, FORMAT_VERSION
+    // 43→44): added World.territory_enabled + World.species_territories
+    // (empty with the flag off). Layout growth only — trajectory proven
+    // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
+    &[(0, 0xb99c431dab29593b), (100, 0x7b02f3ead610bd84), (1000, 0x97905596ba954bc8)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -237,6 +241,7 @@ fn parallel_matches_serial_across_thread_counts() {
         // Both flags on: exercises the PLAY affect par_iter AND the PLAY→iq
         // enrichment coupling in the cognition par_iter across thread counts (M-E).
         include_str!("../../../scenarios/affect-play.toml"),
+        include_str!("../../../scenarios/habitat-territories.toml"),
     ] {
         let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
         const TICKS: u64 = 300;
@@ -269,4 +274,64 @@ fn parallel_matches_serial_across_thread_counts() {
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
     common::assert_golden("minimal", SCENARIO, GOLDEN);
+}
+
+const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territories.toml");
+// Re-pinned 2026-09-26 for the flagship seed change (11 -> 1, F1 of the
+// final fix wave): seed 1 is the validated showcase seed, holding all three
+// locomotion classes alive at their `max_share` caps through 20k ticks
+// (674/525/300 Land/Water/Air, 99.7% inside territory), where seed 11 lets
+// Land die out by ~5k ticks and ends birds-only.
+const HABITAT_GOLDEN: &[(u64, u64)] =
+    &[(0, 0xc24fe92b548eecd8), (100, 0x77c4a23110fbdced), (1000, 0x8e380edcd29de170)];
+
+#[test]
+fn habitat_territories_matches_golden_hashes() {
+    common::assert_golden("habitat-territories", HABITAT_SCENARIO, HABITAT_GOLDEN);
+}
+
+/// FNV-1a over `bincode(agents) ++ bincode(biome)`: the simulation trajectory
+/// WITHOUT the `World` envelope. Adding a serialized `World` field (a layout
+/// change) moves every `state_hash` golden but leaves this untouched, so it
+/// separates "only the snapshot layout grew" from "behaviour changed".
+/// Pinned before the territory/habitat/collision layer landed (flag off in
+/// both scenarios); it must never move while that layer is off.
+fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
+    let mut bytes = bincode::serialize(&w.agents).expect("agents serialize");
+    bytes.extend(bincode::serialize(&w.biome).expect("biome serialize"));
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+const MINIMAL_TRAJECTORY_AT_1000: u64 = 0x2aef3e5125791e3a;
+const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x86655e507670d579;
+
+fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
+    let mut w = common::world(src);
+    common::run(&mut w, ticks);
+    let h = trajectory_hash(&w);
+    if std::env::var("UPDATE_HASHES").is_ok() {
+        println!("// {label} trajectory at {ticks}: 0x{h:016x}");
+        return;
+    }
+    assert_eq!(h, pinned, "{label}: trajectory moved with territory_enabled OFF");
+}
+
+#[test]
+fn minimal_trajectory_unchanged_by_territory_substrate() {
+    assert_trajectory("minimal", SCENARIO, 1000, MINIMAL_TRAJECTORY_AT_1000);
+}
+
+#[test]
+fn grand_theater_trajectory_unchanged_by_territory_substrate() {
+    assert_trajectory(
+        "grand-theater",
+        include_str!("../../../scenarios/grand-theater.toml"),
+        200,
+        GRAND_THEATER_TRAJECTORY_AT_200,
+    );
 }

@@ -56,7 +56,7 @@ const _RIG_KIND: PackedInt32Array = [
 # Pose grid is the same 16-slot layout as the apes so one shader serves all.
 const POSE_COUNT := ApeSprites.POSE_COUNT
 
-# Selection thresholds (tunable; validated in Task 9's capture pass).
+# Selection thresholds (tunable; validated against captured sprite renders).
 const SIZE_SPLIT := 1.25
 const HERB_MAX := 0.34
 const CARN_MIN := 0.66
@@ -70,6 +70,14 @@ const TAG_JAWS := 1 << 2
 const TAG_STORAGE := 1 << 3
 const TAG_LOCOMOTOR2 := 1 << 4
 
+# Locomotion class (territory/habitat layer; crates/anabios-godot
+# `alive_locomotion()`'s byte codes). Single source of truth: agent_layer.gd
+# reads these too (its own airborne-lift gate), rather than keeping a second
+# copy of the Air code.
+const LOCO_LAND := 0
+const LOCO_WATER := 1
+const LOCO_AIR := 2
+
 
 static func rig_kind(archetype: int) -> int:
 	return _RIG_KIND[archetype]
@@ -81,11 +89,23 @@ static func rig_kind(archetype: int) -> int:
 # on top of the diet/size table: livestock still wins outright, then armour
 # on a non-carnivore reads as a tortoise, spines as a porcupine at any diet,
 # a large Storage-bearing herbivore as a mammoth, and a small herbivore with
-# two-or-more Locomotor modules as a wading bird. Anything else falls through
-# to the original hare/deer/boar/primate/fox/wolf table unchanged.
-static func archetype_for(diet: float, size: float, livestock: bool, tags: int = 0) -> int:
+# two-or-more Locomotor modules as a wading bird. `locomotion` (default
+# LOCO_LAND, see the LOCO_* consts above; the territory/habitat layer's
+# per-agent class) overrides the sprite next, so a Water/Air grazer never
+# reads as "a land animal in the water": Air reads as the Wader
+# (flighted), Water as the Tortoise (aquatic). Livestock still wins over
+# locomotion too. Anything else (land, the default) falls through to the
+# original hare/deer/boar/primate/fox/wolf table unchanged — byte-identical
+# to every caller that predates this parameter.
+static func archetype_for(
+	diet: float, size: float, livestock: bool, tags: int = 0, locomotion: int = LOCO_LAND
+) -> int:
 	if livestock:
 		return LIVESTOCK
+	if locomotion == LOCO_AIR:
+		return WADER
+	if locomotion == LOCO_WATER:
+		return TORTOISE
 	var large := size >= SIZE_SPLIT
 	var herbivore := diet < HERB_MAX
 	if (tags & TAG_ARMOR) != 0 and diet < CARN_MIN:

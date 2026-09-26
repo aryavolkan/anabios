@@ -300,6 +300,64 @@ func _init() -> void:
 	)
 	_check(M.archetype_for(0.9, 2.0, true, M.TAG_ARMOR) == M.LIVESTOCK, "livestock beats any tag")
 
+	# Locomotion class (territory/habitat layer): with the territory layer on,
+	# a grazer's sprite should match its Water/Air locomotion class instead of
+	# reading as "a land animal in the water/sky". Land (the
+	# default, 0) leaves every existing diet/size pick alone; Water reads as
+	# an aquatic Tortoise and Air as a flighted Wader, regardless of size;
+	# livestock still overrides everything, locomotion included.
+	_check(
+		M.archetype_for(0.1, 0.8, false, 0, M.LOCO_LAND) == M.HARE,
+		"land locomotion keeps herb small = hare"
+	)
+	_check(
+		M.archetype_for(0.1, 2.0, false, 0, M.LOCO_LAND) == M.DEER,
+		"land locomotion keeps herb large = deer"
+	)
+	_check(
+		M.archetype_for(0.1, 0.8, false, 0, M.LOCO_WATER) == M.TORTOISE,
+		"water locomotion (small) = tortoise"
+	)
+	_check(
+		M.archetype_for(0.1, 2.0, false, 0, M.LOCO_WATER) == M.TORTOISE,
+		"water locomotion (large) = tortoise"
+	)
+	_check(
+		M.archetype_for(0.1, 0.8, false, 0, M.LOCO_AIR) == M.WADER, "air locomotion (small) = wader"
+	)
+	_check(
+		M.archetype_for(0.1, 2.0, false, 0, M.LOCO_AIR) == M.WADER, "air locomotion (large) = wader"
+	)
+	_check(
+		M.archetype_for(0.9, 2.0, true, 0, M.LOCO_AIR) == M.LIVESTOCK,
+		"livestock still wins over locomotion"
+	)
+
+	# Coat colour must track the same locomotion-aware archetype as the
+	# silhouette (agent_layer.gd's _body_colors() must call archetype_for()
+	# with the locomotion argument, or a Water/Air agent gets the right shape
+	# but a stale land-based tint). _body_colors()
+	# itself depends on the live sim and can't be unit-tested headless, so
+	# this pins the pure contract it must respect: an agent whose diet/size
+	# would otherwise read as Hare/Deer gets the Wader/Tortoise coat hue once
+	# its locomotion overrides the archetype, exactly as coat_hue would pick
+	# for that archetype directly.
+	var coat_sp := 7
+	_check(
+		(
+			M.coat_hue(M.archetype_for(0.1, 0.8, false, 0, M.LOCO_AIR), coat_sp)
+			== M.coat_hue(M.WADER, coat_sp)
+		),
+		"air locomotion's coat hue matches the Wader band"
+	)
+	_check(
+		(
+			M.coat_hue(M.archetype_for(0.1, 2.0, false, 0, M.LOCO_WATER), coat_sp)
+			== M.coat_hue(M.TORTOISE, coat_sp)
+		),
+		"water locomotion's coat hue matches the Tortoise band"
+	)
+
 	_check_weapon_cells()
 	_check_quad_archetypes()
 	_check_hero_art()

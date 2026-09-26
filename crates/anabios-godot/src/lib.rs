@@ -1521,6 +1521,47 @@ impl Simulation {
         out
     }
 
+    /// Whether the territory/habitat/collision layer is enabled — gates the
+    /// territory ground overlay and the airborne body lift.
+    #[func]
+    fn territory_active(&self) -> bool {
+        self.inner.as_ref().map(|w| w.territory_enabled).unwrap_or(false)
+    }
+
+    /// Locomotion class per alive agent (0 land, 1 water, 2 air), same order
+    /// as `alive_positions`. Empty when the territory layer is off.
+    #[func]
+    fn alive_locomotion(&self) -> PackedByteArray {
+        let mut out = PackedByteArray::new();
+        if let Some(w) = self.inner.as_ref() {
+            for c in locomotion_of(w) {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    /// Live species territories: `{species_id, pos, radius, locomotion,
+    /// color}` per species with members and an initialized range. Empty when
+    /// the layer is off.
+    #[func]
+    fn species_territories(&self) -> Array<VarDictionary> {
+        let mut out = Array::new();
+        let Some(w) = self.inner.as_ref() else {
+            return out;
+        };
+        for t in territories_of(w) {
+            let mut d = VarDictionary::new();
+            d.set("species_id", t.species_id as i64);
+            d.set("pos", Vector2::new(t.cx, t.cy));
+            d.set("radius", t.r);
+            d.set("locomotion", t.class as i64);
+            d.set("color", hsv_to_color(t.hsv.0, t.hsv.1, t.hsv.2));
+            out.push(&d);
+        }
+        out
+    }
+
     /// Predetermined trade hubs: fixed marketplace positions with the goods that
     /// meet there. Static after worldgen; the viewer draws a building + goods
     /// ring at each. Empty unless the scenario enables resources.
@@ -1684,6 +1725,55 @@ fn body_tags_of(w: &anabios_core::World) -> Vec<i32> {
                 tag |= 1 << 4;
             }
             tag
+        })
+        .collect()
+}
+
+/// Locomotion class per alive agent (0 land / 1 water / 2 air), ascending id
+/// order; empty when the territory layer is off.
+fn locomotion_of(w: &anabios_core::World) -> Vec<u8> {
+    if !w.territory_enabled {
+        return Vec::new();
+    }
+    w.agents
+        .iter_alive()
+        .map(|id| anabios_core::habitat::Locomotion::of(&w.agents.genome[id as usize]) as u8)
+        .collect()
+}
+
+/// One live, initialized species territory with its species colour (HSV of
+/// the species' centroid genome, clamped like `alive_colors`).
+struct TerritoryView {
+    species_id: u32,
+    cx: f32,
+    cy: f32,
+    r: f32,
+    class: u8,
+    hsv: (f32, f32, f32),
+}
+
+fn territories_of(w: &anabios_core::World) -> Vec<TerritoryView> {
+    use anabios_core::genome::GenomeSlot;
+    w.species_territories
+        .iter()
+        .enumerate()
+        .filter(|(sid, t)| {
+            t.is_set() && w.species_member_counts.get(*sid).copied().unwrap_or(0) > 0
+        })
+        .map(|(sid, t)| {
+            let g = &w.species_centroids[sid];
+            TerritoryView {
+                species_id: sid as u32,
+                cx: t.cx,
+                cy: t.cy,
+                r: t.r,
+                class: t.class as u8,
+                hsv: (
+                    g.get(GenomeSlot::ColorHue),
+                    g.get(GenomeSlot::ColorSat).clamp(0.4, 1.0),
+                    g.get(GenomeSlot::ColorVal).clamp(0.5, 1.0),
+                ),
+            }
         })
         .collect()
 }
@@ -2541,6 +2631,44 @@ mod tests {
             assert_eq!(tag & (1 << 4) != 0, want_locomotor2, "agent {id} locomotor bit");
             // No stray bits beyond the five defined ones.
             assert_eq!(tag & !0b11111, 0, "agent {id} unexpected extra bits: {tag}");
+        }
+    }
+
+    /// A world with the territory/habitat/collision layer on: the shipped
+    /// `habitat-territories.toml` scenario, stepped a few ticks so the three
+    /// founder species' territories are initialized (species step runs on
+    /// tick 0).
+    fn habitat_world() -> anabios_core::World {
+        let toml = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scenarios/habitat-territories.toml"
+        ))
+        .expect("read habitat-territories.toml");
+        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
+        for _ in 0..5 {
+            anabios_core::tick::step(&mut w);
+        }
+        w
+    }
+
+    #[test]
+    fn locomotion_export_is_empty_when_off_and_aligned_when_on() {
+        assert!(super::locomotion_of(&minimal_world()).is_empty());
+        let w = habitat_world();
+        let loco = super::locomotion_of(&w);
+        assert_eq!(loco.len(), w.agents.live_count() as usize);
+        assert!(loco.contains(&0) && loco.contains(&1) && loco.contains(&2));
+    }
+
+    #[test]
+    fn territory_export_lists_live_initialized_species() {
+        assert!(super::territories_of(&minimal_world()).is_empty());
+        let w = habitat_world();
+        let t = super::territories_of(&w);
+        assert!(t.len() >= 3, "three founder species, got {}", t.len());
+        for v in &t {
+            assert!(v.r >= anabios_core::territory::TERRITORY_R_MIN);
+            assert!(w.species_member_counts[v.species_id as usize] > 0);
         }
     }
 

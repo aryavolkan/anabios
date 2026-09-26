@@ -6,7 +6,8 @@ const GROUND_PHEROMONE_0 := 1
 const GROUND_ENV_OPTIMUM := 5
 const GROUND_SUCCESSION := 6
 const GROUND_MARKETS := 7
-const GROUND_MAX := 8  # count of ground modes
+const GROUND_TERRITORY := 8
+const GROUND_MAX := 9  # count of ground modes
 
 # Body color modes.
 const BODY_SPECIES := 0
@@ -49,6 +50,10 @@ func ground_is_markets() -> bool:
 	return ground_mode == GROUND_MARKETS
 
 
+func ground_is_territory() -> bool:
+	return ground_mode == GROUND_TERRITORY
+
+
 # Pheromone channel for the current ground mode, or -1 if not a pheromone mode.
 func ground_channel() -> int:
 	if ground_mode >= GROUND_PHEROMONE_0 and ground_mode <= GROUND_PHEROMONE_0 + 3:
@@ -76,6 +81,9 @@ func _cycle_ground() -> void:
 		ground_mode = GROUND_BIOME
 	# Skip MARKETS when the trade economy is disabled.
 	if ground_mode == GROUND_MARKETS and not bool(sim.resources_active()):
+		ground_mode = GROUND_BIOME
+	# Skip TERRITORY when the territory layer is disabled.
+	if ground_mode == GROUND_TERRITORY and not bool(sim.territory_active()):
 		ground_mode = GROUND_BIOME
 
 

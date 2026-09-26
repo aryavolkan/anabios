@@ -213,6 +213,17 @@ pub const SEA_LEVEL: f32 = 0.35;
 pub const ROCK_LINE: f32 = 0.78;
 /// Temperature drop per unit elevation above sea level.
 pub const TEMP_LAPSE: f32 = 0.55;
+/// Aquatic biomass capacity of a Water cell when `World::territory_enabled`
+/// (0.6 × Grass; raised from 0.4× — see the territory-habitat-collision
+/// findings doc — to reduce aquatic-lineage collapse in the measurement
+/// probe). `TerrainType::carrying_capacity` stays 0.0 for Water — the aquatic
+/// pool is maintained only by `seed_aquatic`/`aquatic_regrow_step`.
+pub const AQUATIC_CAPACITY: f32 = 6.0;
+/// Logistic regrowth rate of aquatic biomass per biome step (Grass's rate).
+pub const AQUATIC_REGROWTH_RATE: f32 = 0.01;
+/// Floor a grazed-out Water cell reseeds from, as a fraction of capacity, so
+/// the aquatic pool can never go permanently extinct.
+pub const AQUATIC_RESEED_FRAC: f32 = 0.01;
 /// Whittaker band cutoffs for temperature and moisture.
 pub const BAND_LO: f32 = 0.33;
 pub const BAND_HI: f32 = 0.66;
@@ -756,6 +767,31 @@ impl BiomeField {
         }
     }
 
+    /// Fill every Water cell to `AQUATIC_CAPACITY` (territory layer; called
+    /// once at instantiate). Deterministic, no RNG.
+    pub fn seed_aquatic(&mut self) {
+        for c in self.cells.iter_mut() {
+            if c.terrain == TerrainType::Water {
+                c.plant_biomass = AQUATIC_CAPACITY;
+            }
+        }
+    }
+
+    /// One biome step of logistic aquatic regrowth on Water cells only
+    /// (territory layer), from at least the reseed floor. Land cells are
+    /// untouched. Deterministic, no RNG.
+    pub fn aquatic_regrow_step(&mut self) {
+        let floor = AQUATIC_RESEED_FRAC * AQUATIC_CAPACITY;
+        for c in self.cells.iter_mut() {
+            if c.terrain != TerrainType::Water {
+                continue;
+            }
+            let b = c.plant_biomass.max(floor);
+            let next = b + AQUATIC_REGROWTH_RATE * b * (1.0 - b / AQUATIC_CAPACITY);
+            c.plant_biomass = next.clamp(0.0, AQUATIC_CAPACITY);
+        }
+    }
+
     /// Spread vegetation into depleted cells from their 4-neighbours (torus).
     /// Only cells with positive carrying capacity can recolonize. Double-
     /// buffered so the result is independent of scan order. Deterministic.
@@ -785,6 +821,17 @@ impl BiomeField {
                 let mut sum = 0.0f32;
                 let mut count = 0.0f32;
                 for &ni in &n {
+                    // Exclude Water neighbours as a seed source: they carry
+                    // terrestrial `plant_biomass` only via the aquatic pool
+                    // (AQUATIC_CAPACITY, maintained separately by
+                    // seed_aquatic/aquatic_regrow_step), which must never leak
+                    // onto land through recolonization. Flag-off identical:
+                    // Water's plant_biomass is always 0.0 there (never seeded,
+                    // 0.0 capacity), so it could never pass the seed-min check
+                    // anyway — no RNG, no arithmetic change for non-Water sources.
+                    if self.cells[ni].terrain == TerrainType::Water {
+                        continue;
+                    }
                     let b = self.cells[ni].plant_biomass;
                     if b > RECOLONIZE_SEED_MIN {
                         sum += b;
@@ -1718,6 +1765,54 @@ mod tests {
         assert_eq!(wb, cb, "reused scratch must be cleared, not carried across calls");
     }
 
+    /// Aquatic biomass (territory layer) must never leak onto land through
+    /// `recolonize_step`: a Water neighbour's `plant_biomass` (maintained only
+    /// by `seed_aquatic`/`aquatic_regrow_step`) is not a valid recolonization
+    /// seed source, even though it exceeds `RECOLONIZE_SEED_MIN`. A land
+    /// neighbour with real vegetation is a positive control proving the gate
+    /// is what's blocking recolonization, not a broken `recolonize_step`.
+    #[test]
+    fn recolonize_step_does_not_seed_from_aquatic_water_neighbours() {
+        // 3x3 grid: center starts depleted grass. Its four orthogonal
+        // neighbours: north = Water at full aquatic capacity (must NOT seed
+        // it), the other three = depleted grass (no seed either), except one
+        // land neighbour gets real vegetation as the positive control below.
+        let mut cells = vec![grass_cell(0.0, SUCCESSION_CLIMAX); 9];
+        let mut water = grass_cell(AQUATIC_CAPACITY, SUCCESSION_CLIMAX);
+        water.terrain = TerrainType::Water;
+        cells[1] = water; // north of center (row 0, col 1)
+        let mut field = BiomeField {
+            cells,
+            res: 3,
+            world_size: 24.0,
+            cell_size: 8.0,
+            recolonize_scratch: Vec::new(),
+        };
+        field.recolonize_step(false);
+        assert_eq!(
+            field.cells[4].plant_biomass, 0.0,
+            "a depleted land cell must not be recolonized from an aquatic Water neighbour"
+        );
+
+        // Positive control: replace the Water neighbour with a vegetated land
+        // neighbour of the same biomass value — recolonization now happens,
+        // proving the gate (not a broken recolonize_step) blocked the first case.
+        let mut cells2 = vec![grass_cell(0.0, SUCCESSION_CLIMAX); 9];
+        cells2[1] = grass_cell(AQUATIC_CAPACITY, SUCCESSION_CLIMAX);
+        let mut field2 = BiomeField {
+            cells: cells2,
+            res: 3,
+            world_size: 24.0,
+            cell_size: 8.0,
+            recolonize_scratch: Vec::new(),
+        };
+        field2.recolonize_step(false);
+        assert!(
+            field2.cells[4].plant_biomass > 0.0,
+            "a depleted land cell must still be recolonized from a vegetated land neighbour"
+        );
+    }
+
     #[test]
     fn climax_regrowth_matches_pre_succession_arithmetic() {
         // The Climax path must be byte-identical to the original logistic
@@ -1808,5 +1903,31 @@ mod tests {
         };
         field.regrow_step(false);
         assert_eq!(field.cells[0].succession, SUCCESSION_BARE);
+    }
+
+    #[test]
+    fn aquatic_biomass_seeds_and_regrows_only_water() {
+        let mut f = BiomeField::generate(3, 32, 256.0);
+        for (k, c) in f.cells.iter_mut().enumerate() {
+            c.terrain = if k % 2 == 0 { TerrainType::Water } else { TerrainType::Grass };
+            c.plant_biomass = 0.0;
+        }
+        f.seed_aquatic();
+        for c in &f.cells {
+            let want = if c.terrain == TerrainType::Water { AQUATIC_CAPACITY } else { 0.0 };
+            assert_eq!(c.plant_biomass, want);
+        }
+        // Grazed-out water reseeds and climbs; land is untouched by this step.
+        for c in f.cells.iter_mut() {
+            c.plant_biomass = 0.0;
+        }
+        f.aquatic_regrow_step();
+        for c in &f.cells {
+            if c.terrain == TerrainType::Water {
+                assert!(c.plant_biomass > 0.0 && c.plant_biomass <= AQUATIC_CAPACITY);
+            } else {
+                assert_eq!(c.plant_biomass, 0.0);
+            }
+        }
     }
 }
