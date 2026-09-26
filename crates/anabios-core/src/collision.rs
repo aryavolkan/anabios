@@ -1,13 +1,16 @@
 //! Body collision (territory/habitat/collision layer). Each agent is a disc of
 //! `body_radius` (from its Size gene); colliding pairs (see
-//! `Locomotion::collides_with`) are kept at least `r_i + r_j` apart by:
+//! `Locomotion::collides_with`) are kept apart, not guaranteed to never
+//! overlap, by:
 //!
 //! 1. a separation steering term added in `decide_all` (agents route around
 //!    each other), and
-//! 2. a hard post-integrate resolve (stage 4'): `RESOLVE_PASSES` Jacobi
-//!    passes over a fine hash, each agent pushing itself out of its overlaps
-//!    against a position snapshot, dropping any push into terrain its class
-//!    can't occupy.
+//! 2. a best-effort post-integrate resolve (stage 4'): `RESOLVE_PASSES`
+//!    Jacobi passes over a fine hash, each agent pushing itself out of its
+//!    overlaps against a position snapshot, dropping any push into terrain
+//!    its class can't occupy. A fixed pass count over a crowded hash can
+//!    still leave some pairs closer than their gap (see
+//!    `territory_measurement_probe`'s `deep_overlaps`/`shallow_overlaps`).
 //!
 //! Both read snapshots and write only their own slot, so the result is
 //! independent of rayon thread count. Gated on `World::territory_enabled`.
@@ -68,8 +71,20 @@ fn away_dir(i: u32, j: u32, d: Vec2, dist: f32) -> Vec2 {
     }
 }
 
-fn collision_res(ws: f32) -> usize {
-    ((ws / COLLISION_CELL) as usize).max(3)
+/// Grid resolution for a world of extent `ws`: cells of side `COLLISION_CELL`,
+/// at least 3 wide, capped at 1024. The flagship (1024-wide world) resolves
+/// to 256, well under the cap and unaffected by it. Above the cap,
+/// `cell_size = ws / res` grows past `COLLISION_CELL` instead of the grid
+/// (and its `res²` buckets) growing without bound, which keeps rebuild and
+/// memory cost bounded on huge worlds. Correctness holds either way: a
+/// bigger `cell_size` only ever exceeds `COLLISION_CELL`, never falls below
+/// it, so `UniformSpatialHash::query`'s one-ring scan (valid up to
+/// `perception_max_radius() == cell_size`) still covers the `COLLISION_CELL`
+/// reach `separation_steer`/`resolve_overlaps` query with, and the
+/// `MAX_PUSH`-sized-move stale-bucket bound (see `resolve_overlaps`'s doc)
+/// only gets more slack, never less.
+pub(crate) fn collision_res(ws: f32) -> usize {
+    ((ws / COLLISION_CELL) as usize).clamp(3, 1024)
 }
 
 /// (Re)size and rebuild `world.collision_spatial` from current positions.
@@ -201,6 +216,22 @@ mod tests {
         let mut g = Genome::neutral();
         g.set(GenomeSlot::Locomotion, loco);
         g
+    }
+
+    #[test]
+    fn collision_res_caps_at_1024_with_cell_size_still_at_least_collision_cell() {
+        // Flagship-sized world: well under the cap, untouched by it.
+        assert_eq!(collision_res(1024.0), 256);
+        // A huge world: capped at 1024 rather than growing without bound.
+        assert_eq!(collision_res(16384.0), 1024);
+        let cell_size = 16384.0 / collision_res(16384.0) as f32;
+        assert!(
+            cell_size >= COLLISION_CELL,
+            "cell_size {cell_size} must stay >= COLLISION_CELL so the one-ring \
+             query still covers the reach separation_steer/resolve_overlaps query with"
+        );
+        // Tiny world: floors at 3 (a one-ring query needs at least a 3x3 grid).
+        assert_eq!(collision_res(1.0), 3);
     }
 
     #[test]

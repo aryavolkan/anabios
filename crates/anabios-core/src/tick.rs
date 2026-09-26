@@ -74,9 +74,10 @@ pub fn step(world: &mut World) {
         world.territory_enabled.then_some(&world.biome),
     );
 
-    // Stage 4': collision resolve (territory layer) — no two colliding bodies
-    // end the move overlapping. Before needs/anchor/interact so every later
-    // stage sees resolved positions. No-op with the flag off.
+    // Stage 4': collision resolve (territory layer) — colliding bodies are
+    // kept apart (separation steering plus this best-effort 2-pass min-gap
+    // resolve), not guaranteed to never touch. Before needs/anchor/interact
+    // so every later stage sees resolved positions. No-op with the flag off.
     crate::collision::resolve_overlaps(world);
 
     // Stage 4a': basic needs — thirst/fatigue accumulation, drinking, and the
@@ -341,7 +342,7 @@ fn decide_all(world: &mut World) {
             // Past the free-roam zone, the intent accumulated so far is
             // unit-capped before the pull is added (`apply_territory_pull`),
             // so an unbounded evolved move intent can't swamp a fixed-size
-            // pull after normalization (Task 9b territory diagnosis, H6).
+            // pull after normalization (see `territory::apply_territory_pull`).
             if territory_enabled {
                 if let Some(t) = territories.get(agents.species_id[i] as usize) {
                     let pull = crate::territory::territory_pull(
@@ -615,5 +616,47 @@ mod tests {
             "high-arousal distant threat ⇒ hijack Freeze (zero heading), got {on:?}"
         );
         assert_ne!(off, Vec2::ZERO, "flag off ⇒ no hijack; prey still has a (flee) heading");
+    }
+
+    #[test]
+    fn territory_pull_wins_over_a_huge_outward_program_intent_in_decide_all() {
+        use crate::habitat::Locomotion;
+        use crate::program::{Node, Program};
+        use crate::territory::Territory;
+
+        // Species 0's territory sits at (500, 500), r = 100; the agent is
+        // placed well beyond it, so the pull is at full strength. Its program
+        // always emits a raw move intent of magnitude 1000 in +x — away from
+        // home, and orders of magnitude larger than TERRITORY_PULL — modeling
+        // an evolved program whose intent would otherwise swamp the pull once
+        // the sum is normalized to a direction (see
+        // `territory::apply_territory_pull`'s doc). This exercises the real
+        // `decide_all` pipeline (not just the isolated helper), so it would
+        // catch a reorder of the territory-pull block relative to the rest of
+        // the movement-bias stack (e.g. moving it after `apply_mood`) if that
+        // ever broke the unit-cap-before-adding-the-pull behaviour.
+        let mut w = World::new(21);
+        w.territory_enabled = true;
+        let centre = Vec2::new(500.0, 500.0);
+        let start = Vec2::new(700.0, 500.0);
+        let a = w.spawn_agent(start, Genome::neutral());
+        w.species_territories.push(Territory {
+            cx: centre.x,
+            cy: centre.y,
+            r: 100.0,
+            class: Locomotion::Land,
+        });
+        w.agents.program[a as usize] =
+            Program::from_slice(&[Node::Const(1000.0), Node::MoveTowardX]);
+        w.resize_scratch();
+        decide_all(&mut w);
+
+        let dir = w.desired_direction[a as usize];
+        let home = (centre - start).normalize();
+        assert!(
+            dir.dot(home) > 0.0,
+            "desired_direction must net toward home despite a huge outward program \
+             intent: dir={dir:?} home={home:?}"
+        );
     }
 }

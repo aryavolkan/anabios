@@ -269,8 +269,10 @@ fn habitat_classes_never_leave_their_terrain() {
 
 /// Measurement probe (not a gate): 8 seeds × 20k ticks of the flagship
 /// scenario, reporting per-class populations, habitat violations, deep
-/// overlaps (colliding pairs closer than half their gap), and the share of
-/// members inside their species' territory. Run:
+/// overlaps (colliding pairs closer than half their gap), shallow overlaps
+/// (colliding pairs closer than their gap but at least half of it — still
+/// touching, less severely), and the share of members inside their species'
+/// territory. Run:
 ///   cargo test -p anabios-core --release --test invariants \
 ///     territory_measurement_probe -- --ignored --nocapture
 #[test]
@@ -289,7 +291,7 @@ fn territory_measurement_probe() {
         let ids: Vec<u32> = w.agents.iter_alive().collect();
         let mut pop = [0u32; 3];
         let mut inside_by_class = [0u32; 3];
-        let (mut violations, mut deep, mut inside) = (0u32, 0u32, 0u32);
+        let (mut violations, mut deep, mut shallow, mut inside) = (0u32, 0u32, 0u32, 0u32);
         for &id in &ids {
             let i = id as usize;
             let c = Locomotion::of(&w.agents.genome[i]);
@@ -335,12 +337,14 @@ fn territory_measurement_probe() {
                 );
                 if d < 0.5 * gap {
                     deep += 1;
+                } else if d < gap {
+                    shallow += 1;
                 }
             }
         }
         let n = ids.len().max(1) as f32;
         println!(
-            "seed={seed} alive={} land={} water={} air={} violations={violations} deep_overlaps={deep} inside_territory={:.1}% inside_by_class(L/W/A)={}/{}/{} water_cells_with_biomass={}",
+            "seed={seed} alive={} land={} water={} air={} violations={violations} deep_overlaps={deep} shallow_overlaps={shallow} inside_territory={:.1}% inside_by_class(L/W/A)={}/{}/{} water_cells_with_biomass={}",
             ids.len(), pop[0], pop[1], pop[2], 100.0 * inside as f32 / n,
             inside_pct_by_class(0), inside_pct_by_class(1), inside_pct_by_class(2),
             w.biome.cells.iter().filter(|c| c.terrain == TerrainType::Water && c.plant_biomass > 0.1).count(),

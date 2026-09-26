@@ -17,7 +17,7 @@ the curated root set. Run any of these with
 | `predator-prey.toml` | Predation, collapse-and-recovery cycles | — |
 | `trophic-cascade.toml` | Top-down cascades through three trophic levels | — |
 | `territories.toml` | Pheromone territories & scent marking | — |
-| `habitat-territories.toml` | Habitat/collision layer showcase: three grazer species differing only in Locomotion (Land/Water/Air) each hold a species territory and never overlap bodies; per-lineage `max_share` 0.45/0.35/0.20 stops the shared population cap from sterilizing the smaller founders. Measure with `cargo test -p anabios-core --release --test invariants territory_measurement_probe -- --ignored --nocapture` | territory |
+| `habitat-territories.toml` | Habitat/collision layer showcase: three grazer species differing only in Locomotion (Land/Water/Air) each hold a species territory and are kept apart (separation steering plus a best-effort 2-pass min-gap resolve); per-lineage `max_share` 0.45/0.35/0.20 stops the shared population cap from sterilizing the smaller founders. Measure with `cargo test -p anabios-core --release --test invariants territory_measurement_probe -- --ignored --nocapture` | territory |
 | `dialects.toml` | Meme divergence between clusters; dialect formation | — |
 | `traditions.toml` | E9 meme-lineage variants: traditions sweeping a culture | inventions, settlement, living_biome |
 | `war.toml` | Kin-group warfare (`War`/`WarEnded` events) | war |
