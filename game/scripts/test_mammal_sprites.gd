@@ -300,6 +300,39 @@ func _init() -> void:
 	)
 	_check(M.archetype_for(0.9, 2.0, true, M.TAG_ARMOR) == M.LIVESTOCK, "livestock beats any tag")
 
+	# Locomotion class (territory/habitat layer, task-11b): with the territory
+	# layer on, a grazer's sprite should match its Water/Air locomotion class
+	# instead of reading as "a land animal in the water/sky". Land (the
+	# default, 0) leaves every existing diet/size pick alone; Water reads as
+	# an aquatic Tortoise and Air as a flighted Wader, regardless of size;
+	# livestock still overrides everything, locomotion included.
+	_check(
+		M.archetype_for(0.1, 0.8, false, 0, M.LOCO_LAND) == M.HARE,
+		"land locomotion keeps herb small = hare"
+	)
+	_check(
+		M.archetype_for(0.1, 2.0, false, 0, M.LOCO_LAND) == M.DEER,
+		"land locomotion keeps herb large = deer"
+	)
+	_check(
+		M.archetype_for(0.1, 0.8, false, 0, M.LOCO_WATER) == M.TORTOISE,
+		"water locomotion (small) = tortoise"
+	)
+	_check(
+		M.archetype_for(0.1, 2.0, false, 0, M.LOCO_WATER) == M.TORTOISE,
+		"water locomotion (large) = tortoise"
+	)
+	_check(
+		M.archetype_for(0.1, 0.8, false, 0, M.LOCO_AIR) == M.WADER, "air locomotion (small) = wader"
+	)
+	_check(
+		M.archetype_for(0.1, 2.0, false, 0, M.LOCO_AIR) == M.WADER, "air locomotion (large) = wader"
+	)
+	_check(
+		M.archetype_for(0.9, 2.0, true, 0, M.LOCO_AIR) == M.LIVESTOCK,
+		"livestock still wins over locomotion"
+	)
+
 	_check_weapon_cells()
 	_check_quad_archetypes()
 	_check_hero_art()

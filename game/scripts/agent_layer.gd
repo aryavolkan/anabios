@@ -137,10 +137,12 @@ const SHADOW_H := 0.36
 const SHADOW_DROP := 0.40  # centre offset below the body centre, of the body size
 # Airborne figures (territory layer, Air locomotion) ride AIR_LIFT body sizes
 # above their ground point; their contact shadow stays on the ground, shrunk
-# by AIR_SHADOW_SCALE and never cut at the waterline.
+# by AIR_SHADOW_SCALE and never cut at the waterline. The locomotion codes
+# themselves (LOCO_AIR and friends) live in MammalSprites — its archetype_for
+# also branches on them (task-11b) — so there is one source of truth instead
+# of two copies of the bridge's alive_locomotion() byte codes.
 const AIR_LIFT := 0.9
 const AIR_SHADOW_SCALE := 0.6
-const LOCO_AIR := 2
 var _death_effects: Array = []
 
 var _prev_ids: PackedInt32Array = PackedInt32Array()
@@ -546,8 +548,9 @@ func refresh(
 	for i in n:
 		if visible_mask[i]:
 			var tags: int = body_tags[i] if have_tags else 0
+			var loco_i: int = locomotion[i] if have_locomotion else 0
 			var arch := (
-				MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags)
+				MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags, loco_i)
 				if have_sp
 				else MammalSprites.PRIMATE
 			)
@@ -565,8 +568,9 @@ func refresh(
 				bucket_ix[i] = _prev_bucket[pm]
 			else:
 				var tags2: int = body_tags[i] if have_tags else 0
+				var loco_i2: int = locomotion[i] if have_locomotion else 0
 				var arch2 := (
-					MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags2)
+					MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags2, loco_i2)
 					if have_sp
 					else MammalSprites.PRIMATE
 				)
@@ -613,7 +617,7 @@ func refresh(
 				sz *= FxMath.birth_scale(age / BIRTH_POP)
 		# Upright: the hominin stands, not spins — heading drives the
 		# walk shader (walk weight + facing), not the transform rotation.
-		var airborne: bool = have_locomotion and locomotion[i] == LOCO_AIR
+		var airborne: bool = have_locomotion and locomotion[i] == MammalSprites.LOCO_AIR
 		var t: Transform2D = Transform2D(
 			0.0, Vector2(sz, sz), 0.0, smooth[i] + air_lift(sz, airborne)
 		)
