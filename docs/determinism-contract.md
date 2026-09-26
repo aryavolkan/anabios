@@ -71,6 +71,17 @@ the merge base of a change and check them at its head before regenerating
 goldens. Hashing agents + biome alone is not enough — a flag-off regression
 confined to codex bookkeeping or an extra RNG draw would slip past it.
 
+## Two default layers
+
+The **scenario schema** (`Scenario`, `scenarios/*.toml`) defaults to the full
+engine: every feature knob is `true` and `season_period` is 2000 unless a file
+opts out. Four experiment levers stay off by default (`env_period`,
+`climate_drift_rate`, `payoff_biased_learning`, `unilateral_trade`). The
+**engine** (`World::new`, `World::with_dims`) defaults to nothing: every
+subsystem flag is `false`. Every "flag off ⇒ zero RNG draws, byte-identical"
+guarantee in this document is stated and tested at the engine layer, and the
+flag-off trajectory guards pin inline all-off fixtures, not the scenario files.
+
 Locomotion class (Land/Water/Air) is derived from the genome
 (`Locomotion::of`, reading `GenomeSlot::Locomotion`) every time it's needed —
 it is never stored on `Agent` or `World`, so there is nothing to skip or
