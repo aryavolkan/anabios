@@ -45,6 +45,7 @@ pub fn step(world: &mut World) {
         world.world_size,
         world.gene_tech_coupling,
         world.cognition_enabled,
+        world.territory_enabled,
     );
 
     // Stage 2b: subcortical affect — update per-agent Panksepp activations from
@@ -173,6 +174,9 @@ pub fn step(world: &mut World) {
             world.biome.regrow_step_seasonal(phase, sf);
         } else {
             world.biome.regrow_step(sf);
+        }
+        if world.territory_enabled {
+            world.biome.aquatic_regrow_step();
         }
         // Stage 10b: resource node spawn/cleanup (opt-in; no-op when off).
         crate::resource::resource_step(world);

@@ -64,6 +64,14 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         if world.agents.asleep[i] {
             continue;
         }
+        // Territory layer: graze only terrain this agent's Locomotion class
+        // may feed on (flyers over water, stranded agents). Flag off ⇒ skipped.
+        if world.territory_enabled
+            && !crate::habitat::Locomotion::of(&world.agents.genome[i])
+                .can_graze(world.biome.sample(world.agents.position[i]).terrain)
+        {
+            continue;
+        }
         if !module::has(&world.agents.modules[i], ModuleType::Mouth) {
             continue;
         }
@@ -687,6 +695,39 @@ mod tests {
             w.world_size,
             false,
             w.cognition_enabled,
+            false,
+        );
+    }
+
+    #[test]
+    fn flyers_do_not_graze_aquatic_biomass() {
+        let mut w = World::new(5);
+        w.territory_enabled = true;
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 0..res {
+                let c = w.biome.at_mut(col, row);
+                c.terrain = crate::biome::TerrainType::Water;
+                c.plant_biomass = crate::biome::AQUATIC_CAPACITY;
+            }
+        }
+        let mut g = crate::genome::Genome::neutral();
+        g.set(crate::genome::GenomeSlot::Locomotion, 0.9); // Air
+        let bird = w.spawn_agent(crate::prelude::Vec2::new(500.0, 500.0), g);
+        g.set(crate::genome::GenomeSlot::Locomotion, 0.1); // Water
+        let fish = w.spawn_agent(crate::prelude::Vec2::new(300.0, 300.0), g);
+        let before_bird = w.biome.sample(w.agents.position[bird as usize]).plant_biomass;
+        let before_fish = w.biome.sample(w.agents.position[fish as usize]).plant_biomass;
+        refresh_sensors(&mut w);
+        interact_all(&mut w);
+        assert_eq!(
+            w.biome.sample(w.agents.position[bird as usize]).plant_biomass,
+            before_bird,
+            "an Air agent over water must not graze"
+        );
+        assert!(
+            w.biome.sample(w.agents.position[fish as usize]).plant_biomass < before_fish,
+            "a Water agent grazes aquatic biomass"
         );
     }
 

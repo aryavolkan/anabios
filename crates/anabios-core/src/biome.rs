@@ -213,6 +213,15 @@ pub const SEA_LEVEL: f32 = 0.35;
 pub const ROCK_LINE: f32 = 0.78;
 /// Temperature drop per unit elevation above sea level.
 pub const TEMP_LAPSE: f32 = 0.55;
+/// Aquatic biomass capacity of a Water cell when `World::territory_enabled`
+/// (0.4 × Grass). `TerrainType::carrying_capacity` stays 0.0 for Water — the
+/// aquatic pool is maintained only by `seed_aquatic`/`aquatic_regrow_step`.
+pub const AQUATIC_CAPACITY: f32 = 4.0;
+/// Logistic regrowth rate of aquatic biomass per biome step (Grass's rate).
+pub const AQUATIC_REGROWTH_RATE: f32 = 0.01;
+/// Floor a grazed-out Water cell reseeds from, as a fraction of capacity, so
+/// the aquatic pool can never go permanently extinct.
+pub const AQUATIC_RESEED_FRAC: f32 = 0.01;
 /// Whittaker band cutoffs for temperature and moisture.
 pub const BAND_LO: f32 = 0.33;
 pub const BAND_HI: f32 = 0.66;
@@ -753,6 +762,31 @@ impl BiomeField {
                 |c| 1.0 + SEASON_AMPLITUDE * season_match(c.env, phase),
                 fert,
             );
+        }
+    }
+
+    /// Fill every Water cell to `AQUATIC_CAPACITY` (territory layer; called
+    /// once at instantiate). Deterministic, no RNG.
+    pub fn seed_aquatic(&mut self) {
+        for c in self.cells.iter_mut() {
+            if c.terrain == TerrainType::Water {
+                c.plant_biomass = AQUATIC_CAPACITY;
+            }
+        }
+    }
+
+    /// One biome step of logistic aquatic regrowth on Water cells only
+    /// (territory layer), from at least the reseed floor. Land cells are
+    /// untouched. Deterministic, no RNG.
+    pub fn aquatic_regrow_step(&mut self) {
+        let floor = AQUATIC_RESEED_FRAC * AQUATIC_CAPACITY;
+        for c in self.cells.iter_mut() {
+            if c.terrain != TerrainType::Water {
+                continue;
+            }
+            let b = c.plant_biomass.max(floor);
+            let next = b + AQUATIC_REGROWTH_RATE * b * (1.0 - b / AQUATIC_CAPACITY);
+            c.plant_biomass = next.clamp(0.0, AQUATIC_CAPACITY);
         }
     }
 
@@ -1808,5 +1842,31 @@ mod tests {
         };
         field.regrow_step(false);
         assert_eq!(field.cells[0].succession, SUCCESSION_BARE);
+    }
+
+    #[test]
+    fn aquatic_biomass_seeds_and_regrows_only_water() {
+        let mut f = BiomeField::generate(3, 32, 256.0);
+        for (k, c) in f.cells.iter_mut().enumerate() {
+            c.terrain = if k % 2 == 0 { TerrainType::Water } else { TerrainType::Grass };
+            c.plant_biomass = 0.0;
+        }
+        f.seed_aquatic();
+        for c in &f.cells {
+            let want = if c.terrain == TerrainType::Water { AQUATIC_CAPACITY } else { 0.0 };
+            assert_eq!(c.plant_biomass, want);
+        }
+        // Grazed-out water reseeds and climbs; land is untouched by this step.
+        for c in f.cells.iter_mut() {
+            c.plant_biomass = 0.0;
+        }
+        f.aquatic_regrow_step();
+        for c in &f.cells {
+            if c.terrain == TerrainType::Water {
+                assert!(c.plant_biomass > 0.0 && c.plant_biomass <= AQUATIC_CAPACITY);
+            } else {
+                assert_eq!(c.plant_biomass, 0.0);
+            }
+        }
     }
 }

@@ -117,6 +117,7 @@ fn bench_stages(c: &mut Criterion) {
                     sw.world_size,
                     sw.gene_tech_coupling,
                     sw.cognition_enabled,
+                    sw.territory_enabled,
                 )
             });
             sw.sensors = sensors;

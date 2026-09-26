@@ -1049,6 +1049,11 @@ impl Scenario {
                 }
             }
         }
+        // Territory layer: stock the oceans with aquatic biomass once the
+        // final biome exists. Flag off ⇒ Water stays at 0.0 as before.
+        if w.territory_enabled {
+            w.biome.seed_aquatic();
+        }
         // Predetermined trade hubs: placed from the finalized biome once the
         // trade-goods subsystem is active. Must run AFTER the world_map match so
         // it sees the real (Earth or climate) biome, not the default one.
