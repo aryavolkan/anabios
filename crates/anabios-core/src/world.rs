@@ -350,6 +350,15 @@ pub struct World {
     /// tick in `harvest_pass`. `#[serde(skip)]` — reconstructed on load.
     #[serde(skip)]
     pub resource_spatial: UniformSpatialHash,
+    /// Fine collision hash (`collision::COLLISION_CELL` cells), rebuilt at
+    /// stage 1 and inside the stage-4' resolve when `territory_enabled`.
+    /// `#[serde(skip)]` scratch — resized/rebuilt on first use after load.
+    #[serde(skip)]
+    pub collision_spatial: UniformSpatialHash,
+    /// Jacobi position snapshot reused by `collision::resolve_overlaps`.
+    /// Scratch, `#[serde(skip)]`.
+    #[serde(skip)]
+    pub collision_scratch: Vec<crate::prelude::Vec2>,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
@@ -537,6 +546,9 @@ impl World {
                 crate::biome::WORLD_SIZE_DEFAULT,
                 crate::spatial::HASH_RES_DEFAULT,
             ),
+            // Placeholder (3x3); `collision::rebuild_hash` sizes it on first use.
+            collision_spatial: UniformSpatialHash::with_dims(crate::biome::WORLD_SIZE_DEFAULT, 3),
+            collision_scratch: Vec::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),

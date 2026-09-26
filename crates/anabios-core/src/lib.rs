@@ -11,6 +11,7 @@ pub mod behavior;
 pub mod biome;
 pub mod carcass;
 pub mod codex;
+pub mod collision;
 pub mod culture;
 pub mod dimorphism;
 pub mod disaster;

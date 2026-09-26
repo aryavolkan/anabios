@@ -31,6 +31,11 @@ pub fn step(world: &mut World) {
     // Stage 1: rebuild the spatial hash from current positions.
     world.spatial.rebuild(&world.agents.position, |i| world.agents.is_alive(i as u32));
 
+    // Territory layer: fine collision hash for this tick's separation steer.
+    if world.territory_enabled {
+        crate::collision::rebuild_hash(world);
+    }
+
     // Stage 2: sense. The culture-lineage mask (anthropogenic arms race) is
     // refreshed first — a no-op leaving an empty mask when the flag is off.
     world.refresh_culture_mask();
@@ -68,6 +73,11 @@ pub fn step(world: &mut World) {
         world.spatial.perception_max_radius(),
         world.territory_enabled.then_some(&world.biome),
     );
+
+    // Stage 4': collision resolve (territory layer) — no two colliding bodies
+    // end the move overlapping. Before needs/anchor/interact so every later
+    // stage sees resolved positions. No-op with the flag off.
+    crate::collision::resolve_overlaps(world);
 
     // Stage 4a': basic needs — thirst/fatigue accumulation, drinking, and the
     // sleep hysteresis (opt-in; no-op and zero RNG draws when
@@ -211,6 +221,7 @@ fn decide_all(world: &mut World) {
     let territory_enabled = world.territory_enabled;
     let territories = &world.species_territories;
     let spatial = &world.spatial;
+    let collision = &world.collision_spatial;
     let ws = world.world_size;
     let cap = world.agents.capacity();
     world
@@ -413,6 +424,14 @@ fn decide_all(world: &mut World) {
                     &sensors[i],
                     agents.energy[i],
                 );
+            }
+            // Separation steering (territory layer): route around overlapping
+            // bodies. Last in the stack so it still applies under the pen
+            // override and the hijack; the stage-4' resolve backstops it.
+            if territory_enabled {
+                let sep = crate::collision::separation_steer(collision, agents, i, ws);
+                action.move_x += crate::collision::SEP_PULL * sep.x;
+                action.move_y += crate::collision::SEP_PULL * sep.y;
             }
             // Normalize the movement intent to a unit direction (identical to the
             // pre-M11 logic that lived inside `decide`). Guard against a non-finite

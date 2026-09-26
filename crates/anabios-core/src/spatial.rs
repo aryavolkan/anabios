@@ -70,6 +70,12 @@ impl UniformSpatialHash {
         self.cell_size
     }
 
+    /// Grid resolution per axis.
+    #[inline]
+    pub fn res(&self) -> usize {
+        self.res
+    }
+
     /// Rebuild from the alive agent positions. Agents whose `alive` bit is
     /// false are skipped. `positions[i]` and `alive_iter` are indexed by
     /// agent id.
