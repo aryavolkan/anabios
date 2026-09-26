@@ -277,11 +277,13 @@ fn minimal_scenario_matches_golden_hashes() {
 }
 
 const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territories.toml");
-// Re-pinned for Task 9b (territory-pull mechanism fix, 2026-09-25): tick 0's
-// hash is unchanged (the fix only affects post-instantiate movement); ticks
-// 100 and 1000 moved.
+// Re-pinned 2026-09-26 for the flagship seed change (11 -> 1, F1 of the
+// final fix wave): seed 1 is the validated showcase seed, holding all three
+// locomotion classes alive at their `max_share` caps through 20k ticks
+// (674/525/300 Land/Water/Air, 99.7% inside territory), where seed 11 lets
+// Land die out by ~5k ticks and ends birds-only.
 const HABITAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xd5f4fc2e1dbb698b), (100, 0x915051a395e3183a), (1000, 0x58062a9c7997308b)];
+    &[(0, 0xc24fe92b548eecd8), (100, 0x77c4a23110fbdced), (1000, 0x8e380edcd29de170)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {
