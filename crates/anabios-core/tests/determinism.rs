@@ -270,3 +270,49 @@ fn parallel_matches_serial_across_thread_counts() {
 fn minimal_scenario_matches_golden_hashes() {
     common::assert_golden("minimal", SCENARIO, GOLDEN);
 }
+
+/// FNV-1a over `bincode(agents) ++ bincode(biome)`: the simulation trajectory
+/// WITHOUT the `World` envelope. Adding a serialized `World` field (a layout
+/// change) moves every `state_hash` golden but leaves this untouched, so it
+/// separates "only the snapshot layout grew" from "behaviour changed".
+/// Pinned before the territory/habitat/collision layer landed (flag off in
+/// both scenarios); it must never move while that layer is off.
+fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
+    let mut bytes = bincode::serialize(&w.agents).expect("agents serialize");
+    bytes.extend(bincode::serialize(&w.biome).expect("biome serialize"));
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+const MINIMAL_TRAJECTORY_AT_1000: u64 = 0x2aef3e5125791e3a;
+const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x86655e507670d579;
+
+fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
+    let mut w = common::world(src);
+    common::run(&mut w, ticks);
+    let h = trajectory_hash(&w);
+    if std::env::var("UPDATE_HASHES").is_ok() {
+        println!("// {label} trajectory at {ticks}: 0x{h:016x}");
+        return;
+    }
+    assert_eq!(h, pinned, "{label}: trajectory moved with territory_enabled OFF");
+}
+
+#[test]
+fn minimal_trajectory_unchanged_by_territory_substrate() {
+    assert_trajectory("minimal", SCENARIO, 1000, MINIMAL_TRAJECTORY_AT_1000);
+}
+
+#[test]
+fn grand_theater_trajectory_unchanged_by_territory_substrate() {
+    assert_trajectory(
+        "grand-theater",
+        include_str!("../../../scenarios/grand-theater.toml"),
+        200,
+        GRAND_THEATER_TRAJECTORY_AT_200,
+    );
+}
