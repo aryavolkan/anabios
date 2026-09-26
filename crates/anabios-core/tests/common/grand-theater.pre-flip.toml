@@ -62,12 +62,6 @@ inventions_enabled = true
 gene_tech_coupling = true
 cognition_enabled = true
 war_enabled = true
-# `practices_enabled` already defaulted to true before the schema flip (Task
-# 1 left it untouched), so it must stay explicit here — with cognition on,
-# the pre-flip trajectory was already running practice discovery; forcing it
-# off via OPT_OUT_ALL's blanket opt-out would replay a config that never
-# existed and move the pin.
-practices_enabled = true
 
 # ---------------------------------------------------------------------------
 # THE CAPITAL — north-seam hub (948,4). The four-goods trade quartet spawns

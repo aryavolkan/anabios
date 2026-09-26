@@ -4,9 +4,12 @@
 //! drift when a future knob is added — add it here too.
 #![allow(dead_code)]
 
-/// Every feature knob, off. Appended AFTER a file's own top-level keys; TOML
-/// rejects duplicate keys, so a base that already sets one of these must go
-/// through `with_opt_outs`, which drops the duplicates.
+/// Every feature knob at its PRE-FLIP default: off for all of them, except
+/// `practices_enabled`, which already defaulted on before the schema flip (a
+/// fixture must replay the world as it was, and a file that never mentioned
+/// the knob ran with practices on). Appended AFTER a file's own top-level
+/// keys; TOML rejects duplicate keys, so a base that already sets one of
+/// these must go through `with_opt_outs`, which drops the duplicates.
 pub const OPT_OUT_ALL: &str = "
 biome_adaptation = false
 terrain_habitat = false
@@ -29,7 +32,7 @@ settlement_enabled = false
 sexual_dimorphism_enabled = false
 domestication_enabled = false
 knowledge_enabled = false
-practices_enabled = false
+practices_enabled = true
 payoff_biased_learning = false
 basic_needs_enabled = false
 mate_seeking_enabled = false
@@ -69,14 +72,9 @@ pub fn grand_theater_flag_off() -> String {
     with_opt_outs(GRAND_THEATER_PRE_FLIP)
 }
 
-/// Copy of `scenarios/grand-theater.toml` at commit 16d9731 (the merge of PR
-/// #173), i.e. the configuration the pin was computed on — plus one addition,
-/// `practices_enabled = true`. That flag already defaulted to true before the
-/// schema flip (Task 1 left its default untouched), so with cognition on the
-/// pre-flip trajectory already ran practice discovery; without this explicit
-/// line, `with_opt_outs`'s blanket opt-out would force it off and replay a
-/// configuration that never existed, moving the pin. Kept inline because Task
-/// 3 rewrites the live file.
+/// Verbatim copy of `scenarios/grand-theater.toml` at commit 16d9731 (the
+/// merge of PR #173), i.e. the configuration the pin was computed on. Kept
+/// inline because Task 3 rewrites the live file.
 pub const GRAND_THEATER_PRE_FLIP: &str = include_str!("grand-theater.pre-flip.toml");
 
 #[cfg(test)]
@@ -91,5 +89,6 @@ mod tests {
         assert!(s.find("territory_enabled").unwrap() < s.find("[[agents]]").unwrap());
         let parsed = anabios_core::scenario::Scenario::parse_toml(&s).expect("parses");
         assert!(parsed.war_enabled && !parsed.territory_enabled && parsed.season_period == 0);
+        assert!(parsed.practices_enabled, "practices_enabled must replay its pre-flip on-default");
     }
 }
