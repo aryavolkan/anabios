@@ -153,6 +153,12 @@ var _prev_bucket: PackedInt32Array = PackedInt32Array()
 # self-coloured hominin atlases), kept in sync with the other _prev_* arrays so
 # a death ghost can inherit its agent's colour instead of a flat grey.
 var _prev_color: PackedColorArray = PackedColorArray()
+# The bodies actually drawn last refresh — id and drawn centre (the smoothed
+# ground point plus air_lift for a flyer), in draw order — so a click
+# resolves against what is on screen (pick) rather than the sim ground
+# point, which an airborne body sits AIR_LIFT body sizes above.
+var _drawn_ids: PackedInt32Array = PackedInt32Array()
+var _drawn_centres: PackedVector2Array = PackedVector2Array()
 # Per-agent animation state (Phase 3 step 2, D6): birth time, facing
 # (committed side 0 right / 1 left, eased value, low-passed heading x), gait
 # cycle position (0..1, advanced by the distance a body covers on screen and
@@ -327,6 +333,29 @@ static func air_lift(sz: float, airborne: bool) -> Vector2:
 	return Vector2(0.0, -sz * AIR_LIFT) if airborne else Vector2.ZERO
 
 
+# Nearest drawn body to world_pos within radius, by drawn centre: its id, or
+# -1 when none is in range. Same strict-radius, first-closest rule as the
+# bridge's agent_near, applied to the drawn centres instead of the sim
+# ground points. Pure; unit-tested.
+static func nearest_drawn(
+	centres: PackedVector2Array, ids: PackedInt32Array, world_pos: Vector2, radius: float
+) -> int:
+	var best := -1
+	var best_d2: float = radius * radius
+	for j in mini(centres.size(), ids.size()):
+		var d2: float = centres[j].distance_squared_to(world_pos)
+		if d2 < best_d2:
+			best_d2 = d2
+			best = ids[j]
+	return best
+
+
+# Click-to-inspect against the bodies drawn last refresh (see _drawn_ids):
+# the nearest drawn centre within radius world units, or -1.
+func pick(world_pos: Vector2, radius: float) -> int:
+	return nearest_drawn(_drawn_centres, _drawn_ids, world_pos, radius)
+
+
 # Staggered crowd-cell key: odd rows shift by half a cell.
 static func crowd_key(pos: Vector2, cell: float) -> Vector2i:
 	var row := int(floor(pos.y / cell))
@@ -363,6 +392,8 @@ func refresh(
 		_prev_bucket = PackedInt32Array()
 		_prev_energy = PackedFloat32Array()
 		_prev_color = PackedColorArray()
+		_drawn_ids = PackedInt32Array()
+		_drawn_centres = PackedVector2Array()
 		_anim.sync(PackedInt32Array(), Time.get_ticks_msec() / 1000.0)
 		_anim.compact()
 		_report_visible(0)
@@ -602,6 +633,8 @@ func refresh(
 	if m > mm.instance_count:
 		mm.instance_count = m
 	mm.visible_instance_count = m
+	_drawn_ids.resize(m if have_ids else 0)
+	_drawn_centres.resize(_drawn_ids.size())
 	for j in m:
 		var i: int = idx[j]
 		var b: int = bucket_ix[i]
@@ -618,10 +651,12 @@ func refresh(
 		# Upright: the hominin stands, not spins — heading drives the
 		# walk shader (walk weight + facing), not the transform rotation.
 		var airborne: bool = have_locomotion and locomotion[i] == MammalSprites.LOCO_AIR
-		var t: Transform2D = Transform2D(
-			0.0, Vector2(sz, sz), 0.0, smooth[i] + air_lift(sz, airborne)
-		)
+		var centre: Vector2 = smooth[i] + air_lift(sz, airborne)
+		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, centre)
 		mm.set_instance_transform_2d(j, t)
+		if have_ids:
+			_drawn_ids[j] = ids[i]
+			_drawn_centres[j] = centre
 		var wading: bool = not airborne and wading_check and _biome.is_water_at(smooth[i])
 		# A wading figure casts no contact shadow on the water; a flyer's shrinks.
 		var sh_w: float = 0.0 if wading else sz * SHADOW_W * (AIR_SHADOW_SCALE if airborne else 1.0)
@@ -740,8 +775,10 @@ func refresh(
 			_anim.action_pose[s] = action_state.x
 			_anim.action_hold[s] = action_state.y
 			act = action_state.x
-			# Emote-worthy actions get a pictogram above the agent's head.
-			_emote_layer.collect(ids[i], smooth[i], sz, act)
+			# Emote-worthy actions get a pictogram above the agent's head —
+			# above the drawn body, so a flyer's glyph clears its lifted
+			# sprite; the sip ripple stays on the ground point.
+			_emote_layer.collect(ids[i], centre, sz, act)
 			if act == ACT_DRINK and _effects != null:
 				_effects.tick_sip(ids[i], smooth[i], sz)
 		mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))

@@ -3,8 +3,9 @@ extends SceneTree
 # view-rect arithmetic behind the Phase 3 visible-set culling
 # (docs/superpowers/specs/2026-09-12-pixel-world-at-scale-design.md, §6
 # Phase 3), the torus-aware death-ghost rect check, the two-pointer id
-# merge that the smoothing pass is built on, and the idle-spear-ready act
-# pick — the pieces most likely to regress. AgentLayer itself references no
+# merge that the smoothing pass is built on, the idle-spear-ready act
+# pick, and the drawn-centre click resolution behind pick() — the pieces
+# most likely to regress. AgentLayer itself references no
 # autoload (see camera_controller.gd
 # and main.gd, which cannot compile under -s for that reason — noted in
 # test_event_fx.gd), so the whole script preloads cleanly here. Run with:
@@ -195,6 +196,52 @@ func _check_air_lift() -> void:
 	_check(is_equal_approx(lift.y, -10.0 * AgentLayer.AIR_LIFT), "lift scales with body size")
 
 
+func _check_nearest_drawn() -> void:
+	var centres := PackedVector2Array([Vector2(0, 0), Vector2(10, 0), Vector2(3, 3)])
+	var ids := PackedInt32Array([11, 22, 33])
+	_check(
+		AgentLayer.nearest_drawn(centres, ids, Vector2(2.5, 2.5), 4.0) == 33,
+		"the closest drawn centre in range wins, not the first"
+	)
+	_check(
+		AgentLayer.nearest_drawn(centres, ids, Vector2(20, 20), 4.0) == -1,
+		"nothing within the radius picks nothing"
+	)
+	# The radius is strict, as in the bridge's agent_near.
+	_check(
+		AgentLayer.nearest_drawn(centres, ids, Vector2(14, 0), 4.0) == -1,
+		"a centre exactly radius away is out of range"
+	)
+	_check(
+		AgentLayer.nearest_drawn(centres, ids, Vector2(13.9, 0), 4.0) == 22,
+		"a centre just inside the radius is picked"
+	)
+	# Equidistant centres: the first in draw order wins, deterministically.
+	var pair := PackedVector2Array([Vector2(0, 0), Vector2(4, 0)])
+	_check(
+		AgentLayer.nearest_drawn(pair, PackedInt32Array([5, 6]), Vector2(2, 0), 4.0) == 5,
+		"an equidistant tie goes to the first drawn body"
+	)
+	_check(
+		AgentLayer.nearest_drawn(PackedVector2Array(), PackedInt32Array(), Vector2.ZERO, 4.0) == -1,
+		"no drawn bodies picks nothing"
+	)
+	# A lifted flyer is picked at its drawn centre, not at its ground point:
+	# a click on the body (air_lift above the ground) hits it, and a click at
+	# the ground point, outside the 4-unit disc for any body size, misses.
+	var ground := Vector2(50, 50)
+	var flyer := PackedVector2Array([ground + AgentLayer.air_lift(AgentLayer.BODY_MIN, true)])
+	var flyer_id := PackedInt32Array([7])
+	_check(
+		AgentLayer.nearest_drawn(flyer, flyer_id, flyer[0], 4.0) == 7,
+		"a click on the lifted body hits the flyer"
+	)
+	_check(
+		AgentLayer.nearest_drawn(flyer, flyer_id, ground, 4.0) == -1,
+		"a click at the flyer's ground point misses the lifted body"
+	)
+
+
 func _init() -> void:
 	_check_view_rect()
 	_check_pos_in_rect()
@@ -202,6 +249,7 @@ func _init() -> void:
 	_check_crowd_cells()
 	_check_idle_weapon_act()
 	_check_air_lift()
+	_check_nearest_drawn()
 
 	if _failed:
 		quit(1)
