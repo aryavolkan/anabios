@@ -135,6 +135,12 @@ const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.34)
 const SHADOW_W := 0.95  # of the body size
 const SHADOW_H := 0.36
 const SHADOW_DROP := 0.40  # centre offset below the body centre, of the body size
+# Airborne figures (territory layer, Air locomotion) ride AIR_LIFT body sizes
+# above their ground point; their contact shadow stays on the ground, shrunk
+# by AIR_SHADOW_SCALE and never cut at the waterline.
+const AIR_LIFT := 0.9
+const AIR_SHADOW_SCALE := 0.6
+const LOCO_AIR := 2
 var _death_effects: Array = []
 
 var _prev_ids: PackedInt32Array = PackedInt32Array()
@@ -313,6 +319,12 @@ static func crowd_cell_for(zoom: float) -> float:
 	return CROWD_CELL * sqrt(maxf(zoom, CROWD_ZOOM) / CROWD_ZOOM)
 
 
+# World-space offset that lifts an airborne figure's body above its ground
+# point (its shadow stays put). Zero for anything not flying.
+static func air_lift(sz: float, airborne: bool) -> Vector2:
+	return Vector2(0.0, -sz * AIR_LIFT) if airborne else Vector2.ZERO
+
+
 # Staggered crowd-cell key: odd rows shift by half a cell.
 static func crowd_key(pos: Vector2, cell: float) -> Vector2i:
 	var row := int(floor(pos.y / cell))
@@ -399,6 +411,13 @@ func refresh(
 	var moods: PackedInt32Array = sim.alive_moods() if sim.affect_active() else PackedInt32Array()
 	# Held-invention bits (all-zero in flag-off worlds) arm the fight pose.
 	var inv_masks: PackedInt32Array = sim.alive_invention_masks()
+	# Locomotion class per agent (empty unless the territory layer is on).
+	# Named "locomotion" rather than the brief's "loco" — the instance loop
+	# below already binds a local `loco` (FxMath.step_locomotion's result),
+	# and GDScript rejects re-declaring a name already in the function's
+	# scope as a hard parse error, not just a shadow warning.
+	var locomotion: PackedByteArray = sim.alive_locomotion()
+	var have_locomotion: bool = locomotion.size() == n
 	var body_colors: PackedColorArray = _body_colors(n)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n
@@ -594,11 +613,14 @@ func refresh(
 				sz *= FxMath.birth_scale(age / BIRTH_POP)
 		# Upright: the hominin stands, not spins — heading drives the
 		# walk shader (walk weight + facing), not the transform rotation.
-		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
+		var airborne: bool = have_locomotion and locomotion[i] == LOCO_AIR
+		var t: Transform2D = Transform2D(
+			0.0, Vector2(sz, sz), 0.0, smooth[i] + air_lift(sz, airborne)
+		)
 		mm.set_instance_transform_2d(j, t)
-		var wading: bool = wading_check and _biome.is_water_at(smooth[i])
-		# A wading figure casts no contact shadow on the water.
-		var sh_w: float = 0.0 if wading else sz * SHADOW_W
+		var wading: bool = not airborne and wading_check and _biome.is_water_at(smooth[i])
+		# A wading figure casts no contact shadow on the water; a flyer's shrinks.
+		var sh_w: float = 0.0 if wading else sz * SHADOW_W * (AIR_SHADOW_SCALE if airborne else 1.0)
 		shadows.set_instance_transform_2d(
 			shadow_n,
 			Transform2D(

@@ -193,6 +193,12 @@ func _ready() -> void:
 	caravan_layer.name = "CaravanLayer"
 	add_child(caravan_layer)
 	move_child(caravan_layer, module_layers.get_index())
+	# Species territory rings ([G] ground mode "territory"; territory layer).
+	var territory_layer = preload("res://scripts/territory_layer.gd").new()
+	territory_layer.name = "TerritoryLayer"
+	add_child(territory_layer)
+	move_child(territory_layer, module_layers.get_index())
+	territory_layer.setup(sim, overlay)
 	_make_wrap_clones()
 	# Replay & event camera (E2): snapshot ring + R/U/V modes.
 	var replay_manager := preload("res://scripts/replay_manager.gd").new()
