@@ -352,7 +352,11 @@ pub struct World {
     pub resource_spatial: UniformSpatialHash,
     /// Fine collision hash (`collision::COLLISION_CELL` cells), rebuilt at
     /// stage 1 and inside the stage-4' resolve when `territory_enabled`.
-    /// `#[serde(skip)]` scratch — resized/rebuilt on first use after load.
+    /// `#[serde(skip)]` scratch: after a snapshot load this is serde's
+    /// `Default` (`UniformSpatialHash::new()`, a 1024-wide/64-res hash), NOT
+    /// the `World::new` 3x3 placeholder. `collision::rebuild_hash` resizes it
+    /// whenever its resolution OR its world extent no longer matches the
+    /// live `World::world_size`, so it self-heals on first use either way.
     #[serde(skip)]
     pub collision_spatial: UniformSpatialHash,
     /// Jacobi position snapshot reused by `collision::resolve_overlaps`.

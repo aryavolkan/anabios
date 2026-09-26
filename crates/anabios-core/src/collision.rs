@@ -73,9 +73,18 @@ fn collision_res(ws: f32) -> usize {
 }
 
 /// (Re)size and rebuild `world.collision_spatial` from current positions.
+/// Re-sizes whenever either the resolution OR the world extent no longer
+/// matches the target — a snapshot load leaves `collision_spatial` at its
+/// serde `Default` (`UniformSpatialHash::new()`, a 1024-wide/64-res hash),
+/// not the `World::new` 3x3 placeholder, so `res` alone can spuriously match
+/// (e.g. any `world_size` in `[256, 260)` also resolves to `res == 64`) while
+/// the extent is still wrong: positions would then wrap at the stale extent
+/// and same-cell neighbours near the true seam could land in unrelated cells.
 pub fn rebuild_hash(world: &mut World) {
     let res = collision_res(world.world_size);
-    if world.collision_spatial.res() != res {
+    let stale = world.collision_spatial.res() != res
+        || world.collision_spatial.world_size() != world.world_size;
+    if stale {
         world.collision_spatial = UniformSpatialHash::with_dims(world.world_size, res);
     }
     let agents = &world.agents;
@@ -265,5 +274,43 @@ mod tests {
         rebuild_hash(&mut w);
         let s = separation_steer(&w.collision_spatial, &w.agents, a as usize, w.world_size);
         assert!(s.x < 0.0 && s.y.abs() < 1e-6, "steer west, away from b: {s:?}");
+    }
+
+    #[test]
+    fn rebuild_hash_heals_a_stale_extent_from_a_loaded_snapshot() {
+        // A small, non-default world extent. `collision_res(256.0) == 64`,
+        // which also happens to equal `UniformSpatialHash::new()`'s HASH_RES
+        // default — so a resolution-only staleness check would miss this.
+        let mut w = World::with_dims(1, 256.0, 32, 16);
+        w.territory_enabled = true;
+        for c in w.biome.cells.iter_mut() {
+            c.terrain = crate::biome::TerrainType::Grass;
+        }
+        // Simulate a post-snapshot-load world: `collision_spatial` is
+        // `#[serde(skip)]`, so it comes back as serde's `Default`
+        // (`UniformSpatialHash::new()`, a 1024-wide/64-res hash) — not the
+        // `World::new` 3x3 placeholder the naive res-only check assumed.
+        w.collision_spatial = crate::spatial::UniformSpatialHash::default();
+
+        // Two agents straddling the true wrap seam at 256: 0.3 apart on the
+        // torus, but ~255.7 apart if a stale 1024-wide hash bucketed them.
+        let a = w.spawn_agent(Vec2::new(255.8, 128.0), Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(0.1, 128.0), Genome::neutral());
+        let gap =
+            body_radius(&w.agents.genome[a as usize]) + body_radius(&w.agents.genome[b as usize]);
+
+        resolve_overlaps(&mut w);
+
+        assert_eq!(
+            w.collision_spatial.world_size(),
+            256.0,
+            "rebuild_hash must re-extent the hash to the live world_size, not just match res"
+        );
+        let d = crate::spatial::torus_distance(
+            w.agents.position[a as usize],
+            w.agents.position[b as usize],
+            w.world_size,
+        );
+        assert!(d >= gap - 1e-4, "seam pair not separated: d={d} gap={gap}");
     }
 }
