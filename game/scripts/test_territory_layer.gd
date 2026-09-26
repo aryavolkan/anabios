@@ -4,7 +4,7 @@ extends SceneTree
 # let one ring draw across the torus seam at any camera position; and
 # select_sites(), the largest-N cap that keeps the overlay legible once
 # speciation has produced more territories than can be drawn without
-# turning into a muddy blob (review finding on task-11). Run with:
+# turning into a muddy blob. Run with:
 #   godot --headless --rendering-driver dummy --path game \
 #     -s res://scripts/test_territory_layer.gd
 # Exits 0 on success, 1 on the first failed assertion.

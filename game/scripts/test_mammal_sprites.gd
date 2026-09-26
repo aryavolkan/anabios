@@ -300,9 +300,9 @@ func _init() -> void:
 	)
 	_check(M.archetype_for(0.9, 2.0, true, M.TAG_ARMOR) == M.LIVESTOCK, "livestock beats any tag")
 
-	# Locomotion class (territory/habitat layer, task-11b): with the territory
-	# layer on, a grazer's sprite should match its Water/Air locomotion class
-	# instead of reading as "a land animal in the water/sky". Land (the
+	# Locomotion class (territory/habitat layer): with the territory layer on,
+	# a grazer's sprite should match its Water/Air locomotion class instead of
+	# reading as "a land animal in the water/sky". Land (the
 	# default, 0) leaves every existing diet/size pick alone; Water reads as
 	# an aquatic Tortoise and Air as a flighted Wader, regardless of size;
 	# livestock still overrides everything, locomotion included.
@@ -334,9 +334,9 @@ func _init() -> void:
 	)
 
 	# Coat colour must track the same locomotion-aware archetype as the
-	# silhouette (review finding on task-11b: agent_layer.gd's _body_colors()
-	# called archetype_for() without the locomotion argument, so a Water/Air
-	# agent got the right shape but a stale land-based tint). _body_colors()
+	# silhouette (agent_layer.gd's _body_colors() must call archetype_for()
+	# with the locomotion argument, or a Water/Air agent gets the right shape
+	# but a stale land-based tint). _body_colors()
 	# itself depends on the live sim and can't be unit-tested headless, so
 	# this pins the pure contract it must respect: an agent whose diet/size
 	# would otherwise read as Hare/Deer gets the Wader/Tortoise coat hue once

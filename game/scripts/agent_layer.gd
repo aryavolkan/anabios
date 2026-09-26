@@ -139,8 +139,8 @@ const SHADOW_DROP := 0.40  # centre offset below the body centre, of the body si
 # above their ground point; their contact shadow stays on the ground, shrunk
 # by AIR_SHADOW_SCALE and never cut at the waterline. The locomotion codes
 # themselves (LOCO_AIR and friends) live in MammalSprites — its archetype_for
-# also branches on them (task-11b) — so there is one source of truth instead
-# of two copies of the bridge's alive_locomotion() byte codes.
+# also branches on them — so there is one source of truth instead of two
+# copies of the bridge's alive_locomotion() byte codes.
 const AIR_LIFT := 0.9
 const AIR_SHADOW_SCALE := 0.6
 var _death_effects: Array = []
@@ -414,10 +414,10 @@ func refresh(
 	# Held-invention bits (all-zero in flag-off worlds) arm the fight pose.
 	var inv_masks: PackedInt32Array = sim.alive_invention_masks()
 	# Locomotion class per agent (empty unless the territory layer is on).
-	# Named "locomotion" rather than the brief's "loco" — the instance loop
-	# below already binds a local `loco` (FxMath.step_locomotion's result),
-	# and GDScript rejects re-declaring a name already in the function's
-	# scope as a hard parse error, not just a shadow warning.
+	# Named "locomotion" rather than "loco" — the instance loop below already
+	# binds a local `loco` (FxMath.step_locomotion's result), and GDScript
+	# rejects re-declaring a name already in the function's scope as a hard
+	# parse error, not just a shadow warning.
 	var locomotion: PackedByteArray = sim.alive_locomotion()
 	var have_locomotion: bool = locomotion.size() == n
 	var body_colors: PackedColorArray = _body_colors(n, locomotion, have_locomotion)
@@ -862,7 +862,7 @@ func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) ->
 			# by refresh(), which fetches them before calling this) must feed the
 			# SAME archetype_for() call refresh() uses to pick the render bucket —
 			# otherwise a Water/Air agent gets the right silhouette but a stale
-			# land-based coat tint (review finding on task-11b).
+			# land-based coat tint.
 			var diet: PackedFloat32Array = sim.alive_diet()
 			var sizes: PackedFloat32Array = sim.alive_sizes()
 			var sp_ids: PackedInt32Array = sim.alive_species_ids()

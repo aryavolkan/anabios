@@ -12,7 +12,7 @@ const FILL_ALPHA := 0.08
 const REFRESH_FRAMES := 15
 # Once speciation produces more territories than this, drawing every one of
 # them piles the translucent discs into a single muddy, mostly-opaque blob
-# with no legible boundaries (review finding on task-11). Capping to the
+# with no legible boundaries. Capping to the
 # largest MAX_RINGS keeps the overlay readable; radius grows with sqrt(member
 # count), so "largest" means "most populous".
 const MAX_RINGS := 6

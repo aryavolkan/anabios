@@ -701,8 +701,8 @@ mod tests {
         );
     }
 
-    /// `feed_pass`'s territory-layer grazing gate (Task 9 amendment): Air
-    /// grazes over both land and sea (a seabird niche — `Locomotion::can_graze`
+    /// `feed_pass`'s territory-layer grazing gate: Air grazes over both land
+    /// and sea (a seabird niche — `Locomotion::can_graze`
     /// is unconditionally true for Air, matching its unrestricted
     /// `can_occupy`), while Land/Water are each confined to their own
     /// terrain, so a stranded agent on the wrong terrain doesn't graze.

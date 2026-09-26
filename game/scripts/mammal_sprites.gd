@@ -56,7 +56,7 @@ const _RIG_KIND: PackedInt32Array = [
 # Pose grid is the same 16-slot layout as the apes so one shader serves all.
 const POSE_COUNT := ApeSprites.POSE_COUNT
 
-# Selection thresholds (tunable; validated in Task 9's capture pass).
+# Selection thresholds (tunable; validated against captured sprite renders).
 const SIZE_SPLIT := 1.25
 const HERB_MAX := 0.34
 const CARN_MIN := 0.66
@@ -92,7 +92,7 @@ static func rig_kind(archetype: int) -> int:
 # two-or-more Locomotor modules as a wading bird. `locomotion` (default
 # LOCO_LAND, see the LOCO_* consts above; the territory/habitat layer's
 # per-agent class) overrides the sprite next, so a Water/Air grazer never
-# reads as "a land animal in the water" (task-11b): Air reads as the Wader
+# reads as "a land animal in the water": Air reads as the Wader
 # (flighted), Water as the Tortoise (aquatic). Livestock still wins over
 # locomotion too. Anything else (land, the default) falls through to the
 # original hare/deer/boar/primate/fox/wolf table unchanged — byte-identical
