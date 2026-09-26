@@ -151,6 +151,9 @@ pub fn step(world: &mut World) {
     // Stage 8: periodic species clustering.
     if world.tick.is_multiple_of(crate::species::SPECIES_STEP_INTERVAL) {
         crate::species::species_step(world);
+        // Territory layer: re-centre/re-size each species' range from its
+        // freshly reassigned members (no-op, zero state with the flag off).
+        crate::territory::territory_step(world);
     }
 
     // Stage 9: codex detectors (extinction, population crash, etc.). Runs every
@@ -205,6 +208,8 @@ fn decide_all(world: &mut World) {
     let affect_enabled = world.affect_enabled;
     let basic_needs_enabled = world.basic_needs_enabled;
     let mate_seeking_enabled = world.mate_seeking_enabled;
+    let territory_enabled = world.territory_enabled;
+    let territories = &world.species_territories;
     let spatial = &world.spatial;
     let ws = world.world_size;
     let cap = world.agents.capacity();
@@ -228,6 +233,9 @@ fn decide_all(world: &mut World) {
                 *dir_out = Vec2::ZERO;
                 return;
             }
+            // Territory layer: this agent's Locomotion class (None = flag off).
+            let class =
+                territory_enabled.then(|| crate::habitat::Locomotion::of(&agents.genome[i]));
             let mut action = decide(
                 &agents.program[i],
                 &agents.genome[i],
@@ -267,8 +275,10 @@ fn decide_all(world: &mut World) {
                     affinity,
                     crate::culture::HABITAT_REACH,
                 );
-                action.move_x += crate::culture::HABITAT_PULL * pull.x;
-                action.move_y += crate::culture::HABITAT_PULL * pull.y;
+                if crate::habitat::pull_allowed(biome, agents.position[i], pull, class) {
+                    action.move_x += crate::culture::HABITAT_PULL * pull.x;
+                    action.move_y += crate::culture::HABITAT_PULL * pull.y;
+                }
             }
             // Terrain habitat selection (opt-in): bias movement toward the
             // nearest cell of this agent's TerrainAffinity-preferred terrain, so
@@ -283,8 +293,10 @@ fn decide_all(world: &mut World) {
                     target,
                     crate::culture::TERRAIN_HABITAT_REACH,
                 );
-                action.move_x += crate::culture::TERRAIN_HABITAT_PULL * pull.x;
-                action.move_y += crate::culture::TERRAIN_HABITAT_PULL * pull.y;
+                if crate::habitat::pull_allowed(biome, agents.position[i], pull, class) {
+                    action.move_x += crate::culture::TERRAIN_HABITAT_PULL * pull.x;
+                    action.move_y += crate::culture::TERRAIN_HABITAT_PULL * pull.y;
+                }
             }
             // Trade-hub seeking (opt-in with the trade-goods subsystem): agents
             // with a real trade motive steer toward the nearest predetermined
@@ -312,6 +324,20 @@ fn decide_all(world: &mut World) {
                 );
                 action.move_x += pull.x;
                 action.move_y += pull.y;
+            }
+            // Species territory (territory layer, opt-in): free roam inside the
+            // species' range, a Territoriality-scaled pull home past its edge.
+            if territory_enabled {
+                if let Some(t) = territories.get(agents.species_id[i] as usize) {
+                    let pull = crate::territory::territory_pull(
+                        t,
+                        agents.position[i],
+                        agents.genome[i].get(crate::genome::GenomeSlot::Territoriality),
+                        ws,
+                    );
+                    action.move_x += pull.x;
+                    action.move_y += pull.y;
+                }
             }
             // Water-seeking (basic needs, opt-in): a thirsty agent gets an
             // additive pull toward the nearest drinkable cell, scaled by its
