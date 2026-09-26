@@ -251,6 +251,21 @@ pub struct World {
     /// written and byte-identical with the flag off.
     #[serde(default)]
     pub disease_enabled: bool,
+    /// When true, the territory/habitat/collision layer is active: the
+    /// `Locomotion` gene gates movement/grazing by terrain (Land/Water/Air),
+    /// Water cells carry aquatic biomass, each species keeps a territory with a
+    /// soft-edge homing pull, and bodies are kept apart (separation steering +
+    /// the stage-4' min-gap resolve). Off by default — zero RNG draws and
+    /// byte-identical trajectories with the flag off.
+    #[serde(default)]
+    pub territory_enabled: bool,
+    /// Per-species territory, indexed by species id. Grown lazily by
+    /// `territory::territory_step`, ONLY when `territory_enabled` — empty (and
+    /// unread) otherwise. Serialized: the centre is a path-dependent EMA, so
+    /// dropping it on load would diverge restore-and-continue (still-ticks v13
+    /// footgun).
+    #[serde(default)]
+    pub species_territories: Vec<crate::territory::Territory>,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -494,6 +509,8 @@ impl World {
             unilateral_trade: false,
             anthro_race_enabled: false,
             disease_enabled: false,
+            territory_enabled: false,
+            species_territories: Vec::new(),
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
@@ -768,5 +785,12 @@ mod tests {
     fn affect_enabled_defaults_off() {
         let w = World::new(1);
         assert!(!w.affect_enabled, "affect layer is opt-in; off by default");
+    }
+
+    #[test]
+    fn territory_layer_defaults_off_and_empty() {
+        let w = World::new(1);
+        assert!(!w.territory_enabled, "territory layer is opt-in; off by default");
+        assert!(w.species_territories.is_empty());
     }
 }

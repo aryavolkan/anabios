@@ -82,7 +82,11 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
     // 42→43): World.biome_step_interval added (default/absent 1) — layout
     // growth only, trajectory byte-identical.
-    &[(0, 0xc281070a7a4d0fd2), (100, 0x93947fa094bdca1d), (200, 0x6514327d1b7b4964)];
+    // Refreshed 2026-09-25 (territory/habitat/collision layer, FORMAT_VERSION
+    // 43→44): added World.territory_enabled + World.species_territories
+    // (empty with the flag off). Layout growth only — trajectory proven
+    // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
+    &[(0, 0xccacae7e02e2f4ba), (100, 0x4e2b65f9b3c3107f), (200, 0xade6e9a81055f6ca)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

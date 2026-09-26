@@ -1,0 +1,47 @@
+# Territory / habitat / collision showcase (docs/superpowers/specs/
+# 2026-09-25-territory-habitat-collision-design.md): three grazer species
+# that differ only in their Locomotion gene — land walkers, water swimmers
+# (graze aquatic biomass), and flyers (roam over land AND sea, feed on land).
+# Each keeps a species territory and bodies never overlap.
+#
+# sea_level 0.45 + continentality carve real oceans at the default 1024 world,
+# so all three classes have habitat. Uniform placement is relocated to the
+# nearest valid cell for each founder's class at instantiate.
+name = "habitat-territories"
+seed = 11
+max_population = 1500
+territory_enabled = true
+
+[climate]
+continentality = 0.8
+sea_level = 0.45
+
+[[agents]]
+count = 150
+archetype = "grazer"
+placement = { kind = "uniform" }
+[agents.traits]
+locomotion = 0.5
+size = 0.5
+lifespan_bias = 0.6
+reproduction_threshold = 0.5
+
+[[agents]]
+count = 100
+archetype = "grazer"
+placement = { kind = "uniform" }
+[agents.traits]
+locomotion = 0.1
+size = 0.4
+lifespan_bias = 0.6
+reproduction_threshold = 0.5
+
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "uniform" }
+[agents.traits]
+locomotion = 0.9
+size = 0.3
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

@@ -168,6 +168,14 @@ pub struct Scenario {
     /// `false` (default) keeps the world byte-identical.
     #[serde(default)]
     pub mate_seeking_enabled: bool,
+    /// Opt-in territory/habitat/collision layer: heritable Land/Water/Air
+    /// locomotion (terrain-gated movement and grazing), aquatic biomass on
+    /// Water cells, per-species territories with a soft-edge homing pull, and
+    /// body collision (steering + hard min-gap resolve). Pin a spec's class
+    /// with `[agents.traits] locomotion = 0.1 | 0.5 | 0.9`. `false` (default)
+    /// keeps the world byte-identical.
+    #[serde(default)]
+    pub territory_enabled: bool,
     /// Opt-in O3 reproductive-success payoff bias: cultural transmission
     /// declines a maladaptive-practice channel when its local holders show a
     /// higher observed birth-failure fraction than non-holders (content bias
@@ -1018,6 +1026,7 @@ impl Scenario {
         w.unilateral_trade = self.unilateral_trade;
         w.anthro_race_enabled = self.anthro_race_enabled;
         w.disease_enabled = self.disease_enabled;
+        w.territory_enabled = self.territory_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
@@ -2023,5 +2032,22 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         let mut g = Genome::neutral();
         archetype_genome("asocial_forager", &mut g);
         assert!(!crate::invention::is_ape(&g, &modules), "asocial_forager stays non-ape");
+    }
+
+    #[test]
+    fn territory_flag_parses_and_instantiates() {
+        let s = Scenario::parse_toml(
+            "name = \"t\"\nseed = 1\nterritory_enabled = true\n[[agents]]\ncount = 2\n\
+             [agents.traits]\nlocomotion = 0.9\n",
+        )
+        .expect("parse");
+        let w = s.instantiate();
+        assert!(w.territory_enabled);
+        for id in w.agents.iter_alive() {
+            assert_eq!(
+                crate::habitat::Locomotion::of(&w.agents.genome[id as usize]),
+                crate::habitat::Locomotion::Air
+            );
+        }
     }
 }

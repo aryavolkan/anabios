@@ -211,7 +211,11 @@ const GOLDEN: &[(u64, u64)] =
     // `tests/biome_step_interval.rs::interval_one_is_byte_identical_to_the_
     // field_absent`); only the serialized layout grew, moving all three
     // hashes once.
-    &[(0, 0x1f0833df5551cb75), (100, 0x3bf5b90f0c20a792), (1000, 0xfda6a2cf52557694)];
+    // Refreshed 2026-09-25 (territory/habitat/collision layer, FORMAT_VERSION
+    // 43→44): added World.territory_enabled + World.species_territories
+    // (empty with the flag off). Layout growth only — trajectory proven
+    // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
+    &[(0, 0xb99c431dab29593b), (100, 0x7b02f3ead610bd84), (1000, 0x97905596ba954bc8)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to

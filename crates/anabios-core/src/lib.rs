@@ -44,6 +44,7 @@ pub mod settlement;
 pub mod snapshot;
 pub mod spatial;
 pub mod species;
+pub mod territory;
 pub mod tick;
 pub mod world;
 

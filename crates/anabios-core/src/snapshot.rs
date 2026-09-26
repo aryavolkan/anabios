@@ -201,7 +201,14 @@ use crate::world::World;
 ///     reloaded huge/vast-scale world must keep regrowing at the cadence it
 ///     was saved at. `1` in every pre-existing scenario ⇒ trajectories
 ///     byte-identical; only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 43;
+/// 44: territory/habitat/collision layer — `World.territory_enabled` (bool)
+///     and `World.species_territories` (`Vec<Territory>`, serialized EMA
+///     state; empty unless the flag is on). Genome slot 7 renamed in place to
+///     `Locomotion` (layout unchanged). Flag absent/off in every pre-existing
+///     scenario ⇒ trajectories byte-identical (pinned by the
+///     `*_trajectory_unchanged_by_territory_substrate` guards in
+///     `tests/determinism.rs`); only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 44;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {
