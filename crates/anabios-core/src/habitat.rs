@@ -262,4 +262,19 @@ mod tests {
         damp_locomotion_mutation(0.5, &mut g);
         assert!((g.get(GenomeSlot::Locomotion) - 0.51).abs() < 1e-6);
     }
+
+    #[test]
+    fn instantiate_relocates_founders_onto_their_habitat() {
+        let s = crate::scenario::Scenario::parse_toml(include_str!(
+            "../../../scenarios/habitat-territories.toml"
+        ))
+        .expect("parse");
+        let w = s.instantiate();
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            let class = Locomotion::of(&w.agents.genome[i]);
+            let t = w.biome.sample(w.agents.position[i]).terrain;
+            assert!(class.can_occupy(t), "founder {id} ({class:?}) spawned on {t:?}");
+        }
+    }
 }

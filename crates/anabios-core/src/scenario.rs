@@ -1183,7 +1183,6 @@ impl Scenario {
                         }
                     }
                 };
-                placed_positions.push(position);
                 let mut g = Genome::neutral();
                 // Normally-distributed Big Five personality (heritable, evolves).
                 // Sampled from the dedicated substream, before archetype/trait
@@ -1194,6 +1193,19 @@ impl Scenario {
                     archetype_genome(name, &mut g);
                 }
                 spec.traits.apply(&mut g);
+                // Territory layer: move a founder onto terrain its Locomotion
+                // class can occupy (no RNG). Flag off ⇒ position unchanged.
+                let position = if w.territory_enabled {
+                    crate::habitat::nearest_valid(
+                        &w.biome,
+                        position,
+                        crate::habitat::Locomotion::of(&g),
+                    )
+                    .unwrap_or(position)
+                } else {
+                    position
+                };
+                placed_positions.push(position);
                 let id = match &kit {
                     Some((modules, program)) => {
                         w.spawn_seeded(position, g, species_id, modules.clone(), program.clone())

@@ -65,6 +65,7 @@ pub fn step(world: &mut World) {
         world.gene_tech_coupling,
         world.cognition_enabled,
         world.spatial.perception_max_radius(),
+        world.territory_enabled.then_some(&world.biome),
     );
 
     // Stage 4a': basic needs — thirst/fatigue accumulation, drinking, and the
