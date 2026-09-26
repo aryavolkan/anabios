@@ -2,16 +2,24 @@ name: showcase
 
 # Publishes the static web replay player (showcase/) to GitHub Pages.
 #
-# Gated: this NEVER runs on ordinary pushes. It only runs when a maintainer
+# Gated: this does not run on ordinary pushes. It runs when a maintainer
 # explicitly asks for it — via the Actions "Run workflow" button
-# (workflow_dispatch) or by pushing a `v*` release tag. replay.js is
-# regenerated at publish time from source (scenario + seed), not shipped
-# from the committed copy, so the hosted deck is reproducible.
+# (workflow_dispatch) or by pushing a `v*` release tag — and when a push to
+# main changes what the page is built from (the atlas, the deck, or this
+# workflow), so the hosted atlas tracks main. replay.js is regenerated at
+# publish time from source (scenario + seed), not shipped from the committed
+# copy, so the hosted deck is reproducible.
 on:
   workflow_dispatch: {}
   push:
     tags:
       - "v*"
+    branches:
+      - main
+    paths:
+      - "web/**"
+      - "showcase/**"
+      - ".github/workflows/showcase.yml"
 
 env:
   CARGO_TERM_COLOR: always
