@@ -441,6 +441,9 @@ trait_overrides! {
     /// Heritable sleep need (`GenomeSlot::SleepNeed`; read only with
     /// `basic_needs_enabled`).
     sleep_need => SleepNeed,
+    /// Locomotion class gene (`GenomeSlot::Locomotion`; read only with
+    /// `territory_enabled`): `0.1` water, `0.5` land, `0.9` air.
+    locomotion => Locomotion,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
