@@ -3,8 +3,8 @@
 //! species step, and the soft-edge pull that keeps members roaming inside it.
 //! Everything is gated on `World::territory_enabled`.
 //!
-//! Amended 2026-09-25 after the territory diagnosis
-//! (`.superpowers/sdd/2026-09-25-territory-habitat-collision/territory-diagnosis.md`):
+//! Amended 2026-09-25 after the territory pull diagnosis
+//! (`docs/superpowers/specs/2026-09-25-territory-pull-diagnosis.md`):
 //! the original `TERRITORY_PULL` lever alone could not lift `inside_territory`
 //! (measured ≤ 1/8 seeds ≥ 80%) because (1) the pull is a fixed-size vector
 //! added to an unbounded, evolvable move intent that can reach 10²–10⁶ in
@@ -49,7 +49,7 @@ impl Territory {
 /// per species step (`species::SPECIES_STEP_INTERVAL` ticks).
 pub const TERRITORY_CENTRE_RATE: f32 = 0.1;
 /// Radius per √member: `r = clamp(K·√n, R_MIN, R_MAX)`. K and R_MAX were
-/// raised 12→24 / 256→512 (Task 9b, 2026-09-25 territory diagnosis, §9c): at
+/// raised 12→24 / 256→512 (2026-09-25 territory pull diagnosis, §9c): at
 /// the old values (≈452 unit² per member) the range's own interior was
 /// grazed out, so a pull strong enough to hold members there starved them
 /// (measured: 5/8 seeds went fully extinct). Quadrupling per-capita area
@@ -61,15 +61,15 @@ pub const TERRITORY_K: f32 = 24.0;
 pub const TERRITORY_R_MIN: f32 = 48.0;
 pub const TERRITORY_R_MAX: f32 = 512.0;
 /// Homing pull at Territoriality = 1 and the ramp fully engaged (full
-/// strength at `r`, see `territory_pull`). Raised 1.0 → 2.5 (Task 9 round 3)
-/// to try to lift `inside_territory`; by itself this was swamped by
-/// unbounded evolved move intents (Task 9b diagnosis, H6) until
+/// strength at `r`, see `territory_pull`). Raised 1.0 → 2.5 to try to lift
+/// `inside_territory`; by itself this was swamped by unbounded evolved move
+/// intents (the territory pull diagnosis, H6) until
 /// `apply_territory_pull` unit-caps the intent accumulated so far in
 /// `decide_all` before this pull is added.
 pub const TERRITORY_PULL: f32 = 2.5;
 /// Free-roam fraction of `r`: a member inside `TERRITORY_FREE_FRAC · r` feels
 /// no pull; the pull ramps from there to full strength at `r` (not `2r` as
-/// before). Task 9b, 2026-09-25 territory diagnosis (§9b): the old
+/// before). The 2026-09-25 territory pull diagnosis (§9b) found the old
 /// zero-to-`r`-then-ramp-to-`2r` geometry put an outward-steering member's
 /// stall point outside `r` by construction — exactly where `inside_territory`
 /// draws its line.
@@ -104,8 +104,8 @@ pub fn territory_pull(t: &Territory, pos: Vec2, terr: f32, ws: f32) -> Vec2 {
 }
 
 /// Cap the move intent accumulated in `decide_all` so far to unit length
-/// before adding a non-zero territory pull, then add it (Task 9b, 2026-09-25
-/// territory diagnosis, §9a). Evolved programs feed sensor values (energy,
+/// before adding a non-zero territory pull, then add it (2026-09-25 territory
+/// pull diagnosis, §9a). Evolved programs feed sensor values (energy,
 /// distances clamped at 1e6) into `MoveToward*`, which by mid-run can reach
 /// intents of magnitude 10²–10⁶ — added directly, a `TERRITORY_PULL`-sized
 /// bias is invisible once the sum is normalized to a direction (H6). Capping
@@ -219,8 +219,8 @@ mod tests {
 
     #[test]
     fn pull_is_zero_inside_and_ramps_outside() {
-        // Task 9b geometry: free roam out to `TERRITORY_FREE_FRAC · r`, then
-        // ramp to full strength at `r` (not `2r`), capped beyond it.
+        // Geometry: free roam out to `TERRITORY_FREE_FRAC · r`, then ramp to
+        // full strength at `r` (not `2r`), capped beyond it.
         let t = Territory { cx: 500.0, cy: 500.0, r: 100.0, class: Locomotion::Land };
         let inner = TERRITORY_FREE_FRAC * t.r;
         // inner == 50.0. Free-roam zone: zero strictly inside and exactly at
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn apply_territory_pull_caps_a_huge_outward_intent_before_adding_the_pull() {
         // An evolved intent of magnitude ~1000 pointing away from home (H6 in
-        // the Task 9b diagnosis); the pull points home (+x). Without the cap
+        // the territory pull diagnosis); the pull points home (+x). Without the cap
         // the pull would be invisible after normalization; with it, the
         // capped intent (length <= 1) can't out-weigh the pull.
         let action = Vec2::new(-1000.0, 0.0);

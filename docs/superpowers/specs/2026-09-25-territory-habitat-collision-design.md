@@ -6,9 +6,10 @@
 
 ## Goal
 
-Animals should (1) never overlap each other, (2) roam within a defined
-species territory, and (3) respect their habitat: land animals stay on
-land, water animals stay in water, and birds (air) may range over both.
+Animals should (1) be kept apart from each other (separation steering plus a
+best-effort min-gap resolve, not a hard overlap guarantee), (2) roam within a
+defined species territory, and (3) respect their habitat: land animals stay
+on land, water animals stay in water, and birds (air) may range over both.
 
 ## Current state (2026-09-25, `main` @ bf563ea)
 
@@ -123,8 +124,8 @@ all existing goldens byte-identical.
   swamp a fixed-size pull after normalization.
 - Ranges of different species may overlap; exclusion stays emergent
   (existing `TerritorialRage`).
-- **Amended 2026-09-25 after the territory diagnosis**
-  (`.superpowers/sdd/2026-09-25-territory-habitat-collision/territory-diagnosis.md`):
+- **Amended 2026-09-25 after the territory pull diagnosis**
+  (`docs/superpowers/specs/2026-09-25-territory-pull-diagnosis.md`):
   the pull formula above (free-roam to `r/2`, ramp to full at `r`, and the
   unit-capped intent) and the enlarged `TERRITORY_K` / `TERRITORY_R_MAX`
   below replace the original "free roam to `r`, ramp to `2r`" geometry, which

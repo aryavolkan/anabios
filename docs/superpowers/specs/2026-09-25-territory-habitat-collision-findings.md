@@ -31,7 +31,7 @@ diagnosis) is now fixed; two items remain open, reported honestly:
 
 1. **`inside_territory` — FIXED (Round 4)**: root cause was not a wrong
    constant but a wrong mechanism, found by the Task 9b diagnosis (see
-   `.superpowers/sdd/2026-09-25-territory-habitat-collision/territory-diagnosis.md`):
+   `docs/superpowers/specs/2026-09-25-territory-pull-diagnosis.md`):
    (a) the pull is a fixed-size vector added to an *unbounded, evolvable*
    move intent that reaches magnitude 10²–10⁶ by mid-run, drowning the pull
    after normalization; (b) the pull only started ramping *at* `r` (full
@@ -629,7 +629,7 @@ count rather than the pull constant.
 **Task:** 9b (territory-pull mechanism fix), following a dedicated diagnosis
 task run after Round 3 closed constant tuning with `inside_territory` at its
 worst measured value (0/8). **Diagnosis:**
-[`territory-diagnosis.md`](../../../.superpowers/sdd/2026-09-25-territory-habitat-collision/territory-diagnosis.md)
+[`2026-09-25-territory-pull-diagnosis.md`](2026-09-25-territory-pull-diagnosis.md)
 (§1, §6, §8, §9 are the load-bearing sections; §9 is this round's exact
 requirements).
 
@@ -793,3 +793,34 @@ in Task 9b's scope), and the ~20% tick-overhead miss (accepted since Round
 `inside_territory` mechanism, **DONE_WITH_CONCERNS** overall (carrying
 forward the pre-existing, out-of-scope Land/Water diversity and tick-overhead
 items).
+
+## Final probe (post-review)
+
+Whole-branch review flagged that "never overlap" overclaimed what the
+collision layer actually guarantees (best-effort separation steering plus a
+2-pass min-gap resolve, not a hard guarantee). `territory_measurement_probe`
+now also reports `shallow_overlaps` — colliding pairs closer than their gap
+but at least half of it (still touching, less severely than `deep_overlaps`)
+— alongside the flagship seed change from `seed = 11` to the validated
+showcase `seed = 1` (F1 of the final fix wave).
+
+`cargo test -p anabios-core --release --test invariants territory_measurement_probe -- --ignored --nocapture`, 264.70s:
+
+```
+seed=1 alive=1499 land=674 water=525 air=300 violations=0 deep_overlaps=3 shallow_overlaps=283 inside_territory=99.7% inside_by_class(L/W/A)=100.0/99.2/100.0 water_cells_with_biomass=11949
+seed=2 alive=300 land=0 water=0 air=300 violations=0 deep_overlaps=0 shallow_overlaps=6 inside_territory=86.0% inside_by_class(L/W/A)=-/-/86.0 water_cells_with_biomass=10454
+seed=3 alive=825 land=0 water=525 air=300 violations=0 deep_overlaps=12 shallow_overlaps=184 inside_territory=80.2% inside_by_class(L/W/A)=-/99.2/47.0 water_cells_with_biomass=6148
+seed=4 alive=825 land=0 water=525 air=300 violations=0 deep_overlaps=2 shallow_overlaps=543 inside_territory=70.3% inside_by_class(L/W/A)=-/100.0/18.3 water_cells_with_biomass=6611
+seed=5 alive=300 land=0 water=0 air=300 violations=0 deep_overlaps=0 shallow_overlaps=8 inside_territory=23.3% inside_by_class(L/W/A)=-/-/23.3 water_cells_with_biomass=6476
+seed=6 alive=824 land=0 water=524 air=300 violations=0 deep_overlaps=1 shallow_overlaps=155 inside_territory=83.7% inside_by_class(L/W/A)=-/98.3/58.3 water_cells_with_biomass=5192
+seed=7 alive=773 land=0 water=473 air=300 violations=0 deep_overlaps=5 shallow_overlaps=79 inside_territory=85.5% inside_by_class(L/W/A)=-/90.5/77.7 water_cells_with_biomass=6287
+seed=8 alive=974 land=674 water=0 air=300 violations=0 deep_overlaps=1 shallow_overlaps=686 inside_territory=93.5% inside_by_class(L/W/A)=100.0/-/79.0 water_cells_with_biomass=7689
+```
+
+Identical `alive`/`deep_overlaps`/`inside_territory` numbers to Round 4's
+probe (this change touches wording and instrumentation only, not the
+mechanism). `shallow_overlaps` (6–686 across seeds) confirms the "kept
+apart" reword is the accurate claim: at ~300–1500 agents on a shared range,
+a meaningful share of colliding pairs sit inside their gap but past the
+`deep_overlaps` half-gap line at any instant — expected from a fixed
+`RESOLVE_PASSES = 2` Jacobi resolve over a moving crowd, not a regression.
