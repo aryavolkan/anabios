@@ -113,11 +113,26 @@ all existing goldens byte-identical.
     the members' current centroid); extinct species' records retained but
     inert (index-aligned with `species_*` vectors).
 - Pull (in `decide_all`, next to the anchor pull):
-  `d = torus_distance(pos, centre)`; `d ≤ r` ⇒ 0 (free roam);
-  `d > r` ⇒ `min((d − r) / r, 1) · TERRITORY_PULL · Territoriality ·
-  unit(centre − pos)`.
+  `d = torus_distance(pos, centre)`; `inner = TERRITORY_FREE_FRAC · r`;
+  `d ≤ inner` ⇒ 0 (free roam); `d > inner` ⇒
+  `min((d − inner) / (r − inner), 1) · TERRITORY_PULL · Territoriality ·
+  unit(centre − pos)` — full strength is reached at `r` itself, not `2r`.
+  Before this pull is added, the move intent accumulated so far in
+  `decide_all` is capped to unit length (`territory::apply_territory_pull`,
+  only when the pull is non-zero) so an unbounded evolved move intent can't
+  swamp a fixed-size pull after normalization.
 - Ranges of different species may overlap; exclusion stays emergent
   (existing `TerritorialRage`).
+- **Amended 2026-09-25 after the territory diagnosis**
+  (`.superpowers/sdd/2026-09-25-territory-habitat-collision/territory-diagnosis.md`):
+  the pull formula above (free-roam to `r/2`, ramp to full at `r`, and the
+  unit-capped intent) and the enlarged `TERRITORY_K` / `TERRITORY_R_MAX`
+  below replace the original "free roam to `r`, ramp to `2r`" geometry, which
+  measured ≤ 1/8 seeds ≥ 80% `inside_territory` (root cause: an unbounded
+  evolved move intent swamps a fixed-size pull, and the old ramp's stall
+  point for an outward-steering member sits outside `r` by construction).
+  The fix was validated at 6/8 seeds ≥ 80%, zero extinctions — see the
+  findings doc's "Round 4" section.
 
 ### 5. Separation
 
@@ -218,16 +233,23 @@ and 3× zoom via the `running-the-viewer` skill.
 
 ## Tunable constants (initial values)
 
-| Constant | Initial |
-|---|---|
-| `AQUATIC_CAPACITY` | 0.4 × Grass capacity |
-| `TERRITORY_CENTRE_RATE` | 0.1 per species step |
-| `TERRITORY_K` | 12.0 |
-| `R_MIN` / `R_MAX` | 48 / 256 |
-| `TERRITORY_PULL` | 1.0 |
-| `SEP_PULL` | 2.0 |
-| `BODY_R_BASE` / `BODY_R_SIZE` | 0.4 / 0.35 (⇒ pair gap ≤ 1.5 at Size = 1) |
-| Resolve passes K | 2 |
+| Constant | Initial | Current (2026-09-25, Task 9b) |
+|---|---|---|
+| `AQUATIC_CAPACITY` | 0.4 × Grass capacity | 0.6 × Grass capacity |
+| `TERRITORY_CENTRE_RATE` | 0.1 per species step | unchanged |
+| `TERRITORY_K` | 12.0 | **24.0** |
+| `R_MIN` / `R_MAX` | 48 / 256 | 48 / **512** |
+| `TERRITORY_PULL` | 1.0 | 2.5 |
+| `TERRITORY_FREE_FRAC` | (n/a, ramp started at `r`) | **0.5** (new) |
+| `SEP_PULL` | 2.0 | unchanged |
+| `BODY_R_BASE` / `BODY_R_SIZE` | 0.4 / 0.35 (⇒ pair gap ≤ 1.5 at Size = 1) | unchanged |
+| Resolve passes K | 2 | unchanged |
+
+**Amended 2026-09-25 after the territory diagnosis**: `TERRITORY_K` and
+`R_MAX` were raised (12→24, 256→512) so a range strong enough to hold members
+(via the pull-geometry fix above) can still feed them — see the diagnosis
+§9c/§10 and the findings doc's "Round 4" section. `TERRITORY_FREE_FRAC` is new
+(§4 above). `TERRITORY_PULL` stays 2.5 (Task 9 round 3's value).
 
 ## Out of scope (v1)
 

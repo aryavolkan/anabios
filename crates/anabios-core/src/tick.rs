@@ -338,6 +338,10 @@ fn decide_all(world: &mut World) {
             }
             // Species territory (territory layer, opt-in): free roam inside the
             // species' range, a Territoriality-scaled pull home past its edge.
+            // Past the free-roam zone, the intent accumulated so far is
+            // unit-capped before the pull is added (`apply_territory_pull`),
+            // so an unbounded evolved move intent can't swamp a fixed-size
+            // pull after normalization (Task 9b territory diagnosis, H6).
             if territory_enabled {
                 if let Some(t) = territories.get(agents.species_id[i] as usize) {
                     let pull = crate::territory::territory_pull(
@@ -346,8 +350,12 @@ fn decide_all(world: &mut World) {
                         agents.genome[i].get(crate::genome::GenomeSlot::Territoriality),
                         ws,
                     );
-                    action.move_x += pull.x;
-                    action.move_y += pull.y;
+                    let v = crate::territory::apply_territory_pull(
+                        Vec2::new(action.move_x, action.move_y),
+                        pull,
+                    );
+                    action.move_x = v.x;
+                    action.move_y = v.y;
                 }
             }
             // Water-seeking (basic needs, opt-in): a thirsty agent gets an

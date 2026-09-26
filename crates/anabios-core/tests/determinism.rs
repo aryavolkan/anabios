@@ -277,8 +277,11 @@ fn minimal_scenario_matches_golden_hashes() {
 }
 
 const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territories.toml");
+// Re-pinned for Task 9b (territory-pull mechanism fix, 2026-09-25): tick 0's
+// hash is unchanged (the fix only affects post-instantiate movement); ticks
+// 100 and 1000 moved.
 const HABITAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0xd5f4fc2e1dbb698b), (100, 0xb94a24dc0328ad4c), (1000, 0x9ae217d01389078a)];
+    &[(0, 0xd5f4fc2e1dbb698b), (100, 0x915051a395e3183a), (1000, 0x58062a9c7997308b)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {

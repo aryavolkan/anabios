@@ -7,53 +7,71 @@ tuning), closing out the territory/habitat/collision layer (Tasks 2–8).
 1024-wide world, `max_population = 1500`, three grazer species differing only
 in Locomotion: Land, Water, Air).
 
-> **This doc has three tuning rounds; read the Headline below for the final
-> state, then "Round 3 (final)" at the very bottom for the final numbers and
-> verdict table.** Everything between the Headline and Round 3 is kept as the
-> historical record of how the diagnosis narrowed: the original findings
-> below found a diversity collapse; "Update 2026-09-25: `max_share` fix"
-> diagnosed a scenario authoring bug (one shared population cap) and fixed
-> Water but not Air; "Round 2" fixed Air's food-access disadvantage (it now
-> grazes land and sea) and clustered the founders, which flipped the problem
-> from Air-always-extinct to Land-rarely-surviving; "Round 3 (final)" tried
-> the plan's last prescribed lever (`TERRITORY_PULL` 1.0→2.5) for
-> `inside_territory` — tuning is now closed regardless of outcome.
+> **This doc now has four rounds; read the Headline below for the final
+> state, then "Round 4 — mechanism fix (diagnosis)" at the very bottom for
+> the final numbers and verdict table.** Everything between the Headline and
+> Round 4 is kept as the historical record of how the diagnosis narrowed: the
+> original findings below found a diversity collapse; "Update 2026-09-25:
+> `max_share` fix" diagnosed a scenario authoring bug (one shared population
+> cap) and fixed Water but not Air; "Round 2" fixed Air's food-access
+> disadvantage (it now grazes land and sea) and clustered the founders, which
+> flipped the problem from Air-always-extinct to Land-rarely-surviving;
+> "Round 3" tried the plan's last prescribed lever (`TERRITORY_PULL`
+> 1.0→2.5) for `inside_territory` and made it worse (0/8), closing constant
+> tuning; a follow-up diagnosis (Task 9b) then found the actual mechanism
+> bug behind that failure and fixed it (Round 4) — `inside_territory` now
+> reaches **6/8 seeds ≥ 80%, zero extinctions**.
 
-## Headline (final state, after Round 3)
+## Headline (final state, after Round 4)
 
 Correctness holds throughout every round: **zero habitat violations across
-all 32 probe-seed runs**, four constant configurations. Tuning is now closed
-(controller ruling) with three items left open, reported honestly rather than
-chased further:
+all 40 probe-seed runs**, five constant/mechanism configurations. The
+mechanism bug behind the `inside_territory` miss (found by the Task 9b
+diagnosis) is now fixed; two items remain open, reported honestly:
 
-1. **Tick overhead (accepted miss)**: `territory_enabled` costs **~19–24%**
-   per 10k-agent tick against a ≤10% budget. The one architecture-preserving
-   lever available (`RESOLVE_PASSES` 2→1) was tried in round 1; it only
-   trimmed the overhead to ~18–20% while making `deep_overlaps` ~5× worse, so
-   it was reverted. The controller has accepted ~20% as the final cost of
-   this opt-in layer.
-2. **Land-vs-air (and water) competitive balance is unresolved and now
-   oscillates with every tuning round rather than converging**: pre-fix, Land
-   dominated and Air went extinct in 24/24 seeds (Air's food mask was
-   land-only despite an unrestricted habitat mask). Round 2's fix (Air grazes
-   land and sea) flipped it hard the other way — Air now survives 7/8 seeds,
-   but Land drops to 2–3/8. Round 3's `TERRITORY_PULL` increase (aimed at
-   `inside_territory`, see below) incidentally moved Water from 6/8 to 3/8
-   without helping Land. No round has found a setting where all three
-   classes coexist reliably across seeds (round 2 got lucky on one seed of
-   eight). **Candidate next step, not implemented**: a flight metabolic
-   premium (Air pays extra energy upkeep for its wider range/food access, so
-   its efficiency advantage over Land is priced rather than free) — this is a
-   new mechanic, outside this task's "tune constants only" scope.
-3. **`inside_territory` (accepted miss)**: stayed mostly below the 80% target
-   through every round (best case 1/8 seeds ≥80% in round 2; **0/8 in round
-   3**, i.e. the prescribed `TERRITORY_PULL` lever made it worse, not
-   better). No constant tried across three rounds reliably lifts it — see
-   Round 3's per-target table for the final numbers.
+1. **`inside_territory` — FIXED (Round 4)**: root cause was not a wrong
+   constant but a wrong mechanism, found by the Task 9b diagnosis (see
+   `.superpowers/sdd/2026-09-25-territory-habitat-collision/territory-diagnosis.md`):
+   (a) the pull is a fixed-size vector added to an *unbounded, evolvable*
+   move intent that reaches magnitude 10²–10⁶ by mid-run, drowning the pull
+   after normalization; (b) the pull only started ramping *at* `r` (full
+   strength at `2r`), so an outward-steering member's stall point sat
+   *outside* `r` by construction — exactly where the metric draws its line;
+   (c) the K=12/R_MAX=256 range (≈452 unit² per member) grazed out its own
+   interior, so a pull strong enough to hold members there would have
+   starved them. The fix (implemented here, Task 9b): `decide_all` unit-caps
+   the move intent accumulated so far before adding a non-zero pull
+   (`territory::apply_territory_pull`); the pull now ramps from
+   `TERRITORY_FREE_FRAC · r` (0.5) to full strength at `r`, not `2r`
+   (`territory_pull`); `TERRITORY_K` 12→24 and `TERRITORY_R_MAX` 256→512
+   enlarge the per-capita range so the now-binding pull doesn't starve its
+   members. Result: **6/8 seeds ≥ 80% (was 0/8), zero extinctions, Air alive
+   8/8, Water alive 5/8 (was 3/8), Land alive 2/8 (was 3/8)** — see "Round 4"
+   below for the full table and per-class breakdown.
+2. **Tick overhead (accepted miss, unchanged)**: `territory_enabled` costs
+   **~19–24%** per 10k-agent tick against a ≤10% budget. The one
+   architecture-preserving lever available (`RESOLVE_PASSES` 2→1) was tried
+   in round 1; it only trimmed the overhead to ~18–20% while making
+   `deep_overlaps` ~5× worse, so it was reverted. The controller has
+   accepted ~20% as the final cost of this opt-in layer. Not re-measured in
+   Round 4 (the mechanism fix touches `decide_all`'s territory block and
+   `territory_pull`, not the collision/resolve stages the bench targets).
+3. **Land-vs-air (and water) competitive balance (accepted, unchanged
+   character)**: pre-fix, Land dominated and Air went extinct in 24/24
+   seeds; Round 2's fix (Air grazes land and sea) flipped it hard the other
+   way. Round 4's numbers continue that pattern — Air alive 8/8, Water 5/8,
+   Land only 2/8 — consistent with Round 2/3's diagnosis of an unpriced Air
+   efficiency advantage, not something Task 9b's territory-pull fix touches
+   or was scoped to address. **Candidate next step, not implemented**: a
+   flight metabolic premium for Air.
 
-Per the task's stop rule ("if a target misses and one reasonable constant
-change doesn't fix it, stop tuning ... report DONE_WITH_CONCERNS"), tuning
-stopped after one attempt per target.
+The `inside_territory` misses that remain (seeds 4 and 5 in Round 4, both
+pure- or Air-heavy seeds) are **heritable escape, not mechanism failure**:
+their Air lineages evolved Territoriality down to 0.16–0.19, below
+`1/TERRITORY_PULL = 0.4`, the threshold at which even a fully-engaged pull
+can no longer out-vote a unit-length outward intent. This is intended
+behaviour (Territoriality is a heritable gene the pull is scaled by), not a
+bug, and it bounds any "≥ 80% on every seed" target.
 
 ## Constants changed
 
@@ -605,3 +623,173 @@ now closed regardless of this outcome. Final recommendation:
 attempted here): a flight metabolic premium for Air, and further
 investigation of why `inside_territory` correlates with class-coexistence
 count rather than the pull constant.
+
+## Round 4 — mechanism fix (diagnosis)
+
+**Task:** 9b (territory-pull mechanism fix), following a dedicated diagnosis
+task run after Round 3 closed constant tuning with `inside_territory` at its
+worst measured value (0/8). **Diagnosis:**
+[`territory-diagnosis.md`](../../../.superpowers/sdd/2026-09-25-territory-habitat-collision/territory-diagnosis.md)
+(§1, §6, §8, §9 are the load-bearing sections; §9 is this round's exact
+requirements).
+
+### Root cause (summary; see the diagnosis for the full measurement)
+
+Round 3 raised `TERRITORY_PULL` on the theory that the pull was too weak.
+The diagnosis found the opposite problem: the pull's *mechanism*, not its
+*magnitude*, was broken, in three compounding ways (diagnosis §3–§4, §8):
+
+1. **H6 (new, dominant for Air): the pull is a fixed-size vector added to an
+   unbounded, evolvable move intent.** Evolved programs feed sensor values
+   (energy, distances clamped at 1e6) into `MoveToward*`; by 6–10k ticks
+   Air's median intent magnitude reaches 57–1040 (p90 up to 1e6) at
+   `TERRITORY_PULL = 2.5`, versus ≈1 at `TERRITORY_PULL` 0 or 1.0. After
+   normalization the pull carries under 1% of the final direction —
+   `cos(desired, home) ≈ 0.0` for outside Air agents in steady state. A
+   *stronger* pull only raised the payoff of letting the intent inflate, so
+   Round 3's lever made containment worse, not better.
+2. **H4 (confirmed, dominant overall): the old ramp started at `r`, not
+   before it.** With free roam to `r` and ramp to full strength at `2r`, an
+   agent whose non-territory steering points outward (typical for foragers:
+   the territory core is grazed out, food is outside) settles on a stall
+   shell at `d ≈ r·(1 + |cos|/(PULL·terr))` — which is *outside `r` by
+   construction*, exactly where the `inside_territory` metric draws its
+   line. Measured median d/r of non-inflated outside agents: 1.1–1.9.
+3. **H7 (new, confirmed): the K=12/R_MAX=256 range (≈452 unit² per member)
+   can't feed the population it holds.** Fixing (1) and (2) alone at the old
+   radius law lifts containment to 95–97% at 1k ticks, but then **5/8 seeds
+   go fully extinct** by 10k ticks — the range starves once escape is closed
+   off.
+
+Two of the diagnosis's other hypotheses (H1 centre-on-invalid-terrain, H2
+stale inherited centres) were confirmed **minor/secondary**; H5 (a
+misleading composition-dominated metric) was **partly true**, which is why
+this round also adds the per-class breakdown recommended there (see below).
+
+### The fix (implemented exactly as diagnosis §9)
+
+- `crates/anabios-core/src/tick.rs::decide_all` — territory block: extracted
+  the "unit-cap the intent, then add the pull" logic into a new pure helper,
+  `territory::apply_territory_pull(action_xy, pull) -> Vec2` (kept
+  `decide_all` a two-line call instead of an inline conditional). It caps the
+  move intent accumulated so far to length ≤ 1 (only when finite) whenever
+  the pull is non-zero, then adds the pull.
+- `crates/anabios-core/src/territory.rs::territory_pull` — new
+  `TERRITORY_FREE_FRAC = 0.5`: zero pull inside `FREE_FRAC · r`, ramping to
+  full strength at `r` (`ramp = ((dist − inner) / (r − inner)).min(1.0)`,
+  `inner = FREE_FRAC · r`) instead of the old zero-to-`r`-then-ramp-to-`2r`.
+- Constants: `TERRITORY_K` 12.0 → 24.0, `TERRITORY_R_MAX` 256.0 → 512.0.
+  `TERRITORY_PULL` stays 2.5 (Round 3's value); `TERRITORY_R_MIN` stays 48.0.
+- Everything sits inside the existing `if territory_enabled` gate; the pull
+  cap only clamps the accumulated intent, never the pull itself, and both
+  functions are pure (no RNG, no `World` access). Flag off ⇒ byte-identical:
+  both trajectory guards (`minimal_trajectory_unchanged_by_territory_substrate`,
+  `grand_theater_trajectory_unchanged_by_territory_substrate`) pass
+  **untouched**, with no hash change needed.
+- Per the diagnosis's H5 recommendation, `territory_measurement_probe`
+  (`crates/anabios-core/tests/invariants.rs`) now also prints per-class
+  inside % (`inside_by_class(L/W/A)=...`, `-` for an extinct class) on each
+  seed's line, so the aggregate figure's class-composition dependence is
+  visible directly in the probe output rather than requiring a separate
+  diagnosis run.
+
+`HABITAT_GOLDEN` re-pinned in `crates/anabios-core/tests/determinism.rs`:
+
+```
+// before (Round 3)
+&[(0, 0xd5f4fc2e1dbb698b), (100, 0xb94a24dc0328ad4c), (1000, 0x9ae217d01389078a)]
+// after (UPDATE_HASHES=1 cargo test -p anabios-core --release --test determinism
+// habitat_territories_matches_golden_hashes -- --nocapture)
+&[(0, 0xd5f4fc2e1dbb698b), (100, 0x915051a395e3183a), (1000, 0x58062a9c7997308b)]
+```
+
+Tick 0's hash is unchanged (the fix only changes post-instantiate movement,
+same as Round 3); ticks 100 and 1000 moved, as expected.
+
+### New probe (verbatim)
+
+`cargo test -p anabios-core --release --test invariants territory_measurement_probe -- --ignored --nocapture`, 235.39s:
+
+```
+seed=1 alive=1499 land=674 water=525 air=300 violations=0 deep_overlaps=3 inside_territory=99.7% inside_by_class(L/W/A)=100.0/99.2/100.0 water_cells_with_biomass=11949
+seed=2 alive=300 land=0 water=0 air=300 violations=0 deep_overlaps=0 inside_territory=86.0% inside_by_class(L/W/A)=-/-/86.0 water_cells_with_biomass=10454
+seed=3 alive=825 land=0 water=525 air=300 violations=0 deep_overlaps=12 inside_territory=80.2% inside_by_class(L/W/A)=-/99.2/47.0 water_cells_with_biomass=6148
+seed=4 alive=825 land=0 water=525 air=300 violations=0 deep_overlaps=2 inside_territory=70.3% inside_by_class(L/W/A)=-/100.0/18.3 water_cells_with_biomass=6611
+seed=5 alive=300 land=0 water=0 air=300 violations=0 deep_overlaps=0 inside_territory=23.3% inside_by_class(L/W/A)=-/-/23.3 water_cells_with_biomass=6476
+seed=6 alive=824 land=0 water=524 air=300 violations=0 deep_overlaps=1 inside_territory=83.7% inside_by_class(L/W/A)=-/98.3/58.3 water_cells_with_biomass=5192
+seed=7 alive=773 land=0 water=473 air=300 violations=0 deep_overlaps=5 inside_territory=85.5% inside_by_class(L/W/A)=-/90.5/77.7 water_cells_with_biomass=6287
+seed=8 alive=974 land=674 water=0 air=300 violations=0 deep_overlaps=1 inside_territory=93.5% inside_by_class(L/W/A)=100.0/-/79.0 water_cells_with_biomass=7689
+```
+
+This matches the diagnosis's own §10 "after" run exactly (same fix, same
+constants, run independently here as part of Task 9b's verification): **6/8
+seeds ≥ 80%** (seeds 1, 2, 3, 6, 7, 8; misses are seed 4 at 70.3% and seed 5
+at 23.3%), **zero extinctions** (every seed's `alive` count is a healthy
+population, 300–1499), **Air alive on 8/8 seeds** (was 7/8 pre-fix), **Water
+alive on 5/8** (was 3/8 in Round 3), **Land alive on 2/8** (was 3/8 in Round
+3 — an incidental, expected side effect of enlarging the Water/Air ranges
+into more of the shared world, not a new problem this task's scope covers).
+`violations` stay 0 on every seed; `deep_overlaps` are 0–12 (down from
+Round 3's 0–116).
+
+The per-class breakdown shows the fix reaching classes it previously never
+held: Water is 90.5–100% inside on every seed it survives (was 38.1–98.1%
+pre-fix), and Air — never held above 15.1% in any prior round — reaches
+18.3–100% (misses only on seeds 4 and 5, both discussed below). Land, which
+was already near-100% inside before this fix (it is terrain-bounded and
+tightly herded), stays at 100% on both seeds it survives.
+
+### Per-target verdicts (Round 4, final)
+
+| Target | Result | Verdict |
+|---|---|---|
+| `violations == 0` every seed | 0/8 | **PASS** (holds in all 5 rounds, 40/40 seeds) |
+| `deep_overlaps ≈ 0` (handful OK at ~1500 agents) | 0–12 | **PASS** — best of any round (was 0–116 in Round 3) |
+| `inside_territory ≥ 80%` on most seeds | **6/8** | **PASS** — reverses Round 3's 0/8; matches the diagnosis's validated §6 prediction (6/8, 0 extinctions) exactly |
+| `air > 0` on ≥ 6/8 seeds | 8/8 | **PASS** — improved from 7/8 |
+| `water > 0` on ≥ 6/8 seeds | 5/8 | **MISS, narrowly** — up from 3/8 (Round 3) but short of the 6/8 bar; not a regression, and not tuned further per this task's scope (mechanism fix only, no scenario/constant retuning beyond §9c) |
+| `land > 0` (not an original target, tracked since Round 2) | 2/8 | open, unresolved; down from 3/8, an expected side effect of Water/Air's larger, now-effective ranges competing harder for the shared world, not investigated further (out of Task 9b's scope) |
+| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (Round 1 measurement; not re-measured — Task 9b's fix does not touch the collision/resolve stages the bench targets) | **MISS — accepted per controller ruling** (unchanged) |
+
+The two seeds still under 80% (4: 70.3%, 5: 23.3%) are, per the diagnosis's
+prediction, **heritable escape rather than mechanism failure**: their Air
+lineages evolved Territoriality down to 0.16–0.19, below
+`1/TERRITORY_PULL = 0.4` — the point at which even a fully-engaged pull can
+no longer out-vote a unit-length outward intent. Territoriality staying
+heritable (and therefore evolvable away where holding is costly) is intended
+behaviour, not a bug, and it bounds any "≥ 80% on every seed" target.
+
+**R_MAX caveat (carried from the diagnosis, §8):** `TERRITORY_R_MAX = 512`
+on the flagship scenario's 1024-wide torus means a max-size range (radius
+512) can cover essentially half the world's linear extent — i.e. a
+full-capacity species' range is not a small, local "territory" in the
+intuitive sense on this map, it can span most of the world. This is by
+design (the diagnosis measured that the flagship's populations, up to
+max_share 675/525/300 on a ~50%-ocean 1024 world, need close to that much
+area to be fed without starving), but it weakens the "territory" story for
+the larger classes on this particular scenario and should be revisited if a
+future task wants visually/behaviorally tighter ranges — e.g. by lowering
+`max_population`/`max_share`, raising forage productivity, or sizing `r`
+from the co-ranging lineage population rather than each genome-species
+fragment (the diagnosis's fragmentation-aware alternative, not implemented
+here). `TERRITORY_R_MAX = 512` has not been (and per this task's scope,
+should not be) tried on a larger scenario without re-checking this ratio.
+
+### Round 4 verdict (final)
+
+The Task 9b diagnosis correctly identified that Round 3's failure was a
+mechanism bug, not a mistuned constant, and its prescribed three-part fix
+(§9a unit-capped intent, §9b free-roam-to-`r/2`-then-ramp-to-`r` geometry,
+§9c enlarged K/R_MAX) reproduces exactly as predicted when implemented here:
+`inside_territory` goes from the task's worst-ever result (0/8 in Round 3)
+to its best (6/8), with zero extinctions and improved `deep_overlaps` and
+Air survival as side benefits. The mechanism fix is complete and matches its
+own validation numbers exactly (bit-for-bit population/percentage match
+against the diagnosis's independent measurement run). Two items remain open
+by design/scope: `water > 0` on 5/8 (short of 6/8, an incidental but not
+regressive side effect), `land > 0` on 2/8 (unresolved since Round 2, not
+in Task 9b's scope), and the ~20% tick-overhead miss (accepted since Round
+1, untouched by this fix). Recommendation: **DONE** for the
+`inside_territory` mechanism, **DONE_WITH_CONCERNS** overall (carrying
+forward the pre-existing, out-of-scope Land/Water diversity and tick-overhead
+items).
