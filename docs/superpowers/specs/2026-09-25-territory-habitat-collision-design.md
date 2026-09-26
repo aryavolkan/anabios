@@ -1,8 +1,11 @@
 # Territory, Habitat & Collision — Design
 
-**Date:** 2026-09-25
-**Status:** Approved design, pending implementation plan
+**Date:** 2026-09-25 (text reconciled with the shipped code 2026-09-26, review)
+**Status:** Implemented — PR #173
 **Branch:** `claude/territory-habitat-collision`
+**Plan:** `docs/superpowers/plans/2026-09-25-territory-habitat-collision.md`
+**Findings:** `docs/superpowers/specs/2026-09-25-territory-habitat-collision-findings.md`
+**Diagnosis:** `docs/superpowers/specs/2026-09-25-territory-pull-diagnosis.md`
 
 ## Goal
 
@@ -42,7 +45,9 @@ all existing goldens byte-identical.
 ### 1. Locomotion gene
 
 - Rename `GenomeSlot::_Reserved7` → `Locomotion` in place (`GENOME_LEN`
-  stays 50; old saves remain readable). Counts toward speciation distance.
+  stays 50, so the genome's serialized layout is unchanged; snapshots are
+  still strictly versioned — see Persistence). Counts toward speciation
+  distance (only the personality slots are masked out of `Genome::distance`).
 - Bands: `v < 0.25` ⇒ **Water**, `0.25 ≤ v < 0.75` ⇒ **Land**, `v ≥ 0.75` ⇒ **Air**.
   `Genome::neutral()` (0.5) is therefore Land.
 - Mutation: slot 7 uses the same RNG draw as today, but the delta is scaled
@@ -62,9 +67,20 @@ all existing goldens byte-identical.
 ### 2. Habitat constraint
 
 - Validity: Land ⇔ cell terrain ≠ Water; Water ⇔ terrain = Water; Air ⇔ any.
-- Integrate gate (`integrate_all`, per-agent, own-slot write): compute the
-  proposed wrapped position; if invalid, try x-only move, then y-only move
-  (coastline slide); if both invalid, stay put (velocity zeroed).
+- Integrate gate (`integrate_all` → `habitat::gate_move`, per-agent,
+  own-slot write): validate the proposed destination; if invalid, try the
+  x-only move, then the y-only move (coastline slide); if both are invalid,
+  stay put (velocity zeroed). The gate samples the torus-*wrapped*
+  destination — the exact coordinate `integrate_all` stores — not the raw
+  `pos + v` (review fix: for a sub-3e-5 overshoot past the seam, f32
+  `rem_euclid` rounds the stored coordinate to exactly `world_size`, which
+  `cell_coords` reads as row/column 0 while the raw value clamps to the last
+  row — a violation the gate could not see; see the findings doc's "Review
+  caveats"). A displacement longer than half a biome cell is
+  sampled along its segment at ≤ half-cell spacing (speed multipliers stack
+  to ~9 units/tick against 8-unit cells), so a fast agent cannot tunnel
+  through a one-cell strip of forbidden terrain
+  (`gate_does_not_tunnel_through_a_one_cell_strip`).
 - Decide masking: with the flag on, the EnvAffinity and terrain habitat
   pulls are skipped when the cell one cell-width along the pull is invalid
   for the agent's class (`habitat::pull_allowed`). The water pull is kept:
@@ -101,15 +117,18 @@ all existing goldens byte-identical.
 - New persisted `World.species_territories: Vec<Territory>`, parallel to the
   other per-species vectors:
   ```rust
-  pub struct Territory { pub cx: f32, pub cy: f32, pub r: f32, pub class: u8 }
+  pub struct Territory { pub cx: f32, pub cy: f32, pub r: f32, pub class: Locomotion }
   ```
+  `class` is the `habitat::Locomotion` enum (serde-derived; the viewer bridge
+  exports its `u8` discriminant). `r == 0.0` marks a row `territory_step` has
+  not initialised yet, which applies no pull.
 - `territory_step` runs immediately after `species_step` (every
   `SPECIES_STEP_INTERVAL` = 200 ticks):
   - centre: EMA (`TERRITORY_CENTRE_RATE`) toward the members' torus-safe
     mean position (mean offset from a reference point — the current centre,
     or the first member for a new row; no trig);
   - radius: `clamp(TERRITORY_K · √n, R_MIN, R_MAX)`;
-  - class: members' majority locomotion class;
+  - class: members' majority locomotion class (lowest index wins ties);
   - new species inherit the parent species' record (no parent ⇒ seeded from
     the members' current centroid); extinct species' records retained but
     inert (index-aligned with `species_*` vectors).
@@ -149,7 +168,9 @@ all existing goldens byte-identical.
   `unit(self − other) · (reach − d)/reach` over colliding neighbours within
   `reach = STEER_MARGIN·(r_i + r_j)` on the collision hash; `decide_all` adds
   `sep · SEP_PULL` last, before normalization.
-- **Hard resolve (new stage 4d, after integrate / needs):** snapshot
+- **Hard resolve (new stage 4′, `collision::resolve_overlaps` in `tick.rs`:
+  immediately after integrate and *before* `needs_step`, anchor learning and
+  interact, so every later stage sees resolved positions):** snapshot
   positions; K = 2 Jacobi passes; each agent sums push-out from overlapping
   colliding neighbours (one-ring `query` on the collision hash rebuilt from
   post-integrate positions; between passes positions move ≤ `MAX_PUSH`),
@@ -167,7 +188,7 @@ all existing goldens byte-identical.
 | 2 sense | class-aware plant sensing |
 | 3 decide | + separation pull, + territory pull, habitat masking of pulls |
 | 4 integrate | habitat gate with coastline slide |
-| 4d resolve (new) | Jacobi min-gap resolve |
+| 4′ resolve (new; before 4a′ needs / 4c anchor / 5 interact) | Jacobi min-gap resolve |
 | 5 interact / eat | class-gated grazing |
 | 8 species (÷200) | `territory_step` |
 | 10 biome | Water carrying capacity > 0 |
@@ -175,7 +196,13 @@ all existing goldens byte-identical.
 ## Persistence
 
 - `species_territories` serialized ⇒ `FORMAT_VERSION` 43 → 44 with history
-  note in `snapshot.rs`. `territory_enabled` field added to `World`.
+  note in `snapshot.rs`. `territory_enabled` field added to `World`. Both
+  new fields are `#[serde(default)]`, but the snapshot envelope is an exact
+  `FORMAT_VERSION` match (`load_from_bytes`), so pre-44 snapshots are
+  rejected, not migrated. Flag absent/off in every pre-existing scenario ⇒
+  trajectories byte-identical (pinned by the
+  `*_trajectory_unchanged_by_territory_substrate` guards in
+  `tests/determinism.rs`); only the serialized layout grew.
 - `collision_spatial` and the resolve snapshot are non-serialized per-tick
   scratch; the locomotion class is derived from the genome, never stored.
 - No new `EventType` in v1.
@@ -193,13 +220,22 @@ all existing goldens byte-identical.
 ## Testing
 
 **Unit (TDD, local):**
-- Locomotion band edges (0.39 / 0.4 / 0.7); mutation scale only with flag;
-  deterministic spawn relocation.
+- Locomotion band edges (0.25 / 0.75 — `WATER_MAX` / `AIR_MIN`,
+  `bands_split_at_quarter_and_three_quarters`); mutation scale only with
+  flag; deterministic spawn relocation.
 - Habitat gate: land-into-water blocked; coastline slide; water can't leave
-  water; air crosses freely. Property test on `continental.toml`, 2,000
-  ticks: zero Land-on-Water and zero Water-on-Land agents.
-- Territory: pull exactly 0 inside `r`, increasing outside; torus-seam
-  centroid; radius formula; child species inherits parent record.
+  water; air crosses freely; the gate judges the wrapped destination at the
+  seam. Invariant test `habitat_classes_never_leave_their_terrain`
+  (`tests/invariants.rs`) on `scenarios/habitat-territories.toml`, 2,000
+  ticks: zero Land-on-Water and zero Water-on-Land agents, checked every
+  tick over several seeds (tightened in review from one seed sampled every
+  50 ticks, which had missed a 7-tick seam violation — findings doc, "Review
+  caveats").
+- Territory: pull exactly 0 out to `TERRITORY_FREE_FRAC · r` (= `r/2`),
+  ramping to full strength at `r` and capped beyond it
+  (`pull_is_zero_inside_and_ramps_outside`); the unit-cap wins over a huge
+  outward program intent in `decide_all`; torus-seam centroid; radius
+  formula; child species inherits parent record.
 - Separation: two stacked agents end ≥ `min_gap` apart after resolve;
   Air↔Land do not push; push never crosses invalid habitat; mating still
   succeeds within `MATING_RANGE`.
@@ -209,23 +245,33 @@ all existing goldens byte-identical.
 **Determinism:**
 - Flag off: all existing goldens (determinism / affect / cognition /
   inventions) unchanged — primary gating guard.
-- Flag on: new `territory` golden in `determinism.rs`; save→load→step entry
-  in `save_load_roundtrip.rs`; 1-thread vs N-thread identity;
-  `snapshot_size.rs` updated.
+- Flag on: `HABITAT_GOLDEN` / `habitat_territories_matches_golden_hashes`
+  in `determinism.rs`; `territory_roundtrip` save→load→step entry in
+  `save_load_roundtrip.rs`; `parallel_matches_serial_across_thread_counts`
+  includes the scenario. `snapshot_size.rs` (a non-pinned size report) was
+  not changed.
 - Full golden suite on PR CI; locally `cargo fmt --check`, clippy, rustdoc
   `-D warnings`, fast unit tests.
 
-**Performance:** ≤ 10% tick-time overhead at 10k agents, measured with the
-isolated stage bench against a saved baseline.
+**Performance:** target ≤ 10% tick-time overhead at 10k agents, measured with
+the isolated stage bench against a saved baseline. Measured 1.19–1.24× in the
+findings doc's Round 1 and accepted as a miss; that figure predates the
+Round-4 mechanism and was taken on the 1024-wide flagship only (see the
+findings doc's "Review caveats" for the collision-grid-cap cost on ≥ 4096-wide
+worlds).
 
 **Measurement probe (before freezing constants):**
 `scenarios/habitat-territories.toml` — continental worldgen, pinned
-Land/Water/Air archetypes; 20k ticks × 8 seeds, headless. Report:
+Land/Water/Air archetypes; 20k ticks × 8 seeds, headless
+(`territory_measurement_probe` in `tests/invariants.rs`, `--ignored`). Report:
 - pairwise overlap rate (target: 0 colliding-pair overlaps at tick end),
 - % members inside own territory (target ≥ 80%),
 - habitat violations (must be 0),
 - Water and Air population persistence,
-- territory centre drift.
+- territory centre drift (not instrumented in the shipped probe, which
+  reports per-class populations, `violations`, `deep_overlaps` /
+  `shallow_overlaps`, `inside_territory` overall and per class, and
+  `water_cells_with_biomass` — all final-tick readings).
 If aquatic lineages collapse, tune `AQUATIC_CAPACITY` / `R_MIN`, not the
 architecture.
 

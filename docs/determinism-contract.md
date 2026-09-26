@@ -61,6 +61,16 @@ path-dependent EMA territory state (grown lazily by `territory::territory_step`
 only when `territory_enabled`), so dropping it on load would diverge
 restore-and-continue exactly like the v13 `still_ticks` footgun.
 
+Layout-only changes are proven with the **trajectory guards** in
+`tests/determinism.rs` (`*_trajectory_unchanged_by_territory_substrate`): an
+FNV over the bincode of every serialized sub-state that is the trajectory
+(agents, biome, rng, codex, species tables, pheromones, disasters, market
+field, trade hubs, culture roots) without the `World` envelope. Adding a
+`World` field moves the `state_hash` goldens but not these pins; pin them at
+the merge base of a change and check them at its head before regenerating
+goldens. Hashing agents + biome alone is not enough — a flag-off regression
+confined to codex bookkeeping or an extra RNG draw would slip past it.
+
 Locomotion class (Land/Water/Air) is derived from the genome
 (`Locomotion::of`, reading `GenomeSlot::Locomotion`) every time it's needed —
 it is never stored on `Agent` or `World`, so there is nothing to skip or

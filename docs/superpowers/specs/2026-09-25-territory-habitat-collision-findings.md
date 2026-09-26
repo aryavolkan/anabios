@@ -25,7 +25,8 @@ in Locomotion: Land, Water, Air).
 ## Headline (final state, after Round 4)
 
 Correctness holds throughout every round: **zero habitat violations across
-all 40 probe-seed runs**, five constant/mechanism configurations. The
+all 40 probe-seed runs** (final-tick readings — see "Review caveats" below),
+five constant/mechanism configurations. The
 mechanism bug behind the `inside_territory` miss (found by the Task 9b
 diagnosis) is now fixed; two items remain open, reported honestly:
 
@@ -49,7 +50,9 @@ diagnosis) is now fixed; two items remain open, reported honestly:
    8/8, Water alive 5/8 (was 3/8), Land alive 2/8 (was 3/8)** — see "Round 4"
    below for the full table and per-class breakdown.
 2. **Tick overhead (accepted miss, unchanged)**: `territory_enabled` costs
-   **~19–24%** per 10k-agent tick against a ≤10% budget. The one
+   **~19–24%** per 10k-agent tick against a ≤10% budget (a Round-1
+   measurement on the 1024-wide flagship, never re-measured — see "Review
+   caveats" below for what it does and does not cover). The one
    architecture-preserving lever available (`RESOLVE_PASSES` 2→1) was tried
    in round 1; it only trimmed the overhead to ~18–20% while making
    `deep_overlaps` ~5× worse, so it was reverted. The controller has
@@ -72,6 +75,43 @@ their Air lineages evolved Territoriality down to 0.16–0.19, below
 can no longer out-vote a unit-length outward intent. This is intended
 behaviour (Territoriality is a heritable gene the pull is scaled by), not a
 bug, and it bounds any "≥ 80% on every seed" target.
+
+### Review caveats (2026-09-26)
+
+Two of this doc's headline statements are narrower than they read. Both are
+recorded here, and pointed to from the tables that quote them, rather than by
+rewriting the rounds' numbers.
+
+1. **The tick-cost figure (1.19–1.24×, "~20%") is a Round-1 measurement.**
+   It was taken with `TERRITORY_K = 12`, `TERRITORY_R_MAX = 256`,
+   `TERRITORY_PULL = 1.0` and the old free-roam-to-`r` ramp, and was never
+   re-measured after Round 4 changed the `decide_all` territory path (the
+   `TERRITORY_FREE_FRAC` ramp and the per-agent move-intent unit-cap in
+   `territory::apply_territory_pull`); every later table that quotes it
+   carries the number forward, not a fresh measurement. It is also a
+   1024-wide-world number. `collision::collision_res` clamps the collision
+   grid to 1024 cells a side, so every world ≥ 4096 wide (`continental`,
+   `out-of-africa-earth`, `riverlands`, `huge-steppe`) rebuilds a 1024²
+   hash twice per tick (stage 1 and inside the stage-4′ resolve); the
+   flag-on cost at that cap was not measured by this task. An independent
+   measurement during review found ~0.7–0.9 ms/tick of *fixed* cost there
+   from the two O(res²) rebuilds: `continental.toml` went 0.54 → 1.45
+   ms/tick with the flag flipped on.
+2. **"Zero habitat violations" / `violations=0` are final-tick readings of
+   the 20k-tick probe, not every-tick facts.** The probe samples the world
+   once, at tick 20,000, and the gating invariant test sampled one seed
+   every 50 ticks. A per-tick check during review found a real violation
+   on seed 7: agent 623 (class Water) stood on Tundra for ticks 786–792 at
+   `y` exactly `= world_size`. Cause: `habitat::gate_move` sampled the raw
+   pre-wrap destination while `integrate_all` stores the wrapped one; for a
+   tiny negative overshoot f32 `rem_euclid` rounds the stored coordinate to
+   exactly `world_size`, which `cell_coords` then reads as row 0 — a
+   different cell from the one the gate had validated. Fixed in review:
+   `gate_move` now samples the wrapped destination (pinned by
+   `gate_samples_the_wrapped_destination_at_the_seam` in `habitat.rs`), and
+   `habitat_classes_never_leave_their_terrain` now checks every tick over
+   several seeds. The probe numbers in this doc are kept as measured; none
+   of them could have seen a 7-tick excursion that ended before tick 20k.
 
 ## Constants changed
 
@@ -125,6 +165,13 @@ comfortably outside noise of the 1.10 target — this is a real, reproducible
 
 **Acceptance: MISS.** `on` median is not ≤ 1.10 × `off` median under either
 constant setting tried.
+
+> Review caveat (2026-09-26): the runs above are Round-1 numbers
+> (`TERRITORY_K = 12`, `TERRITORY_R_MAX = 256`, `TERRITORY_PULL = 1.0`, old
+> ramp) on the 1024-wide flagship. They were not re-measured after Round 4
+> changed the `decide_all` territory path, and they say nothing about the
+> 1024²-collision-grid-cap cost on ≥ 4096-wide worlds — see "Review
+> caveats" under the Headline.
 
 ## Probe: 8 seeds × 20k ticks, `territory_measurement_probe`
 
@@ -181,7 +228,7 @@ Runtime: 356.70s.
 
 | Target | Result | Verdict |
 |---|---|---|
-| `violations == 0` every seed | 0 on all 8 seeds (all 3 configurations) | **PASS** |
+| `violations == 0` every seed | 0 on all 8 seeds (all 3 configurations; final-tick reading — see Review caveats) | **PASS** |
 | `deep_overlaps ≈ 0`, handful acceptable at 1500 agents | 0–38 (max 38, seed 6) | **PASS** (same order as the 0–41 baseline) |
 | `inside_territory ≥ 80%` on most seeds | 6/8 ≥ 80% (seed 4: 20.4%, seed 6: 30.9% miss) | **MARGINAL** — "most" holds numerically (6/8) but two seeds newly miss where the pre-tuning baseline had 7/7 live seeds ≥ 80%. Both misses are seeds where `AQUATIC_CAPACITY=6.0` flipped the outcome from extinct (seed 6) or a different class mix to all-Water; territory cohesion in those runs hasn't caught up by tick 20k. |
 | `water > 0` and `air > 0` on ≥ 6/8 seeds | water > 0 on 5/8 (seeds 1,3,4,6,7); air > 0 on **0/8** | **MISS** |
@@ -199,13 +246,25 @@ larger-scale scenario tier. Today only `habitat-territories.toml` (1024 wide)
 enables the layer, so this doesn't bite yet, but it should gate any future
 attempt to enable `territory_enabled` on a Huge/Vast-scale scenario.
 
+> Review update (2026-09-26): `collision::collision_res` now clamps the grid
+> to 1024 cells a side (`cell_size` grows past `COLLISION_CELL` instead), so
+> the 8192-wide case above is bounded at 1024² ≈ 1.05M buckets, not 4.2M —
+> but every world ≥ 4096 wide (`continental`, `out-of-africa-earth`,
+> `riverlands`, `huge-steppe`) sits exactly at that cap, and the two O(res²)
+> rebuilds per tick (stage 1 + inside the stage-4′ resolve) were measured in
+> review at ~0.7–0.9 ms/tick of fixed cost with the flag on
+> (`continental.toml`: 0.54 → 1.45 ms/tick). Not measured by this task; see
+> "Review caveats" under the Headline.
+
 ## Verdict
 
 The territory/habitat/collision layer is behaviorally correct at the
-flagship scale (zero habitat violations, acceptable overlap counts, high
-territory cohesion in 6 of 8 seeds) but ships with two open, honestly-missed
-targets rather than further tuning: a genuine ~20% per-tick cost on 10k
-agents that the one architecture-preserving lever available
+flagship scale (zero habitat violations at the probe's final tick — see
+"Review caveats" — acceptable overlap counts, high territory cohesion in 6 of
+8 seeds) but ships with two open, honestly-missed targets rather than further
+tuning: a genuine ~20% per-tick cost on 10k agents (Round-1 measurement,
+1024-wide world — see "Review caveats") that the one
+architecture-preserving lever available
 (`RESOLVE_PASSES`) cannot buy down without unacceptably degrading collision
 quality, and a diversity outcome where the Air niche — the smallest founder
 population competing across both land and sea for a land-only food source —
@@ -359,11 +418,11 @@ attempted, per the "tune constants only, stop after one attempt" rule.
 
 | Target | Result (post-`max_share`) | Verdict |
 |---|---|---|
-| `violations == 0` every seed | 0 on all 8 seeds | **PASS** |
+| `violations == 0` every seed | 0 on all 8 seeds (final-tick reading — see Review caveats) | **PASS** |
 | `deep_overlaps ≈ 0` (handful OK at 1500 agents) | 0–22 on 7/8 seeds; **177 on seed 7** | **MOSTLY PASS, one outlier** — not tuned further this round (see observation above) |
 | `inside_territory ≥ 80%` on most seeds | Only 1/8 seeds ≥ 80% (seed 7, 91.3%) | **MISS** — regressed from the pre-`max_share` baseline (was 6/8); an open, recorded side effect of the caps, not tuned further |
 | `water > 0` and `air > 0` on ≥ 6/8 seeds | water > 0 on 8/8 (up from 5/8); **air > 0 on 0/8** (unchanged) | **PARTIAL** — Water's collapse is fixed; Air's is a distinct, structural (food-access) problem `max_share` cannot reach |
-| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (unchanged; `AQUATIC_CAPACITY`/`max_share` don't affect tick cost) | **MISS — accepted** (controller ruling: no further tuning; this ~20% overhead on an opt-in layer is the final, shipped number) |
+| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (unchanged; `AQUATIC_CAPACITY`/`max_share` don't affect tick cost; Round-1 figure, 1024-wide world — see Review caveats) | **MISS — accepted** (controller ruling: no further tuning; this ~20% overhead on an opt-in layer is the final, shipped number) |
 
 ### Final verdict
 
@@ -491,12 +550,12 @@ spawn doesn't keep them clustered 20,000 ticks later once population dynamics
 
 | Target | Result | Verdict |
 |---|---|---|
-| `violations == 0` every seed | 0/8 | **PASS** |
+| `violations == 0` every seed | 0/8 (final-tick reading — see Review caveats) | **PASS** |
 | `deep_overlaps ≈ 0` (handful OK at ~1500 agents) | 0–75, mostly single digits | **MOSTLY PASS**, occasional outliers on higher-population seeds, unchanged character from prior rounds |
 | `inside_territory ≥ 80%` on most seeds | 1/8 (seed 5, 83.6%) | **MISS**, unchanged from the post-`max_share` round — founder clustering didn't fix it |
 | `water > 0` and `air > 0` on ≥ 6/8 seeds | water 6/8, **air 7/8** | **PASS** — both individually clear the ≥6/8 bar for the first time this task |
 | (new, unrequested) `land > 0` | 2/8 | Not an original target; recorded because Ruling A's fix inverted which class is now the rare one |
-| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (unchanged; neither ruling touches tick-cost code paths, not re-measured) | **MISS — accepted per controller ruling** (round 1), final number |
+| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (unchanged; neither ruling touches tick-cost code paths, not re-measured; Round-1 figure — see Review caveats) | **MISS — accepted per controller ruling** (round 1), final number |
 
 ### Round 2 verdict
 
@@ -594,13 +653,13 @@ made in response to any of this, per the ruling.
 
 | Target | Result | Verdict |
 |---|---|---|
-| `violations == 0` every seed | 0/8 | **PASS** (holds in all 4 rounds, 32/32 seeds) |
+| `violations == 0` every seed | 0/8 (final-tick readings — see Review caveats) | **PASS** (holds in all 4 rounds, 32/32 seeds) |
 | `deep_overlaps ≈ 0` (handful OK at ~1500 agents) | 0–116, mostly single digits | **MOSTLY PASS**, occasional outliers persist (unchanged character across all rounds) |
 | `inside_territory ≥ 80%` on most seeds | 0/8 | **MISS — final**, worse than round 2 (1/8); the prescribed lever did not help |
 | `land > 0` (not an original target, tracked since round 2's overcorrection) | 3/8 | open, unresolved |
 | `water > 0` on ≥ 6/8 seeds | 3/8 | **MISS — final** (was 6/8 in round 2; regressed) |
 | `air > 0` on ≥ 6/8 seeds | 7/8 | **PASS — final** (stable across rounds 2–3) |
-| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (round 1 measurement; not re-measured, unaffected by `TERRITORY_PULL`) | **MISS — accepted per controller ruling**, final |
+| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (round 1 measurement; not re-measured, unaffected by `TERRITORY_PULL`; see Review caveats) | **MISS — accepted per controller ruling**, final |
 
 ### Round 3 verdict (final, task closed)
 
@@ -610,7 +669,8 @@ incidental side effect on the ecological competition, moved Water's survival
 from 6/8 seeds down to 3/8 without helping Land. Only Air's survival (7/8)
 proved stable across the constant changes tried in rounds 2 and 3. Three
 tuning rounds, four constant/scenario configurations, and 32 probe-seed runs
-later, the picture is: **correctness is solid** (zero violations, always),
+later, the picture is: **correctness is solid** (zero violations at every
+probe's final tick — see Review caveats),
 **collision quality is acceptable with occasional outliers**, but **the
 three-species coexistence and territory-cohesion goals the scenario was
 designed around are not reliably achievable by constant tuning alone** — the
@@ -729,7 +789,8 @@ population, 300–1499), **Air alive on 8/8 seeds** (was 7/8 pre-fix), **Water
 alive on 5/8** (was 3/8 in Round 3), **Land alive on 2/8** (was 3/8 in Round
 3 — an incidental, expected side effect of enlarging the Water/Air ranges
 into more of the shared world, not a new problem this task's scope covers).
-`violations` stay 0 on every seed; `deep_overlaps` are 0–12 (down from
+`violations` stay 0 on every seed (at the final tick — see Review caveats);
+`deep_overlaps` are 0–12 (down from
 Round 3's 0–116).
 
 The per-class breakdown shows the fix reaching classes it previously never
@@ -743,13 +804,13 @@ tightly herded), stays at 100% on both seeds it survives.
 
 | Target | Result | Verdict |
 |---|---|---|
-| `violations == 0` every seed | 0/8 | **PASS** (holds in all 5 rounds, 40/40 seeds) |
+| `violations == 0` every seed | 0/8 (final-tick readings — see Review caveats) | **PASS** (holds in all 5 rounds, 40/40 seeds) |
 | `deep_overlaps ≈ 0` (handful OK at ~1500 agents) | 0–12 | **PASS** — best of any round (was 0–116 in Round 3) |
 | `inside_territory ≥ 80%` on most seeds | **6/8** | **PASS** — reverses Round 3's 0/8; matches the diagnosis's validated §6 prediction (6/8, 0 extinctions) exactly |
 | `air > 0` on ≥ 6/8 seeds | 8/8 | **PASS** — improved from 7/8 |
 | `water > 0` on ≥ 6/8 seeds | 5/8 | **MISS, narrowly** — up from 3/8 (Round 3) but short of the 6/8 bar; not a regression, and not tuned further per this task's scope (mechanism fix only, no scenario/constant retuning beyond §9c) |
 | `land > 0` (not an original target, tracked since Round 2) | 2/8 | open, unresolved; down from 3/8, an expected side effect of Water/Air's larger, now-effective ranges competing harder for the shared world, not investigated further (out of Task 9b's scope) |
-| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (Round 1 measurement; not re-measured — Task 9b's fix does not touch the collision/resolve stages the bench targets) | **MISS — accepted per controller ruling** (unchanged) |
+| bench `on` ≤ 1.10 × `off` | 1.19–1.24 (Round 1 measurement; not re-measured after this round changed the `decide_all` territory path and added the per-agent unit-cap; 1024-wide world only, silent on the ≥ 4096-wide collision-grid-cap cost — see Review caveats) | **MISS — accepted per controller ruling** (unchanged) |
 
 The two seeds still under 80% (4: 70.3%, 5: 23.3%) are, per the diagnosis's
 prediction, **heritable escape rather than mechanism failure**: their Air
@@ -789,7 +850,7 @@ against the diagnosis's independent measurement run). Two items remain open
 by design/scope: `water > 0` on 5/8 (short of 6/8, an incidental but not
 regressive side effect), `land > 0` on 2/8 (unresolved since Round 2, not
 in Task 9b's scope), and the ~20% tick-overhead miss (accepted since Round
-1, untouched by this fix). Recommendation: **DONE** for the
+1; never re-measured after this fix — see Review caveats). Recommendation: **DONE** for the
 `inside_territory` mechanism, **DONE_WITH_CONCERNS** overall (carrying
 forward the pre-existing, out-of-scope Land/Water diversity and tick-overhead
 items).
@@ -824,3 +885,9 @@ apart" reword is the accurate claim: at ~300–1500 agents on a shared range,
 a meaningful share of colliding pairs sit inside their gap but past the
 `deep_overlaps` half-gap line at any instant — expected from a fixed
 `RESOLVE_PASSES = 2` Jacobi resolve over a moving crowd, not a regression.
+
+`violations=0` here is, as everywhere in this doc, the tick-20k reading. The
+per-tick seam violation described under "Review caveats" (seed 7, agent 623,
+ticks 786–792) occurred in this same configuration; the `gate_move`
+wrapped-destination fix that closes it moves the flag-on trajectory, and the
+table above predates that fix.
