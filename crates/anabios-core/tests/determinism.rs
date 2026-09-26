@@ -211,7 +211,11 @@ const GOLDEN: &[(u64, u64)] =
     // `tests/biome_step_interval.rs::interval_one_is_byte_identical_to_the_
     // field_absent`); only the serialized layout grew, moving all three
     // hashes once.
-    &[(0, 0x1f0833df5551cb75), (100, 0x3bf5b90f0c20a792), (1000, 0xfda6a2cf52557694)];
+    // Refreshed 2026-09-25 (territory/habitat/collision layer, FORMAT_VERSION
+    // 43→44): added World.territory_enabled + World.species_territories
+    // (empty with the flag off). Layout growth only — trajectory proven
+    // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
+    &[(0, 0xb99c431dab29593b), (100, 0x7b02f3ead610bd84), (1000, 0x97905596ba954bc8)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -237,6 +241,7 @@ fn parallel_matches_serial_across_thread_counts() {
         // Both flags on: exercises the PLAY affect par_iter AND the PLAY→iq
         // enrichment coupling in the cognition par_iter across thread counts (M-E).
         include_str!("../../../scenarios/affect-play.toml"),
+        include_str!("../../../scenarios/habitat-territories.toml"),
     ] {
         let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
         const TICKS: u64 = 300;
@@ -269,4 +274,85 @@ fn parallel_matches_serial_across_thread_counts() {
 #[test]
 fn minimal_scenario_matches_golden_hashes() {
     common::assert_golden("minimal", SCENARIO, GOLDEN);
+}
+
+const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territories.toml");
+// Re-pinned 2026-09-26 after the review fixes (a splinter species starts its
+// territory at its own members' centroid, `gate_move` samples the wrapped
+// destination and the path of a long step, relocation searches the whole
+// torus) and the showcase seed change 1 -> 4: under the fixed code seed 4
+// holds all three classes at their caps through 20k ticks (675/525/300,
+// 91.6% inside, one deep overlap) where seed 1 ends with a crowded
+// shoreline (197 deep overlaps).
+const HABITAT_GOLDEN: &[(u64, u64)] =
+    &[(0, 0x2c407bf59a50d2f1), (100, 0xf7e48697d9a045be), (1000, 0xc4675529251f5022)];
+
+#[test]
+fn habitat_territories_matches_golden_hashes() {
+    common::assert_golden("habitat-territories", HABITAT_SCENARIO, HABITAT_GOLDEN);
+}
+
+/// FNV-1a over the bincode of every serialized `World` sub-state that IS the
+/// simulation trajectory — agents, biome, rng, codex (events + detector
+/// accumulators), the species tables, pheromones, disasters, the market
+/// field, trade hubs and culture roots — WITHOUT the `World` envelope itself.
+/// Adding a serialized `World` field (a layout change) moves every
+/// `state_hash` golden but leaves this untouched, so it separates "only the
+/// snapshot layout grew" from "behaviour changed" — and, unlike a hash of
+/// agents + biome alone, it also catches a flag-off regression confined to
+/// stage-8/9 bookkeeping (an extra codex event, a perturbed detector
+/// accumulator, an extra RNG draw). The sub-states' own layouts must not
+/// change between the pin and the check; when one does, re-pin from the
+/// merge base (`UPDATE_HASHES=1` prints the values) rather than from HEAD.
+/// Pinned at the merge base of the territory/habitat/collision layer (flag
+/// off in both scenarios) and re-derived identical at its head; it must
+/// never move while that layer is off.
+fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
+    let mut bytes = bincode::serialize(&w.agents).expect("agents serialize");
+    bytes.extend(bincode::serialize(&w.biome).expect("biome serialize"));
+    bytes.extend(bincode::serialize(&w.rng).expect("rng serialize"));
+    bytes.extend(bincode::serialize(&w.codex).expect("codex serialize"));
+    bytes.extend(bincode::serialize(&w.species_centroids).expect("centroids serialize"));
+    bytes.extend(bincode::serialize(&w.species_member_counts).expect("counts serialize"));
+    bytes.extend(bincode::serialize(&w.species_parents).expect("parents serialize"));
+    bytes.extend(bincode::serialize(&w.pheromones).expect("pheromones serialize"));
+    bytes.extend(bincode::serialize(&w.disasters).expect("disasters serialize"));
+    bytes.extend(bincode::serialize(&w.market_field).expect("market serialize"));
+    bytes.extend(bincode::serialize(&w.trade_hubs).expect("hubs serialize"));
+    bytes.extend(bincode::serialize(&w.culture_roots).expect("culture roots serialize"));
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xd1133dd8d119e894;
+const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x56819428b6cd2bf0;
+
+fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
+    let mut w = common::world(src);
+    common::run(&mut w, ticks);
+    let h = trajectory_hash(&w);
+    if std::env::var("UPDATE_HASHES").is_ok() {
+        println!("// {label} trajectory at {ticks}: 0x{h:016x}");
+        return;
+    }
+    assert_eq!(h, pinned, "{label}: trajectory moved with territory_enabled OFF");
+}
+
+#[test]
+fn minimal_trajectory_unchanged_by_territory_substrate() {
+    assert_trajectory("minimal", SCENARIO, 1000, MINIMAL_TRAJECTORY_AT_1000);
+}
+
+#[test]
+fn grand_theater_trajectory_unchanged_by_territory_substrate() {
+    assert_trajectory(
+        "grand-theater",
+        include_str!("../../../scenarios/grand-theater.toml"),
+        200,
+        GRAND_THEATER_TRAJECTORY_AT_200,
+    );
 }

@@ -7,6 +7,8 @@ use anabios_core::tick::step;
 use anabios_core::world::World;
 use proptest::prelude::*;
 
+mod common;
+
 fn build_world(seed: u64, agent_count: usize) -> World {
     let mut w = World::new(seed);
     // Invariants hold regardless of scale; cap population so the proptest cases
@@ -235,4 +237,140 @@ proptest! {
 fn combined_energy(w: &World) -> f32 {
     use anabios_core::interact::FOOD_ENERGY_PER_BIOMASS;
     w.alive_energy_total() + w.plant_biomass_total() * FOOD_ENERGY_PER_BIOMASS
+}
+
+/// Territory layer: with the flag on, no Land agent is ever on a Water cell
+/// and no Water agent is ever on land — checked for every alive agent after
+/// EVERY tick, over several seeds. `habitat::gate_move` validates each move,
+/// so a one-tick excursion is a real breach and sampling every N ticks would
+/// hide it (a 50-tick sample missed the seam rounding case this guards:
+/// before the wrapped-destination fix, seed 7's agent 623 (Water) stood on
+/// Tundra at ticks 786–792). The per-tick check costs ~1% of a step. The
+/// production predicate (`Locomotion::can_occupy`) is used directly so the
+/// rule is not re-encoded here, and the checked agent-ticks are counted per
+/// class so the test cannot pass vacuously if a class dies out.
+#[test]
+fn habitat_classes_never_leave_their_terrain() {
+    use anabios_core::habitat::Locomotion;
+    use anabios_core::scenario::Scenario;
+    let src = include_str!("../../../scenarios/habitat-territories.toml");
+    let horizon = common::ticks(2000);
+    for seed in [1u64, 2, 7] {
+        let mut s = Scenario::parse_toml(src).expect("parse");
+        s.seed = seed;
+        let mut w = s.instantiate();
+        assert!(w.territory_enabled);
+        let mut checked = [0u64; 3];
+        let mut check = |w: &World| {
+            for id in w.agents.iter_alive() {
+                let i = id as usize;
+                let c = Locomotion::of(&w.agents.genome[i]);
+                let t = w.biome.sample(w.agents.position[i]).terrain;
+                assert!(
+                    c.can_occupy(t),
+                    "seed {seed} tick {}: {c:?} agent {id} on {t:?} at {:?}",
+                    w.tick,
+                    w.agents.position[i]
+                );
+                checked[c.index()] += 1;
+            }
+        };
+        check(&w); // founders are relocated at instantiate
+        while w.tick < horizon {
+            common::run(&mut w, 1);
+            check(&w);
+        }
+        for c in [Locomotion::Land, Locomotion::Water] {
+            assert!(
+                checked[c.index()] >= horizon,
+                "seed {seed}: only {} {c:?} agent-ticks checked over {horizon} ticks — vacuous",
+                checked[c.index()]
+            );
+        }
+    }
+}
+
+/// Measurement probe (not a gate): 8 seeds × 20k ticks of the flagship
+/// scenario, reporting per-class populations, habitat violations, deep
+/// overlaps (colliding pairs closer than half their gap), shallow overlaps
+/// (colliding pairs closer than their gap but at least half of it — still
+/// touching, less severely), and the share of members inside their species'
+/// territory. Run:
+///   cargo test -p anabios-core --release --test invariants \
+///     territory_measurement_probe -- --ignored --nocapture
+#[test]
+#[ignore]
+fn territory_measurement_probe() {
+    use anabios_core::biome::TerrainType;
+    use anabios_core::collision::body_radius;
+    use anabios_core::habitat::Locomotion;
+    use anabios_core::scenario::Scenario;
+    let base = include_str!("../../../scenarios/habitat-territories.toml");
+    for seed in 1..=8u64 {
+        let mut s = Scenario::parse_toml(base).expect("parse");
+        s.seed = seed;
+        let mut w = s.instantiate();
+        common::run(&mut w, 20_000);
+        let ids: Vec<u32> = w.agents.iter_alive().collect();
+        let mut pop = [0u32; 3];
+        let mut inside_by_class = [0u32; 3];
+        let (mut violations, mut deep, mut shallow, mut inside) = (0u32, 0u32, 0u32, 0u32);
+        for &id in &ids {
+            let i = id as usize;
+            let c = Locomotion::of(&w.agents.genome[i]);
+            pop[c.index()] += 1;
+            let t = w.biome.sample(w.agents.position[i]).terrain;
+            if !c.can_occupy(t) {
+                violations += 1;
+            }
+            if let Some(tr) = w.species_territories.get(w.agents.species_id[i] as usize) {
+                let d = anabios_core::spatial::torus_distance(
+                    tr.centre(),
+                    w.agents.position[i],
+                    w.world_size,
+                );
+                if tr.is_set() && d <= tr.r {
+                    inside += 1;
+                    inside_by_class[c.index()] += 1;
+                }
+            }
+        }
+        // Per-class inside % (diagnosis §5 H5): the aggregate figure is
+        // composition-dominated (Land ~100%, Water/Air vary widely), so a
+        // single number can move purely because which classes survive
+        // changed, not because containment did. "-" marks an extinct class.
+        let inside_pct_by_class = |k: usize| {
+            if pop[k] == 0 {
+                "-".to_string()
+            } else {
+                format!("{:.1}", 100.0 * inside_by_class[k] as f32 / pop[k] as f32)
+            }
+        };
+        for (k, &a) in ids.iter().enumerate() {
+            for &b in &ids[k + 1..] {
+                let (ga, gb) = (&w.agents.genome[a as usize], &w.agents.genome[b as usize]);
+                if !Locomotion::of(ga).collides_with(Locomotion::of(gb)) {
+                    continue;
+                }
+                let gap = body_radius(ga) + body_radius(gb);
+                let d = anabios_core::spatial::torus_distance(
+                    w.agents.position[a as usize],
+                    w.agents.position[b as usize],
+                    w.world_size,
+                );
+                if d < 0.5 * gap {
+                    deep += 1;
+                } else if d < gap {
+                    shallow += 1;
+                }
+            }
+        }
+        let n = ids.len().max(1) as f32;
+        println!(
+            "seed={seed} alive={} land={} water={} air={} violations={violations} deep_overlaps={deep} shallow_overlaps={shallow} inside_territory={:.1}% inside_by_class(L/W/A)={}/{}/{} water_cells_with_biomass={}",
+            ids.len(), pop[0], pop[1], pop[2], 100.0 * inside as f32 / n,
+            inside_pct_by_class(0), inside_pct_by_class(1), inside_pct_by_class(2),
+            w.biome.cells.iter().filter(|c| c.terrain == TerrainType::Water && c.plant_biomass > 0.1).count(),
+        );
+    }
 }

@@ -421,6 +421,7 @@ fn metalworking_raises_combat_damage() {
             w.world_size,
             false,
             w.cognition_enabled,
+            false,
         );
         w.actions[attacker as usize].fire_intent = 1.0;
         let before = w.agents.energy[target as usize];
@@ -506,6 +507,7 @@ fn fire_holder_pays_extra_metabolism() {
             false,
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
+            None,
         );
         before - w.agents.energy[id as usize]
     };
@@ -1313,7 +1315,11 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // Refreshed 2026-09-12 (pixel-world-at-scale Phase 1, FORMAT_VERSION
     // 42→43): World.biome_step_interval added (default/absent 1) — layout
     // growth only, trajectory byte-identical.
-    &[(0, 0xdddcfaf87d6dd1a4), (100, 0x47b1ca50bbd414d0), (300, 0xe1d6d9b8759b2bf7)];
+    // Refreshed 2026-09-25 (territory/habitat/collision layer, FORMAT_VERSION
+    // 43→44): added World.territory_enabled + World.species_territories
+    // (empty with the flag off). Layout growth only — trajectory proven
+    // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
+    &[(0, 0x1974263cec9f90c8), (100, 0x9956e7aa7a7694cc), (300, 0xed55c437cc0f3283)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {

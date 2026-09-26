@@ -47,6 +47,9 @@ pub fn develop_all(world: &mut World) {
     let cap = world.agents.capacity();
     // M-E: read the affect flag BEFORE the `&mut world.agents` borrow below.
     let affect_enabled = world.affect_enabled;
+    // Territory layer: a Water cell's capacity is the aquatic pool, so a
+    // juvenile raised over the sea is scored on the food actually under it.
+    let territory_enabled = world.territory_enabled;
     // Each juvenile folds its OWN cell nutrition + sensed crowding into its OWN
     // iq accumulators — index-disjoint, no RNG (see the doc above). Bit-identical
     // to the old serial ascending-id loop. `biome`/`sensors` (shared) and
@@ -86,7 +89,7 @@ pub fn develop_all(world: &mut World) {
             // develops a lower IQ.)
             let (col, row) = biome.cell_coords(position[i]);
             let cell = biome.at(col, row);
-            let carry = cell.terrain.carrying_capacity();
+            let carry = crate::biome::BiomeField::effective_capacity(cell, territory_enabled);
             let nutrition =
                 if carry > 0.0 { (cell.plant_biomass / carry).clamp(0.0, 1.0) } else { 0.0 };
             // Social enrichment: local neighbour density from this tick's sense.
@@ -156,6 +159,34 @@ mod tests {
         w.sensors[i].crowding = crowding;
         develop_all(&mut w);
         w.agents.iq[i]
+    }
+
+    /// Territory layer: a juvenile over a seeded Water cell is scored on the
+    /// aquatic pool, not on Water's 0.0 terrestrial capacity.
+    #[test]
+    fn juvenile_nutrition_counts_aquatic_biomass_when_territory_on() {
+        use crate::biome::{TerrainType, AQUATIC_CAPACITY};
+        let build = |territory_on: bool| {
+            let mut w = World::new(3);
+            w.cognition_enabled = true;
+            w.territory_enabled = territory_on;
+            let pos = Vec2::new(500.0, 500.0);
+            let (col, row) = w.biome.cell_coords(pos);
+            let c = w.biome.at_mut(col, row);
+            c.terrain = TerrainType::Water;
+            c.plant_biomass = AQUATIC_CAPACITY; // full aquatic pool
+            let mut g = Genome::neutral();
+            g.set(GenomeSlot::Locomotion, 0.1); // Water class
+            let id = w.spawn_agent(pos, g);
+            w.agents.age[id as usize] = 0;
+            w.resize_scratch();
+            develop_all(&mut w);
+            w.agents.iq_enrich_acc[id as usize]
+        };
+        let off = build(false);
+        let on = build(true);
+        assert_eq!(off, 0.0, "flag off: Water capacity is 0.0 ⇒ nutrition 0");
+        assert!(on > off, "flag on: full aquatic pool counts as nutrition (acc {on})");
     }
 
     #[test]

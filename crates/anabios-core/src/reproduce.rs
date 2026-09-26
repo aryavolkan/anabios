@@ -226,7 +226,13 @@ pub fn reproduce_all(world: &mut World) {
             crate::invention::held_mask(&world.agents.meme_vector[i]),
             crate::invention::held_mask(&world.agents.meme_vector[j]),
         );
+        let loco_before = child_genome.get(crate::genome::GenomeSlot::Locomotion);
         child_genome.mutate_in_place_scaled(&mut world.rng, sigma_mult);
+        // Territory layer: class flips are rare — shrink this slot's drawn
+        // delta (same draw count). Flag off ⇒ untouched.
+        if world.territory_enabled {
+            crate::habitat::damp_locomotion_mutation(loco_before, &mut child_genome);
+        }
 
         // Mark both parents as reproduced this tick before spawning so the
         // newborn's slot (which gets a fresh bitvec bit) isn't accidentally
@@ -236,6 +242,17 @@ pub fn reproduce_all(world: &mut World) {
 
         // Spawn at midpoint of parents on the torus (account for wrap).
         let child_pos = midpoint_torus(a_pos, b_pos, world.world_size);
+        // Territory layer: a newborn lands on terrain its class can occupy.
+        let child_pos = if world.territory_enabled {
+            crate::habitat::nearest_valid(
+                &world.biome,
+                child_pos,
+                crate::habitat::Locomotion::of(&child_genome),
+            )
+            .unwrap_or(child_pos)
+        } else {
+            child_pos
+        };
 
         // `crossover_and_mutate` only reads the parents, so borrow their module
         // lists / programs in place instead of cloning them: `world.agents.*` and

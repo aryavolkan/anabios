@@ -193,6 +193,12 @@ func _ready() -> void:
 	caravan_layer.name = "CaravanLayer"
 	add_child(caravan_layer)
 	move_child(caravan_layer, module_layers.get_index())
+	# Species territory rings ([G] ground mode "territory"; territory layer).
+	var territory_layer = preload("res://scripts/territory_layer.gd").new()
+	territory_layer.name = "TerritoryLayer"
+	add_child(territory_layer)
+	move_child(territory_layer, module_layers.get_index())
+	territory_layer.setup(sim, overlay)
 	_make_wrap_clones()
 	# Replay & event camera (E2): snapshot ring + R/U/V modes.
 	var replay_manager := preload("res://scripts/replay_manager.gd").new()
@@ -551,7 +557,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
 			var world_pos: Vector2 = ($Camera2D as Camera2D).get_global_mouse_position()
-			var hit_id: int = int(sim.agent_near(world_pos, 4.0))
+			var hit_id: int = -1
+			# With the territory layer on, an airborne body is drawn AIR_LIFT
+			# body sizes above its sim position, so the click resolves against
+			# the drawn bodies first; the ground-point search still covers a
+			# body the layer did not draw (overview zoom, crowd cap).
+			if bool(sim.territory_active()):
+				hit_id = _agent_layer.pick(world_pos, 4.0)
+			if hit_id < 0:
+				hit_id = int(sim.agent_near(world_pos, 4.0))
 			inspector.pin(hit_id)
 	elif event is InputEventKey:
 		var k := event as InputEventKey

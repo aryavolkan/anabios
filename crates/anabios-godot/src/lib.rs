@@ -1521,6 +1521,54 @@ impl Simulation {
         out
     }
 
+    /// Whether the territory/habitat/collision layer is enabled — gates the
+    /// territory ground overlay and the airborne body lift.
+    #[func]
+    fn territory_active(&self) -> bool {
+        self.inner.as_ref().map(|w| w.territory_enabled).unwrap_or(false)
+    }
+
+    /// Locomotion class per alive agent (0 land, 1 water, 2 air), same order
+    /// as `alive_positions`. Empty when the territory layer is off.
+    #[func]
+    fn alive_locomotion(&self) -> PackedByteArray {
+        let mut out = PackedByteArray::new();
+        if let Some(w) = self.inner.as_ref() {
+            for c in locomotion_of(w) {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    /// Live species territories: `{species_id, pos, radius, locomotion,
+    /// diet, size, members, color}` per species with members and an
+    /// initialized range. `diet` and `size` are on the `alive_diet` /
+    /// `alive_sizes` scale (the viewer feeds them to
+    /// `MammalSprites.archetype_for` so a ring takes the coat colour its
+    /// bodies are tinted with), `members` is the live member count and
+    /// `color` the centroid's colour-gene HSV. Empty when the layer is off.
+    #[func]
+    fn species_territories(&self) -> Array<VarDictionary> {
+        let mut out = Array::new();
+        let Some(w) = self.inner.as_ref() else {
+            return out;
+        };
+        for t in territories_of(w) {
+            let mut d = VarDictionary::new();
+            d.set("species_id", t.species_id as i64);
+            d.set("pos", Vector2::new(t.cx, t.cy));
+            d.set("radius", t.r);
+            d.set("locomotion", t.class as i64);
+            d.set("diet", t.diet);
+            d.set("size", t.size);
+            d.set("members", t.members as i64);
+            d.set("color", hsv_to_color(t.hsv.0, t.hsv.1, t.hsv.2));
+            out.push(&d);
+        }
+        out
+    }
+
     /// Predetermined trade hubs: fixed marketplace positions with the goods that
     /// meet there. Static after worldgen; the viewer draws a building + goods
     /// ring at each. Empty unless the scenario enables resources.
@@ -1684,6 +1732,89 @@ fn body_tags_of(w: &anabios_core::World) -> Vec<i32> {
                 tag |= 1 << 4;
             }
             tag
+        })
+        .collect()
+}
+
+/// Locomotion class per alive agent (0 land / 1 water / 2 air), ascending id
+/// order; empty when the territory layer is off.
+fn locomotion_of(w: &anabios_core::World) -> Vec<u8> {
+    if !w.territory_enabled {
+        return Vec::new();
+    }
+    w.agents
+        .iter_alive()
+        .map(|id| anabios_core::habitat::Locomotion::of(&w.agents.genome[id as usize]) as u8)
+        .collect()
+}
+
+/// One live, initialized species territory with the body-sprite inputs of
+/// its members and its species colour (HSV of the species' centroid genome,
+/// clamped like `alive_colors`).
+struct TerritoryView {
+    species_id: u32,
+    cx: f32,
+    cy: f32,
+    r: f32,
+    class: u8,
+    /// Mean `alive_diet` value over the alive members.
+    diet: f32,
+    /// Centroid body size on the `alive_sizes` scale.
+    size: f32,
+    /// Live member count.
+    members: u32,
+    hsv: (f32, f32, f32),
+}
+
+/// Mean `alive_diet` value per species id (index = species id, one entry per
+/// territory slot), averaged over the alive members; 0.0 for a species with
+/// none. Diet lives on the Mouth module, not in the genome, so the species
+/// centroid cannot supply it the way it supplies size.
+fn species_mean_diet(w: &anabios_core::World) -> Vec<f32> {
+    let n = w.species_territories.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut sum = vec![0.0f32; n];
+    let mut count = vec![0u32; n];
+    for id in w.agents.iter_alive() {
+        let sid = w.agents.species_id[id as usize] as usize;
+        if sid < n {
+            sum[sid] +=
+                anabios_core::module::effective_diet_carnivory(&w.agents.modules[id as usize]);
+            count[sid] += 1;
+        }
+    }
+    sum.iter().zip(&count).map(|(s, c)| if *c > 0 { s / *c as f32 } else { 0.0 }).collect()
+}
+
+fn territories_of(w: &anabios_core::World) -> Vec<TerritoryView> {
+    use anabios_core::genome::GenomeSlot;
+    let diet = species_mean_diet(w);
+    w.species_territories
+        .iter()
+        .enumerate()
+        .filter(|(sid, t)| {
+            t.is_set() && w.species_member_counts.get(*sid).copied().unwrap_or(0) > 0
+        })
+        .map(|(sid, t)| {
+            let g = &w.species_centroids[sid];
+            TerritoryView {
+                species_id: sid as u32,
+                cx: t.cx,
+                cy: t.cy,
+                r: t.r,
+                class: t.class as u8,
+                diet: diet[sid],
+                // Same derivation as `alive_sizes`.
+                size: 0.5 + 2.5 * g.get(GenomeSlot::Size),
+                members: w.species_member_counts[sid],
+                hsv: (
+                    g.get(GenomeSlot::ColorHue),
+                    g.get(GenomeSlot::ColorSat).clamp(0.4, 1.0),
+                    g.get(GenomeSlot::ColorVal).clamp(0.5, 1.0),
+                ),
+            }
         })
         .collect()
 }
@@ -2542,6 +2673,66 @@ mod tests {
             // No stray bits beyond the five defined ones.
             assert_eq!(tag & !0b11111, 0, "agent {id} unexpected extra bits: {tag}");
         }
+    }
+
+    /// A world with the territory/habitat/collision layer on: the shipped
+    /// `habitat-territories.toml` scenario, stepped a few ticks so the three
+    /// founder species' territories are initialized (species step runs on
+    /// tick 0).
+    fn habitat_world() -> anabios_core::World {
+        let toml = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scenarios/habitat-territories.toml"
+        ))
+        .expect("read habitat-territories.toml");
+        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
+        for _ in 0..5 {
+            anabios_core::tick::step(&mut w);
+        }
+        w
+    }
+
+    #[test]
+    fn locomotion_export_is_empty_when_off_and_aligned_when_on() {
+        assert!(super::locomotion_of(&minimal_world()).is_empty());
+        let w = habitat_world();
+        let loco = super::locomotion_of(&w);
+        assert_eq!(loco.len(), w.agents.live_count() as usize);
+        assert!(loco.contains(&0) && loco.contains(&1) && loco.contains(&2));
+    }
+
+    #[test]
+    fn territory_export_lists_live_initialized_species() {
+        use anabios_core::genome::GenomeSlot;
+        use anabios_core::module::effective_diet_carnivory;
+        assert!(super::territories_of(&minimal_world()).is_empty());
+        let w = habitat_world();
+        let t = super::territories_of(&w);
+        assert!(t.len() >= 3, "three founder species, got {}", t.len());
+        for v in &t {
+            let sid = v.species_id as usize;
+            assert!(v.r >= anabios_core::territory::TERRITORY_R_MIN);
+            assert!(w.species_member_counts[sid] > 0);
+            assert_eq!(v.members, w.species_member_counts[sid]);
+            // Same scale as `alive_sizes`: 0.5 + 2.5 * the centroid's Size gene.
+            let size_gene = w.species_centroids[sid].get(GenomeSlot::Size);
+            assert_eq!(v.size, 0.5 + 2.5 * size_gene);
+            // Same value as `alive_diet`, averaged over the species' alive members.
+            let (mut sum, mut n) = (0.0f32, 0u32);
+            for id in w.agents.iter_alive() {
+                if w.agents.species_id[id as usize] as usize == sid {
+                    sum += effective_diet_carnivory(&w.agents.modules[id as usize]);
+                    n += 1;
+                }
+            }
+            assert!(n > 0);
+            let mean = sum / n as f32;
+            assert!((v.diet - mean).abs() < 1e-6, "diet {} vs member mean {mean}", v.diet);
+        }
+        // The showcase's three grazer founders are herbivores: the viewer
+        // resolves them to the herbivore/aquatic/flighted sprites, never the
+        // self-coloured primate whose coat tint is white.
+        assert!(t.iter().all(|v| v.diet < 0.34), "grazer territories export a herbivore diet");
     }
 
     /// Builds a world at the given `biome_res` (default resolution if `None`)

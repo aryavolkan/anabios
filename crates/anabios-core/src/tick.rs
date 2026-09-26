@@ -31,6 +31,11 @@ pub fn step(world: &mut World) {
     // Stage 1: rebuild the spatial hash from current positions.
     world.spatial.rebuild(&world.agents.position, |i| world.agents.is_alive(i as u32));
 
+    // Territory layer: fine collision hash for this tick's separation steer.
+    if world.territory_enabled {
+        crate::collision::rebuild_hash(world);
+    }
+
     // Stage 2: sense. The culture-lineage mask (anthropogenic arms race) is
     // refreshed first — a no-op leaving an empty mask when the flag is off.
     world.refresh_culture_mask();
@@ -45,6 +50,7 @@ pub fn step(world: &mut World) {
         world.world_size,
         world.gene_tech_coupling,
         world.cognition_enabled,
+        world.territory_enabled,
     );
 
     // Stage 2b: subcortical affect — update per-agent Panksepp activations from
@@ -65,7 +71,14 @@ pub fn step(world: &mut World) {
         world.gene_tech_coupling,
         world.cognition_enabled,
         world.spatial.perception_max_radius(),
+        world.territory_enabled.then_some(&world.biome),
     );
+
+    // Stage 4': collision resolve (territory layer) — colliding bodies are
+    // kept apart (separation steering plus this best-effort 2-pass min-gap
+    // resolve), not guaranteed to never touch. Before needs/anchor/interact
+    // so every later stage sees resolved positions. No-op with the flag off.
+    crate::collision::resolve_overlaps(world);
 
     // Stage 4a': basic needs — thirst/fatigue accumulation, drinking, and the
     // sleep hysteresis (opt-in; no-op and zero RNG draws when
@@ -149,6 +162,9 @@ pub fn step(world: &mut World) {
     // Stage 8: periodic species clustering.
     if world.tick.is_multiple_of(crate::species::SPECIES_STEP_INTERVAL) {
         crate::species::species_step(world);
+        // Territory layer: re-centre/re-size each species' range from its
+        // freshly reassigned members (no-op, zero state with the flag off).
+        crate::territory::territory_step(world);
     }
 
     // Stage 9: codex detectors (extinction, population crash, etc.). Runs every
@@ -172,6 +188,9 @@ pub fn step(world: &mut World) {
             world.biome.regrow_step_seasonal(phase, sf);
         } else {
             world.biome.regrow_step(sf);
+        }
+        if world.territory_enabled {
+            world.biome.aquatic_regrow_step();
         }
         // Stage 10b: resource node spawn/cleanup (opt-in; no-op when off).
         crate::resource::resource_step(world);
@@ -200,7 +219,10 @@ fn decide_all(world: &mut World) {
     let affect_enabled = world.affect_enabled;
     let basic_needs_enabled = world.basic_needs_enabled;
     let mate_seeking_enabled = world.mate_seeking_enabled;
+    let territory_enabled = world.territory_enabled;
+    let territories = &world.species_territories;
     let spatial = &world.spatial;
+    let collision = &world.collision_spatial;
     let ws = world.world_size;
     let cap = world.agents.capacity();
     world
@@ -223,6 +245,9 @@ fn decide_all(world: &mut World) {
                 *dir_out = Vec2::ZERO;
                 return;
             }
+            // Territory layer: this agent's Locomotion class (None = flag off).
+            let class =
+                territory_enabled.then(|| crate::habitat::Locomotion::of(&agents.genome[i]));
             let mut action = decide(
                 &agents.program[i],
                 &agents.genome[i],
@@ -262,8 +287,10 @@ fn decide_all(world: &mut World) {
                     affinity,
                     crate::culture::HABITAT_REACH,
                 );
-                action.move_x += crate::culture::HABITAT_PULL * pull.x;
-                action.move_y += crate::culture::HABITAT_PULL * pull.y;
+                if crate::habitat::pull_allowed(biome, agents.position[i], pull, class) {
+                    action.move_x += crate::culture::HABITAT_PULL * pull.x;
+                    action.move_y += crate::culture::HABITAT_PULL * pull.y;
+                }
             }
             // Terrain habitat selection (opt-in): bias movement toward the
             // nearest cell of this agent's TerrainAffinity-preferred terrain, so
@@ -278,8 +305,10 @@ fn decide_all(world: &mut World) {
                     target,
                     crate::culture::TERRAIN_HABITAT_REACH,
                 );
-                action.move_x += crate::culture::TERRAIN_HABITAT_PULL * pull.x;
-                action.move_y += crate::culture::TERRAIN_HABITAT_PULL * pull.y;
+                if crate::habitat::pull_allowed(biome, agents.position[i], pull, class) {
+                    action.move_x += crate::culture::TERRAIN_HABITAT_PULL * pull.x;
+                    action.move_y += crate::culture::TERRAIN_HABITAT_PULL * pull.y;
+                }
             }
             // Trade-hub seeking (opt-in with the trade-goods subsystem): agents
             // with a real trade motive steer toward the nearest predetermined
@@ -307,6 +336,28 @@ fn decide_all(world: &mut World) {
                 );
                 action.move_x += pull.x;
                 action.move_y += pull.y;
+            }
+            // Species territory (territory layer, opt-in): free roam inside the
+            // species' range, a Territoriality-scaled pull home past its edge.
+            // Past the free-roam zone, the intent accumulated so far is
+            // unit-capped before the pull is added (`apply_territory_pull`),
+            // so an unbounded evolved move intent can't swamp a fixed-size
+            // pull after normalization (see `territory::apply_territory_pull`).
+            if territory_enabled {
+                if let Some(t) = territories.get(agents.species_id[i] as usize) {
+                    let pull = crate::territory::territory_pull(
+                        t,
+                        agents.position[i],
+                        agents.genome[i].get(crate::genome::GenomeSlot::Territoriality),
+                        ws,
+                    );
+                    let v = crate::territory::apply_territory_pull(
+                        Vec2::new(action.move_x, action.move_y),
+                        pull,
+                    );
+                    action.move_x = v.x;
+                    action.move_y = v.y;
+                }
             }
             // Water-seeking (basic needs, opt-in): a thirsty agent gets an
             // additive pull toward the nearest drinkable cell, scaled by its
@@ -382,6 +433,14 @@ fn decide_all(world: &mut World) {
                     &sensors[i],
                     agents.energy[i],
                 );
+            }
+            // Separation steering (territory layer): route around overlapping
+            // bodies. Last in the stack so it still applies under the pen
+            // override and the hijack; the stage-4' resolve backstops it.
+            if territory_enabled {
+                let sep = crate::collision::separation_steer(collision, agents, i, ws);
+                action.move_x += crate::collision::SEP_PULL * sep.x;
+                action.move_y += crate::collision::SEP_PULL * sep.y;
             }
             // Normalize the movement intent to a unit direction (identical to the
             // pre-M11 logic that lived inside `decide`). Guard against a non-finite
@@ -557,5 +616,47 @@ mod tests {
             "high-arousal distant threat ⇒ hijack Freeze (zero heading), got {on:?}"
         );
         assert_ne!(off, Vec2::ZERO, "flag off ⇒ no hijack; prey still has a (flee) heading");
+    }
+
+    #[test]
+    fn territory_pull_wins_over_a_huge_outward_program_intent_in_decide_all() {
+        use crate::habitat::Locomotion;
+        use crate::program::{Node, Program};
+        use crate::territory::Territory;
+
+        // Species 0's territory sits at (500, 500), r = 100; the agent is
+        // placed well beyond it, so the pull is at full strength. Its program
+        // always emits a raw move intent of magnitude 1000 in +x — away from
+        // home, and orders of magnitude larger than TERRITORY_PULL — modeling
+        // an evolved program whose intent would otherwise swamp the pull once
+        // the sum is normalized to a direction (see
+        // `territory::apply_territory_pull`'s doc). This exercises the real
+        // `decide_all` pipeline (not just the isolated helper), so it would
+        // catch a reorder of the territory-pull block relative to the rest of
+        // the movement-bias stack (e.g. moving it after `apply_mood`) if that
+        // ever broke the unit-cap-before-adding-the-pull behaviour.
+        let mut w = World::new(21);
+        w.territory_enabled = true;
+        let centre = Vec2::new(500.0, 500.0);
+        let start = Vec2::new(700.0, 500.0);
+        let a = w.spawn_agent(start, Genome::neutral());
+        w.species_territories.push(Territory {
+            cx: centre.x,
+            cy: centre.y,
+            r: 100.0,
+            class: Locomotion::Land,
+        });
+        w.agents.program[a as usize] =
+            Program::from_slice(&[Node::Const(1000.0), Node::MoveTowardX]);
+        w.resize_scratch();
+        decide_all(&mut w);
+
+        let dir = w.desired_direction[a as usize];
+        let home = (centre - start).normalize();
+        assert!(
+            dir.dot(home) > 0.0,
+            "desired_direction must net toward home despite a huge outward program \
+             intent: dir={dir:?} home={home:?}"
+        );
     }
 }

@@ -28,6 +28,13 @@ pub struct UniformSpatialHash {
     flat: Vec<u32>,
     /// Reusable per-cell count buffer for `rebuild` (avoids a per-tick alloc).
     counts: Vec<u32>,
+    /// Cells with agents in the last `rebuild_sparse`, in first-touched order;
+    /// the only cells that build has to reset next time.
+    touched: Vec<u32>,
+    /// Set by the dense `rebuild`, which leaves `counts`/`bucket_lens` dirty
+    /// in every occupied cell; `rebuild_sparse` then resets the whole grid
+    /// once before trusting `touched` again.
+    dense_dirty: bool,
     /// Grid resolution per axis (was the `HASH_RES` const).
     res: usize,
     /// World-units per cell (was the `HASH_CELL_SIZE` const): `world_size / res`.
@@ -57,6 +64,8 @@ impl UniformSpatialHash {
             bucket_lens: vec![0; total_cells],
             flat: Vec::new(),
             counts: vec![0; total_cells],
+            touched: Vec::new(),
+            dense_dirty: false,
             res: hash_res,
             cell_size: world_size / hash_res as f32,
             world_size,
@@ -68,6 +77,18 @@ impl UniformSpatialHash {
     #[inline]
     pub fn perception_max_radius(&self) -> f32 {
         self.cell_size
+    }
+
+    /// Grid resolution per axis.
+    #[inline]
+    pub fn res(&self) -> usize {
+        self.res
+    }
+
+    /// World extent per axis (torus size) this hash is sized for.
+    #[inline]
+    pub fn world_size(&self) -> f32 {
+        self.world_size
     }
 
     /// Rebuild from the alive agent positions. Agents whose `alive` bit is
@@ -87,6 +108,7 @@ impl UniformSpatialHash {
         alive: impl Fn(usize) -> bool,
     ) {
         let total_cells = self.res * self.res;
+        self.dense_dirty = true;
         // Phase 1: count agents per cell (reused buffer, no per-tick alloc).
         self.counts.clear();
         self.counts.resize(total_cells, 0);
@@ -136,6 +158,108 @@ impl UniformSpatialHash {
             let row = (cy + dy) % self.res;
             for dx in [self.res - 1, 0, 1] {
                 let col = (cx + dx) % self.res;
+                let cell = row * self.res + col;
+                let off = self.bucket_offsets[cell] as usize;
+                let len = self.bucket_lens[cell] as usize;
+                for id in &self.flat[off..off + len] {
+                    f(*id);
+                }
+            }
+        }
+    }
+
+    /// `rebuild` for a grid far larger than its population (the collision
+    /// hash: 65k cells for ~1k agents on the flagship, 1M cells at the 1024²
+    /// cap): O(alive) instead of O(cells). Only the cells the previous sparse
+    /// build touched are reset, and bucket offsets are assigned by walking
+    /// that touched list (first-touched order over ascending ids ⇒
+    /// deterministic) instead of every cell. Each cell's slice holds exactly
+    /// the ids `rebuild` would give it, in the same ascending order, so
+    /// `query`/`query_bbox`/`query_wide` are bit-identical; only the layout
+    /// of `flat` differs, which no reader observes. Safe to mix with the
+    /// dense `rebuild` (a full reset follows one).
+    pub fn rebuild_sparse(&mut self, positions: &[Vec2], alive: impl Fn(usize) -> bool) {
+        let total_cells = self.res * self.res;
+        if self.dense_dirty || self.counts.len() != total_cells {
+            self.counts.clear();
+            self.counts.resize(total_cells, 0);
+            self.bucket_offsets.iter_mut().for_each(|o| *o = 0);
+            self.bucket_lens.iter_mut().for_each(|l| *l = 0);
+            self.touched.clear();
+            self.dense_dirty = false;
+        }
+        // Phase 0: reset only last build's occupied cells. Offsets are zeroed
+        // too so an emptied cell slices `flat[0..0]`, never past its end.
+        for &cell in &self.touched {
+            let c = cell as usize;
+            self.counts[c] = 0;
+            self.bucket_offsets[c] = 0;
+            self.bucket_lens[c] = 0;
+        }
+        self.touched.clear();
+        // Phase 1: count per cell, recording each cell on its first hit.
+        for (i, &p) in positions.iter().enumerate() {
+            if !alive(i) {
+                continue;
+            }
+            let cell = self.cell_of(p);
+            if self.counts[cell] == 0 {
+                self.touched.push(cell as u32);
+            }
+            self.counts[cell] += 1;
+        }
+        // Phase 2: prefix-sum over the touched cells only.
+        let mut total = 0_u32;
+        for &cell in &self.touched {
+            let c = cell as usize;
+            self.bucket_offsets[c] = total;
+            total += self.counts[c];
+            self.bucket_lens[c] = 0;
+        }
+        self.flat.clear();
+        self.flat.resize(total as usize, 0);
+        // Phase 3: scatter (ascending id order within each cell, as `rebuild`).
+        for (i, &p) in positions.iter().enumerate() {
+            if !alive(i) {
+                continue;
+            }
+            let cell = self.cell_of(p);
+            let off = self.bucket_offsets[cell] + self.bucket_lens[cell];
+            self.flat[off as usize] = i as u32;
+            self.bucket_lens[cell] += 1;
+        }
+    }
+
+    /// `query` restricted to the ring cells that can hold a point within
+    /// `radius` of `pos`, for `radius < cell_size`. Walks the SAME
+    /// `[res-1, 0, 1]` ring in the same row-major order as `query` and skips
+    /// the ring rows/columns outside the wrapped box `pos ± radius`, so the
+    /// ids it yields are a subsequence of `query`'s: a caller whose own
+    /// distance check is strictly below `radius` (leave a margin above the
+    /// accept reach — a point within the reach is then inside the box by more
+    /// than f32 rounding at the seam) sees the same accepted neighbours in the
+    /// same order, bit-identical, at roughly half the candidates. The
+    /// collision sweeps use it: their reach (≤ 2.75) is well under the 4-unit
+    /// cell. Deterministic.
+    pub fn query_bbox<F: FnMut(u32)>(&self, pos: Vec2, radius: f32, mut f: F) {
+        debug_assert!(
+            radius < self.cell_size,
+            "query_bbox radius {radius} must be below cell_size={}",
+            self.cell_size
+        );
+        let (cx, cy) = self.cell_coords(pos);
+        let (lo_x, lo_y) = self.cell_coords(pos - Vec2::splat(radius));
+        let (hi_x, hi_y) = self.cell_coords(pos + Vec2::splat(radius));
+        for dy in [self.res - 1, 0, 1] {
+            let row = (cy + dy) % self.res;
+            if row != cy && row != lo_y && row != hi_y {
+                continue;
+            }
+            for dx in [self.res - 1, 0, 1] {
+                let col = (cx + dx) % self.res;
+                if col != cx && col != lo_x && col != hi_x {
+                    continue;
+                }
                 let cell = row * self.res + col;
                 let off = self.bucket_offsets[cell] as usize;
                 let len = self.bucket_lens[cell] as usize;
@@ -245,6 +369,91 @@ pub fn torus_distance(a: Vec2, b: Vec2, world_size: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Deterministic pseudo-random positions (LCG; no RNG crate needed).
+    fn scatter(n: usize, ws: f32, seed: u64) -> Vec<Vec2> {
+        let mut x = seed;
+        let mut next = || {
+            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((x >> 33) as f32 / (1u64 << 31) as f32) * ws
+        };
+        (0..n).map(|_| Vec2::new(next(), next())).collect()
+    }
+
+    fn collect(h: &UniformSpatialHash, pos: Vec2, r: f32, bbox: bool) -> Vec<u32> {
+        let mut out = Vec::new();
+        if bbox {
+            h.query_bbox(pos, r, |id| out.push(id));
+        } else {
+            h.query(pos, r, |id| out.push(id));
+        }
+        out
+    }
+
+    #[test]
+    fn sparse_rebuild_matches_dense_per_cell_contents() {
+        let ws = 256.0;
+        let pos = scatter(3000, ws, 7);
+        let alive = |i: usize| i % 7 != 3;
+        let mut dense = UniformSpatialHash::with_dims(ws, 64);
+        let mut sparse = UniformSpatialHash::with_dims(ws, 64);
+        dense.rebuild(&pos, alive);
+        // Two sparse builds in a row (the second resets via `touched`), then
+        // one after a dense build on the same hash (reset via `dense_dirty`).
+        sparse.rebuild_sparse(&pos, alive);
+        sparse.rebuild_sparse(&pos, alive);
+        let mut mixed = UniformSpatialHash::with_dims(ws, 64);
+        mixed.rebuild(&scatter(500, ws, 3), |_| true);
+        mixed.rebuild_sparse(&pos, alive);
+        for probe in scatter(400, ws, 11) {
+            let want = collect(&dense, probe, 4.0, false);
+            assert_eq!(collect(&sparse, probe, 4.0, false), want, "sparse vs dense at {probe:?}");
+            assert_eq!(collect(&mixed, probe, 4.0, false), want, "mixed vs dense at {probe:?}");
+        }
+        // A cell emptied between builds must slice `flat[0..0]`, not panic.
+        let moved: Vec<Vec2> = pos.iter().map(|p| *p + Vec2::splat(100.0)).collect();
+        sparse.rebuild_sparse(&moved, alive);
+        dense.rebuild(&moved, alive);
+        for probe in scatter(200, ws, 13) {
+            assert_eq!(collect(&sparse, probe, 4.0, false), collect(&dense, probe, 4.0, false));
+        }
+    }
+
+    #[test]
+    fn query_bbox_is_an_order_preserving_subsequence_that_keeps_every_near_agent() {
+        let ws = 256.0;
+        let pos = scatter(4000, ws, 5);
+        let mut h = UniformSpatialHash::with_dims(ws, 64); // 4-unit cells
+        h.rebuild(&pos, |_| true);
+        let r = 2.75;
+        for probe in scatter(600, ws, 17).into_iter().chain([
+            Vec2::new(0.0, 0.0),
+            Vec2::new(255.999, 128.0),
+            Vec2::new(1.0, 255.99),
+            Vec2::new(4.0, 4.0),
+            Vec2::new(3.999, 7.999),
+        ]) {
+            let full = collect(&h, probe, 4.0, false);
+            let sub = collect(&h, probe, r, true);
+            // Subsequence of the full ring visit, in the same order.
+            let mut k = 0;
+            for id in &full {
+                if k < sub.len() && sub[k] == *id {
+                    k += 1;
+                }
+            }
+            assert_eq!(k, sub.len(), "bbox ids must be an in-order subsequence at {probe:?}");
+            // Every agent within the (strictly smaller) accept reach is kept.
+            for (id, p) in pos.iter().enumerate() {
+                if torus_distance(probe, *p, ws) < r - 0.25 {
+                    assert!(
+                        sub.contains(&(id as u32)),
+                        "agent {id} within reach missing at {probe:?}"
+                    );
+                }
+            }
+        }
+    }
 
     fn brute_force_neighbors(positions: &[Vec2], origin: Vec2, radius: f32) -> Vec<u32> {
         let mut out: Vec<u32> = (0..positions.len() as u32)

@@ -32,6 +32,10 @@ pub const SPEED_MAX_CAP: f32 = 4.0;
 /// `gene_tech_coupling` (TG1) scales the Machinery speed buff by the holder's
 /// affinity gene; pass `false` for exact identity. `cognition_enabled` adds a
 /// radius-scaled perception-energy cost (zero and byte-identical when false).
+/// `habitat` (territory layer) is `Some(biome)` when `territory_enabled`:
+/// each move passes through `habitat::gate_move` for the agent's Locomotion
+/// class; `None` applies the move ungated (exact identity).
+#[allow(clippy::too_many_arguments)]
 pub fn integrate_all(
     agents: &mut AgentBuffers,
     desired_direction: &[Vec2],
@@ -40,6 +44,7 @@ pub fn integrate_all(
     gene_tech_coupling: bool,
     cognition_enabled: bool,
     max_radius: f32,
+    habitat: Option<&crate::biome::BiomeField>,
 ) {
     use rayon::prelude::*;
     let cap = agents.capacity();
@@ -151,6 +156,18 @@ pub fn integrate_all(
             );
             let v = direction
                 * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed * affect_speed);
+            // Habitat gate (territory layer): the move the agent's Locomotion
+            // class allows — full, coastline slide, or none. `None` ⇒ `v`
+            // untouched, so flag-off worlds are byte-identical.
+            let v = match habitat {
+                Some(biome) => crate::habitat::gate_move(
+                    biome,
+                    crate::habitat::Locomotion::of(&genome[i]),
+                    *pos,
+                    v,
+                ),
+                None => v,
+            };
             *vel = v;
 
             let new_pos = *pos + v;
@@ -210,6 +227,7 @@ mod tests {
             false,
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
+            None,
         );
         let p = w.agents.position[id as usize];
         assert!(p.x >= 0.0 && p.x < WORLD_SIZE);
@@ -231,6 +249,7 @@ mod tests {
             false,
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
+            None,
         );
         let after = w.agents.energy[id as usize];
         assert!(after < before);
@@ -266,6 +285,7 @@ mod tests {
             false,
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
+            None,
         );
         let pos_after = w.agents.position[id as usize];
         assert_eq!(pos_before, pos_after, "no Locomotor → no motion");
@@ -289,6 +309,7 @@ mod tests {
                 false,
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
+                None,
             );
             before - w.agents.energy[id as usize]
         };
@@ -321,6 +342,7 @@ mod tests {
                 false,
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
+                None,
             );
             before - w.agents.energy[id as usize]
         };
@@ -373,6 +395,7 @@ mod tests {
             false,
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
+            None,
         );
         let new_pos = w.agents.position[id as usize];
         // Moved roughly SPEED_MAX_CAP × 1.0 = 4.0 in +x.
@@ -397,6 +420,7 @@ mod tests {
                 false,
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
+                None,
             );
             before - w.agents.energy[id as usize]
         };
@@ -427,6 +451,7 @@ mod tests {
                 false,
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
+                None,
             );
             (
                 (w.agents.position[id as usize] - before_pos).length(),
@@ -465,11 +490,88 @@ mod tests {
                 false,
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
+                None,
             );
             (w.agents.position[id as usize] - before).length()
         };
         let neutral = displacement(0.0);
         let seeking = displacement(1.0);
         assert!(seeking > neutral, "SEEKING boosts movement speed: {neutral} -> {seeking}");
+    }
+
+    /// 256-unit world, all Grass except Water in columns >= 16 (coast at x=128).
+    fn coast_world() -> World {
+        let mut w = World::with_dims(1, 256.0, 32, 16);
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 0..res {
+                w.biome.at_mut(col, row).terrain = if col >= 16 {
+                    crate::biome::TerrainType::Water
+                } else {
+                    crate::biome::TerrainType::Grass
+                };
+            }
+        }
+        w
+    }
+
+    fn step_once(w: &mut World, id: u32, dir: Vec2) -> Vec2 {
+        let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
+        desired[id as usize] = dir;
+        let biome = w.biome.clone();
+        integrate_all(
+            &mut w.agents,
+            &desired,
+            w.world_size,
+            false,
+            false,
+            w.cognition_enabled,
+            w.spatial.perception_max_radius(),
+            Some(&biome),
+        );
+        w.agents.position[id as usize]
+    }
+
+    #[test]
+    fn habitat_gate_keeps_land_agents_out_of_water() {
+        let mut w = coast_world();
+        let id = spawn_at_unit_speed(&mut w, Vec2::new(126.0, 100.0));
+        let p = step_once(&mut w, id, Vec2::new(1.0, 0.0));
+        assert_eq!(p, Vec2::new(126.0, 100.0), "blocked at the shore");
+        let p = step_once(&mut w, id, Vec2::new(0.70710677, 0.70710677));
+        assert!((p.x - 126.0).abs() < 1e-4 && p.y > 100.0, "slides north along the coast: {p:?}");
+    }
+
+    #[test]
+    fn habitat_gate_keeps_water_agents_in_water_and_lets_air_cross() {
+        let mut w = coast_world();
+        let mut g = crate::genome::Genome::neutral();
+        g.set(crate::genome::GenomeSlot::Locomotion, 0.1);
+        let fish = spawn_at_unit_speed(&mut w, Vec2::new(130.0, 60.0));
+        w.agents.genome[fish as usize] = g;
+        assert_eq!(step_once(&mut w, fish, Vec2::new(-1.0, 0.0)), Vec2::new(130.0, 60.0));
+        let bird = spawn_at_unit_speed(&mut w, Vec2::new(126.0, 30.0));
+        w.agents.genome[bird as usize].set(crate::genome::GenomeSlot::Locomotion, 0.9);
+        let p = step_once(&mut w, bird, Vec2::new(1.0, 0.0));
+        assert!((p.x - 130.0).abs() < 1e-4, "air crosses the coast: {p:?}");
+    }
+
+    #[test]
+    fn habitat_none_is_the_ungated_move() {
+        let mut w = coast_world();
+        let id = spawn_at_unit_speed(&mut w, Vec2::new(126.0, 100.0));
+        let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
+        desired[id as usize] = Vec2::new(1.0, 0.0);
+        integrate_all(
+            &mut w.agents,
+            &desired,
+            w.world_size,
+            false,
+            false,
+            w.cognition_enabled,
+            w.spatial.perception_max_radius(),
+            None,
+        );
+        assert!((w.agents.position[id as usize].x - 130.0).abs() < 1e-4);
     }
 }

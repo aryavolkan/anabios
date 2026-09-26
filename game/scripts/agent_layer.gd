@@ -135,6 +135,14 @@ const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.34)
 const SHADOW_W := 0.95  # of the body size
 const SHADOW_H := 0.36
 const SHADOW_DROP := 0.40  # centre offset below the body centre, of the body size
+# Airborne figures (territory layer, Air locomotion) ride AIR_LIFT body sizes
+# above their ground point; their contact shadow stays on the ground, shrunk
+# by AIR_SHADOW_SCALE and never cut at the waterline. The locomotion codes
+# themselves (LOCO_AIR and friends) live in MammalSprites — its archetype_for
+# also branches on them — so there is one source of truth instead of two
+# copies of the bridge's alive_locomotion() byte codes.
+const AIR_LIFT := 0.9
+const AIR_SHADOW_SCALE := 0.6
 var _death_effects: Array = []
 
 var _prev_ids: PackedInt32Array = PackedInt32Array()
@@ -145,6 +153,12 @@ var _prev_bucket: PackedInt32Array = PackedInt32Array()
 # self-coloured hominin atlases), kept in sync with the other _prev_* arrays so
 # a death ghost can inherit its agent's colour instead of a flat grey.
 var _prev_color: PackedColorArray = PackedColorArray()
+# The bodies actually drawn last refresh — id and drawn centre (the smoothed
+# ground point plus air_lift for a flyer), in draw order — so a click
+# resolves against what is on screen (pick) rather than the sim ground
+# point, which an airborne body sits AIR_LIFT body sizes above.
+var _drawn_ids: PackedInt32Array = PackedInt32Array()
+var _drawn_centres: PackedVector2Array = PackedVector2Array()
 # Per-agent animation state (Phase 3 step 2, D6): birth time, facing
 # (committed side 0 right / 1 left, eased value, low-passed heading x), gait
 # cycle position (0..1, advanced by the distance a body covers on screen and
@@ -313,6 +327,35 @@ static func crowd_cell_for(zoom: float) -> float:
 	return CROWD_CELL * sqrt(maxf(zoom, CROWD_ZOOM) / CROWD_ZOOM)
 
 
+# World-space offset that lifts an airborne figure's body above its ground
+# point (its shadow stays put). Zero for anything not flying.
+static func air_lift(sz: float, airborne: bool) -> Vector2:
+	return Vector2(0.0, -sz * AIR_LIFT) if airborne else Vector2.ZERO
+
+
+# Nearest drawn body to world_pos within radius, by drawn centre: its id, or
+# -1 when none is in range. Same strict-radius, first-closest rule as the
+# bridge's agent_near, applied to the drawn centres instead of the sim
+# ground points. Pure; unit-tested.
+static func nearest_drawn(
+	centres: PackedVector2Array, ids: PackedInt32Array, world_pos: Vector2, radius: float
+) -> int:
+	var best := -1
+	var best_d2: float = radius * radius
+	for j in mini(centres.size(), ids.size()):
+		var d2: float = centres[j].distance_squared_to(world_pos)
+		if d2 < best_d2:
+			best_d2 = d2
+			best = ids[j]
+	return best
+
+
+# Click-to-inspect against the bodies drawn last refresh (see _drawn_ids):
+# the nearest drawn centre within radius world units, or -1.
+func pick(world_pos: Vector2, radius: float) -> int:
+	return nearest_drawn(_drawn_centres, _drawn_ids, world_pos, radius)
+
+
 # Staggered crowd-cell key: odd rows shift by half a cell.
 static func crowd_key(pos: Vector2, cell: float) -> Vector2i:
 	var row := int(floor(pos.y / cell))
@@ -349,6 +392,8 @@ func refresh(
 		_prev_bucket = PackedInt32Array()
 		_prev_energy = PackedFloat32Array()
 		_prev_color = PackedColorArray()
+		_drawn_ids = PackedInt32Array()
+		_drawn_centres = PackedVector2Array()
 		_anim.sync(PackedInt32Array(), Time.get_ticks_msec() / 1000.0)
 		_anim.compact()
 		_report_visible(0)
@@ -399,7 +444,14 @@ func refresh(
 	var moods: PackedInt32Array = sim.alive_moods() if sim.affect_active() else PackedInt32Array()
 	# Held-invention bits (all-zero in flag-off worlds) arm the fight pose.
 	var inv_masks: PackedInt32Array = sim.alive_invention_masks()
-	var body_colors: PackedColorArray = _body_colors(n)
+	# Locomotion class per agent (empty unless the territory layer is on).
+	# Named "locomotion" rather than "loco" — the instance loop below already
+	# binds a local `loco` (FxMath.step_locomotion's result), and GDScript
+	# rejects re-declaring a name already in the function's scope as a hard
+	# parse error, not just a shadow warning.
+	var locomotion: PackedByteArray = sim.alive_locomotion()
+	var have_locomotion: bool = locomotion.size() == n
+	var body_colors: PackedColorArray = _body_colors(n, locomotion, have_locomotion)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n
 	var have_ids: bool = ids.size() == n
@@ -527,8 +579,9 @@ func refresh(
 	for i in n:
 		if visible_mask[i]:
 			var tags: int = body_tags[i] if have_tags else 0
+			var loco_i: int = locomotion[i] if have_locomotion else 0
 			var arch := (
-				MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags)
+				MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags, loco_i)
 				if have_sp
 				else MammalSprites.PRIMATE
 			)
@@ -546,8 +599,9 @@ func refresh(
 				bucket_ix[i] = _prev_bucket[pm]
 			else:
 				var tags2: int = body_tags[i] if have_tags else 0
+				var loco_i2: int = locomotion[i] if have_locomotion else 0
 				var arch2 := (
-					MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags2)
+					MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags2, loco_i2)
 					if have_sp
 					else MammalSprites.PRIMATE
 				)
@@ -579,6 +633,8 @@ func refresh(
 	if m > mm.instance_count:
 		mm.instance_count = m
 	mm.visible_instance_count = m
+	_drawn_ids.resize(m if have_ids else 0)
+	_drawn_centres.resize(_drawn_ids.size())
 	for j in m:
 		var i: int = idx[j]
 		var b: int = bucket_ix[i]
@@ -594,11 +650,16 @@ func refresh(
 				sz *= FxMath.birth_scale(age / BIRTH_POP)
 		# Upright: the hominin stands, not spins — heading drives the
 		# walk shader (walk weight + facing), not the transform rotation.
-		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, smooth[i])
+		var airborne: bool = have_locomotion and locomotion[i] == MammalSprites.LOCO_AIR
+		var centre: Vector2 = smooth[i] + air_lift(sz, airborne)
+		var t: Transform2D = Transform2D(0.0, Vector2(sz, sz), 0.0, centre)
 		mm.set_instance_transform_2d(j, t)
-		var wading: bool = wading_check and _biome.is_water_at(smooth[i])
-		# A wading figure casts no contact shadow on the water.
-		var sh_w: float = 0.0 if wading else sz * SHADOW_W
+		if have_ids:
+			_drawn_ids[j] = ids[i]
+			_drawn_centres[j] = centre
+		var wading: bool = not airborne and wading_check and _biome.is_water_at(smooth[i])
+		# A wading figure casts no contact shadow on the water; a flyer's shrinks.
+		var sh_w: float = 0.0 if wading else sz * SHADOW_W * (AIR_SHADOW_SCALE if airborne else 1.0)
 		shadows.set_instance_transform_2d(
 			shadow_n,
 			Transform2D(
@@ -714,8 +775,10 @@ func refresh(
 			_anim.action_pose[s] = action_state.x
 			_anim.action_hold[s] = action_state.y
 			act = action_state.x
-			# Emote-worthy actions get a pictogram above the agent's head.
-			_emote_layer.collect(ids[i], smooth[i], sz, act)
+			# Emote-worthy actions get a pictogram above the agent's head —
+			# above the drawn body, so a flyer's glyph clears its lifted
+			# sprite; the sip ripple stays on the ground point.
+			_emote_layer.collect(ids[i], centre, sz, act)
 			if act == ACT_DRINK and _effects != null:
 				_effects.tick_sip(ids[i], smooth[i], sz)
 		mm.set_instance_custom_data(j, Color(phase, moving, face_left, act / ACT_SCALE))
@@ -808,7 +871,7 @@ func _refresh_death_effects(delta: float) -> void:
 			mm.set_instance_color(j, c)
 
 
-func _body_colors(n: int) -> PackedColorArray:
+func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) -> PackedColorArray:
 	var out := PackedColorArray()
 	out.resize(n)
 	match _overlay.body_mode:
@@ -832,7 +895,11 @@ func _body_colors(n: int) -> PackedColorArray:
 			# Species mode: Primate atlases carry their own coat/skin colours, so
 			# white; quadruped atlases are neutral grayscale, so each agent gets
 			# its per-species coat hue here. Diet/size come from the same batches
-			# refresh() already fetched.
+			# refresh() already fetched. `locomotion`/`have_locomotion` (passed in
+			# by refresh(), which fetches them before calling this) must feed the
+			# SAME archetype_for() call refresh() uses to pick the render bucket —
+			# otherwise a Water/Air agent gets the right silhouette but a stale
+			# land-based coat tint.
 			var diet: PackedFloat32Array = sim.alive_diet()
 			var sizes: PackedFloat32Array = sim.alive_sizes()
 			var sp_ids: PackedInt32Array = sim.alive_species_ids()
@@ -841,7 +908,10 @@ func _body_colors(n: int) -> PackedColorArray:
 			var have_tags: bool = body_tags.size() == n
 			for i in n:
 				var tags: int = body_tags[i] if have_tags else 0
-				var arch := MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags)
+				var loco_i: int = locomotion[i] if have_locomotion else 0
+				var arch := MammalSprites.archetype_for(
+					diet[i], sizes[i], live[i] != 0, tags, loco_i
+				)
 				out[i] = MammalSprites.coat_hue(arch, sp_ids[i])
 	return out
 

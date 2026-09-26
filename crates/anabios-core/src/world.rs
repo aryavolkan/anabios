@@ -251,6 +251,21 @@ pub struct World {
     /// written and byte-identical with the flag off.
     #[serde(default)]
     pub disease_enabled: bool,
+    /// When true, the territory/habitat/collision layer is active: the
+    /// `Locomotion` gene gates movement/grazing by terrain (Land/Water/Air),
+    /// Water cells carry aquatic biomass, each species keeps a territory with a
+    /// soft-edge homing pull, and bodies are kept apart (separation steering +
+    /// the stage-4' min-gap resolve). Off by default — zero RNG draws and
+    /// byte-identical trajectories with the flag off.
+    #[serde(default)]
+    pub territory_enabled: bool,
+    /// Per-species territory, indexed by species id. Grown lazily by
+    /// `territory::territory_step`, ONLY when `territory_enabled` — empty (and
+    /// unread) otherwise. Serialized: the centre is a path-dependent EMA, so
+    /// dropping it on load would diverge restore-and-continue (still-ticks v13
+    /// footgun).
+    #[serde(default)]
+    pub species_territories: Vec<crate::territory::Territory>,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -335,6 +350,19 @@ pub struct World {
     /// tick in `harvest_pass`. `#[serde(skip)]` — reconstructed on load.
     #[serde(skip)]
     pub resource_spatial: UniformSpatialHash,
+    /// Fine collision hash (`collision::COLLISION_CELL` cells), rebuilt at
+    /// stage 1 and inside the stage-4' resolve when `territory_enabled`.
+    /// `#[serde(skip)]` scratch: after a snapshot load this is serde's
+    /// `Default` (`UniformSpatialHash::new()`, a 1024-wide/64-res hash), NOT
+    /// the `World::new` 3x3 placeholder. `collision::rebuild_hash` resizes it
+    /// whenever its resolution OR its world extent no longer matches the
+    /// live `World::world_size`, so it self-heals on first use either way.
+    #[serde(skip)]
+    pub collision_spatial: UniformSpatialHash,
+    /// Jacobi position snapshot reused by `collision::resolve_overlaps`.
+    /// Scratch, `#[serde(skip)]`.
+    #[serde(skip)]
+    pub collision_scratch: Vec<crate::prelude::Vec2>,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
@@ -494,6 +522,8 @@ impl World {
             unilateral_trade: false,
             anthro_race_enabled: false,
             disease_enabled: false,
+            territory_enabled: false,
+            species_territories: Vec::new(),
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
@@ -520,6 +550,9 @@ impl World {
                 crate::biome::WORLD_SIZE_DEFAULT,
                 crate::spatial::HASH_RES_DEFAULT,
             ),
+            // Placeholder (3x3); `collision::rebuild_hash` sizes it on first use.
+            collision_spatial: UniformSpatialHash::with_dims(crate::biome::WORLD_SIZE_DEFAULT, 3),
+            collision_scratch: Vec::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),
@@ -768,5 +801,12 @@ mod tests {
     fn affect_enabled_defaults_off() {
         let w = World::new(1);
         assert!(!w.affect_enabled, "affect layer is opt-in; off by default");
+    }
+
+    #[test]
+    fn territory_layer_defaults_off_and_empty() {
+        let w = World::new(1);
+        assert!(!w.territory_enabled, "territory layer is opt-in; off by default");
+        assert!(w.species_territories.is_empty());
     }
 }
