@@ -38,7 +38,9 @@ pub const TERRITORY_K: f32 = 12.0;
 pub const TERRITORY_R_MIN: f32 = 48.0;
 pub const TERRITORY_R_MAX: f32 = 256.0;
 /// Homing pull at Territoriality = 1 once a member is ≥ 2r from the centre.
-pub const TERRITORY_PULL: f32 = 1.0;
+/// Raised 1.0 → 2.5 (Task 9 round 3, the plan's prescribed lever) to try to
+/// lift `inside_territory`, which stayed mostly below 80% through rounds 1–2.
+pub const TERRITORY_PULL: f32 = 2.5;
 
 /// Territory radius for a species of `members` alive agents.
 pub fn radius_for(members: u32) -> f32 {
