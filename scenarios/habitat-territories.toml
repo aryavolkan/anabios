@@ -5,7 +5,7 @@
 # (a seabird niche: `Locomotion::can_graze` lets Air graze both terrains
 # because a land-only flyer diet starves them out against Land's shared
 # forage). Each keeps a species territory; bodies are kept apart (separation
-# steering plus a best-effort 2-pass min-gap resolve — see collision.rs), not
+# steering plus a min-gap resolve (up to eight Jacobi passes per tick) — see collision.rs), not
 # guaranteed to never touch.
 #
 # sea_level 0.45 + continentality carve real oceans at the default 1024 world,
