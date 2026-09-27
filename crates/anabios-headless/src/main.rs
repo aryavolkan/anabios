@@ -185,7 +185,7 @@ enum Command {
     },
     /// Narrate the cultural invention race: stream discovery/adoption events
     /// and periodic per-species tech tables. Best with
-    /// `scenarios/inventions.toml`.
+    /// `scenarios/tribes.toml`.
     Demo {
         #[arg(long)]
         scenario: PathBuf,

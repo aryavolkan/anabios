@@ -104,9 +104,9 @@ the v13 lesson.
    mirroring `World::with_dims`. Without this, a custom-dims world reloads
    with the default 1024/64 grid: wrong `cell_size` (clamps every perception
    radius wrong) and wrong torus extent. Found by
-   `tests/save_load_roundtrip.rs` (`season_period_roundtrip`,
-   `living_biome_roundtrip`); pinned by
-   `tests/serde_skip_audit.rs::load_rederives_spatial_hash_dims`.
+   `tests/save_load_roundtrip.rs` (`riverlands_roundtrip`,
+   `sandbox_roundtrip` — both worlds run on a non-default `world_size`);
+   pinned by `tests/serde_skip_audit.rs::load_rederives_spatial_hash_dims`.
 
 ## Checklist: adding a subsystem
 
