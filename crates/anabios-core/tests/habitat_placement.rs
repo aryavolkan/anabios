@@ -288,6 +288,14 @@ fn max_share_reserves_room_under_the_cap() {
     // Two founder lineages; the first breeds far faster (dense grazers).
     // Without a share the first fills the whole cap; with one it stops at
     // its share and the count never exceeds it.
+    //
+    // The second lineage is pinned to the far corner of the render-colour
+    // genes, which count toward speciation distance but nothing behavioural
+    // reads: with an identical genome the two founder species sit on the
+    // same centroid, and `species_step` can reassign a drifted second-lineage
+    // agent INTO species 1, lifting its count past the share without a birth
+    // (seen at tick 801 when the collision resolve changed the trajectory).
+    // The share gates births, not species drift, so keep the lineages apart.
     let toml = r#"
 name = "share"
 seed = 4
@@ -303,6 +311,10 @@ max_share = 0.6
 count = 20
 archetype = "mammal_grazer"
 placement = { kind = "cluster", center_x = 200.0, center_y = 200.0, radius = 30.0 }
+[agents.traits]
+color_hue = 1.0
+color_sat = 1.0
+color_val = 1.0
 "#;
     let mut w = instantiate(toml);
     assert_eq!(w.lineage_caps, vec![(1, 180)], "60% of 300, keyed by founder species");
