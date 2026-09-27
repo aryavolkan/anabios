@@ -168,6 +168,13 @@ export function createStage(canvas) {
       const vfov = (camera.fov * Math.PI) / 180;
       return worldWidth / (2 * Math.tan(vfov / 2) * camera.aspect);
     },
+    /** World units spanned by one screen pixel at the camera's current
+     *  distance to its orbit target, for a viewport `viewportHeightPx` tall. */
+    unitsPerPixel(viewportHeightPx) {
+      const vfov = (camera.fov * Math.PI) / 180;
+      const distance = camera.position.distanceTo(controls.target);
+      return (2 * distance * Math.tan(vfov / 2)) / viewportHeightPx;
+    },
     /** Smoothly move the orbit target to (x, h, z) keeping the camera offset. */
     flyTo(x, h, z, distance) {
       this._fly = { to: new THREE.Vector3(x, h, z), distance, t: 0 };

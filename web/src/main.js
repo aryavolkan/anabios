@@ -259,7 +259,11 @@ function loop(now) {
   layers.agents.setTime(clock);
   layers.birds.update(clock);
   layers.fx.update(now / 1000);
-  layers.particles.update(reduceMotion ? 0 : dt, $("view").clientHeight / (2 * Math.tan((stage.camera.fov * Math.PI) / 360)));
+  const viewportHeightPx = $("view").clientHeight;
+  layers.particles.update(reduceMotion ? 0 : dt, viewportHeightPx / (2 * Math.tan((stage.camera.fov * Math.PI) / 360)));
+  // Computed once per frame (not per agent) and threaded through the update
+  // path below rather than having layers.js reach into the camera directly.
+  const unitsPerPixel = stage.unitsPerPixel(viewportHeightPx);
   if (layers.agents.marker.visible) {
     const pulse = 0.5 + 0.5 * Math.sin(clock * 5);
     layers.agents.marker.scale.setScalar(layers.agents.baseScale * (1.3 + 0.25 * pulse));
@@ -278,7 +282,7 @@ function loop(now) {
     const fractional = src.kind === "replay" || state.speed < 1;
     if (stepped > 0 || fractional || state.sinceStep === 0) {
       const tick = src.tick;
-      layers.agents.update(src.agents(), heightAt, src.kind === "live");
+      layers.agents.update(src.agents(), heightAt, src.kind === "live", unitsPerPixel);
       if (stepped > 0 || src.kind === "replay") {
         const streaks = src.streaks();
         layers.streaks.push(streaks, tick);
