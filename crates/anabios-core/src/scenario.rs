@@ -170,10 +170,12 @@ pub struct Scenario {
     /// `inventions_enabled` (Writing must exist).
     #[serde(default = "default_true")]
     pub knowledge_enabled: bool,
-    /// Maladaptive cultural practices (Inbreeding, Child Sacrifice). Unlike the
-    /// opt-in flags above, this defaults to `true`: practices run whenever
-    /// `cognition_enabled` is on, exactly as before the flag existed, so every
-    /// existing scenario is unchanged. Set `false` to suppress practice
+    /// Maladaptive cultural practices (Inbreeding, Child Sacrifice). On by
+    /// default like the feature knobs above, but unlike them it is on in the
+    /// engine too (`World::new`), and it already defaulted `true` before the
+    /// scenario schema flipped to full-stack defaults: practices run whenever
+    /// `cognition_enabled` is on, exactly as before the flag existed (so the
+    /// flag-off fixtures keep it on). Set `false` to suppress practice
     /// *discovery* — the only source of practices in a fresh run (with none
     /// discovered there is nothing for copy-toward-best or inherit-jitter to
     /// amplify above threshold), so a fresh run effectively carries none. The O1
@@ -941,6 +943,15 @@ pub enum ScenarioError {
     )]
     InvalidBiomeRes,
     #[error(
+        "disease_enabled needs spatial-hash cells at least {radius} world units wide, but \
+         world_size / hash_res = {cell}: the spillover crowding probe queries a {radius}-unit \
+         radius, and the hash's neighbour query walks only the one-cell ring around a \
+         position (debug builds assert the radius fits in one cell; release builds \
+         silently miss neighbours beyond it) — lower hash_res to at most world_size / \
+         {radius}, or opt out with `disease_enabled = false`"
+    )]
+    DiseaseHashCellTooSmall { cell: f32, radius: f32 },
+    #[error(
         "world_size must be a finite value > 0 (got {0}): placement draws uniform \
          positions in [0, world_size) and every torus wrap divides by it"
     )]
@@ -1011,6 +1022,20 @@ impl Scenario {
         }
         if scenario.biome_step_interval == Some(0) {
             return Err(ScenarioError::InvalidBiomeStepInterval(0));
+        }
+        // Disease's spillover probe queries `disease::SPILLOVER_RADIUS`, and a
+        // spatial-hash query only reaches one cell (`world_size / hash_res`)
+        // out. A narrower cell parses and instantiates cleanly, then trips the
+        // debug `query` assert on the first disease step (or undercounts
+        // crowding in release) — so reject it here, the way `hash_res < 3` is.
+        if scenario.disease_enabled {
+            let ws = scenario.world_size.unwrap_or(crate::biome::WORLD_SIZE_DEFAULT);
+            let hr = scenario.hash_res.unwrap_or(crate::spatial::HASH_RES_DEFAULT);
+            let cell = ws / hr as f32;
+            let radius = crate::disease::SPILLOVER_RADIUS;
+            if cell < radius {
+                return Err(ScenarioError::DiseaseHashCellTooSmall { cell, radius });
+            }
         }
         // Terrain-aware placement preconditions. `instantiate` degrades
         // gracefully on both of these (uniform fallback / `max(1)`), but a
@@ -1525,7 +1550,7 @@ size = 0.5
     }
 
     #[test]
-    fn gene_tech_coupling_defaults_off_and_scenario_applies() {
+    fn gene_tech_coupling_explicit_off_and_scenario_applies() {
         // The scenario schema now defaults this on; explicit opt-out still
         // turns it off for baseline identity.
         let base = r#"
@@ -1556,7 +1581,7 @@ count = 5
     }
 
     #[test]
-    fn gene_requirements_defaults_off_and_scenario_applies() {
+    fn gene_requirements_explicit_off_and_scenario_applies() {
         // The scenario schema now defaults this on; explicit opt-out still
         // turns it off for baseline identity.
         let base = r#"
@@ -1587,7 +1612,7 @@ count = 5
     }
 
     #[test]
-    fn affect_enabled_defaults_off_and_scenario_applies() {
+    fn affect_enabled_explicit_off_and_scenario_applies() {
         // The scenario schema now defaults this on; explicit opt-out still
         // turns it off for baseline identity.
         let base =
@@ -2039,6 +2064,21 @@ sixe = 0.5
         }
         // 3 and up are accepted.
         assert!(Scenario::parse_toml("name = \"t\"\nseed = 1\nhash_res = 3\n").is_ok());
+    }
+
+    #[test]
+    fn parse_toml_rejects_disease_on_hash_cells_narrower_than_spillover() {
+        // 256 / 64 (the default hash_res) = 4-unit cells, narrower than the
+        // 8-unit spillover probe: the first disease step would trip the
+        // spatial-hash `query` assert in a debug build.
+        let text = "name = \"t\"\nseed = 1\nworld_size = 256\n";
+        let err = Scenario::parse_toml(text).expect_err("disease on 4-unit cells must be rejected");
+        assert!(matches!(err, ScenarioError::DiseaseHashCellTooSmall { .. }), "got {err}");
+        assert!(err.to_string().contains("hash_res"), "error should name hash_res, got: {err}");
+        // The same world with disease opted out is fine.
+        assert!(Scenario::parse_toml(&format!("{text}disease_enabled = false\n")).is_ok());
+        // So is disease on a coarser hash: 256 / 32 = 8-unit cells, exactly the radius.
+        assert!(Scenario::parse_toml(&format!("{text}hash_res = 32\n")).is_ok());
     }
 
     #[test]
