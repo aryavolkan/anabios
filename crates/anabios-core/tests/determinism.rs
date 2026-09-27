@@ -233,10 +233,10 @@ const GOLDEN: &[(u64, u64)] =
 /// thread count or execution order the state hashes would diverge.
 #[test]
 fn parallel_matches_serial_across_thread_counts() {
-    // Every world runs the full stack now, so each exercises the feature-on
-    // parallel paths (sense reads the gene-tech-coupling arm; cognition drives
-    // the `iq` stage; the PLAY affect par_iter and the PLAY→iq enrichment
-    // coupling). `tribes` carries the ape-tier culture and the predator guilds,
+    // Every world runs the full stack now (habitat-territories less sexual
+    // dimorphism), so each exercises the feature-on parallel paths (sense
+    // reads the gene-tech-coupling arm; cognition drives the `iq` stage; the
+    // PLAY affect par_iter and the PLAY→iq enrichment coupling). `tribes` carries the ape-tier culture and the predator guilds,
     // `habitat-territories` the territory layer, `grand-theater` the staged
     // emergence at scale.
     for scenario_src in [
@@ -289,8 +289,10 @@ const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territor
 const HABITAT_GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-26: the scenario schema now defaults every feature on;
     // the flag-off engine is pinned separately by the `*_trajectory_is_pinned`
-    // guards, which did not move.
-    &[(0, 0x0e76be58766240ac), (100, 0xc048ec294a06f1ab), (1000, 0x5ae9ab56c8053fb0)];
+    // guards, which did not move. Re-pinned 2026-09-27 after the validation
+    // tuning (Land founded as four habitat herds, `sexual_dimorphism_enabled =
+    // false`; see the scenario header); the guards again did not move.
+    &[(0, 0xabf4cde73a94b777), (100, 0x1f63dcdd6fbbb461), (1000, 0xe9d9e06230efdf4b)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {

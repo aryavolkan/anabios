@@ -3,8 +3,9 @@
 //! reload (the `#[serde(skip)]`-accumulator footgun — a skipped field that
 //! feeds future ticks is invisible to `state_hash` yet breaks replay).
 //!
-//! One test per world (each runs the full stack, so every default-on
-//! subsystem is warmed in all twelve), warmed enough that the subsystems'
+//! One test per world (each runs the full stack — `habitat-territories` less
+//! sexual dimorphism, its one documented opt-out — so every default-on
+//! subsystem is warmed across the twelve), warmed enough that the subsystems'
 //! state is non-trivial before saving, each guarding that its world actually
 //! enables the stack (so a scenario edit silently dropping a flag fails
 //! loudly). The retired files whose configuration no world carries — the
@@ -29,9 +30,15 @@ macro_rules! roundtrip_tests {
     };
 }
 
-/// Every feature knob the scenario schema defaults on is on — no world opts
-/// out of any of them.
+/// Every feature knob the scenario schema defaults on is on.
 fn full_stack(w: &World) -> bool {
+    w.sexual_dimorphism_enabled && full_stack_but_dimorphism(w)
+}
+
+/// Every default-on knob except sexual dimorphism — the one opt-out a curated
+/// world carries (`habitat-territories`: female choice sterilizes its small
+/// flyers; see that file's header).
+fn full_stack_but_dimorphism(w: &World) -> bool {
     w.biome_adaptation
         && w.terrain_habitat
         && w.inventions_enabled
@@ -48,7 +55,6 @@ fn full_stack(w: &World) -> bool {
         && w.disasters_enabled
         && w.war_enabled
         && w.settlement_enabled
-        && w.sexual_dimorphism_enabled
         && w.domestication_enabled
         && w.knowledge_enabled
         && w.practices_enabled
@@ -85,8 +91,9 @@ roundtrip_tests! {
     habitat_territories_roundtrip:
         // Warm past two species steps (ticks 0/200/400) so territory EMA state
         // is non-trivial when saved.
-        "../../../scenarios/habitat-territories.toml", 420, full_stack,
-        "habitat-territories (full stack)";
+        "../../../scenarios/habitat-territories.toml", 420,
+        |w: &World| full_stack_but_dimorphism(w) && !w.sexual_dimorphism_enabled,
+        "habitat-territories (full stack but dimorphism)";
     grand_theater_roundtrip:
         // The strongest single guard: grand-theater warms every subsystem at
         // once, including both experiment levers it opts into.

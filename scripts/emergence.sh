@@ -193,7 +193,7 @@ case "$cmd" in
     # Assets:
     #   showcase/replay.js                    (saga, seed 318 — the hosted deck)
     #   runs/showcase/out-of-africa-saga.mp4  (saga cinematic, seed 318)
-    #   runs/showcase/predator-prey.mp4       (deck-pinned seed 0)
+    #   runs/showcase/predator-prey.mp4       (deck-pinned seed 14)
     #   runs/showcase/speciation.mp4          (deck-pinned seed 0)
     #   runs/showcase/tribes.mp4              (deck-pinned seed 0)
     # Needs a real display (Movie Maker capture) + ffmpeg; re-run after any

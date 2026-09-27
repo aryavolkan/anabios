@@ -20,24 +20,66 @@ first two on deliberately; none turns on the latter two — see "Retired
 experiments".
 
 Every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate →
-200 ticks) and has a `tests/save_load_roundtrip.rs` round-trip test. Read a
+200 ticks) and has a `tests/save_load_roundtrip.rs` round-trip test. The cost
+column is wall-clock milliseconds per tick of `anabios-headless run --ticks
+2000` at the scenario seed (release build, `real` × 1000 / 2000, instantiate
+included; best of two runs on a 10-core Apple M5 laptop) — it tracks the live
+population the world settles at far more than its map size. Read a
 world's own header comment for the full story — placement technique, tuned
 seeds, measured caveats; this table is the index.
 
 | World | Setting | Shows | Opt-outs / levers | Seed | Cost (ms/tick) |
 |---|---|---|---|---|---|
-| `minimal.toml` | 1024² plains, one lineage | Baseline grazing world; the determinism goldens pin on this scenario. | — | 12345 | — |
-| `predator-prey.toml` | Four regional herds: a mixed cohort at the centre, a mammal grazer/pursuer pair north, a reptile ambusher/basker pair east, a thin forager background | Predation cycles and population crashes (`PopCrash`), the trophic cascade when predators collapse, mammal-vs-reptile niche sorting on the drier east, and foraging/climate-affinity selection in the background stock. Absorbed: trophic-cascade, grazers-and-wolves, mammals-vs-reptiles, foraging-selection, biome-adaptation. | — | 0 | — |
-| `speciation.toml` | One herbivore stock seeded as two body-size morphs at the west/east ends, plus a communicator, a scent-marker, a cooperator and a hunter-prey lineage | Speciation from a founder stock (`Divergence`/`Convergence`), dialect formation between the communicator clusters, pheromone territories between the marker clusters, kin cooperation, and the four DIT learning-strategy pairings. Absorbed: divergent, convergent, cooperation, territories, dialects, gene-culture, gene-culture-skill, gene-culture-hunt, gene-culture-alarm. | — | 4242 | — |
-| `tribes.toml` | Ape-tier omnivore innovators, traditionalists and a stone-tool hunter band among grazer herds, armoured/spined prey and predator packs | Discovery and adoption of inventions (`Discovery`/`Adoption`/`KnowledgeRatchet`), traditions, IQ-tech coevolution, weapons and war (`War`/`WarEnded`), domestication pens, sexual dimorphism, epidemics (`Epidemic`/`MedContain`), the anthropogenic arms race, the affect layer's moods and play, and thirst/sleep. Absorbed: inventions, tool-users, weapons-arena, weapons-arms-race, war, traditions, cognitive-coevolution, tech-gene-coupling, knowledge-ratchet, domestication, dimorphism, disease, anthro-race, affect-play, affect-seeking, affect-showcase, affect-social, affect-threat, basic-needs. | — | 60623 | — |
-| `markets.toml` | Four terrain-affinity forager lineages at a biome junction beside five goods-producing grazer lineages | Home-range anchoring and settlements, resource harvesting, bilateral barter at the predetermined trade hubs, and the trade-flow/market events. Absorbed: settlement, biome-trade, geographic-trade, trade-hubs, unilateral-trade (its lever is exercised by an inline fixture in `tests/trade.rs`, not this world). | — | 424242 | — |
-| `habitat-territories.toml` | Three grazer species differing only in Locomotion (land/water/air), founded together at one site | Locomotion-gated habitat selection, species territories kept apart by collision-aware separation steering, and per-lineage `max_share` stopping the shared population cap from sterilizing the smaller founders. | — | 4 | — |
-| `grand-theater.toml` | Everything-on staged world at the tuned geographic-trade terrain (seed 424242) | Environment, disturbance, gene-culture, economy, conflict and communication all colliding in one shared world — the strongest save/load round-trip guard. | `env_period = 400`, `climate_drift_rate = 0.00005` | 424242 | — |
-| `out-of-africa-saga.toml` | The grand-theater cast on a human-dispersal geography (climate-driven worldgen) | The showcase cut: era-3 tech (Stone Tools/Fire/Farming/Writing/Husbandry) seeded on the Quarry innovators from tick 0 so downstream tech and on-camera taming emerge without stalling at era 1. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | — |
-| `out-of-africa-earth.toml` | The saga's founders re-anchored onto a real-Earth elevation/temperature/precipitation map (`world_map = "earth"`) | The same DIT/cognition/war/domestication stack, but the exodus runs through the real African corridors (Sinai/Bab-el-Mandeb, Gibraltar); dispersal is emergent, not scripted. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | — |
-| `sandbox.toml` | 2048² world, 8k population cap, no staging | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | `season_period = 2500` | 7 | — |
-| `riverlands.toml` | 4096² self-siting continent: mountains, rain-shadow, a hydrology-carved river network | Terrain-aware placement (`kind = "habitat"`/`"near_spec"`) so herds and a persistent predator pack (`max_share` + `mate_seeking`) find water and each other regardless of seed. Absorbed: continental. | `season_period = 3000` | 7 | — |
-| `huge-steppe.toml` | 8192² world (biome grid 1024²), 6k population budget | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput at the same population budget as the prior largest world. | `season_period = 5000` | 21 | — |
+| `minimal.toml` | 1024² plains, one lineage | Baseline grazing world; the determinism goldens pin on this scenario. | — | 12345 | 2.8 |
+| `predator-prey.toml` | Four regional herds: a mixed cohort at the centre, a mammal grazer/pursuer pair north, a reptile ambusher/basker pair east, a thin forager background | Predation cycles and population crashes (`PopCrash`), the trophic cascade when predators collapse, mammal-vs-reptile niche sorting on the drier east, and foraging/climate-affinity selection in the background stock. Absorbed: trophic-cascade, grazers-and-wolves, mammals-vs-reptiles, foraging-selection, biome-adaptation. | Founder tuning: the mammal pursuer pack starts at 30 founders on the herd it hunts (`near_spec`, 10% share), clear of the ~10-hunter Allee floor it fell under at 14 | 0 | 1.3 |
+| `speciation.toml` | One herbivore stock seeded as two body-size morphs at the west/east ends, plus a communicator, a scent-marker, a cooperator and a hunter-prey lineage | Speciation from a founder stock (`Divergence`/`Convergence`), dialect formation between the communicator clusters, pheromone territories between the marker clusters, kin cooperation, and the four DIT learning-strategy pairings. Absorbed: divergent, convergent, cooperation, territories, dialects, gene-culture, gene-culture-skill, gene-culture-hunt, gene-culture-alarm. | — | 4242 | 1.1 |
+| `tribes.toml` | Ape-tier omnivore innovators, traditionalists and a stone-tool hunter band among grazer herds, armoured/spined prey and predator packs | Discovery and adoption of inventions (`Discovery`/`Adoption`/`KnowledgeRatchet`), traditions, IQ-tech coevolution, weapons and war (`War`/`WarEnded`), domestication pens, sexual dimorphism, epidemics (`Epidemic`/`MedContain`), the anthropogenic arms race, the affect layer's moods and play, and thirst/sleep. Absorbed: inventions, tool-users, weapons, weapons-arena, weapons-arms-race, war, traditions, cognitive-coevolution, tech-gene-coupling, knowledge-ratchet, domestication, dimorphism, disease, anthro-race, affect-play, affect-seeking, affect-showcase, affect-social, affect-threat, basic-needs. | — | 60623 | 1.4 |
+| `markets.toml` | Four terrain-affinity forager lineages at a biome junction beside five goods-producing grazer lineages | Home-range anchoring and settlements, resource harvesting, bilateral barter at the predetermined trade hubs, and the trade-flow/market events. Absorbed: settlement, biome-trade, geographic-trade, trade-hubs, unilateral-trade (its lever is exercised by an inline fixture in `tests/trade.rs`, not this world). | — | 424242 | 3.3 |
+| `habitat-territories.toml` | Three grazer species differing only in Locomotion (land/water/air), founded together at four shared sites | Locomotion-gated habitat selection, species territories kept apart by collision-aware separation steering, and per-lineage `max_share` stopping the shared population cap from sterilizing the smaller founders. | `sexual_dimorphism_enabled = false`, the only curated opt-out: female mate choice sterilizes the size-0.3 flyers (display 0.39 against a 0.40 bar), so Air never breeds. Founder tuning: Land founds four habitat herds (as one 150-strong herd, Land dwindles on half the seeds) | 4 | 2.3 |
+| `grand-theater.toml` | Everything-on staged world at the tuned geographic-trade terrain (seed 424242) | Environment, disturbance, gene-culture, economy, conflict and communication all colliding in one shared world — the strongest save/load round-trip guard. | `env_period = 400`, `climate_drift_rate = 0.00005` | 424242 | 7.0 |
+| `out-of-africa-saga.toml` | The grand-theater cast on a human-dispersal geography (climate-driven worldgen) | The showcase cut: era-3 tech (Stone Tools/Fire/Farming/Writing/Husbandry) seeded on the Quarry innovators from tick 0 so downstream tech and on-camera taming emerge without stalling at era 1. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | 6.8 |
+| `out-of-africa-earth.toml` | The saga's founders re-anchored onto a real-Earth elevation/temperature/precipitation map (`world_map = "earth"`) | The same DIT/cognition/war/domestication stack, but the exodus runs through the real African corridors (Sinai/Bab-el-Mandeb, Gibraltar); dispersal is emergent, not scripted. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | 11.0 |
+| `sandbox.toml` | 2048² world, 8k population cap, no staging | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | `season_period = 2500` | 7 | 10.0 |
+| `riverlands.toml` | 4096² self-siting continent: mountains, rain-shadow, a hydrology-carved river network | Terrain-aware placement (`kind = "habitat"`/`"near_spec"`) so herds and a persistent predator pack (`max_share` + `mate_seeking`) find water and each other regardless of seed. Absorbed: continental. | `season_period = 3000` | 7 | 5.2 |
+| `huge-steppe.toml` | 8192² world (biome grid 1024²), 6k population budget | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput at the same population budget as the prior largest world. | `season_period = 5000` | 21 | 9.8 |
+
+## Validation
+
+The consolidation's bar (spec §5): each world's headline detectors fire on at
+least 5 of 8 seeds, and on at least 5 of 8 seeds no founder kind is extinct and
+the population ends above half its founder count — measured with
+`anabios-headless sweep` over seeds 0–7 at 5000 ticks (seeds 0–3 at 2000 ticks
+for `out-of-africa-earth` and `huge-steppe`). Founder counts, `max_share`,
+placement and `max_population` are the only levers; no engine constant moves.
+Two limits are structural and hold in every world:
+
+- **Sterile kits.** `stalker`, `pack_hunter`, `marker`, `communicator`,
+  `cultural_cooperator`, `culture_prey`, `skilled_forager`, `fast_hunter`,
+  `slow_hunter` and the three DIT learners carry no Reproductive module. They
+  act for one founder lifetime and die out by design, so the founder-kind bar
+  counts the breeding kinds.
+- **Armed prey.** `spiner` dies out on nearly every seed wherever it is
+  founded (`tribes`, `grand-theater`, the two out-of-africa worlds) — at 10
+  to 40 founders and under a doubled population cap (`grand-theater`), and
+  no single opt-out among thirteen tried rescues it (`tribes`, 1500 ticks);
+  `bruiser` survives on at most 4 of 8 seeds at 12 to 40 founders
+  (`tribes`). No founder lever tried holds either kind on a majority of
+  seeds.
+
+| World | Bar | Documented gaps |
+|---|---|---|
+| `minimal` | met, 8/8 | — |
+| `predator-prey` | met after tuning, 6/8 (was 3/8: the pursuer pack faded on 4/8 seeds) | Does not reliably show `TrophicCascade` (0/8); the detector's crash→boom→drop ordering is covered by the unit tests in `src/codex/cycles.rs`, and `tests/emergence.rs` (`population_dynamics`) asserts the E3 family on this world. |
+| `speciation` | met, 6/8 (two seeds end below half the founders) | Does not show culture out-growing its asocial control in the four gene-culture pairings (A 0/12, alarm 0/12, hunt 3/10, skill-C 4/20 in the report-only `tests/gene_culture.rs` harnesses): every cultural founder is a sterile kit, and co-locating the skilled foragers with the control lifts skill-C only to 6/20. |
+| `tribes` | not met, 1/8 (spiner 1/8, bruiser 2/8; 5/8 without the armed prey) | Does not reliably show adoption of a non-seeded invention (2/8), domestication (0/8), `KnowledgeRatchet` (0/8), `MedContain` (0/8) or `InstitutionalRatchet` (0/8, the deck's Ratchet chapter) within 5000 ticks; the fixture tests in `tests/domestication.rs`, `tests/knowledge.rs` and `tests/inventions.rs` cover the first three, the unit tests in `src/codex/disease.rs` and `src/codex/traditions.rs` the last two. Spines/Jaws persistence to tick 1500 is covered by `tests/emergence.rs` (`weapons_arms_race`). |
+| `markets` | met, 5/8 (three seeds end below half the 1282 founders) | — |
+| `habitat-territories` | met after tuning, 8/8 (was 1/8: Air never bred and the world fell to a median of 25 agents) | — |
+| `grand-theater` | not met, 0/8 (spiner 1/8, bruiser 2/8, sentinel 5/8, cooperator 5/8; per-lineage shares hold the cooperators but not the other three and drop the population bar to 5/8) | Does not reliably show invention discovery (1/8) or `KnowledgeRatchet` (0/8); the fixture tests in `tests/inventions.rs` and `tests/knowledge.rs` cover them, and `out-of-africa-saga` shows both (7/8, 8/8). |
+| `out-of-africa-saga` | not met, 0/8 (spiner 1/8, bruiser 1/8, sentinel 5/8, herd 6/8, asocial prey 6/8) | Does not show `EvolvedTool` (0/8; it needs species-level Metalworking adoption), so the deck's ToolUse chapter times out; the unit test in `src/codex/signatures.rs` covers the detector. |
+| `sandbox` | met, 8/8 | — |
+| `riverlands` | met, 8/8 | — |
+| `out-of-africa-earth` | not met, 0/4 (spiner 0/4, sentinel 1/4, asocial prey 2/4) | Does not reliably show invention discovery within 2000 ticks (2/4); covered as for `grand-theater`. |
+| `huge-steppe` | met, 4/4 | — |
 
 ## Running
 

@@ -6,6 +6,14 @@
 # foraging / climate-affinity selection in the background stock. Runs the
 # full stack. Absorbed: trophic-cascade, grazers-and-wolves,
 # mammals-vs-reptiles, foraging-selection, biome-adaptation.
+#
+# Validation (8 seeds x 5000 ticks, full stack): predation by both the
+# stalkers and the pursuers, PopCrash and the E3 population-dynamics family
+# fire on 8/8 seeds and every breeding founder kind survives on 6/8; the
+# stalker kit carries no Reproductive module, so the stalkers act for one
+# founder lifetime and die out by design. TrophicCascade itself fires on 0/8
+# seeds (see docs/scenarios.md, Validation). The showcase deck pins seed 14,
+# which fires Predation, PopCrash, CarryingCap and PopCycle early.
 name = "predator-prey"
 seed = 0
 max_population = 2000
@@ -43,11 +51,17 @@ env_affinity = 0.5
 reproduction_threshold = 0.5
 mutation_rate = 0.3
 
+# The pursuer pack is seeded onto the mammal grazer herd it hunts
+# (`near_spec`, spec 2 — the riverlands technique) at 30 founders with a 10%
+# share. The validation sweep (8 seeds x 5000 ticks, full stack): 14
+# founders clustered 100 units north of the herd dip under ten hunters by
+# tick 1500 on 5/8 seeds (riverlands measured the pack's Allee floor near
+# ten) and die out on 4/8; seeded on the herd at 30 they persist on 7/8.
 [[agents]]
-count = 14
+count = 30
 archetype = "mammal_pursuer"
-placement = { kind = "cluster", center_x = 340.0, center_y = 200.0, radius = 50.0 }
-max_share = 0.06
+placement = { kind = "near_spec", spec = 2, radius = 50.0 }
+max_share = 0.1
 [agents.traits]
 size = 0.65
 lifespan_bias = 1.0

@@ -20,15 +20,15 @@ const outDir = resolve(web, "scenarios");
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
-// Phenomenon column of docs/scenarios.md, keyed by file name (a row may list
-// several files separated by " / ").
+// Phenomenon ("Shows", the third) column of docs/scenarios.md, keyed by file
+// name (a row may list several files separated by " / ").
 const descriptions = new Map();
 try {
   const doc = readFileSync(resolve(root, "docs/scenarios.md"), "utf8");
   for (const line of doc.split("\n")) {
     const m = line.match(/^\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*$/);
     if (!m) continue;
-    for (const f of m[1].matchAll(/`([^`]+\.toml)`/g)) descriptions.set(f[1], m[2].replace(/`/g, ""));
+    for (const f of m[1].matchAll(/`([^`]+\.toml)`/g)) descriptions.set(f[1], m[3].split("|")[0].trim().replace(/`/g, ""));
   }
 } catch { /* docs are optional */ }
 
