@@ -14,9 +14,8 @@ fn scenarios_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scenarios")
 }
 
-/// Collect every `*.toml` under `scenarios/` (recursively, so archived
-/// experiments in `scenarios/experiments/` keep smoke coverage), sorted
-/// for determinism.
+/// Collect every `*.toml` under `scenarios/` (recursively, so a future
+/// subdirectory keeps smoke coverage), sorted for determinism.
 fn scenario_files() -> Vec<PathBuf> {
     fn walk(dir: &PathBuf, out: &mut Vec<PathBuf>) {
         for entry in fs::read_dir(dir).expect("read scenarios dir").filter_map(|e| e.ok()) {
@@ -78,26 +77,24 @@ fn every_scenario_parses_instantiates_and_runs() {
     eprintln!("validated {} scenarios", files.len());
 }
 
-/// Dedicated smoke test for the Task 3.1 living-sandbox scenario (in addition
-/// to the glob-based test above): both cohorts must start alive, and the fair
-/// culture-vs-control design must actually hold — species 1 (culture) carries
-/// a Communicator, species 2 (control) does not, and BOTH carry Reproductive
-/// (the prior `skilled_forager` design would have dropped Reproductive from
-/// the culture cohort via `communicator_kit()`, biasing the experiment).
+/// Dedicated smoke test for `sandbox.toml` (which absorbed the Task 3.1
+/// living-sandbox scenario), in addition to the glob-based test above: the
+/// culture and control cohorts must start alive, and the fair
+/// culture-vs-control design must actually hold — species 3
+/// (`cultural_forager`, culture) carries a Communicator, species 2
+/// (`asocial_forager`, control) does not, and BOTH carry Reproductive (the
+/// prior `skilled_forager` design would have dropped Reproductive from the
+/// culture cohort via `communicator_kit()`, biasing the experiment).
 #[test]
-fn living_sandbox_smoke() {
-    // Task 3 (scenario consolidation) folded this scenario into
-    // `scenarios/sandbox.toml` and deleted the standalone file; the inline
-    // fixture is a verbatim copy kept for this dedicated smoke test.
-    let toml = include_str!("common/living-sandbox-coevolution.pre-flip.toml");
+fn sandbox_smoke() {
+    let toml = include_str!("../../../scenarios/sandbox.toml");
     let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
 
-    let species1_alive =
-        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 1).count();
-    let species2_alive =
-        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 2).count();
-    assert!(species1_alive > 0, "culture cohort (species 1) should start alive");
-    assert!(species2_alive > 0, "control cohort (species 2) should start alive");
+    let species_alive = |w: &anabios_core::world::World, sid: u32| {
+        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == sid).count()
+    };
+    assert!(species_alive(&w, 3) > 0, "culture cohort (species 3) should start alive");
+    assert!(species_alive(&w, 2) > 0, "control cohort (species 2) should start alive");
 
     for id in w.agents.iter_alive() {
         let mods = &w.agents.modules[id as usize];
@@ -105,14 +102,17 @@ fn living_sandbox_smoke() {
             anabios_core::module::has(mods, anabios_core::module::ModuleType::Communicator);
         let has_reproductive =
             anabios_core::module::has(mods, anabios_core::module::ModuleType::Reproductive);
-        assert!(has_reproductive, "agent {id}: BOTH cohorts must keep Reproductive (fair design)");
         match w.agents.species_id[id as usize] {
-            1 => assert!(has_communicator, "agent {id}: culture cohort must have a Communicator"),
+            3 => {
+                assert!(has_communicator, "agent {id}: culture cohort must have a Communicator");
+                assert!(has_reproductive, "agent {id}: culture cohort must keep Reproductive");
+            }
             2 => {
                 assert!(
                     !has_communicator,
                     "agent {id}: control cohort must NOT have a Communicator"
-                )
+                );
+                assert!(has_reproductive, "agent {id}: control cohort must keep Reproductive");
             }
             _ => {}
         }
@@ -124,23 +124,20 @@ fn living_sandbox_smoke() {
     assert!(w.agents.live_count() > 0, "population should survive 200 ticks");
 }
 
-/// Dedicated smoke test for the invention-tree demo scenario:
-/// `inventions_enabled` must be set on the instantiated world, all three
-/// populations must start alive, and the demo's design must hold — species 1
-/// (innovators) and 2 (traditionalists) carry a Communicator (culture-
-/// capable) and their contrasting Openness genes, species 3 (acultural
-/// control) carries none.
+/// Dedicated smoke test for `tribes.toml` (which absorbed the invention-tree
+/// demo scenario): `inventions_enabled` must be set on the instantiated world,
+/// the three invention-demo populations must start alive, and the demo's
+/// design must hold — species 1 (innovators) and 2 (traditionalists) carry a
+/// Communicator (culture-capable) and their contrasting Openness genes,
+/// species 4 (`asocial_forager`, the acultural control) carries none.
 #[test]
-fn inventions_scenario_smoke() {
-    // Task 3 (scenario consolidation) folded this scenario into
-    // `scenarios/tribes.toml` and deleted the standalone file; the inline
-    // fixture is a verbatim copy kept for this dedicated smoke test.
-    let toml = include_str!("common/inventions.pre-flip.toml");
+fn tribes_smoke() {
+    let toml = include_str!("../../../scenarios/tribes.toml");
     let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
 
     assert!(w.inventions_enabled, "scenario should enable inventions_enabled");
 
-    for sid in [1u32, 2, 3] {
+    for sid in [1u32, 2, 4] {
         let alive =
             w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == sid).count();
         assert!(alive > 0, "founding species {sid} should start alive");
@@ -160,7 +157,7 @@ fn inventions_scenario_smoke() {
                 assert!(has_communicator, "agent {id}: traditionalists must have a Communicator");
                 assert!(openness < 0.5, "agent {id}: traditionalists must be low-Openness");
             }
-            3 => {
+            4 => {
                 assert!(
                     !has_communicator,
                     "agent {id}: acultural control must NOT have a Communicator"

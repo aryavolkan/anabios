@@ -5,6 +5,8 @@
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 
+mod common;
+
 fn run(toml: &str, ticks: u64) -> anabios_core::world::World {
     let mut w = Scenario::parse_toml(toml).expect("parse").instantiate();
     for _ in 0..ticks {
@@ -81,10 +83,13 @@ fn extraversion_increases_clustering() {
     assert!(ch > cl, "high-E crowding {ch} should exceed low-E {cl}");
 }
 
+// Fixture: under the schema's full-stack defaults the edge vanishes at this
+// horizon (high-C 27.54 vs low-C 27.58 mean energy), so this check replays the
+// inline scenario as it was written — every other knob at its pre-flip default.
 #[test]
 fn conscientiousness_raises_mean_energy() {
-    let hi = run(&scenario("conscientiousness = 0.95"), 300);
-    let lo = run(&scenario("conscientiousness = 0.05"), 300);
+    let hi = run(&common::fixtures::with_opt_outs(&scenario("conscientiousness = 0.95")), 300);
+    let lo = run(&common::fixtures::with_opt_outs(&scenario("conscientiousness = 0.05")), 300);
     let (eh, el) = (mean_energy(&hi), mean_energy(&lo));
     assert!(eh > el, "high-C mean energy {eh} should exceed low-C {el}");
 }

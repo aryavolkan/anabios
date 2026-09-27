@@ -1,25 +1,29 @@
-//! M12-style emergence for the grazers-and-wolves demo scenario. Verifies that
-//! the mood-aware mammal archetypes sustain a working predator guild:
-//! predation fires and both founder lineages persist across seeds.
-//! Release-gated per spec §2.2.
+//! M12-style emergence for the grazers-and-wolves demo founders, now the
+//! mammal grazer / pursuer pair in `predator-prey.toml` (which absorbed
+//! `grazers-and-wolves.toml`). Verifies that the mood-aware mammal archetypes
+//! sustain a working predator guild: predation fires and both founder lineages
+//! persist across seeds. Release-gated per spec §2.2.
 
-use anabios_core::codex::EventType;
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 
-const SCENARIO: &str = include_str!("../../../scenarios/grazers-and-wolves.toml");
+const SCENARIO: &str = include_str!("../../../scenarios/predator-prey.toml");
 const SEEDS: u64 = 8;
 const TICKS: u32 = 2000;
-/// Measured on this scenario: predation in 8/8 seeds, both lineages persist
-/// in 8/8 seeds. Floors are set well below observed rates so unrelated tuning
-/// drift can't flake the test (spec §2.2).
+/// Measured on the retired two-founder file: predation in 8/8 seeds, both
+/// lineages persist in 8/8 seeds. Floors are set well below observed rates so
+/// unrelated tuning drift can't flake the test (spec §2.2).
 const PREDATION_FLOOR: u64 = 6;
 const PERSIST_FLOOR: u64 = 6;
+/// Founder species ids of the mammal pair in `predator-prey.toml` (the third
+/// and fourth archetype specs; 1/2 are its grazer / stalker pair).
+const MAMMAL_GRAZER: u32 = 3;
+const MAMMAL_PURSUER: u32 = 4;
 
-/// Walk the species-parent chain to the founder species id (1 = mammal
-/// grazer, 2 = mammal pursuer), so descendants that speciated away still
-/// count toward their founder's lineage. Mirrors `codex::war::lineage_root`
-/// (not exported).
+/// Walk the species-parent chain to the founder species id
+/// (`MAMMAL_GRAZER` / `MAMMAL_PURSUER`), so descendants that speciated away
+/// still count toward their founder's lineage. Mirrors
+/// `codex::war::lineage_root` (not exported).
 fn lineage_root(w: &anabios_core::World, sid: u32) -> u32 {
     let mut cur = sid;
     for _ in 0..64 {
@@ -37,21 +41,31 @@ fn grazers_and_wolves_sustain_predation() {
     let mut with_predation = 0u64;
     let mut both_persist = 0u64;
     for seed in 0..SEEDS {
-        let mut s = Scenario::parse_toml(SCENARIO).expect("parse grazers-and-wolves");
+        let mut s = Scenario::parse_toml(SCENARIO).expect("parse predator-prey");
         s.seed = seed;
         let mut w = s.instantiate();
+        // The world-level `Predation` event fires on the first kill by ANY
+        // attacker, and predator-prey also seeds stalkers and reptile
+        // ambushers — so attribute each new combat death to its attacker's
+        // lineage and count only the pursuer's kills, as the two-founder
+        // file's `Predation` event did.
+        let mut predated = false;
+        let mut seen: Option<u64> = None;
         for _ in 0..TICKS {
             step(&mut w);
+            for d in w.codex.combat_deaths.iter().filter(|d| seen.is_none_or(|t| d.tick > t)) {
+                predated |= lineage_root(&w, d.attacker_species) == MAMMAL_PURSUER;
+            }
+            seen = w.codex.combat_deaths.back().map(|d| d.tick).or(seen);
         }
-        let predated = w.codex.events.iter().any(|e| e.event_type == EventType::Predation);
         if predated {
             with_predation += 1;
         }
         let mut lineage_alive = [false; 2];
         for id in w.agents.iter_alive() {
             let root = lineage_root(&w, w.agents.species_id[id as usize]);
-            if (1..=2).contains(&root) {
-                lineage_alive[(root - 1) as usize] = true;
+            if (MAMMAL_GRAZER..=MAMMAL_PURSUER).contains(&root) {
+                lineage_alive[(root - MAMMAL_GRAZER) as usize] = true;
             }
         }
         if lineage_alive.iter().all(|&a| a) {
@@ -60,7 +74,7 @@ fn grazers_and_wolves_sustain_predation() {
     }
     assert!(
         with_predation >= PREDATION_FLOOR,
-        "Predation emerged in only {with_predation}/{SEEDS} seeds (floor {PREDATION_FLOOR})"
+        "Pursuer predation emerged in only {with_predation}/{SEEDS} seeds (floor {PREDATION_FLOOR})"
     );
     assert!(
         both_persist >= PERSIST_FLOOR,
@@ -69,14 +83,14 @@ fn grazers_and_wolves_sustain_predation() {
     );
 }
 
-/// The scenario's *other* job is the mood body-color overlay: it is the demo
-/// the viewer menu opens on body mode 5, and `gallery/README.md` documents the
-/// palette it is supposed to show. Pin that claim so a tuning change can't
-/// quietly collapse the demo to one or two colors.
+/// The retired grazers-and-wolves demo's *other* job was the mood body-color
+/// overlay (`gallery/README.md` documents the palette it is supposed to show).
+/// Pin that claim on the world that absorbed it so a tuning change can't
+/// quietly collapse the overlay to one or two colors.
 ///
-/// Measured over 600 ticks: seeds 0-3 reach 8/7/7/7 distinct moods — every one
-/// except `fight`, which needs RAGE to beat FEAR in `mood::compute_mood` and
-/// only fires on some seeds (never for the wolves; see the scenario header).
+/// Measured over 600 ticks on the retired file: seeds 0-3 reach 8/7/7/7
+/// distinct moods — every one except `fight`, which needs RAGE to beat FEAR in
+/// `mood::compute_mood` and only fires on some seeds (never for the wolves).
 /// The floor sits below that so unrelated drift can't flake the test.
 #[cfg_attr(debug_assertions, ignore = "release-only emergence test")]
 #[test]
@@ -85,7 +99,7 @@ fn grazers_and_wolves_paint_the_mood_palette() {
     const OVERLAY_TICKS: u32 = 600;
     const DISTINCT_MOOD_FLOOR: usize = 6;
     for seed in 0..OVERLAY_SEEDS {
-        let mut s = Scenario::parse_toml(SCENARIO).expect("parse grazers-and-wolves");
+        let mut s = Scenario::parse_toml(SCENARIO).expect("parse predator-prey");
         s.seed = seed;
         let mut w = s.instantiate();
         let mut seen = [false; anabios_core::mood::MOOD_COUNT];

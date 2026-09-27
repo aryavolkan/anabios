@@ -1,4 +1,6 @@
 //! M-D flag-on behavior: CARE (kin provision) + PANIC/GRIEF (isolation distress).
+//! The scenario-level checks run on `minimal` (the 200-agent herd that
+//! `affect-social.toml` founded), which carries the affect layer by default.
 
 use anabios_core::affect::{CARE, PANIC};
 use anabios_core::culture::{ALARM_MEME_CHANNEL, MEME_BROADCAST_THRESHOLD};
@@ -10,7 +12,7 @@ use anabios_core::world::World;
 
 mod common;
 
-const AFFECT_SOCIAL: &str = include_str!("../../../scenarios/affect-social.toml");
+const AFFECT_SOCIAL: &str = include_str!("../../../scenarios/minimal.toml");
 
 #[test]
 fn affect_social_scenario_enables_the_layer() {
@@ -111,7 +113,11 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // 43→44): added World.territory_enabled + World.species_territories
     // (empty with the flag off). Layout growth only — trajectory proven
     // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
-    &[(0, 0x598d1823f3d5e055), (100, 0xf45ae691060d8be2), (300, 0x5bb4012956585f03)];
+    // Re-pinned 2026-09-26 (scenario consolidation): `affect-social.toml` was
+    // retired into `minimal.toml`, and the scenario schema now defaults every
+    // feature on; the flag-off engine is pinned separately by the
+    // `*_trajectory_is_pinned` guards, which did not move.
+    &[(0, 0x75704801cc76d91a), (100, 0x0ee54f25ad7ccbb5), (300, 0x25b3dc0c1abdada0)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

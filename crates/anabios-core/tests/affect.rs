@@ -1,7 +1,9 @@
-//! End-to-end determinism for the flag-ON affect scenario. `determinism.rs`
-//! locks the flag-OFF minimal scenario; this pins the affect layer's real
-//! behavior (SEEKING-biased foraging) so it cannot drift silently, and proves
-//! the serialized `affect` column survives a save→load→step round-trip.
+//! End-to-end determinism for the affect layer inside the full-stack worlds.
+//! `minimal` (the 200-uniform herd that `affect-seeking.toml` founded) pins
+//! SEEKING-biased foraging; `tribes` (which absorbed `affect-threat.toml`'s
+//! grazers and stalkers) pins FEAR / MassFright. The flag-OFF engine is locked
+//! by `determinism.rs`'s `*_trajectory_is_pinned` guards; this suite also
+//! proves the serialized `affect` column survives a save→load→step round-trip.
 
 use anabios_core::affect::RAGE;
 use anabios_core::agent::SPAWN_ENERGY;
@@ -15,7 +17,7 @@ use anabios_core::world::World;
 
 mod common;
 
-const SCENARIO: &str = include_str!("../../../scenarios/affect-seeking.toml");
+const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
 
 #[test]
 fn affect_scenario_parses_with_flag_on() {
@@ -103,16 +105,20 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // 43→44): added World.territory_enabled + World.species_territories
     // (empty with the flag off). Layout growth only — trajectory proven
     // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
-    &[(0, 0x294511998f5d8a0c), (100, 0x65a23d91f3c90ff0), (300, 0x318553368f295a61)];
+    // Re-pinned 2026-09-26 (scenario consolidation): `affect-seeking.toml` was
+    // retired into `minimal.toml`, and the scenario schema now defaults every
+    // feature on; the flag-off engine is pinned separately by the
+    // `*_trajectory_is_pinned` guards, which did not move.
+    &[(0, 0x75704801cc76d91a), (100, 0x0ee54f25ad7ccbb5), (300, 0x25b3dc0c1abdada0)];
 
 #[test]
 fn affect_scenario_matches_golden_hashes() {
     common::assert_golden("affect", SCENARIO, AFFECT_GOLDEN);
 }
 
-// --- M-B: FEAR / hijack flag-on tests (affect-threat scenario) ---
+// --- M-B: FEAR / hijack flag-on tests (`tribes`, which absorbed affect-threat) ---
 
-const THREAT_SCENARIO: &str = include_str!("../../../scenarios/affect-threat.toml");
+const THREAT_SCENARIO: &str = include_str!("../../../scenarios/tribes.toml");
 
 #[test]
 fn affect_threat_parses_with_flag_on() {
@@ -213,7 +219,11 @@ const THREAT_GOLDEN: &[(u64, u64)] =
     // 43→44): added World.territory_enabled + World.species_territories
     // (empty with the flag off). Layout growth only — trajectory proven
     // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
-    &[(0, 0x92acf02b57d95b09), (100, 0x27b4df4a74f6686e), (300, 0x77099a348fad1094)];
+    // Re-pinned 2026-09-26 (scenario consolidation): `affect-threat.toml` was
+    // retired into `tribes.toml`, and the scenario schema now defaults every
+    // feature on; the flag-off engine is pinned separately by the
+    // `*_trajectory_is_pinned` guards, which did not move.
+    &[(0, 0x808d1ec15075dd36), (100, 0x3ee6c678fbb566a1), (300, 0x3cd95619247dfc8d)];
 
 #[test]
 fn affect_threat_matches_golden_hashes() {

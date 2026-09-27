@@ -215,7 +215,10 @@ const GOLDEN: &[(u64, u64)] =
     // 43→44): added World.territory_enabled + World.species_territories
     // (empty with the flag off). Layout growth only — trajectory proven
     // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
-    &[(0, 0xb99c431dab29593b), (100, 0x7b02f3ead610bd84), (1000, 0x97905596ba954bc8)];
+    // Re-pinned 2026-09-26: the scenario schema now defaults every feature on;
+    // the flag-off engine is pinned separately by the `*_trajectory_is_pinned`
+    // guards, which did not move.
+    &[(0, 0x75704801cc76d91a), (100, 0x0ee54f25ad7ccbb5), (1000, 0x951d1a8c666614d7)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -230,18 +233,17 @@ const GOLDEN: &[(u64, u64)] =
 /// thread count or execution order the state hashes would diverge.
 #[test]
 fn parallel_matches_serial_across_thread_counts() {
-    // A feature-on scenario exercises more parallel paths (sense reads the
-    // gene-tech-coupling arm; cognition drives the `iq` stage) than minimal.
+    // Every world runs the full stack now, so each exercises the feature-on
+    // parallel paths (sense reads the gene-tech-coupling arm; cognition drives
+    // the `iq` stage; the PLAY affect par_iter and the PLAY→iq enrichment
+    // coupling). `tribes` carries the ape-tier culture and the predator guilds,
+    // `habitat-territories` the territory layer, `grand-theater` the staged
+    // emergence at scale.
     for scenario_src in [
         include_str!("../../../scenarios/minimal.toml"),
-        include_str!("../../../scenarios/tech-gene-coupling.toml"),
-        include_str!("../../../scenarios/affect-seeking.toml"),
-        include_str!("../../../scenarios/affect-threat.toml"),
-        include_str!("../../../scenarios/affect-social.toml"),
-        // Both flags on: exercises the PLAY affect par_iter AND the PLAY→iq
-        // enrichment coupling in the cognition par_iter across thread counts (M-E).
-        include_str!("../../../scenarios/affect-play.toml"),
+        include_str!("../../../scenarios/tribes.toml"),
         include_str!("../../../scenarios/habitat-territories.toml"),
+        include_str!("../../../scenarios/grand-theater.toml"),
     ] {
         let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
         const TICKS: u64 = 300;
@@ -285,7 +287,10 @@ const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territor
 // 91.6% inside, one deep overlap) where seed 1 ends with a crowded
 // shoreline (197 deep overlaps).
 const HABITAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x2c407bf59a50d2f1), (100, 0xf7e48697d9a045be), (1000, 0xc4675529251f5022)];
+    // Re-pinned 2026-09-26: the scenario schema now defaults every feature on;
+    // the flag-off engine is pinned separately by the `*_trajectory_is_pinned`
+    // guards, which did not move.
+    &[(0, 0x0e76be58766240ac), (100, 0xc048ec294a06f1ab), (1000, 0x5ae9ab56c8053fb0)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {

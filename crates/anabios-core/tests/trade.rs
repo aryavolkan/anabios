@@ -5,9 +5,19 @@ use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 
-const TRADE: &str = include_str!("../../../scenarios/biome-trade.toml");
-const GEO: &str = include_str!("../../../scenarios/geographic-trade.toml");
-const UNI: &str = include_str!("../../../scenarios/unilateral-trade.toml");
+mod common;
+
+// `markets.toml` absorbed both `biome-trade.toml` (the goods-producing grazer
+// lineages) and `geographic-trade.toml` (the terrain-affinity foragers at the
+// biome junction), so the trade and geographic-trade checks share it.
+const MARKETS: &str = include_str!("../../../scenarios/markets.toml");
+
+/// `unilateral-trade.toml` as it was. `unilateral_trade` is an experiment lever
+/// that stays off in every world (`markets` absorbed the file's founders), so
+/// the lever's scenario checks keep the retired file as an inline fixture.
+fn uni() -> String {
+    common::fixtures::unilateral_trade_flag_off()
+}
 
 /// Determinism checks replay the same seed twice — the comparison works at any
 /// tick count, so under coverage instrumentation (where each tick is ~5-10x
@@ -28,7 +38,7 @@ fn unilateral_trade_flag_parses_and_wires() {
     let w = Scenario::parse_toml(toml).unwrap().instantiate();
     assert!(w.unilateral_trade);
     // And the scenario file carries both freeze-fix flags.
-    let w = Scenario::parse_toml(UNI).expect("parse unilateral-trade").instantiate();
+    let w = Scenario::parse_toml(&uni()).expect("parse unilateral-trade").instantiate();
     assert!(w.unilateral_trade && w.conserve_goods_on_death);
 }
 
@@ -36,7 +46,7 @@ fn unilateral_trade_flag_parses_and_wires() {
 #[test]
 fn unilateral_trade_scenario_is_deterministic() {
     let run = || {
-        let mut w = Scenario::parse_toml(UNI).expect("parse").instantiate();
+        let mut w = Scenario::parse_toml(&uni()).expect("parse").instantiate();
         for _ in 0..det_ticks() {
             step(&mut w);
         }
@@ -53,7 +63,7 @@ fn unilateral_trade_scenario_is_deterministic() {
 /// new code path doesn't break the economy.)
 #[test]
 fn unilateral_trade_scenario_produces_trades() {
-    let mut w = Scenario::parse_toml(UNI).expect("parse").instantiate();
+    let mut w = Scenario::parse_toml(&uni()).expect("parse").instantiate();
     let mut saw_trade = false;
     for _ in 0..600 {
         step(&mut w);
@@ -69,7 +79,7 @@ fn unilateral_trade_scenario_produces_trades() {
 #[test]
 fn trade_scenario_is_deterministic() {
     let run = || {
-        let mut w = Scenario::parse_toml(TRADE).expect("parse").instantiate();
+        let mut w = Scenario::parse_toml(MARKETS).expect("parse").instantiate();
         for _ in 0..det_ticks() {
             step(&mut w);
         }
@@ -83,7 +93,7 @@ fn trade_scenario_is_deterministic() {
 /// founding stock.
 #[test]
 fn trade_scenario_produces_trades_and_population_growth() {
-    let mut w = Scenario::parse_toml(TRADE).expect("parse").instantiate();
+    let mut w = Scenario::parse_toml(MARKETS).expect("parse").instantiate();
     let initial = w.agents.live_count();
     let mut saw_trade = false;
     for _ in 0..600 {
@@ -131,7 +141,7 @@ fn sorted_fraction(w: &anabios_core::world::World) -> f32 {
 #[test]
 fn geographic_trade_scenario_is_deterministic() {
     let run = || {
-        let mut w = Scenario::parse_toml(GEO).expect("parse").instantiate();
+        let mut w = Scenario::parse_toml(MARKETS).expect("parse").instantiate();
         for _ in 0..det_ticks() {
             step(&mut w);
         }
@@ -145,7 +155,7 @@ fn geographic_trade_scenario_is_deterministic() {
 /// goods-gated; goods fund invention learning instead).
 #[test]
 fn geographic_trade_produces_trades_and_population_growth() {
-    let mut w = Scenario::parse_toml(GEO).expect("parse").instantiate();
+    let mut w = Scenario::parse_toml(MARKETS).expect("parse").instantiate();
     let initial = w.agents.live_count();
     let mut saw_trade = false;
     for _ in 0..800 {
@@ -172,9 +182,14 @@ fn geographic_trade_produces_trades_and_population_growth() {
 /// the ROBUST metric (whole-population, not per-species) called out in the
 /// task brief — it proves the `terrain_habitat` cline forms without
 /// requiring perfect sorting or fighting the Rock-terrain scarcity problem.
+// Fixture: on `markets` the whole-population sorted fraction rose only
+// 0.176 -> 0.224 (+0.049, under the +0.05 bar) by tick 400, so the retired
+// junction-only geographic-trade world keeps the cline claim.
 #[test]
 fn geographic_trade_sorts_by_terrain() {
-    let mut w = Scenario::parse_toml(GEO).expect("parse").instantiate();
+    let mut w = Scenario::parse_toml(&common::fixtures::geographic_trade_flag_off())
+        .expect("parse geographic-trade fixture")
+        .instantiate();
     let sorted_before = sorted_fraction(&w);
     for _ in 0..400 {
         step(&mut w);
@@ -187,12 +202,14 @@ fn geographic_trade_sorts_by_terrain() {
 }
 
 /// Regression guard: a resources-OFF scenario is unaffected by the feature.
-/// (minimal.toml never enables resources; its golden hashes live in
-/// determinism.rs. This asserts the flag genuinely defaults off end-to-end.)
+/// (The flag-off minimal is pinned by determinism.rs's trajectory guard. This
+/// asserts an opted-out flag genuinely stays off end-to-end.)
+// Fixture: `minimal` now runs the full stack (resources on), so the pre-flip
+// flag-off copy is the resources-OFF world this guard needs.
 #[test]
 fn minimal_scenario_keeps_resources_off() {
-    let minimal = include_str!("../../../scenarios/minimal.toml");
-    let w = Scenario::parse_toml(minimal).expect("parse").instantiate();
+    let minimal = common::fixtures::minimal_flag_off();
+    let w = Scenario::parse_toml(&minimal).expect("parse").instantiate();
     assert!(!w.resources_enabled);
     assert!(w.resources.is_empty());
 }
@@ -204,7 +221,7 @@ fn minimal_scenario_keeps_resources_off() {
 /// flow stays alive across the whole run.
 #[test]
 fn geographic_trade_turnover_is_ongoing() {
-    let mut w = Scenario::parse_toml(GEO).expect("parse").instantiate();
+    let mut w = Scenario::parse_toml(MARKETS).expect("parse").instantiate();
     let mut early = 0usize; // ticks 0..400
     let mut late = 0usize; // ticks 400..800
     for t in 0..800 {

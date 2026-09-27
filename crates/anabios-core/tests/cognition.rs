@@ -1,8 +1,8 @@
-//! End-to-end determinism for the flag-ON cognitive gene–culture scenario.
-//! `determinism.rs` only locks the flag-OFF minimal scenario and `inventions.rs`
-//! the inventions demo; this pins the cognitive layer's actual behavior (IQ
-//! development, IQ-gated acquisition, practice discovery/spread, reproductive
-//! effects) so it cannot drift silently.
+//! End-to-end determinism for the cognitive gene–culture layer on `tribes`
+//! (which absorbed `cognitive-coevolution.toml`; the full stack keeps both
+//! `cognition_enabled` and `inventions_enabled` on). This pins the cognitive
+//! layer's actual behavior (IQ development, IQ-gated acquisition, practice
+//! discovery/spread, reproductive effects) so it cannot drift silently.
 
 use anabios_core::codex::EventType;
 use anabios_core::scenario::Scenario;
@@ -11,7 +11,7 @@ use anabios_core::tick::step;
 
 mod common;
 
-const SCENARIO: &str = include_str!("../../../scenarios/cognitive-coevolution.toml");
+const SCENARIO: &str = include_str!("../../../scenarios/tribes.toml");
 
 #[test]
 fn cognitive_scenario_parses_with_both_flags() {
@@ -160,7 +160,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // 43→44): added World.territory_enabled + World.species_territories
     // (empty with the flag off). Layout growth only — trajectory proven
     // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
-    &[(0, 0x5c06b73b2d4da2e0), (100, 0x24a567ab39108b14), (300, 0xa1193c5b9d5a5835)];
+    // Re-pinned 2026-09-26 (scenario consolidation): `cognitive-coevolution.toml`
+    // was retired into `tribes.toml`, and the scenario schema now defaults every
+    // feature on; the flag-off engine is pinned separately by the
+    // `*_trajectory_is_pinned` guards, which did not move.
+    &[(0, 0x808d1ec15075dd36), (100, 0x3ee6c678fbb566a1), (300, 0x3cd95619247dfc8d)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {

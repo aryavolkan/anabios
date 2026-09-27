@@ -43,12 +43,13 @@ mod feeding {
 mod speciation {
     //! Integration test: two genetically-distant founder populations should be
     //! recognized as separate species by the first time `species_step` runs
-    //! (tick 200) or shortly after.
+    //! (tick 200) or shortly after. Runs on `speciation`, which absorbed the
+    //! divergent scenario's two body-size morphs.
 
     use anabios_core::scenario::Scenario;
     use anabios_core::tick::step;
 
-    const SCENARIO: &str = include_str!("../../../scenarios/divergent.toml");
+    const SCENARIO: &str = include_str!("../../../scenarios/speciation.toml");
 
     #[test]
     fn distant_founder_populations_become_separate_species() {
@@ -123,6 +124,8 @@ mod reproduction {
         on.repro_biased_learning = true;
         on.max_population = 500;
         let mut off = scenario.instantiate();
+        // The scenario schema defaults the flag on, so the control arm opts out.
+        off.repro_biased_learning = false;
         off.max_population = 500;
 
         for _ in 0..2_000 {
@@ -210,14 +213,15 @@ mod module_gating {
 }
 
 mod codex_events {
-    //! Integration test: codex emits SpeciationEvent on a divergent scenario
-    //! where two distant founder populations are forced to split.
+    //! Integration test: codex emits SpeciationEvent on `speciation` (which
+    //! absorbed the divergent scenario) where two distant founder populations
+    //! are forced to split; the affect showcase check runs on `tribes`.
 
     use anabios_core::codex::EventType;
     use anabios_core::scenario::Scenario;
     use anabios_core::tick::step;
 
-    const SCENARIO: &str = include_str!("../../../scenarios/divergent.toml");
+    const SCENARIO: &str = include_str!("../../../scenarios/speciation.toml");
 
     #[test]
     fn divergent_scenario_emits_speciation_event() {
@@ -241,7 +245,7 @@ mod codex_events {
         );
     }
 
-    const AFFECT_SHOWCASE: &str = include_str!("../../../scenarios/affect-showcase.toml");
+    const AFFECT_SHOWCASE: &str = include_str!("../../../scenarios/tribes.toml");
 
     #[test]
     fn affect_showcase_emits_an_affect_event() {
@@ -279,13 +283,14 @@ mod serde_skip_audit {
     use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
     use anabios_core::tick::step;
 
-    /// A pheromone-active + domestication scenario, warmed so both documented
+    /// A pheromone-active + domestication scenario (`tribes`, which absorbed
+    /// `domestication.toml`), warmed so both documented
     /// re-derivation caches are non-default: after load, `track_livestock` must
     /// be re-derived from the persisted flag (not left false) and the pheromone
     /// nonzero cache must match a fresh recompute (decay would no-op otherwise).
     #[test]
     fn load_rederives_skipped_caches() {
-        let mut w = Scenario::parse_toml(include_str!("../../../scenarios/domestication.toml"))
+        let mut w = Scenario::parse_toml(include_str!("../../../scenarios/tribes.toml"))
             .unwrap()
             .instantiate();
         for _ in 0..300 {
@@ -306,7 +311,7 @@ mod serde_skip_audit {
     /// and `living_biome_roundtrip` surfaced. Pin the re-derivation directly.
     #[test]
     fn load_rederives_spatial_hash_dims() {
-        let mut w = Scenario::parse_toml(include_str!("../../../scenarios/sandbox-large.toml"))
+        let mut w = Scenario::parse_toml(include_str!("../../../scenarios/sandbox.toml"))
             .unwrap()
             .instantiate();
         assert_eq!(w.world_size, 2048.0, "scenario pins non-default dims");

@@ -1,13 +1,17 @@
-//! Save→load→step round-trip hardening: every opt-in subsystem must survive
+//! Save→load→step round-trip hardening: every subsystem must survive
 //! serialization bit-identically, and the world must step identically after a
 //! reload (the `#[serde(skip)]`-accumulator footgun — a skipped field that
 //! feeds future ticks is invisible to `state_hash` yet breaks replay).
 //!
-//! One test per opt-in flag, warmed enough that the subsystem's state is
-//! non-trivial before saving, each guarding that its scenario actually
-//! enables the flag (so a scenario edit silently dropping it fails loudly).
-//! These assert *self-consistency*, not pinned values — no golden hashes.
-//! See `docs/determinism-contract.md` for the skip rules this suite enforces.
+//! One test per world (each runs the full stack, so every default-on
+//! subsystem is warmed in all twelve), warmed enough that the subsystems'
+//! state is non-trivial before saving, each guarding that its world actually
+//! enables the stack (so a scenario edit silently dropping a flag fails
+//! loudly). The retired files whose configuration no world carries — the
+//! experiment levers, and the few states no world reaches within its warm-up —
+//! round-trip as inline fixtures below. These assert *self-consistency*, not
+//! pinned values — no golden hashes. See `docs/determinism-contract.md` for the
+//! skip rules this suite enforces.
 
 use anabios_core::world::World;
 
@@ -25,84 +29,154 @@ macro_rules! roundtrip_tests {
     };
 }
 
+/// Every feature knob the scenario schema defaults on is on — no world opts
+/// out of any of them.
+fn full_stack(w: &World) -> bool {
+    w.biome_adaptation
+        && w.terrain_habitat
+        && w.inventions_enabled
+        && w.gene_tech_coupling
+        && w.gene_requirements
+        && w.cognition_enabled
+        && w.affect_enabled
+        && w.living_biome
+        && w.season_period > 0
+        && w.nutrient_variation
+        && w.soil_fertility
+        && w.resources_enabled
+        && w.conserve_goods_on_death
+        && w.disasters_enabled
+        && w.war_enabled
+        && w.settlement_enabled
+        && w.sexual_dimorphism_enabled
+        && w.domestication_enabled
+        && w.knowledge_enabled
+        && w.practices_enabled
+        && w.basic_needs_enabled
+        && w.mate_seeking_enabled
+        && w.territory_enabled
+        && w.disease_enabled
+        && w.anthro_race_enabled
+        && w.repro_biased_learning
+}
+
+// Warm-ups: a world keeps the longest warm-up of the retired rows it absorbed
+// (so every absorbed subsystem is past its old detector windows), 120 when it
+// absorbed none.
 roundtrip_tests! {
-    lineage_caps_and_mate_seeking_roundtrip:
-        "../../../scenarios/riverlands.toml", 200,
-        |w: &World| w.mate_seeking_enabled && !w.lineage_caps.is_empty(),
-        "mate_seeking_enabled + max_share";
-    env_period_roundtrip:
-        "../../../scenarios/experiments/dit-env-slow.toml", 300, |w: &World| w.env_period > 0, "env_period";
-    biome_adaptation_roundtrip:
-        "../../../scenarios/biome-adaptation.toml", 400, |w: &World| w.biome_adaptation, "biome_adaptation";
-    terrain_habitat_roundtrip:
-        "../../../scenarios/geographic-trade.toml", 400, |w: &World| w.terrain_habitat, "terrain_habitat";
-    inventions_roundtrip:
-        "../../../scenarios/inventions.toml", 500, |w: &World| w.inventions_enabled, "inventions_enabled";
-    gene_requirements_roundtrip:
-        "../../../scenarios/experiments/gene-requirements.toml", 500, |w: &World| w.gene_requirements, "gene_requirements";
-    cognition_roundtrip:
-        "../../../scenarios/cognitive-coevolution.toml", 400, |w: &World| w.cognition_enabled, "cognition_enabled";
-    living_biome_roundtrip:
-        "../../../scenarios/living-sandbox-coevolution.toml", 400, |w: &World| w.living_biome, "living_biome";
-    season_period_roundtrip:
-        "../../../scenarios/sandbox-large.toml", 300, |w: &World| w.season_period > 0, "season_period";
-    climate_drift_roundtrip:
-        "../../../scenarios/experiments/drifting-climate.toml", 400, |w: &World| w.climate_drift_rate > 0.0, "climate_drift_rate";
-    nutrient_fertility_roundtrip:
-        "../../../scenarios/foraging-selection.toml", 400, |w: &World| w.nutrient_variation && w.soil_fertility, "nutrient_variation+soil_fertility";
-    resources_roundtrip:
-        "../../../scenarios/biome-trade.toml", 400, |w: &World| w.resources_enabled, "resources_enabled";
-    disasters_roundtrip:
-        "../../../scenarios/disturbance.toml", 400, |w: &World| w.disasters_enabled, "disasters_enabled";
-    war_roundtrip:
-        "../../../scenarios/war.toml", 600, |w: &World| w.war_enabled, "war_enabled";
-    settlement_roundtrip:
-        "../../../scenarios/settlement.toml", 400, |w: &World| w.settlement_enabled, "settlement_enabled";
-    dimorphism_roundtrip:
-        "../../../scenarios/dimorphism.toml", 400, |w: &World| w.sexual_dimorphism_enabled, "sexual_dimorphism_enabled";
-    domestication_roundtrip:
-        "../../../scenarios/domestication.toml", 400, |w: &World| w.domestication_enabled, "domestication_enabled";
-    knowledge_roundtrip:
-        "../../../scenarios/knowledge-ratchet.toml", 300, |w: &World| w.knowledge_enabled, "knowledge_enabled";
-    affect_roundtrip:
-        "../../../scenarios/affect-social.toml", 300, |w: &World| w.affect_enabled, "affect_enabled";
-    practices_roundtrip:
-        "../../../scenarios/experiments/o1-lever-practices-off.toml", 300, |w: &World| !w.practices_enabled && w.cognition_enabled, "practices_enabled(off variant)";
-    payoff_biased_learning_roundtrip:
-        "../../../scenarios/experiments/o2-payoff-biased-learning.toml", 300, |w: &World| w.payoff_biased_learning, "payoff_biased_learning";
-    repro_biased_learning_roundtrip:
-        "../../../scenarios/experiments/o3-repro-biased-learning.toml", 300, |w: &World| w.repro_biased_learning, "repro_biased_learning";
-    unilateral_trade_roundtrip:
-        "../../../scenarios/unilateral-trade.toml", 400, |w: &World| w.unilateral_trade && w.conserve_goods_on_death, "unilateral_trade+conserve_goods_on_death";
-    disease_roundtrip:
-        "../../../scenarios/disease.toml", 400, |w: &World| w.disease_enabled, "disease_enabled";
-    basic_needs_roundtrip:
-        "../../../scenarios/basic-needs.toml", 600, |w: &World| w.basic_needs_enabled, "basic_needs_enabled";
-    gene_tech_coupling_roundtrip:
-        "../../../scenarios/tech-gene-coupling.toml", 300, |w: &World| w.gene_tech_coupling, "gene_tech_coupling";
-    affect_seeking_roundtrip:
-        "../../../scenarios/affect-seeking.toml", 300, |w: &World| w.affect_enabled, "affect(seeking)";
-    affect_threat_roundtrip:
-        "../../../scenarios/affect-threat.toml", 300, |w: &World| w.affect_enabled, "affect(threat)";
-    affect_play_roundtrip:
-        "../../../scenarios/affect-play.toml", 80, |w: &World| w.affect_enabled, "affect(play)";
-    affect_showcase_roundtrip:
-        "../../../scenarios/affect-showcase.toml", 800, |w: &World| w.affect_enabled, "affect(showcase, past detector windows)";
-    anthro_race_roundtrip:
-        "../../../scenarios/anthro-race.toml", 400, |w: &World| w.anthro_race_enabled && !w.culture_roots.is_empty(), "anthro_race_enabled+culture_roots";
+    minimal_roundtrip:
+        "../../../scenarios/minimal.toml", 120, full_stack, "minimal (full stack)";
+    predator_prey_roundtrip:
+        // Absorbed biome-adaptation (400) and foraging-selection (400).
+        "../../../scenarios/predator-prey.toml", 400, full_stack, "predator-prey (full stack)";
+    speciation_roundtrip:
+        "../../../scenarios/speciation.toml", 120, full_stack, "speciation (full stack)";
+    tribes_roundtrip:
+        // Absorbed inventions (500), cognitive-coevolution (400), war (600),
+        // dimorphism, domestication, disease, anthro-race (400), basic-needs
+        // (600), knowledge-ratchet, tech-gene-coupling and the affect files —
+        // affect-showcase's 800 carries the affect detectors past their windows.
+        "../../../scenarios/tribes.toml", 800,
+        |w: &World| full_stack(w) && !w.culture_roots.is_empty(),
+        "tribes (full stack + culture_roots)";
+    markets_roundtrip:
+        // Absorbed settlement, biome-trade, geographic-trade, unilateral-trade (400).
+        "../../../scenarios/markets.toml", 400, full_stack, "markets (full stack)";
+    habitat_territories_roundtrip:
+        // Warm past two species steps (ticks 0/200/400) so territory EMA state
+        // is non-trivial when saved.
+        "../../../scenarios/habitat-territories.toml", 420, full_stack,
+        "habitat-territories (full stack)";
+    grand_theater_roundtrip:
+        // The strongest single guard: grand-theater warms every subsystem at
+        // once, including both experiment levers it opts into.
+        "../../../scenarios/grand-theater.toml", 300,
+        |w: &World| full_stack(w) && w.env_period > 0 && w.climate_drift_rate > 0.0,
+        "grand-theater (everything on)";
+    out_of_africa_saga_roundtrip:
+        "../../../scenarios/out-of-africa-saga.toml", 120, full_stack,
+        "out-of-africa-saga (full stack)";
     out_of_africa_earth_roundtrip:
-        "../../../scenarios/out-of-africa-earth.toml", 300, |w: &World| w.biome.res == 256, "out-of-africa-earth (from_earth field + every opt-in)";
-    biome_step_interval_roundtrip:
+        "../../../scenarios/out-of-africa-earth.toml", 300,
+        |w: &World| full_stack(w) && w.biome.res == 256,
+        "out-of-africa-earth (from_earth field + full stack)";
+    sandbox_roundtrip:
+        // Absorbed living-sandbox-coevolution (400) and sandbox-large (300).
+        "../../../scenarios/sandbox.toml", 400, full_stack, "sandbox (full stack)";
+    riverlands_roundtrip:
+        "../../../scenarios/riverlands.toml", 200,
+        |w: &World| full_stack(w) && !w.lineage_caps.is_empty(),
+        "riverlands (full stack + max_share)";
+    huge_steppe_roundtrip:
+        "../../../scenarios/huge-steppe.toml", 120,
+        |w: &World| full_stack(w) && w.world_size == 8192.0,
+        "huge-steppe (8192 world, full stack)";
+}
+
+/// An inline fixture source, its warm-up, the flag it must enable, and a label.
+type FixtureCase = (String, u64, fn(&World) -> bool, &'static str);
+
+/// The retired experiment files (`scenarios/experiments/`), kept verbatim as
+/// inline fixtures: each carries a lever or a combination no world has.
+/// Warm-ups are the retired rows' own.
+#[test]
+fn experiment_fixtures_roundtrip() {
+    use common::fixtures::*;
+    let cases: [FixtureCase; 7] = [
         // A default-size carrier scenario rather than vast-steppe: instantiating
         // the 2048^2 grid is the slowest thing in the suite (minutes in the
         // debug coverage shards) and the flag's persistence needs only one
         // full biome_step_interval=4 period (effective cadence 40 ticks).
-        "../../../scenarios/experiments/biome-step-interval.toml", 120, |w: &World| w.biome_step_interval > 1, "biome_step_interval";
-    territory_roundtrip:
-        // Warm past two species steps (ticks 0/200/400) so territory EMA state
-        // is non-trivial when saved.
-        "../../../scenarios/habitat-territories.toml", 420,
-        |w: &World| w.territory_enabled, "territory_enabled";
+        (biome_step_interval_flag_off(), 120, |w| w.biome_step_interval > 1, "biome_step_interval"),
+        (dit_env_slow_flag_off(), 300, |w| w.env_period > 0, "env_period"),
+        (drifting_climate_flag_off(), 400, |w| w.climate_drift_rate > 0.0, "climate_drift_rate"),
+        (gene_requirements_flag_off(), 500, |w| w.gene_requirements, "gene_requirements"),
+        (
+            o1_lever_practices_off_flag_off(),
+            300,
+            |w| !w.practices_enabled && w.cognition_enabled,
+            "practices_enabled(off variant)",
+        ),
+        (
+            o2_payoff_biased_learning_flag_off(),
+            300,
+            |w| w.payoff_biased_learning,
+            "payoff_biased_learning",
+        ),
+        (
+            o3_repro_biased_learning_flag_off(),
+            300,
+            |w| w.repro_biased_learning,
+            "repro_biased_learning",
+        ),
+    ];
+    for (src, warm, flag, what) in cases {
+        roundtrip(&src, warm, flag, what);
+    }
+}
+
+/// Retired root files whose round-tripped state the absorbing world does not
+/// reach: the `unilateral_trade` lever stays off in every world (`markets`
+/// absorbed the file's founders), and `tribes` (which absorbed
+/// knowledge-ratchet) holds no Writing within its warm-up, so its
+/// `knowledge_by_species` is empty when saved. The knowledge fixture keeps the
+/// pairing with `knowledge.rs::knowledge_accrues_per_species`, which pins its
+/// non-triviality at this warm-up. Warm-ups are the retired rows' own.
+#[test]
+fn retired_state_fixtures_roundtrip() {
+    use common::fixtures::*;
+    let cases: [FixtureCase; 2] = [
+        (
+            unilateral_trade_flag_off(),
+            400,
+            |w| w.unilateral_trade && w.conserve_goods_on_death,
+            "unilateral_trade+conserve_goods_on_death",
+        ),
+        (knowledge_ratchet_flag_off(), 300, |w| w.knowledge_enabled, "knowledge_enabled"),
+    ];
+    for (src, warm, flag, what) in cases {
+        roundtrip(&src, warm, flag, what);
+    }
 }
 
 /// Territory layer on a NON-default world extent. `collision_spatial` is
@@ -130,31 +204,4 @@ fn territory_roundtrip_on_a_256_world_heals_the_collision_hash() {
     }
     common::run(&mut w, 30);
     common::assert_roundtrip_world(&mut w, "territory_enabled on a 256-wide world");
-}
-
-/// The strongest single guard: grand-theater warms every subsystem at once.
-#[test]
-fn grand_theater_everything_on_roundtrip() {
-    roundtrip(
-        include_str!("../../../scenarios/grand-theater.toml"),
-        300,
-        |w: &World| {
-            w.env_period > 0
-                && w.climate_drift_rate > 0.0
-                && w.season_period > 0
-                && w.biome_adaptation
-                && w.living_biome
-                && w.nutrient_variation
-                && w.soil_fertility
-                && w.disasters_enabled
-                && w.terrain_habitat
-                && w.resources_enabled
-                && w.settlement_enabled
-                && w.inventions_enabled
-                && w.gene_tech_coupling
-                && w.cognition_enabled
-                && w.war_enabled
-        },
-        "grand-theater(everything-on)",
-    );
 }

@@ -1,7 +1,8 @@
 //! Basic-needs integration tests: the flag-on trajectory actually expresses
-//! the designed pressures (drinkable water exists in the flagship scenario,
-//! dehydration shortens survival, sleep cycles run) — complementing the
-//! flag-off inertness unit tests in `src/needs.rs`.
+//! the designed pressures (drinkable water exists in the retired flagship
+//! scenario, dehydration shortens survival, sleep cycles run) — complementing
+//! the flag-off inertness unit tests in `src/needs.rs`. The flagship
+//! `basic-needs.toml` is kept as an inline fixture (`common::fixtures`).
 
 use anabios_core::genome::Genome;
 use anabios_core::needs;
@@ -10,11 +11,14 @@ use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 use anabios_core::world::World;
 
-const SCENARIO: &str = include_str!("../../../scenarios/basic-needs.toml");
+mod common;
 
+// Fixture: `tribes` absorbed basic-needs.toml, but no world carries its
+// `climate.river_threshold = 60` on the 1024 map (the rivers this pins).
 #[test]
 fn scenario_instantiates_with_drinkable_water_in_reach() {
-    let s = Scenario::parse_toml(SCENARIO).expect("basic-needs.toml parses");
+    let s = Scenario::parse_toml(&common::fixtures::basic_needs_flag_off())
+        .expect("basic-needs fixture parses");
     let w = s.instantiate();
     assert!(w.basic_needs_enabled, "flagship scenario opts in");
     let drinkable = (0..w.biome.res)
@@ -84,10 +88,13 @@ fn dehydration_hastens_starvation() {
 
 /// Over a long flag-on run, fatigue forces real sleep cycles: agents fall
 /// asleep and later wake again (the hysteresis actually cycles in vivo).
+// Fixture: `tribes` absorbed basic-needs.toml; the suite stays on the fixture
+// whose river-carved 1024 map (`climate.river_threshold = 60`) no world has.
 #[test]
 #[cfg_attr(debug_assertions, ignore)]
 fn agents_sleep_and_wake_over_a_long_run() {
-    let s = Scenario::parse_toml(SCENARIO).expect("basic-needs.toml parses");
+    let s = Scenario::parse_toml(&common::fixtures::basic_needs_flag_off())
+        .expect("basic-needs fixture parses");
     let mut w = s.instantiate();
     let mut ever_asleep = false;
     let mut woke_after_sleep = false;
