@@ -248,45 +248,65 @@ fn combined_energy(w: &World) -> f32 {
 /// Tundra at ticks 786–792). The per-tick check costs ~1% of a step. The
 /// production predicate (`Locomotion::can_occupy`) is used directly so the
 /// rule is not re-encoded here, and the checked agent-ticks are counted per
-/// class so the test cannot pass vacuously if a class dies out.
-#[test]
-fn habitat_classes_never_leave_their_terrain() {
+/// class so the test cannot pass vacuously if a class dies out. One test per
+/// seed (nextest runs them side by side).
+mod habitat_classes_never_leave_their_terrain {
+    #[test]
+    fn seed_1() {
+        super::assert_habitat_classes_stay_on_their_terrain(1);
+    }
+
+    #[test]
+    fn seed_2() {
+        super::assert_habitat_classes_stay_on_their_terrain(2);
+    }
+
+    #[test]
+    fn seed_7() {
+        super::assert_habitat_classes_stay_on_their_terrain(7);
+    }
+}
+
+fn assert_habitat_classes_stay_on_their_terrain(seed: u64) {
     use anabios_core::habitat::Locomotion;
     use anabios_core::scenario::Scenario;
     let src = include_str!("../../../scenarios/habitat-territories.toml");
     let horizon = common::ticks(2000);
-    for seed in [1u64, 2, 7] {
-        let mut s = Scenario::parse_toml(src).expect("parse");
-        s.seed = seed;
-        let mut w = s.instantiate();
-        assert!(w.territory_enabled);
-        let mut checked = [0u64; 3];
-        let mut check = |w: &World| {
-            for id in w.agents.iter_alive() {
-                let i = id as usize;
-                let c = Locomotion::of(&w.agents.genome[i]);
-                let t = w.biome.sample(w.agents.position[i]).terrain;
-                assert!(
-                    c.can_occupy(t),
-                    "seed {seed} tick {}: {c:?} agent {id} on {t:?} at {:?}",
-                    w.tick,
-                    w.agents.position[i]
-                );
-                checked[c.index()] += 1;
-            }
-        };
-        check(&w); // founders are relocated at instantiate
-        while w.tick < horizon {
-            common::run(&mut w, 1);
-            check(&w);
-        }
-        for c in [Locomotion::Land, Locomotion::Water] {
+    let mut s = Scenario::parse_toml(src).expect("parse");
+    s.seed = seed;
+    // The rule is per agent, not per population: a third of the world's 1500
+    // cap (set before `instantiate`, so each class's `max_share` scales with
+    // it) keeps every class breeding while cutting the per-tick cost — the
+    // full-stack world made this the longest test in the debug suite.
+    s.max_population = Some(500);
+    let mut w = s.instantiate();
+    assert!(w.territory_enabled);
+    let mut checked = [0u64; 3];
+    let mut check = |w: &World| {
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            let c = Locomotion::of(&w.agents.genome[i]);
+            let t = w.biome.sample(w.agents.position[i]).terrain;
             assert!(
-                checked[c.index()] >= horizon,
-                "seed {seed}: only {} {c:?} agent-ticks checked over {horizon} ticks — vacuous",
-                checked[c.index()]
+                c.can_occupy(t),
+                "seed {seed} tick {}: {c:?} agent {id} on {t:?} at {:?}",
+                w.tick,
+                w.agents.position[i]
             );
+            checked[c.index()] += 1;
         }
+    };
+    check(&w); // founders are relocated at instantiate
+    while w.tick < horizon {
+        common::run(&mut w, 1);
+        check(&w);
+    }
+    for c in [Locomotion::Land, Locomotion::Water] {
+        assert!(
+            checked[c.index()] >= horizon,
+            "seed {seed}: only {} {c:?} agent-ticks checked over {horizon} ticks — vacuous",
+            checked[c.index()]
+        );
     }
 }
 

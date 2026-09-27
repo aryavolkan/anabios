@@ -36,9 +36,9 @@
 #   scripts/emergence.sh record-web out-of-africa-saga --seed 318   # regen showcase/replay.js
 #   scripts/emergence.sh view                            # menu: pick a scenario
 #   scripts/emergence.sh run    predator-prey --ticks 5000
-#   scripts/emergence.sh replay weapons-arms-race --seed 3
-#   scripts/emergence.sh sweep  traditions --seeds 16 --ticks 12000
-#   scripts/emergence.sh soak   drifting-climate --ticks 300000 --window 50000
+#   scripts/emergence.sh replay minimal --ticks 300 --snapshot-every 100
+#   scripts/emergence.sh sweep  tribes --seeds 16 --ticks 12000
+#   scripts/emergence.sh soak   grand-theater --ticks 300000 --window 50000
 
 set -euo pipefail
 
@@ -193,16 +193,16 @@ case "$cmd" in
     # Assets:
     #   showcase/replay.js                    (saga, seed 318 — the hosted deck)
     #   runs/showcase/out-of-africa-saga.mp4  (saga cinematic, seed 318)
-    #   runs/showcase/predator-prey.mp4       (deck-pinned seed 0)
-    #   runs/showcase/dialects.mp4            (deck-pinned seed 0)
-    #   runs/showcase/inventions.mp4          (deck-pinned seed 0)
+    #   runs/showcase/predator-prey.mp4       (deck-pinned seed 14)
+    #   runs/showcase/speciation.mp4          (deck-pinned seed 0)
+    #   runs/showcase/tribes.mp4              (deck-pinned seed 0)
     # Needs a real display (Movie Maker capture) + ffmpeg; re-run after any
     # change to the scenarios, decks, or sim, and re-deploy showcase/ (the
     # showcase workflow regenerates replay.js itself at publish time).
     shift || true
     "$0" record-web out-of-africa-saga --seed 318
     "$0" record out-of-africa-saga --seed 318 --max-seconds 900
-    for deck in predator-prey dialects inventions; do
+    for deck in predator-prey speciation tribes; do
       "$0" record "$deck" --max-seconds 600
     done
     echo "[showcase] all assets regenerated (web: showcase/replay.js, mp4s: runs/showcase/)" >&2

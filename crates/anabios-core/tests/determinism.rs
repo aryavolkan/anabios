@@ -215,7 +215,10 @@ const GOLDEN: &[(u64, u64)] =
     // 43→44): added World.territory_enabled + World.species_territories
     // (empty with the flag off). Layout growth only — trajectory proven
     // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
-    &[(0, 0xb99c431dab29593b), (100, 0x7b02f3ead610bd84), (1000, 0x97905596ba954bc8)];
+    // Re-pinned 2026-09-26: the scenario schema now defaults every feature on;
+    // the flag-off engine is pinned separately by the `*_trajectory_is_pinned`
+    // guards, which did not move.
+    &[(0, 0x75704801cc76d91a), (100, 0x0ee54f25ad7ccbb5), (1000, 0x951d1a8c666614d7)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -228,46 +231,78 @@ const GOLDEN: &[(u64, u64)] =
 /// threads). Wrapping `step` in `pool.install(..)` routes every internal
 /// `par_iter` onto that pool, so if any parallel stage's result depended on
 /// thread count or execution order the state hashes would diverge.
-#[test]
-fn parallel_matches_serial_across_thread_counts() {
-    // A feature-on scenario exercises more parallel paths (sense reads the
-    // gene-tech-coupling arm; cognition drives the `iq` stage) than minimal.
-    for scenario_src in [
-        include_str!("../../../scenarios/minimal.toml"),
-        include_str!("../../../scenarios/tech-gene-coupling.toml"),
-        include_str!("../../../scenarios/affect-seeking.toml"),
-        include_str!("../../../scenarios/affect-threat.toml"),
-        include_str!("../../../scenarios/affect-social.toml"),
-        // Both flags on: exercises the PLAY affect par_iter AND the PLAY→iq
-        // enrichment coupling in the cognition par_iter across thread counts (M-E).
-        include_str!("../../../scenarios/affect-play.toml"),
-        include_str!("../../../scenarios/habitat-territories.toml"),
-    ] {
-        let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
-        const TICKS: u64 = 300;
+///
+/// Every world runs the full stack now (habitat-territories less sexual
+/// dimorphism), so each exercises the feature-on parallel paths (sense reads
+/// the gene-tech-coupling arm; cognition drives the `iq` stage; the PLAY
+/// affect par_iter and the PLAY→iq enrichment coupling). `tribes` carries the
+/// ape-tier culture and the predator guilds, `habitat-territories` the
+/// territory layer, `grand-theater` the staged emergence with every cohort.
+///
+/// The claim does not depend on population, and 3 × 300 full-stack ticks per
+/// world made this the longest test in the debug suite, so each world is its
+/// own test (nextest runs them side by side) and runs under a
+/// `PARALLEL_POP_CAP`-agent cap, identically for every thread count;
+/// `grand-theater` also founds each cohort at a third of its count (every
+/// founder kind is still present — its 1444 founders alone outweighed the
+/// other three worlds together).
+fn assert_parallel_matches_serial(scenario_src: &str, founder_divisor: u32) {
+    let mut scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
+    for spec in &mut scenario.agents {
+        spec.count = spec.count.div_ceil(founder_divisor);
+    }
+    // Set before `instantiate`, so each lineage's `max_share` cap scales too.
+    scenario.max_population = Some(PARALLEL_POP_CAP);
+    let ticks = common::ticks(300);
 
-        let hash_with_threads = |n: usize| -> u64 {
-            let pool =
-                rayon::ThreadPoolBuilder::new().num_threads(n).build().expect("build rayon pool");
-            let mut world = scenario.instantiate();
-            pool.install(|| {
-                for _ in 0..TICKS {
-                    step(&mut world);
-                }
-            });
-            state_hash(&world)
-        };
+    let hash_with_threads = |n: usize| -> u64 {
+        let pool =
+            rayon::ThreadPoolBuilder::new().num_threads(n).build().expect("build rayon pool");
+        let mut world = scenario.instantiate();
+        pool.install(|| {
+            for _ in 0..ticks {
+                step(&mut world);
+            }
+        });
+        state_hash(&world)
+    };
 
-        let serial = hash_with_threads(1);
-        for n in [2usize, 8] {
-            assert_eq!(
-                serial,
-                hash_with_threads(n),
-                "scenario {:?}: state diverged between 1 and {n} threads after {TICKS} ticks \
-                 — a parallel stage depends on thread count or execution order",
-                scenario.name,
-            );
-        }
+    let serial = hash_with_threads(1);
+    for n in [2usize, 8] {
+        assert_eq!(
+            serial,
+            hash_with_threads(n),
+            "scenario {:?}: state diverged between 1 and {n} threads after {ticks} ticks \
+             — a parallel stage depends on thread count or execution order",
+            scenario.name,
+        );
+    }
+}
+
+/// Population cap for `assert_parallel_matches_serial`.
+const PARALLEL_POP_CAP: u32 = 500;
+
+mod parallel_matches_serial_across_thread_counts {
+    use super::assert_parallel_matches_serial as check;
+
+    #[test]
+    fn minimal() {
+        check(include_str!("../../../scenarios/minimal.toml"), 1);
+    }
+
+    #[test]
+    fn tribes() {
+        check(include_str!("../../../scenarios/tribes.toml"), 1);
+    }
+
+    #[test]
+    fn habitat_territories() {
+        check(include_str!("../../../scenarios/habitat-territories.toml"), 1);
+    }
+
+    #[test]
+    fn grand_theater() {
+        check(include_str!("../../../scenarios/grand-theater.toml"), 3);
     }
 }
 
@@ -285,7 +320,12 @@ const HABITAT_SCENARIO: &str = include_str!("../../../scenarios/habitat-territor
 // 91.6% inside, one deep overlap) where seed 1 ends with a crowded
 // shoreline (197 deep overlaps).
 const HABITAT_GOLDEN: &[(u64, u64)] =
-    &[(0, 0x2c407bf59a50d2f1), (100, 0xf7e48697d9a045be), (1000, 0xc4675529251f5022)];
+    // Re-pinned 2026-09-26: the scenario schema now defaults every feature on;
+    // the flag-off engine is pinned separately by the `*_trajectory_is_pinned`
+    // guards, which did not move. Re-pinned 2026-09-27 after the validation
+    // tuning (Land founded as four habitat herds, `sexual_dimorphism_enabled =
+    // false`; see the scenario header); the guards again did not move.
+    &[(0, 0xabf4cde73a94b777), (100, 0x1f63dcdd6fbbb461), (1000, 0xe9d9e06230efdf4b)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {
@@ -306,7 +346,10 @@ fn habitat_territories_matches_golden_hashes() {
 /// merge base (`UPDATE_HASHES=1` prints the values) rather than from HEAD.
 /// Pinned at the merge base of the territory/habitat/collision layer (flag
 /// off in both scenarios) and re-derived identical at its head; it must
-/// never move while that layer is off.
+/// never move while that layer is off. The pins below are computed on the
+/// inline flag-off fixtures in `common::fixtures` (the scenario schema now
+/// defaults every knob on, so the live scenario files no longer reproduce
+/// this configuration), not on the live scenario files.
 fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
     let mut bytes = bincode::serialize(&w.agents).expect("agents serialize");
     bytes.extend(bincode::serialize(&w.biome).expect("biome serialize"));
@@ -343,15 +386,20 @@ fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
 }
 
 #[test]
-fn minimal_trajectory_unchanged_by_territory_substrate() {
-    assert_trajectory("minimal", SCENARIO, 1000, MINIMAL_TRAJECTORY_AT_1000);
+fn minimal_flag_off_trajectory_is_pinned() {
+    assert_trajectory(
+        "minimal (all knobs off)",
+        &common::fixtures::minimal_flag_off(),
+        1000,
+        MINIMAL_TRAJECTORY_AT_1000,
+    );
 }
 
 #[test]
-fn grand_theater_trajectory_unchanged_by_territory_substrate() {
+fn grand_theater_pre_flip_trajectory_is_pinned() {
     assert_trajectory(
-        "grand-theater",
-        include_str!("../../../scenarios/grand-theater.toml"),
+        "grand-theater (pre-flip flags)",
+        &common::fixtures::grand_theater_flag_off(),
         200,
         GRAND_THEATER_TRAJECTORY_AT_200,
     );

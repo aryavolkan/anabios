@@ -1174,8 +1174,10 @@ fn practice_discovery_requires_the_flag_and_iq() {
 
 // --- End-to-end -------------------------------------------------------------------
 
-const INVENTIONS_SCENARIO: &str = include_str!("../../../scenarios/inventions.toml");
+const INVENTIONS_SCENARIO: &str = include_str!("../../../scenarios/tribes.toml");
 
+// `tribes` absorbed `inventions.toml`: its innovator / traditionalist bands
+// are the demo's founders, among the rest of the full stack.
 #[test]
 fn inventions_scenario_is_deterministic() {
     let scenario = Scenario::parse_toml(INVENTIONS_SCENARIO).expect("parse inventions scenario");
@@ -1190,11 +1192,11 @@ fn inventions_scenario_is_deterministic() {
     assert_eq!(run(300), run(300), "same seed + flag on → bit-identical");
 }
 
-/// Pinned golden hashes for the flag-ON inventions scenario. `determinism.rs`
-/// only locks the flag-OFF `minimal.toml`, so the entire invention mechanism —
-/// discovery RNG draws, copy-toward-best spread, atrophy, pollution, per-holder
-/// upkeep — would be free to drift silently while `inventions_scenario_is_
-/// deterministic` (self-consistency only) still passed. These hashes lock the
+/// Pinned golden hashes for the inventions world (`tribes`). Without a pin on
+/// an inventive world the entire invention mechanism — discovery RNG draws,
+/// copy-toward-best spread, atrophy, pollution, per-holder upkeep — would be
+/// free to drift silently while `inventions_scenario_is_deterministic`
+/// (self-consistency only) still passed. These hashes lock the
 /// mechanism's actual behavior. Regenerate deliberately with `UPDATE_HASHES=1`
 /// (prints new values to copy in) whenever an invention change is intentional.
 // Refreshed 2026-07-19: MemeSweep no longer fires on invention channels (the
@@ -1319,19 +1321,27 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // 43→44): added World.territory_enabled + World.species_territories
     // (empty with the flag off). Layout growth only — trajectory proven
     // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
-    &[(0, 0x1974263cec9f90c8), (100, 0x9956e7aa7a7694cc), (300, 0xed55c437cc0f3283)];
+    // Re-pinned 2026-09-26 (scenario consolidation): `inventions.toml` was
+    // retired into `tribes.toml`, and the scenario schema now defaults every
+    // feature on; the flag-off engine is pinned separately by the
+    // `*_trajectory_is_pinned` guards, which did not move.
+    &[(0, 0x808d1ec15075dd36), (100, 0x3ee6c678fbb566a1), (300, 0x3cd95619247dfc8d)];
 
 #[test]
 fn inventions_scenario_matches_golden_hashes() {
     common::assert_golden("inventions", INVENTIONS_SCENARIO, INVENTIONS_GOLDEN);
 }
 
+// Fixture: `tribes` seeds Stone Tools, so its only Stone Tools "discovery" is
+// the tick-0 seeding latch (the next one is Fire at tick 947); the retired
+// unseeded demo keeps the emergent-first-discovery claim.
 #[test]
 fn innovators_discover_before_traditionalists_in_demo_scenario() {
     // The demo's core promise: with the flag on, the high-Openness culture
     // produces discoveries and the tree's first era appears within a few
     // hundred ticks.
-    let scenario = Scenario::parse_toml(INVENTIONS_SCENARIO).expect("parse inventions scenario");
+    let scenario = Scenario::parse_toml(&common::fixtures::inventions_flag_off())
+        .expect("parse inventions fixture");
     let mut w = scenario.instantiate();
     let mut first_discovery_tick = None;
     let mut stone_seen = false;

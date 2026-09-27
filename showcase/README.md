@@ -87,8 +87,8 @@ command (needs a real display + ffmpeg):
 |------|-----------------|-----|
 | `out-of-africa-saga` | `out-of-africa-saga.toml` · 318 | the flagship: exodus, fire, husbandry, writing |
 | `predator-prey` | `predator-prey.toml` · 0 | collapse-and-recovery: grazers vs stalkers |
-| `dialects` | `dialects.toml` · 0 | two clusters diverge; a dialect sweeps |
-| `inventions` | `inventions.toml` · 0 | the innovators-vs-traditionalists tech race |
+| `speciation` | `speciation.toml` · 0 | two clusters diverge; a dialect sweeps |
+| `tribes` | `tribes.toml` · 0 | the innovators-vs-traditionalists tech race |
 
 ```sh
 scripts/emergence.sh showcase                 # everything below, one command

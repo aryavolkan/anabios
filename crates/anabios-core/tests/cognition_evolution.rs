@@ -33,13 +33,14 @@ use anabios_core::tick::step;
 use anabios_core::world::World;
 use anabios_core::{iq, practice};
 
-const COGNITIVE: &str = include_str!("../../../scenarios/cognitive-coevolution.toml");
+const COGNITIVE: &str = include_str!("../../../scenarios/tribes.toml");
 
 fn env_u64(key: &str, default: u64) -> u64 {
     std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
 }
 
-/// Instantiate the cognitive scenario at `seed`, with the population cap raised
+/// Instantiate the cognitive scenario (`tribes`, which absorbed
+/// `cognitive-coevolution.toml`) at `seed`, with the population cap raised
 /// enough that a growing control run does not saturate within the test horizon
 /// (at the cap both arms plateau and any reproductive differential is masked)
 /// but bounded so compute stays reasonable. Override with `COG_MAXPOP`.

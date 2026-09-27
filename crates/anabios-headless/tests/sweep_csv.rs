@@ -40,19 +40,22 @@ fn summary_csv_has_novel_types_column() {
     }
 }
 
-// Runs a sweep against biome-trade (which fires resource_traded/material_learning,
-// treated as rare/novel by the default score table) and asserts any run with
-// novel_events > 0 gets its events JSONL copied into <out>/novel/.
+// Runs a sweep against markets (which absorbed biome-trade and fires
+// resource_traded/material_learning, treated as rare/novel by the default
+// score table) and asserts any run with novel_events > 0 gets its events JSONL
+// copied into <out>/novel/.
 #[test]
 fn novel_runs_are_copied_to_novel_dir() {
     let tmp = tempfile::tempdir().unwrap();
     let out = tmp.path().join("swp");
-    let scenario = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scenarios/biome-trade.toml");
+    let scenario = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scenarios/markets.toml");
     // The mechanism under test is the novel/ copy, not the sweep length — and
-    // the spawned binary is instrumented under cargo llvm-cov, where every tick
-    // is ~10x slower (this test was a 13.5-minute single pole in the coverage
-    // job). Shorten under cfg(coverage), mirroring record_schema.rs.
-    let (seeds, ticks) = if cfg!(coverage) { ("2", "300") } else { ("4", "1500") };
+    // the spawned binary is instrumented under cargo llvm-cov, and unoptimized
+    // in any debug build, where the full-stack 1282-founder world runs for
+    // minutes per hundred ticks (this test was a 13.5-minute single pole in the
+    // coverage job). Shorten there, mirroring record_schema.rs.
+    let (seeds, ticks) =
+        if cfg!(coverage) || cfg!(debug_assertions) { ("2", "100") } else { ("4", "1500") };
     let status = Command::new(env!("CARGO_BIN_EXE_anabios-headless"))
         .args([
             "sweep",

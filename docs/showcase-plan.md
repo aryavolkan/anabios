@@ -18,9 +18,10 @@ validated scenario `out-of-africa-saga.toml` delivers the invention of writing
 
 ## 1. What already exists
 
-- **`scenarios/out-of-africa.toml`** (seed 318): a grand-theater world with
-  *every* opt-in flag on, including `sexual_dimorphism_enabled` and
-  `domestication_enabled`. Themed geography: an equatorial "Africa" (Cradle hub
+- **`scenarios/out-of-africa.toml`** (seed 318; since retired into
+  `out-of-africa-saga.toml`, which carries the same founders): a
+  grand-theater world with *every* opt-in flag on, including
+  `sexual_dimorphism_enabled` and `domestication_enabled`. Themed geography: an equatorial "Africa" (Cradle hub
   at 150,440; obsidian Quarry at 240,430; megafauna belt at 200,620), a mid-map
   ocean with two desert crossings, a Sahel DIT relay, and a cold "Eurasia" north
   held by archaics.

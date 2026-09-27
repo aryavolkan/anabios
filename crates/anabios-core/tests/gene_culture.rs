@@ -7,6 +7,11 @@
 //!
 //! This is an analysis harness, not a pass/fail gate — run with:
 //!   cargo test -p anabios-core --release --test gene_culture -- --nocapture --ignored
+//!
+//! The four retired gene-culture scenarios were folded into `speciation.toml`,
+//! which carries every one of their founder pairs as its own lineage; the
+//! harnesses read those lineages by their species ids there (see the
+//! `SP_*` constants).
 
 // Experiment labels (A/B/C) are meaningful shorthand for the design variants and
 // intentionally capitalized in test names.
@@ -16,7 +21,17 @@ use anabios_core::module::{has, ModuleType};
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 
-const SCENARIO: &str = include_str!("../../../scenarios/gene-culture.toml");
+const SCENARIO: &str = include_str!("../../../scenarios/speciation.toml");
+
+// Founder species ids in `speciation.toml` (archetype specs get fresh ids in
+// `[[agents]]` order; the two archetype-free morphs share species 0).
+const SP_CULTURAL_COOPERATOR: u32 = 5;
+const SP_ASOCIAL_FORAGER: u32 = 6;
+const SP_SKILLED_FORAGER: u32 = 7;
+const SP_CULTURE_PREY: u32 = 8;
+const SP_ASOCIAL_PREY: u32 = 9;
+const SP_FAST_HUNTER: u32 = 10;
+const SP_SLOW_HUNTER: u32 = 11;
 
 /// Per-species snapshot: alive count, mean meme[2] (the cooperation norm),
 /// fraction carrying a Communicator module (the culture-enabling gene).
@@ -45,23 +60,23 @@ fn snapshot(w: &anabios_core::world::World) -> std::collections::BTreeMap<u32, (
 fn gene_culture_coevolution_A() {
     const SEEDS: u64 = 12;
     const TICKS: u32 = 1500;
-    // Species 1 = cultural_cooperator (first archetype spec → fresh id 1),
-    // species 2 = asocial grazer.
+    // Culture-users = cultural_cooperator, control = asocial_forager.
+    let (coop, asocial) = (SP_CULTURAL_COOPERATOR, SP_ASOCIAL_FORAGER);
     let mut coop_wins = 0u64;
     for seed in 0..SEEDS {
-        let mut s = Scenario::parse_toml(SCENARIO).expect("parse gene-culture");
+        let mut s = Scenario::parse_toml(SCENARIO).expect("parse speciation");
         s.seed = seed;
         let mut w = s.instantiate();
         // Record the starting counts.
         let start = snapshot(&w);
-        let c0 = start.get(&1).map(|t| t.0).unwrap_or(0);
-        let a0 = start.get(&2).map(|t| t.0).unwrap_or(0);
+        let c0 = start.get(&coop).map(|t| t.0).unwrap_or(0);
+        let a0 = start.get(&asocial).map(|t| t.0).unwrap_or(0);
         for t in 0..TICKS {
             step(&mut w);
             if t % 300 == 299 {
                 let s = snapshot(&w);
-                let c = s.get(&1).copied().unwrap_or((0, 0.0, 0.0));
-                let a = s.get(&2).copied().unwrap_or((0, 0.0, 0.0));
+                let c = s.get(&coop).copied().unwrap_or((0, 0.0, 0.0));
+                let a = s.get(&asocial).copied().unwrap_or((0, 0.0, 0.0));
                 eprintln!(
                     "seed{seed} t{}: coop n={} meme2={:.2} comm={:.2} | asocial n={} | total={}",
                     t + 1,
@@ -74,8 +89,8 @@ fn gene_culture_coevolution_A() {
             }
         }
         let end = snapshot(&w);
-        let c1 = end.get(&1).map(|t| t.0).unwrap_or(0);
-        let a1 = end.get(&2).map(|t| t.0).unwrap_or(0);
+        let c1 = end.get(&coop).map(|t| t.0).unwrap_or(0);
+        let a1 = end.get(&asocial).map(|t| t.0).unwrap_or(0);
         // "Culture won" if the cooperator lineage grew its share of the population.
         let start_share = c0 as f32 / (c0 + a0).max(1) as f32;
         let end_share = c1 as f32 / (c1 + a1).max(1) as f32;
@@ -89,11 +104,10 @@ fn gene_culture_coevolution_A() {
     eprintln!("RESULT: culture-users grew their share in {coop_wins}/{SEEDS} seeds");
 }
 
-const SCENARIO_ALARM: &str = include_str!("../../../scenarios/gene-culture-alarm.toml");
-
 /// A (alarm variant): culture-prey (Communicator + alarm early-warning) vs
-/// asocial-prey (own-detection only), sharing the same predators. If cultural
-/// early-warning is adaptive, culture-prey should out-survive the control.
+/// asocial-prey (own-detection only), sharing the same predators (the fast /
+/// slow hunters seeded beside them). If cultural early-warning is adaptive,
+/// culture-prey should out-survive the control.
 #[ignore = "experiment harness — run explicitly with --ignored --nocapture"]
 #[test]
 fn gene_culture_coevolution_A_alarm() {
@@ -101,18 +115,18 @@ fn gene_culture_coevolution_A_alarm() {
     const TICKS: u32 = 800;
     let mut coop_wins = 0u64;
     for seed in 0..SEEDS {
-        let mut s = Scenario::parse_toml(SCENARIO_ALARM).expect("parse alarm");
+        let mut s = Scenario::parse_toml(SCENARIO).expect("parse speciation");
         s.seed = seed;
         let mut w = s.instantiate();
         let start = snapshot(&w);
-        let c0 = start.get(&1).map(|t| t.0).unwrap_or(0);
-        let a0 = start.get(&2).map(|t| t.0).unwrap_or(0);
+        let c0 = start.get(&SP_CULTURE_PREY).map(|t| t.0).unwrap_or(0);
+        let a0 = start.get(&SP_ASOCIAL_PREY).map(|t| t.0).unwrap_or(0);
         for _ in 0..TICKS {
             step(&mut w);
         }
         let end = snapshot(&w);
-        let c1 = end.get(&1).map(|t| t.0).unwrap_or(0);
-        let a1 = end.get(&2).map(|t| t.0).unwrap_or(0);
+        let c1 = end.get(&SP_CULTURE_PREY).map(|t| t.0).unwrap_or(0);
+        let a1 = end.get(&SP_ASOCIAL_PREY).map(|t| t.0).unwrap_or(0);
         if c1 > a1 {
             coop_wins += 1;
         }
@@ -120,8 +134,6 @@ fn gene_culture_coevolution_A_alarm() {
     }
     eprintln!("ALARM RESULT: culture-prey out-survived asocial in {coop_wins}/{SEEDS} seeds");
 }
-
-const SCENARIO_HUNT: &str = include_str!("../../../scenarios/gene-culture-hunt.toml");
 
 /// A (technique variant, addressing the "genes enable certain memes" insight):
 /// FAST vs SLOW hunters share the SAME hunt-technique meme and the SAME prey.
@@ -134,32 +146,35 @@ fn gene_culture_technique_A_hunt() {
     const TICKS: u32 = 1200;
     let mut fast_wins = 0u64;
     for seed in 0..SEEDS {
-        let mut s = Scenario::parse_toml(SCENARIO_HUNT).expect("parse hunt");
+        let mut s = Scenario::parse_toml(SCENARIO).expect("parse speciation");
         s.seed = seed;
         let mut w = s.instantiate();
-        // species 1 = prey (grazer), 2 = fast_hunter, 3 = slow_hunter.
+        // Prey = the culture / asocial prey pair the hunters are seeded beside.
+        let count = |sn: &std::collections::BTreeMap<u32, (u32, f32, f32)>, sid: u32| {
+            sn.get(&sid).map(|x| x.0).unwrap_or(0)
+        };
+        let start = snapshot(&w);
+        let (fast0, slow0) = (count(&start, SP_FAST_HUNTER), count(&start, SP_SLOW_HUNTER));
         for t in 0..TICKS {
             step(&mut w);
             if t % 400 == 399 {
                 let sn = snapshot(&w);
-                let prey = sn.get(&1).map(|x| x.0).unwrap_or(0);
-                let fast = sn.get(&2).map(|x| x.0).unwrap_or(0);
-                let slow = sn.get(&3).map(|x| x.0).unwrap_or(0);
+                let prey = count(&sn, SP_CULTURE_PREY) + count(&sn, SP_ASOCIAL_PREY);
+                let fast = count(&sn, SP_FAST_HUNTER);
+                let slow = count(&sn, SP_SLOW_HUNTER);
                 eprintln!("HUNT seed{seed} t{}: prey={prey} fast={fast} slow={slow}", t + 1);
             }
         }
         let sn = snapshot(&w);
-        let fast = sn.get(&2).map(|x| x.0).unwrap_or(0);
-        let slow = sn.get(&3).map(|x| x.0).unwrap_or(0);
+        let fast = count(&sn, SP_FAST_HUNTER);
+        let slow = count(&sn, SP_SLOW_HUNTER);
         if fast > slow {
             fast_wins += 1;
         }
-        eprintln!("HUNT SEED{seed}: fast {}->{fast}, slow {}->{slow}", 20, 20);
+        eprintln!("HUNT SEED{seed}: fast {fast0}->{fast}, slow {slow0}->{slow}");
     }
     eprintln!("HUNT RESULT: fast (gene-enabled culture) beat slow in {fast_wins}/{SEEDS} seeds");
 }
-
-const SCENARIO_SKILL: &str = include_str!("../../../scenarios/gene-culture-skill.toml");
 
 /// C (cumulative cultural skill): Communicator foragers who learn + socially
 /// copy a foraging skill vs. an identical control that lacks the gene (so cannot
@@ -172,25 +187,29 @@ fn gene_culture_skill_C() {
     const TICKS: u32 = 1500;
     let mut culture_wins = 0u64;
     for seed in 0..SEEDS {
-        let mut s = Scenario::parse_toml(SCENARIO_SKILL).expect("parse skill");
+        let mut s = Scenario::parse_toml(SCENARIO).expect("parse speciation");
         s.seed = seed;
         let mut w = s.instantiate();
+        let (culture, asocial) = (SP_SKILLED_FORAGER, SP_ASOCIAL_FORAGER);
+        let start = snapshot(&w);
+        let c0 = start.get(&culture).map(|x| x.0).unwrap_or(0);
+        let a0 = start.get(&asocial).map(|x| x.0).unwrap_or(0);
         for t in 0..TICKS {
             step(&mut w);
             if t % 500 == 499 {
                 let sn = snapshot(&w);
-                let c = sn.get(&1).copied().unwrap_or((0, 0.0, 0.0));
-                let a = sn.get(&2).map(|x| x.0).unwrap_or(0);
+                let c = sn.get(&culture).copied().unwrap_or((0, 0.0, 0.0));
+                let a = sn.get(&asocial).map(|x| x.0).unwrap_or(0);
                 eprintln!("SKILL seed{seed} t{}: culture n={} skill(meme5-proxy: meme2={:.2}) | asocial n={}", t + 1, c.0, c.1, a);
             }
         }
         let sn = snapshot(&w);
-        let c = sn.get(&1).map(|x| x.0).unwrap_or(0);
-        let a = sn.get(&2).map(|x| x.0).unwrap_or(0);
+        let c = sn.get(&culture).map(|x| x.0).unwrap_or(0);
+        let a = sn.get(&asocial).map(|x| x.0).unwrap_or(0);
         if c > a {
             culture_wins += 1;
         }
-        eprintln!("SKILL SEED{seed}: culture 40->{c}, asocial 40->{a}");
+        eprintln!("SKILL SEED{seed}: culture {c0}->{c}, asocial {a0}->{a}");
     }
     eprintln!(
         "SKILL RESULT: culture-gene lineage out-grew control in {culture_wins}/{SEEDS} seeds"

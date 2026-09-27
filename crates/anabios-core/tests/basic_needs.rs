@@ -1,7 +1,8 @@
 //! Basic-needs integration tests: the flag-on trajectory actually expresses
-//! the designed pressures (drinkable water exists in the flagship scenario,
-//! dehydration shortens survival, sleep cycles run) — complementing the
-//! flag-off inertness unit tests in `src/needs.rs`.
+//! the designed pressures (drinkable water exists in `tribes`, the world that
+//! absorbed the `basic-needs.toml` flagship; dehydration shortens survival;
+//! sleep cycles run) — complementing the flag-off inertness unit tests in
+//! `src/needs.rs`.
 
 use anabios_core::genome::Genome;
 use anabios_core::needs;
@@ -10,21 +11,21 @@ use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 use anabios_core::world::World;
 
-const SCENARIO: &str = include_str!("../../../scenarios/basic-needs.toml");
+const SCENARIO: &str = include_str!("../../../scenarios/tribes.toml");
 
 #[test]
 fn scenario_instantiates_with_drinkable_water_in_reach() {
-    let s = Scenario::parse_toml(SCENARIO).expect("basic-needs.toml parses");
+    let s = Scenario::parse_toml(SCENARIO).expect("tribes.toml parses");
     let w = s.instantiate();
-    assert!(w.basic_needs_enabled, "flagship scenario opts in");
+    assert!(w.basic_needs_enabled, "the world runs basic needs");
     let drinkable = (0..w.biome.res)
         .flat_map(|row| (0..w.biome.res).map(move |col| (col, row)))
         .filter(|&(col, row)| needs::drinkable_cell(&w.biome, col, row))
         .count();
-    // Default sea level provides lakes/seas; river_threshold carves rivers on
-    // top. A meaningfully-watered map has plenty of drinkable cells — this is
-    // the guard that keeps the scenario from silently drying out under future
-    // worldgen changes.
+    // Default sea level provides lakes/seas (a scenario's river_threshold
+    // would carve rivers on top; tribes sets none). A meaningfully-watered map
+    // has plenty of drinkable cells — this is the guard that keeps the scenario
+    // from silently drying out under future worldgen changes.
     assert!(drinkable > 100, "expected a watered map, got {drinkable} drinkable cells");
 }
 
@@ -87,7 +88,7 @@ fn dehydration_hastens_starvation() {
 #[test]
 #[cfg_attr(debug_assertions, ignore)]
 fn agents_sleep_and_wake_over_a_long_run() {
-    let s = Scenario::parse_toml(SCENARIO).expect("basic-needs.toml parses");
+    let s = Scenario::parse_toml(SCENARIO).expect("tribes.toml parses");
     let mut w = s.instantiate();
     let mut ever_asleep = false;
     let mut woke_after_sleep = false;

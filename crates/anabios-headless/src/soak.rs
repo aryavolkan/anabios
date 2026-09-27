@@ -200,12 +200,16 @@ fn write_csv(out: &Path, scenario: &str, seed: u64, rows: &[WindowRow]) -> Resul
 mod tests {
     use super::*;
 
+    // The window bookkeeping does not depend on the world; the flag-off
+    // minimal keeps these runs cheap (the full stack is several times the
+    // cost per tick).
+    use crate::minimal_flag_off_text;
+
     #[test]
     fn window_math_is_sane() {
         // 3 full windows of a tiny scenario: monotonic cumulative types,
         // positive throughput, end_tick alignment.
-        let text =
-            std::fs::read_to_string("../../scenarios/minimal.toml").expect("read minimal.toml");
+        let text = minimal_flag_off_text();
         let window = 200;
         let ticks = 600;
         let rows = soak(&text, 7, ticks, window).expect("soak runs");
@@ -232,8 +236,7 @@ mod tests {
 
     #[test]
     fn trailing_partial_window_is_reported() {
-        let text =
-            std::fs::read_to_string("../../scenarios/minimal.toml").expect("read minimal.toml");
+        let text = minimal_flag_off_text();
         // 500 ticks in 200-tick windows -> 200, 200, 100.
         let rows = soak(&text, 1, 500, 200).expect("soak runs");
         assert_eq!(rows.len(), 3);

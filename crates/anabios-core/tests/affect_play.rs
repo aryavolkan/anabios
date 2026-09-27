@@ -1,6 +1,7 @@
 //! M-E flag-ON end-to-end: PLAY trigger + social-approach bias + IQ-enrichment
-//! coupling. Both `affect_enabled` and `cognition_enabled` are on in the scenario
-//! so all three PLAY touchpoints are exercised. Models `cognition.rs`.
+//! coupling. Runs on `tribes` (which absorbed `affect-play.toml`), where the
+//! full stack keeps both `affect_enabled` and `cognition_enabled` on so all
+//! three PLAY touchpoints are exercised. Models `cognition.rs`.
 
 use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::state_hash;
@@ -8,7 +9,7 @@ use anabios_core::tick::step;
 
 mod common;
 
-const SCENARIO: &str = include_str!("../../../scenarios/affect-play.toml");
+const SCENARIO: &str = include_str!("../../../scenarios/tribes.toml");
 
 #[test]
 fn affect_play_scenario_parses_with_both_flags() {
@@ -86,7 +87,11 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // 43→44): added World.territory_enabled + World.species_territories
     // (empty with the flag off). Layout growth only — trajectory proven
     // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
-    &[(0, 0xccacae7e02e2f4ba), (100, 0x4e2b65f9b3c3107f), (200, 0xade6e9a81055f6ca)];
+    // Re-pinned 2026-09-26 (scenario consolidation): `affect-play.toml` was
+    // retired into `tribes.toml`, and the scenario schema now defaults every
+    // feature on; the flag-off engine is pinned separately by the
+    // `*_trajectory_is_pinned` guards, which did not move.
+    &[(0, 0x808d1ec15075dd36), (100, 0x3ee6c678fbb566a1), (200, 0xc3a2e157b5d553b2)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

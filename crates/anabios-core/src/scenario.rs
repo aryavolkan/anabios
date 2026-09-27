@@ -13,6 +13,11 @@ pub(crate) fn default_true() -> bool {
     true
 }
 
+/// Scenario-schema default for `season_period`: grand-theater's cycle. `0` opts out.
+pub(crate) fn default_season_period() -> u32 {
+    2000
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 // Reject unknown keys so a misspelled feature flag (`inventions_enable`,
 // `sexual_dimorphism = true`) fails loudly at load instead of silently leaving
@@ -24,116 +29,153 @@ pub struct Scenario {
     pub seed: u64,
     #[serde(default)]
     pub agents: Vec<AgentSpec>,
-    /// DIT environmental-variability period (experiment). `0` (default) = the
-    /// env technique mechanism is OFF. `> 0` shifts the optimum every N ticks;
-    /// `4294967295` (`u32::MAX`, `culture::ENV_STATIC_PERIOD`) = active-but-static.
+    /// DIT environmental-variability period (experiment lever, stays off by
+    /// default). `0` (default) = the env technique mechanism is OFF. `> 0`
+    /// shifts the optimum every N ticks; `4294967295` (`u32::MAX`,
+    /// `culture::ENV_STATIC_PERIOD`) = active-but-static.
     #[serde(default)]
     pub env_period: u32,
-    /// Opt-in: enable the biome-adaptation feeding bonus (EnvAffinity vs local
-    /// climate). `false` (default) leaves foraging behavior unchanged.
-    #[serde(default)]
+    /// On by default (scenario schema): enable the biome-adaptation feeding
+    /// bonus (EnvAffinity vs local climate). Set `false` to opt out; the
+    /// engine's own default (`World::new`) stays off, so the flag-off
+    /// byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub biome_adaptation: bool,
-    /// Opt-in: enable terrain-based habitat selection (agents pulled toward
-    /// their `TerrainAffinity` preferred terrain, so species sort into
-    /// biomes and trade at borders). `false` (default) leaves movement
-    /// unchanged.
-    #[serde(default)]
+    /// On by default (scenario schema): enable terrain-based habitat
+    /// selection (agents pulled toward their `TerrainAffinity` preferred
+    /// terrain, so species sort into biomes and trade at borders). Set
+    /// `false` to opt out; the engine's own default (`World::new`) stays
+    /// off, so the flag-off byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub terrain_habitat: bool,
-    /// Opt-in: enable the cultural invention tree (discovery + social spread
-    /// on the invention meme channels, with per-holder buffs/debuffs).
-    /// `false` (default) leaves culture unchanged.
-    #[serde(default)]
+    /// On by default (scenario schema): enable the cultural invention tree
+    /// (discovery + social spread on the invention meme channels, with
+    /// per-holder buffs/debuffs). Set `false` to opt out; the engine's own
+    /// default (`World::new`) stays off, so the flag-off byte-identity
+    /// guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub inventions_enabled: bool,
-    /// Opt-in: couple invention buffs and discovery to genome slots
-    /// (`invention::GeneAffinity`), so adoption selects the genome and vice
-    /// versa. `false` (default) is bit-identical to no coupling.
-    #[serde(default)]
+    /// On by default (scenario schema): couple invention buffs and discovery
+    /// to genome slots (`invention::GeneAffinity`), so adoption selects the
+    /// genome and vice versa. Set `false` to opt out; the engine's own
+    /// default (`World::new`) stays off, so the flag-off byte-identity
+    /// guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub gene_tech_coupling: bool,
-    /// Opt-in: enforce each invention's hard genetic prerequisite
-    /// (`invention::GeneReq`) on discovery and social copying.
-    /// `false` (default) is bit-identical to no gate.
-    #[serde(default)]
+    /// On by default (scenario schema): enforce each invention's hard
+    /// genetic prerequisite (`invention::GeneReq`) on discovery and social
+    /// copying. Set `false` to opt out; the engine's own default
+    /// (`World::new`) stays off, so the flag-off byte-identity guarantee is
+    /// unchanged.
+    #[serde(default = "default_true")]
     pub gene_requirements: bool,
-    /// Opt-in: enable the cognitive layer (per-agent realized IQ from the
-    /// `CognitivePotential` gene + juvenile enrichment, with a metabolic cost).
-    /// `false` (default) leaves metabolism and culture unchanged.
-    #[serde(default)]
+    /// On by default (scenario schema): enable the cognitive layer (per-agent
+    /// realized IQ from the `CognitivePotential` gene + juvenile enrichment,
+    /// with a metabolic cost). Set `false` to opt out; the engine's own
+    /// default (`World::new`) stays off, so the flag-off byte-identity
+    /// guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub cognition_enabled: bool,
-    /// Opt-in: enable the subcortical affect layer (per-agent Panksepp activations
-    /// developed each tick; SEEKING biases foraging in M-A). `false` (default)
-    /// leaves behavior byte-identical.
-    #[serde(default)]
+    /// On by default (scenario schema): enable the subcortical affect layer
+    /// (per-agent Panksepp activations developed each tick; SEEKING biases
+    /// foraging in M-A). Set `false` to opt out; the engine's own default
+    /// (`World::new`) stays off, so the flag-off byte-identity guarantee is
+    /// unchanged.
+    #[serde(default = "default_true")]
     pub affect_enabled: bool,
-    /// Opt-in: enable renewing biome (depleted cells recolonize from
-    /// vegetated neighbours). `false` (default) leaves regrowth unchanged.
-    #[serde(default)]
+    /// On by default (scenario schema): enable renewing biome (depleted
+    /// cells recolonize from vegetated neighbours). Set `false` to opt out;
+    /// the engine's own default (`World::new`) stays off, so the flag-off
+    /// byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub living_biome: bool,
-    /// Opt-in: season cycle length in ticks. `0` (default) = seasonal biome
-    /// regrowth OFF (plain regrowth every biome step). `> 0` boosts regrowth
-    /// in cells whose climate matches the current season phase, migrating
-    /// the productive band over a `2 * season_period`-tick cycle.
-    #[serde(default)]
+    /// On by default (scenario schema): season cycle length in ticks. `2000`
+    /// (default) boosts regrowth in cells whose climate matches the current
+    /// season phase, migrating the productive band over a
+    /// `2 * season_period`-tick cycle. Set `0` to opt out (plain regrowth
+    /// every biome step); the engine's own default (`World::new`) stays off,
+    /// so the flag-off byte-identity guarantee is unchanged.
+    #[serde(default = "default_season_period")]
     pub season_period: u32,
-    /// Opt-in secular climate drift (E10): radians/tick of a slow non-stationary
-    /// drift added to the environmental optimum on top of the seasonal cycle.
-    /// `0.0` (default) leaves the optimum purely seasonal (byte-identical to
-    /// pre-E10). A small value like `0.00005` gives a multi-100k-tick wander.
+    /// Opt-in secular climate drift (E10) (experiment lever, stays off by
+    /// default): radians/tick of a slow non-stationary drift added to the
+    /// environmental optimum on top of the seasonal cycle. `0.0` (default)
+    /// leaves the optimum purely seasonal (byte-identical to pre-E10). A
+    /// small value like `0.00005` gives a multi-100k-tick wander.
     #[serde(default)]
     pub climate_drift_rate: f32,
-    /// Opt-in: enable per-cell nutrient-value variation (energy per bite scaled
-    /// by `nutrient_quality`). `false` (default) leaves foraging energy unchanged.
-    #[serde(default)]
+    /// On by default (scenario schema): enable per-cell nutrient-value
+    /// variation (energy per bite scaled by `nutrient_quality`). Set `false`
+    /// to opt out; the engine's own default (`World::new`) stays off, so the
+    /// flag-off byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub nutrient_variation: bool,
-    /// Opt-in: enable per-cell soil fertility (scales carrying capacity and
-    /// regrowth). `false` (default) leaves regrowth unchanged.
-    #[serde(default)]
+    /// On by default (scenario schema): enable per-cell soil fertility
+    /// (scales carrying capacity and regrowth). Set `false` to opt out; the
+    /// engine's own default (`World::new`) stays off, so the flag-off
+    /// byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub soil_fertility: bool,
-    /// Opt-in: enable the biome-trade-goods economy (resource nodes spawn,
-    /// agents harvest and trade them, and invention learning requires — and
-    /// consumes — per-tech material baskets).
-    /// `false` (default) leaves the world unchanged.
-    #[serde(default)]
+    /// On by default (scenario schema): enable the biome-trade-goods economy
+    /// (resource nodes spawn, agents harvest and trade them, and invention
+    /// learning requires — and consumes — per-tech material baskets). Set
+    /// `false` to opt out; the engine's own default (`World::new`) stays
+    /// off, so the flag-off byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub resources_enabled: bool,
-    /// Opt-in: conserve trade goods on death (transfer to nearest living
-    /// agent) so long-run trade doesn't freeze. Default off.
-    #[serde(default)]
+    /// On by default (scenario schema): conserve trade goods on death
+    /// (transfer to nearest living agent) so long-run trade doesn't freeze.
+    /// Set `false` to opt out; the engine's own default (`World::new`) stays
+    /// off, so the flag-off byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub conserve_goods_on_death: bool,
-    /// Opt-in: enable natural disasters (fire/drought/freeze on a Poisson
-    /// schedule, succession scars). `false` (default) leaves the world
-    /// unchanged — zero RNG draws, no state.
-    #[serde(default)]
+    /// On by default (scenario schema): enable natural disasters
+    /// (fire/drought/freeze on a Poisson schedule, succession scars). Set
+    /// `false` to opt out; the engine's own default (`World::new`) stays
+    /// off, so the flag-off byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub disasters_enabled: bool,
-    /// Opt-in: `SenseHostility` joins the program mutation pool (E7) so
-    /// war-reactive behavior can evolve. `false` (default) keeps the
-    /// baseline pool byte-identical.
-    #[serde(default)]
+    /// On by default (scenario schema): `SenseHostility` joins the program
+    /// mutation pool (E7) so war-reactive behavior can evolve. Set `false`
+    /// to opt out; the engine's own default (`World::new`) stays off, so the
+    /// flag-off byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub war_enabled: bool,
-    /// Opt-in: home-range anchoring (E8) — anchors learn, homing pull,
-    /// anchor Sense nodes in the mutation pool. `false` (default) keeps
-    /// the world byte-identical.
-    #[serde(default)]
+    /// On by default (scenario schema): home-range anchoring (E8) — anchors
+    /// learn, homing pull, anchor Sense nodes in the mutation pool. Set
+    /// `false` to opt out; the engine's own default (`World::new`) stays
+    /// off, so the flag-off byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub settlement_enabled: bool,
-    /// Opt-in: sexual dimorphism (E12) — binary sex, opposite-sex mating,
-    /// female mate choice, sex-linked stat expression. `false` (default)
-    /// keeps the world byte-identical (zero extra RNG draws).
-    #[serde(default)]
+    /// On by default (scenario schema): sexual dimorphism (E12) — binary
+    /// sex, opposite-sex mating, female mate choice, sex-linked stat
+    /// expression. Set `false` to opt out; the engine's own default
+    /// (`World::new`) stays off, so the flag-off byte-identity guarantee is
+    /// unchanged.
+    #[serde(default = "default_true")]
     pub sexual_dimorphism_enabled: bool,
-    /// Opt-in: domestication (E13) — Husbandry holders tame wild juvenile
-    /// herbivores into penned, milk-yielding livestock that breeds
-    /// born-tamed. `false` (default) keeps the world byte-identical.
-    /// Effectively requires `inventions_enabled` (taming needs Husbandry).
-    #[serde(default)]
+    /// On by default (scenario schema): domestication (E13) — Husbandry
+    /// holders tame wild juvenile herbivores into penned, milk-yielding
+    /// livestock that breeds born-tamed. Set `false` to opt out; the
+    /// engine's own default (`World::new`) stays off, so the flag-off
+    /// byte-identity guarantee is unchanged. Effectively requires
+    /// `inventions_enabled` (taming needs Husbandry).
+    #[serde(default = "default_true")]
     pub domestication_enabled: bool,
-    /// Opt-in: knowledge accumulation — Writing-holding cultures build
-    /// durable, transmissible tech memory that survives population
-    /// bottlenecks. `false` (default) keeps the world byte-identical.
-    /// Effectively requires `inventions_enabled` (Writing must exist).
-    #[serde(default)]
+    /// On by default (scenario schema): knowledge accumulation —
+    /// Writing-holding cultures build durable, transmissible tech memory
+    /// that survives population bottlenecks. Set `false` to opt out; the
+    /// engine's own default (`World::new`) stays off, so the flag-off
+    /// byte-identity guarantee is unchanged. Effectively requires
+    /// `inventions_enabled` (Writing must exist).
+    #[serde(default = "default_true")]
     pub knowledge_enabled: bool,
-    /// Maladaptive cultural practices (Inbreeding, Child Sacrifice). Unlike the
-    /// opt-in flags above, this defaults to `true`: practices run whenever
-    /// `cognition_enabled` is on, exactly as before the flag existed, so every
-    /// existing scenario is unchanged. Set `false` to suppress practice
+    /// Maladaptive cultural practices (Inbreeding, Child Sacrifice). On by
+    /// default like the feature knobs above, but unlike them it is on in the
+    /// engine too (`World::new`), and it already defaulted `true` before the
+    /// scenario schema flipped to full-stack defaults: practices run whenever
+    /// `cognition_enabled` is on, exactly as before the flag existed (so the
+    /// flag-off fixtures keep it on). Set `false` to suppress practice
     /// *discovery* — the only source of practices in a fresh run (with none
     /// discovered there is nothing for copy-toward-best or inherit-jitter to
     /// amplify above threshold), so a fresh run effectively carries none. The O1
@@ -142,70 +184,83 @@ pub struct Scenario {
     /// `docs/superpowers/specs/2026-08-03-o1-exclusion-findings.md`.
     #[serde(default = "default_true")]
     pub practices_enabled: bool,
-    /// Opt-in O2 payoff-biased social learning: cultural transmission copies
-    /// from the highest-energy Communicator neighbour (model bias) and
-    /// declines traits whose local holders are lower-energy than non-holders
-    /// (content bias), so maladaptive practices are rejected while they still
-    /// exist in the world. Off by default ⇒ byte-identical payoff-blind
-    /// transmission. See
-    /// `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
+    /// Opt-in O2 payoff-biased social learning (experiment lever, stays off
+    /// by default): cultural transmission copies from the highest-energy
+    /// Communicator neighbour (model bias) and declines traits whose local
+    /// holders are lower-energy than non-holders (content bias), so
+    /// maladaptive practices are rejected while they still exist in the
+    /// world. Off by default ⇒ byte-identical payoff-blind transmission.
+    /// See `docs/superpowers/specs/2026-08-03-o2-payoff-biased-learning-design.md`.
     #[serde(default)]
     pub payoff_biased_learning: bool,
-    /// Opt-in basic needs (thirst + sleep as Layer-0 drives): agents
-    /// accumulate thirst (drink at water/river cells; dehydration raises
-    /// basal drain) and fatigue (sleep on a hysteresis: movement + feeding
-    /// suppressed, discounted metabolism, fatigue recovers). `false`
-    /// (default) keeps the world byte-identical — zero RNG, no state.
-    /// A scenario with no drinkable cells (no Water terrain and
-    /// `river_threshold` 0) will dehydrate everyone; pair the flag with water.
-    #[serde(default)]
+    /// On by default (scenario schema): basic needs (thirst + sleep as
+    /// Layer-0 drives) — agents accumulate thirst (drink at water/river
+    /// cells; dehydration raises basal drain) and fatigue (sleep on a
+    /// hysteresis: movement + feeding suppressed, discounted metabolism,
+    /// fatigue recovers). Set `false` to opt out; the engine's own default
+    /// (`World::new`) stays off, so the flag-off byte-identity guarantee is
+    /// unchanged. A scenario with no drinkable cells (no Water terrain and
+    /// `river_threshold` 0) will dehydrate everyone; pair the flag with
+    /// water.
+    #[serde(default = "default_true")]
     pub basic_needs_enabled: bool,
-    /// Opt-in mate seeking: an agent whose program asks to mate but has no
-    /// same-species neighbour in perception steers toward the nearest one
-    /// within `reproduce::MATE_SEEK_REACH`. Mating itself is contact-range,
-    /// so without this a sparse lineage (a predator pack spread over a large
-    /// world) can be fed, have room under the cap, and still never breed.
-    /// `false` (default) keeps the world byte-identical.
-    #[serde(default)]
+    /// On by default (scenario schema): mate seeking — an agent whose
+    /// program asks to mate but has no same-species neighbour in perception
+    /// steers toward the nearest one within `reproduce::MATE_SEEK_REACH`.
+    /// Mating itself is contact-range, so without this a sparse lineage (a
+    /// predator pack spread over a large world) can be fed, have room under
+    /// the cap, and still never breed. Set `false` to opt out; the engine's
+    /// own default (`World::new`) stays off, so the flag-off byte-identity
+    /// guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub mate_seeking_enabled: bool,
-    /// Opt-in territory/habitat/collision layer: heritable Land/Water/Air
-    /// locomotion (terrain-gated movement and grazing), aquatic biomass on
-    /// Water cells, per-species territories with a soft-edge homing pull, and
-    /// body collision (steering + hard min-gap resolve). Pin a spec's class
-    /// with `[agents.traits] locomotion = 0.1 | 0.5 | 0.9`. `false` (default)
-    /// keeps the world byte-identical.
-    #[serde(default)]
+    /// On by default (scenario schema): territory/habitat/collision layer —
+    /// heritable Land/Water/Air locomotion (terrain-gated movement and
+    /// grazing), aquatic biomass on Water cells, per-species territories
+    /// with a soft-edge homing pull, and body collision (steering + hard
+    /// min-gap resolve). Pin a spec's class with `[agents.traits] locomotion
+    /// = 0.1 | 0.5 | 0.9`. Set `false` to opt out; the engine's own default
+    /// (`World::new`) stays off, so the flag-off byte-identity guarantee is
+    /// unchanged.
+    #[serde(default = "default_true")]
     pub territory_enabled: bool,
-    /// Opt-in O3 reproductive-success payoff bias: cultural transmission
-    /// declines a maladaptive-practice channel when its local holders show a
-    /// higher observed birth-failure fraction than non-holders (content bias
-    /// only — no model bias, which O2b measured as skill-suppressing). The
-    /// only fitness proxy that can see a stillbirth/cull cost. Off by
-    /// default ⇒ byte-identical transmission and no birth-outcome counting.
-    /// See `docs/superpowers/specs/2026-09-02-o3-corrected-apparatus-repro-bias-design.md`.
-    #[serde(default)]
+    /// On by default (scenario schema): O3 reproductive-success payoff bias
+    /// — cultural transmission declines a maladaptive-practice channel when
+    /// its local holders show a higher observed birth-failure fraction than
+    /// non-holders (content bias only — no model bias, which O2b measured as
+    /// skill-suppressing). The only fitness proxy that can see a
+    /// stillbirth/cull cost. Set `false` to opt out; the engine's own
+    /// default (`World::new`) stays off, so the flag-off byte-identity
+    /// guarantee is unchanged. See
+    /// `docs/superpowers/specs/2026-09-02-o3-corrected-apparatus-repro-bias-design.md`.
+    #[serde(default = "default_true")]
     pub repro_biased_learning: bool,
-    /// Opt-in unilateral (one-sided) exchange: when no mutually-beneficial
-    /// barter swap exists, an agent may gift one `TRADE_UNIT` of a good it
-    /// holds above `STOCK_TARGET + TRADE_UNIT` to a partner that still wants
-    /// it — breaking the both-must-give constraint behind the measured trade
+    /// Opt-in unilateral (one-sided) exchange (experiment lever, stays off
+    /// by default): when no mutually-beneficial barter swap exists, an
+    /// agent may gift one `TRADE_UNIT` of a good it holds above
+    /// `STOCK_TARGET + TRADE_UNIT` to a partner that still wants it —
+    /// breaking the both-must-give constraint behind the measured trade
     /// freeze (`docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`).
     /// Off by default ⇒ byte-identical bilateral-only trade.
     #[serde(default)]
     pub unilateral_trade: bool,
-    /// Opt-in anthropogenic arms race: `culture_bearer`-tagged founder
-    /// lineages become perceptible to wild agents as tool-bearing threats
-    /// (new sensor + evolvable program node + the `Vigilance` gene's FEAR
-    /// gain), and the `HuntedAdaptation` codex detector pairs the culture
-    /// lineage's power rise against prey defensive-trait rises. `false`
-    /// (default) keeps the world byte-identical.
-    #[serde(default)]
+    /// On by default (scenario schema): anthropogenic arms race —
+    /// `culture_bearer`-tagged founder lineages become perceptible to wild
+    /// agents as tool-bearing threats (new sensor + evolvable program node +
+    /// the `Vigilance` gene's FEAR gain), and the `HuntedAdaptation` codex
+    /// detector pairs the culture lineage's power rise against prey
+    /// defensive-trait rises. Set `false` to opt out; the engine's own
+    /// default (`World::new`) stays off, so the flag-off byte-identity
+    /// guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub anthro_race_enabled: bool,
-    /// Opt-in disease subsystem: crowding-seeded SIS pathogen — spillover in crowded
-    /// populations, proximity spread, energy-drain mortality via the existing starve
-    /// path; `EpidemicOutbreak`/`MedicineContainment` codex events. `false` (default) keeps the
-    /// world byte-identical.
-    #[serde(default)]
+    /// On by default (scenario schema): disease subsystem — crowding-seeded
+    /// SIS pathogen (spillover in crowded populations, proximity spread,
+    /// energy-drain mortality via the existing starve path;
+    /// `EpidemicOutbreak`/`MedicineContainment` codex events). Set `false`
+    /// to opt out; the engine's own default (`World::new`) stays off, so the
+    /// flag-off byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
     pub disease_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
@@ -860,13 +915,15 @@ pub enum ScenarioError {
     #[error("{0}")]
     UnknownInvention(String),
     #[error(
-        "starting_inventions requires `inventions_enabled = true` — without the \
-         invention tree the seeded meme channels are never read"
+        "starting_inventions given but inventions_enabled = false — without the \
+         invention tree the seeded meme channels are never read; opt out of \
+         starting_inventions too"
     )]
     InventionsDisabled,
     #[error(
-        "knowledge_enabled requires `inventions_enabled = true` — knowledge accumulation \
-         tracks Writing-holding cultures, which don't exist without the invention tree"
+        "knowledge_enabled is on but inventions_enabled = false — knowledge accumulation \
+         tracks Writing-holding cultures, which don't exist without the invention tree; \
+         opt out of knowledge_enabled too"
     )]
     KnowledgeNeedsInventions,
     #[error(
@@ -885,6 +942,15 @@ pub enum ScenarioError {
          cleanly, then panics on the first cell lookup (`res - 1` underflows)"
     )]
     InvalidBiomeRes,
+    #[error(
+        "disease_enabled needs spatial-hash cells at least {radius} world units wide, but \
+         world_size / hash_res = {cell}: the spillover crowding probe queries a {radius}-unit \
+         radius, and the hash's neighbour query walks only the one-cell ring around a \
+         position (debug builds assert the radius fits in one cell; release builds \
+         silently miss neighbours beyond it) — lower hash_res to at most world_size / \
+         {radius}, or opt out with `disease_enabled = false`"
+    )]
+    DiseaseHashCellTooSmall { cell: f32, radius: f32 },
     #[error(
         "world_size must be a finite value > 0 (got {0}): placement draws uniform \
          positions in [0, world_size) and every torus wrap divides by it"
@@ -956,6 +1022,20 @@ impl Scenario {
         }
         if scenario.biome_step_interval == Some(0) {
             return Err(ScenarioError::InvalidBiomeStepInterval(0));
+        }
+        // Disease's spillover probe queries `disease::SPILLOVER_RADIUS`, and a
+        // spatial-hash query only reaches one cell (`world_size / hash_res`)
+        // out. A narrower cell parses and instantiates cleanly, then trips the
+        // debug `query` assert on the first disease step (or undercounts
+        // crowding in release) — so reject it here, the way `hash_res < 3` is.
+        if scenario.disease_enabled {
+            let ws = scenario.world_size.unwrap_or(crate::biome::WORLD_SIZE_DEFAULT);
+            let hr = scenario.hash_res.unwrap_or(crate::spatial::HASH_RES_DEFAULT);
+            let cell = ws / hr as f32;
+            let radius = crate::disease::SPILLOVER_RADIUS;
+            if cell < radius {
+                return Err(ScenarioError::DiseaseHashCellTooSmall { cell, radius });
+            }
         }
         // Terrain-aware placement preconditions. `instantiate` degrades
         // gracefully on both of these (uniform fallback / `max(1)`), but a
@@ -1470,11 +1550,13 @@ size = 0.5
     }
 
     #[test]
-    fn gene_tech_coupling_defaults_off_and_scenario_applies() {
-        // Omitting the field leaves it off (serde default) for baseline identity.
+    fn gene_tech_coupling_explicit_off_and_scenario_applies() {
+        // The scenario schema now defaults this on; explicit opt-out still
+        // turns it off for baseline identity.
         let base = r#"
 name = "base"
 seed = 1
+gene_tech_coupling = false
 
 [[agents]]
 count = 5
@@ -1499,11 +1581,13 @@ count = 5
     }
 
     #[test]
-    fn gene_requirements_defaults_off_and_scenario_applies() {
-        // Omitting the field leaves it off (serde default) for baseline identity.
+    fn gene_requirements_explicit_off_and_scenario_applies() {
+        // The scenario schema now defaults this on; explicit opt-out still
+        // turns it off for baseline identity.
         let base = r#"
 name = "base"
 seed = 1
+gene_requirements = false
 
 [[agents]]
 count = 5
@@ -1528,9 +1612,11 @@ count = 5
     }
 
     #[test]
-    fn affect_enabled_defaults_off_and_scenario_applies() {
-        // Omitting the field leaves it off (serde default) for baseline identity.
-        let base = "name = \"base\"\nseed = 1\n\n[[agents]]\ncount = 5\n[agents.traits]\n";
+    fn affect_enabled_explicit_off_and_scenario_applies() {
+        // The scenario schema now defaults this on; explicit opt-out still
+        // turns it off for baseline identity.
+        let base =
+            "name = \"base\"\nseed = 1\naffect_enabled = false\n\n[[agents]]\ncount = 5\n[agents.traits]\n";
         let s0 = Scenario::parse_toml(base).expect("parse");
         assert!(!s0.affect_enabled);
         assert!(!s0.instantiate().affect_enabled);
@@ -1653,9 +1739,9 @@ placement = { kind = "uniform" }
         assert!(s.resources_enabled);
         let w = s.instantiate();
         assert!(w.resources_enabled);
-        // Default (absent) stays false.
+        // Default (absent) is now true (the scenario schema runs the full stack).
         let off = Scenario::parse_toml("name=\"t\"\nseed=1\n").expect("parse").instantiate();
-        assert!(!off.resources_enabled);
+        assert!(off.resources_enabled);
     }
 
     #[test]
@@ -1677,9 +1763,11 @@ terrain_affinity = 0.87
         assert!(w.terrain_habitat);
         let id = w.agents.iter_alive().next().expect("one agent");
         assert_eq!(w.agents.genome[id as usize].get(GenomeSlot::TerrainAffinity), 0.87);
-        // Default (absent) stays false, and the genome slot stays untouched.
+        // Default (absent) is now true (the scenario schema runs the full
+        // stack), but with no explicit trait override the genome slot stays
+        // untouched (its neutral default).
         let off = Scenario::parse_toml("name=\"t\"\nseed=1\n").expect("parse").instantiate();
-        assert!(!off.terrain_habitat);
+        assert!(off.terrain_habitat);
     }
 
     #[test]
@@ -1887,9 +1975,12 @@ placement = { kind = "uniform" }
     fn parse_toml_rejects_starting_inventions_with_tree_disabled() {
         // Seeding without `inventions_enabled` would silently write meme
         // channels nothing reads — reject so the author fixes the flag.
+        // `inventions_enabled` now defaults on, so this needs an explicit
+        // opt-out to exercise the disabled-tree path.
         let text = r#"
 name = "t"
 seed = 1
+inventions_enabled = false
 [[agents]]
 count = 1
 starting_inventions = ["stone_tools"]
@@ -1973,6 +2064,21 @@ sixe = 0.5
         }
         // 3 and up are accepted.
         assert!(Scenario::parse_toml("name = \"t\"\nseed = 1\nhash_res = 3\n").is_ok());
+    }
+
+    #[test]
+    fn parse_toml_rejects_disease_on_hash_cells_narrower_than_spillover() {
+        // 256 / 64 (the default hash_res) = 4-unit cells, narrower than the
+        // 8-unit spillover probe: the first disease step would trip the
+        // spatial-hash `query` assert in a debug build.
+        let text = "name = \"t\"\nseed = 1\nworld_size = 256\n";
+        let err = Scenario::parse_toml(text).expect_err("disease on 4-unit cells must be rejected");
+        assert!(matches!(err, ScenarioError::DiseaseHashCellTooSmall { .. }), "got {err}");
+        assert!(err.to_string().contains("hash_res"), "error should name hash_res, got: {err}");
+        // The same world with disease opted out is fine.
+        assert!(Scenario::parse_toml(&format!("{text}disease_enabled = false\n")).is_ok());
+        // So is disease on a coarser hash: 256 / 32 = 8-unit cells, exactly the radius.
+        assert!(Scenario::parse_toml(&format!("{text}hash_res = 32\n")).is_ok());
     }
 
     #[test]
@@ -2066,5 +2172,46 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
                 crate::habitat::Locomotion::Air
             );
         }
+    }
+
+    #[test]
+    fn bare_scenario_runs_the_full_stack_by_default() {
+        let s = Scenario::parse_toml("name = \"bare\"\nseed = 1\n").expect("parse");
+        // Every feature knob is on; the four experiment levers stay off.
+        assert!(s.biome_adaptation && s.terrain_habitat && s.inventions_enabled);
+        assert!(s.gene_tech_coupling && s.gene_requirements && s.cognition_enabled);
+        assert!(s.affect_enabled && s.living_biome && s.nutrient_variation);
+        assert!(s.soil_fertility && s.resources_enabled && s.conserve_goods_on_death);
+        assert!(s.disasters_enabled && s.war_enabled && s.settlement_enabled);
+        assert!(s.sexual_dimorphism_enabled && s.domestication_enabled);
+        assert!(s.knowledge_enabled && s.practices_enabled && s.basic_needs_enabled);
+        assert!(s.mate_seeking_enabled && s.territory_enabled && s.disease_enabled);
+        assert!(s.anthro_race_enabled && s.repro_biased_learning);
+        assert_eq!(s.season_period, 2000);
+        assert_eq!(s.env_period, 0);
+        assert_eq!(s.climate_drift_rate, 0.0);
+        assert!(!s.payoff_biased_learning && !s.unilateral_trade);
+        // The engine layer is untouched: a bare World is still all-off.
+        let w = World::new(1);
+        assert!(!w.territory_enabled && !w.affect_enabled && !w.cognition_enabled);
+    }
+
+    #[test]
+    fn explicit_opt_out_still_wins() {
+        let s = Scenario::parse_toml(
+            "name = \"off\"\nseed = 1\nterritory_enabled = false\nseason_period = 0\n",
+        )
+        .expect("parse");
+        assert!(!s.territory_enabled);
+        assert_eq!(s.season_period, 0);
+        let w = s.instantiate();
+        assert!(!w.territory_enabled && w.affect_enabled);
+    }
+
+    #[test]
+    fn opting_out_of_inventions_while_knowledge_stays_on_is_rejected() {
+        let err = Scenario::parse_toml("name = \"k\"\nseed = 1\ninventions_enabled = false\n")
+            .expect_err("knowledge_enabled defaults on and needs inventions");
+        assert!(matches!(err, ScenarioError::KnowledgeNeedsInventions), "{err}");
     }
 }

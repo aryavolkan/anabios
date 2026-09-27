@@ -15,6 +15,8 @@ use anabios_core::spatial::torus_distance;
 use anabios_core::world::World;
 use glam::Vec2;
 
+mod common;
+
 /// A watered, mountainous world small enough to generate quickly. The
 /// river threshold is pinned to this `biome_res` on purpose — see
 /// `examples/river_scaling.rs` for why the pair cannot be separated.
@@ -365,7 +367,9 @@ placement = {{ kind = "cluster", center_x = 540.0, center_y = 500.0, radius = 0.
         )
     };
     let run = |flag: bool| {
-        let mut w = instantiate(&base(flag));
+        // Written when every other knob defaulted off: keep that meaning now
+        // that the schema defaults the full stack on, so only the flag differs.
+        let mut w = instantiate(&common::fixtures::with_opt_outs(&base(flag)));
         // Both founders are the same archetype; give them one species so they
         // are mates, and enough energy to clear the breeding bar.
         for id in w.agents.iter_alive().collect::<Vec<_>>() {
@@ -383,7 +387,9 @@ placement = {{ kind = "cluster", center_x = 540.0, center_y = 500.0, radius = 0.
 
 #[test]
 fn mate_seeking_off_is_byte_identical() {
-    let toml = watered_world(
+    // Written when every knob defaulted off (the flag-off world under test);
+    // the schema now defaults the full stack on, so opt out explicitly.
+    let toml = common::fixtures::with_opt_outs(&watered_world(
         5,
         r#"
 [[agents]]
@@ -391,7 +397,7 @@ count = 30
 archetype = "mammal_grazer"
 placement = { kind = "habitat", herds = 3, radius = 60.0 }
 "#,
-    );
+    ));
     let a = {
         let mut w = instantiate(&toml);
         for _ in 0..200 {

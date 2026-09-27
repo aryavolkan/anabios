@@ -19,7 +19,7 @@
 #
 # Examples:
 #   scripts/viewer-bench.sh predator-prey
-#   scripts/viewer-bench.sh continental 600 3
+#   scripts/viewer-bench.sh riverlands 600 3
 #
 # Env overrides:
 #   ANABIOS_BENCH_OUT   output CSV path (default runs/viewer-bench.csv)

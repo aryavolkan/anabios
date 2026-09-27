@@ -8,47 +8,44 @@ Not a neuroevolution project. Agents have **simple, hand-engineered cognition** 
 
 ## Status
 
-Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md). Shipped to date (git tags `m1`–`m10` plus later batches):
+Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md). Shipped to date (git tags `m1`–`m10` plus later batches). Each subsystem below has a knob (`inventions_enabled`, `disease_enabled`, …) that the scenario schema defaults **on** — a curated world lists only what it turns off — while the engine itself (`World::new`) defaults every subsystem off; four experiment levers (`env_period`, `climate_drift_rate`, `payoff_biased_learning`, `unilateral_trade`) stay off unless a file turns them on. See [`docs/scenarios.md`](docs/scenarios.md).
 
 - **Core sim** — deterministic SoA agent simulation: uniform-grid spatial hashing, evolvable postfix behavior programs, 50-slot float genome, modular morphology, speciation
 - **Interaction substrate (M11–M15)** — combat & predation, carcass scavenging, pheromone fields, communication/meme culture, kin-directed cooperation
-- **Invention tree** — 10-tech cumulative culture tree (Stone Tools → Fire → Farming/Metalworking → Writing/Medicine/Husbandry → Machinery/Electricity/Nuclear Power) riding the meme channels: individual discovery (Openness + skill gated), social spread, per-holder buffs *and* debuffs (metabolism, upkeep, crowding stress, biome pollution, radiation mutation); `InventionDiscovered`/`InventionAdopted` codex events. Opt-in per scenario (`inventions_enabled`)
+- **Invention tree** — 10-tech cumulative culture tree (Stone Tools → Fire → Farming/Metalworking → Writing/Medicine/Husbandry → Machinery/Electricity/Nuclear Power) riding the meme channels: individual discovery (Openness + skill gated), social spread, per-holder buffs *and* debuffs (metabolism, upkeep, crowding stress, biome pollution, radiation mutation); `InventionDiscovered`/`InventionAdopted` codex events (`inventions_enabled`)
 - **Codex** — 59 emergence detectors (extinction → herd cohesion → invention adoption → sexual selection → knowledge ratchet → affect cascades) writing a persistent event timeline
-- **Experiments** — DIT gene-culture technique model; biome climate adaptation (opt-in per scenario); runtime world dimensions + living/seasonal biomes
+- **Experiments** — DIT gene-culture technique model; biome climate adaptation (`biome_adaptation`); runtime world dimensions + living/seasonal biomes
 - **Cognition** — realized IQ (metabolic cost, era gates) evolving under selection; maladaptive practices (Inbreeding, Child Sacrifice) spread by payoff-blind transmission — the measured culture-exclusion lever (O1). `cognition_enabled` / `practices_enabled`
-- **Affect layer (mA–mF)** — primitive-brain affect (SEEK/FEAR/RAGE/LUST/CARE/PANIC/PLAY) with hijack, panic cascades, feeding frenzies, territorial rage, mass grief. Opt-in (`affect_enabled`)
-- **Knowledge accumulation (E14)** — Writing-backed per-culture tech memory that survives population bottlenecks; `KnowledgeRatchet` event. Opt-in (`knowledge_enabled`, rides `inventions_enabled`)
-- **Trade economy** — biome trade goods with bilateral barter; the late-run freeze is measured and fixed opt-in (`resources_enabled`, `conserve_goods_on_death`, `unilateral_trade` — see `docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`)
-- **Payoff-biased learning (O2b, experimental)** — model + content bias in cultural transmission. Opt-in (`payoff_biased_learning`); measured negative on the energy proxy, see `docs/superpowers/specs/2026-08-07-o2b-payoff-biased-findings.md`
-- **Sexual dimorphism (E12)** — opt-in binary sex + female mate choice: `SexualDimorphism` gene scales male upkeep/damage/display and female metabolic efficiency; `MateChoosiness` sets the female acceptance bar; `SexualSelection`/`SexRatioCollapse` codex events. Opt-in per scenario (`sexual_dimorphism_enabled`)
-- **Domestication (E13)** — Husbandry holders tame wild juvenile herbivores into penned livestock (movement override toward the owner), draw per-tick milk yields from surplus adults, and herds breed born-tamed; `AnimalDomesticated`/`LivestockHerd` codex events. Opt-in per scenario (`domestication_enabled`, rides `inventions_enabled`)
-- **Anthropogenic arms race** — scenario-tagged `culture_bearer` lineages ("humans") are perceptible to wild agents as tool-bearing threats (new sensor + evolvable `SenseCultureThreat` program node + the `Vigilance` gene's FEAR gain); the `HuntedAdaptation` codex event fires when a hunted prey lineage's armor/speed/vigilance co-rises with its culture predator's tech era/weapon damage. Opt-in per scenario (`anthro_race_enabled`, spec: `docs/superpowers/specs/2026-08-19-anthro-arms-race-design.md`)
-- **Disease & epidemiology (H1)** — crowding-seeded SIS pathogen: zoonotic spillover in dense populations, proximity spread, energy-drain mortality via the normal starve path; Medicine finally has a counter-pressure (holders are 0.25× as susceptible and recover 3×). `EpidemicOutbreak`/`MedicineContainment` codex events (61/62). Opt-in per scenario (`disease_enabled`, spec: `docs/superpowers/specs/2026-09-01-disease-epidemiology-design.md`)
-- **Vertebrate classes** — mammal/reptile founder archetypes (`mammal_grazer`, `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`) pairing class body plans with affect/cognition genome profiles: endotherm-approximated mammals (high metabolism, big-brained, social, bold) vs ectotherm-approximated reptiles (cheap idle, armored, hair-trigger freeze-fight-flight, ambush Jaws). Demo: `scenarios/mammals-vs-reptiles.toml`
+- **Affect layer (mA–mF)** — primitive-brain affect (SEEK/FEAR/RAGE/LUST/CARE/PANIC/PLAY) with hijack, panic cascades, feeding frenzies, territorial rage, mass grief (`affect_enabled`)
+- **Knowledge accumulation (E14)** — Writing-backed per-culture tech memory that survives population bottlenecks; `KnowledgeRatchet` event (`knowledge_enabled`, rides `inventions_enabled`)
+- **Trade economy** — biome trade goods with bilateral barter (`resources_enabled`, `conserve_goods_on_death`); the late-run freeze is measured, and its one-sided-exchange fix stays an experiment lever (`unilateral_trade`, off in every curated world — see `docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`)
+- **Payoff-biased learning (O2b, experimental)** — model + content bias in cultural transmission. An experiment lever (`payoff_biased_learning`, off by default); measured negative on the energy proxy, see `docs/superpowers/specs/2026-08-07-o2b-payoff-biased-findings.md`
+- **Sexual dimorphism (E12)** — binary sex + female mate choice: `SexualDimorphism` gene scales male upkeep/damage/display and female metabolic efficiency; `MateChoosiness` sets the female acceptance bar; `SexualSelection`/`SexRatioCollapse` codex events (`sexual_dimorphism_enabled`)
+- **Domestication (E13)** — Husbandry holders tame wild juvenile herbivores into penned livestock (movement override toward the owner), draw per-tick milk yields from surplus adults, and herds breed born-tamed; `AnimalDomesticated`/`LivestockHerd` codex events (`domestication_enabled`, rides `inventions_enabled`)
+- **Anthropogenic arms race** — scenario-tagged `culture_bearer` lineages ("humans") are perceptible to wild agents as tool-bearing threats (new sensor + evolvable `SenseCultureThreat` program node + the `Vigilance` gene's FEAR gain); the `HuntedAdaptation` codex event fires when a hunted prey lineage's armor/speed/vigilance co-rises with its culture predator's tech era/weapon damage (`anthro_race_enabled`; spec: `docs/superpowers/specs/2026-08-19-anthro-arms-race-design.md`)
+- **Disease & epidemiology (H1)** — crowding-seeded SIS pathogen: zoonotic spillover in dense populations, proximity spread, energy-drain mortality via the normal starve path; Medicine finally has a counter-pressure (holders are 0.25× as susceptible and recover 3×). `EpidemicOutbreak`/`MedicineContainment` codex events, 61/62 (`disease_enabled`; spec: `docs/superpowers/specs/2026-09-01-disease-epidemiology-design.md`)
+- **Vertebrate classes** — mammal/reptile founder archetypes (`mammal_grazer`, `mammal_pursuer`, `reptile_ambusher`, `reptile_basker`) pairing class body plans with affect/cognition genome profiles: endotherm-approximated mammals (high metabolism, big-brained, social, bold) vs ectotherm-approximated reptiles (cheap idle, armored, hair-trigger freeze-fight-flight, ambush Jaws). Founded as the mammal and reptile pairs in `scenarios/predator-prey.toml`
 - **Web atlas** — three.js frontend (`web/`) over a WebAssembly build of the core (`crates/anabios-wasm`): live in-browser worlds with terrain relief, genome-coloured instanced agents, combat/trade lanes, villages, markets, codex rings + feed, agent inspector, and playback of the recorded showcase replay through the same scene; the wasm run is asserted bit-identical to native (`scripts/web.sh test`)
 - **Viewer** — Godot 4.6+ client in the pixel-art style of the reference boards: streamed, autotiled ground with hand-drawn tiles, flora and 24 px creature figures, 2.5D-scaled buildings in the open-source 3/4-view convention (a roof over a front wall about a figure high, trees a little taller than the houses), village footprints in clearings (camps, thatch huts, timber-frame houses, a dominant hall, palisades, catapults, fields, burning ruins), invention workshops with the invention hung as the shop sign, market squares joined by dirt roads, a themed HUD (smooth sans by default, a 5×7 pixel font as an opt-in) with biome/species/pheromone overlays, unit card, tabbed codex (research, species, biomes, culture), event log, co-evolution charts, per-species tables behind `[P]`
 - **Tooling** — headless sweep CLI (parallel seeds → JSONL + CSV) with archive-weighted emergence scoring (`docs/emergence-corpus.md`), save/load snapshots (`docs/determinism-contract.md`), criterion benchmark suite
 
 ## Scenarios
 
-`scenarios/` holds the curated, test-pinned set (43 TOMLs) — every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate → 200 ticks, recursively over the tree) and most back a dedicated integration test, a viewer menu entry, or a gallery/showcase capture. **The full scenario → phenomenon → flag map is [`docs/scenarios.md`](docs/scenarios.md); a clone-to-finding walkthrough is [`docs/reproduce.md`](docs/reproduce.md).** Highlights:
+`scenarios/` holds twelve curated worlds, each named for its setting. The scenario schema defaults every feature knob on, so each world runs the full engine stack and lists only what it turns off (one world opts out of one subsystem; three turn the two climate levers on). Every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate → 200 ticks) and round-tripped by `tests/save_load_roundtrip.rs`, and each backs a viewer menu entry. **The full world → phenomenon → opt-out map, with each world's validation result and per-tick cost, is [`docs/scenarios.md`](docs/scenarios.md); a clone-to-finding walkthrough is [`docs/reproduce.md`](docs/reproduce.md).**
 
-| Scenario | Demonstrates |
+| World | Shows |
 |---|---|
 | `minimal.toml` | Baseline grazing world; determinism goldens |
-| `divergent.toml` / `convergent.toml` | Speciation / trait evolution |
-| `predator-prey.toml` / `trophic-cascade.toml` | Predation, arms races, cascades |
-| `war.toml` / `weapons-arms-race.toml` / `weapons-arena.toml` | Kin war, weapon coevolution |
-| `biome-trade.toml` / `geographic-trade.toml` / `settlement.toml` | Trade economies & markets |
-| `inventions.toml` / `cognitive-coevolution.toml` / `knowledge-ratchet.toml` | Invention tree, cognition, writing |
-| `dimorphism.toml` / `domestication.toml` | Sexual selection, livestock |
-| `anthro-race.toml` | Human-vs-animal arms race (`HuntedAdaptation`) |
-| `basic-needs.toml` | Thirst + sleep drives, rivers, dehydration |
-| `mammals-vs-reptiles.toml` | Vertebrate-class archetypes |
-| `out-of-africa.toml` / `out-of-africa-saga.toml` | The flagship every-feature-on arc |
-| `grand-theater.toml` / `sandbox-large.toml` | Staged & freeform large worlds |
+| `predator-prey.toml` | Predation cycles and crashes, mammal-vs-reptile niche sorting |
+| `speciation.toml` | Speciation, dialects, pheromone territories, kin cooperation |
+| `tribes.toml` | Inventions, cognition, traditions, war, domestication, epidemics, the anthropogenic arms race, thirst + sleep |
+| `markets.toml` | Settlements, trade hubs, barter economies |
+| `habitat-territories.toml` | Land/water/air habitat selection and species territories |
+| `grand-theater.toml` | Every subsystem colliding in one staged world |
+| `out-of-africa-saga.toml` / `out-of-africa-earth.toml` | The flagship dispersal arc (procedural / real-Earth map) |
+| `sandbox.toml` / `riverlands.toml` / `huge-steppe.toml` | Freeform and large-scale worlds (2048² / 4096² / 8192²) |
 
-`scenarios/experiments/` holds archived experiment suites (O1 exclusion ablations, DIT boundary suite, biome/climate variants) — kept runnable and smoke-tested, but out of the viewer menu; see `scenarios/experiments/README.md`.
+The one-feature demos and the `scenarios/experiments/` suites that preceded these worlds are retired; the configurations a test still needs live on as inline fixtures under `crates/anabios-core/tests/common/` (see "Retired experiments" in [`docs/scenarios.md`](docs/scenarios.md)).
 
 ## Testing
 
@@ -90,7 +87,7 @@ pausing the sim, and writes + prints the mean:
 
 ```bash
 scripts/viewer-bench.sh predator-prey            # 300 frames, default seed
-scripts/viewer-bench.sh continental 600 3         # 600 frames, seed 3
+scripts/viewer-bench.sh riverlands 600 3          # 600 frames, seed 3
 cat runs/viewer-bench.csv                         # header + one row/frame + a "mean" row
 ```
 
@@ -104,10 +101,10 @@ Run N seeds of a scenario in parallel and dump per-run codex events + a CSV summ
 ```bash
 cargo build --release --bin anabios-headless
 ./target/release/anabios-headless sweep \
-    --scenario scenarios/divergent.toml \
+    --scenario scenarios/speciation.toml \
     --seeds 32 --ticks 5000 \
-    --out runs/divergent-32
-cat runs/divergent-32/summary.csv
+    --out runs/speciation-32
+cat runs/speciation-32/summary.csv
 ```
 
 The summary CSV has columns `seed, ticks, final_alive, final_biomass, state_hash, extinction, pop_crash, speciation, migration, novel_module, novel_behavior, predation, combat_raid, arms_race, territory_formation, niche_partitioning, dialect_formed, meme_sweep, alarm_call, evolved_cooperation, pack_hunting, herd_cohesion, invention_discovered, invention_adopted, practice_discovered, practice_adopted, resource_traded, material_learning, sexual_selection, sex_ratio_collapse, animal_domesticated, livestock_herd, hunted_adaptation, epidemic_outbreak, medicine_containment, emergence_score, novel_events, coverage` — pipe it into a spreadsheet or a notebook to mine for rare events. The per-seed `seed_NNNNNNNN.events.jsonl` files contain the full event stream for each run.
@@ -121,11 +118,11 @@ The `demo` subcommand narrates cultural advancement between competing population
 ```bash
 cargo build --release --bin anabios-headless
 ./target/release/anabios-headless demo \
-    --scenario scenarios/inventions.toml \
+    --scenario scenarios/tribes.toml \
     --ticks 8000 --report-every 1000
 ```
 
-`scenarios/inventions.toml` seeds three populations — high-Openness **innovators**, low-Openness **traditionalists** (who rarely invent but copy what diffuses in), and an acultural control group — competing for one grazing range. Expect the innovators to climb the tree (discoveries tick ~300–2700), the traditionalists to adopt each invention a few hundred ticks later via pure social diffusion, and the control group to stay at era 0. The same scenario is in the Godot viewer's menu ("Inventions — innovators vs traditionalists") with a per-species tech panel and adoption-fraction charts.
+`scenarios/tribes.toml` founds high-Openness **innovators** (seeded with Stone Tools), low-Openness **traditionalists** (who rarely invent but copy what diffuses in) and an asocial forager control among grazer herds, armed prey and predator packs. At the scenario seed the first climbed invention (Fire) arrives around tick 950; the climb is slow and seed-dependent — a non-seeded invention is adopted on only 2 of 8 seeds within 5000 ticks, and Writing, Husbandry and Medicine not at all (see the `tribes` row in [`docs/scenarios.md`](docs/scenarios.md)); `out-of-africa-saga.toml` seeds the era-3 tech for the showcase instead. The same world is in the Godot viewer's menu ("Tribes — tools, war, traditions") with a per-species tech panel and adoption-fraction charts.
 
 ## Running the viewer
 
@@ -166,7 +163,7 @@ recorded showcase replay (`showcase/replay.js`) through the same scene.
 ```bash
 rustup target add wasm32-unknown-unknown
 scripts/web.sh build        # wasm core → web/wasm, three.js → web/vendor, scenarios → web/scenarios
-scripts/web.sh serve        # http://127.0.0.1:8080/  (?scenario=inventions&seed=3, ?replay=out-of-africa-saga)
+scripts/web.sh serve        # http://127.0.0.1:8080/  (?scenario=tribes&seed=3, ?replay=out-of-africa-saga)
 scripts/web.sh test         # node smoke test + native-vs-wasm trajectory fingerprint (bit-identical)
 ```
 
@@ -191,9 +188,11 @@ The saga timeline (`game/showcase/out-of-africa-saga.json`) narrates the out-of-
 
 ```bash
 ./target/release/anabios-headless replay \
-    --scenario scenarios/weapons-arms-race.toml \
-    --ticks 2000 --snapshot-every 250
+    --scenario scenarios/minimal.toml \
+    --ticks 300 --snapshot-every 100
 ```
+
+Each event costs its own re-simulation from the nearest snapshot, and the full-stack worlds fire thousands of events over a few thousand ticks — pass `--event <index>` to verify a single one on a long run.
 
 ## Stack
 

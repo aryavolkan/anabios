@@ -6,252 +6,78 @@ const MenuBgShader := preload("res://shaders/menu_bg.gdshader")
 const SCENARIOS: Array[Dictionary] = [
 	# Foundations
 	{
-		"label": "Foundations — Minimal (200 herbivores)",
+		"label": "Minimal — 200 herbivores",
 		"path": "res://../scenarios/minimal.toml",
 		"ground": 0,
 		"body": 0
 	},
 	{
-		"label": "Foundations — Divergent (two founders)",
-		"path": "res://../scenarios/divergent.toml",
-		"ground": 0,
-		"body": 0
-	},
-	# Milestones
-	{
-		"label": "M12 — Predator / prey",
+		"label": "Predator / prey — cycles & cascades",
 		"path": "res://../scenarios/predator-prey.toml",
 		"ground": 0,
 		"body": 2
 	},
 	{
-		"label": "E3 — Trophic cascade",
-		"path": "res://../scenarios/trophic-cascade.toml",
-		"ground": 0,
-		"body": 2
-	},
-	{
-		"label": "E4 — Disturbance (fire & succession)",
-		"path": "res://../scenarios/disturbance.toml",
-		"ground": 6,
-		"body": 0
-	},
-	{
-		"label": "E5 — Convergent evolution",
-		"path": "res://../scenarios/convergent.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{"label": "E7 — War & alliance", "path": "res://../scenarios/war.toml", "ground": 0, "body": 2},
-	{
-		"label": "E8 — Settlements & markets",
-		"path": "res://../scenarios/settlement.toml",
-		"ground": 7,
-		"body": 0
-	},
-	{
-		"label": "E9 — Traditions & institutions",
-		"path": "res://../scenarios/traditions.toml",
-		"ground": 7,
-		"body": 1
-	},
-	{
-		"label": "E12 — Sexual dimorphism",
-		"path": "res://../scenarios/dimorphism.toml",
-		"ground": 0,
-		"body": 2
-	},
-	{
-		"label": "E13 — Domestication (husbandry pens)",
-		"path": "res://../scenarios/domestication.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "M13 — Territories (pheromones)",
-		"path": "res://../scenarios/territories.toml",
-		"ground": 1,
-		"body": 0
-	},
-	{
-		"label": "M14 — Dialects (memes)",
-		"path": "res://../scenarios/dialects.toml",
+		"label": "Speciation — morphs, dialects, kin",
+		"path": "res://../scenarios/speciation.toml",
 		"ground": 1,
 		"body": 1
 	},
+	# Worlds
 	{
-		"label": "M15 — Cooperation & kin",
-		"path": "res://../scenarios/cooperation.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Gene–culture (baseline)",
-		"path": "res://../scenarios/gene-culture.toml",
+		"label": "Tribes — tools, war, traditions",
+		"path": "res://../scenarios/tribes.toml",
 		"ground": 0,
 		"body": 1
 	},
 	{
-		"label": "Gene–culture — Skill",
-		"path": "res://../scenarios/gene-culture-skill.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "Gene–culture — Hunt",
-		"path": "res://../scenarios/gene-culture-hunt.toml",
-		"ground": 0,
-		"body": 2
-	},
-	{
-		"label": "Gene–culture — Alarm",
-		"path": "res://../scenarios/gene-culture-alarm.toml",
-		"ground": 1,
-		"body": 1
-	},
-	# Invention tree
-	{
-		"label": "Inventions — innovators vs traditionalists",
-		"path": "res://../scenarios/inventions.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "Cognitive — IQ, tech & bad ideas",
-		"path": "res://../scenarios/cognitive-coevolution.toml",
-		"ground": 0,
-		"body": 1
-	},
-	{
-		"label": "TG — Gene↔tech coupling (soft selection)",
-		"path": "res://../scenarios/tech-gene-coupling.toml",
-		"ground": 0,
-		"body": 1
-	},
-	# Grand theater
-	{
-		"label": "Grand — Out of Africa (every feature on)",
-		"path": "res://../scenarios/out-of-africa.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Grand — Out of Africa saga (full scale)",
-		"path": "res://../scenarios/out-of-africa-saga.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Grand — Theater (staged emergence)",
-		"path": "res://../scenarios/grand-theater.toml",
-		"ground": 0,
-		"body": 0
-	},
-	# Sandbox worlds
-	{
-		"label": "Sandbox — Large (2048², 6k cap)",
-		"path": "res://../scenarios/sandbox-large.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Sandbox — Coevolution (tech tree)",
-		"path": "res://../scenarios/sandbox-coevolution.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Sandbox — Living coevolution (gene vs culture)",
-		"path": "res://../scenarios/living-sandbox-coevolution.toml",
-		"ground": 0,
-		"body": 0
-	},
-	# Biome & trade
-	{
-		"label": "Biome — Climate adaptation",
-		"path": "res://../scenarios/biome-adaptation.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Trade — Biome goods economy",
-		"path": "res://../scenarios/biome-trade.toml",
+		"label": "Markets — settlements & trade",
+		"path": "res://../scenarios/markets.toml",
 		"ground": 7,
 		"body": 0
 	},
 	{
-		"label": "Trade — Geographic junction",
-		"path": "res://../scenarios/geographic-trade.toml",
-		"ground": 7,
-		"body": 0
-	},
-	# Behavior & cognition
-	{
-		"label": "Behavior — Foraging selection",
-		"path": "res://../scenarios/foraging-selection.toml",
-		"ground": 0,
-		"body": 2
-	},
-	{
-		"label": "Behavior — Tool users",
-		"path": "res://../scenarios/tool-users.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Behavior — Affect: seeking",
-		"path": "res://../scenarios/affect-seeking.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Behavior — Affect: social",
-		"path": "res://../scenarios/affect-social.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Behavior — Affect: threat",
-		"path": "res://../scenarios/affect-threat.toml",
-		"ground": 0,
-		"body": 0
-	},
-	{
-		"label": "Behavior — Mammals vs reptiles (affect classes)",
-		"path": "res://../scenarios/mammals-vs-reptiles.toml",
-		"ground": 0,
-		"body": 2
-	},
-	{
-		"label": "Behavior — Grazers & wolves (moods)",
-		"path": "res://../scenarios/grazers-and-wolves.toml",
-		"ground": 0,
-		"body": 5
-	},
-	{
-		"label": "Behavior — Habitat & territories (land/sea/air)",
+		"label": "Habitat — land / sea / air territories",
 		"path": "res://../scenarios/habitat-territories.toml",
 		"ground": 8,
 		"body": 0
 	},
 	{
-		"label": "Cognitive — Knowledge ratchet (writing)",
-		"path": "res://../scenarios/knowledge-ratchet.toml",
+		"label": "Grand theater — staged emergence",
+		"path": "res://../scenarios/grand-theater.toml",
 		"ground": 0,
-		"body": 1
-	},
-	# War & weapons
-	{
-		"label": "War — Weapons arena",
-		"path": "res://../scenarios/weapons-arena.toml",
-		"ground": 0,
-		"body": 2
+		"body": 0
 	},
 	{
-		"label": "War — Weapons arms race",
-		"path": "res://../scenarios/weapons-arms-race.toml",
+		"label": "Out of Africa — the saga",
+		"path": "res://../scenarios/out-of-africa-saga.toml",
 		"ground": 0,
-		"body": 2
+		"body": 0
+	},
+	{
+		"label": "Out of Africa — Earth (4096)",
+		"path": "res://../scenarios/out-of-africa-earth.toml",
+		"ground": 0,
+		"body": 0
+	},
+	# Scale
+	{
+		"label": "Sandbox — 2048², 8k cap",
+		"path": "res://../scenarios/sandbox.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Riverlands — 4096 continents",
+		"path": "res://../scenarios/riverlands.toml",
+		"ground": 0,
+		"body": 0
+	},
+	{
+		"label": "Huge steppe — 8192 scale test",
+		"path": "res://../scenarios/huge-steppe.toml",
+		"ground": 0,
+		"body": 0
 	},
 ]
 

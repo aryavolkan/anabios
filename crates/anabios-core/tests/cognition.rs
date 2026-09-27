@@ -1,8 +1,8 @@
-//! End-to-end determinism for the flag-ON cognitive gene–culture scenario.
-//! `determinism.rs` only locks the flag-OFF minimal scenario and `inventions.rs`
-//! the inventions demo; this pins the cognitive layer's actual behavior (IQ
-//! development, IQ-gated acquisition, practice discovery/spread, reproductive
-//! effects) so it cannot drift silently.
+//! End-to-end determinism for the cognitive gene–culture layer on `tribes`
+//! (which absorbed `cognitive-coevolution.toml`; the full stack keeps both
+//! `cognition_enabled` and `inventions_enabled` on). This pins the cognitive
+//! layer's actual behavior (IQ development, IQ-gated acquisition, practice
+//! discovery/spread, reproductive effects) so it cannot drift silently.
 
 use anabios_core::codex::EventType;
 use anabios_core::scenario::Scenario;
@@ -11,7 +11,7 @@ use anabios_core::tick::step;
 
 mod common;
 
-const SCENARIO: &str = include_str!("../../../scenarios/cognitive-coevolution.toml");
+const SCENARIO: &str = include_str!("../../../scenarios/tribes.toml");
 
 #[test]
 fn cognitive_scenario_parses_with_both_flags() {
@@ -160,7 +160,11 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // 43→44): added World.territory_enabled + World.species_territories
     // (empty with the flag off). Layout growth only — trajectory proven
     // unchanged by tests/determinism.rs::*_trajectory_unchanged_by_territory_substrate.
-    &[(0, 0x5c06b73b2d4da2e0), (100, 0x24a567ab39108b14), (300, 0xa1193c5b9d5a5835)];
+    // Re-pinned 2026-09-26 (scenario consolidation): `cognitive-coevolution.toml`
+    // was retired into `tribes.toml`, and the scenario schema now defaults every
+    // feature on; the flag-off engine is pinned separately by the
+    // `*_trajectory_is_pinned` guards, which did not move.
+    &[(0, 0x808d1ec15075dd36), (100, 0x3ee6c678fbb566a1), (300, 0x3cd95619247dfc8d)];
 
 #[test]
 fn cognitive_scenario_matches_golden_hashes() {
@@ -169,17 +173,26 @@ fn cognitive_scenario_matches_golden_hashes() {
 
 /// The demo's promise: with cognition on, both beneficial tech and maladaptive
 /// practices appear in the codex event stream within a few hundred ticks.
+/// Only inventions nobody held at t0 count: `tribes` seeds Stone Tools, whose
+/// Discovered / Adopted latches fire on the seeding at tick 0 (the first
+/// climbed invention, Fire, arrives at tick 947 on this seed).
 #[test]
 fn cognitive_scenario_produces_invention_and_practice_events() {
     let s = Scenario::parse_toml(SCENARIO).expect("parse cognitive scenario");
+    // No population cap here: the loop stops at the first climbed invention,
+    // and a lower cap only delays it (tick 1159 under a 500 cap set after
+    // `instantiate`, 2310 under one set before it, 947 uncapped).
     let mut w = s.instantiate();
+    let seeded = common::inventions_held(&w);
     let mut saw_invention = false;
     let mut saw_practice = false;
     for _ in 0..5000 {
         step(&mut w);
         for ev in w.codex.drain_events() {
             match ev.event_type {
-                EventType::InventionDiscovered | EventType::InventionAdopted => {
+                EventType::InventionDiscovered | EventType::InventionAdopted
+                    if !seeded.contains(&(ev.value as usize)) =>
+                {
                     saw_invention = true
                 }
                 EventType::PracticeDiscovered | EventType::PracticeAdopted => saw_practice = true,
@@ -195,7 +208,7 @@ fn cognitive_scenario_produces_invention_and_practice_events() {
 }
 
 /// Realized IQ actually develops above zero in the cognitive scenario. This is
-/// the non-triviality precondition that keeps `cognition_roundtrip` (in
+/// the non-triviality precondition that keeps `tribes_roundtrip` (in
 /// `save_load_roundtrip.rs`) honest — a round-trip over an all-zero IQ column
 /// would pass vacuously.
 #[test]

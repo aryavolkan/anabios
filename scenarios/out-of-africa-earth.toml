@@ -1,8 +1,9 @@
 name = "out-of-africa-earth"
 seed = 318
 
-# OUT OF AFRICA — REAL EARTH. The full out-of-africa subsystem stack on a real
-# Earth map (world_map = "earth"): real elevation + temperature + precipitation
+# OUT OF AFRICA — REAL EARTH. Runs the full stack (see docs/scenarios.md);
+# opt-outs: none — on a real Earth map (world_map = "earth"): real elevation
+# + temperature + precipitation
 # rasters (assets/earth/, built by scripts/build_earth_map.py) drive the biome
 # field through the existing Whittaker classify(). Founding lineages are placed
 # on real coordinates with `geo`: the cognitive cradle in equatorial East
@@ -10,9 +11,10 @@ seed = 318
 # African exits (Sinai / Bab-el-Mandeb, Gibraltar). Equirectangular; E-W wraps
 # (dateline), poles are ice at the y-edges.
 #
-# This is `out-of-africa.toml`'s population and lineage composition (same
-# counts, same traits) re-anchored from the procedural grand-theater map onto
-# real coordinates — the two scenarios differ ONLY in geography. Placements
+# This is `out-of-africa-saga.toml`'s non-seeded founder composition (same
+# counts, same traits, no `starting_inventions`) re-anchored from the
+# procedural grand-theater map onto real coordinates — the two scenarios
+# differ ONLY in geography (and the saga's two showcase seeds). Placements
 # were land-verified against assets/earth/elevation.u8 before landing (every
 # cluster center is LAND; each cluster disk sampled >=78% land, most >=90%).
 #
@@ -35,7 +37,7 @@ seed = 318
 # The exodus is emergent, not scripted: agents forage, trade, and settle their
 # way out through the real African corridors (Sinai/Bab-el-Mandeb toward
 # Arabia, Gibraltar toward Iberia) under the same DIT/cognition/war/
-# domestication stack as `out-of-africa.toml`. Watch Migration /
+# domestication stack as `out-of-africa-saga.toml`. Watch Migration /
 # CorridorUse / RangeExpansion / SpeciationEvent for the trek,
 # MaterialLearning / InventionDiscovered / AnimalDomesticated for the
 # technology arc, and SexualSelection on the hominid lineages.
@@ -71,21 +73,6 @@ world_map = "earth"
 
 env_period = 400
 climate_drift_rate = 0.00005
-season_period = 2000
-biome_adaptation = true
-living_biome = true
-nutrient_variation = true
-soil_fertility = true
-disasters_enabled = true
-terrain_habitat = true
-resources_enabled = true
-settlement_enabled = true
-inventions_enabled = true
-gene_tech_coupling = true
-cognition_enabled = true
-war_enabled = true
-sexual_dimorphism_enabled = true
-domestication_enabled = true
 
 # ---------------------------------------------------------------------------
 # THE CRADLE — equatorial East Africa (lat 0.5, lon 37.0: Kenya/Ethiopia

@@ -1,8 +1,9 @@
 //! Disease subsystem (flag `disease_enabled`): scenario wiring, flag-off
 //! no-op, end-to-end outbreak in a crowded world, medicine A/B recovery,
 //! sparse-world negative, save/load round-trip, and the release-gated
-//! emergence check that `scenarios/disease.toml` fires `EpidemicOutbreak`
-//! across seeds (spec: `docs/superpowers/specs/2026-09-01-disease-epidemiology-design.md`).
+//! emergence check that `scenarios/tribes.toml` (which absorbed
+//! `disease.toml`) fires `EpidemicOutbreak` across seeds
+//! (spec: `docs/superpowers/specs/2026-09-01-disease-epidemiology-design.md`).
 
 use anabios_core::codex::EventType;
 use anabios_core::genome::Genome;
@@ -13,7 +14,7 @@ use anabios_core::world::World;
 
 mod common;
 
-const SCENARIO: &str = include_str!("../../../scenarios/disease.toml");
+const SCENARIO: &str = include_str!("../../../scenarios/tribes.toml");
 
 /// Tight cluster of `n` same-species agents around (512, 512).
 fn clustered_world(seed: u64, n: usize, disease: bool) -> World {
@@ -42,10 +43,14 @@ fn total_infection(w: &World) -> f32 {
     w.agents.iter_alive().map(|id| w.agents.infection[id as usize]).sum()
 }
 
+// Fixture: `tribes` absorbed disease.toml but no world seeds a Medicine band
+// (0 holders at t0 on tribes), so the retired two-band wiring is kept.
 #[test]
 fn scenario_instantiates_with_flags_and_medicine_held() {
     use anabios_core::invention::{has, MEDICINE};
-    let w = Scenario::parse_toml(SCENARIO).expect("parse disease").instantiate();
+    let w = Scenario::parse_toml(&common::fixtures::disease_flag_off())
+        .expect("parse disease fixture")
+        .instantiate();
     assert!(w.disease_enabled && w.inventions_enabled);
     // Two bands: 150 susceptible grazers (no medicine) + 60 innovators
     // (seeded with the full era-3 chain). Exactly the innovators hold Medicine.
@@ -217,8 +222,8 @@ fn disease_state_survives_save_load_step() {
     common::assert_roundtrip_world(&mut w, "disease");
 }
 
-/// Emergence: the dense seeded medicine culture spills over, outbreaks, and
-/// resolves — `EpidemicOutbreak` must fire across seeds. Release-gated:
+/// Emergence: the dense tribes world spills over, outbreaks, and resolves —
+/// `EpidemicOutbreak` must fire across seeds. Release-gated:
 /// spillover is rare per-tick (`SPILLOVER_P`), so this needs the long horizon.
 #[cfg_attr(debug_assertions, ignore = "release-only emergence test")]
 #[test]

@@ -1,6 +1,8 @@
 //! World generation: the climate/earth/continental field generators and the
 //! biome-derived agent traits that read them. One module per former binary.
 
+mod common;
+
 mod earth_worldgen {
     use anabios_core::biome::{BiomeField, TerrainType, EARTH_RES};
 
@@ -133,14 +135,24 @@ mod continental_worldgen {
         }
     }
 
+    // `riverlands` absorbed `continental.toml` (its 4096 continents + rivers).
     #[test]
     fn continental_scenario_loads_and_runs_deterministically() {
         let toml = std::fs::read_to_string(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../scenarios/continental.toml"
+            "/../../scenarios/riverlands.toml"
         ))
-        .expect("read continental.toml");
-        let scenario = Scenario::parse_toml(&toml).expect("parse");
+        .expect("read riverlands.toml");
+        let mut scenario = Scenario::parse_toml(&toml).expect("parse");
+        // Replaying identically does not depend on population: every founder
+        // cohort at a quarter of its count under a 500 cap (set before
+        // `instantiate`, so each lineage's `max_share` scales), which keeps
+        // the two full-stack 200-tick runs short in a debug build. The
+        // continent and river network are generated in full either way.
+        for spec in &mut scenario.agents {
+            spec.count = spec.count.div_ceil(4);
+        }
+        scenario.max_population = Some(500);
         let mut a = scenario.instantiate();
         let mut b = scenario.instantiate();
         for _ in 0..200 {
@@ -156,20 +168,29 @@ mod biome_adaptation {
     //! With biome_adaptation on, populations evolve a spatial EnvAffinity cline
     //! matched to the local climate — agents in high-climate cells carry higher
     //! affinity than those in low-climate cells (in-place local adaptation).
+    //! Runs on `predator-prey`, which absorbed `biome-adaptation.toml`.
 
     use anabios_core::genome::GenomeSlot;
     use anabios_core::scenario::Scenario;
     use anabios_core::tick::step;
 
-    const SCENARIO: &str = include_str!("../../../scenarios/biome-adaptation.toml");
+    const SCENARIO: &str = include_str!("../../../scenarios/predator-prey.toml");
 
     #[test]
     fn affinity_cline_tracks_local_climate() {
-        let mut w = Scenario::parse_toml(SCENARIO).expect("parse").instantiate();
+        // Every founder cohort at half its count under a 300 cap (set before
+        // `instantiate`, so each lineage's `max_share` scales): 2500
+        // full-stack ticks were one of the suite's longest debug tests, and
+        // the cline this test asserts forms well below that size — measured
+        // at release, the high-minus-low EnvAffinity gap is 0.12 here against
+        // 0.06 under the previous post-`instantiate` 500 cap.
+        let mut s = Scenario::parse_toml(SCENARIO).expect("parse");
+        for spec in &mut s.agents {
+            spec.count = spec.count.div_ceil(2);
+        }
+        s.max_population = Some(300);
+        let mut w = s.instantiate();
         assert!(w.biome_adaptation);
-        // Clamp the cap: 2500 ticks at the default 10k cap is minutes-slow; the
-        // cline signal this test asserts forms well below 500 agents.
-        w.max_population = 500;
         for _ in 0..2500 {
             step(&mut w);
         }
@@ -210,7 +231,7 @@ mod nutrient_fertility {
     use anabios_core::tick::step;
 
     const MINIMAL: &str = include_str!("../../../scenarios/minimal.toml");
-    const FORAGING: &str = include_str!("../../../scenarios/foraging-selection.toml");
+    const FORAGING: &str = include_str!("../../../scenarios/predator-prey.toml");
 
     #[test]
     fn generated_fields_land_in_range() {
@@ -229,12 +250,15 @@ mod nutrient_fertility {
         }
     }
 
-    /// With both flags OFF (default), the nutrient_quality/fertility field VALUES
+    /// With both flags OFF, the nutrient_quality/fertility field VALUES
     /// must not influence simulation dynamics: mutating them to extremes leaves the
     /// biomass trajectory and agent energies bit-identical.
+    // Fixture: `minimal` now runs the full stack (both flags on); the pre-flip
+    // flag-off copy is the flags-off world this inertness check needs.
     #[test]
     fn fields_are_inert_when_flags_off() {
-        let base = Scenario::parse_toml(MINIMAL).expect("parse");
+        let base =
+            Scenario::parse_toml(&crate::common::fixtures::minimal_flag_off()).expect("parse");
         let mut a = base.clone().instantiate();
         let mut b = base.instantiate();
         assert!(!b.nutrient_variation && !b.soil_fertility);
@@ -319,15 +343,24 @@ mod nutrient_fertility {
         );
     }
 
-    /// End-to-end: the foraging-selection scenario (both flags on) runs without
+    /// End-to-end: `predator-prey` (which absorbed the foraging-selection
+    /// scenario; both flags on by default) runs without
     /// collapsing and the forage-gain observables are computable. The scientific
     /// result (does the gain rise over generations?) is read from a long
     /// `emergence.sh soak` run, not asserted here.
     #[test]
     fn foraging_scenario_runs_and_metrics_are_finite() {
-        let mut w = Scenario::parse_toml(FORAGING).expect("parse").instantiate();
+        // Finite metrics and a live population do not depend on scale: every
+        // founder cohort at a quarter of its count under a 500 cap (set
+        // before `instantiate`, so each lineage's `max_share` scales) keeps
+        // the 300 full-stack ticks short in a debug build.
+        let mut s = Scenario::parse_toml(FORAGING).expect("parse");
+        for spec in &mut s.agents {
+            spec.count = spec.count.div_ceil(4);
+        }
+        s.max_population = Some(500);
+        let mut w = s.instantiate();
         assert!(w.nutrient_variation && w.soil_fertility, "flags must be on");
-        w.max_population = 500; // keep the run fast
         for _ in 0..300 {
             step(&mut w);
         }

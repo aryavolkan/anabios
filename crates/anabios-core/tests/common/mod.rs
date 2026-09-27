@@ -6,6 +6,8 @@
 
 #![allow(dead_code)]
 
+pub mod fixtures;
+
 use anabios_core::codex::EventType;
 use anabios_core::scenario::Scenario;
 use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
@@ -34,6 +36,20 @@ pub fn world_after(src: &str, ticks: u64) -> World {
 /// Codex events of `kind` currently in the ring buffer.
 pub fn count_events(w: &World, kind: EventType) -> usize {
     w.codex.events.iter().filter(|e| e.event_type == kind).count()
+}
+
+/// Inventions any live agent holds right now — called on a freshly
+/// instantiated world, the set a scenario seeds through `starting_inventions`.
+/// Detector checks exclude these: a seeded invention's first-holder / adoption
+/// / tradition latch fires on the seeding itself, not on climbing the tree.
+pub fn inventions_held(w: &World) -> Vec<usize> {
+    (0..anabios_core::invention::INVENTION_COUNT)
+        .filter(|&k| {
+            w.agents
+                .iter_alive()
+                .any(|id| anabios_core::invention::has(&w.agents.meme_vector[id as usize], k))
+        })
+        .collect()
 }
 
 /// Horizon scaled for coverage instrumentation. `cargo llvm-cov` sets

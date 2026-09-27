@@ -1,23 +1,97 @@
+# Predator / prey: a grazer herd and its stalkers at the centre, a mammal
+# grazer/pursuer pair to the north, a reptile ambusher/basker pair to the
+# east, and a thin background of unspecialised foragers. Shows predation
+# cycles and population crashes (PopCrash), the trophic cascade when the
+# predators collapse, mammal-vs-reptile niche sorting on the drier east, and
+# foraging / climate-affinity selection in the background stock. Runs the
+# full stack. Absorbed: trophic-cascade, grazers-and-wolves,
+# mammals-vs-reptiles, foraging-selection, biome-adaptation.
+#
+# Validation (8 seeds x 5000 ticks, full stack): predation by both the
+# stalkers and the pursuers, PopCrash and the E3 population-dynamics family
+# fire on 8/8 seeds and every breeding founder kind survives on 6/8; the
+# stalker kit carries no Reproductive module, so the stalkers act for one
+# founder lifetime and die out by design. TrophicCascade itself fires on 0/8
+# seeds (see docs/scenarios.md, Validation). The showcase deck pins seed 14,
+# which fires Predation, PopCrash, CarryingCap and PopCycle early.
 name = "predator-prey"
 seed = 0
-cognition_enabled = true
-# Cap living agents so the windowed viewer stays fluent (default is 10000).
 max_population = 2000
 
-# Prey: a herd of grazers clustered in the middle of the world.
+[climate]
+moisture_bias = -0.1
+
 [[agents]]
 count = 60
 archetype = "grazer"
 placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+max_share = 0.25
 [agents.traits]
 size = 0.5
 lifespan_bias = 1.0
 
-# Predators: a handful of stalkers seeded into the same region.
 [[agents]]
-count = 8
+count = 10
 archetype = "stalker"
 placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
+max_share = 0.08
 [agents.traits]
 size = 0.7
 lifespan_bias = 1.0
+
+[[agents]]
+count = 80
+archetype = "mammal_grazer"
+placement = { kind = "cluster", center_x = 340.0, center_y = 300.0, radius = 70.0 }
+max_share = 0.2
+[agents.traits]
+size = 0.4
+lifespan_bias = 1.0
+env_affinity = 0.5
+reproduction_threshold = 0.5
+mutation_rate = 0.3
+
+# The pursuer pack is seeded onto the mammal grazer herd it hunts
+# (`near_spec`, spec 2 — the riverlands technique) at 30 founders with a 10%
+# share. The validation sweep (8 seeds x 5000 ticks, full stack): 14
+# founders clustered 100 units north of the herd dip under ten hunters by
+# tick 1500 on 5/8 seeds (riverlands measured the pack's Allee floor near
+# ten) and die out on 4/8; seeded on the herd at 30 they persist on 7/8.
+[[agents]]
+count = 30
+archetype = "mammal_pursuer"
+placement = { kind = "near_spec", spec = 2, radius = 50.0 }
+max_share = 0.1
+[agents.traits]
+size = 0.65
+lifespan_bias = 1.0
+env_affinity = 0.5
+reproduction_threshold = 0.4
+
+[[agents]]
+count = 80
+archetype = "reptile_basker"
+placement = { kind = "cluster", center_x = 684.0, center_y = 340.0, radius = 70.0 }
+max_share = 0.2
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+env_affinity = 0.8
+
+[[agents]]
+count = 24
+archetype = "reptile_ambusher"
+placement = { kind = "cluster", center_x = 684.0, center_y = 512.0, radius = 50.0 }
+max_share = 0.06
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+env_affinity = 0.8
+
+[[agents]]
+count = 150
+placement = { kind = "uniform" }
+max_share = 0.15
+[agents.traits]
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

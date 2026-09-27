@@ -1,3 +1,6 @@
+# Minimal: a single archetype-free lineage scattered uniformly. The fast
+# smoke scenario the golden-hash determinism test pins on. Runs the full
+# stack (see docs/scenarios.md); opt-outs: none.
 name = "minimal"
 seed = 12345
 # Pin the cap so the golden-hash determinism test stays fast and stable.

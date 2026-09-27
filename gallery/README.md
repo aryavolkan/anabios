@@ -231,10 +231,15 @@ only, so both close-ups sit early.
 (`ZOOM`/`X`/`Y` are `ANABIOS_CAM_*`; `TICKS`/`FRAMES` are `ANABIOS_SHOT_*`.)
 
 Reproduce from `game/` — needs the real renderer, `--headless` hangs at
-`frame_post_draw` under the dummy driver:
+`frame_post_draw` under the dummy driver. These stills were captured on
+`weapons-arms-race.toml`, since retired into `tribes.toml` (which founds the
+same grazer and herd prey, stalkers, spiners and bruisers among its other
+lineages); the camera and tick
+values below framed that world, so the exact frames come back only on a
+checkout of commit `16d9731`. The same capture on `tribes`:
 
 ```
-ANABIOS_SHOT=out.png ANABIOS_SCENARIO="res://../scenarios/weapons-arms-race.toml" \
+ANABIOS_SHOT=out.png ANABIOS_SCENARIO="res://../scenarios/tribes.toml" \
   ANABIOS_CAM_ZOOM=4.5 ANABIOS_CAM_X=695 ANABIOS_CAM_Y=340 \
   ANABIOS_SHOT_TICKS=27 ANABIOS_SHOT_FRAMES=1 \
   godot --path . res://scenes/main.tscn
@@ -259,8 +264,10 @@ selection" small-multiple plots the holder−nonholder differential over time.
 | coupling-t4001-coevo-selection.png | 4031 | Same run with the [Y] chart: all 10 inventions in the era-split adoption charts, and the ±1 "gene↔tech selection" panel catching Δfarming's green positive bump mid-sweep (zero line = no differential; flat zeros pre-adoption, not spurious negatives). |
 
 Reproduce: `ANABIOS_HELIX=1` / `ANABIOS_COEVO=1` with
-`ANABIOS_SCENARIO="res://../scenarios/tech-gene-coupling.toml"`,
-`ANABIOS_SHOT_TICKS=4000 ANABIOS_SHOT_FRAMES=30`.
+`ANABIOS_SCENARIO="res://../scenarios/tribes.toml"`,
+`ANABIOS_SHOT_TICKS=4000 ANABIOS_SHOT_FRAMES=30`. (The stills were captured
+on `tech-gene-coupling.toml`, since retired into `tribes.toml`, which runs
+the same coupling among more lineages — expect different adoption levels.)
 
 ## classic scenarios
 
@@ -300,16 +307,20 @@ Reproduce from `game/` (windowed, `--headless` hangs on `frame_post_draw`).
 No `ANABIOS_SEED` here on purpose: the viewer always loads a scenario through
 `load_scenario_with_seed(text, GameConfig.seed)`, so the TOML's `seed = 0` is
 replaced by the viewer default 12345 — which is the seed both stills were
-captured on.
+captured on. `grazers-and-wolves.toml` has since been retired into
+`predator-prey.toml` (its herd and pack are the mammal grazer/pursuer pair
+to the north),
+so the commands below run the mood mode on `predator-prey` and do not
+reproduce these exact frames; those need a checkout of commit `16d9731`.
 
 ```
 ANABIOS_BODY=5 ANABIOS_CAM_FIT=1 \
-  ANABIOS_SCENARIO="res://../scenarios/grazers-and-wolves.toml" \
+  ANABIOS_SCENARIO="res://../scenarios/predator-prey.toml" \
   ANABIOS_SHOT=wolves-t000-grazing.png \
   godot --path . res://scenes/main.tscn
 
 ANABIOS_BODY=5 ANABIOS_CAM_FIT=1 \
-  ANABIOS_SCENARIO="res://../scenarios/grazers-and-wolves.toml" \
+  ANABIOS_SCENARIO="res://../scenarios/predator-prey.toml" \
   ANABIOS_SHOT_TICKS=150 ANABIOS_SHOT=wolves-t150-hunt.png \
   godot --path . res://scenes/main.tscn
 ```

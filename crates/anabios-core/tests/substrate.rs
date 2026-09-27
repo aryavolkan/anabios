@@ -1,6 +1,8 @@
 //! Core substrate invariants: feeding, reproduction, speciation, module
 //! gating, and the codex/serde audits. One module per former binary.
 
+mod common;
+
 mod feeding {
     //! Integration test: a herbivore population on grass survives 500 ticks
     //! without total collapse or runaway plant blow-up.
@@ -43,12 +45,13 @@ mod feeding {
 mod speciation {
     //! Integration test: two genetically-distant founder populations should be
     //! recognized as separate species by the first time `species_step` runs
-    //! (tick 200) or shortly after.
+    //! (tick 200) or shortly after. Runs on `speciation`, which absorbed the
+    //! divergent scenario's two body-size morphs.
 
     use anabios_core::scenario::Scenario;
     use anabios_core::tick::step;
 
-    const SCENARIO: &str = include_str!("../../../scenarios/divergent.toml");
+    const SCENARIO: &str = include_str!("../../../scenarios/speciation.toml");
 
     #[test]
     fn distant_founder_populations_become_separate_species() {
@@ -57,6 +60,10 @@ mod speciation {
         // The split is genetic, not population-driven — cap population so the run
         // stays fast under the raised 10k default.
         world.max_population = 500;
+        // Every archetype founder already has its own species row (placeholder
+        // parent `Some(0)`), so only rows allocated after instantiation are
+        // splits. The two body-size morphs share archetype-free species 0.
+        let founders = world.species_parents.len();
 
         // Run past the first speciation event (200 ticks) plus a buffer for
         // the algorithm to recognize the split.
@@ -64,17 +71,31 @@ mod speciation {
             step(&mut world);
         }
 
-        // At least two non-empty species expected.
-        let non_empty: usize = world.species_member_counts.iter().filter(|&&c| c > 0).count();
+        // The morph stock's family: species 0 plus every row allocated after
+        // instantiation whose parent chain reaches 0 before any founder.
+        let from_morph_stock = |sid: usize| {
+            let mut cur = sid;
+            while cur >= founders {
+                match world.species_parents[cur] {
+                    Some(p) => cur = p as usize,
+                    None => return false,
+                }
+            }
+            cur == 0
+        };
+        let family: Vec<usize> =
+            (0..world.species_parents.len()).filter(|&sid| from_morph_stock(sid)).collect();
+
+        // At least two non-empty species expected in the morph stock's family.
+        let non_empty = family.iter().filter(|&&sid| world.species_member_counts[sid] > 0).count();
         assert!(
             non_empty >= 2,
-            "expected speciation, got species member counts {:?}",
+            "expected the morph stock to speciate: family {family:?}, member counts {:?}",
             world.species_member_counts,
         );
 
-        // At least one species has a recorded parent (non-founder).
-        let any_child = world.species_parents.iter().any(|p| p.is_some());
-        assert!(any_child, "no non-founder species recorded in phylogeny");
+        // At least one of them is a recorded split (a non-founder row).
+        assert!(family.iter().any(|&sid| sid >= founders), "no split of the morph stock recorded");
     }
 }
 
@@ -86,11 +107,18 @@ mod reproduction {
     use anabios_core::scenario::Scenario;
     use anabios_core::tick::step;
 
-    const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
+    // Fixture: both claims are engine-substrate ones (births replace deaths;
+    // one flag gates its own counters), and on the full-stack `minimal` each
+    // ran for over ten minutes in a debug build (5000 and 2 × 2000 ticks with
+    // every subsystem on). The pre-flip flag-off copy is the world they were
+    // written for.
+    fn scenario_text() -> String {
+        crate::common::fixtures::minimal_flag_off()
+    }
 
     #[test]
     fn population_sustains_past_one_lifespan() {
-        let scenario = Scenario::parse_toml(SCENARIO).expect("parse");
+        let scenario = Scenario::parse_toml(&scenario_text()).expect("parse");
         let mut world = scenario.instantiate();
         // Sustaining a population past a lifespan doesn't need scale — cap it so the
         // 5,000-tick run stays fast under the raised 10k default.
@@ -117,12 +145,15 @@ mod reproduction {
     /// credited surviving births to parents.
     #[test]
     fn birth_outcome_counters_are_flag_gated() {
-        let scenario = Scenario::parse_toml(SCENARIO).expect("parse");
+        let scenario = Scenario::parse_toml(&scenario_text()).expect("parse");
 
         let mut on = scenario.instantiate();
         on.repro_biased_learning = true;
         on.max_population = 500;
         let mut off = scenario.instantiate();
+        // Off in the fixture already; set explicitly so the control arm's
+        // meaning does not rest on the fixture.
+        off.repro_biased_learning = false;
         off.max_population = 500;
 
         for _ in 0..2_000 {
@@ -210,14 +241,15 @@ mod module_gating {
 }
 
 mod codex_events {
-    //! Integration test: codex emits SpeciationEvent on a divergent scenario
-    //! where two distant founder populations are forced to split.
+    //! Integration test: codex emits SpeciationEvent on `speciation` (which
+    //! absorbed the divergent scenario) where two distant founder populations
+    //! are forced to split; the affect showcase check runs on `tribes`.
 
     use anabios_core::codex::EventType;
     use anabios_core::scenario::Scenario;
     use anabios_core::tick::step;
 
-    const SCENARIO: &str = include_str!("../../../scenarios/divergent.toml");
+    const SCENARIO: &str = include_str!("../../../scenarios/speciation.toml");
 
     #[test]
     fn divergent_scenario_emits_speciation_event() {
@@ -227,13 +259,20 @@ mod codex_events {
         // cap population so the test stays fast under the raised 10k default.
         world.max_population = 500;
 
+        // Only splits of the morph stock (archetype-free species 0) count; the
+        // other lineages' splits are not the divergent pair's.
+        let founders = world.species_parents.len();
+
         // 400 ticks is well past the first species_step (at tick 200).
         for _ in 0..400 {
             step(&mut world);
         }
 
-        let saw_speciation =
-            world.codex.events.iter().any(|ev| ev.event_type == EventType::SpeciationEvent);
+        let saw_speciation = world.codex.events.iter().any(|ev| {
+            ev.event_type == EventType::SpeciationEvent
+                && ev.species_id as usize >= founders
+                && world.species_parents[ev.species_id as usize] == Some(0)
+        });
         assert!(
             saw_speciation,
             "expected at least one SpeciationEvent; got {:?}",
@@ -241,7 +280,7 @@ mod codex_events {
         );
     }
 
-    const AFFECT_SHOWCASE: &str = include_str!("../../../scenarios/affect-showcase.toml");
+    const AFFECT_SHOWCASE: &str = include_str!("../../../scenarios/tribes.toml");
 
     #[test]
     fn affect_showcase_emits_an_affect_event() {
@@ -279,13 +318,14 @@ mod serde_skip_audit {
     use anabios_core::snapshot::{load_from_bytes, save_to_bytes, state_hash};
     use anabios_core::tick::step;
 
-    /// A pheromone-active + domestication scenario, warmed so both documented
+    /// A pheromone-active + domestication scenario (`tribes`, which absorbed
+    /// `domestication.toml`), warmed so both documented
     /// re-derivation caches are non-default: after load, `track_livestock` must
     /// be re-derived from the persisted flag (not left false) and the pheromone
     /// nonzero cache must match a fresh recompute (decay would no-op otherwise).
     #[test]
     fn load_rederives_skipped_caches() {
-        let mut w = Scenario::parse_toml(include_str!("../../../scenarios/domestication.toml"))
+        let mut w = Scenario::parse_toml(include_str!("../../../scenarios/tribes.toml"))
             .unwrap()
             .instantiate();
         for _ in 0..300 {
@@ -306,7 +346,7 @@ mod serde_skip_audit {
     /// and `living_biome_roundtrip` surfaced. Pin the re-derivation directly.
     #[test]
     fn load_rederives_spatial_hash_dims() {
-        let mut w = Scenario::parse_toml(include_str!("../../../scenarios/sandbox-large.toml"))
+        let mut w = Scenario::parse_toml(include_str!("../../../scenarios/sandbox.toml"))
             .unwrap()
             .instantiate();
         assert_eq!(w.world_size, 2048.0, "scenario pins non-default dims");

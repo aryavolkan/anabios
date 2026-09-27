@@ -1,7 +1,9 @@
 //! E13 domestication: scenario wiring, taming over ticks, born-tamed
 //! breeding, pen override, save/load identity, and the release-gated
 //! emergence check that an innovator culture reaches Husbandry and tames
-//! the wild herd.
+//! the wild herd. Runs on `tribes` (which absorbed `domestication.toml`;
+//! species 0 is its archetype-free herd); the emergence check keeps the
+//! retired file as a fixture.
 
 use anabios_core::agent::AGENT_NULL;
 use anabios_core::codex::EventType;
@@ -13,7 +15,7 @@ use anabios_core::world::World;
 
 mod common;
 
-const SCENARIO: &str = include_str!("../../../scenarios/domestication.toml");
+const SCENARIO: &str = include_str!("../../../scenarios/tribes.toml");
 
 fn livestock_count(w: &World) -> u32 {
     w.agents.iter_alive().filter(|&id| w.agents.livestock_of[id as usize] != AGENT_NULL).count()
@@ -32,9 +34,20 @@ fn scenario_instantiates_with_flag_and_two_populations() {
 /// over time, the herd breeds born-tamed, and the codex records it.
 #[test]
 fn husbandry_holder_tames_and_herd_grows() {
-    let mut w = Scenario::parse_toml(SCENARIO).expect("parse domestication").instantiate();
-    // Grant Husbandry (and prereqs, for realism) to every innovator (the
-    // archetype species, id 1 — species 0 is the wild stock).
+    // Neither assertion depends on population size, and running all 3000
+    // ticks under `tribes`' 1500 cap made this one of the suite's longest
+    // debug tests: cap it lower (before `instantiate`, so each lineage's
+    // `max_share` cap scales with it), and stop once both assertions hold —
+    // on `tribes` the first taming lands on the first step, so the loop
+    // normally ends there; the bound and the cap matter only if that moves.
+    let mut s = Scenario::parse_toml(SCENARIO).expect("parse domestication");
+    s.max_population = Some(500);
+    let mut w = s.instantiate();
+    // Grant Husbandry (and prereqs, for realism) to every founder outside
+    // species 0 — i.e. every archetype lineage on `tribes` (innovators,
+    // traditionalists, the hunter band, foragers, communicators, grazers,
+    // herds, the predator packs and the armed prey); species 0 is the
+    // archetype-free wild stock they tame.
     let ch = anabios_core::invention::INVENTION_CHANNEL_BASE;
     for id in w.agents.iter_alive().collect::<Vec<_>>() {
         if w.agents.species_id[id as usize] != 0 {
@@ -55,6 +68,9 @@ fn husbandry_holder_tames_and_herd_grows() {
             }
         }
         tamed_total = tamed_total.max(livestock_count(&w));
+        if saw_domesticated && tamed_total >= 1 {
+            break;
+        }
     }
     assert!(saw_domesticated, "AnimalDomesticated fired within 3000 ticks");
     assert!(tamed_total >= 1, "at least one animal tamed; peak herd {tamed_total}");
@@ -79,10 +95,13 @@ fn livestock_state_survives_save_load_step() {
     common::assert_roundtrip_world(&mut w, "domestication livestock");
 }
 
+// Fixture: `tribes` (which absorbed inventions.toml) runs domestication on;
+// the pre-flip inventions world is the only one with inventions on and it off.
 #[test]
 fn flag_off_scenario_has_no_livestock() {
-    const INVENTIONS: &str = include_str!("../../../scenarios/inventions.toml");
-    let mut w = Scenario::parse_toml(INVENTIONS).expect("parse inventions").instantiate();
+    let mut w = Scenario::parse_toml(&common::fixtures::inventions_flag_off())
+        .expect("parse inventions fixture")
+        .instantiate();
     assert!(!w.domestication_enabled);
     for _ in 0..300 {
         step(&mut w);
@@ -95,6 +114,8 @@ fn flag_off_scenario_has_no_livestock() {
 
 /// Emergence: the innovator culture climbs to Husbandry on its own and tames
 /// the wild herd in a floor fraction of seeds. Release-gated per spec.
+// Fixture: on `tribes` Husbandry was discovered in 0/8 seeds by tick 8000 (no
+// taming), so the retired innovator-beside-a-herd world keeps the claim.
 #[cfg_attr(debug_assertions, ignore = "release-only emergence test")]
 #[test]
 fn domestication_emerges_across_seeds() {
@@ -104,7 +125,8 @@ fn domestication_emerges_across_seeds() {
     let mut tamed = 0u64;
     let mut herd_at_end = 0u64;
     for seed in 0..SEEDS {
-        let mut s = Scenario::parse_toml(SCENARIO).expect("parse domestication");
+        let mut s = Scenario::parse_toml(&common::fixtures::domestication_flag_off())
+            .expect("parse domestication fixture");
         s.seed = seed;
         let mut w = s.instantiate();
         let mut saw_husbandry = false;

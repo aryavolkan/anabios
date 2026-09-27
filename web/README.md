@@ -38,7 +38,7 @@ The page is plain ES modules behind an import map — no bundler, no framework.
 It needs an HTTP server (module scripts and `fetch` don't work from `file://`);
 any static server over `web/` works.
 
-Deep links: `?scenario=inventions&seed=3&speed=4`, `?replay=out-of-africa-saga`,
+Deep links: `?scenario=tribes&seed=3&speed=4`, `?replay=out-of-africa-saga`,
 `&color=diet`, `&paused=1`.
 
 **Controls:** drag orbits, right-drag pans, wheel zooms · click an agent for its
@@ -103,7 +103,11 @@ scripts/web.sh test predator-prey 300 7
 ### Measured in-browser tick rate (the roadmap's WASM spike)
 
 Single-threaded wasm (rayon falls back to sequential on `wasm32-unknown-unknown`;
-no SIMD), release build, node 22 / V8, one core of a cloud container:
+no SIMD), release build, node 22 / V8, one core of a cloud container. Measured
+before the twelve-world consolidation, when the scenario files ran with most
+subsystems off (`inventions` has since been retired into `tribes`); natively
+the full-stack `minimal` costs ~3.5× its all-off copy per tick, so expect the
+current worlds to run slower than these rows:
 
 | scenario | agents at end | wasm ticks/s | ms/tick |
 |---|---|---|---|

@@ -31,9 +31,9 @@ scenario lands here — same name as the deck.
 | deck (`game/showcase/`) | scenario · seed | asset |
 |---|---|---|
 | `out-of-africa-saga.json` | `out-of-africa-saga.toml` · 318 | `showcase/replay.js` (hosted web replay) + `runs/showcase/out-of-africa-saga.mp4` |
-| `predator-prey.json` | `predator-prey.toml` · 0 | `runs/showcase/predator-prey.mp4` |
-| `dialects.json` | `dialects.toml` · 0 | `runs/showcase/dialects.mp4` |
-| `inventions.json` | `inventions.toml` · 0 | `runs/showcase/inventions.mp4` |
+| `predator-prey.json` | `predator-prey.toml` · 14 | `runs/showcase/predator-prey.mp4` |
+| `speciation.json` | `speciation.toml` · 0 | `runs/showcase/speciation.mp4` |
+| `tribes.json` | `tribes.toml` · 0 | `runs/showcase/tribes.mp4` |
 
 ## Regenerating the assets
 

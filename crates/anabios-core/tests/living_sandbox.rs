@@ -42,8 +42,13 @@ use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 use anabios_core::world::World;
 
-const SCENARIO: &str = include_str!("../../../scenarios/living-sandbox-coevolution.toml");
-const CULTURE_FOUNDER: u32 = 1;
+// `sandbox.toml` absorbed `living-sandbox-coevolution.toml`: its
+// `cultural_forager` (species 3) and `asocial_forager` (species 2) specs are
+// the culture and control cohorts, now beside innovators, skilled foragers
+// and two predator kinds (the FINDING above was measured on the retired
+// two-cohort file).
+const SCENARIO: &str = include_str!("../../../scenarios/sandbox.toml");
+const CULTURE_FOUNDER: u32 = 3;
 const CONTROL_FOUNDER: u32 = 2;
 
 fn env_u64(key: &str, default: u64) -> u64 {

@@ -139,7 +139,7 @@ the invasion margin or gets honestly closed.*
   **Done 2026-09-01:** `disease_enabled` (off by default) — crowding-seeded SIS pathogen
   (spillover → proximity spread → energy-drain mortality via the starve path), Medicine
   counter-pressure (0.25× susceptibility, 3× recovery), `EpidemicOutbreak`/`MedicineContainment`
-  events (60/61), `scenarios/disease.toml` (susceptible herd + medicine band), integration +
+  events (60/61), `scenarios/disease.toml` (susceptible herd + medicine band; since retired into `tribes.toml`), integration +
   round-trip + golden coverage (FORMAT_VERSION 35), emergence evidence 4/5 seeds
   (spec: `docs/superpowers/specs/2026-09-01-disease-epidemiology-design.md`).
   *Done when:* ~~flag off-by-default, integration test + goldens + round-trip, new event

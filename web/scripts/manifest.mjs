@@ -20,15 +20,15 @@ const outDir = resolve(web, "scenarios");
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 
-// Phenomenon column of docs/scenarios.md, keyed by file name (a row may list
-// several files separated by " / ").
+// Phenomenon ("Shows", the third) column of docs/scenarios.md, keyed by file
+// name (a row may list several files separated by " / ").
 const descriptions = new Map();
 try {
   const doc = readFileSync(resolve(root, "docs/scenarios.md"), "utf8");
   for (const line of doc.split("\n")) {
     const m = line.match(/^\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*$/);
     if (!m) continue;
-    for (const f of m[1].matchAll(/`([^`]+\.toml)`/g)) descriptions.set(f[1], m[2].replace(/`/g, ""));
+    for (const f of m[1].matchAll(/`([^`]+\.toml)`/g)) descriptions.set(f[1], m[3].split("|")[0].trim().replace(/`/g, ""));
   }
 } catch { /* docs are optional */ }
 
@@ -38,16 +38,23 @@ for (const file of readdirSync(srcDir).filter((f) => f.endsWith(".toml")).sort()
   const top = text.split(/^\[/m)[0]; // top-level keys only
   const get = (k) => top.match(new RegExp(`^${k}\\s*=\\s*([^#\\n]+)`, "m"))?.[1].trim();
   const name = get("name")?.replace(/^"|"$/g, "") ?? basename(file, ".toml");
-  const flags = [...top.matchAll(/^([a-z_]+_enabled|living_biome|terrain_habitat|biome_adaptation|nutrient_variation|soil_fertility|gene_tech_coupling|gene_requirements|payoff_biased_learning|unilateral_trade|conserve_goods_on_death)\s*=\s*true/gm)]
+  // The schema turns every feature on; what a world OPTS OUT of is the
+  // informative list. `= false` for a feature knob, or a lever the world
+  // deliberately turns on (env_period / climate_drift_rate > 0).
+  const off = [...top.matchAll(/^([a-z_]+_enabled|living_biome|terrain_habitat|biome_adaptation|nutrient_variation|soil_fertility|gene_tech_coupling|gene_requirements|conserve_goods_on_death|repro_biased_learning)\s*=\s*false/gm)]
     .map((m) => m[1].replace(/_enabled$/, ""));
-  for (const k of ["env_period", "season_period"]) if (Number(get(k)) > 0) flags.push(k.replace("_period", ""));
+  if (get("season_period") === "0") off.push("season");
+  const levers = [];
+  for (const k of ["env_period"]) if (Number(get(k)) > 0) levers.push("env");
+  if (Number(get("climate_drift_rate")) > 0) levers.push("drift");
+  for (const k of ["payoff_biased_learning", "unilateral_trade"]) if (get(k) === "true") levers.push(k);
   const agents = [...text.matchAll(/^count\s*=\s*(\d+)/gm)].reduce((s, m) => s + Number(m[1]), 0);
   scenarios.push({
     file: `scenarios/${file}`, id: basename(file, ".toml"), name,
     seed: Number(get("seed") ?? 0),
     world_size: Number(get("world_size") ?? 1024),
     biome_res: Number(get("biome_res") ?? 128),
-    agents, flags,
+    agents, off, levers,
     description: descriptions.get(file) ?? "",
   });
   copyFileSync(resolve(srcDir, file), resolve(outDir, file));

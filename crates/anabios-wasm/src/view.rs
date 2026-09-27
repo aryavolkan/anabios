@@ -630,7 +630,11 @@ mod tests {
         assert_eq!(labels.get(&2).map(String::as_str), Some("stalker"));
         let v: Value = serde_json::from_str(&species_json(&w, &labels)).unwrap();
         let rows = v["species"].as_array().unwrap();
-        assert_eq!(rows.iter().map(|r| r["count"].as_u64().unwrap()).sum::<u64>(), 68);
+        // At tick 0 the rows cover every declared founder (68 in the retired
+        // two-founder file; read from the spec so founder tuning of the
+        // consolidated world does not break the check).
+        let founders: u64 = s.agents.iter().map(|a| u64::from(a.count)).sum();
+        assert_eq!(rows.iter().map(|r| r["count"].as_u64().unwrap()).sum::<u64>(), founders);
     }
 
     #[test]

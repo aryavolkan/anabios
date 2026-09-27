@@ -14,9 +14,8 @@ fn scenarios_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../scenarios")
 }
 
-/// Collect every `*.toml` under `scenarios/` (recursively, so archived
-/// experiments in `scenarios/experiments/` keep smoke coverage), sorted
-/// for determinism.
+/// Collect every `*.toml` under `scenarios/` (recursively, so a future
+/// subdirectory keeps smoke coverage), sorted for determinism.
 fn scenario_files() -> Vec<PathBuf> {
     fn walk(dir: &PathBuf, out: &mut Vec<PathBuf>) {
         for entry in fs::read_dir(dir).expect("read scenarios dir").filter_map(|e| e.ok()) {
@@ -34,67 +33,110 @@ fn scenario_files() -> Vec<PathBuf> {
     files
 }
 
-#[test]
-fn every_scenario_parses_instantiates_and_runs() {
-    let files = scenario_files();
-    assert!(!files.is_empty(), "found no scenario TOMLs to validate");
+/// Parse, instantiate and run one scenario file, keeping every agent in bounds.
+fn smoke(file: &str) {
+    let path = scenarios_dir().join(file);
+    let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {file}: {e}"));
+    let scenario = Scenario::parse_toml(&text).unwrap_or_else(|e| panic!("parse {file}: {e}"));
+    let mut w = scenario.instantiate();
+    // Clamp the population cap so fertile scenarios keep this smoke test
+    // fast (the default 10k cap made 200-tick runs minutes-slow).
+    w.max_population = w.max_population.min(500);
 
-    // Instrumented ticks run ~5-10x slower, and this test tick-loops EVERY
-    // scenario back-to-back — the tallest pole in the coverage job. The claim
-    // (parses, runs, stays in bounds) doesn't need the full horizon, so halve
-    // it there. Bound once: the tick assertion below must use the same number.
+    // Instrumented ticks run ~5-10x slower — the claim (parses, runs, stays in
+    // bounds) doesn't need the full horizon, so halve it under coverage.
+    // Bound once: the tick assertion below must use the same number.
     let horizon = common::ticks(200);
+    common::run(&mut w, horizon);
 
-    for path in &files {
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-        let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("read {name}: {e}"));
-        let scenario = Scenario::parse_toml(&text).unwrap_or_else(|e| panic!("parse {name}: {e}"));
-        let mut w = scenario.instantiate();
-        // Clamp the population cap so fertile scenarios keep this smoke test
-        // fast (the default 10k cap made 200-tick runs minutes-slow).
-        w.max_population = w.max_population.min(500);
-
-        common::run(&mut w, horizon);
-
-        // Every alive agent must remain within the (toroidal) world bounds — a cheap
-        // catch-all that a scenario didn't drive the sim into a bad state. Uses this
-        // world's own `world_size` (not the crate-default `WORLD_SIZE` constant) so
-        // scenarios that opt into a larger world (e.g. `world_size = 2048.0`) are
-        // checked against their actual bounds.
-        let world_size = w.world_size;
-        for id in w.agents.iter_alive() {
-            let p = w.agents.position[id as usize];
-            assert!(
-                p.x.is_finite()
-                    && p.y.is_finite()
-                    && (0.0..world_size).contains(&p.x)
-                    && (0.0..world_size).contains(&p.y),
-                "{name}: agent {id} left world bounds at {p:?}"
-            );
-        }
-        assert_eq!(w.tick, horizon, "{name}: expected {horizon} ticks");
-        eprintln!("ok: {name} ({} agents alive)", w.agents.live_count());
+    // Every alive agent must remain within the (toroidal) world bounds — a cheap
+    // catch-all that a scenario didn't drive the sim into a bad state. Uses this
+    // world's own `world_size` (not the crate-default `WORLD_SIZE` constant) so
+    // scenarios that opt into a larger world (e.g. `world_size = 2048.0`) are
+    // checked against their actual bounds.
+    let world_size = w.world_size;
+    for id in w.agents.iter_alive() {
+        let p = w.agents.position[id as usize];
+        assert!(
+            p.x.is_finite()
+                && p.y.is_finite()
+                && (0.0..world_size).contains(&p.x)
+                && (0.0..world_size).contains(&p.y),
+            "{file}: agent {id} left world bounds at {p:?}"
+        );
     }
-    eprintln!("validated {} scenarios", files.len());
+    assert_eq!(w.tick, horizon, "{file}: expected {horizon} ticks");
+    eprintln!("ok: {file} ({} agents alive)", w.agents.live_count());
 }
 
-/// Dedicated smoke test for the Task 3.1 living-sandbox scenario (in addition
-/// to the glob-based test above): both cohorts must start alive, and the fair
-/// culture-vs-control design must actually hold — species 1 (culture) carries
-/// a Communicator, species 2 (control) does not, and BOTH carry Reproductive
-/// (the prior `skilled_forager` design would have dropped Reproductive from
-/// the culture cohort via `communicator_kit()`, biasing the experiment).
+/// One smoke test per scenario file, so nextest runs them side by side — as a
+/// single loop over the twelve full-stack worlds this was one of the longest
+/// tests in the debug suite. `SMOKED` lists the files; the glob check below
+/// fails when a file under `scenarios/` has no entry, so a new scenario still
+/// cannot land without smoke coverage.
+macro_rules! smoke_tests {
+    ($($name:ident: $file:literal;)*) => {
+        const SMOKED: &[&str] = &[$($file),*];
+        mod every_scenario_parses_instantiates_and_runs {
+            $(
+                #[test]
+                fn $name() {
+                    super::smoke($file);
+                }
+            )*
+        }
+    };
+}
+
+smoke_tests! {
+    grand_theater: "grand-theater.toml";
+    habitat_territories: "habitat-territories.toml";
+    huge_steppe: "huge-steppe.toml";
+    markets: "markets.toml";
+    minimal: "minimal.toml";
+    out_of_africa_earth: "out-of-africa-earth.toml";
+    out_of_africa_saga: "out-of-africa-saga.toml";
+    predator_prey: "predator-prey.toml";
+    riverlands: "riverlands.toml";
+    sandbox: "sandbox.toml";
+    speciation: "speciation.toml";
+    tribes: "tribes.toml";
+}
+
 #[test]
-fn living_sandbox_smoke() {
-    let toml = include_str!("../../../scenarios/living-sandbox-coevolution.toml");
+fn every_scenario_file_is_smoke_tested() {
+    let dir = scenarios_dir();
+    let found: Vec<String> = scenario_files()
+        .iter()
+        .map(|p| p.strip_prefix(&dir).expect("under scenarios/").to_string_lossy().into_owned())
+        .collect();
+    assert!(!found.is_empty(), "found no scenario TOMLs to validate");
+    let mut listed: Vec<String> = SMOKED.iter().map(|f| f.to_string()).collect();
+    listed.sort();
+    assert_eq!(
+        found, listed,
+        "every *.toml under scenarios/ needs a `smoke_tests!` entry in tests/all_scenarios.rs"
+    );
+}
+
+/// Dedicated smoke test for `sandbox.toml` (which absorbed the Task 3.1
+/// living-sandbox scenario), in addition to the glob-based test above: the
+/// culture and control cohorts must start alive, and the fair
+/// culture-vs-control design must actually hold — species 3
+/// (`cultural_forager`, culture) carries a Communicator, species 2
+/// (`asocial_forager`, control) does not, and BOTH carry Reproductive (the
+/// prior `skilled_forager` design would have dropped Reproductive from the
+/// culture cohort via `communicator_kit()`, biasing the experiment).
+#[test]
+fn sandbox_smoke() {
+    let toml = include_str!("../../../scenarios/sandbox.toml");
     let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
 
-    let species1_alive =
-        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 1).count();
-    let species2_alive =
-        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == 2).count();
-    assert!(species1_alive > 0, "culture cohort (species 1) should start alive");
-    assert!(species2_alive > 0, "control cohort (species 2) should start alive");
+    let species_alive = |w: &anabios_core::world::World, sid: u32| {
+        w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == sid).count()
+    };
+    assert!(species_alive(&w, 3) > 0, "culture cohort (species 3) should start alive");
+    assert!(species_alive(&w, 2) > 0, "control cohort (species 2) should start alive");
 
     for id in w.agents.iter_alive() {
         let mods = &w.agents.modules[id as usize];
@@ -102,14 +144,17 @@ fn living_sandbox_smoke() {
             anabios_core::module::has(mods, anabios_core::module::ModuleType::Communicator);
         let has_reproductive =
             anabios_core::module::has(mods, anabios_core::module::ModuleType::Reproductive);
-        assert!(has_reproductive, "agent {id}: BOTH cohorts must keep Reproductive (fair design)");
         match w.agents.species_id[id as usize] {
-            1 => assert!(has_communicator, "agent {id}: culture cohort must have a Communicator"),
+            3 => {
+                assert!(has_communicator, "agent {id}: culture cohort must have a Communicator");
+                assert!(has_reproductive, "agent {id}: culture cohort must keep Reproductive");
+            }
             2 => {
                 assert!(
                     !has_communicator,
                     "agent {id}: control cohort must NOT have a Communicator"
-                )
+                );
+                assert!(has_reproductive, "agent {id}: control cohort must keep Reproductive");
             }
             _ => {}
         }
@@ -121,20 +166,20 @@ fn living_sandbox_smoke() {
     assert!(w.agents.live_count() > 0, "population should survive 200 ticks");
 }
 
-/// Dedicated smoke test for the invention-tree demo scenario:
-/// `inventions_enabled` must be set on the instantiated world, all three
-/// populations must start alive, and the demo's design must hold — species 1
-/// (innovators) and 2 (traditionalists) carry a Communicator (culture-
-/// capable) and their contrasting Openness genes, species 3 (acultural
-/// control) carries none.
+/// Dedicated smoke test for `tribes.toml` (which absorbed the invention-tree
+/// demo scenario): `inventions_enabled` must be set on the instantiated world,
+/// the three invention-demo populations must start alive, and the demo's
+/// design must hold — species 1 (innovators) and 2 (traditionalists) carry a
+/// Communicator (culture-capable) and their contrasting Openness genes,
+/// species 4 (`asocial_forager`, the acultural control) carries none.
 #[test]
-fn inventions_scenario_smoke() {
-    let toml = include_str!("../../../scenarios/inventions.toml");
+fn tribes_smoke() {
+    let toml = include_str!("../../../scenarios/tribes.toml");
     let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
 
     assert!(w.inventions_enabled, "scenario should enable inventions_enabled");
 
-    for sid in [1u32, 2, 3] {
+    for sid in [1u32, 2, 4] {
         let alive =
             w.agents.iter_alive().filter(|&id| w.agents.species_id[id as usize] == sid).count();
         assert!(alive > 0, "founding species {sid} should start alive");
@@ -154,7 +199,7 @@ fn inventions_scenario_smoke() {
                 assert!(has_communicator, "agent {id}: traditionalists must have a Communicator");
                 assert!(openness < 0.5, "agent {id}: traditionalists must be low-Openness");
             }
-            3 => {
+            4 => {
                 assert!(
                     !has_communicator,
                     "agent {id}: acultural control must NOT have a Communicator"
