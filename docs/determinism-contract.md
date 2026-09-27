@@ -7,8 +7,9 @@ anabios is bit-identical per seed. Two mechanisms uphold that:
   (`tests/determinism.rs` + per-subsystem pins); any intentional behavior
   change regenerates them in the same PR (`UPDATE_HASHES=1 …`).
 - **Save/load round-trip** (`snapshot::{save_to_bytes, load_from_bytes}`) — a
-  snapshot must restore-and-continue bit-identically. Guarded per opt-in
-  subsystem by `tests/save_load_roundtrip.rs`.
+  snapshot must restore-and-continue bit-identically. Guarded per subsystem
+  by `tests/save_load_roundtrip.rs` (every world runs the full stack; the
+  experiment levers round-trip as inline fixtures).
 
 The sharp edge: `state_hash` hashes exactly the *serialized* fields. A
 `#[serde(skip)]` field is invisible to the hash — but if it feeds future
@@ -116,9 +117,29 @@ the v13 lesson.
    above; add it to the inventory table.
 3. Category (c) → add the re-derivation to `load_from_bytes` **and** a guard
    in `tests/serde_skip_audit.rs`.
-4. New opt-in flag → add a round-trip test to
-   `tests/save_load_roundtrip.rs` with a scenario that enables it, warmed
-   enough that the subsystem's state is non-trivial (cross-check the
-   subsystem's own integration test tick range — a too-short warm-up is
-   false-green).
+4. New feature knob → give it both defaults (see "Two default layers"):
+   the engine field stays off in `World::new`, and the `Scenario` field
+   takes `#[serde(default = "default_true")]`, so every curated world runs
+   it (an experiment lever takes plain `#[serde(default)]` and stays off
+   everywhere). Then, in the same change:
+   - add `knob = false` — its pre-flip default — to
+     `tests/common/opt-out-all.toml` (read as `OPT_OUT_ALL` by the fixtures
+     and by the `anabios-headless` unit tests) **and** to the Godot
+     `pre_flip_knobs_but_inventions!` list in
+     `crates/anabios-godot/src/lib.rs`. The fixtures replay pre-flip worlds,
+     which never ran the knob; `tests/common/fixtures.rs`'s guard tests
+     (`opt_out_all_turns_off_every_default_on_knob`,
+     `godot_pre_flip_knob_list_matches_opt_out_all`) fail until both lists
+     carry it;
+   - add the knob to `full_stack()` in `tests/save_load_roundtrip.rs`, so
+     all twelve worlds' round-trips assert it is on — they then round-trip
+     its state. Check that at least one world's warm-up leaves that state
+     non-trivial (cross-check the subsystem's own integration test tick
+     range — a too-short warm-up is false-green); if none does, add a
+     fixture row;
+   - re-run the two flag-off trajectory guards in `tests/determinism.rs`
+     (`minimal_flag_off_trajectory_is_pinned`,
+     `grand_theater_pre_flip_trajectory_is_pinned`): with the knob off they
+     must not move. The scenario goldens do move (the knob is on in every
+     world) — re-pin them with `UPDATE_HASHES=1`.
 5. Detector state lives in `CodexState` — keep it skip-free.

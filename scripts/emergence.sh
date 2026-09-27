@@ -36,9 +36,9 @@
 #   scripts/emergence.sh record-web out-of-africa-saga --seed 318   # regen showcase/replay.js
 #   scripts/emergence.sh view                            # menu: pick a scenario
 #   scripts/emergence.sh run    predator-prey --ticks 5000
-#   scripts/emergence.sh replay weapons-arms-race --seed 3
-#   scripts/emergence.sh sweep  traditions --seeds 16 --ticks 12000
-#   scripts/emergence.sh soak   drifting-climate --ticks 300000 --window 50000
+#   scripts/emergence.sh replay minimal --ticks 300 --snapshot-every 100
+#   scripts/emergence.sh sweep  tribes --seeds 16 --ticks 12000
+#   scripts/emergence.sh soak   grand-theater --ticks 300000 --window 50000
 
 set -euo pipefail
 

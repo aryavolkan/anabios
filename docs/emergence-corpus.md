@@ -50,6 +50,14 @@ to 13 scenarios, cutting permanently-novel types to **2/59** (`evolved_tool`,
 
 ### Regen recipe (the e1.3 vintage)
 
+This is the recipe as it ran on 2026-08-09. Every scenario it names except
+`predator-prey` was retired by the twelve-world consolidation
+(`docs/scenarios.md` lists which world absorbed each), and `predator-prey`
+itself now runs the full stack, so the recipe runs as written only on a
+checkout of commit `16d9731`, the last that carried those files (e.g.
+`git worktree add /tmp/anabios-e1.3 16d9731` and run it there). The next
+vintage should sweep the twelve worlds instead.
+
 ```bash
 cargo build --release -p anabios-headless
 for s in divergent inventions predator-prey cooperation \

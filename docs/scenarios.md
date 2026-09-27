@@ -7,9 +7,14 @@ single phenomenon. The scenario schema defaults every feature knob **on**
 otherwise. (The engine layer, `World::new`/`World::with_dims`, defaults to
 nothing; see `docs/determinism-contract.md`'s "Two default layers" for the
 split.) To opt a subsystem out for your own run, copy a scenario and set its
-`*_enabled` knob to `false` (or `season_period = 0`) — the flag-off trajectory
-guards in `tests/determinism.rs` pin that this is byte-identical to the
-subsystem never having existed.
+`*_enabled` knob to `false` (or `season_period = 0`). Opting out is meant to
+be a no-op at the engine layer; that is pinned per subsystem by its own
+flag-off tests (for example `tests/disease.rs::flag_off_is_noop`,
+`territory::tests::step_is_a_noop_with_the_flag_off`), and for two whole
+worlds by the flag-off trajectory guards in `tests/determinism.rs`, which
+pin `minimal` and `grand-theater` as they were before the schema flip
+(inline fixtures: `minimal` with every knob off, `grand-theater` with only
+its own pre-flip flags on).
 
 Four knobs stay off by default everywhere as **experiment levers**, not
 curated-world features: `env_period` (DIT environmental-variability sweep),
@@ -24,7 +29,12 @@ Every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate �
 column is wall-clock milliseconds per tick of `anabios-headless run --ticks
 2000` at the scenario seed (release build, `real` × 1000 / 2000, instantiate
 included; best of two runs on a 10-core Apple M5 laptop) — it tracks the live
-population the world settles at far more than its map size. Read a
+population the world settles at far more than its map size. The full stack
+itself costs about 3.5× the bare engine: `minimal` runs at 2.85 ms/tick
+against 0.81 ms/tick for its pre-flip, all-off copy
+(`crates/anabios-core/tests/common/minimal.pre-flip.toml` with the
+`opt-out-all.toml` knobs inserted), both at ~2000 agents by the same
+method. Read a
 world's own header comment for the full story — placement technique, tuned
 seeds, measured caveats; this table is the index.
 
@@ -39,9 +49,9 @@ seeds, measured caveats; this table is the index.
 | `grand-theater.toml` | Everything-on staged world at the tuned geographic-trade terrain (seed 424242) | Environment, disturbance, gene-culture, economy, conflict and communication all colliding in one shared world — the strongest save/load round-trip guard. | `env_period = 400`, `climate_drift_rate = 0.00005` | 424242 | 7.0 |
 | `out-of-africa-saga.toml` | The grand-theater cast on a human-dispersal geography (climate-driven worldgen) | The showcase cut: era-3 tech (Stone Tools/Fire/Farming/Writing/Husbandry) seeded on the Quarry innovators from tick 0 so downstream tech and on-camera taming emerge without stalling at era 1. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | 6.8 |
 | `out-of-africa-earth.toml` | The saga's founders re-anchored onto a real-Earth elevation/temperature/precipitation map (`world_map = "earth"`) | The same DIT/cognition/war/domestication stack, but the exodus runs through the real African corridors (Sinai/Bab-el-Mandeb, Gibraltar); dispersal is emergent, not scripted. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | 11.0 |
-| `sandbox.toml` | 2048² world, 8k population cap, no staging | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | `season_period = 2500` | 7 | 10.0 |
-| `riverlands.toml` | 4096² self-siting continent: mountains, rain-shadow, a hydrology-carved river network | Terrain-aware placement (`kind = "habitat"`/`"near_spec"`) so herds and a persistent predator pack (`max_share` + `mate_seeking`) find water and each other regardless of seed. Absorbed: continental. | `season_period = 3000` | 7 | 5.2 |
-| `huge-steppe.toml` | 8192² world (biome grid 1024²), 6k population budget | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput at the same population budget as the prior largest world. | `season_period = 5000` | 21 | 9.8 |
+| `sandbox.toml` | 2048² world, 8k population cap, no staging; seasons slowed to `season_period = 2500` | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | — | 7 | 10.0 |
+| `riverlands.toml` | 4096² self-siting continent: mountains, rain-shadow, a hydrology-carved river network; seasons slowed to `season_period = 3000` | Terrain-aware placement (`kind = "habitat"`/`"near_spec"`) so herds and a persistent predator pack (`max_share` + `mate_seeking`) find water and each other regardless of seed. Absorbed: continental. | — | 7 | 5.2 |
+| `huge-steppe.toml` | 8192² world (biome grid 1024²), 6k population budget; seasons slowed to `season_period = 5000` | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput at the same population budget as the prior largest world. | — | 21 | 9.8 |
 
 ## Validation
 
@@ -109,8 +119,8 @@ twelve-world consolidation are retired; `scenarios/experiments/` is gone. The
 retired one-feature demos live on as inline fixtures under
 `crates/anabios-core/tests/common/` where a suite still needs their exact
 configuration. Seven of them pin the four experiment levers plus three other
-retired mechanisms, each round-tripped in `tests/save_load_roundtrip.rs`'s
-`experiment_fixtures_roundtrip`:
+retired mechanisms, each round-tripped by its own test in
+`tests/save_load_roundtrip.rs`'s `experiment_fixtures` module:
 
 | Fixture | What it probes | Findings / design |
 |---|---|---|
@@ -124,7 +134,7 @@ retired mechanisms, each round-tripped in `tests/save_load_roundtrip.rs`'s
 
 Two more retired root files round-trip as fixtures for a different reason —
 not an experiment lever, but state the absorbing world doesn't reach within
-its warm-up (`retired_state_fixtures_roundtrip`): `unilateral-trade` (the
+its warm-up (the `retired_state_fixtures` module): `unilateral-trade` (the
 lever stays off in every curated world; `markets` absorbed its founders) and
 `knowledge-ratchet` (`tribes`, which absorbed it, holds no Writing within its
 warm-up).

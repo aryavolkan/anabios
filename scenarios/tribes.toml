@@ -1,15 +1,16 @@
 # Tribes: ape-tier omnivore lineages — innovators, traditionalists, a
 # culture-bearing hunter band seeded with stone tools — among grazer herds,
 # armoured and spined prey, and predator packs. Shows discovery and adoption
-# of inventions (Discovery / Adoption / KnowledgeRatchet), traditions,
-# IQ-tech coevolution, weapons and war (War / WarEnded), domestication pens,
-# sexual dimorphism, epidemics (Epidemic / MedContain), the anthropogenic arms
-# race, the affect layer's moods and play, and thirst / sleep. Runs the full
-# stack. Absorbed: inventions, tool-users, weapons, weapons-arena,
-# weapons-arms-race, war, traditions, cognitive-coevolution,
-# tech-gene-coupling, knowledge-ratchet, domestication, dimorphism, disease,
-# anthro-race, affect-play, affect-seeking, affect-showcase, affect-social,
-# affect-threat, basic-needs.
+# of inventions (Discovery / Adoption; the KnowledgeRatchet needs Writing,
+# discovered on 0/8 seeds in 5000 ticks), traditions, IQ-tech coevolution,
+# weapons and war (War / WarEnded), domestication pens (they need Husbandry,
+# likewise 0/8), sexual dimorphism, epidemics (Epidemic; MedContain needs
+# Medicine, likewise 0/8), the anthropogenic arms race, the affect layer's
+# moods and play, and thirst / sleep. Runs the full stack. Absorbed:
+# inventions, tool-users, weapons, weapons-arena, weapons-arms-race, war,
+# traditions, cognitive-coevolution, tech-gene-coupling, knowledge-ratchet,
+# domestication, dimorphism, disease, anthro-race, affect-play,
+# affect-seeking, affect-showcase, affect-social, affect-threat, basic-needs.
 name = "tribes"
 seed = 60623
 max_population = 1500
