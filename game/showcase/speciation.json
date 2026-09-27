@@ -1,5 +1,5 @@
 {
-  "_comment": "meme-sweep arc — two communicator clusters diverge and a dialect sweeps; scenario=dialects seed=0",
+  "_comment": "meme-sweep arc — two communicator clusters diverge and a dialect sweeps; scenario=speciation seed=0",
   "seed": 0,
   "beats": [
     { "do": [
