@@ -236,7 +236,8 @@ fn parallel_matches_serial_across_thread_counts() {
     // Every world runs the full stack now (habitat-territories less sexual
     // dimorphism), so each exercises the feature-on parallel paths (sense
     // reads the gene-tech-coupling arm; cognition drives the `iq` stage; the
-    // PLAY affect par_iter and the PLAY→iq enrichment coupling). `tribes` carries the ape-tier culture and the predator guilds,
+    // PLAY affect par_iter and the PLAY→iq enrichment coupling). `tribes`
+    // carries the ape-tier culture and the predator guilds,
     // `habitat-territories` the territory layer, `grand-theater` the staged
     // emergence at scale.
     for scenario_src in [

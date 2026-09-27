@@ -31,9 +31,9 @@ seeds, measured caveats; this table is the index.
 | World | Setting | Shows | Opt-outs / levers | Seed | Cost (ms/tick) |
 |---|---|---|---|---|---|
 | `minimal.toml` | 1024² plains, one lineage | Baseline grazing world; the determinism goldens pin on this scenario. | — | 12345 | 2.8 |
-| `predator-prey.toml` | Four regional herds: a mixed cohort at the centre, a mammal grazer/pursuer pair north, a reptile ambusher/basker pair east, a thin forager background | Predation cycles and population crashes (`PopCrash`), the trophic cascade when predators collapse, mammal-vs-reptile niche sorting on the drier east, and foraging/climate-affinity selection in the background stock. Absorbed: trophic-cascade, grazers-and-wolves, mammals-vs-reptiles, foraging-selection, biome-adaptation. | Founder tuning: the mammal pursuer pack starts at 30 founders on the herd it hunts (`near_spec`, 10% share), clear of the ~10-hunter Allee floor it fell under at 14 | 0 | 1.3 |
+| `predator-prey.toml` | Four regional herds: a mixed cohort at the centre, a mammal grazer/pursuer pair north, a reptile ambusher/basker pair east, a thin forager background | Predation cycles and population crashes (`PopCrash`), the trophic cascade when predators collapse (rare: 0/8 seeds at 5000 ticks; unit-tested), mammal-vs-reptile niche sorting on the drier east, and foraging/climate-affinity selection in the background stock. Absorbed: trophic-cascade, grazers-and-wolves, mammals-vs-reptiles, foraging-selection, biome-adaptation. | Founder tuning: the mammal pursuer pack starts at 30 founders on the herd it hunts (`near_spec`, 10% share), clear of the ~10-hunter Allee floor it fell under at 14 | 0 | 1.3 |
 | `speciation.toml` | One herbivore stock seeded as two body-size morphs at the west/east ends, plus a communicator, a scent-marker, a cooperator and a hunter-prey lineage | Speciation from a founder stock (`Divergence`/`Convergence`), dialect formation between the communicator clusters, pheromone territories between the marker clusters, kin cooperation, and the four DIT learning-strategy pairings. Absorbed: divergent, convergent, cooperation, territories, dialects, gene-culture, gene-culture-skill, gene-culture-hunt, gene-culture-alarm. | — | 4242 | 1.1 |
-| `tribes.toml` | Ape-tier omnivore innovators, traditionalists and a stone-tool hunter band among grazer herds, armoured/spined prey and predator packs | Discovery and adoption of inventions (`Discovery`/`Adoption`/`KnowledgeRatchet`), traditions, IQ-tech coevolution, weapons and war (`War`/`WarEnded`), domestication pens, sexual dimorphism, epidemics (`Epidemic`/`MedContain`), the anthropogenic arms race, the affect layer's moods and play, and thirst/sleep. Absorbed: inventions, tool-users, weapons, weapons-arena, weapons-arms-race, war, traditions, cognitive-coevolution, tech-gene-coupling, knowledge-ratchet, domestication, dimorphism, disease, anthro-race, affect-play, affect-seeking, affect-showcase, affect-social, affect-threat, basic-needs. | — | 60623 | 1.4 |
+| `tribes.toml` | Ape-tier omnivore innovators, traditionalists and a stone-tool hunter band among grazer herds, armoured/spined prey and predator packs | Discovery and adoption of inventions (`Discovery`/`Adoption`; the `KnowledgeRatchet` needs Writing, discovered on 0/8 seeds in 5000 ticks), traditions, IQ-tech coevolution, weapons and war (`War`/`WarEnded`), domestication pens (they need Husbandry, likewise 0/8), sexual dimorphism, epidemics (`Epidemic`; `MedContain` needs Medicine, likewise 0/8), the anthropogenic arms race, the affect layer's moods and play, and thirst/sleep. Absorbed: inventions, tool-users, weapons, weapons-arena, weapons-arms-race, war, traditions, cognitive-coevolution, tech-gene-coupling, knowledge-ratchet, domestication, dimorphism, disease, anthro-race, affect-play, affect-seeking, affect-showcase, affect-social, affect-threat, basic-needs. | — | 60623 | 1.4 |
 | `markets.toml` | Four terrain-affinity forager lineages at a biome junction beside five goods-producing grazer lineages | Home-range anchoring and settlements, resource harvesting, bilateral barter at the predetermined trade hubs, and the trade-flow/market events. Absorbed: settlement, biome-trade, geographic-trade, trade-hubs, unilateral-trade (its lever is exercised by an inline fixture in `tests/trade.rs`, not this world). | — | 424242 | 3.3 |
 | `habitat-territories.toml` | Three grazer species differing only in Locomotion (land/water/air), founded together at four shared sites | Locomotion-gated habitat selection, species territories kept apart by collision-aware separation steering, and per-lineage `max_share` stopping the shared population cap from sterilizing the smaller founders. | `sexual_dimorphism_enabled = false`, the only curated opt-out: female mate choice sterilizes the size-0.3 flyers (display 0.39 against a 0.40 bar), so Air never breeds. Founder tuning: Land founds four habitat herds (as one 150-strong herd, Land dwindles on half the seeds) | 4 | 2.3 |
 | `grand-theater.toml` | Everything-on staged world at the tuned geographic-trade terrain (seed 424242) | Environment, disturbance, gene-culture, economy, conflict and communication all colliding in one shared world — the strongest save/load round-trip guard. | `env_period = 400`, `climate_drift_rate = 0.00005` | 424242 | 7.0 |
@@ -50,35 +50,44 @@ least 5 of 8 seeds, and on at least 5 of 8 seeds no founder kind is extinct and
 the population ends above half its founder count — measured with
 `anabios-headless sweep` over seeds 0–7 at 5000 ticks (seeds 0–3 at 2000 ticks
 for `out-of-africa-earth` and `huge-steppe`). Founder counts, `max_share`,
-placement and `max_population` are the only levers; no engine constant moves.
-Two limits are structural and hold in every world:
+placement and `max_population` are the levers, plus one documented opt-out
+(`habitat-territories` turns sexual dimorphism off; see its row); no engine
+constant moves. Two limits hold wherever the kinds concerned are founded, and
+one kind depends on the world and seed:
 
 - **Sterile kits.** `stalker`, `pack_hunter`, `marker`, `communicator`,
   `cultural_cooperator`, `culture_prey`, `skilled_forager`, `fast_hunter`,
   `slow_hunter` and the three DIT learners carry no Reproductive module. They
   act for one founder lifetime and die out by design, so the founder-kind bar
   counts the breeding kinds.
-- **Armed prey.** `spiner` dies out on nearly every seed wherever it is
+- **Spined prey.** `spiner` dies out on nearly every seed wherever it is
   founded (`tribes`, `grand-theater`, the two out-of-africa worlds) — at 10
   to 40 founders and under a doubled population cap (`grand-theater`), and
-  no single opt-out among thirteen tried rescues it (`tribes`, 1500 ticks);
-  `bruiser` survives on at most 4 of 8 seeds at 12 to 40 founders
-  (`tribes`). No founder lever tried holds either kind on a majority of
-  seeds.
+  no single opt-out among thirteen tried rescues it (`tribes`, 1500 ticks).
+  No founder lever tried holds it on a majority of seeds.
+- **Armoured prey.** `bruiser` persistence depends on the world and seed: it
+  survives on 4/4 seeds of the unmodified `out-of-africa-earth` (2000 ticks),
+  but on 1–2 of 8 in `tribes`, `grand-theater` and `out-of-africa-saga`;
+  raising its founders reaches 4 of 8 in `tribes` (40 founders) and 4 of 6
+  in a tripled-count saga probe (30 founders) — never a majority of 8.
+
+Armed-prey persistence as a mechanism (Spines- and Jaws-bearing agents still
+alive at tick 1500 on `tribes`) is covered by `tests/emergence.rs`
+(`weapons_arms_race`).
 
 | World | Bar | Documented gaps |
 |---|---|---|
 | `minimal` | met, 8/8 | — |
 | `predator-prey` | met after tuning, 6/8 (was 3/8: the pursuer pack faded on 4/8 seeds) | Does not reliably show `TrophicCascade` (0/8); the detector's crash→boom→drop ordering is covered by the unit tests in `src/codex/cycles.rs`, and `tests/emergence.rs` (`population_dynamics`) asserts the E3 family on this world. |
 | `speciation` | met, 6/8 (two seeds end below half the founders) | Does not show culture out-growing its asocial control in the four gene-culture pairings (A 0/12, alarm 0/12, hunt 3/10, skill-C 4/20 in the report-only `tests/gene_culture.rs` harnesses): every cultural founder is a sterile kit, and co-locating the skilled foragers with the control lifts skill-C only to 6/20. |
-| `tribes` | not met, 1/8 (spiner 1/8, bruiser 2/8; 5/8 without the armed prey) | Does not reliably show adoption of a non-seeded invention (2/8), domestication (0/8), `KnowledgeRatchet` (0/8), `MedContain` (0/8) or `InstitutionalRatchet` (0/8, the deck's Ratchet chapter) within 5000 ticks; the fixture tests in `tests/domestication.rs`, `tests/knowledge.rs` and `tests/inventions.rs` cover the first three, the unit tests in `src/codex/disease.rs` and `src/codex/traditions.rs` the last two. Spines/Jaws persistence to tick 1500 is covered by `tests/emergence.rs` (`weapons_arms_race`). |
+| `tribes` | not met, 1/8 (spiner 1/8, bruiser 2/8; 5/8 without the armed prey) | Does not reliably show adoption of a non-seeded invention (2/8), domestication (0/8), `KnowledgeRatchet` (0/8), `MedContain` (0/8) or `InstitutionalRatchet` (0/8, the deck's Ratchet chapter) within 5000 ticks. Adoption is covered by the synthetic detector test `invention_discovered_fires_once_and_adopted_fires_at_majority` in `tests/inventions.rs`; domestication and the `KnowledgeRatchet` by the fixture tests `domestication_emerges_across_seeds` in `tests/domestication.rs` and `knowledge_ratchet_emerges_across_seeds` in `tests/knowledge.rs`; `MedContain` and `InstitutionalRatchet` by the unit tests in `src/codex/disease.rs` and `src/codex/traditions.rs`. Spines/Jaws persistence to tick 1500 is covered by `tests/emergence.rs` (`weapons_arms_race`). |
 | `markets` | met, 5/8 (three seeds end below half the 1282 founders) | — |
 | `habitat-territories` | met after tuning, 8/8 (was 1/8: Air never bred and the world fell to a median of 25 agents) | — |
-| `grand-theater` | not met, 0/8 (spiner 1/8, bruiser 2/8, sentinel 5/8, cooperator 5/8; per-lineage shares hold the cooperators but not the other three and drop the population bar to 5/8) | Does not reliably show invention discovery (1/8) or `KnowledgeRatchet` (0/8); the fixture tests in `tests/inventions.rs` and `tests/knowledge.rs` cover them, and `out-of-africa-saga` shows both (7/8, 8/8). |
-| `out-of-africa-saga` | not met, 0/8 (spiner 1/8, bruiser 1/8, sentinel 5/8, herd 6/8, asocial prey 6/8) | Does not show `EvolvedTool` (0/8; it needs species-level Metalworking adoption), so the deck's ToolUse chapter times out; the unit test in `src/codex/signatures.rs` covers the detector. |
+| `grand-theater` | not met, 0/8 (spiner 1/8, bruiser 2/8, sentinel 5/8, cooperator 5/8; per-lineage shares hold the cooperators but not the other three and drop the population bar to 5/8) | Does not reliably keep the sentinel and cooperator kinds; no fixture covers their persistence. A variant tripling the small breeding kinds (sentinel, herd, asocial prey, cooperator, spiner, bruiser) held sentinel and cooperator on 4/4 finished seeds but was not adopted, because spiner and bruiser still die out (and the archetype-free stock died on one seed), so the bar stays unmet. Does not reliably show invention discovery (1/8) or `KnowledgeRatchet` (0/8); the fixture tests `innovators_discover_before_traditionalists_in_demo_scenario` in `tests/inventions.rs` and `knowledge_ratchet_emerges_across_seeds` in `tests/knowledge.rs` cover them, and `out-of-africa-saga` shows both (7/8, 8/8). |
+| `out-of-africa-saga` | not met, 0/8 (spiner 1/8, bruiser 1/8, sentinel 5/8, herd 6/8, asocial prey 6/8) | Does not reliably keep the sentinel, herd and asocial-prey kinds; no fixture covers their persistence. The same tripled-count variant held them on 6/6 finished seeds but was not adopted, because spiner still dies out (alive on 1/6), so the bar stays unmet while the showcase replay would need re-recording. Does not show `EvolvedTool` (0/8; it needs species-level Metalworking adoption), so the deck's ToolUse chapter times out; the unit test in `src/codex/signatures.rs` covers the detector. |
 | `sandbox` | met, 8/8 | — |
 | `riverlands` | met, 8/8 | — |
-| `out-of-africa-earth` | not met, 0/4 (spiner 0/4, sentinel 1/4, asocial prey 2/4) | Does not reliably show invention discovery within 2000 ticks (2/4); covered as for `grand-theater`. |
+| `out-of-africa-earth` | not met, 0/4 (spiner 0/4, sentinel 1/4, asocial prey 2/4) | Does not reliably keep the sentinel and asocial-prey kinds; no fixture covers their persistence. The tripled-count variant was not probed on this map (it held those kinds on the saga's cast, which this world shares) and was not adopted, because spiner still dies out there. Does not reliably show invention discovery within 2000 ticks (2/4); covered as for `grand-theater`. |
 | `huge-steppe` | met, 4/4 | — |
 
 ## Running

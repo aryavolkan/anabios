@@ -44,22 +44,24 @@
 # size 0.3 displays 0.39 against a 0.40 bar — no Air male ever qualifies, so
 # Air never breeds and dies out at founder lifespan (tick ~3000-3500) on
 # every seed, at any founder count or share. Measured by a one-knob-at-a-time
-# ablation of every default-on knob (4 seeds x 1500 ticks): only dimorphism
-# off lets Air breed (to its 300 cap); disease, disasters and basic needs off
-# each leave Air at zero births. The validation sweep with this opt-out and
-# four Land herds (8 seeds x 5000 ticks): all three classes alive on 8/8
-# seeds and all three within 1% of their `max_share` caps (675/525/300) on
-# 6/8 (seed 0 ends with Water at 52, seed 2 with Land at 317), zero habitat
-# violations, territory formation on 8/8. Dimorphism itself is
-# exercised on `tribes`. Otherwise the full stack runs (see
-# docs/scenarios.md).
+# ablation of 23 of the 26 default-on knobs (4 seeds x 1500 ticks; not
+# covered: `inventions_enabled`, which cannot be turned off alone because
+# knowledge requires it, `territory_enabled` and `conserve_goods_on_death`):
+# only dimorphism off lets Air breed (to its 300 cap); disease, disasters and
+# basic needs off each leave Air at zero births. The validation sweep with
+# this opt-out and four Land herds (8 seeds x 5000 ticks): all three classes
+# alive on 8/8 seeds and all three within 1% of their `max_share` caps
+# (675/525/300) on 5/8 (seed 0 ends with Water at 52, seed 2 with Land at
+# 317, seed 4 with Land at 654), zero habitat violations, territory
+# formation on 8/8. Dimorphism itself is exercised on `tribes`. Otherwise
+# the full stack runs (see docs/scenarios.md).
 #
-# seed = 4 stays the showcase seed (all three classes at their caps at
-# t5000 in that sweep). The land/air ecology imbalance measured before the
-# schema flip (findings doc, post-review table: Land survives 4/8, Water
-# 6/8, Air 7/8 by 20k ticks) is an open finding, not fixed here; the
-# candidate follow-up (a flight metabolic premium for Air) is not
-# implemented.
+# seed = 4 stays the showcase seed (in that sweep all three classes are
+# alive at t5000: Water and Air at their caps, Land at 654 of 675). The
+# land/air ecology imbalance measured before the schema flip (findings doc,
+# post-review table: Land survives 4/8, Water 6/8, Air 7/8 by 20k ticks) is
+# an open finding, not fixed here; the candidate follow-up (a flight
+# metabolic premium for Air) is not implemented.
 name = "habitat-territories"
 seed = 4
 max_population = 1500
