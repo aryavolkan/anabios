@@ -1,0 +1,92 @@
+# Markets: four terrain-affinity forager lineages founded at a biome junction
+# (the settlement / geographic-trade founders) beside five goods-producing
+# grazer lineages (the biome-trade founders). Shows home-range anchoring and
+# settlements, resource harvesting, bilateral barter at the predetermined
+# trade hubs, and the trade-flow / market events. Runs the full stack;
+# `unilateral_trade` stays off (experiment lever) and is exercised by an
+# inline fixture in tests/trade.rs. Absorbed: settlement, biome-trade,
+# geographic-trade, trade-hubs, unilateral-trade.
+name = "markets"
+seed = 424242
+max_population = 2200
+
+[[agents]]
+count = 156
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
+max_share = 0.14
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.12
+
+[[agents]]
+count = 33
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
+max_share = 0.06
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.37
+
+[[agents]]
+count = 98
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
+max_share = 0.1
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.62
+
+[[agents]]
+count = 195
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 816.0, center_y = 336.0, radius = 60.0 }
+max_share = 0.16
+[agents.traits]
+reproduction_threshold = 0.2
+terrain_affinity = 0.87
+
+[[agents]]
+count = 160
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+max_share = 0.1
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 160
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+max_share = 0.1
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 160
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+max_share = 0.1
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 160
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+max_share = 0.1
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4
+
+[[agents]]
+count = 160
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 1008.0, center_y = 696.0, radius = 70.0 }
+max_share = 0.1
+[agents.traits]
+reproduction_threshold = 0.2
+size = 0.4

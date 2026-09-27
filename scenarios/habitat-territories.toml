@@ -42,11 +42,11 @@
 # crowded shoreline (197 deep overlaps, every one a coast-adjacent Land
 # pair whose seaward push the resolve dropped). The land/air ecology
 # imbalance is an open finding, not fixed here; the candidate follow-up (a
-# flight metabolic premium for Air) is not implemented.
+# flight metabolic premium for Air) is not implemented. Runs the full stack
+# (see docs/scenarios.md); opt-outs: none.
 name = "habitat-territories"
 seed = 4
 max_population = 1500
-territory_enabled = true
 
 [climate]
 continentality = 0.8

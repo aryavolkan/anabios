@@ -86,7 +86,10 @@ fn every_scenario_parses_instantiates_and_runs() {
 /// the culture cohort via `communicator_kit()`, biasing the experiment).
 #[test]
 fn living_sandbox_smoke() {
-    let toml = include_str!("../../../scenarios/living-sandbox-coevolution.toml");
+    // Task 3 (scenario consolidation) folded this scenario into
+    // `scenarios/sandbox.toml` and deleted the standalone file; the inline
+    // fixture is a verbatim copy kept for this dedicated smoke test.
+    let toml = include_str!("common/living-sandbox-coevolution.pre-flip.toml");
     let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
 
     let species1_alive =
@@ -129,7 +132,10 @@ fn living_sandbox_smoke() {
 /// control) carries none.
 #[test]
 fn inventions_scenario_smoke() {
-    let toml = include_str!("../../../scenarios/inventions.toml");
+    // Task 3 (scenario consolidation) folded this scenario into
+    // `scenarios/tribes.toml` and deleted the standalone file; the inline
+    // fixture is a verbatim copy kept for this dedicated smoke test.
+    let toml = include_str!("common/inventions.pre-flip.toml");
     let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
 
     assert!(w.inventions_enabled, "scenario should enable inventions_enabled");

@@ -1,4 +1,5 @@
-# A continent-scale grazing world that sites itself.
+# A continent-scale grazing world that sites itself. Runs the full stack (see
+# docs/scenarios.md); opt-outs: none. Absorbed: continental.
 #
 # Geography: `continentality` pulls the land into a few masses, `mountain_uplift`
 # raises ridged ranges, `rain_shadow` dries their lee slopes, and the hydrology
@@ -6,18 +7,19 @@
 #
 # CAUTION on `river_threshold`: it thresholds a flow accumulation counted in
 # *upstream cells*, so it is meaningless without its `biome_res`. 150 at
-# biome_res 512 (here, and in continental.toml) carves ~1% of the map into
-# river; the same 150 at biome_res 128 carves five cells in the whole world.
-# Run `cargo run --release -p anabios-core --example river_scaling` before
-# copying this block into a world of a different scale.
+# biome_res 512 (here) carves ~1% of the map into river; the same 150 at
+# biome_res 128 carves five cells in the whole world. Run `cargo run
+# --release -p anabios-core --example river_scaling` before copying this
+# block into a world of a different scale.
 #
-# Population: unlike continental.toml — whose founder cluster center is a pair
-# of coordinates recovered by a manual densest-patch scout, and therefore only
-# correct for its one seed — the herds here are placed by `kind = "habitat"`,
-# which reads the generated field and anchors them on vegetated ground within
-# reach of drinkable water. The predators then take `kind = "near_spec"` to
-# find the herds wherever the terrain put them. Nothing here is seed-specific,
-# so re-seeding relocates the whole ecology instead of breaking it.
+# Population: unlike the absorbed continental founder cohort below — whose
+# cluster center is a pair of coordinates recovered by a manual
+# densest-patch scout, and therefore only correct for its one seed — the
+# herds here are placed by `kind = "habitat"`, which reads the generated
+# field and anchors them on vegetated ground within reach of drinkable
+# water. The predators then take `kind = "near_spec"` to find the herds
+# wherever the terrain put them. Nothing here is seed-specific, so
+# re-seeding relocates the whole ecology instead of breaking it.
 name = "riverlands"
 seed = 7
 world_size = 4096.0
@@ -27,20 +29,19 @@ hash_res = 256
 # with a moderate cap stays cheap: this runs faster per tick than the default
 # 1024² predator-prey scenario, which caps at 2000.
 max_population = 2500
-living_biome = true
 season_period = 3000
-# Thirst is on, which is what makes the water-aware siting load-bearing:
-# `habitat` anchors are chosen with the same `drinkable_cell` predicate the
-# thirst drive uses, so a herd starts where it can actually drink. A cohort
-# stranded beyond the 96-unit water scan never finds water and pays up to 4x
-# basal metabolism until it starves.
-basic_needs_enabled = true
-# The pack is sparse: 80 hunters over a 4096² map. Mating is contact-range
-# and `Mate` alone moves nobody, so without this a fed pack with room under
-# the cap still never breeds (measured: births stop once the founders leave
-# their seeding cluster). A mating hunter that sees no pack-mate steers
-# toward the nearest one within 96 units.
-mate_seeking_enabled = true
+# Thirst is on by default, which is what makes the water-aware siting
+# load-bearing: `habitat` anchors are chosen with the same `drinkable_cell`
+# predicate the thirst drive uses, so a herd starts where it can actually
+# drink. A cohort stranded beyond the 96-unit water scan never finds water
+# and pays up to 4x basal metabolism until it starves.
+#
+# Mate-seeking is on by default too. The pack is sparse: 80 hunters over a
+# 4096² map. Mating is contact-range and `Mate` alone moves nobody, so
+# without it a fed pack with room under the cap still never breeds (measured:
+# births stop once the founders leave their seeding cluster). A mating
+# hunter that sees no pack-mate steers toward the nearest one within 96
+# units.
 
 [climate]
 continentality = 0.85
@@ -101,3 +102,18 @@ thirst_tolerance = 0.7
 # Lower than the grazers' default so the pack can replace combat losses.
 reproduction_threshold = 0.4
 lifespan_bias = 1.0
+
+# Absorbed from continental.toml: a small founder cohort on the same
+# river-adjacent forest its densest-patch scout found (cluster center from
+# BiomeField::generate_with(7, 512, 4096.0, this file's climate), a
+# 100%-Forest window with the nearest river cell ~91 units away). `max_share`
+# is the last 5% left after the herds (80%) and the pack (15%), so this
+# archetype-free stock has room to persist rather than losing every slot to
+# the two population-cap-first lineages above.
+[[agents]]
+count = 120
+placement = { kind = "cluster", center_x = 1492.0, center_y = 1020.0, radius = 120.0 }
+max_share = 0.05
+[agents.traits]
+lifespan_bias = 0.6
+reproduction_threshold = 0.5

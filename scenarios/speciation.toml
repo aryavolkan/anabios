@@ -1,0 +1,125 @@
+# Speciation: one herbivore stock seeded as two body-size morphs at the west
+# and east ends of the map, with a communicator, a scent-marker, a
+# cooperator and a hunter-prey lineage folded in. Shows speciation from a
+# founder stock (Divergence / Convergence events), dialect formation between
+# the two communicator clusters, pheromone territories between the marker
+# clusters, kin cooperation, and the gene-culture pairings (cultural vs
+# asocial foragers, skilled foragers, fast vs slow hunters, cultured vs
+# asocial prey). Runs the full stack. Absorbed: divergent, convergent,
+# cooperation, territories, dialects, gene-culture, gene-culture-skill,
+# gene-culture-hunt, gene-culture-alarm.
+name = "speciation"
+seed = 4242
+max_population = 2000
+
+[[agents]]
+count = 60
+placement = { kind = "cluster", center_x = 212.0, center_y = 512.0, radius = 60.0 }
+max_share = 0.12
+[agents.traits]
+size = 0.2
+basal_metabolism = 0.2
+lifespan_bias = 0.7
+reproduction_threshold = 0.4
+
+[[agents]]
+count = 60
+placement = { kind = "cluster", center_x = 812.0, center_y = 512.0, radius = 60.0 }
+max_share = 0.12
+[agents.traits]
+size = 0.8
+basal_metabolism = 0.8
+lifespan_bias = 0.7
+reproduction_threshold = 0.4
+
+[[agents]]
+count = 24
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 260.0, center_y = 300.0, radius = 40.0 }
+max_share = 0.08
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 24
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 764.0, center_y = 300.0, radius = 40.0 }
+max_share = 0.08
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 30
+archetype = "marker"
+placement = { kind = "cluster", center_x = 300.0, center_y = 760.0, radius = 40.0 }
+max_share = 0.06
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 30
+archetype = "marker"
+placement = { kind = "cluster", center_x = 720.0, center_y = 760.0, radius = 40.0 }
+max_share = 0.06
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 30
+archetype = "cultural_cooperator"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 40.0 }
+max_share = 0.08
+[agents.traits]
+altruism = 1.0
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+
+[[agents]]
+count = 30
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 40.0 }
+max_share = 0.08
+[agents.traits]
+altruism = 0.0
+basal_metabolism = 0.7
+lifespan_bias = 1.0
+
+[[agents]]
+count = 40
+archetype = "skilled_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 200.0, radius = 40.0 }
+max_share = 0.08
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 40
+archetype = "culture_prey"
+placement = { kind = "cluster", center_x = 512.0, center_y = 820.0, radius = 40.0 }
+max_share = 0.08
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 40
+archetype = "asocial_prey"
+placement = { kind = "cluster", center_x = 512.0, center_y = 820.0, radius = 40.0 }
+max_share = 0.08
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 16
+archetype = "fast_hunter"
+placement = { kind = "cluster", center_x = 560.0, center_y = 820.0, radius = 30.0 }
+max_share = 0.04
+[agents.traits]
+lifespan_bias = 1.0
+
+[[agents]]
+count = 16
+archetype = "slow_hunter"
+placement = { kind = "cluster", center_x = 464.0, center_y = 820.0, radius = 30.0 }
+max_share = 0.04
+[agents.traits]
+lifespan_bias = 1.0

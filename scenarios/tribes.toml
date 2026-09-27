@@ -1,0 +1,154 @@
+# Tribes: ape-tier omnivore lineages — innovators, traditionalists, a
+# culture-bearing hunter band seeded with stone tools — among grazer herds,
+# armoured and spined prey, and predator packs. Shows discovery and adoption
+# of inventions (Discovery / Adoption / KnowledgeRatchet), traditions,
+# IQ-tech coevolution, weapons and war (War / WarEnded), domestication pens,
+# sexual dimorphism, epidemics (Epidemic / MedContain), the anthropogenic arms
+# race, the affect layer's moods and play, and thirst / sleep. Runs the full
+# stack. Absorbed: inventions, tool-users, weapons, weapons-arena,
+# weapons-arms-race, war, traditions, cognitive-coevolution,
+# tech-gene-coupling, knowledge-ratchet, domestication, dimorphism, disease,
+# anthro-race, affect-play, affect-seeking, affect-showcase, affect-social,
+# affect-threat, basic-needs.
+name = "tribes"
+seed = 60623
+max_population = 1500
+
+[[agents]]
+count = 30
+archetype = "innovator"
+placement = { kind = "cluster", center_x = 340.0, center_y = 512.0, radius = 40.0 }
+max_share = 0.12
+starting_inventions = ["stone_tools"]
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 1.0
+
+[[agents]]
+count = 30
+archetype = "traditionalist"
+placement = { kind = "cluster", center_x = 684.0, center_y = 512.0, radius = 40.0 }
+max_share = 0.12
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+openness = 0.05
+
+[[agents]]
+count = 24
+archetype = "ape_hunter"
+placement = { kind = "cluster", center_x = 400.0, center_y = 300.0, radius = 40.0 }
+max_share = 0.1
+starting_inventions = ["stone_tools"]
+culture_bearer = true
+[agents.traits]
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+[[agents]]
+count = 20
+archetype = "asocial_forager"
+placement = { kind = "cluster", center_x = 512.0, center_y = 300.0, radius = 40.0 }
+max_share = 0.06
+[agents.traits]
+altruism = 0.0
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+
+[[agents]]
+count = 30
+archetype = "communicator"
+placement = { kind = "cluster", center_x = 430.0, center_y = 700.0, radius = 40.0 }
+max_share = 0.08
+[agents.traits]
+lifespan_bias = 1.0
+openness = 1.0
+
+[[agents]]
+count = 60
+archetype = "grazer"
+placement = { kind = "cluster", center_x = 620.0, center_y = 700.0, radius = 60.0 }
+max_share = 0.14
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+vigilance = 0.5
+
+[[agents]]
+count = 24
+archetype = "herd"
+placement = { kind = "cluster", center_x = 700.0, center_y = 340.0, radius = 40.0 }
+max_share = 0.06
+[agents.traits]
+size = 0.55
+lifespan_bias = 1.0
+
+[[agents]]
+count = 20
+placement = { kind = "cluster", center_x = 472.0, center_y = 512.0, radius = 30.0 }
+max_share = 0.05
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+sexual_dimorphism = 0.3
+mate_choosiness = 0.6
+
+[[agents]]
+count = 20
+placement = { kind = "cluster", center_x = 552.0, center_y = 512.0, radius = 30.0 }
+max_share = 0.05
+[agents.traits]
+size = 0.5
+lifespan_bias = 1.0
+sexual_dimorphism = 0.7
+mate_choosiness = 0.6
+
+[[agents]]
+count = 10
+archetype = "stalker"
+placement = { kind = "cluster", center_x = 620.0, center_y = 700.0, radius = 60.0 }
+max_share = 0.04
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+
+[[agents]]
+count = 12
+archetype = "pack_hunter"
+placement = { kind = "cluster", center_x = 330.0, center_y = 700.0, radius = 40.0 }
+max_share = 0.04
+[agents.traits]
+size = 0.7
+lifespan_bias = 1.0
+
+[[agents]]
+count = 12
+archetype = "fast_hunter"
+placement = { kind = "cluster", center_x = 594.0, center_y = 512.0, radius = 30.0 }
+max_share = 0.04
+[agents.traits]
+size = 0.65
+lifespan_bias = 1.0
+openness = 0.9
+
+[[agents]]
+count = 12
+archetype = "spiner"
+placement = { kind = "cluster", center_x = 700.0, center_y = 340.0, radius = 40.0 }
+max_share = 0.04
+[agents.traits]
+size = 0.6
+lifespan_bias = 1.0
+
+[[agents]]
+count = 12
+archetype = "bruiser"
+placement = { kind = "cluster", center_x = 330.0, center_y = 700.0, radius = 40.0 }
+max_share = 0.04
+[agents.traits]
+size = 0.8
+lifespan_bias = 1.0

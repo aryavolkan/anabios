@@ -1,0 +1,48 @@
+# Sandbox: a 2048-unit world with an 8k cap and no staging — innovators,
+# asocial foragers, cultural and skilled foragers, and two predator kinds
+# scattered uniformly. The open-ended run for watching the tech tree, gene vs
+# culture and long ecological cycles at scale. Runs the full stack.
+# Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution.
+name = "sandbox"
+seed = 7
+world_size = 2048.0
+biome_res = 256
+hash_res = 128
+season_period = 2500
+max_population = 8000
+
+[[agents]]
+count = 500
+archetype = "innovator"
+placement = { kind = "uniform" }
+max_share = 0.25
+
+[[agents]]
+count = 700
+archetype = "asocial_forager"
+placement = { kind = "uniform" }
+max_share = 0.3
+
+[[agents]]
+count = 300
+archetype = "cultural_forager"
+placement = { kind = "uniform" }
+max_share = 0.15
+
+[[agents]]
+count = 200
+archetype = "skilled_forager"
+placement = { kind = "uniform" }
+max_share = 0.12
+
+[[agents]]
+count = 100
+archetype = "stalker"
+placement = { kind = "uniform" }
+max_share = 0.1
+
+[[agents]]
+count = 50
+archetype = "pack_hunter"
+placement = { kind = "uniform" }
+max_share = 0.08

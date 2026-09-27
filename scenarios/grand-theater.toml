@@ -1,9 +1,9 @@
 name = "grand-theater"
 seed = 424242
 
-# GRAND THEATER: every opt-in subsystem switched on at once, in one shared
-# world, with the cast placed so the subsystems collide instead of running in
-# isolation. One run exercises, in combination:
+# GRAND THEATER: runs the full stack (see docs/scenarios.md); opt-outs: none.
+# One shared world, with the cast placed so the subsystems collide instead of
+# running in isolation. One run exercises, in combination:
 #
 #   * Environment: living biome + seasonal regrowth band (season_period) +
 #     secular climate drift (climate_drift_rate) on top of the DIT seasonal
@@ -49,19 +49,6 @@ max_population = 3000
 
 env_period = 400
 climate_drift_rate = 0.00005
-season_period = 2000
-biome_adaptation = true
-living_biome = true
-nutrient_variation = true
-soil_fertility = true
-disasters_enabled = true
-terrain_habitat = true
-resources_enabled = true
-settlement_enabled = true
-inventions_enabled = true
-gene_tech_coupling = true
-cognition_enabled = true
-war_enabled = true
 
 # ---------------------------------------------------------------------------
 # THE CAPITAL — north-seam hub (948,4). The four-goods trade quartet spawns
