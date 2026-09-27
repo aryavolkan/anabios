@@ -585,7 +585,8 @@ mod traditions {
     //! absorbed the traditions showcase scenario (sweep evidence in the E9 plan
     //! completion notes).
 
-    use anabios_core::codex::EventType;
+    use anabios_core::codex::{EventType, RATCHET_MIN_ERA};
+    use anabios_core::invention::{self, INVENTIONS};
     use anabios_core::scenario::Scenario;
     use anabios_core::tick::step;
 
@@ -597,18 +598,40 @@ mod traditions {
         let mut world = scenario.instantiate();
         // Pin the cap for debug-profile speed; culture keeps flowing.
         world.max_population = 800;
+        // `tribes` seeds Stone Tools, and the detectors walk every meme
+        // channel — invention channels included — so a lineage on a seeded
+        // invention's channel is the seeding held, not a tradition formed.
+        // Only lineages on other channels count; the ratchet counts only when
+        // no seeded invention alone reaches its era floor.
+        let seeded = crate::common::inventions_held(&world);
+        let seeded_channels: Vec<u8> =
+            seeded.iter().map(|&k| invention::channel(k) as u8).collect();
+        let seeded_reach_ratchet = seeded.iter().any(|&k| INVENTIONS[k].era >= RATCHET_MIN_ERA);
 
         // Radiation fires early (t≈150), traditions latch by t≈4000 (see plan).
         for _ in 0..5000 {
             step(&mut world);
         }
 
-        let saw = |t: EventType| world.codex.events.iter().any(|ev| ev.event_type == t);
+        let unseeded_channel = |variant: u32| {
+            world
+                .codex
+                .meme_variants
+                .get(&variant)
+                .is_some_and(|v| !seeded_channels.contains(&v.channel))
+        };
+        let tradition = world.codex.events.iter().any(|ev| {
+            ev.event_type == EventType::TraditionPreserved && unseeded_channel(ev.value as u32)
+        });
+        // A CulturalRadiation event does not carry its root variant; the
+        // detector latches each root it reports in `radiation_active`.
+        let radiation = world.codex.radiation_active.iter().any(|&root| unseeded_channel(root));
+        let ratchet = !seeded_reach_ratchet
+            && world.codex.events.iter().any(|ev| ev.event_type == EventType::InstitutionalRatchet);
         assert!(
-            saw(EventType::TraditionPreserved)
-                || saw(EventType::CulturalRadiation)
-                || saw(EventType::InstitutionalRatchet),
-            "expected at least one E9 tradition event; got {:?}",
+            tradition || radiation || ratchet,
+            "expected at least one E9 tradition event off the seeded channels {seeded_channels:?}; \
+             got {:?}",
             world.codex.events.iter().map(|e| e.event_type).collect::<Vec<_>>()
         );
     }

@@ -173,17 +173,23 @@ fn cognitive_scenario_matches_golden_hashes() {
 
 /// The demo's promise: with cognition on, both beneficial tech and maladaptive
 /// practices appear in the codex event stream within a few hundred ticks.
+/// Only inventions nobody held at t0 count: `tribes` seeds Stone Tools, whose
+/// Discovered / Adopted latches fire on the seeding at tick 0 (the first
+/// climbed invention, Fire, arrives at tick 947 on this seed).
 #[test]
 fn cognitive_scenario_produces_invention_and_practice_events() {
     let s = Scenario::parse_toml(SCENARIO).expect("parse cognitive scenario");
     let mut w = s.instantiate();
+    let seeded = common::inventions_held(&w);
     let mut saw_invention = false;
     let mut saw_practice = false;
     for _ in 0..5000 {
         step(&mut w);
         for ev in w.codex.drain_events() {
             match ev.event_type {
-                EventType::InventionDiscovered | EventType::InventionAdopted => {
+                EventType::InventionDiscovered | EventType::InventionAdopted
+                    if !seeded.contains(&(ev.value as usize)) =>
+                {
                     saw_invention = true
                 }
                 EventType::PracticeDiscovered | EventType::PracticeAdopted => saw_practice = true,

@@ -58,6 +58,10 @@ mod speciation {
         // The split is genetic, not population-driven — cap population so the run
         // stays fast under the raised 10k default.
         world.max_population = 500;
+        // Every archetype founder already has its own species row (placeholder
+        // parent `Some(0)`), so only rows allocated after instantiation are
+        // splits. The two body-size morphs share archetype-free species 0.
+        let founders = world.species_parents.len();
 
         // Run past the first speciation event (200 ticks) plus a buffer for
         // the algorithm to recognize the split.
@@ -65,17 +69,31 @@ mod speciation {
             step(&mut world);
         }
 
-        // At least two non-empty species expected.
-        let non_empty: usize = world.species_member_counts.iter().filter(|&&c| c > 0).count();
+        // The morph stock's family: species 0 plus every row allocated after
+        // instantiation whose parent chain reaches 0 before any founder.
+        let from_morph_stock = |sid: usize| {
+            let mut cur = sid;
+            while cur >= founders {
+                match world.species_parents[cur] {
+                    Some(p) => cur = p as usize,
+                    None => return false,
+                }
+            }
+            cur == 0
+        };
+        let family: Vec<usize> =
+            (0..world.species_parents.len()).filter(|&sid| from_morph_stock(sid)).collect();
+
+        // At least two non-empty species expected in the morph stock's family.
+        let non_empty = family.iter().filter(|&&sid| world.species_member_counts[sid] > 0).count();
         assert!(
             non_empty >= 2,
-            "expected speciation, got species member counts {:?}",
+            "expected the morph stock to speciate: family {family:?}, member counts {:?}",
             world.species_member_counts,
         );
 
-        // At least one species has a recorded parent (non-founder).
-        let any_child = world.species_parents.iter().any(|p| p.is_some());
-        assert!(any_child, "no non-founder species recorded in phylogeny");
+        // At least one of them is a recorded split (a non-founder row).
+        assert!(family.iter().any(|&sid| sid >= founders), "no split of the morph stock recorded");
     }
 }
 
@@ -231,13 +249,20 @@ mod codex_events {
         // cap population so the test stays fast under the raised 10k default.
         world.max_population = 500;
 
+        // Only splits of the morph stock (archetype-free species 0) count; the
+        // other lineages' splits are not the divergent pair's.
+        let founders = world.species_parents.len();
+
         // 400 ticks is well past the first species_step (at tick 200).
         for _ in 0..400 {
             step(&mut world);
         }
 
-        let saw_speciation =
-            world.codex.events.iter().any(|ev| ev.event_type == EventType::SpeciationEvent);
+        let saw_speciation = world.codex.events.iter().any(|ev| {
+            ev.event_type == EventType::SpeciationEvent
+                && ev.species_id as usize >= founders
+                && world.species_parents[ev.species_id as usize] == Some(0)
+        });
         assert!(
             saw_speciation,
             "expected at least one SpeciationEvent; got {:?}",

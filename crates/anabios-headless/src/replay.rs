@@ -175,6 +175,11 @@ mod tests {
         std::fs::read_to_string(path).expect("predator-prey scenario")
     }
 
+    fn minimal_text() -> String {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scenarios/minimal.toml");
+        std::fs::read_to_string(path).expect("minimal scenario")
+    }
+
     #[test]
     fn zero_snapshot_interval_errors_not_panics() {
         let text = predator_prey_text();
@@ -184,12 +189,16 @@ mod tests {
         }
     }
 
+    // The claim does not depend on the world, and verifying costs a replay per
+    // event: the full-stack predator-prey world emits ~3200 events in 500
+    // ticks (a 7-minute test), minimal ~140 in 300 ticks — still replayed
+    // from the snapshots at ticks 0, 100 and 200.
     #[test]
     fn replay_reproduces_events_bit_identically() {
-        let text = predator_prey_text();
-        let (snaps, records) = record_run(&text, Some(7), 500, 100).expect("record");
-        assert!(!records.is_empty(), "expected at least one event in 500 ticks of predator-prey");
-        // Verify every recorded event (500-tick runs produce a handful).
+        let text = minimal_text();
+        let (snaps, records) = record_run(&text, Some(7), 300, 100).expect("record");
+        assert!(!records.is_empty(), "expected at least one event in 300 ticks of minimal");
+        // Verify every recorded event.
         for rec in &records {
             let out = verify(&snaps, rec).expect("verify");
             assert!(
