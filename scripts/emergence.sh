@@ -194,15 +194,15 @@ case "$cmd" in
     #   showcase/replay.js                    (saga, seed 318 — the hosted deck)
     #   runs/showcase/out-of-africa-saga.mp4  (saga cinematic, seed 318)
     #   runs/showcase/predator-prey.mp4       (deck-pinned seed 0)
-    #   runs/showcase/dialects.mp4            (deck-pinned seed 0)
-    #   runs/showcase/inventions.mp4          (deck-pinned seed 0)
+    #   runs/showcase/speciation.mp4          (deck-pinned seed 0)
+    #   runs/showcase/tribes.mp4              (deck-pinned seed 0)
     # Needs a real display (Movie Maker capture) + ffmpeg; re-run after any
     # change to the scenarios, decks, or sim, and re-deploy showcase/ (the
     # showcase workflow regenerates replay.js itself at publish time).
     shift || true
     "$0" record-web out-of-africa-saga --seed 318
     "$0" record out-of-africa-saga --seed 318 --max-seconds 900
-    for deck in predator-prey dialects inventions; do
+    for deck in predator-prey speciation tribes; do
       "$0" record "$deck" --max-seconds 600
     done
     echo "[showcase] all assets regenerated (web: showcase/replay.js, mp4s: runs/showcase/)" >&2
