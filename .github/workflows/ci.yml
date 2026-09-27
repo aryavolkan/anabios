@@ -90,8 +90,10 @@ jobs:
   # Coverage is collected in parallel shards, then unioned in the `coverage` job.
   # Instrumented execution is ~5-10x slower per tick. The tests whose claim does
   # not depend on horizon length shorten under `cfg(coverage)` (see
-  # `common::ticks`) — notably `all_scenarios`, which tick-loops every scenario
-  # back-to-back and was this job's tallest pole. Behavioural tests that need
+  # `common::ticks`) — notably the `all_scenarios` smoke tests (one per world;
+  # as a single loop over every scenario it was this job's tallest pole), and
+  # the claims that do not depend on population run under a lowered
+  # `max_population`. Behavioural tests that need
   # their full horizon to observe the emergence they assert (`traditions`, the
   # `trade` turnover sims) keep it, so shards are not perfectly even; more
   # shards absorbs that, which is cheaper to maintain than the bin-packed

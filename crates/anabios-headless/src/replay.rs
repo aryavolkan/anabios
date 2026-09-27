@@ -170,34 +170,35 @@ pub fn run(
 mod tests {
     use super::*;
 
-    fn predator_prey_text() -> String {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scenarios/predator-prey.toml");
-        std::fs::read_to_string(path).expect("predator-prey scenario")
-    }
-
-    fn minimal_text() -> String {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scenarios/minimal.toml");
-        std::fs::read_to_string(path).expect("minimal scenario")
-    }
+    // The replay claims below do not depend on the world, and verifying costs
+    // a re-simulation per event: the full-stack predator-prey world emits
+    // ~3200 events in 500 ticks (a 7-minute release test), full-stack minimal
+    // ~140 in 300 (over 5 minutes in a debug build); the flag-off minimal
+    // fires 8.
+    use crate::minimal_flag_off_text;
 
     #[test]
     fn zero_snapshot_interval_errors_not_panics() {
-        let text = predator_prey_text();
+        let text = minimal_flag_off_text();
         match record_run(&text, Some(7), 10, 0) {
             Ok(_) => panic!("every=0 must error, not panic or succeed"),
             Err(e) => assert!(e.to_string().contains("snapshot interval")),
         }
     }
 
-    // The claim does not depend on the world, and verifying costs a replay per
-    // event: the full-stack predator-prey world emits ~3200 events in 500
-    // ticks (a 7-minute test), minimal ~140 in 300 ticks — still replayed
-    // from the snapshots at ticks 0, 100 and 200.
     #[test]
     fn replay_reproduces_events_bit_identically() {
-        let text = minimal_text();
-        let (snaps, records) = record_run(&text, Some(7), 300, 100).expect("record");
-        assert!(!records.is_empty(), "expected at least one event in 300 ticks of minimal");
+        let text = minimal_flag_off_text();
+        // The scenario seed (12345) fires events in every 100-tick window, so
+        // verification restores from the snapshots at ticks 0, 100 and 200.
+        let (snaps, records) = record_run(&text, None, 300, 100).expect("record");
+        for window in [0..100, 100..200, 200..300] {
+            assert!(
+                records.iter().any(|r| window.contains(&r.tick)),
+                "expected an event in ticks {window:?} so the snapshot at {} is restored",
+                window.start
+            );
+        }
         // Verify every recorded event.
         for rec in &records {
             let out = verify(&snaps, rec).expect("verify");
@@ -215,8 +216,8 @@ mod tests {
 
     #[test]
     fn replay_detects_trajectory_divergence() {
-        let text = predator_prey_text();
-        let (snaps, records) = record_run(&text, Some(7), 500, 100).expect("record");
+        let text = minimal_flag_off_text();
+        let (snaps, records) = record_run(&text, None, 300, 100).expect("record");
         let rec = records.first().expect("at least one event");
         let out = verify(&snaps, rec).expect("verify");
         assert!(out.hash_ok);

@@ -175,16 +175,16 @@ placement = { kind = \"uniform\" }
         // Asocial-descended by founder tag, regardless of any Communicator
         // module a birth mutates in. If module mutation ever produces a
         // Communicator (module readout disagrees), that disagreement proves the
-        // lineage-locked tag is doing its job.
-        const ASOCIAL: &str = "\
-name = \"t\"
-seed = 7
-[[agents]]
-count = 40
-archetype = \"asocial_forager\"
-placement = { kind = \"uniform\" }
-";
-        let mut world = Scenario::parse_toml(ASOCIAL).unwrap().instantiate();
+        // lineage-locked tag is doing its job. Every scenario knob is off, as
+        // when this test was written: the invariant needs only births, and
+        // the full stack (the schema default) made this 1500-tick run one of
+        // the slowest tests in a debug build.
+        let asocial = format!(
+            "name = \"t\"\nseed = 7\n{}\n[[agents]]\ncount = 40\n\
+             archetype = \"asocial_forager\"\nplacement = {{ kind = \"uniform\" }}\n",
+            crate::OPT_OUT_ALL
+        );
+        let mut world = Scenario::parse_toml(&asocial).unwrap().instantiate();
         let mut t = init(&world);
         for _ in 0..1500 {
             step(&mut world);

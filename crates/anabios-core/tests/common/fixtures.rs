@@ -1,7 +1,8 @@
 //! Inline scenario fixtures. The scenario schema defaults every feature knob
 //! ON; these keep the pre-flip configurations of files the suites depend on.
 //! `OPT_OUT_ALL` lists every knob explicitly, so a fixture's meaning cannot
-//! drift when a future knob is added — add it here too.
+//! drift when a future knob is added — add it to `opt-out-all.toml` too (the
+//! guard test at the bottom fails until you do).
 #![allow(dead_code)]
 
 /// Every feature knob at its PRE-FLIP default: off for all of them, except
@@ -10,38 +11,12 @@
 /// the knob ran with practices on). Appended AFTER a file's own top-level
 /// keys; TOML rejects duplicate keys, so a base that already sets one of
 /// these must go through `with_opt_outs`, which drops the duplicates.
-pub const OPT_OUT_ALL: &str = "
-biome_adaptation = false
-terrain_habitat = false
-inventions_enabled = false
-gene_tech_coupling = false
-gene_requirements = false
-cognition_enabled = false
-affect_enabled = false
-living_biome = false
-season_period = 0
-env_period = 0
-climate_drift_rate = 0.0
-nutrient_variation = false
-soil_fertility = false
-resources_enabled = false
-conserve_goods_on_death = false
-disasters_enabled = false
-war_enabled = false
-settlement_enabled = false
-sexual_dimorphism_enabled = false
-domestication_enabled = false
-knowledge_enabled = false
-practices_enabled = true
-payoff_biased_learning = false
-basic_needs_enabled = false
-mate_seeking_enabled = false
-territory_enabled = false
-repro_biased_learning = false
-unilateral_trade = false
-anthro_race_enabled = false
-disease_enabled = false
-";
+///
+/// The list lives in `opt-out-all.toml` beside this file so the
+/// `anabios-headless` unit tests (which cannot reach this module) read the
+/// same list; `tests::opt_out_all_turns_off_every_default_on_knob` fails if
+/// a knob the schema defaults on is missing from it.
+pub const OPT_OUT_ALL: &str = include_str!("opt-out-all.toml");
 
 /// `base` with every knob it does NOT already set turned off. The opt-outs
 /// are inserted before the first table header (`[climate]`, `[[agents]]`, …)
@@ -209,5 +184,88 @@ mod tests {
         let parsed = anabios_core::scenario::Scenario::parse_toml(&s).expect("parses");
         assert!(parsed.war_enabled && !parsed.territory_enabled && parsed.season_period == 0);
         assert!(parsed.practices_enabled, "practices_enabled must replay its pre-flip on-default");
+    }
+
+    /// Top-level fields of `s` as serialized (knobs are scalars there).
+    fn fields(s: &anabios_core::scenario::Scenario) -> serde_json::Map<String, serde_json::Value> {
+        match serde_json::to_value(s).expect("serialize scenario") {
+            serde_json::Value::Object(m) => m,
+            v => panic!("scenario serialized to a non-object: {v}"),
+        }
+    }
+
+    /// Scalar "on": `true`, or a non-zero number (`season_period`).
+    fn is_on(v: &serde_json::Value) -> bool {
+        match v {
+            serde_json::Value::Bool(b) => *b,
+            serde_json::Value::Number(n) => n.as_f64() != Some(0.0),
+            _ => false,
+        }
+    }
+
+    /// The experiment levers: off in the schema too, but listed in
+    /// `OPT_OUT_ALL` so a fixture base cannot inherit one.
+    const LEVERS: [&str; 4] =
+        ["env_period", "climate_drift_rate", "payoff_biased_learning", "unilateral_trade"];
+
+    /// The guard behind `OPT_OUT_ALL`'s "every knob" promise. The default-on
+    /// set is read off the schema itself (a bare `name`/`seed` scenario,
+    /// serialized), not from a hand-kept list, so a new `default_true` knob
+    /// that `opt-out-all.toml` misses fails here instead of silently running
+    /// every fixture (and the flag-off trajectory guards) with it on.
+    #[test]
+    fn opt_out_all_turns_off_every_default_on_knob() {
+        use anabios_core::scenario::Scenario;
+        let header = "name = \"g\"\nseed = 1\n";
+        let schema = fields(&Scenario::parse_toml(header).expect("bare header parses"));
+        let opted = fields(&Scenario::parse_toml(&with_opt_outs(header)).expect("opt-outs parse"));
+        let default_on: Vec<&String> =
+            schema.iter().filter(|(k, v)| *k != "seed" && is_on(v)).map(|(k, _)| k).collect();
+        // 25 `default_true` knobs plus `season_period` today; a floor, so a
+        // serialization change that hid them would not pass vacuously.
+        assert!(default_on.len() >= 26, "found only {} default-on knobs", default_on.len());
+        for key in &default_on {
+            if *key == "practices_enabled" {
+                // Its pre-flip default was already on; fixtures keep it.
+                assert!(is_on(&opted[*key]), "practices_enabled must stay on");
+            } else {
+                assert!(
+                    !is_on(&opted[*key]),
+                    "`{key}` defaults on in the scenario schema but OPT_OUT_ALL leaves it on — \
+                     add `{key} = false` (its pre-flip default) to tests/common/opt-out-all.toml"
+                );
+            }
+        }
+        for lever in LEVERS {
+            assert!(!is_on(&schema[lever]) && !is_on(&opted[lever]), "lever {lever} must be off");
+        }
+        // Nothing but knobs in the list: each line is a default-on knob or a lever.
+        let listed: Vec<&str> = OPT_OUT_ALL
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| l.split('=').next().unwrap().trim())
+            .collect();
+        assert_eq!(listed.len(), default_on.len() + LEVERS.len(), "OPT_OUT_ALL: {listed:?}");
+    }
+
+    /// The Godot crate's export tests keep their own copy of the list (its
+    /// `pre_flip_knobs_but_inventions!` macro, which leaves `inventions_enabled`
+    /// to each fixture). Text-level check that it writes every other
+    /// `OPT_OUT_ALL` line verbatim, so the two cannot drift apart.
+    #[test]
+    fn godot_pre_flip_knob_list_matches_opt_out_all() {
+        let src = include_str!("../../../anabios-godot/src/lib.rs");
+        let start =
+            src.find("macro_rules! pre_flip_knobs_but_inventions").expect("Godot knob macro");
+        let body = &src[start..start + src[start..].find("};").expect("macro end")];
+        let godot: Vec<&str> = body
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix('"')?.strip_suffix("\\n\","))
+            .collect();
+        let expected: Vec<&str> = OPT_OUT_ALL
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.starts_with("inventions_enabled"))
+            .collect();
+        assert_eq!(godot, expected, "crates/anabios-godot/src/lib.rs knob list vs OPT_OUT_ALL");
     }
 }

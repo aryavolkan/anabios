@@ -23,9 +23,9 @@ fn scenario_instantiates_with_drinkable_water_in_reach() {
         .filter(|&(col, row)| needs::drinkable_cell(&w.biome, col, row))
         .count();
     // Default sea level provides lakes/seas (a scenario's river_threshold
-    // would carve rivers on top; tribes sets none). A meaningfully-watered map has plenty of drinkable cells — this is
-    // the guard that keeps the scenario from silently drying out under future
-    // worldgen changes.
+    // would carve rivers on top; tribes sets none). A meaningfully-watered map
+    // has plenty of drinkable cells — this is the guard that keeps the scenario
+    // from silently drying out under future worldgen changes.
     assert!(drinkable > 100, "expected a watered map, got {drinkable} drinkable cells");
 }
 

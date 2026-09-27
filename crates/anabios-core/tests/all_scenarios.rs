@@ -33,48 +33,90 @@ fn scenario_files() -> Vec<PathBuf> {
     files
 }
 
-#[test]
-fn every_scenario_parses_instantiates_and_runs() {
-    let files = scenario_files();
-    assert!(!files.is_empty(), "found no scenario TOMLs to validate");
+/// Parse, instantiate and run one scenario file, keeping every agent in bounds.
+fn smoke(file: &str) {
+    let path = scenarios_dir().join(file);
+    let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {file}: {e}"));
+    let scenario = Scenario::parse_toml(&text).unwrap_or_else(|e| panic!("parse {file}: {e}"));
+    let mut w = scenario.instantiate();
+    // Clamp the population cap so fertile scenarios keep this smoke test
+    // fast (the default 10k cap made 200-tick runs minutes-slow).
+    w.max_population = w.max_population.min(500);
 
-    // Instrumented ticks run ~5-10x slower, and this test tick-loops EVERY
-    // scenario back-to-back — the tallest pole in the coverage job. The claim
-    // (parses, runs, stays in bounds) doesn't need the full horizon, so halve
-    // it there. Bound once: the tick assertion below must use the same number.
+    // Instrumented ticks run ~5-10x slower — the claim (parses, runs, stays in
+    // bounds) doesn't need the full horizon, so halve it under coverage.
+    // Bound once: the tick assertion below must use the same number.
     let horizon = common::ticks(200);
+    common::run(&mut w, horizon);
 
-    for path in &files {
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-        let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("read {name}: {e}"));
-        let scenario = Scenario::parse_toml(&text).unwrap_or_else(|e| panic!("parse {name}: {e}"));
-        let mut w = scenario.instantiate();
-        // Clamp the population cap so fertile scenarios keep this smoke test
-        // fast (the default 10k cap made 200-tick runs minutes-slow).
-        w.max_population = w.max_population.min(500);
-
-        common::run(&mut w, horizon);
-
-        // Every alive agent must remain within the (toroidal) world bounds — a cheap
-        // catch-all that a scenario didn't drive the sim into a bad state. Uses this
-        // world's own `world_size` (not the crate-default `WORLD_SIZE` constant) so
-        // scenarios that opt into a larger world (e.g. `world_size = 2048.0`) are
-        // checked against their actual bounds.
-        let world_size = w.world_size;
-        for id in w.agents.iter_alive() {
-            let p = w.agents.position[id as usize];
-            assert!(
-                p.x.is_finite()
-                    && p.y.is_finite()
-                    && (0.0..world_size).contains(&p.x)
-                    && (0.0..world_size).contains(&p.y),
-                "{name}: agent {id} left world bounds at {p:?}"
-            );
-        }
-        assert_eq!(w.tick, horizon, "{name}: expected {horizon} ticks");
-        eprintln!("ok: {name} ({} agents alive)", w.agents.live_count());
+    // Every alive agent must remain within the (toroidal) world bounds — a cheap
+    // catch-all that a scenario didn't drive the sim into a bad state. Uses this
+    // world's own `world_size` (not the crate-default `WORLD_SIZE` constant) so
+    // scenarios that opt into a larger world (e.g. `world_size = 2048.0`) are
+    // checked against their actual bounds.
+    let world_size = w.world_size;
+    for id in w.agents.iter_alive() {
+        let p = w.agents.position[id as usize];
+        assert!(
+            p.x.is_finite()
+                && p.y.is_finite()
+                && (0.0..world_size).contains(&p.x)
+                && (0.0..world_size).contains(&p.y),
+            "{file}: agent {id} left world bounds at {p:?}"
+        );
     }
-    eprintln!("validated {} scenarios", files.len());
+    assert_eq!(w.tick, horizon, "{file}: expected {horizon} ticks");
+    eprintln!("ok: {file} ({} agents alive)", w.agents.live_count());
+}
+
+/// One smoke test per scenario file, so nextest runs them side by side — as a
+/// single loop over the twelve full-stack worlds this was one of the longest
+/// tests in the debug suite. `SMOKED` lists the files; the glob check below
+/// fails when a file under `scenarios/` has no entry, so a new scenario still
+/// cannot land without smoke coverage.
+macro_rules! smoke_tests {
+    ($($name:ident: $file:literal;)*) => {
+        const SMOKED: &[&str] = &[$($file),*];
+        mod every_scenario_parses_instantiates_and_runs {
+            $(
+                #[test]
+                fn $name() {
+                    super::smoke($file);
+                }
+            )*
+        }
+    };
+}
+
+smoke_tests! {
+    grand_theater: "grand-theater.toml";
+    habitat_territories: "habitat-territories.toml";
+    huge_steppe: "huge-steppe.toml";
+    markets: "markets.toml";
+    minimal: "minimal.toml";
+    out_of_africa_earth: "out-of-africa-earth.toml";
+    out_of_africa_saga: "out-of-africa-saga.toml";
+    predator_prey: "predator-prey.toml";
+    riverlands: "riverlands.toml";
+    sandbox: "sandbox.toml";
+    speciation: "speciation.toml";
+    tribes: "tribes.toml";
+}
+
+#[test]
+fn every_scenario_file_is_smoke_tested() {
+    let dir = scenarios_dir();
+    let found: Vec<String> = scenario_files()
+        .iter()
+        .map(|p| p.strip_prefix(&dir).expect("under scenarios/").to_string_lossy().into_owned())
+        .collect();
+    assert!(!found.is_empty(), "found no scenario TOMLs to validate");
+    let mut listed: Vec<String> = SMOKED.iter().map(|f| f.to_string()).collect();
+    listed.sort();
+    assert_eq!(
+        found, listed,
+        "every *.toml under scenarios/ needs a `smoke_tests!` entry in tests/all_scenarios.rs"
+    );
 }
 
 /// Dedicated smoke test for `sandbox.toml` (which absorbed the Task 3.1

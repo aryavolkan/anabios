@@ -106,10 +106,10 @@ mod cooperation_emergence {
     const SCENARIO: &str = include_str!("../../../scenarios/speciation.toml");
     const SEEDS: u64 = 16;
     const TICKS: u32 = 400;
-    /// Measured on this scenario: EvolvedCooperation in 16/16 seeds (kin-gated
-    /// sharing sustains in the dense cluster), HerdCohesion in 13/16, and the
-    /// population survives to TICKS in 16/16. Floor set well below the observed
-    /// rate so tuning drift can't flake it (§2.2).
+    /// Measured on the retired `cooperation.toml`: EvolvedCooperation in 16/16
+    /// seeds (kin-gated sharing sustains in the dense cluster), HerdCohesion in
+    /// 13/16, and the population survives to TICKS in 16/16. Floor set well
+    /// below the observed rate so tuning drift can't flake it (§2.2).
     const COOP_FLOOR: u64 = 13;
 
     #[cfg_attr(debug_assertions, ignore = "release-only emergence test")]
@@ -117,7 +117,7 @@ mod cooperation_emergence {
     fn cooperation_emerges_across_seeds() {
         let mut with_coop = 0u64;
         for seed in 0..SEEDS {
-            let mut s = Scenario::parse_toml(SCENARIO).expect("parse cooperation");
+            let mut s = Scenario::parse_toml(SCENARIO).expect("parse speciation");
             s.seed = seed;
             let mut w = s.instantiate();
             for _ in 0..TICKS {
@@ -150,10 +150,10 @@ mod territory_emergence {
     const SCENARIO: &str = include_str!("../../../scenarios/speciation.toml");
     const SEEDS: u64 = 16;
     const TICKS: u32 = 400;
-    /// Measured on this scenario: TerritoryFormation in 16/16 seeds (marking
-    /// species reliably cluster and mark), NichePartitioning in 6/16 (too marginal
-    /// to gate on). Floor set well below the observed rate so unrelated tuning
-    /// drift can't flake it (spec §2.2).
+    /// Measured on the retired `territories.toml`: TerritoryFormation in 16/16
+    /// seeds (marking species reliably cluster and mark), NichePartitioning in
+    /// 6/16 (too marginal to gate on). Floor set well below the observed rate so
+    /// unrelated tuning drift can't flake it (spec §2.2).
     const TERRITORY_FLOOR: u64 = 13;
 
     #[cfg_attr(debug_assertions, ignore = "release-only emergence test")]
@@ -161,7 +161,7 @@ mod territory_emergence {
     fn territories_form_across_seeds() {
         let mut with_territory = 0u64;
         for seed in 0..SEEDS {
-            let mut s = Scenario::parse_toml(SCENARIO).expect("parse territories");
+            let mut s = Scenario::parse_toml(SCENARIO).expect("parse speciation");
             s.seed = seed;
             let mut w = s.instantiate();
             for _ in 0..TICKS {
@@ -194,10 +194,11 @@ mod dialect_emergence {
     const SCENARIO: &str = include_str!("../../../scenarios/speciation.toml");
     const SEEDS: u64 = 16;
     const TICKS: u32 = 400;
-    /// Measured on this scenario: a broadcast meme sweeps each communicator cluster
-    /// to dominance → MemeSweep in 16/16 seeds. DialectFormed is 0/16 here (the two
-    /// clusters are distinct species, so there is no within-species east/west split
-    /// to diverge — that detector ships but its emergence is left to later scenarios).
+    /// Measured on the retired `dialects.toml`: a broadcast meme sweeps each
+    /// communicator cluster to dominance → MemeSweep in 16/16 seeds. DialectFormed
+    /// was 0/16 there (the two clusters are distinct species, so there is no
+    /// within-species east/west split to diverge — that detector ships but its
+    /// emergence is left to later scenarios).
     /// Floor set well below the observed rate so tuning drift can't flake it (§2.2).
     const DIALECT_FLOOR: u64 = 13;
 
@@ -206,7 +207,7 @@ mod dialect_emergence {
     fn dialects_form_across_seeds() {
         let mut with_dialect = 0u64;
         for seed in 0..SEEDS {
-            let mut s = Scenario::parse_toml(SCENARIO).expect("parse dialects");
+            let mut s = Scenario::parse_toml(SCENARIO).expect("parse speciation");
             s.seed = seed;
             let mut w = s.instantiate();
             for _ in 0..TICKS {
@@ -336,15 +337,23 @@ mod trait_evolution {
         // Pin the cap for debug-profile speed; trait dynamics are unaffected.
         world.max_population = 1000;
 
-        for _ in 0..1500 {
-            step(&mut world);
-        }
-
-        let saw = |t: EventType| world.codex.events.iter().any(|ev| ev.event_type == t);
-        assert!(
+        let fired = |w: &anabios_core::World| {
+            let saw = |t: EventType| w.codex.events.iter().any(|ev| ev.event_type == t);
             saw(EventType::TraitFixation)
                 || saw(EventType::RapidAdaptation)
-                || saw(EventType::ConvergentEvolution),
+                || saw(EventType::ConvergentEvolution)
+        };
+        // Stop at the first E5 event: the claim is that one fires within the
+        // window, and the full-stack world is slow in a debug build.
+        for _ in 0..1500 {
+            step(&mut world);
+            if fired(&world) {
+                break;
+            }
+        }
+
+        assert!(
+            fired(&world),
             "expected at least one E5 trait event; got {:?}",
             world.codex.events.iter().map(|e| e.event_type).collect::<Vec<_>>()
         );
@@ -372,17 +381,24 @@ mod population_dynamics {
         // plateau at the cap itself satisfies the detector set.
         world.max_population = 500;
 
-        // 2000 ticks covers the first guild oscillation on the scenario seed.
-        for _ in 0..2000 {
-            step(&mut world);
-        }
-
-        let saw = |t: EventType| world.codex.events.iter().any(|ev| ev.event_type == t);
-        assert!(
+        let fired = |w: &anabios_core::World| {
+            let saw = |t: EventType| w.codex.events.iter().any(|ev| ev.event_type == t);
             saw(EventType::PopulationCycleDetected)
                 || saw(EventType::CarryingCapacityReached)
                 || saw(EventType::BoomAndBust)
-                || saw(EventType::TrophicCascade),
+                || saw(EventType::TrophicCascade)
+        };
+        // 2000 ticks covers the first guild oscillation on the scenario seed;
+        // stop at the first E3 event (the claim is that one fires in the window).
+        for _ in 0..2000 {
+            step(&mut world);
+            if fired(&world) {
+                break;
+            }
+        }
+
+        assert!(
+            fired(&world),
             "expected at least one E3 population-dynamics event; got {:?}",
             world.codex.events.iter().map(|e| e.event_type).collect::<Vec<_>>()
         );
@@ -494,17 +510,24 @@ mod war {
         // Pin the cap for debug-profile speed; the pack clash persists.
         world.max_population = 500;
 
-        // Wars declare by t≈500 and kin networks latch at t≈1500 (see plan).
-        for _ in 0..3000 {
-            step(&mut world);
-        }
-
-        let saw = |t: EventType| world.codex.events.iter().any(|ev| ev.event_type == t);
-        assert!(
+        let fired = |w: &anabios_core::World| {
+            let saw = |t: EventType| w.codex.events.iter().any(|ev| ev.event_type == t);
             saw(EventType::WarOrRaid)
                 || saw(EventType::WarEnded)
                 || saw(EventType::AllianceFormed)
-                || saw(EventType::KinNetworkStable),
+                || saw(EventType::KinNetworkStable)
+        };
+        // Wars declare by t≈500 and kin networks latch at t≈1500 (see plan);
+        // stop at the first E7 event (the claim is that one fires in the window).
+        for _ in 0..3000 {
+            step(&mut world);
+            if fired(&world) {
+                break;
+            }
+        }
+
+        assert!(
+            fired(&world),
             "expected at least one E7 event; got {:?}",
             world.codex.events.iter().map(|e| e.event_type).collect::<Vec<_>>()
         );
@@ -529,17 +552,24 @@ mod named_behaviors {
         // Pin the cap for debug-profile speed; combat/invention dynamics persist.
         world.max_population = 500;
 
-        // Signaling fired at t=460 and flight in 14/16 sweep runs (see plan).
-        for _ in 0..2000 {
-            step(&mut world);
-        }
-
-        let saw = |t: EventType| world.codex.events.iter().any(|ev| ev.event_type == t);
-        assert!(
+        let fired = |w: &anabios_core::World| {
+            let saw = |t: EventType| w.codex.events.iter().any(|ev| ev.event_type == t);
             saw(EventType::EvolvedAmbush)
                 || saw(EventType::EvolvedTool)
                 || saw(EventType::EvolvedFlight)
-                || saw(EventType::StructuredSignaling),
+                || saw(EventType::StructuredSignaling)
+        };
+        // Signaling fired at t=460 and flight in 14/16 sweep runs (see plan);
+        // stop at the first E6 event (the claim is that one fires in the window).
+        for _ in 0..2000 {
+            step(&mut world);
+            if fired(&world) {
+                break;
+            }
+        }
+
+        assert!(
+            fired(&world),
             "expected at least one E6 named-behavior event; got {:?}",
             world.codex.events.iter().map(|e| e.event_type).collect::<Vec<_>>()
         );
@@ -564,16 +594,23 @@ mod settlement_economy {
         // Pin the cap for debug-profile speed; trade and harvest persist.
         world.max_population = 800;
 
-        // Markets crystallize by t≈400, specialization splits by t≈60 (see plan).
-        for _ in 0..1200 {
-            step(&mut world);
-        }
-
-        let saw = |t: EventType| world.codex.events.iter().any(|ev| ev.event_type == t);
-        assert!(
+        let fired = |w: &anabios_core::World| {
+            let saw = |t: EventType| w.codex.events.iter().any(|ev| ev.event_type == t);
             saw(EventType::SettlementFormed)
                 || saw(EventType::MarketEmerged)
-                || saw(EventType::SpecializationSplit),
+                || saw(EventType::SpecializationSplit)
+        };
+        // Markets crystallize by t≈400, specialization splits by t≈60 (see
+        // plan); stop at the first E8 event (the claim is that one fires).
+        for _ in 0..1200 {
+            step(&mut world);
+            if fired(&world) {
+                break;
+            }
+        }
+
+        assert!(
+            fired(&world),
             "expected at least one E8 economy event; got {:?}",
             world.codex.events.iter().map(|e| e.event_type).collect::<Vec<_>>()
         );
@@ -608,28 +645,35 @@ mod traditions {
             seeded.iter().map(|&k| invention::channel(k) as u8).collect();
         let seeded_reach_ratchet = seeded.iter().any(|&k| INVENTIONS[k].era >= RATCHET_MIN_ERA);
 
-        // Radiation fires early (t≈150), traditions latch by t≈4000 (see plan).
-        for _ in 0..5000 {
+        let fired = |w: &anabios_core::World| {
+            let unseeded_channel = |variant: u32| {
+                w.codex
+                    .meme_variants
+                    .get(&variant)
+                    .is_some_and(|v| !seeded_channels.contains(&v.channel))
+            };
+            let tradition = w.codex.events.iter().any(|ev| {
+                ev.event_type == EventType::TraditionPreserved && unseeded_channel(ev.value as u32)
+            });
+            // A CulturalRadiation event does not carry its root variant; the
+            // detector latches each root it reports in `radiation_active`.
+            let radiation = w.codex.radiation_active.iter().any(|&root| unseeded_channel(root));
+            let ratchet = !seeded_reach_ratchet
+                && w.codex.events.iter().any(|ev| ev.event_type == EventType::InstitutionalRatchet);
+            tradition || radiation || ratchet
+        };
+        // Radiation fires early (t≈150), traditions latch by t≈4000 (see
+        // plan). Checked every 50 ticks, stopping at the first E9 event off
+        // the seeded channels (the claim is that one fires in the window).
+        for t in 1..=5000 {
             step(&mut world);
+            if t % 50 == 0 && fired(&world) {
+                break;
+            }
         }
 
-        let unseeded_channel = |variant: u32| {
-            world
-                .codex
-                .meme_variants
-                .get(&variant)
-                .is_some_and(|v| !seeded_channels.contains(&v.channel))
-        };
-        let tradition = world.codex.events.iter().any(|ev| {
-            ev.event_type == EventType::TraditionPreserved && unseeded_channel(ev.value as u32)
-        });
-        // A CulturalRadiation event does not carry its root variant; the
-        // detector latches each root it reports in `radiation_active`.
-        let radiation = world.codex.radiation_active.iter().any(|&root| unseeded_channel(root));
-        let ratchet = !seeded_reach_ratchet
-            && world.codex.events.iter().any(|ev| ev.event_type == EventType::InstitutionalRatchet);
         assert!(
-            tradition || radiation || ratchet,
+            fired(&world),
             "expected at least one E9 tradition event off the seeded channels {seeded_channels:?}; \
              got {:?}",
             world.codex.events.iter().map(|e| e.event_type).collect::<Vec<_>>()
@@ -656,9 +700,9 @@ mod vertebrate_coexistence {
     const SCENARIO: &str = include_str!("../../../scenarios/predator-prey.toml");
     const SEEDS: u64 = 8;
     const TICKS: u32 = 2000;
-    /// Measured on this scenario: all four founder lineages persist to 2000 ticks
-    /// in 8/8 seeds. Floor set well below the observed rate so unrelated tuning
-    /// drift can't flake the test (spec §2.2).
+    /// Measured on the retired `mammals-vs-reptiles.toml`: all four founder
+    /// lineages persist to 2000 ticks in 8/8 seeds. Floor set well below the
+    /// observed rate so unrelated tuning drift can't flake the test (spec §2.2).
     const ALL_PERSIST_FLOOR: u64 = 5;
 
     // Founder species ids on `predator-prey`: 3 = mammal grazer, 4 = mammal
@@ -672,7 +716,7 @@ mod vertebrate_coexistence {
         let mut all_persist = 0u64;
         let mut with_fright = 0u64;
         for seed in 0..SEEDS {
-            let mut s = Scenario::parse_toml(SCENARIO).expect("parse mammals-vs-reptiles");
+            let mut s = Scenario::parse_toml(SCENARIO).expect("parse predator-prey");
             s.seed = seed;
             let mut w = s.instantiate();
             for _ in 0..TICKS {
@@ -761,6 +805,14 @@ mod tg1_selection {
         // cost otherwise swamps the small Openness-linked Fire buff.
         s.cognition_enabled = false;
         let mut w = s.instantiate();
+        // The retired `tech-gene-coupling.toml`'s cap: below carrying-capacity
+        // saturation, gene↔tech selection (not Malthusian collapse) drives
+        // the dynamics — and `tribes`' own 1500 cap made the two 2500-tick
+        // runs one of this suite's longest debug tests. Set after
+        // `instantiate`, so the lineage caps stay `tribes`' and the global cap
+        // binds first. (Set before it — shares scaled to 400 — the
+        // differential all but vanished: 0.0011 against the 0.02 bar.)
+        w.max_population = 400;
         let ids: Vec<_> = w.agents.iter_alive().collect();
         for (n, id) in ids.iter().enumerate() {
             let i = *id as usize;

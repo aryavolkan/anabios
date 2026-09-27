@@ -143,7 +143,16 @@ mod continental_worldgen {
             "/../../scenarios/riverlands.toml"
         ))
         .expect("read riverlands.toml");
-        let scenario = Scenario::parse_toml(&toml).expect("parse");
+        let mut scenario = Scenario::parse_toml(&toml).expect("parse");
+        // Replaying identically does not depend on population: every founder
+        // cohort at a quarter of its count under a 500 cap (set before
+        // `instantiate`, so each lineage's `max_share` scales), which keeps
+        // the two full-stack 200-tick runs short in a debug build. The
+        // continent and river network are generated in full either way.
+        for spec in &mut scenario.agents {
+            spec.count = spec.count.div_ceil(4);
+        }
+        scenario.max_population = Some(500);
         let mut a = scenario.instantiate();
         let mut b = scenario.instantiate();
         for _ in 0..200 {
@@ -169,11 +178,19 @@ mod biome_adaptation {
 
     #[test]
     fn affinity_cline_tracks_local_climate() {
-        let mut w = Scenario::parse_toml(SCENARIO).expect("parse").instantiate();
+        // Every founder cohort at half its count under a 300 cap (set before
+        // `instantiate`, so each lineage's `max_share` scales): 2500
+        // full-stack ticks were one of the suite's longest debug tests, and
+        // the cline this test asserts forms well below that size — measured
+        // at release, the high-minus-low EnvAffinity gap is 0.12 here against
+        // 0.06 under the previous post-`instantiate` 500 cap.
+        let mut s = Scenario::parse_toml(SCENARIO).expect("parse");
+        for spec in &mut s.agents {
+            spec.count = spec.count.div_ceil(2);
+        }
+        s.max_population = Some(300);
+        let mut w = s.instantiate();
         assert!(w.biome_adaptation);
-        // Clamp the cap: 2500 ticks at the default 10k cap is minutes-slow; the
-        // cline signal this test asserts forms well below 500 agents.
-        w.max_population = 500;
         for _ in 0..2500 {
             step(&mut w);
         }
@@ -333,9 +350,17 @@ mod nutrient_fertility {
     /// `emergence.sh soak` run, not asserted here.
     #[test]
     fn foraging_scenario_runs_and_metrics_are_finite() {
-        let mut w = Scenario::parse_toml(FORAGING).expect("parse").instantiate();
+        // Finite metrics and a live population do not depend on scale: every
+        // founder cohort at a quarter of its count under a 500 cap (set
+        // before `instantiate`, so each lineage's `max_share` scales) keeps
+        // the 300 full-stack ticks short in a debug build.
+        let mut s = Scenario::parse_toml(FORAGING).expect("parse");
+        for spec in &mut s.agents {
+            spec.count = spec.count.div_ceil(4);
+        }
+        s.max_population = Some(500);
+        let mut w = s.instantiate();
         assert!(w.nutrient_variation && w.soil_fertility, "flags must be on");
-        w.max_population = 500; // keep the run fast
         for _ in 0..300 {
             step(&mut w);
         }

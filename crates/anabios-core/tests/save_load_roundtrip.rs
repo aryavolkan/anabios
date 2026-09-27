@@ -120,45 +120,52 @@ roundtrip_tests! {
         "huge-steppe (8192 world, full stack)";
 }
 
-/// An inline fixture source, its warm-up, the flag it must enable, and a label.
-type FixtureCase = (String, u64, fn(&World) -> bool, &'static str);
+/// One `#[test]` per inline fixture, so nextest can shard them: as two tests
+/// the nine ran back to back, and the experiment group was the longest single
+/// test in the debug suite.
+macro_rules! fixture_roundtrip_tests {
+    ($($name:ident: $src:expr, $warm:literal, $flag:expr, $what:literal;)*) => {
+        $(
+            #[test]
+            fn $name() {
+                super::roundtrip(&$src, $warm, $flag, $what);
+            }
+        )*
+    };
+}
 
 /// The retired experiment files (`scenarios/experiments/`), kept verbatim as
 /// inline fixtures: each carries a lever or a combination no world has.
 /// Warm-ups are the retired rows' own.
-#[test]
-fn experiment_fixtures_roundtrip() {
-    use common::fixtures::*;
-    let cases: [FixtureCase; 7] = [
+mod experiment_fixtures {
+    use super::common::fixtures::*;
+    use anabios_core::world::World;
+
+    fixture_roundtrip_tests! {
         // A default-size carrier scenario rather than vast-steppe: instantiating
         // the 2048^2 grid is the slowest thing in the suite (minutes in the
         // debug coverage shards) and the flag's persistence needs only one
         // full biome_step_interval=4 period (effective cadence 40 ticks).
-        (biome_step_interval_flag_off(), 120, |w| w.biome_step_interval > 1, "biome_step_interval"),
-        (dit_env_slow_flag_off(), 300, |w| w.env_period > 0, "env_period"),
-        (drifting_climate_flag_off(), 400, |w| w.climate_drift_rate > 0.0, "climate_drift_rate"),
-        (gene_requirements_flag_off(), 500, |w| w.gene_requirements, "gene_requirements"),
-        (
-            o1_lever_practices_off_flag_off(),
-            300,
-            |w| !w.practices_enabled && w.cognition_enabled,
-            "practices_enabled(off variant)",
-        ),
-        (
-            o2_payoff_biased_learning_flag_off(),
-            300,
-            |w| w.payoff_biased_learning,
-            "payoff_biased_learning",
-        ),
-        (
-            o3_repro_biased_learning_flag_off(),
-            300,
-            |w| w.repro_biased_learning,
-            "repro_biased_learning",
-        ),
-    ];
-    for (src, warm, flag, what) in cases {
-        roundtrip(&src, warm, flag, what);
+        biome_step_interval_roundtrip:
+            biome_step_interval_flag_off(), 120,
+            |w: &World| w.biome_step_interval > 1, "biome_step_interval";
+        dit_env_slow_roundtrip:
+            dit_env_slow_flag_off(), 300, |w: &World| w.env_period > 0, "env_period";
+        drifting_climate_roundtrip:
+            drifting_climate_flag_off(), 400,
+            |w: &World| w.climate_drift_rate > 0.0, "climate_drift_rate";
+        gene_requirements_roundtrip:
+            gene_requirements_flag_off(), 500, |w: &World| w.gene_requirements, "gene_requirements";
+        o1_lever_practices_off_roundtrip:
+            o1_lever_practices_off_flag_off(), 300,
+            |w: &World| !w.practices_enabled && w.cognition_enabled,
+            "practices_enabled(off variant)";
+        o2_payoff_biased_learning_roundtrip:
+            o2_payoff_biased_learning_flag_off(), 300,
+            |w: &World| w.payoff_biased_learning, "payoff_biased_learning";
+        o3_repro_biased_learning_roundtrip:
+            o3_repro_biased_learning_flag_off(), 300,
+            |w: &World| w.repro_biased_learning, "repro_biased_learning";
     }
 }
 
@@ -169,20 +176,17 @@ fn experiment_fixtures_roundtrip() {
 /// `knowledge_by_species` is empty when saved. The knowledge fixture keeps the
 /// pairing with `knowledge.rs::knowledge_accrues_per_species`, which pins its
 /// non-triviality at this warm-up. Warm-ups are the retired rows' own.
-#[test]
-fn retired_state_fixtures_roundtrip() {
-    use common::fixtures::*;
-    let cases: [FixtureCase; 2] = [
-        (
-            unilateral_trade_flag_off(),
-            400,
-            |w| w.unilateral_trade && w.conserve_goods_on_death,
-            "unilateral_trade+conserve_goods_on_death",
-        ),
-        (knowledge_ratchet_flag_off(), 300, |w| w.knowledge_enabled, "knowledge_enabled"),
-    ];
-    for (src, warm, flag, what) in cases {
-        roundtrip(&src, warm, flag, what);
+mod retired_state_fixtures {
+    use super::common::fixtures::*;
+    use anabios_core::world::World;
+
+    fixture_roundtrip_tests! {
+        unilateral_trade_roundtrip:
+            unilateral_trade_flag_off(), 400,
+            |w: &World| w.unilateral_trade && w.conserve_goods_on_death,
+            "unilateral_trade+conserve_goods_on_death";
+        knowledge_ratchet_roundtrip:
+            knowledge_ratchet_flag_off(), 300, |w: &World| w.knowledge_enabled, "knowledge_enabled";
     }
 }
 

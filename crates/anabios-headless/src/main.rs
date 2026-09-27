@@ -19,6 +19,27 @@ use anabios_core::snapshot::state_hash;
 use anabios_core::tick::step;
 use anabios_core::world::World;
 use anyhow::{Context, Result};
+
+/// Every scenario knob at its pre-flip default (all off but
+/// `practices_enabled`): the file `anabios-core`'s test fixtures read as
+/// `common::fixtures::OPT_OUT_ALL`, where a guard test keeps it complete. For
+/// unit tests whose claim does not depend on the world, so they run on the
+/// all-off engine instead of the full-stack scenario defaults.
+#[cfg(test)]
+const OPT_OUT_ALL: &str = include_str!("../../anabios-core/tests/common/opt-out-all.toml");
+
+/// `scenarios/minimal.toml` as it was before the scenario schema defaulted
+/// every knob on: `anabios-core`'s `minimal.pre-flip.toml` with `OPT_OUT_ALL`
+/// inserted ahead of its `[[agents]]` table — the world `anabios-core`'s
+/// `minimal_flag_off_trajectory_is_pinned` pins. For unit tests whose claim
+/// does not depend on the world: the full-stack `minimal` is several times
+/// the cost per tick, and the replay tests pay it once per recorded event.
+#[cfg(test)]
+fn minimal_flag_off_text() -> String {
+    let base = include_str!("../../anabios-core/tests/common/minimal.pre-flip.toml");
+    let i = base.find("\n[").expect("minimal.pre-flip.toml has an [[agents]] table");
+    format!("{}\n{}{}", &base[..i], OPT_OUT_ALL, &base[i..])
+}
 use clap::{Parser, Subcommand};
 use ledger::StrategyKind;
 

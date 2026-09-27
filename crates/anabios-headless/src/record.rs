@@ -454,11 +454,20 @@ fn base64_encode(data: &[u8]) -> String {
 mod tests {
     use super::*;
 
+    /// `predator-prey` (full stack, so capture reads every subsystem's state)
+    /// with every founder cohort at a quarter of its count under a 500 cap
+    /// (set before `instantiate`, so each lineage's `max_share` scales): the
+    /// capture claims below do not depend on population, and the full world
+    /// made these some of the slowest tests in a debug build.
     fn minimal_world() -> World {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../scenarios/predator-prey.toml");
         let text = std::fs::read_to_string(path).expect("scenario");
         let mut s = Scenario::parse_toml(&text).expect("parse");
         s.seed = 7;
+        for spec in &mut s.agents {
+            spec.count = spec.count.div_ceil(4);
+        }
+        s.max_population = Some(500);
         s.instantiate()
     }
 

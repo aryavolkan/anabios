@@ -34,9 +34,20 @@ fn scenario_instantiates_with_flag_and_two_populations() {
 /// over time, the herd breeds born-tamed, and the codex records it.
 #[test]
 fn husbandry_holder_tames_and_herd_grows() {
-    let mut w = Scenario::parse_toml(SCENARIO).expect("parse domestication").instantiate();
-    // Grant Husbandry (and prereqs, for realism) to every innovator (the
-    // archetype species, id 1 — species 0 is the wild stock).
+    // Neither assertion depends on population size, and running all 3000
+    // ticks under `tribes`' 1500 cap made this one of the suite's longest
+    // debug tests: cap it lower (before `instantiate`, so each lineage's
+    // `max_share` cap scales with it), and stop once both assertions hold —
+    // on `tribes` the first taming lands on the first step, so the loop
+    // normally ends there; the bound and the cap matter only if that moves.
+    let mut s = Scenario::parse_toml(SCENARIO).expect("parse domestication");
+    s.max_population = Some(500);
+    let mut w = s.instantiate();
+    // Grant Husbandry (and prereqs, for realism) to every founder outside
+    // species 0 — i.e. every archetype lineage on `tribes` (innovators,
+    // traditionalists, the hunter band, foragers, communicators, grazers,
+    // herds, the predator packs and the armed prey); species 0 is the
+    // archetype-free wild stock they tame.
     let ch = anabios_core::invention::INVENTION_CHANNEL_BASE;
     for id in w.agents.iter_alive().collect::<Vec<_>>() {
         if w.agents.species_id[id as usize] != 0 {
@@ -57,6 +68,9 @@ fn husbandry_holder_tames_and_herd_grows() {
             }
         }
         tamed_total = tamed_total.max(livestock_count(&w));
+        if saw_domesticated && tamed_total >= 1 {
+            break;
+        }
     }
     assert!(saw_domesticated, "AnimalDomesticated fired within 3000 ticks");
     assert!(tamed_total >= 1, "at least one animal tamed; peak herd {tamed_total}");

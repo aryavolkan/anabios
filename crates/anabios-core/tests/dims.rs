@@ -1,12 +1,18 @@
 //! Guards that at DEFAULT dimensions the runtime-dimension work stays
-//! byte-identical: agent state after 1000 ticks of minimal.toml must match a
-//! recorded reference. Every Phase-1 task must keep this passing.
+//! byte-identical: agent state after 1000 ticks of minimal (its pre-flip,
+//! flag-off copy) must match a recorded reference. Every Phase-1 task must
+//! keep this passing.
 use anabios_core::scenario::Scenario;
 use anabios_core::tick::step;
 
+mod common;
+
+// Fixture: the default-dims guard is engine-level, and `minimal` now runs the
+// full stack (1000 full-stack ticks were a two-minute debug test); the
+// pre-flip flag-off copy is the world this fingerprint was written for.
 fn run_default_1000() -> Vec<(f32, f32, f32)> {
-    let toml = include_str!("../../../scenarios/minimal.toml");
-    let mut w = Scenario::parse_toml(toml).unwrap().instantiate();
+    let toml = common::fixtures::minimal_flag_off();
+    let mut w = Scenario::parse_toml(&toml).unwrap().instantiate();
     for _ in 0..1000 {
         step(&mut w);
     }
@@ -22,8 +28,8 @@ fn run_default_1000() -> Vec<(f32, f32, f32)> {
 #[test]
 fn default_dims_byte_identical() {
     // The world built via with_dims at default dims must match new-built.
-    let toml = include_str!("../../../scenarios/minimal.toml");
-    let mut a = Scenario::parse_toml(toml).unwrap().instantiate();
+    let toml = common::fixtures::minimal_flag_off();
+    let mut a = Scenario::parse_toml(&toml).unwrap().instantiate();
     let mut b = anabios_core::world::World::with_dims(a.seed, 1024.0, 128, 64);
     // b has no agents; assert the dimension fields are the documented defaults.
     assert_eq!(a.world_size, 1024.0);

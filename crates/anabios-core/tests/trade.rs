@@ -34,8 +34,11 @@ fn det_ticks() -> u64 {
 /// The `unilateral_trade` flag parses from TOML and wires through to `World`.
 #[test]
 fn unilateral_trade_flag_parses_and_wires() {
-    let toml = "name = \"t\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nunilateral_trade = true\n[[agents]]\narchetype = \"grazer\"\ncount = 4\n";
-    let w = Scenario::parse_toml(toml).unwrap().instantiate();
+    // A 64-wide world (1-unit hash cells) is too fine for disease's 8-unit
+    // spillover probe, which `parse_toml` rejects, and the test is about this
+    // one flag's wiring: every other knob is off.
+    let toml = common::fixtures::with_opt_outs("name = \"t\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nunilateral_trade = true\n[[agents]]\narchetype = \"grazer\"\ncount = 4\n");
+    let w = Scenario::parse_toml(&toml).unwrap().instantiate();
     assert!(w.unilateral_trade);
     // And the scenario file carries both freeze-fix flags.
     let w = Scenario::parse_toml(&uni()).expect("parse unilateral-trade").instantiate();
@@ -43,10 +46,19 @@ fn unilateral_trade_flag_parses_and_wires() {
 }
 
 /// The unilateral-exchange scenario is deterministic (both new flags on).
+/// Scaled down like `markets_scaled_down` (each 320-grazer lineage at a
+/// quarter, under a 500 cap): replaying identically does not depend on
+/// population, and the 1600-founder replay ran for minutes in a debug build.
 #[test]
 fn unilateral_trade_scenario_is_deterministic() {
+    let mut scenario = Scenario::parse_toml(&uni()).expect("parse");
+    for spec in &mut scenario.agents {
+        spec.count = spec.count.div_ceil(4);
+    }
+    scenario.max_population = Some(500);
+    assert!(scenario.unilateral_trade && scenario.conserve_goods_on_death);
     let run = || {
-        let mut w = Scenario::parse_toml(&uni()).expect("parse").instantiate();
+        let mut w = scenario.instantiate();
         for _ in 0..det_ticks() {
             step(&mut w);
         }
@@ -75,11 +87,29 @@ fn unilateral_trade_scenario_produces_trades() {
     assert!(saw_trade, "expected at least one cross-species trade");
 }
 
-/// The trade scenario is deterministic: two independent runs match at tick 300.
+/// `markets` scaled down for the determinism replay: every founder cohort at
+/// a quarter of its count under a 500 cap (set before `instantiate`, so each
+/// lineage's `max_share` cap scales with it). Replaying identically does not
+/// depend on population, and two 300-tick runs of the full 1282-founder world
+/// were among the longest tests in the debug suite.
+fn markets_scaled_down() -> Scenario {
+    let mut s = Scenario::parse_toml(MARKETS).expect("parse markets");
+    for spec in &mut s.agents {
+        spec.count = spec.count.div_ceil(4);
+    }
+    s.max_population = Some(500);
+    s
+}
+
+/// The trade scenario is deterministic: two independent runs match at tick
+/// 300. (`markets` absorbed both biome-trade and geographic-trade, so this one
+/// replay covers what were two determinism tests on two files.)
 #[test]
 fn trade_scenario_is_deterministic() {
+    let scenario = markets_scaled_down();
+    assert!(scenario.resources_enabled && scenario.terrain_habitat);
     let run = || {
-        let mut w = Scenario::parse_toml(MARKETS).expect("parse").instantiate();
+        let mut w = scenario.instantiate();
         for _ in 0..det_ticks() {
             step(&mut w);
         }
@@ -134,20 +164,6 @@ fn sorted_fraction(w: &anabios_core::world::World) -> f32 {
     } else {
         on as f32 / n as f32
     }
-}
-
-/// The geographic-trade scenario is deterministic: two independent runs
-/// match at tick 300.
-#[test]
-fn geographic_trade_scenario_is_deterministic() {
-    let run = || {
-        let mut w = Scenario::parse_toml(MARKETS).expect("parse").instantiate();
-        for _ in 0..det_ticks() {
-            step(&mut w);
-        }
-        state_hash(&w)
-    };
-    assert_eq!(run(), run(), "geographic-trade scenario must replay identically");
 }
 
 /// The geographic-trade economy turns over: cross-species trades occur AND
@@ -243,8 +259,9 @@ fn geographic_trade_turnover_is_ongoing() {
 /// `World` (no behavior yet — Task 1 only adds the flag).
 #[test]
 fn conserve_goods_on_death_flag_parses_and_wires() {
-    let toml = "name = \"t\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nconserve_goods_on_death = true\n[[agents]]\narchetype = \"grazer\"\ncount = 4\n";
-    let w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
+    // 64-wide world: every other knob off (see `unilateral_trade_flag_parses_and_wires`).
+    let toml = common::fixtures::with_opt_outs("name = \"t\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nconserve_goods_on_death = true\n[[agents]]\narchetype = \"grazer\"\ncount = 4\n");
+    let w = anabios_core::scenario::Scenario::parse_toml(&toml).unwrap().instantiate();
     assert!(w.conserve_goods_on_death);
 }
 
@@ -255,8 +272,9 @@ fn conserve_goods_on_death_flag_parses_and_wires() {
 fn conserve_goods_step_moves_dead_inventory_to_living() {
     use anabios_core::genome::Genome;
     use anabios_core::prelude_test::Vec2;
-    let toml = "name = \"c\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nconserve_goods_on_death = true\n";
-    let mut w = anabios_core::scenario::Scenario::parse_toml(toml).unwrap().instantiate();
+    // 64-wide world: every other knob off (see `unilateral_trade_flag_parses_and_wires`).
+    let toml = common::fixtures::with_opt_outs("name = \"c\"\nseed = 1\nworld_size = 64\nresources_enabled = true\nconserve_goods_on_death = true\n");
+    let mut w = anabios_core::scenario::Scenario::parse_toml(&toml).unwrap().instantiate();
     // Two agents a few units apart; A holds goods, B is the nearest (only) living neighbour.
     let a = w.spawn_agent(Vec2::new(10.0, 10.0), Genome::neutral());
     let b = w.spawn_agent(Vec2::new(12.0, 10.0), Genome::neutral());
@@ -334,10 +352,14 @@ fn trade_only_happens_at_hubs() {
     use anabios_core::hub::TradeHub;
     use anabios_core::prelude_test::Vec2;
 
-    // Minimal 2-agent world with resources on and one hub at the origin.
+    // Minimal 2-agent world with only resources on and one hub at the origin.
+    // The opt-outs keep it that: under the full-stack schema defaults disease
+    // would run on this 256-wide world's 4-unit hash cells, narrower than its
+    // 8-unit spillover probe (`parse_toml` now rejects that combination; it
+    // used to trip the spatial-hash query assert in debug builds).
     let build = |on_hub: bool| {
-        let toml = "name=\"t\"\nseed=1\nworld_size=256\nresources_enabled=true\n[[agents]]\narchetype=\"grazer\"\ncount=2\n";
-        let mut w = Scenario::parse_toml(toml).expect("parse").instantiate();
+        let toml = common::fixtures::with_opt_outs("name=\"t\"\nseed=1\nworld_size=256\nresources_enabled=true\n[[agents]]\narchetype=\"grazer\"\ncount=2\n");
+        let mut w = Scenario::parse_toml(&toml).expect("parse").instantiate();
         w.trade_hubs = vec![TradeHub { pos: Vec2::new(0.0, 0.0), cell: 0, goods: vec![] }];
         let ids: Vec<u32> = w.agents.iter_alive().collect();
         let (a, b) = (ids[0] as usize, ids[1] as usize);

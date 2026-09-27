@@ -7,7 +7,7 @@
 //! keep the retired file as an inline fixture (`common::fixtures`).
 
 use anabios_core::codex::EventType;
-use anabios_core::scenario::Scenario;
+use anabios_core::scenario::{Scenario, ScenarioError};
 use anabios_core::tick::step;
 
 mod common;
@@ -15,11 +15,15 @@ mod common;
 #[test]
 fn knowledge_flag_requires_inventions() {
     // The schema defaults inventions on, so the invalid combination is an
-    // explicit inventions opt-out with knowledge still on.
-    let bad = "name=\"k\"\nseed=1\nworld_size=64\ninventions_enabled=false\nknowledge_enabled=true\n[[agents]]\narchetype=\"grazer\"\ncount=4\n";
-    assert!(Scenario::parse_toml(bad).is_err());
-    let ok = "name=\"k\"\nseed=1\nworld_size=64\ninventions_enabled=true\nknowledge_enabled=true\n[[agents]]\narchetype=\"grazer\"\ncount=4\n";
-    let w = Scenario::parse_toml(ok).unwrap().instantiate();
+    // explicit inventions opt-out with knowledge still on. Every other knob is
+    // off: the 64-wide world's hash cells are too fine for disease (which
+    // `parse_toml` would reject), and this pair is the only one under test.
+    let bad = common::fixtures::with_opt_outs("name=\"k\"\nseed=1\nworld_size=64\ninventions_enabled=false\nknowledge_enabled=true\n[[agents]]\narchetype=\"grazer\"\ncount=4\n");
+    let err =
+        Scenario::parse_toml(&bad).expect_err("knowledge without inventions must be rejected");
+    assert!(matches!(err, ScenarioError::KnowledgeNeedsInventions), "got {err}");
+    let ok = common::fixtures::with_opt_outs("name=\"k\"\nseed=1\nworld_size=64\ninventions_enabled=true\nknowledge_enabled=true\n[[agents]]\narchetype=\"grazer\"\ncount=4\n");
+    let w = Scenario::parse_toml(&ok).unwrap().instantiate();
     assert!(w.knowledge_enabled);
 }
 
@@ -66,7 +70,7 @@ fn flag_off_scenario_has_no_knowledge_ratchet() {
 
 /// Knowledge actually accrues per species over a normal run — the
 /// non-triviality precondition behind the knowledge fixture in
-/// `save_load_roundtrip.rs::retired_state_fixtures_roundtrip`, which would
+/// `save_load_roundtrip.rs::retired_state_fixtures::knowledge_ratchet_roundtrip`, which would
 /// otherwise round-trip an empty map.
 // Fixture: on `tribes` no species holds Writing within 300 ticks, so
 // `knowledge_by_species` stays empty; the Writing-seeded band is kept.

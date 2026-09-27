@@ -1,6 +1,8 @@
 //! Core substrate invariants: feeding, reproduction, speciation, module
 //! gating, and the codex/serde audits. One module per former binary.
 
+mod common;
+
 mod feeding {
     //! Integration test: a herbivore population on grass survives 500 ticks
     //! without total collapse or runaway plant blow-up.
@@ -105,11 +107,18 @@ mod reproduction {
     use anabios_core::scenario::Scenario;
     use anabios_core::tick::step;
 
-    const SCENARIO: &str = include_str!("../../../scenarios/minimal.toml");
+    // Fixture: both claims are engine-substrate ones (births replace deaths;
+    // one flag gates its own counters), and on the full-stack `minimal` each
+    // ran for over ten minutes in a debug build (5000 and 2 × 2000 ticks with
+    // every subsystem on). The pre-flip flag-off copy is the world they were
+    // written for.
+    fn scenario_text() -> String {
+        crate::common::fixtures::minimal_flag_off()
+    }
 
     #[test]
     fn population_sustains_past_one_lifespan() {
-        let scenario = Scenario::parse_toml(SCENARIO).expect("parse");
+        let scenario = Scenario::parse_toml(&scenario_text()).expect("parse");
         let mut world = scenario.instantiate();
         // Sustaining a population past a lifespan doesn't need scale — cap it so the
         // 5,000-tick run stays fast under the raised 10k default.
@@ -136,13 +145,14 @@ mod reproduction {
     /// credited surviving births to parents.
     #[test]
     fn birth_outcome_counters_are_flag_gated() {
-        let scenario = Scenario::parse_toml(SCENARIO).expect("parse");
+        let scenario = Scenario::parse_toml(&scenario_text()).expect("parse");
 
         let mut on = scenario.instantiate();
         on.repro_biased_learning = true;
         on.max_population = 500;
         let mut off = scenario.instantiate();
-        // The scenario schema defaults the flag on, so the control arm opts out.
+        // Off in the fixture already; set explicitly so the control arm's
+        // meaning does not rest on the fixture.
         off.repro_biased_learning = false;
         off.max_population = 500;
 

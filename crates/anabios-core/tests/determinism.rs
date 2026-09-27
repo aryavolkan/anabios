@@ -231,46 +231,78 @@ const GOLDEN: &[(u64, u64)] =
 /// threads). Wrapping `step` in `pool.install(..)` routes every internal
 /// `par_iter` onto that pool, so if any parallel stage's result depended on
 /// thread count or execution order the state hashes would diverge.
-#[test]
-fn parallel_matches_serial_across_thread_counts() {
-    // Every world runs the full stack now (habitat-territories less sexual
-    // dimorphism), so each exercises the feature-on parallel paths (sense
-    // reads the gene-tech-coupling arm; cognition drives the `iq` stage; the
-    // PLAY affect par_iter and the PLAY→iq enrichment coupling). `tribes`
-    // carries the ape-tier culture and the predator guilds,
-    // `habitat-territories` the territory layer, `grand-theater` the staged
-    // emergence at scale.
-    for scenario_src in [
-        include_str!("../../../scenarios/minimal.toml"),
-        include_str!("../../../scenarios/tribes.toml"),
-        include_str!("../../../scenarios/habitat-territories.toml"),
-        include_str!("../../../scenarios/grand-theater.toml"),
-    ] {
-        let scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
-        const TICKS: u64 = 300;
+///
+/// Every world runs the full stack now (habitat-territories less sexual
+/// dimorphism), so each exercises the feature-on parallel paths (sense reads
+/// the gene-tech-coupling arm; cognition drives the `iq` stage; the PLAY
+/// affect par_iter and the PLAY→iq enrichment coupling). `tribes` carries the
+/// ape-tier culture and the predator guilds, `habitat-territories` the
+/// territory layer, `grand-theater` the staged emergence with every cohort.
+///
+/// The claim does not depend on population, and 3 × 300 full-stack ticks per
+/// world made this the longest test in the debug suite, so each world is its
+/// own test (nextest runs them side by side) and runs under a
+/// `PARALLEL_POP_CAP`-agent cap, identically for every thread count;
+/// `grand-theater` also founds each cohort at a third of its count (every
+/// founder kind is still present — its 1444 founders alone outweighed the
+/// other three worlds together).
+fn assert_parallel_matches_serial(scenario_src: &str, founder_divisor: u32) {
+    let mut scenario = Scenario::parse_toml(scenario_src).expect("parse scenario");
+    for spec in &mut scenario.agents {
+        spec.count = spec.count.div_ceil(founder_divisor);
+    }
+    // Set before `instantiate`, so each lineage's `max_share` cap scales too.
+    scenario.max_population = Some(PARALLEL_POP_CAP);
+    let ticks = common::ticks(300);
 
-        let hash_with_threads = |n: usize| -> u64 {
-            let pool =
-                rayon::ThreadPoolBuilder::new().num_threads(n).build().expect("build rayon pool");
-            let mut world = scenario.instantiate();
-            pool.install(|| {
-                for _ in 0..TICKS {
-                    step(&mut world);
-                }
-            });
-            state_hash(&world)
-        };
+    let hash_with_threads = |n: usize| -> u64 {
+        let pool =
+            rayon::ThreadPoolBuilder::new().num_threads(n).build().expect("build rayon pool");
+        let mut world = scenario.instantiate();
+        pool.install(|| {
+            for _ in 0..ticks {
+                step(&mut world);
+            }
+        });
+        state_hash(&world)
+    };
 
-        let serial = hash_with_threads(1);
-        for n in [2usize, 8] {
-            assert_eq!(
-                serial,
-                hash_with_threads(n),
-                "scenario {:?}: state diverged between 1 and {n} threads after {TICKS} ticks \
-                 — a parallel stage depends on thread count or execution order",
-                scenario.name,
-            );
-        }
+    let serial = hash_with_threads(1);
+    for n in [2usize, 8] {
+        assert_eq!(
+            serial,
+            hash_with_threads(n),
+            "scenario {:?}: state diverged between 1 and {n} threads after {ticks} ticks \
+             — a parallel stage depends on thread count or execution order",
+            scenario.name,
+        );
+    }
+}
+
+/// Population cap for `assert_parallel_matches_serial`.
+const PARALLEL_POP_CAP: u32 = 500;
+
+mod parallel_matches_serial_across_thread_counts {
+    use super::assert_parallel_matches_serial as check;
+
+    #[test]
+    fn minimal() {
+        check(include_str!("../../../scenarios/minimal.toml"), 1);
+    }
+
+    #[test]
+    fn tribes() {
+        check(include_str!("../../../scenarios/tribes.toml"), 1);
+    }
+
+    #[test]
+    fn habitat_territories() {
+        check(include_str!("../../../scenarios/habitat-territories.toml"), 1);
+    }
+
+    #[test]
+    fn grand_theater() {
+        check(include_str!("../../../scenarios/grand-theater.toml"), 3);
     }
 }
 

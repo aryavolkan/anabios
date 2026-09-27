@@ -49,7 +49,12 @@ fn scenario_instantiates_with_both_sexes() {
 
 #[test]
 fn both_sexes_persist_through_generations() {
-    let mut w = Scenario::parse_toml(SCENARIO).expect("parse dimorphism").instantiate();
+    // Generations, not population size, are the claim: cap below `tribes`'
+    // 1500 so the 800 ticks stay cheap in a debug build (before
+    // `instantiate`, so each lineage's `max_share` cap scales with it).
+    let mut s = Scenario::parse_toml(SCENARIO).expect("parse tribes");
+    s.max_population = Some(500);
+    let mut w = s.instantiate();
     for _ in 0..800 {
         step(&mut w);
     }

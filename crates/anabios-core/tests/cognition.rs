@@ -179,6 +179,9 @@ fn cognitive_scenario_matches_golden_hashes() {
 #[test]
 fn cognitive_scenario_produces_invention_and_practice_events() {
     let s = Scenario::parse_toml(SCENARIO).expect("parse cognitive scenario");
+    // No population cap here: the loop stops at the first climbed invention,
+    // and a lower cap only delays it (tick 1159 under a 500 cap set after
+    // `instantiate`, 2310 under one set before it, 947 uncapped).
     let mut w = s.instantiate();
     let seeded = common::inventions_held(&w);
     let mut saw_invention = false;
@@ -205,7 +208,7 @@ fn cognitive_scenario_produces_invention_and_practice_events() {
 }
 
 /// Realized IQ actually develops above zero in the cognitive scenario. This is
-/// the non-triviality precondition that keeps `cognition_roundtrip` (in
+/// the non-triviality precondition that keeps `tribes_roundtrip` (in
 /// `save_load_roundtrip.rs`) honest — a round-trip over an all-zero IQ column
 /// would pass vacuously.
 #[test]
