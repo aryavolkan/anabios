@@ -1,6 +1,6 @@
 {
-  "_comment": "collapse-and-recovery arc — grazers vs stalkers around a shared cluster; scenario=predator-prey seed=14",
-  "seed": 14,
+  "_comment": "collapse-and-recovery arc — grazers vs stalkers around a shared cluster; scenario=predator-prey seed=0",
+  "seed": 0,
   "beats": [
     { "do": [
       { "letterbox": true },
