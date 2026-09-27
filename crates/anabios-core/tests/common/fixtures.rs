@@ -84,13 +84,6 @@ pub const GRAND_THEATER_PRE_FLIP: &str = include_str!("grand-theater.pre-flip.to
 // other knob at its pre-flip default. A fixture no suite reads is deleted
 // with its `.pre-flip.toml`.
 
-pub const BASIC_NEEDS_PRE_FLIP: &str = include_str!("basic-needs.pre-flip.toml");
-/// `basic-needs.toml` as it was: 150 uniform founders on a river-carved 1024
-/// map (`climate.river_threshold = 60`); only `basic_needs_enabled` on.
-pub fn basic_needs_flag_off() -> String {
-    with_opt_outs(BASIC_NEEDS_PRE_FLIP)
-}
-
 pub const BIOME_STEP_INTERVAL_PRE_FLIP: &str = include_str!("biome-step-interval.pre-flip.toml");
 /// `experiments/biome-step-interval.toml` as it was: 200 founders; only
 /// `living_biome` on, with `biome_step_interval = 4`.

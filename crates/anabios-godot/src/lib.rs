@@ -2304,6 +2304,120 @@ fn sample_to_dict(s: &CoevoSample) -> VarDictionary {
 mod tests {
     use super::*;
 
+    /// Every scenario feature knob except `inventions_enabled`, written at its
+    /// PRE-FLIP default: off, except `practices_enabled`, which already
+    /// defaulted on. Mirrors `OPT_OUT_ALL` in
+    /// `crates/anabios-core/tests/common/fixtures.rs` (the schema now defaults
+    /// every knob on, so a flag-off world must say so explicitly; this crate
+    /// cannot reach that test module).
+    macro_rules! pre_flip_knobs_but_inventions {
+        () => {
+            concat!(
+                "biome_adaptation = false\n",
+                "terrain_habitat = false\n",
+                "gene_tech_coupling = false\n",
+                "gene_requirements = false\n",
+                "cognition_enabled = false\n",
+                "affect_enabled = false\n",
+                "living_biome = false\n",
+                "season_period = 0\n",
+                "env_period = 0\n",
+                "climate_drift_rate = 0.0\n",
+                "nutrient_variation = false\n",
+                "soil_fertility = false\n",
+                "resources_enabled = false\n",
+                "conserve_goods_on_death = false\n",
+                "disasters_enabled = false\n",
+                "war_enabled = false\n",
+                "settlement_enabled = false\n",
+                "sexual_dimorphism_enabled = false\n",
+                "domestication_enabled = false\n",
+                "knowledge_enabled = false\n",
+                "practices_enabled = true\n",
+                "payoff_biased_learning = false\n",
+                "basic_needs_enabled = false\n",
+                "mate_seeking_enabled = false\n",
+                "territory_enabled = false\n",
+                "repro_biased_learning = false\n",
+                "unilateral_trade = false\n",
+                "anthro_race_enabled = false\n",
+                "disease_enabled = false\n",
+            )
+        };
+    }
+
+    /// `scenarios/minimal.toml` as it was before the schema flip (a verbatim
+    /// copy of `tests/common/minimal.pre-flip.toml`, every knob written off):
+    /// the flag-off world the export tests' OFF branches need, now that the
+    /// shipped minimal runs the full stack.
+    const MINIMAL_FLAG_OFF: &str = concat!(
+        "name = \"minimal\"\n",
+        "seed = 12345\n",
+        "max_population = 2000\n",
+        "inventions_enabled = false\n",
+        pre_flip_knobs_but_inventions!(),
+        "\n[[agents]]\n",
+        "count = 200\n",
+        "placement = { kind = \"uniform\" }\n",
+        "\n[agents.traits]\n",
+        "size = 0.4\n",
+        "basal_metabolism = 0.4\n",
+        "lifespan_bias = 0.6\n",
+        "reproduction_threshold = 0.5\n",
+    );
+
+    /// The retired `scenarios/weapons.toml` (removed by the scenario
+    /// consolidation; no world seeds the spear line), as it was: innovators
+    /// seeded with Stone Tools + Hafted Spears beside traditionalists and an
+    /// acultural control, only `inventions_enabled` on.
+    const WEAPONS_PRE_FLIP: &str = concat!(
+        "name = \"weapons\"\n",
+        "seed = 0\n",
+        "max_population = 400\n",
+        "inventions_enabled = true\n",
+        pre_flip_knobs_but_inventions!(),
+        "\n[[agents]]\n",
+        "count = 24\n",
+        "archetype = \"innovator\"\n",
+        "starting_inventions = [\"stone_tools\", \"hafted_spears\"]\n",
+        "placement = { kind = \"cluster\", center_x = 300.0, center_y = 512.0, radius = 80.0 }\n",
+        "[agents.traits]\n",
+        "altruism = 0.3\n",
+        "basal_metabolism = 0.6\n",
+        "lifespan_bias = 1.0\n",
+        "\n[[agents]]\n",
+        "count = 24\n",
+        "archetype = \"traditionalist\"\n",
+        "placement = { kind = \"cluster\", center_x = 724.0, center_y = 512.0, radius = 80.0 }\n",
+        "[agents.traits]\n",
+        "altruism = 0.3\n",
+        "basal_metabolism = 0.6\n",
+        "lifespan_bias = 1.0\n",
+        "\n[[agents]]\n",
+        "count = 16\n",
+        "archetype = \"asocial_forager\"\n",
+        "placement = { kind = \"cluster\", center_x = 512.0, center_y = 280.0, radius = 60.0 }\n",
+        "[agents.traits]\n",
+        "altruism = 0.0\n",
+        "basal_metabolism = 0.6\n",
+        "lifespan_bias = 1.0\n",
+    );
+
+    /// Instantiate `toml` and step it 25 ticks (the query tests' warm-up).
+    fn world_after_25(toml: &str) -> anabios_core::World {
+        let mut w = anabios_core::Scenario::parse_toml(toml).unwrap().instantiate();
+        for _ in 0..25 {
+            anabios_core::tick::step(&mut w);
+        }
+        w
+    }
+
+    /// The flag-off minimal world (`MINIMAL_FLAG_OFF`), stepped like
+    /// `minimal_world`.
+    fn minimal_flag_off_world() -> anabios_core::World {
+        world_after_25(MINIMAL_FLAG_OFF)
+    }
+
     /// A world with agents for the query tests below: the shipped minimal
     /// scenario (200 agents, uniform placement), stepped a few ticks so
     /// positions, moods and fire intent are non-trivial.
@@ -2459,16 +2573,8 @@ mod tests {
 
     #[test]
     fn livestock_flags_match_alive_count_and_are_binary() {
-        // Minimal scenario has domestication OFF -> every flag must be 0.
-        let toml = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../scenarios/minimal.toml"
-        ))
-        .expect("read minimal.toml");
-        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
-        for _ in 0..25 {
-            anabios_core::tick::step(&mut w);
-        }
+        // Flag-off minimal has domestication OFF -> every flag must be 0.
+        let w = minimal_flag_off_world();
         let flags = super::livestock_flags_of(&w);
         assert_eq!(flags.len(), w.agents.iter_alive().count());
         assert!(flags.iter().all(|&f| f == 0 || f == 1));
@@ -2478,32 +2584,18 @@ mod tests {
 
     #[test]
     fn invention_masks_flag_gated_and_seeded() {
-        // Minimal scenario has inventions OFF -> every mask must be 0.
-        let toml = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../scenarios/minimal.toml"
-        ))
-        .expect("read minimal.toml");
-        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
-        for _ in 0..25 {
-            anabios_core::tick::step(&mut w);
-        }
+        // Flag-off minimal has inventions OFF -> every mask must be 0.
+        let w = minimal_flag_off_world();
         let masks = super::invention_masks_of(&w);
         assert_eq!(masks.len(), w.agents.iter_alive().count());
         assert!(!w.inventions_enabled);
         assert!(masks.iter().all(|&m| m == 0), "inventions off => empty masks");
 
-        // weapons.toml seeds stone_tools + hafted_spears, so at least one ape
-        // must read back the spear bit the viewer keys its weapon poses on.
-        let toml = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../scenarios/weapons.toml"
-        ))
-        .expect("read weapons.toml");
-        let mut w = anabios_core::Scenario::parse_toml(&toml).unwrap().instantiate();
-        for _ in 0..25 {
-            anabios_core::tick::step(&mut w);
-        }
+        // The retired weapons.toml seeds stone_tools + hafted_spears, so at
+        // least one ape must read back the spear bit the viewer keys its
+        // weapon poses on. (`tribes` seeds Stone Tools only — no world seeds
+        // the spear line — so the retired file is inlined.)
+        let w = world_after_25(WEAPONS_PRE_FLIP);
         let masks = super::invention_masks_of(&w);
         assert_eq!(masks.len(), w.agents.iter_alive().count());
         let spear_bit = 1i32 << anabios_core::invention::HAFTED_SPEARS;
@@ -2694,7 +2786,7 @@ mod tests {
 
     #[test]
     fn locomotion_export_is_empty_when_off_and_aligned_when_on() {
-        assert!(super::locomotion_of(&minimal_world()).is_empty());
+        assert!(super::locomotion_of(&minimal_flag_off_world()).is_empty());
         let w = habitat_world();
         let loco = super::locomotion_of(&w);
         assert_eq!(loco.len(), w.agents.live_count() as usize);
@@ -2705,7 +2797,7 @@ mod tests {
     fn territory_export_lists_live_initialized_species() {
         use anabios_core::genome::GenomeSlot;
         use anabios_core::module::effective_diet_carnivory;
-        assert!(super::territories_of(&minimal_world()).is_empty());
+        assert!(super::territories_of(&minimal_flag_off_world()).is_empty());
         let w = habitat_world();
         let t = super::territories_of(&w);
         assert!(t.len() >= 3, "three founder species, got {}", t.len());

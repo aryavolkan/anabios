@@ -258,9 +258,9 @@ mod tests {
     #[test]
     fn scenario_instantiate_populates_hubs_from_biome() {
         use crate::scenario::Scenario;
-        const TRADE: &str = include_str!("../../../scenarios/biome-trade.toml");
+        const TRADE: &str = include_str!("../../../scenarios/markets.toml");
         let w = Scenario::parse_toml(TRADE).expect("parse").instantiate();
-        assert!(w.resources_enabled, "biome-trade must enable resources");
+        assert!(w.resources_enabled, "markets must enable resources");
         // apply() must have stored exactly what placement computes from the
         // finalized biome (proves the wiring ran, not the default empty vec).
         assert_eq!(w.trade_hubs, place_trade_hubs(&w.biome));
