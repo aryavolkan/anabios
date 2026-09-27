@@ -242,6 +242,64 @@ func _check_nearest_drawn() -> void:
 	)
 
 
+func _check_body_diameter() -> void:
+	# Size export 0.5 is genome Size 0: base radius only, doubled to a
+	# diameter (2 * 0.4).
+	_check(
+		is_equal_approx(AgentLayer.body_diameter(0.5), 0.8),
+		"body_diameter(0.5) expected 0.8, got %s" % AgentLayer.body_diameter(0.5)
+	)
+	# Size export 3.0 is genome Size 1 (clamped): base + size term, doubled
+	# (2 * 0.75).
+	_check(
+		is_equal_approx(AgentLayer.body_diameter(3.0), 1.5),
+		"body_diameter(3.0) expected 1.5, got %s" % AgentLayer.body_diameter(3.0)
+	)
+
+
+func _check_sprite_size() -> void:
+	# Zoom 1x: legible (14) is above BODY_CAP, so the readable size passes
+	# through unchanged, exactly like today's clampf(sizes[i] * BODY_SCALE, ...).
+	_check(
+		is_equal_approx(AgentLayer.sprite_size(1.0, 1.0, 6.0), 8.5),
+		"sprite_size at zoom 1 expected 8.5, got %s" % AgentLayer.sprite_size(1.0, 1.0, 6.0)
+	)
+
+	# Zoom 4x: legible = 14 / 4 = 3.5, below the readable size (8.5) and
+	# above the physical diameter for size 1.0, so legible wins.
+	_check(
+		is_equal_approx(AgentLayer.sprite_size(1.0, 4.0, 6.0), 3.5),
+		"sprite_size at zoom 4 expected 3.5, got %s" % AgentLayer.sprite_size(1.0, 4.0, 6.0)
+	)
+
+	# A large zoom (16x): legible = 14 / 16 = 0.875, below the physical
+	# diameter (0.94 for size 1.0), so the floor wins and the sprite is
+	# drawn at its true body size.
+	_check(
+		is_equal_approx(AgentLayer.sprite_size(1.0, 16.0, 6.0), AgentLayer.body_diameter(1.0)),
+		(
+			"sprite_size at zoom 16 expected the physical diameter, got %s"
+			% AgentLayer.sprite_size(1.0, 16.0, 6.0)
+		)
+	)
+
+	# Across a zoom sweep, the result never drops below the physical
+	# diameter and never exceeds the readable (BODY_SCALE-clamped) size.
+	var size_export := 2.0
+	var readable: float = clampf(size_export * AgentLayer.BODY_SCALE, 6.0, AgentLayer.BODY_CAP)
+	var diameter: float = AgentLayer.body_diameter(size_export)
+	for zoom in [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0]:
+		var sz: float = AgentLayer.sprite_size(size_export, zoom, 6.0)
+		_check(
+			sz >= diameter - 0.0001,
+			"sprite_size(%s) %s never drops below the physical diameter %s" % [zoom, sz, diameter]
+		)
+		_check(
+			sz <= readable + 0.0001,
+			"sprite_size(%s) %s never exceeds the readable size %s" % [zoom, sz, readable]
+		)
+
+
 func _init() -> void:
 	_check_view_rect()
 	_check_pos_in_rect()
@@ -250,6 +308,8 @@ func _init() -> void:
 	_check_idle_weapon_act()
 	_check_air_lift()
 	_check_nearest_drawn()
+	_check_body_diameter()
+	_check_sprite_size()
 
 	if _failed:
 		quit(1)

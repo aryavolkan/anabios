@@ -50,6 +50,21 @@ const CROWD_CELL := 12.0
 # biome lookup each frame, so only where the cut is visible).
 const WADING_ZOOM := 1.0
 const BODY_MIN: float = 6.0
+# Screen pixels a sprite's on-screen width must never fall below as the
+# camera zooms in (see sprite_size()). At 1x zoom LEGIBLE_PX / zoom = 14 is
+# already above BODY_CAP, so overview rendering is unchanged; the floor only
+# starts biting once the readable size (BODY_SCALE-derived) would draw wider
+# than 14 px, i.e. from about 4x zoom on, and by about 9x zoom the sprite has
+# shrunk all the way to its physical body diameter.
+const LEGIBLE_PX: float = 14.0
+# Mirrors collision.rs's BODY_R_BASE / BODY_R_SIZE — the sim's physical body
+# radius is BODY_R_BASE + BODY_R_SIZE * Size (Size, the genome export, in
+# [0,1]). Kept here so the viewer can compute the true body diameter
+# (body_diameter()) that a sprite should never shrink smaller than, however
+# far the camera zooms in. Keep these two in sync with
+# crates/anabios-core/src/collision.rs if its constants change.
+const PHYS_BODY_R_BASE: float = 0.4
+const PHYS_BODY_R_SIZE: float = 0.35
 # World units of margin added on every side of the camera's world rect before
 # querying alive_in_rect(): keeps an agent walking toward the edge of the
 # screen from popping in/out of the visible set the frame it crosses the
@@ -374,6 +389,30 @@ static func idle_weapon_act(act: float, walking: bool, inv_mask: int) -> float:
 	return act
 
 
+# Physical body diameter (world units) for a bridge size export
+# (sim.alive_sizes(), `0.5 + 2.5 * Size`): inverts that back to the genome's
+# Size in [0,1] and doubles the mirrored collision.rs radius
+# (PHYS_BODY_R_BASE + PHYS_BODY_R_SIZE * Size) to get a diameter — the floor
+# sprite_size() never draws a body smaller than.
+static func body_diameter(size_export: float) -> float:
+	var size_gene: float = clampf((size_export - 0.5) / 2.5, 0.0, 1.0)
+	return 2.0 * (PHYS_BODY_R_BASE + PHYS_BODY_R_SIZE * size_gene)
+
+
+# Sprite width in world units, shrinking toward the physical body as the
+# camera zooms in instead of staying at today's fixed readable size for
+# every zoom level. `readable` is today's size (BODY_SCALE, floored at
+# min_body and capped at BODY_CAP); `legible` is the world-unit span that
+# LEGIBLE_PX screen pixels cover at this zoom. The result is the smaller of
+# the two, never let below the true body diameter — so two bodies the sim's
+# collision resolve has separated eventually separate on screen too, however
+# far the camera zooms in.
+static func sprite_size(size_export: float, zoom: float, min_body: float) -> float:
+	var readable: float = clampf(size_export * BODY_SCALE, min_body, BODY_CAP)
+	var legible: float = LEGIBLE_PX / zoom
+	return maxf(body_diameter(size_export), minf(readable, legible))
+
+
 func refresh(
 	delta: float,
 	animation_time: float,
@@ -547,6 +586,9 @@ func refresh(
 	if _cam != null:
 		zoom_boost = clampf(1.2 / _cam.zoom.x, 1.0, 3.0)
 	var min_body := BODY_MIN * zoom_boost
+	# Zoom for sprite_size()'s shrink-toward-physical rule; 1.0 (no shrink,
+	# same as today) when there is no camera to read a zoom from.
+	var body_zoom: float = _cam.zoom.x if _cam != null else 1.0
 
 	# Bucket alive indices by render bucket — one MultiMesh per bucket. Only
 	# visible indices are grouped into `buckets` (the MultiMesh writes below
@@ -639,7 +681,7 @@ func refresh(
 		var i: int = idx[j]
 		var b: int = bucket_ix[i]
 		var gait_fps: float = MammalSprites.bucket_gait_fps(b)
-		var sz: float = clampf(sizes[i] * BODY_SCALE, min_body, BODY_CAP)
+		var sz: float = sprite_size(sizes[i], body_zoom, min_body)
 		# New agents squash in, then spring to full size with an overshoot
 		# (anticipation-then-pop) instead of blinking into existence;
 		# after BIRTH_POP seconds the scale is exactly 1.
@@ -823,7 +865,15 @@ func _kill(
 	if prev_idx < _prev_bucket.size():
 		sp = _prev_bucket[prev_idx]
 	if prev_idx < _prev_sizes.size():
-		sz = clampf(_prev_sizes[prev_idx] * BODY_SCALE, BODY_MIN, BODY_CAP)
+		# _kill runs on the same layer as refresh() and shares its _cam member,
+		# so a ghost applies the same shrink-toward-physical rule (against
+		# BODY_MIN, not the zoom-boosted min_body — same floor the old code
+		# used) as the body that just died, rather than popping back to
+		# overview size at close zoom. Falls back to the old fixed-size
+		# clamp (zoom 1.0, which sprite_size reduces to unchanged) if this
+		# layer is ever driven without a camera.
+		var death_zoom: float = _cam.zoom.x if _cam != null else 1.0
+		sz = sprite_size(_prev_sizes[prev_idx], death_zoom, BODY_MIN)
 	# Inherit the agent's body colour so a quadruped ghost keeps its coat hue
 	# instead of the neutral-grey value-ramp; hominin atlases are self-coloured
 	# (white here) so their ghosts are unchanged.
