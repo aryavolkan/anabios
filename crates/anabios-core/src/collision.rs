@@ -495,7 +495,12 @@ pub fn sweep_moves(world: &mut World) {
             }
             v = allowed / remaining;
         }
-        *end = wrap_torus(p, size_v);
+        let end_p = wrap_torus(p, size_v);
+        // A move cut short at a contact ends part-way along a path the
+        // habitat gate validated only at half-cell samples, so the cut point
+        // can clip the corner of a cell the class cannot occupy. Never end
+        // there: stay at the tick's start instead (the resolve still runs).
+        *end = if ci.can_occupy(biome.sample(end_p).terrain) { end_p } else { start };
     });
     let AgentBuffers { position, velocity, energy, genome, alive, .. } = &mut world.agents;
     let ends_ref = &ends;
