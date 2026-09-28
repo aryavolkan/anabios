@@ -240,8 +240,25 @@ pub fn reproduce_all(world: &mut World) {
         world.reproduced_this_tick.set(i, true);
         world.reproduced_this_tick.set(j, true);
 
-        // Spawn at midpoint of parents on the torus (account for wrap).
-        let child_pos = midpoint_torus(a_pos, b_pos, world.world_size);
+        // Spawn at the midpoint of the parents on the torus (account for
+        // wrap) — or, with the collision layer on, beside it on the
+        // perpendicular bisector, clear of both parents' bodies: births run
+        // after the stage-4' resolve, so a midpoint child would sit stacked
+        // on its parents for a whole tick. `flip` alternates the side by the
+        // initiating parent's id parity (no RNG; flag-off births unchanged).
+        let child_pos = if world.territory_enabled {
+            let child_r = crate::collision::body_radius(&child_genome);
+            crate::collision::offspring_position(
+                a_pos,
+                b_pos,
+                child_r + crate::collision::body_radius(&a_genome),
+                child_r + crate::collision::body_radius(&b_genome),
+                a_id & 1 == 1,
+                world.world_size,
+            )
+        } else {
+            midpoint_torus(a_pos, b_pos, world.world_size)
+        };
         // Territory layer: a newborn lands on terrain its class can occupy.
         let child_pos = if world.territory_enabled {
             crate::habitat::nearest_valid(
@@ -660,6 +677,42 @@ mod tests {
         // Each parent paid energy.
         assert!(w.agents.energy[id0 as usize] < SPAWN_ENERGY * 2.0);
         assert!(w.agents.energy[id1 as usize] < SPAWN_ENERGY * 2.0);
+    }
+
+    /// Collision layer on: the newborn is placed clear of both parents'
+    /// bodies (births run after the stage-4' resolve, so a midpoint child
+    /// would sit stacked on them for a tick). Flag off: the midpoint, as
+    /// before.
+    #[test]
+    fn newborn_is_placed_clear_of_both_parents_when_collision_is_on() {
+        use crate::collision::body_radius;
+        for territory in [true, false] {
+            let mut w = World::new(13);
+            w.territory_enabled = territory;
+            let (a, b) = spawn_fertile_pair(&mut w);
+            reproduce_all(&mut w);
+            assert_eq!(w.agents.live_count(), 3);
+            let child = 2u32;
+            assert!(w.agents.is_alive(child));
+            let ws = w.world_size;
+            let (pa, pb, pc) = (
+                w.agents.position[a as usize],
+                w.agents.position[b as usize],
+                w.agents.position[child as usize],
+            );
+            let da = torus_distance(pc, pa, ws);
+            let db = torus_distance(pc, pb, ws);
+            if territory {
+                let rc = body_radius(&w.agents.genome[child as usize]);
+                let ga = rc + body_radius(&w.agents.genome[a as usize]);
+                let gb = rc + body_radius(&w.agents.genome[b as usize]);
+                assert!(da >= ga - 1e-4, "child overlaps parent a: {da} < {ga}");
+                assert!(db >= gb - 1e-4, "child overlaps parent b: {db} < {gb}");
+            } else {
+                let mid = midpoint_torus(pa, pb, ws);
+                assert!(torus_distance(pc, mid, ws) < 1e-5, "flag off must keep the midpoint");
+            }
+        }
     }
 
     #[test]

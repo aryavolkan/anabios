@@ -17,6 +17,11 @@
 //!
 //! Both read snapshots and write only their own slot, so the result is
 //! independent of rayon thread count. Gated on `World::territory_enabled`.
+//!
+//! Births happen after the resolve (stage 6), so a newborn is placed clear of
+//! both parents' bodies (`offspring_position`) instead of on their midpoint;
+//! otherwise every birth tick showed the child stacked on its parents until
+//! the next resolve.
 
 use crate::agent::AgentBuffers;
 use crate::genome::{Genome, GenomeSlot};
@@ -89,6 +94,39 @@ const TIE_DIRS: [(f32, f32); 8] = [
 #[inline]
 pub fn body_radius(g: &Genome) -> f32 {
     BODY_R_BASE + BODY_R_SIZE * g.get(GenomeSlot::Size)
+}
+
+/// Where a newborn lands (territory layer on): on the perpendicular bisector
+/// of its parents, offset from their midpoint just far enough that its body
+/// clears both of theirs. `gap_a` / `gap_b` are the child-parent minimum
+/// gaps (child radius + parent radius); the offset uses the larger, so the
+/// child is at least its gap from each parent. The midpoint itself (the
+/// flag-off placement) is at most `MATING_RANGE / 2` from either parent and
+/// overlapped both by more than half a body for the one tick before the
+/// next resolve pushed them apart — every birth was a stacked pair on
+/// screen. Coincident parents (a zero-length axis) take a fixed +x normal;
+/// `flip` mirrors the offset so consecutive litters alternate sides. No RNG.
+pub fn offspring_position(
+    a: Vec2,
+    b: Vec2,
+    gap_a: f32,
+    gap_b: f32,
+    flip: bool,
+    world_size: f32,
+) -> Vec2 {
+    let d = torus_delta(b, a, world_size);
+    let len = d.length();
+    let mid = a + d * 0.5;
+    let gap = gap_a.max(gap_b);
+    let half = len * 0.5;
+    let h = (gap * gap - half * half).max(0.0).sqrt();
+    let n = if len > 1e-4 {
+        Vec2::new(-d.y, d.x) / len
+    } else {
+        Vec2::new(1.0, 0.0)
+    };
+    let off = n * if flip { -h } else { h };
+    wrap_torus(mid + off, Vec2::splat(world_size))
 }
 
 /// Unit vector pushing `i` away from `j`, given `d = pos_i − pos_j` (torus)
@@ -280,7 +318,56 @@ pub fn resolve_overlaps(world: &mut World) {
 mod tests {
     use super::*;
     use crate::genome::{Genome, GenomeSlot};
+    use crate::spatial::torus_distance;
     use crate::world::World;
+
+    /// A newborn lands at least its child–parent gap from BOTH parents, on
+    /// the torus, whether the parents touch, coincide, sit apart, straddle
+    /// the seam or lie on a diagonal; `flip` mirrors it across the midpoint.
+    #[test]
+    fn offspring_position_clears_both_parents() {
+        let ws = 1024.0;
+        let (ga, gb) = (1.15, 1.2);
+        let pairs = [
+            ((300.0, 300.0), (300.5, 300.0)),   // parents overlapping
+            ((300.0, 300.0), (300.0, 300.0)),   // coincident
+            ((300.0, 300.0), (301.15, 300.0)),  // just touching
+            ((300.0, 300.0), (302.0, 300.0)),   // at MATING_RANGE
+            ((1023.8, 300.0), (0.3, 300.0)),    // across the seam
+            ((300.0, 300.0), (300.7, 300.9)),   // diagonal axis
+        ];
+        for ((ax, ay), (bx, by)) in pairs {
+            let a = Vec2::new(ax, ay);
+            let b = Vec2::new(bx, by);
+            let mut sides = Vec::new();
+            for flip in [false, true] {
+                let c = offspring_position(a, b, ga, gb, flip, ws);
+                assert!(c.x >= 0.0 && c.x < ws && c.y >= 0.0 && c.y < ws, "wrapped: {c:?}");
+                let da = torus_distance(c, a, ws);
+                let db = torus_distance(c, b, ws);
+                assert!(da >= ga - 1e-4, "child {c:?} inside parent a's gap: {da} < {ga} ({a:?} {b:?})");
+                assert!(db >= gb - 1e-4, "child {c:?} inside parent b's gap: {db} < {gb} ({a:?} {b:?})");
+                // Just clear, not flung: the farther parent is within one extra body.
+                assert!(da.max(db) <= gb + 1.0, "child flung away: {da} {db}");
+                sides.push(c);
+            }
+            // The two flips mirror across the parents' midpoint.
+            let mid = wrap_torus(a + torus_delta(b, a, ws) * 0.5, Vec2::splat(ws));
+            let m2 = wrap_torus(sides[0] + torus_delta(sides[1], sides[0], ws) * 0.5, Vec2::splat(ws));
+            assert!(torus_distance(mid, m2, ws) < 1e-3, "flips are not mirrored: {sides:?} mid {mid:?}");
+        }
+    }
+
+    /// Parents already farther apart than the gap: the midpoint is clear and
+    /// is kept (no offset for no reason).
+    #[test]
+    fn offspring_position_keeps_a_clear_midpoint() {
+        let ws = 1024.0;
+        let a = Vec2::new(300.0, 300.0);
+        let b = Vec2::new(303.0, 300.0);
+        let c = offspring_position(a, b, 1.15, 1.15, false, ws);
+        assert!((c.x - 301.5).abs() < 1e-5 && (c.y - 300.0).abs() < 1e-5, "{c:?}");
+    }
 
     fn flat_world() -> World {
         let mut w = World::new(2);
