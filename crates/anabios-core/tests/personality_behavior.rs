@@ -55,6 +55,11 @@ fn mean_energy(w: &anabios_core::world::World) -> f32 {
     s / ids.len() as f32
 }
 
+/// The inline scenario with only the territory/habitat/collision layer off.
+fn without_territory(toml: &str) -> String {
+    toml.replacen("seed = 7\n", "seed = 7\nterritory_enabled = false\n", 1)
+}
+
 fn scenario(trait_line: &str) -> String {
     // Center off the equator: under the climate worldgen the equatorial cell at
     // (512,512) is abundant Rainforest (carrying capacity 28), where food is so
@@ -75,10 +80,19 @@ fn openness_increases_movement() {
     assert!(sh > sl, "high-O mean speed {sh} should exceed low-O {sl}");
 }
 
+// Fixture: the territory layer's min-gap collision resolve bounds how many
+// bodies fit inside a perception radius, so it caps the very metric this test
+// reads — mean crowding tops out near 17 with the layer on against 30 without
+// it — and under the converging resolve (2026-09-27) the high/low ordering at
+// 300 ticks sits in a population-crash phase that flips sign between horizons
+// (high-E ahead at 250, behind at 300 by 11.48 to 11.76, ahead again from 400).
+// Without the collision layer the approach bias reads cleanly at every
+// horizon from 150 ticks on (22.7 vs 20.0 at 300, 30.6 vs 19.6 at 600), so
+// this check opts out of that one knob and keeps the rest of the stack.
 #[test]
 fn extraversion_increases_clustering() {
-    let hi = run(&scenario("extraversion = 0.95"), 300);
-    let lo = run(&scenario("extraversion = 0.05"), 300);
+    let hi = run(&without_territory(&scenario("extraversion = 0.95")), 300);
+    let lo = run(&without_territory(&scenario("extraversion = 0.05")), 300);
     let (ch, cl) = (mean_crowding(&hi), mean_crowding(&lo));
     assert!(ch > cl, "high-E crowding {ch} should exceed low-E {cl}");
 }

@@ -117,7 +117,10 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // retired into `minimal.toml`, and the scenario schema now defaults every
     // feature on; the flag-off engine is pinned separately by the
     // `*_trajectory_is_pinned` guards, which did not move.
-    &[(0, 0x75704801cc76d91a), (100, 0x0ee54f25ad7ccbb5), (300, 0x25b3dc0c1abdada0)];
+    // Re-pinned 2026-09-27: the collision resolve now runs up to eight Jacobi
+    // passes with a per-pass hash rebuild, a coastline slide and a settle exit
+    // (was two fixed passes); every full-stack trajectory moves from tick 1.
+    &[(0, 0x75704801cc76d91a), (100, 0x1f7d211ea492d346), (300, 0x3f5842c8203edb2b)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {

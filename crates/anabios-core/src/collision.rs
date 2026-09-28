@@ -5,11 +5,14 @@
 //!
 //! 1. a separation steering term added in `decide_all` (agents route around
 //!    each other), and
-//! 2. a best-effort post-integrate resolve (stage 4'): `RESOLVE_PASSES`
-//!    Jacobi passes over a fine hash, each agent pushing itself out of its
-//!    overlaps against a position snapshot, dropping any push into terrain
-//!    its class can't occupy. A fixed pass count over a crowded hash can
-//!    still leave some pairs closer than their gap (see
+//! 2. a post-integrate resolve (stage 4'): up to `RESOLVE_PASSES` Jacobi
+//!    passes over a fine hash rebuilt before each one, each agent pushing
+//!    itself out of its overlaps against a position snapshot and sliding
+//!    along the coast when a push would leave its terrain, until a pass
+//!    moves nobody more than `RESOLVE_SETTLE`. Measured at 2000 ticks on the
+//!    full-stack worlds: zero pairs closer than half their gap and 0–3% of
+//!    agents closer than 90% of it (a tenth of a unit); the rest of the
+//!    "touching" pairs sit within that last 10% (see
 //!    `territory_measurement_probe`'s `deep_overlaps`/`shallow_overlaps`).
 //!
 //! Both read snapshots and write only their own slot, so the result is
@@ -37,8 +40,28 @@ pub const BODY_R_SIZE: f32 = 0.35;
 pub const STEER_MARGIN: f32 = 1.25;
 /// Weight of the steering vector in `decide_all`.
 pub const SEP_PULL: f32 = 2.0;
-/// Jacobi passes per tick.
-pub const RESOLVE_PASSES: usize = 2;
+/// Upper bound on Jacobi passes per tick. Measured on the full-stack worlds
+/// at 2000 ticks (minimal / predator-prey / habitat-territories): two passes
+/// left 4–6% of agents visibly overlapping (closer than 90% of their gap)
+/// and 1–13 pairs closer than half of it; eight passes with a rebuild and the
+/// coastline slide below leave 0–3% visible and zero deep overlaps, for
+/// ~20% more tick cost before the settle exit.
+pub const RESOLVE_PASSES: usize = 8;
+/// Rebuild the fine hash before every pass after the first, so each pass
+/// queries fresh buckets (and the tight query radius) instead of the stale
+/// ones the first build left.
+pub const RESOLVE_REBUILD_EACH_PASS: bool = true;
+/// When a push would leave the class's terrain, keep the axis component that
+/// stays on it (a coastline slide, as `habitat::gate_move` does) instead of
+/// dropping the push whole. Dropping it pinned shoreline crowds: roughly
+/// 40% of the residual overlaps sat on coasts.
+pub const RESOLVE_COAST_SLIDE: bool = true;
+/// Settle threshold: the loop stops after a pass whose largest applied push
+/// is below this many world units (5% of the smallest pair gap), so a tick
+/// with no crowding pays for one pass and only a real pile-up runs all
+/// `RESOLVE_PASSES`. A max over per-agent push lengths is order-independent,
+/// so the exit is identical for any rayon thread count.
+pub const RESOLVE_SETTLE: f32 = 0.04;
 /// Largest per-pass push (keeps a pass inside the one-ring hash guarantee).
 pub const MAX_PUSH: f32 = 1.0;
 /// Hash query radius of the separation steer (`UniformSpatialHash::query_bbox`):
@@ -158,13 +181,16 @@ pub fn separation_steer(
 }
 
 /// Stage 4': push overlapping colliding pairs apart to their minimum gap.
-/// Rebuilds the fine hash from post-integrate positions, then runs
-/// `RESOLVE_PASSES` Jacobi passes: each alive agent sums half of each overlap
+/// Rebuilds the fine hash from post-integrate positions, then runs up to
+/// `RESOLVE_PASSES` Jacobi passes (rebuilding the hash before each one when
+/// `RESOLVE_REBUILD_EACH_PASS`): each alive agent sums half of each overlap
 /// along `away_dir` (read from the pass's snapshot), caps the push at
-/// `MAX_PUSH`, and applies it only if the destination is valid for its class.
-/// Between passes positions move ≤ `MAX_PUSH`, so a neighbour within the
-/// max gap (1.5) is still within one hash cell (4.0) of the stale bucket.
-/// No-op with the flag off.
+/// `MAX_PUSH`, and applies it if the destination is valid for its class —
+/// else, with `RESOLVE_COAST_SLIDE`, the axis component that is. The loop
+/// stops after a pass whose largest push is below `RESOLVE_SETTLE`. Without
+/// a rebuild, positions move ≤ `MAX_PUSH` between passes, so a neighbour
+/// within the max gap (1.5) is still within one hash cell (4.0) of the stale
+/// bucket. No-op with the flag off.
 pub fn resolve_overlaps(world: &mut World) {
     use rayon::prelude::*;
     if !world.territory_enabled {
@@ -174,7 +200,13 @@ pub fn resolve_overlaps(world: &mut World) {
     let ws = world.world_size;
     let cap = world.agents.capacity();
     for pass in 0..RESOLVE_PASSES {
-        let query_r = RESOLVE_QUERY_R[pass.min(RESOLVE_QUERY_R.len() - 1)];
+        if pass > 0 && RESOLVE_REBUILD_EACH_PASS {
+            rebuild_hash(world);
+        }
+        // Fresh buckets take the tight radius; stale ones (no rebuild since
+        // the previous pass moved agents by up to MAX_PUSH) the wide one.
+        let fresh = pass == 0 || RESOLVE_REBUILD_EACH_PASS;
+        let query_r = if fresh { RESOLVE_QUERY_R[0] } else { RESOLVE_QUERY_R[1] };
         let mut snap = std::mem::take(&mut world.collision_scratch);
         snap.clear();
         snap.extend_from_slice(&world.agents.position[..cap]);
@@ -183,48 +215,64 @@ pub fn resolve_overlaps(world: &mut World) {
         let AgentBuffers { position, genome, alive, .. } = &mut world.agents;
         let (genome, alive) = (&*genome, &*alive);
         let snap_ref = &snap;
-        position[..cap].par_iter_mut().enumerate().for_each(|(i, pos)| {
-            if !alive[i] {
-                return;
-            }
-            let p = snap_ref[i];
-            let ci = Locomotion::of(&genome[i]);
-            let ri = body_radius(&genome[i]);
-            let mut push = Vec2::ZERO;
-            spatial.query_bbox(p, query_r, |oid| {
-                let j = oid as usize;
-                if j == i || !ci.collides_with(Locomotion::of(&genome[j])) {
-                    return;
+        // Max over every agent's applied push length — order-independent, so
+        // the settle exit below is identical for any rayon thread count.
+        let largest_push = position[..cap]
+            .par_iter_mut()
+            .enumerate()
+            .map(|(i, pos)| {
+                if !alive[i] {
+                    return 0.0f32;
                 }
-                let gap = ri + body_radius(&genome[j]);
-                let d = torus_delta(p, snap_ref[j], ws);
-                let dist = d.length();
-                if dist >= gap {
-                    return;
+                let p = snap_ref[i];
+                let ci = Locomotion::of(&genome[i]);
+                let ri = body_radius(&genome[i]);
+                let mut push = Vec2::ZERO;
+                spatial.query_bbox(p, query_r, |oid| {
+                    let j = oid as usize;
+                    if j == i || !ci.collides_with(Locomotion::of(&genome[j])) {
+                        return;
+                    }
+                    let gap = ri + body_radius(&genome[j]);
+                    let d = torus_delta(p, snap_ref[j], ws);
+                    let dist = d.length();
+                    if dist >= gap {
+                        return;
+                    }
+                    push += away_dir(i as u32, oid, d, dist) * ((gap - dist) * 0.5);
+                });
+                if push == Vec2::ZERO {
+                    return 0.0;
                 }
-                push += away_dir(i as u32, oid, d, dist) * ((gap - dist) * 0.5);
-            });
-            if push == Vec2::ZERO {
-                return;
-            }
-            let len = push.length();
-            if len > MAX_PUSH {
-                push *= MAX_PUSH / len;
-            }
-            // A push into terrain the class can't occupy is dropped whole.
-            // Every deep overlap in a 20k-tick flagship run is a coast-
-            // adjacent Land pair whose seaward push was discarded this way;
-            // a coastline slide (keep the axis component that stays on land,
-            // as `habitat::gate_move` does) was prototyped and measured: it
-            // did not reduce deep overlaps in dense shoreline crowds (133 on
-            // the full-population seed) and flipped the showcase seed's
-            // outcome, so it is not shipped. Follow-up: measure it on its own.
-            let target = wrap_torus(p + push, Vec2::splat(ws));
-            if ci.can_occupy(biome.sample(target).terrain) {
-                *pos = target;
-            }
-        });
+                let len = push.length();
+                if len > MAX_PUSH {
+                    push *= MAX_PUSH / len;
+                }
+                let target = wrap_torus(p + push, Vec2::splat(ws));
+                if ci.can_occupy(biome.sample(target).terrain) {
+                    *pos = target;
+                    return push.length();
+                }
+                if RESOLVE_COAST_SLIDE {
+                    for comp in [Vec2::new(push.x, 0.0), Vec2::new(0.0, push.y)] {
+                        if comp == Vec2::ZERO {
+                            continue;
+                        }
+                        let t = wrap_torus(p + comp, Vec2::splat(ws));
+                        if ci.can_occupy(biome.sample(t).terrain) {
+                            *pos = t;
+                            return comp.length();
+                        }
+                    }
+                }
+                // A push into terrain the class can't occupy is dropped.
+                0.0
+            })
+            .reduce(|| 0.0f32, f32::max);
         world.collision_scratch = snap;
+        if largest_push < RESOLVE_SETTLE {
+            break;
+        }
     }
 }
 
@@ -325,6 +373,87 @@ mod tests {
         resolve_overlaps(&mut w);
         let t = w.biome.sample(w.agents.position[a as usize]).terrain;
         assert_ne!(t, crate::biome::TerrainType::Water, "land agent pushed into the sea");
+    }
+
+    #[test]
+    fn a_dense_pile_separates_to_within_a_tenth_of_its_gaps() {
+        // Forty agents dropped inside a 3-unit square: the pass cap plus the
+        // per-pass rebuild must spread them so no pair is closer than half
+        // its gap and at most a couple sit closer than 90% of it.
+        let mut w = flat_world();
+        let mut ids = Vec::new();
+        for k in 0..40u32 {
+            let x = 300.0 + (k % 8) as f32 * 0.4;
+            let y = 300.0 + (k / 8) as f32 * 0.6;
+            ids.push(w.spawn_agent(Vec2::new(x, y), Genome::neutral()));
+        }
+        let count = |w: &World| {
+            let (mut visible, mut deep) = (0, 0);
+            for (i, &a) in ids.iter().enumerate() {
+                for &b in &ids[i + 1..] {
+                    let gap = body_radius(&w.agents.genome[a as usize])
+                        + body_radius(&w.agents.genome[b as usize]);
+                    let d = crate::spatial::torus_distance(
+                        w.agents.position[a as usize],
+                        w.agents.position[b as usize],
+                        w.world_size,
+                    );
+                    if d < 0.9 * gap {
+                        visible += 1;
+                    }
+                    if d < 0.5 * gap {
+                        deep += 1;
+                    }
+                }
+            }
+            (visible, deep)
+        };
+        // One tick's resolve clears every deep overlap of the pile outright.
+        resolve_overlaps(&mut w);
+        let (visible1, deep1) = count(&w);
+        assert_eq!(deep1, 0, "deep overlaps left after one resolve");
+        assert!(visible1 < 40 * 39 / 2 / 4, "one resolve barely spread the pile: {visible1} pairs");
+        // The sim resolves every tick; a few consecutive resolves finish the job.
+        resolve_overlaps(&mut w);
+        resolve_overlaps(&mut w);
+        let (visible3, deep3) = count(&w);
+        assert_eq!(deep3, 0);
+        assert!(visible3 < visible1, "later resolves must keep spreading the pile");
+        // A handful of pairs (measured: 4 of 780) settle just under 90% of
+        // their gap in the crowd equilibrium — a tenth of a unit, invisible.
+        assert!(
+            visible3 <= 6,
+            "{visible3} pairs still closer than 90% of their gap after 3 resolves"
+        );
+    }
+
+    #[test]
+    fn a_seaward_push_slides_along_the_coast_instead_of_being_dropped() {
+        let mut w = flat_world();
+        // Water east of x = 304 (cell col 38), as above.
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 38..res {
+                w.biome.at_mut(col, row).terrain = crate::biome::TerrainType::Water;
+            }
+        }
+        // `a` sits on the shore; `b` overlaps it from just south of due west,
+        // so the away push on `a` points east with a small northward part:
+        // its x part would enter the sea, its y part stays on land.
+        let a = w.spawn_agent(Vec2::new(303.9, 300.0), Genome::neutral());
+        let _b = w.spawn_agent(Vec2::new(303.4, 299.9), Genome::neutral());
+        let before = w.agents.position[a as usize];
+        resolve_overlaps(&mut w);
+        let after = w.agents.position[a as usize];
+        assert_ne!(after, before, "the push must not be dropped wholesale");
+        assert!(after.y > before.y, "the y component slides north: {before:?} -> {after:?}");
+        assert!(after.x < 304.0, "never into the sea: {after:?}");
+        assert_ne!(w.biome.sample(after).terrain, crate::biome::TerrainType::Water);
+        // And the pair is apart: the slide plus the neighbour's own retreat
+        // reach the gap within the pass cap.
+        let gap = 2.0 * body_radius(&Genome::neutral());
+        let d = crate::spatial::torus_distance(after, w.agents.position[_b as usize], w.world_size);
+        assert!(d >= 0.9 * gap, "still overlapping at the shore: d={d} gap={gap}");
     }
 
     #[test]

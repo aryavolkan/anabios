@@ -218,7 +218,10 @@ const GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-26: the scenario schema now defaults every feature on;
     // the flag-off engine is pinned separately by the `*_trajectory_is_pinned`
     // guards, which did not move.
-    &[(0, 0x75704801cc76d91a), (100, 0x0ee54f25ad7ccbb5), (1000, 0x951d1a8c666614d7)];
+    // Re-pinned 2026-09-27: the collision resolve now runs up to eight Jacobi
+    // passes with a per-pass hash rebuild, a coastline slide and a settle exit
+    // (was two fixed passes); every full-stack trajectory moves from tick 1.
+    &[(0, 0x75704801cc76d91a), (100, 0x1f7d211ea492d346), (1000, 0x9ae94d341eeaeb88)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -325,7 +328,10 @@ const HABITAT_GOLDEN: &[(u64, u64)] =
     // guards, which did not move. Re-pinned 2026-09-27 after the validation
     // tuning (Land founded as four habitat herds, `sexual_dimorphism_enabled =
     // false`; see the scenario header); the guards again did not move.
-    &[(0, 0xabf4cde73a94b777), (100, 0x1f63dcdd6fbbb461), (1000, 0xe9d9e06230efdf4b)];
+    // Re-pinned 2026-09-27: the collision resolve now runs up to eight Jacobi
+    // passes with a per-pass hash rebuild, a coastline slide and a settle exit
+    // (was two fixed passes); every full-stack trajectory moves from tick 1.
+    &[(0, 0xabf4cde73a94b777), (100, 0x8ec9a742bfa585a1), (1000, 0xf7d3b4ed3082fb1b)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {

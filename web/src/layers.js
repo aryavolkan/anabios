@@ -171,6 +171,41 @@ function stallGeometry() {
 }
 
 // ---------------------------------------------------------------------------
+// Body draw scale: the figure geometries are stylised well above the physical
+// collision body (see crates/anabios-core/src/collision.rs BODY_R_BASE/
+// BODY_R_SIZE — radius = BODY_R_BASE + BODY_R_SIZE · Size, Size ∈ [0,1]), so a
+// distant herd reads clearly but two agents the collision resolve has already
+// separated can still look stacked on screen. `bodyScale` keeps the current
+// readable size while the camera is far away and shrinks each body toward its
+// physical diameter as the camera closes in, never below it (bodies never
+// look more overlapped than the physics actually is) and never above the
+// readable size (distant herds stay legible).
+const BODY_R_BASE = 0.4, BODY_R_SIZE = 0.35;
+// crates/anabios-wasm/src/view.rs encodes AGENT.SIZE as `0.5 + 2.5 · Size`
+// (not the raw [0,1] gene) — invert that to recover Size before deriving the
+// physical radius.
+const SIZE_ENC_BASE = 0.5, SIZE_ENC_SPAN = 2.5;
+
+/** Physical body diameter (world units) for an AGENT.SIZE column value. */
+function physicalDiameter(sizeVal) {
+  const gene = (sizeVal - SIZE_ENC_BASE) / SIZE_ENC_SPAN;
+  return 2 * (BODY_R_BASE + BODY_R_SIZE * gene);
+}
+
+/**
+ * Pixels a body should stay legible at, at minimum, regardless of camera
+ * distance — chosen so the default framing (a whole herd) still reads clearly
+ * while, at close range, two bodies 1.1 units apart (two default-size agents'
+ * physical radii touching) no longer overlap on screen.
+ */
+const LEGIBLE_PX = 14;
+
+/** Draw scale: readable far away, clamped down to the physical diameter as the
+ *  camera closes in, but never smaller than it or larger than `readable`. */
+export function bodyScale(readable, physDiam, legible) {
+  return Math.max(physDiam, Math.min(readable, legible));
+}
+
 export const COLOR_MODES = ["species", "diet", "dialect", "energy", "mood", "arousal", "infection"];
 
 export class Agents {
@@ -245,17 +280,24 @@ export class Agents {
   /** Forget the previous population (new world, or a jump in time) so nothing reads as born or dead. */
   reset() { if (this.prev) { this.prev.clear(); this.spare = this.prev; } this.prev = null; this.born.length = 0; this.died.length = 0; }
 
-  update(a, heightAt, live) {
+  /**
+   * @param unitsPerPixel  world units spanned by one screen pixel at the
+   *   camera's current distance to its target (computed once per frame by
+   *   the caller — see `stage.unitsPerPixel` in scene.js — never per agent).
+   */
+  update(a, heightAt, live, unitsPerPixel = 0) {
     const n = Math.min(a.count, this.max), d = a.data, s = a.stride;
     const counts = [0, 0];
     this.selectedPos = null;
     const gaits = this.meshes.map((m) => m.geometry.attributes.aGait.array);
     const prev = this.prev, cur = this.spare, buf = this.buf, born = this.born, died = this.died;
+    const legible = LEGIBLE_PX * unitsPerPixel;
     cur.clear(); born.length = 0; died.length = 0;
     for (let k = 0; k < n; k++) {
       const o = k * s, x = d[o + AGENT.X], y = d[o + AGENT.Y];
       const h = heightAt(x, y);
-      const sc = this.baseScale * (0.55 + 0.45 * d[o + AGENT.SIZE]);
+      const readable = this.baseScale * (0.55 + 0.45 * d[o + AGENT.SIZE]);
+      const sc = unitsPerPixel > 0 ? bodyScale(readable, physicalDiameter(d[o + AGENT.SIZE]), legible) : readable;
       const id = d[o + AGENT.ID] | 0;
       const rot = d[o + AGENT.ROT];
       const asleep = (d[o + AGENT.FLAGS] & AGENT_FLAG.ASLEEP) !== 0;

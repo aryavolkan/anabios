@@ -91,7 +91,10 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // retired into `tribes.toml`, and the scenario schema now defaults every
     // feature on; the flag-off engine is pinned separately by the
     // `*_trajectory_is_pinned` guards, which did not move.
-    &[(0, 0x808d1ec15075dd36), (100, 0x3ee6c678fbb566a1), (200, 0xc3a2e157b5d553b2)];
+    // Re-pinned 2026-09-27: the collision resolve now runs up to eight Jacobi
+    // passes with a per-pass hash rebuild, a coastline slide and a settle exit
+    // (was two fixed passes); every full-stack trajectory moves from tick 1.
+    &[(0, 0x808d1ec15075dd36), (100, 0xe4cf42b1b62c735e), (200, 0x9f98547b9bce1df1)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

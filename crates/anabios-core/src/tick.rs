@@ -75,8 +75,9 @@ pub fn step(world: &mut World) {
     );
 
     // Stage 4': collision resolve (territory layer) — colliding bodies are
-    // kept apart (separation steering plus this best-effort 2-pass min-gap
-    // resolve), not guaranteed to never touch. Before needs/anchor/interact
+    // kept apart (separation steering plus this min-gap resolve: up to
+    // RESOLVE_PASSES Jacobi passes with a settle exit), leaving no deep
+    // overlaps and only sub-tenth-unit residue in dense crowds. Before needs/anchor/interact
     // so every later stage sees resolved positions. No-op with the flag off.
     crate::collision::resolve_overlaps(world);
 
