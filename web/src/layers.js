@@ -349,6 +349,13 @@ export class Agents {
       mesh.instanceMatrix.needsUpdate = true;
       mesh.geometry.attributes.aGait.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      // three caches an InstancedMesh's bounding sphere the first time it is
+      // needed and never refreshes it as instance matrices change; here it was
+      // computed over zero instances (an empty sphere) before the first world
+      // was attached, so `InstancedMesh.raycast` rejected every pick and
+      // clicking an agent never opened its card. Drop the cache each update:
+      // the next raycast (a click) recomputes it over the live instances.
+      mesh.boundingSphere = null;
     }
     if (this.selectedPos) {
       this.marker.position.copy(this.selectedPos).setY(this.selectedPos.y + 0.15);
