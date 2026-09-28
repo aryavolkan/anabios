@@ -87,8 +87,10 @@ pub const MAX_PUSH: f32 = 1.0;
 /// surface there stopped every converging pair instantly — half of every
 /// herd frozen (median step zero). Half the gap still rules out passing
 /// through and stacking; the resolve then takes the shallow overlap back
-/// out within the same tick.
-pub const SWEEP_DEEP_FRAC: f32 = 0.5;
+/// out within the same tick. Set above the audit's "deep" line (half the
+/// gap): at exactly half, pairs a crowd pressed against the surface ended
+/// the tick at 0.42–0.46 of their gap.
+pub const SWEEP_DEEP_FRAC: f32 = 0.6;
 /// Slides per swept move: on contact the inward part of the velocity is
 /// dropped and the move continues along the body's surface, up to this many
 /// times, so a glancing contact does not stop the walk (stopping outright
