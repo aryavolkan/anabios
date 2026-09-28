@@ -161,11 +161,7 @@ pub fn offspring_position(
     let gap = gap_a.max(gap_b);
     let half = len * 0.5;
     let h = (gap * gap - half * half).max(0.0).sqrt();
-    let n = if len > 1e-4 {
-        Vec2::new(-d.y, d.x) / len
-    } else {
-        Vec2::new(1.0, 0.0)
-    };
+    let n = if len > 1e-4 { Vec2::new(-d.y, d.x) / len } else { Vec2::new(1.0, 0.0) };
     let off = n * if flip { -h } else { h };
     wrap_torus(mid + off, Vec2::splat(world_size))
 }
@@ -490,7 +486,8 @@ pub fn sweep_moves(world: &mut World) {
                 break;
             }
             // The rest of the tick along the surface, habitat-gated.
-            let allowed = crate::habitat::gate_move(biome, ci, wrap_torus(p, size_v), slid * remaining);
+            let allowed =
+                crate::habitat::gate_move(biome, ci, wrap_torus(p, size_v), slid * remaining);
             if allowed == Vec2::ZERO {
                 break;
             }
@@ -650,7 +647,10 @@ mod tests {
         move_and_sweep(&mut w, &[(a, Vec2::new(4.0, 0.0)), (b, Vec2::new(-4.0, 0.0))]);
         let (pa, pb) = (w.agents.position[a as usize], w.agents.position[b as usize]);
         let d = torus_distance(pa, pb, ws);
-        assert!(d >= gap - 1e-3 && d <= gap + 1e-2, "stopped at contact: d={d} gap={gap} {pa:?} {pb:?}");
+        assert!(
+            d >= gap - 1e-3 && d <= gap + 1e-2,
+            "stopped at contact: d={d} gap={gap} {pa:?} {pb:?}"
+        );
         assert!(pa.x < pb.x, "swapped through each other: {pa:?} {pb:?}");
         assert!(pa.x > 300.0 && pb.x < 306.0, "both moved toward the contact");
         // The applied velocity is the shortened move; energy refunded for the rest.
@@ -755,12 +755,12 @@ mod tests {
         let ws = 1024.0;
         let (ga, gb) = (1.15, 1.2);
         let pairs = [
-            ((300.0, 300.0), (300.5, 300.0)),   // parents overlapping
-            ((300.0, 300.0), (300.0, 300.0)),   // coincident
-            ((300.0, 300.0), (301.15, 300.0)),  // just touching
-            ((300.0, 300.0), (302.0, 300.0)),   // at MATING_RANGE
-            ((1023.8, 300.0), (0.3, 300.0)),    // across the seam
-            ((300.0, 300.0), (300.7, 300.9)),   // diagonal axis
+            ((300.0, 300.0), (300.5, 300.0)),  // parents overlapping
+            ((300.0, 300.0), (300.0, 300.0)),  // coincident
+            ((300.0, 300.0), (301.15, 300.0)), // just touching
+            ((300.0, 300.0), (302.0, 300.0)),  // at MATING_RANGE
+            ((1023.8, 300.0), (0.3, 300.0)),   // across the seam
+            ((300.0, 300.0), (300.7, 300.9)),  // diagonal axis
         ];
         for ((ax, ay), (bx, by)) in pairs {
             let a = Vec2::new(ax, ay);
@@ -771,16 +771,26 @@ mod tests {
                 assert!(c.x >= 0.0 && c.x < ws && c.y >= 0.0 && c.y < ws, "wrapped: {c:?}");
                 let da = torus_distance(c, a, ws);
                 let db = torus_distance(c, b, ws);
-                assert!(da >= ga - 1e-4, "child {c:?} inside parent a's gap: {da} < {ga} ({a:?} {b:?})");
-                assert!(db >= gb - 1e-4, "child {c:?} inside parent b's gap: {db} < {gb} ({a:?} {b:?})");
+                assert!(
+                    da >= ga - 1e-4,
+                    "child {c:?} inside parent a's gap: {da} < {ga} ({a:?} {b:?})"
+                );
+                assert!(
+                    db >= gb - 1e-4,
+                    "child {c:?} inside parent b's gap: {db} < {gb} ({a:?} {b:?})"
+                );
                 // Just clear, not flung: the farther parent is within one extra body.
                 assert!(da.max(db) <= gb + 1.0, "child flung away: {da} {db}");
                 sides.push(c);
             }
             // The two flips mirror across the parents' midpoint.
             let mid = wrap_torus(a + torus_delta(b, a, ws) * 0.5, Vec2::splat(ws));
-            let m2 = wrap_torus(sides[0] + torus_delta(sides[1], sides[0], ws) * 0.5, Vec2::splat(ws));
-            assert!(torus_distance(mid, m2, ws) < 1e-3, "flips are not mirrored: {sides:?} mid {mid:?}");
+            let m2 =
+                wrap_torus(sides[0] + torus_delta(sides[1], sides[0], ws) * 0.5, Vec2::splat(ws));
+            assert!(
+                torus_distance(mid, m2, ws) < 1e-3,
+                "flips are not mirrored: {sides:?} mid {mid:?}"
+            );
         }
     }
 
@@ -933,7 +943,10 @@ mod tests {
         resolve_overlaps(&mut w);
         let (visible3, deep3) = count(&w);
         assert_eq!(deep3, 0);
-        assert!(visible3 <= visible1, "later resolves must not re-crowd the pile: {visible1} -> {visible3}");
+        assert!(
+            visible3 <= visible1,
+            "later resolves must not re-crowd the pile: {visible1} -> {visible3}"
+        );
         // A handful of pairs (measured: 4 of 780) settle just under 90% of
         // their gap in the crowd equilibrium — a tenth of a unit, invisible.
         assert!(

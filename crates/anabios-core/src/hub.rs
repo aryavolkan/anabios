@@ -280,12 +280,12 @@ mod tests {
         let ws = 1000.0;
         let hub = TradeHub { pos: Vec2::new(100.0, 100.0), cell: 0, goods: vec![] };
         // Far away: a unit pull toward the hub.
-        let far = hub_pull(&[hub.clone()], Vec2::new(100.0, 300.0), ws);
+        let far = hub_pull(std::slice::from_ref(&hub), Vec2::new(100.0, 300.0), ws);
         assert!((far.length() - 1.0).abs() < 1e-6 && far.y < 0.0, "{far:?}");
         // At the market: no pull at all.
-        assert_eq!(hub_pull(&[hub.clone()], Vec2::new(100.0, 110.0), ws), Vec2::ZERO);
+        assert_eq!(hub_pull(std::slice::from_ref(&hub), Vec2::new(100.0, 110.0), ws), Vec2::ZERO);
         // Half-way through the fade: half a unit.
-        let half = hub_pull(&[hub.clone()], Vec2::new(100.0, 100.0 + mid), ws);
+        let half = hub_pull(std::slice::from_ref(&hub), Vec2::new(100.0, 100.0 + mid), ws);
         assert!((half.length() - 0.5).abs() < 1e-6, "{half:?}");
         // Across the seam the nearest hub is still found and the gain applies.
         let seam = hub_pull(&[hub], Vec2::new(100.0, 960.0), ws);
