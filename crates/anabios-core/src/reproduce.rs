@@ -157,6 +157,8 @@ pub fn reproduce_all(world: &mut World) {
     // alive set via spawn() and we don't want to iterate over newborns
     // this tick.
     let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
+    let mut newborns = std::mem::take(&mut world.newborn_scratch);
+    newborns.clear();
     alive_ids.clear();
     alive_ids.extend(world.agents.iter_alive());
 
@@ -355,6 +357,9 @@ pub fn reproduce_all(world: &mut World) {
         // Maladaptive-practice fitness costs (cognition-gated; may cull the child).
         let child_lost =
             apply_practice_fitness_costs(world, child_id, i, j, &a_genome, &b_genome, a_species);
+        if !child_lost && world.territory_enabled {
+            newborns.push(child_id);
+        }
         // O3 repro-biased learning: record the birth outcome on both parents.
         // Flag-gated so flag-off worlds keep all-zero counters (byte-identical
         // serialized state modulo the layout growth).
@@ -369,6 +374,12 @@ pub fn reproduce_all(world: &mut World) {
         }
     }
     world.agents.scratch_ids = alive_ids;
+    // Collision layer: a child clear of its parents may still have landed on
+    // a third body — settle this tick's newborns against everyone (only the
+    // newborns move). No-op with the flag off.
+    crate::collision::settle_newborns(world, &newborns);
+    newborns.clear();
+    world.newborn_scratch = newborns;
 }
 
 /// Meme inheritance: child meme = parent average + jitter, ONLY when the child

@@ -114,6 +114,21 @@ because seed 14 no longer produces the `PopulationCycleDetected` event its
 PopCycle chapter waits on under the new resolve (seed 0 does, at tick 650).
 The other rows date from the consolidation sweep under the two-pass resolve.
 
+The collision audit of 2026-09-28 (every world, 2000 ticks, every tick
+checked for colliding pairs closer than half their gap — the numbers are in
+the pull request that landed it) moved every trajectory again, through four
+changes that together leave no settled pair closer than half its gap on any
+world: a newborn is placed clear of both parents' bodies and, if that spot
+holds a third body, at the nearest free spot instead of on its parents'
+midpoint (births run after the resolve, so every birth was a stacked pair
+for a tick); the trade-hub pull is off inside `HUB_TRADE_RANGE` and fades
+in beyond it (a constant pull to the hub's centre pressed 225 bodies into a
+6-unit radius on `grand-theater`, a pile no bounded resolve can unpack);
+the water pull stops once the agent can already drink where it stands (it
+pinned shoreline crowds against the coast); and the resolve's pass cap rose
+from eight to thirty-two, which a calm tick never reaches. The validation
+bar was not re-run for this change.
+
 ## Running
 
 ```

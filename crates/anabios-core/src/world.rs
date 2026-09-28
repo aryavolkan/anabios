@@ -363,6 +363,14 @@ pub struct World {
     /// Scratch, `#[serde(skip)]`.
     #[serde(skip)]
     pub collision_scratch: Vec<crate::prelude::Vec2>,
+    /// This tick's newborn ids, collected by `reproduce_all` for
+    /// `collision::settle_newborns`. Scratch, `#[serde(skip)]`.
+    #[serde(skip)]
+    pub newborn_scratch: Vec<u32>,
+    /// Per-slot "born this tick" marks for `collision::settle_newborns`.
+    /// Scratch, `#[serde(skip)]`.
+    #[serde(skip)]
+    pub newborn_mark: Vec<bool>,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
@@ -553,6 +561,8 @@ impl World {
             // Placeholder (3x3); `collision::rebuild_hash` sizes it on first use.
             collision_spatial: UniformSpatialHash::with_dims(crate::biome::WORLD_SIZE_DEFAULT, 3),
             collision_scratch: Vec::new(),
+            newborn_scratch: Vec::new(),
+            newborn_mark: Vec::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),

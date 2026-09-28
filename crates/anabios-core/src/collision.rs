@@ -51,7 +51,12 @@ pub const SEP_PULL: f32 = 2.0;
 /// and 1–13 pairs closer than half of it; eight passes with a rebuild and the
 /// coastline slide below leave 0–3% visible and zero deep overlaps, for
 /// ~20% more tick cost before the settle exit.
-pub const RESOLVE_PASSES: usize = 8;
+/// Raised from eight to thirty-two on 2026-09-28: a calm tick still exits
+/// after one pass (the settle test below), only a real pile-up runs on, and
+/// the pile-ups that remain once the hub and water pulls stop pressing agents
+/// into a crowd they are already part of (`hub::hub_pull`, the water pull's
+/// `drinkable_near` gate) are the ones that need the extra passes.
+pub const RESOLVE_PASSES: usize = 32;
 /// Rebuild the fine hash before every pass after the first, so each pass
 /// queries fresh buckets (and the tight query radius) instead of the stale
 /// ones the first build left.
@@ -69,6 +74,22 @@ pub const RESOLVE_COAST_SLIDE: bool = true;
 pub const RESOLVE_SETTLE: f32 = 0.04;
 /// Largest per-pass push (keeps a pass inside the one-ring hash guarantee).
 pub const MAX_PUSH: f32 = 1.0;
+/// Newborn settle (`settle_newborns`) search: rings of `NEWBORN_RING_STEP`
+/// world units around the birth spot, `NEWBORN_RING_SAMPLES` candidates per
+/// ring, out to `NEWBORN_RINGS` rings (twelve units — past the edge of the
+/// densest crowd measured, the ~50 bodies within six units of a market on
+/// grand-theater, where no spot within six units was free). A push-based
+/// settle was tried first and failed exactly where it mattered: a child
+/// dropped inside a crowd is pushed from every side and the pushes cancel,
+/// the same interior cancellation that bounds the Jacobi resolve. Searching
+/// for the nearest free spot has no such failure mode.
+pub const NEWBORN_RINGS: usize = 24;
+pub const NEWBORN_RING_STEP: f32 = 0.5;
+pub const NEWBORN_RING_SAMPLES: usize = 12;
+/// Hash query radius of the newborn settle's free-spot test: above the
+/// largest gap (1.5); the hash is fresh (settled bodies do not move here)
+/// and this tick's newborns are checked from a list instead.
+pub const NEWBORN_QUERY_R: f32 = 1.75;
 /// Hash query radius of the separation steer (`UniformSpatialHash::query_bbox`):
 /// above its largest accept reach, `STEER_MARGIN · 2 · (BODY_R_BASE +
 /// BODY_R_SIZE)` = 1.875, by a margin that dwarfs f32 seam rounding.
@@ -314,11 +335,153 @@ pub fn resolve_overlaps(world: &mut World) {
     }
 }
 
+/// Stage 6 tail: move this tick's newborns off any body they landed on.
+/// `offspring_position` clears the parents, but a herd is dense and the
+/// bisector spot may hold a third agent (or another litter's child). Births
+/// come after the stage-4' resolve, so without this the child sat stacked on
+/// that body for the whole rendered tick. Rebuilds the fine hash once (the
+/// settled population; this tick's newborns are skipped in it and tracked
+/// from a list at their settled spots instead), then, in birth order, moves
+/// each newborn that overlaps a colliding body to the nearest free spot: the
+/// birth spot itself, else ring by ring (`NEWBORN_RINGS` × `NEWBORN_RING_STEP`,
+/// `NEWBORN_RING_SAMPLES` fixed angles each, first hit wins) — a spot on
+/// terrain its class can occupy where no colliding body is within their
+/// gap. A newborn with no free spot within twelve units keeps its birth spot.
+/// Only newborns move — the settled population is untouched, so the adult
+/// trajectory is exactly what the stage-4' resolve left. Serial, RNG-free:
+/// identical for any thread count. No-op with the flag off or no births.
+pub fn settle_newborns(world: &mut World, newborns: &[u32]) {
+    if !world.territory_enabled || newborns.is_empty() {
+        return;
+    }
+    rebuild_hash(world);
+    let ws = world.world_size;
+    let mut is_newborn = std::mem::take(&mut world.newborn_mark);
+    is_newborn.clear();
+    is_newborn.resize(world.agents.capacity(), false);
+    for &id in newborns {
+        is_newborn[id as usize] = true;
+    }
+    // (position, radius, is_air) of every newborn settled so far this tick.
+    let mut placed: Vec<(Vec2, f32, bool)> = Vec::with_capacity(newborns.len());
+    for &id in newborns {
+        let i = id as usize;
+        if !world.agents.is_alive(id) {
+            continue; // culled at birth (practice fitness costs)
+        }
+        let ci = Locomotion::of(&world.agents.genome[i]);
+        let ri = body_radius(&world.agents.genome[i]);
+        let air = ci == Locomotion::Air;
+        let origin = world.agents.position[i];
+        let free = |c: Vec2| -> bool {
+            if !ci.can_occupy(world.biome.sample(c).terrain) {
+                return false;
+            }
+            let agents = &world.agents;
+            let mut clear = true;
+            world.collision_spatial.query_bbox(c, NEWBORN_QUERY_R, |oid| {
+                let j = oid as usize;
+                if !clear || is_newborn[j] || !agents.is_alive(oid) {
+                    return;
+                }
+                if !ci.collides_with(Locomotion::of(&agents.genome[j])) {
+                    return;
+                }
+                let gap = ri + body_radius(&agents.genome[j]);
+                if torus_delta(c, agents.position[j], ws).length_squared() < gap * gap {
+                    clear = false;
+                }
+            });
+            clear
+                && placed.iter().all(|&(p, r, a)| {
+                    a != air || torus_delta(c, p, ws).length_squared() >= (ri + r) * (ri + r)
+                })
+        };
+        let mut spot = None;
+        if free(origin) {
+            spot = Some(origin);
+        } else {
+            'rings: for k in 1..=NEWBORN_RINGS {
+                let radius = k as f32 * NEWBORN_RING_STEP;
+                for m in 0..NEWBORN_RING_SAMPLES {
+                    // Alternate rings start half a step round so candidates
+                    // do not line up on the same spokes.
+                    let a = (m as f32 + if k % 2 == 0 { 0.5 } else { 0.0 })
+                        * (std::f32::consts::TAU / NEWBORN_RING_SAMPLES as f32);
+                    let c = wrap_torus(
+                        origin + Vec2::new(radius * a.cos(), radius * a.sin()),
+                        Vec2::splat(ws),
+                    );
+                    if free(c) {
+                        spot = Some(c);
+                        break 'rings;
+                    }
+                }
+            }
+        }
+        let p = spot.unwrap_or(origin);
+        world.agents.position[i] = p;
+        placed.push((p, ri, air));
+    }
+    world.newborn_mark = is_newborn;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::genome::{Genome, GenomeSlot};
     use crate::spatial::torus_distance;
+
+    /// A newborn dropped onto a settled body is pushed clear of every
+    /// colliding neighbour it overlaps, and the neighbours do not move.
+    #[test]
+    fn settle_newborns_clears_a_child_dropped_on_a_third_body() {
+        let mut w = flat_world();
+        let ws = w.world_size;
+        let g = Genome::neutral();
+        let r = body_radius(&g);
+        // Two settled adults just touching along x, and a "newborn" spawned
+        // right on top of the first one (and overlapping the second).
+        let a = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+        let b = w.spawn_agent(Vec2::new(300.0 + 2.0 * r, 300.0), g);
+        let c = w.spawn_agent(Vec2::new(300.1, 300.05), g);
+        let (pa, pb) = (w.agents.position[a as usize], w.agents.position[b as usize]);
+        settle_newborns(&mut w, &[c]);
+        let pc = w.agents.position[c as usize];
+        let gap = 2.0 * r;
+        assert!(torus_distance(pc, pa, ws) >= gap - 1e-4, "still on a: {pc:?}");
+        assert!(torus_distance(pc, pb, ws) >= gap - 1e-4, "still on b: {pc:?}");
+        assert_eq!(w.agents.position[a as usize], pa, "settled bodies never move");
+        assert_eq!(w.agents.position[b as usize], pb, "settled bodies never move");
+        // Flag off: a no-op.
+        let mut w2 = World::new(2);
+        let c2 = w2.spawn_agent(Vec2::new(300.1, 300.05), g);
+        w2.spawn_agent(Vec2::new(300.0, 300.0), g);
+        settle_newborns(&mut w2, &[c2]);
+        assert_eq!(w2.agents.position[c2 as usize], Vec2::new(300.1, 300.05));
+    }
+
+    /// Two litters landing on the same spot settle against each other too:
+    /// the second newborn sees the first at its settled position.
+    #[test]
+    fn settle_newborns_separates_sibling_newborns() {
+        let mut w = flat_world();
+        let ws = w.world_size;
+        let g = Genome::neutral();
+        let r = body_radius(&g);
+        let a = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+        let c1 = w.spawn_agent(Vec2::new(300.3, 300.0), g);
+        let c2 = w.spawn_agent(Vec2::new(300.3, 300.01), g);
+        settle_newborns(&mut w, &[c1, c2]);
+        let (pa, p1, p2) = (
+            w.agents.position[a as usize],
+            w.agents.position[c1 as usize],
+            w.agents.position[c2 as usize],
+        );
+        for (x, y, what) in [(p1, pa, "c1/a"), (p2, pa, "c2/a"), (p1, p2, "c1/c2")] {
+            assert!(torus_distance(x, y, ws) >= 2.0 * r - 1e-4, "{what} overlap: {x:?} {y:?}");
+        }
+    }
     use crate::world::World;
 
     /// A newborn lands at least its child–parent gap from BOTH parents, on
@@ -500,12 +663,14 @@ mod tests {
         let (visible1, deep1) = count(&w);
         assert_eq!(deep1, 0, "deep overlaps left after one resolve");
         assert!(visible1 < 40 * 39 / 2 / 4, "one resolve barely spread the pile: {visible1} pairs");
-        // The sim resolves every tick; a few consecutive resolves finish the job.
+        // The sim resolves every tick; consecutive resolves never undo the
+        // spread (with the 32-pass cap one resolve usually finishes it, so a
+        // strict "keeps spreading" can no longer be asked for).
         resolve_overlaps(&mut w);
         resolve_overlaps(&mut w);
         let (visible3, deep3) = count(&w);
         assert_eq!(deep3, 0);
-        assert!(visible3 < visible1, "later resolves must keep spreading the pile");
+        assert!(visible3 <= visible1, "later resolves must not re-crowd the pile: {visible1} -> {visible3}");
         // A handful of pairs (measured: 4 of 780) settle just under 90% of
         // their gap in the crowd equilibrium — a tenth of a unit, invisible.
         assert!(

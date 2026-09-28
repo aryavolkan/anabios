@@ -321,7 +321,12 @@ fn decide_all(world: &mut World) {
                 && !trade_hubs.is_empty()
                 && crate::hub::has_trade_motive(&agents.inventory[i])
             {
-                let pull = crate::hub::best_hub_direction(trade_hubs, agents.position[i], ws);
+                // Off inside the hub's trade range and fading in beyond it
+                // (`hub::hub_pull`): an agent that can already trade stops
+                // pressing toward the hub's centre point, so a market is a
+                // milling crowd, not a pile the collision resolve has to
+                // unpack every tick.
+                let pull = crate::hub::hub_pull(trade_hubs, agents.position[i], ws);
                 action.move_x += crate::hub::HUB_PULL * pull.x;
                 action.move_y += crate::hub::HUB_PULL * pull.y;
             }
@@ -364,9 +369,16 @@ fn decide_all(world: &mut World) {
             // additive pull toward the nearest drinkable cell, scaled by its
             // thirst — the same bias pattern as the habitat/anchor/hub pulls.
             // Gated so flag-off stays byte-identical (thirst is 0.0 there).
+            // An agent that can already drink where it stands (its cell or a
+            // 4-neighbour is drinkable — exactly `needs_step`'s drinking test)
+            // gets no pull: a land agent at the shoreline cannot enter the
+            // water cell the pull points into, so the pull only pinned it
+            // (and the crowd behind it) against the coast every tick.
             if basic_needs_enabled {
                 let thirst = agents.thirst[i];
-                if thirst > crate::needs::WATER_SEEK_MIN {
+                if thirst > crate::needs::WATER_SEEK_MIN
+                    && !crate::needs::drinkable_near(biome, agents.position[i])
+                {
                     let pull = crate::needs::best_water_direction(
                         biome,
                         agents.position[i],
