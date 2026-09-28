@@ -1,27 +1,34 @@
 //! Body collision (territory/habitat/collision layer). Each agent is a disc of
 //! `body_radius` (from its Size gene); colliding pairs (see
-//! `Locomotion::collides_with`) are kept apart, not guaranteed to never
-//! overlap, by:
+//! `Locomotion::collides_with`) never pass through one another and end every
+//! tick apart, by:
 //!
 //! 1. a separation steering term added in `decide_all` (agents route around
-//!    each other), and
-//! 2. a post-integrate resolve (stage 4'): up to `RESOLVE_PASSES` Jacobi
-//!    passes over a fine hash rebuilt before each one, each agent pushing
-//!    itself out of its overlaps against a position snapshot and sliding
-//!    along the coast when a push would leave its terrain, until a pass
-//!    moves nobody more than `RESOLVE_SETTLE`. Measured at 2000 ticks on the
-//!    full-stack worlds: zero pairs closer than half their gap and 0–3% of
-//!    agents closer than 90% of it (a tenth of a unit); the rest of the
-//!    "touching" pairs sit within that last 10% (see
-//!    `territory_measurement_probe`'s `deep_overlaps`/`shallow_overlaps`).
+//!    each other);
+//! 2. a swept move (stage 4'', `sweep_moves`): every move is cut back to its
+//!    first contact with another colliding body, relative motion through the
+//!    tick, and continues by sliding along that body's surface — so two
+//!    bodies never swap through each other between two rendered ticks and an
+//!    agent walking into a crowd stops at its edge; and
+//! 3. a post-move resolve (stage 4', `resolve_overlaps`): up to
+//!    `RESOLVE_PASSES` Jacobi passes over a fine hash rebuilt before each
+//!    one, each agent pushing itself out of its overlaps against a position
+//!    snapshot and sliding along the coast when a push would leave its
+//!    terrain, until a pass moves nobody more than `RESOLVE_SETTLE`.
 //!
-//! Both read snapshots and write only their own slot, so the result is
+//! Births happen after all of that (stage 6), so a newborn is placed clear of
+//! both parents' bodies (`offspring_position`) and, if that spot holds a
+//! third body, at the nearest free spot (`settle_newborns`) instead of on its
+//! parents' midpoint. The per-tick audit behind these (every curated world,
+//! 2000 ticks, every colliding pair checked) is recorded in
+//! `docs/scenarios.md`; before the swept move and the newborn placement it
+//! found a stacked pair at every birth and tens of thousands of swap-throughs
+//! per world, and crowds at trade hubs and watering holes the resolve could
+//! not unpack (their pulls now have arrival zones: `hub::hub_pull`, the
+//! water pull's `drinkable_near` gate).
+//!
+//! Every stage reads snapshots and writes only its own slot, so the result is
 //! independent of rayon thread count. Gated on `World::territory_enabled`.
-//!
-//! Births happen after the resolve (stage 6), so a newborn is placed clear of
-//! both parents' bodies (`offspring_position`) instead of on their midpoint;
-//! otherwise every birth tick showed the child stacked on its parents until
-//! the next resolve.
 
 use crate::agent::AgentBuffers;
 use crate::genome::{Genome, GenomeSlot};
@@ -74,6 +81,19 @@ pub const RESOLVE_COAST_SLIDE: bool = true;
 pub const RESOLVE_SETTLE: f32 = 0.04;
 /// Largest per-pass push (keeps a pass inside the one-ring hash guarantee).
 pub const MAX_PUSH: f32 = 1.0;
+/// Contact surface of the swept move (`sweep_moves`) for a pair already
+/// within `STEER_MARGIN` of its gap when the tick starts, as a fraction of
+/// that gap: the resolve leaves herd neighbours at the gap, and a hard
+/// surface there stopped every converging pair instantly — half of every
+/// herd frozen (median step zero). Half the gap still rules out passing
+/// through and stacking; the resolve then takes the shallow overlap back
+/// out within the same tick.
+pub const SWEEP_DEEP_FRAC: f32 = 0.5;
+/// Slides per swept move: on contact the inward part of the velocity is
+/// dropped and the move continues along the body's surface, up to this many
+/// times, so a glancing contact does not stop the walk (stopping outright
+/// cut a herd's median step from 2.3 units to 0.4).
+pub const SWEEP_SLIDES: usize = 2;
 /// Newborn settle (`settle_newborns`) search: rings of `NEWBORN_RING_STEP`
 /// world units around the birth spot, `NEWBORN_RING_SAMPLES` candidates per
 /// ring, out to `NEWBORN_RINGS` rings (twelve units — past the edge of the
@@ -335,6 +355,176 @@ pub fn resolve_overlaps(world: &mut World) {
     }
 }
 
+/// Stage 4'' (between integrate and the resolve): shorten every move to its
+/// first contact. `integrate_all` applies each agent's full gated move; this
+/// pass recovers the start of every move (`position − velocity`), solves,
+/// for each colliding pair whose paths could touch this tick, the earliest
+/// time `t ∈ [0, 1]` at which the two bodies (moving linearly through the
+/// tick, relative motion) come within their gap, and moves each agent only
+/// as far as its earliest contact. Bodies therefore never pass through one
+/// another between two rendered ticks (the swap-through of two agents
+/// stepping two body lengths in opposite directions was the most common
+/// "collision" in every world), and an agent walking into a crowd stops at
+/// its edge instead of stacking on the bodies inside — the density of a
+/// crowd is then bounded by the bodies themselves, not by how many passes
+/// the resolve can afford. A pair already overlapping at the start of the
+/// tick (post-resolve residue) may move apart but not further in. The unused
+/// part of the move's energy cost is refunded. Reads the stage-1 perception
+/// hash (built from this tick's start positions), the applied velocities and
+/// a position snapshot; writes only the agent's own slot, from a per-agent
+/// contact time computed first — order-independent, so identical for any
+/// thread count. RNG-free. No-op with the flag off.
+pub fn sweep_moves(world: &mut World) {
+    use rayon::prelude::*;
+    if !world.territory_enabled {
+        return;
+    }
+    let ws = world.world_size;
+    let cap = world.agents.capacity();
+    let size_v = Vec2::splat(ws);
+    let max_gap = 2.0 * (BODY_R_BASE + BODY_R_SIZE);
+    let spatial = &world.spatial;
+    let biome = &world.biome;
+    let query_cap = spatial.perception_max_radius();
+    let AgentBuffers { position, velocity, genome, alive, .. } = &world.agents;
+    // Longest move this tick bounds how far any neighbour's start can be from
+    // a contact: reach = own remaining move + that + the largest gap.
+    let vmax = velocity[..cap]
+        .par_iter()
+        .enumerate()
+        .map(|(i, v)| if alive[i] { v.length() } else { 0.0 })
+        .reduce(|| 0.0f32, f32::max);
+    let mut ends = std::mem::take(&mut world.collision_scratch);
+    ends.clear();
+    ends.extend_from_slice(&position[..cap]);
+    ends.par_iter_mut().enumerate().for_each(|(i, end)| {
+        if !alive[i] {
+            return;
+        }
+        let v_full = velocity[i];
+        if v_full.length_squared() <= 0.0 {
+            return;
+        }
+        let start = wrap_torus(position[i] - v_full, size_v);
+        let ci = Locomotion::of(&genome[i]);
+        let ri = body_radius(&genome[i]);
+        // Earliest contact of this agent, at `p` with velocity `v` at elapsed
+        // tick fraction `tau`, over the remaining fraction: `(t, normal)`,
+        // the normal pointing from the neighbour into this agent at contact.
+        let earliest = |p: Vec2, v: Vec2, tau: f32, remaining: f32| -> Option<(f32, Vec2)> {
+            let reach = (v.length() * remaining + vmax + max_gap).min(query_cap);
+            let mut best: Option<(f32, Vec2)> = None;
+            spatial.query(wrap_torus(p, size_v), reach, |oid| {
+                let j = oid as usize;
+                if j == i || !alive[j] || !ci.collides_with(Locomotion::of(&genome[j])) {
+                    return;
+                }
+                let gap = ri + body_radius(&genome[j]);
+                let vj = velocity[j];
+                let start_j = wrap_torus(position[j] - vj, size_v);
+                // The neighbour's position now (it moves linearly through the tick).
+                let d0 = torus_delta(p, start_j, ws) - vj * tau;
+                let dv = v - vj;
+                let d0_sq = d0.dot(d0);
+                // A pair already in contact range (herd neighbours sit at the
+                // gap after the resolve, inside the steer margin) keeps its
+                // freedom to jostle: its surface is half the gap — deep enough
+                // to rule out passing through or stacking. Only a pair already
+                // deeper than that may not move further in. A pair still
+                // outside the margin meets a hard surface at the gap.
+                let near = STEER_MARGIN * gap;
+                let contact = if d0_sq >= near * near { gap } else { SWEEP_DEEP_FRAC * gap };
+                let c = d0_sq - contact * contact;
+                let b = 2.0 * d0.dot(dv);
+                let a = dv.dot(dv);
+                let tc = if c <= 0.0 {
+                    if b < 0.0 {
+                        0.0
+                    } else {
+                        return;
+                    }
+                } else {
+                    if a <= 1e-12 {
+                        return;
+                    }
+                    let disc = b * b - 4.0 * a * c;
+                    if disc < 0.0 {
+                        return;
+                    }
+                    (-b - disc.sqrt()) / (2.0 * a)
+                };
+                if !(0.0..remaining).contains(&tc) {
+                    return;
+                }
+                if best.is_none_or(|(bt, _)| tc < bt) {
+                    let at = d0 + dv * tc;
+                    best = Some((tc, at.normalize_or_zero()));
+                }
+            });
+            best
+        };
+        // Walk the move: advance to each contact, then slide along that
+        // body's surface for the rest of the tick (up to `SWEEP_SLIDES`
+        // times), gating every slid segment through the habitat rule.
+        let mut p = start;
+        let mut v = v_full;
+        let mut tau = 0.0f32;
+        let mut remaining = 1.0f32;
+        for slide in 0..=SWEEP_SLIDES {
+            let Some((tc, n)) = earliest(p, v, tau, remaining) else {
+                p += v * remaining;
+                break;
+            };
+            p += v * tc;
+            tau += tc;
+            remaining -= tc;
+            if slide == SWEEP_SLIDES || remaining <= 1e-4 || n == Vec2::ZERO {
+                break;
+            }
+            let inward = v.dot(n);
+            if inward >= 0.0 {
+                continue; // glancing: already moving off the surface
+            }
+            let slid = v - n * inward;
+            if slid.length_squared() <= 1e-8 {
+                break;
+            }
+            // The rest of the tick along the surface, habitat-gated.
+            let allowed = crate::habitat::gate_move(biome, ci, wrap_torus(p, size_v), slid * remaining);
+            if allowed == Vec2::ZERO {
+                break;
+            }
+            v = allowed / remaining;
+        }
+        *end = wrap_torus(p, size_v);
+    });
+    let AgentBuffers { position, velocity, energy, genome, alive, .. } = &mut world.agents;
+    let ends_ref = &ends;
+    let (genome, alive) = (&*genome, &*alive);
+    position[..cap]
+        .par_iter_mut()
+        .zip(velocity[..cap].par_iter_mut())
+        .zip(energy[..cap].par_iter_mut())
+        .enumerate()
+        .for_each(|(i, ((pos, vel), en))| {
+            if !alive[i] || vel.length_squared() <= 0.0 {
+                return;
+            }
+            let end = ends_ref[i];
+            if end == *pos {
+                return;
+            }
+            let v = *vel;
+            let start = wrap_torus(*pos - v, size_v);
+            let nv = torus_delta(end, start, ws);
+            *pos = end;
+            *vel = nv;
+            let size = genome[i].get(GenomeSlot::Size).max(0.1);
+            *en += crate::integrate::MOVE_ENERGY_COST * (v.length() - nv.length()).max(0.0) * size;
+        });
+    world.collision_scratch = ends;
+}
+
 /// Stage 6 tail: move this tick's newborns off any body they landed on.
 /// `offspring_position` clears the parents, but a herd is dense and the
 /// bisector spot may hold a third agent (or another litter's child). Births
@@ -431,6 +621,79 @@ mod tests {
     use super::*;
     use crate::genome::{Genome, GenomeSlot};
     use crate::spatial::torus_distance;
+
+    /// Build both hashes from the agents' current (start-of-tick) positions,
+    /// then apply `moves` as `integrate_all` would (position += v, velocity
+    /// = v) and run the sweep — the test's stand-in for stage 1 + stage 4.
+    fn move_and_sweep(w: &mut World, moves: &[(u32, Vec2)]) {
+        w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
+        rebuild_hash(w);
+        let ws = w.world_size;
+        for &(id, v) in moves {
+            let i = id as usize;
+            w.agents.velocity[i] = v;
+            w.agents.position[i] = wrap_torus(w.agents.position[i] + v, Vec2::splat(ws));
+        }
+        sweep_moves(w);
+    }
+
+    /// Two bodies walking straight at each other stop touching, each on its
+    /// own side — never through one another.
+    #[test]
+    fn sweep_stops_head_on_movers_at_contact() {
+        let mut w = flat_world();
+        let ws = w.world_size;
+        let g = Genome::neutral();
+        let gap = 2.0 * body_radius(&g);
+        let a = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+        let b = w.spawn_agent(Vec2::new(306.0, 300.0), g);
+        move_and_sweep(&mut w, &[(a, Vec2::new(4.0, 0.0)), (b, Vec2::new(-4.0, 0.0))]);
+        let (pa, pb) = (w.agents.position[a as usize], w.agents.position[b as usize]);
+        let d = torus_distance(pa, pb, ws);
+        assert!(d >= gap - 1e-3 && d <= gap + 1e-2, "stopped at contact: d={d} gap={gap} {pa:?} {pb:?}");
+        assert!(pa.x < pb.x, "swapped through each other: {pa:?} {pb:?}");
+        assert!(pa.x > 300.0 && pb.x < 306.0, "both moved toward the contact");
+        // The applied velocity is the shortened move; energy refunded for the rest.
+        assert!(w.agents.velocity[a as usize].x < 4.0);
+    }
+
+    /// A mover stops at a standing body; a crossing pair stops before their
+    /// paths intersect; a pair moving apart is untouched.
+    #[test]
+    fn sweep_stops_at_standing_bodies_and_crossings_but_not_when_parting() {
+        let g = Genome::neutral();
+        let gap = 2.0 * body_radius(&g);
+        // Into a standing body.
+        let mut w = flat_world();
+        let ws = w.world_size;
+        let a = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+        let b = w.spawn_agent(Vec2::new(303.0, 300.0), g);
+        move_and_sweep(&mut w, &[(a, Vec2::new(4.0, 0.0))]);
+        let d = torus_distance(w.agents.position[a as usize], w.agents.position[b as usize], ws);
+        assert!(d >= gap - 1e-3 && d <= gap + 1e-2, "stopped at the standing body: {d}");
+        assert_eq!(w.agents.position[b as usize], Vec2::new(303.0, 300.0));
+        // Crossing paths.
+        let mut w = flat_world();
+        let a = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+        let b = w.spawn_agent(Vec2::new(301.5, 298.5), g);
+        move_and_sweep(&mut w, &[(a, Vec2::new(3.0, 0.0)), (b, Vec2::new(0.0, 3.0))]);
+        let d = torus_distance(w.agents.position[a as usize], w.agents.position[b as usize], ws);
+        assert!(d >= gap - 1e-3, "crossing pair overlaps: {d}");
+        // Parting from an overlapping start: allowed in full.
+        let mut w = flat_world();
+        let a = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+        let b = w.spawn_agent(Vec2::new(300.5, 300.0), g);
+        move_and_sweep(&mut w, &[(a, Vec2::new(-2.0, 0.0)), (b, Vec2::new(2.0, 0.0))]);
+        assert_eq!(w.agents.position[a as usize], Vec2::new(298.0, 300.0));
+        assert_eq!(w.agents.position[b as usize], Vec2::new(302.5, 300.0));
+        // Flag off: the sweep is a no-op.
+        let mut w = World::new(2);
+        let a = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+        let b = w.spawn_agent(Vec2::new(303.0, 300.0), g);
+        move_and_sweep(&mut w, &[(a, Vec2::new(4.0, 0.0))]);
+        assert_eq!(w.agents.position[a as usize], Vec2::new(304.0, 300.0));
+        let _ = b;
+    }
 
     /// A newborn dropped onto a settled body is pushed clear of every
     /// colliding neighbour it overlaps, and the neighbours do not move.

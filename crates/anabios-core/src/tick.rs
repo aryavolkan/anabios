@@ -74,11 +74,17 @@ pub fn step(world: &mut World) {
         world.territory_enabled.then_some(&world.biome),
     );
 
-    // Stage 4': collision resolve (territory layer) — colliding bodies are
-    // kept apart (separation steering plus this min-gap resolve: up to
-    // RESOLVE_PASSES Jacobi passes with a settle exit), leaving no deep
-    // overlaps and only sub-tenth-unit residue in dense crowds. Before needs/anchor/interact
-    // so every later stage sees resolved positions. No-op with the flag off.
+    // Stage 4'': swept contact (territory layer) — every move is cut back to
+    // its first contact with another colliding body (relative motion), so
+    // bodies never pass through one another within a tick and a crowd's
+    // edge stops the agents walking into it. No-op with the flag off.
+    crate::collision::sweep_moves(world);
+
+    // Stage 4': collision resolve (territory layer) — the shallow overlaps
+    // the swept move still allows (a pair in contact range may close to half
+    // its gap) are pushed back out: up to RESOLVE_PASSES Jacobi passes with
+    // a settle exit. Before needs/anchor/interact so every later stage sees
+    // resolved positions. No-op with the flag off.
     crate::collision::resolve_overlaps(world);
 
     // Stage 4a': basic needs — thirst/fatigue accumulation, drinking, and the

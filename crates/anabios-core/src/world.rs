@@ -371,6 +371,10 @@ pub struct World {
     /// Scratch, `#[serde(skip)]`.
     #[serde(skip)]
     pub newborn_mark: Vec<bool>,
+    /// Per-slot contact times for `collision::sweep_moves`. Scratch,
+    /// `#[serde(skip)]`.
+    #[serde(skip)]
+    pub sweep_scratch: Vec<f32>,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
@@ -563,6 +567,7 @@ impl World {
             collision_scratch: Vec::new(),
             newborn_scratch: Vec::new(),
             newborn_mark: Vec::new(),
+            sweep_scratch: Vec::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),
