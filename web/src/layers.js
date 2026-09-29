@@ -291,19 +291,43 @@ function stallGeometry() {
 // knob, where the display size can no longer be inverted to it.
 
 /**
- * Pixels of instance scale a body keeps at minimum, regardless of camera
- * distance — chosen so the default framing (a whole herd) still reads
- * clearly. Below it the physical floor takes over: from roughly 27 px per
- * world unit on, a figure is drawn exactly its physical diameter long, so two
- * bodies 1.15 units apart (two default-size agents touching) meet nose to
- * tail on screen instead of overlapping.
+ * Screen pixels a drawn figure keeps at minimum, nose to tail, regardless of
+ * camera distance — enough to read as an animal. This is a floor on the
+ * drawn *length*, not on the instance scale: the old floor of 14 px of
+ * scale drew every figure 28–38 px long (14 px times its 2.0–2.7 unit
+ * footprint) until the camera was closer than ~30 px per world unit, while
+ * two touching bodies are 1.15 units apart — so at every ordinary zoom a
+ * herd the physics keeps apart rendered as a heap three figures deep. With
+ * the floor on the length, the physical size takes over as soon as a body
+ * spans this many pixels (from ~9 px per world unit on), and only the far
+ * views where a herd is a blob anyway draw bodies larger than their spacing.
  */
-const LEGIBLE_PX = 14;
+export const LEGIBLE_PX = 10;
+
+/**
+ * Drawn length of a body as a fraction of its physical (collision)
+ * diameter at close range. Below one so touching bodies keep a visible
+ * margin: the figures are solid 3D shapes seen from a tilted camera, and
+ * drawn exactly disc-sized, the body of one hid the flank of the next even
+ * when their discs only touched.
+ */
+export const BODY_DRAW = 0.85;
+
+/**
+ * Height an airborne figure (AGENT_FLAG.AIR: a flyer under the sim's
+ * territory layer) is lifted above the ground, in multiples of its drawn
+ * footprint. The collision layer lets flyers pass over ground bodies, so
+ * drawn on the ground they sat inside grazers; lifted, a bird over a herd
+ * reads as a bird over a herd (and casts its own shadow on them).
+ */
+export const AIR_LIFT = 1.2;
 
 /** Draw scale: readable far away, clamped down to the physical body as the
  *  camera closes in, but never smaller than it or larger than `readable`.
- *  `physScale` is the instance scale at which the figure's footprint equals
- *  its physical diameter (`AGENT.BODY / figureFootprint(geo)`). */
+ *  `physScale` is the instance scale at which the figure's drawn footprint
+ *  equals `BODY_DRAW` of its physical diameter (`BODY_DRAW · AGENT.BODY /
+ *  figureFootprint(geo)`); `legible` the scale at which its footprint spans
+ *  `LEGIBLE_PX` on screen (`LEGIBLE_PX · unitsPerPixel / footprint`). */
 export function bodyScale(readable, physScale, legible) {
   return Math.max(physScale, Math.min(readable, legible));
 }
@@ -421,18 +445,20 @@ export class Agents {
     this.selectedPos = null;
     const gaits = this.meshes.map((m) => m.geometry.attributes.aGait.array);
     const prev = this.prev, cur = this.spare, buf = this.buf, born = this.born, died = this.died;
-    const legible = LEGIBLE_PX * unitsPerPixel;
     cur.clear(); born.length = 0; died.length = 0;
     for (let k = 0; k < n; k++) {
       const o = k * s, x = d[o + AGENT.X], y = d[o + AGENT.Y];
       const h = heightAt(x, y);
       const kind = figureKind(d[o + AGENT.DIET]);
+      const fp = this.footprint[kind];
       const readable = this.baseScale * (0.55 + 0.45 * d[o + AGENT.SIZE]);
-      const sc = unitsPerPixel > 0 ? bodyScale(readable, d[o + AGENT.BODY] / this.footprint[kind], legible) : readable;
+      const sc = unitsPerPixel > 0 ? bodyScale(readable, BODY_DRAW * d[o + AGENT.BODY] / fp, LEGIBLE_PX * unitsPerPixel / fp) : readable;
       const id = d[o + AGENT.ID] | 0;
       const rot = d[o + AGENT.ROT];
-      const asleep = (d[o + AGENT.FLAGS] & AGENT_FLAG.ASLEEP) !== 0;
-      _p.set(x, Math.max(h, 0) + 0.02, y);
+      const flags = d[o + AGENT.FLAGS];
+      const asleep = (flags & AGENT_FLAG.ASLEEP) !== 0;
+      const lift = (flags & AGENT_FLAG.AIR) !== 0 ? AIR_LIFT * sc * fp : 0;
+      _p.set(x, Math.max(h, 0) + 0.02 + lift, y);
       _q.setFromAxisAngle(Y_AXIS, -rot);
       _s.set(sc, asleep ? sc * 0.6 : sc, sc);
       _m.compose(_p, _q, _s);

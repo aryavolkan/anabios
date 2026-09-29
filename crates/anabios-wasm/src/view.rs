@@ -18,6 +18,7 @@ use anabios_core::collision::live_body_radius;
 use anabios_core::culture::{SKILL_CHANNEL, TECH_CHANNEL};
 use anabios_core::genome::{GenomeSlot, GENOME_LEN, SLOT_NAMES};
 use anabios_core::growth::body_scale_of;
+use anabios_core::habitat::Locomotion;
 use anabios_core::invention::{
     bit, for_each_set_bit, held_mask, level, tech_era, INVENTIONS, INVENTION_CHANNEL_BASE,
     INVENTION_COUNT,
@@ -39,7 +40,10 @@ use serde_json::{json, Value};
 /// `rot` is the persistent heading's angle when `turning_enabled` (a resting
 /// body keeps facing where it last went), else the velocity's (0 when still).
 /// `flags` bits: 0 = livestock, 1 = asleep, 2 = male (only meaningful when
-/// the matching scenario flag is on — see [`world_flags`]). `body` is the
+/// the matching scenario flag is on — see [`world_flags`]), 3 = airborne
+/// (`Locomotion::Air` under the territory layer: a flyer, which the collision
+/// layer lets pass over ground bodies, so a viewer must lift it off the
+/// ground instead of drawing it inside them). `body` is the
 /// physical collision diameter in world units (`2 · live_body_radius`, so a
 /// juvenile's under `growth_enabled`): what the atlas clamps a close-up
 /// figure to, and what an overlap audit compares positions against —
@@ -167,6 +171,9 @@ pub fn fill_agents(w: &World, out: &mut Vec<f32>) -> usize {
         }
         if w.sexual_dimorphism_enabled && w.agents.sex.get(i).map(|b| *b).unwrap_or(false) {
             flags |= 4;
+        }
+        if w.territory_enabled && Locomotion::of(g) == Locomotion::Air {
+            flags |= 8;
         }
         out.extend_from_slice(&[
             id as f32,
@@ -629,6 +636,36 @@ mod tests {
             let expect = 2.0 * live_body_radius(g, w.agents.age[id as usize], w.growth_enabled);
             assert_eq!(row[16], expect, "body column is the live diameter");
         }
+    }
+
+    /// Flag bit 3 marks a flyer (`Locomotion::Air`) under the territory
+    /// layer — the atlas lifts it off the ground, since the collision layer
+    /// lets it stand over ground bodies — and is never set with the layer
+    /// off.
+    #[test]
+    fn airborne_flag_marks_air_locomotion_under_the_territory_layer() {
+        let (_, w) = world("habitat-territories", 4);
+        assert!(w.territory_enabled);
+        let mut out = Vec::new();
+        fill_agents(&w, &mut out);
+        let (mut air, mut ground) = (0, 0);
+        for row in out.chunks(AGENT_STRIDE) {
+            let id = row[0] as u32;
+            let is_air = Locomotion::of(&w.agents.genome[id as usize]) == Locomotion::Air;
+            let flagged = (row[13] as u32) & 8 != 0;
+            assert_eq!(flagged, is_air, "agent {id}: flag {flagged} vs class Air {is_air}");
+            if is_air {
+                air += 1;
+            } else {
+                ground += 1;
+            }
+        }
+        assert!(air > 0 && ground > 0, "the fixture founds both flyers and ground classes");
+        // Layer off: no agent is flagged airborne, whatever its gene.
+        let (_, mut w2) = world("habitat-territories", 4);
+        w2.territory_enabled = false;
+        fill_agents(&w2, &mut out);
+        assert!(out.chunks(AGENT_STRIDE).all(|row| (row[13] as u32) & 8 == 0));
     }
 
     /// Growth: with the flag on a newborn's exported size (agent buffer and

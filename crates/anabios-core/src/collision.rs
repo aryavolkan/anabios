@@ -10,12 +10,17 @@
 //!    first contact with another colliding body, relative motion through the
 //!    tick, and continues by sliding along that body's surface — so two
 //!    bodies never swap through each other between two rendered ticks and an
-//!    agent walking into a crowd stops at its edge; and
+//!    agent walking into a crowd stops at its edge; a second, cut-only pass
+//!    re-checks each path against the moves the first pass actually left the
+//!    neighbours, so a body stopped by a third one is met where it stands;
+//!    and
 //! 3. a post-move resolve (stage 4', `resolve_overlaps`): up to
-//!    `RESOLVE_PASSES` Jacobi passes over a fine hash rebuilt before each
-//!    one, each agent pushing itself out of its overlaps against a position
-//!    snapshot and sliding along the coast when a push would leave its
-//!    terrain, until a pass moves nobody more than `RESOLVE_SETTLE`.
+//!    `RESOLVE_PASSES` over-relaxed Jacobi passes over a fine hash rebuilt
+//!    before each one, each agent pushing itself out of its overlaps against
+//!    a position snapshot (the whole overlap when the neighbour is pinned
+//!    against its terrain, else half, times `RESOLVE_OMEGA`) and sliding
+//!    along the coast when a push would leave its terrain, until a pass
+//!    moves nobody more than `RESOLVE_SETTLE`.
 //!
 //! Births happen after all of that (stage 6), so a newborn is placed clear of
 //! both parents' bodies (`offspring_position`) and, if that spot holds a
@@ -63,8 +68,24 @@ pub const SEP_PULL: f32 = 2.0;
 /// after one pass (the settle test below), only a real pile-up runs on, and
 /// the pile-ups that remain once the hub and water pulls stop pressing agents
 /// into a crowd they are already part of (`hub::hub_pull`, the water pull's
-/// `drinkable_near` gate) are the ones that need the extra passes.
-pub const RESOLVE_PASSES: usize = 32;
+/// `drinkable_near` gate) are the ones that need the extra passes. Raised
+/// again to sixty-four on 2026-09-29 with the over-relaxed push
+/// (`RESOLVE_OMEGA`) and the tighter settle: the audit's extra-resolve probe
+/// showed a second full resolve clearing three quarters of the market
+/// crowd's remaining near-touch pairs, i.e. a pass budget, not a pin.
+pub const RESOLVE_PASSES: usize = 64;
+/// Over-relaxation of the resolve push: each agent moves `RESOLVE_OMEGA`
+/// times its share of an overlap instead of exactly its share, so a pair
+/// ends a pass slightly past its gap instead of exactly on it. A Jacobi
+/// half-push relaxes a compressed crowd one body per pass and, worse, an
+/// agent pushed from both sides by a chain moves nowhere; the overshoot
+/// breaks that colinearity and carries the correction through the crowd
+/// (successive over-relaxation). Measured on `markets` (300 ticks, the hub
+/// crowd, `anabios-headless audit`): pairs closer than 0.9 of their gap at
+/// the end of a tick fell from 270 pair-ticks to 0, pairs under 0.95 from
+/// 2373 to 9, and the total under the gap from 167k to 44k — at the same
+/// run time, because fewer passes are needed. Above ~1.5 a pile oscillates.
+pub const RESOLVE_OMEGA: f32 = 1.3;
 /// Rebuild the fine hash before every pass after the first, so each pass
 /// queries fresh buckets (and the tight query radius) instead of the stale
 /// ones the first build left.
@@ -75,11 +96,13 @@ pub const RESOLVE_REBUILD_EACH_PASS: bool = true;
 /// 40% of the residual overlaps sat on coasts.
 pub const RESOLVE_COAST_SLIDE: bool = true;
 /// Settle threshold: the loop stops after a pass whose largest applied push
-/// is below this many world units (5% of the smallest pair gap), so a tick
+/// is below this many world units (2.5% of the smallest pair gap), so a tick
 /// with no crowding pays for one pass and only a real pile-up runs all
 /// `RESOLVE_PASSES`. A max over per-agent push lengths is order-independent,
-/// so the exit is identical for any rayon thread count.
-pub const RESOLVE_SETTLE: f32 = 0.04;
+/// so the exit is identical for any rayon thread count. Halved from 0.04 on
+/// 2026-09-29: at 0.04 a settled pair could still sit at 0.93 of its gap
+/// (habitat-territories: 1542 such pair-ticks in 300 ticks; 260 at 0.02).
+pub const RESOLVE_SETTLE: f32 = 0.02;
 /// Largest per-pass push (keeps a pass inside the one-ring hash guarantee).
 pub const MAX_PUSH: f32 = 1.0;
 /// Contact surface of the swept move (`sweep_moves`) for a pair already
@@ -203,6 +226,30 @@ fn away_dir(i: u32, j: u32, d: Vec2, dist: f32) -> Vec2 {
     }
 }
 
+/// Earliest time `t ∈ [0, span)` at which a relative position `d0` moving
+/// at `dv` comes within `contact`; `None` when it does not in that span,
+/// or when the pair starts inside `contact` but is moving apart (it may
+/// leave, not enter further). The pair starting inside and closing meets
+/// the surface at `t = 0`.
+#[inline]
+fn first_contact(d0: Vec2, dv: Vec2, contact: f32, span: f32) -> Option<f32> {
+    let c = d0.dot(d0) - contact * contact;
+    let b = 2.0 * d0.dot(dv);
+    if c <= 0.0 {
+        return if b < 0.0 && span > 0.0 { Some(0.0) } else { None };
+    }
+    let a = dv.dot(dv);
+    if a <= 1e-12 {
+        return None;
+    }
+    let disc = b * b - 4.0 * a * c;
+    if disc < 0.0 {
+        return None;
+    }
+    let tc = (-b - disc.sqrt()) / (2.0 * a);
+    (0.0..span).contains(&tc).then_some(tc)
+}
+
 /// Grid resolution for a world of extent `ws`: cells of side `COLLISION_CELL`,
 /// at least 3 wide, capped at 1024. The floor of 3 is the one-ring query's
 /// minimum grid; below `ws = 3 · COLLISION_CELL` (12 units) the cell shrinks
@@ -280,10 +327,13 @@ pub fn separation_steer(
 /// Stage 4': push overlapping colliding pairs apart to their minimum gap.
 /// Rebuilds the fine hash from post-integrate positions, then runs up to
 /// `RESOLVE_PASSES` Jacobi passes (rebuilding the hash before each one when
-/// `RESOLVE_REBUILD_EACH_PASS`): each alive agent sums half of each overlap
-/// along `away_dir` (read from the pass's snapshot), caps the push at
-/// `MAX_PUSH`, and applies it if the destination is valid for its class —
-/// else, with `RESOLVE_COAST_SLIDE`, the axis component that is. The loop
+/// `RESOLVE_REBUILD_EACH_PASS`): each alive agent sums its share of each
+/// overlap along `away_dir` (read from the pass's snapshot) — half of it,
+/// or the whole overlap when the neighbour's half would carry the neighbour
+/// onto terrain its class cannot occupy (a body pinned against a coast
+/// cannot give way) — times `RESOLVE_OMEGA`, caps the push at `MAX_PUSH`,
+/// and applies it if the destination is valid for its class — else, with
+/// `RESOLVE_COAST_SLIDE`, the axis component that is. The loop
 /// stops after a pass whose largest push is below `RESOLVE_SETTLE`. Without
 /// a rebuild, positions move ≤ `MAX_PUSH` between passes, so a neighbour
 /// within the max gap (1.5) is still within one hash cell (4.0) of the stale
@@ -338,7 +388,22 @@ pub fn resolve_overlaps(world: &mut World) {
                     if dist >= gap {
                         return;
                     }
-                    push += away_dir(i as u32, oid, d, dist) * ((gap - dist) * 0.5);
+                    let overlap = gap - dist;
+                    let away = away_dir(i as u32, oid, d, dist);
+                    // Half the overlap each — unless the neighbour's half would
+                    // carry it onto terrain its class cannot occupy (a body
+                    // pressed against a coast cannot give way; its own push
+                    // is dropped or slid below): then this agent takes the
+                    // whole overlap. Without this a pair pinned in a cove
+                    // stayed at 0.6 of its gap for a hundred ticks.
+                    let theirs = wrap_torus(snap_ref[j] - away * (overlap * 0.5), Vec2::splat(ws));
+                    let share =
+                        if Locomotion::of(&genome[j]).can_occupy(biome.sample(theirs).terrain) {
+                            0.5
+                        } else {
+                            1.0
+                        };
+                    push += away * (overlap * share * RESOLVE_OMEGA);
                 });
                 if push == Vec2::ZERO {
                     return 0.0;
@@ -389,11 +454,15 @@ pub fn resolve_overlaps(world: &mut World) {
 /// crowd is then bounded by the bodies themselves, not by how many passes
 /// the resolve can afford. A pair already overlapping at the start of the
 /// tick (post-resolve residue) may move apart but not further in. The unused
-/// part of the move's energy cost is refunded. Reads the stage-1 perception
-/// hash (built from this tick's start positions), the applied velocities and
-/// a position snapshot; writes only the agent's own slot, from a per-agent
-/// contact time computed first — order-independent, so identical for any
-/// thread count. RNG-free. No-op with the flag off.
+/// part of the move's energy cost is refunded. Two passes: the first walks
+/// every path against the neighbours' full moves; the second re-walks each
+/// first-pass path against the moves the first pass actually left the
+/// neighbours (a body stopped by a third one stands from its cut point on)
+/// and only ever cuts it shorter. Reads the stage-1 collision hash (built
+/// from this tick's start positions), the applied velocities and a position
+/// snapshot; writes only the agent's own slot, from per-agent contact times
+/// computed first — order-independent, so identical for any thread count.
+/// RNG-free. No-op with the flag off.
 pub fn sweep_moves(world: &mut World) {
     use rayon::prelude::*;
     if !world.territory_enabled {
@@ -403,9 +472,14 @@ pub fn sweep_moves(world: &mut World) {
     let cap = world.agents.capacity();
     let size_v = Vec2::splat(ws);
     let max_gap = 2.0 * (BODY_R_BASE + BODY_R_SIZE);
-    let spatial = &world.spatial;
+    // The fine collision hash, built at stage 1 from this tick's start
+    // positions (the same positions the moves start from). Its 4-unit cells
+    // hold a tenth of what the 16-unit perception hash's did, and a query
+    // walks only the rings its reach needs (`query_wide`): in a market
+    // crowd the one-ring perception query visited every body within 24
+    // units — thousands per query.
+    let spatial = &world.collision_spatial;
     let biome = &world.biome;
-    let query_cap = spatial.perception_max_radius();
     let (gait_enabled, growth_enabled) = (world.gait_enabled, world.growth_enabled);
     let desired = &world.desired_direction;
     let AgentBuffers { position, velocity, genome, age, alive, .. } = &world.agents;
@@ -416,110 +490,214 @@ pub fn sweep_moves(world: &mut World) {
         .enumerate()
         .map(|(i, v)| if alive[i] { v.length() } else { 0.0 })
         .reduce(|| 0.0f32, f32::max);
+    // Where each agent's move starts this tick (`integrate_all` applied the
+    // full gated move; the start is recovered as `position − velocity`).
+    let starts: Vec<Vec2> = (0..cap)
+        .into_par_iter()
+        .map(|i| if alive[i] { wrap_torus(position[i] - velocity[i], size_v) } else { position[i] })
+        .collect();
+    // Each neighbour's motion as a pass models it: `(velocity, t_end)` — it
+    // moves at `velocity` from its start until tick fraction `t_end`, then
+    // stands. Pass 1 takes every agent's full gated move over the whole
+    // tick.
+    let mut motion: Vec<(Vec2, f32)> = (0..cap).map(|i| (velocity[i], 1.0f32)).collect();
+    // The path pass 1 walks per agent: up to `SWEEP_SLIDES + 1` straight
+    // segments `(from, velocity, duration)`, for the validation pass.
+    let mut paths: Vec<[(Vec2, Vec2, f32); SWEEP_SLIDES + 1]> =
+        vec![[(Vec2::ZERO, Vec2::ZERO, 0.0); SWEEP_SLIDES + 1]; cap];
     let mut ends = std::mem::take(&mut world.collision_scratch);
     ends.clear();
     ends.extend_from_slice(&position[..cap]);
-    ends.par_iter_mut().enumerate().for_each(|(i, end)| {
+    let mut t_ends: Vec<f32> = vec![1.0; cap];
+    // Earliest contact of agent `i` (radius `ri`, class `ci`) at `p` with
+    // velocity `v` at elapsed tick fraction `tau`, over the remaining
+    // fraction, against every neighbour's modelled motion: `(t, normal)`,
+    // the normal pointing from the neighbour into this agent at contact.
+    let earliest = |motion: &[(Vec2, f32)],
+                    only_cut: bool,
+                    i: usize,
+                    ci: Locomotion,
+                    ri: f32,
+                    p: Vec2,
+                    v: Vec2,
+                    tau: f32,
+                    remaining: f32|
+     -> Option<(f32, Vec2)> {
+        let reach = v.length() * remaining + vmax + max_gap;
+        let mut best: Option<(f32, Vec2)> = None;
+        spatial.query_wide(wrap_torus(p, size_v), reach, |oid| {
+            let j = oid as usize;
+            if j == i || !alive[j] || !ci.collides_with(Locomotion::of(&genome[j])) {
+                return;
+            }
+            let (vj, tj) = motion[j];
+            // The validation pass re-checks only against neighbours the
+            // first pass cut: an uncut neighbour's model is exactly what the
+            // path was already swept against.
+            if only_cut && tj >= 1.0 {
+                return;
+            }
+            let gap = ri + live_body_radius(&genome[j], age[j], growth_enabled);
+            // The neighbour's position now: it moves linearly until `tj`,
+            // then stands.
+            let d0 = torus_delta(p, starts[j], ws) - vj * tau.min(tj);
+            let d0_sq = d0.dot(d0);
+            // A pair already in contact range (herd neighbours sit at the
+            // gap after the resolve, inside the steer margin) keeps its
+            // freedom to jostle: its surface is `SWEEP_DEEP_FRAC` of the gap
+            // — deep enough to rule out passing through or stacking. Only a
+            // pair already deeper than that may not move further in. A pair
+            // still outside the margin meets a hard surface at the gap.
+            let near = STEER_MARGIN * gap;
+            let contact = if d0_sq >= near * near { gap } else { SWEEP_DEEP_FRAC * gap };
+            // Segment 1: both moving, until the neighbour stops.
+            let mut d = d0;
+            let mut elapsed = 0.0f32;
+            let mut hit: Option<(f32, Vec2)> = None;
+            if tau < tj {
+                let span = (tj - tau).min(remaining);
+                let dv = v - vj;
+                match first_contact(d, dv, contact, span) {
+                    Some(t) => hit = Some((t, d + dv * t)),
+                    None => {
+                        d += dv * span;
+                        elapsed = span;
+                    }
+                }
+            }
+            // Segment 2: the neighbour stands, this agent moves on.
+            if hit.is_none() && elapsed < remaining {
+                if let Some(t) = first_contact(d, v, contact, remaining - elapsed) {
+                    hit = Some((elapsed + t, d + v * t));
+                }
+            }
+            if let Some((tc, at)) = hit {
+                if best.is_none_or(|(bt, _)| tc < bt) {
+                    best = Some((tc, at.normalize_or_zero()));
+                }
+            }
+        });
+        best
+    };
+    // Pass 1: walk every move — advance to each contact, then slide along
+    // that body's surface for the rest of the tick (up to `SWEEP_SLIDES`
+    // times), gating every slid segment through the habitat rule.
+    {
+        let motion_ref = &motion;
+        ends.par_iter_mut()
+            .zip(t_ends.par_iter_mut())
+            .zip(paths.par_iter_mut())
+            .enumerate()
+            .for_each(|(i, ((end, t_end), path))| {
+                if !alive[i] {
+                    return;
+                }
+                let v_full = velocity[i];
+                if v_full.length_squared() <= 0.0 {
+                    return;
+                }
+                let start = starts[i];
+                let ci = Locomotion::of(&genome[i]);
+                let ri = live_body_radius(&genome[i], age[i], growth_enabled);
+                let mut p = start;
+                let mut v = v_full;
+                let mut tau = 0.0f32;
+                let mut remaining = 1.0f32;
+                let mut segs = 0usize;
+                for slide in 0..=SWEEP_SLIDES {
+                    let Some((tc, n)) =
+                        earliest(motion_ref, false, i, ci, ri, p, v, tau, remaining)
+                    else {
+                        path[segs] = (p, v, remaining);
+                        segs += 1;
+                        p += v * remaining;
+                        tau = 1.0;
+                        break;
+                    };
+                    if tc > 0.0 {
+                        path[segs] = (p, v, tc);
+                        segs += 1;
+                    }
+                    p += v * tc;
+                    tau += tc;
+                    remaining -= tc;
+                    if slide == SWEEP_SLIDES || remaining <= 1e-4 || n == Vec2::ZERO {
+                        break;
+                    }
+                    let inward = v.dot(n);
+                    if inward >= 0.0 {
+                        continue; // glancing: already moving off the surface
+                    }
+                    let slid = v - n * inward;
+                    if slid.length_squared() <= 1e-8 {
+                        break;
+                    }
+                    // The rest of the tick along the surface, habitat-gated.
+                    let allowed = crate::habitat::gate_move(
+                        biome,
+                        ci,
+                        wrap_torus(p, size_v),
+                        slid * remaining,
+                    );
+                    if allowed == Vec2::ZERO {
+                        break;
+                    }
+                    v = allowed / remaining;
+                }
+                for seg in path.iter_mut().skip(segs) {
+                    *seg = (Vec2::ZERO, Vec2::ZERO, 0.0);
+                }
+                *t_end = tau.clamp(0.0, 1.0);
+                *end = p;
+            });
+    }
+    // Pass 2 (validation): pass 1 checked every path against neighbours'
+    // FULL moves, but a neighbour stopped by a third body stands where its
+    // full move would have carried it away from — and an agent walked into
+    // that spot (on the crowded worlds 4–23 pairs per tick ended the sweep
+    // closer than half their gap, most of them one body still standing in
+    // another's path). Re-walk each agent's pass-1 path against the moves
+    // pass 1 actually left its neighbours (their cut point and when they
+    // got there) and cut it at the first contact. Cuts only: a path is
+    // never extended, so the check can only stop bodies earlier.
+    motion.par_iter_mut().enumerate().for_each(|(i, m)| {
         if !alive[i] {
             return;
         }
-        let v_full = velocity[i];
-        if v_full.length_squared() <= 0.0 {
+        let chord = torus_delta(ends[i], starts[i], ws);
+        *m = if t_ends[i] > 1e-4 { (chord / t_ends[i], t_ends[i]) } else { (Vec2::ZERO, 0.0) };
+    });
+    {
+        let motion_ref = &motion;
+        let paths_ref = &paths;
+        ends.par_iter_mut().zip(t_ends.par_iter_mut()).enumerate().for_each(|(i, (end, t_end))| {
+            if !alive[i] || velocity[i].length_squared() <= 0.0 {
+                return;
+            }
+            let ci = Locomotion::of(&genome[i]);
+            let ri = live_body_radius(&genome[i], age[i], growth_enabled);
+            let mut tau = 0.0f32;
+            for &(from, v, dt) in paths_ref[i].iter() {
+                if dt <= 0.0 {
+                    break;
+                }
+                if let Some((tc, _)) = earliest(motion_ref, true, i, ci, ri, from, v, tau, dt) {
+                    *end = from + v * tc;
+                    *t_end = tau + tc;
+                    return;
+                }
+                tau += dt;
+            }
+        });
+    }
+    // Land every end on the torus and on valid terrain.
+    ends.par_iter_mut().enumerate().for_each(|(i, end)| {
+        if !alive[i] || velocity[i].length_squared() <= 0.0 {
             return;
         }
-        let start = wrap_torus(position[i] - v_full, size_v);
         let ci = Locomotion::of(&genome[i]);
-        let ri = live_body_radius(&genome[i], age[i], growth_enabled);
-        // Earliest contact of this agent, at `p` with velocity `v` at elapsed
-        // tick fraction `tau`, over the remaining fraction: `(t, normal)`,
-        // the normal pointing from the neighbour into this agent at contact.
-        let earliest = |p: Vec2, v: Vec2, tau: f32, remaining: f32| -> Option<(f32, Vec2)> {
-            let reach = (v.length() * remaining + vmax + max_gap).min(query_cap);
-            let mut best: Option<(f32, Vec2)> = None;
-            spatial.query(wrap_torus(p, size_v), reach, |oid| {
-                let j = oid as usize;
-                if j == i || !alive[j] || !ci.collides_with(Locomotion::of(&genome[j])) {
-                    return;
-                }
-                let gap = ri + live_body_radius(&genome[j], age[j], growth_enabled);
-                let vj = velocity[j];
-                let start_j = wrap_torus(position[j] - vj, size_v);
-                // The neighbour's position now (it moves linearly through the tick).
-                let d0 = torus_delta(p, start_j, ws) - vj * tau;
-                let dv = v - vj;
-                let d0_sq = d0.dot(d0);
-                // A pair already in contact range (herd neighbours sit at the
-                // gap after the resolve, inside the steer margin) keeps its
-                // freedom to jostle: its surface is half the gap — deep enough
-                // to rule out passing through or stacking. Only a pair already
-                // deeper than that may not move further in. A pair still
-                // outside the margin meets a hard surface at the gap.
-                let near = STEER_MARGIN * gap;
-                let contact = if d0_sq >= near * near { gap } else { SWEEP_DEEP_FRAC * gap };
-                let c = d0_sq - contact * contact;
-                let b = 2.0 * d0.dot(dv);
-                let a = dv.dot(dv);
-                let tc = if c <= 0.0 {
-                    if b < 0.0 {
-                        0.0
-                    } else {
-                        return;
-                    }
-                } else {
-                    if a <= 1e-12 {
-                        return;
-                    }
-                    let disc = b * b - 4.0 * a * c;
-                    if disc < 0.0 {
-                        return;
-                    }
-                    (-b - disc.sqrt()) / (2.0 * a)
-                };
-                if !(0.0..remaining).contains(&tc) {
-                    return;
-                }
-                if best.is_none_or(|(bt, _)| tc < bt) {
-                    let at = d0 + dv * tc;
-                    best = Some((tc, at.normalize_or_zero()));
-                }
-            });
-            best
-        };
-        // Walk the move: advance to each contact, then slide along that
-        // body's surface for the rest of the tick (up to `SWEEP_SLIDES`
-        // times), gating every slid segment through the habitat rule.
-        let mut p = start;
-        let mut v = v_full;
-        let mut tau = 0.0f32;
-        let mut remaining = 1.0f32;
-        for slide in 0..=SWEEP_SLIDES {
-            let Some((tc, n)) = earliest(p, v, tau, remaining) else {
-                p += v * remaining;
-                break;
-            };
-            p += v * tc;
-            tau += tc;
-            remaining -= tc;
-            if slide == SWEEP_SLIDES || remaining <= 1e-4 || n == Vec2::ZERO {
-                break;
-            }
-            let inward = v.dot(n);
-            if inward >= 0.0 {
-                continue; // glancing: already moving off the surface
-            }
-            let slid = v - n * inward;
-            if slid.length_squared() <= 1e-8 {
-                break;
-            }
-            // The rest of the tick along the surface, habitat-gated.
-            let allowed =
-                crate::habitat::gate_move(biome, ci, wrap_torus(p, size_v), slid * remaining);
-            if allowed == Vec2::ZERO {
-                break;
-            }
-            v = allowed / remaining;
-        }
-        let end_p = wrap_torus(p, size_v);
+        let end_p = wrap_torus(*end, size_v);
+        let start = starts[i];
         // A move cut short at a contact ends part-way along a path the
         // habitat gate validated only at half-cell samples, so the cut point
         // can clip the corner of a cell the class cannot occupy. Never end
@@ -1040,6 +1218,35 @@ mod tests {
         let gap = 2.0 * body_radius(&Genome::neutral());
         let d = crate::spatial::torus_distance(after, w.agents.position[_b as usize], w.world_size);
         assert!(d >= 0.9 * gap, "still overlapping at the shore: d={d} gap={gap}");
+    }
+
+    /// A body pinned against the coast (its own push would enter the sea,
+    /// and so would its half of the correction) is cleared by its free
+    /// neighbour taking the whole overlap: the pair ends at its gap in one
+    /// resolve, and the pinned body never enters the water.
+    #[test]
+    fn a_free_neighbour_takes_the_whole_push_off_a_body_pinned_at_the_coast() {
+        let mut w = flat_world();
+        // Water west of x = 304 (cell col 38 starts the land).
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 0..38 {
+                w.biome.at_mut(col, row).terrain = crate::biome::TerrainType::Water;
+            }
+        }
+        let g = Genome::neutral();
+        let gap = 2.0 * body_radius(&g);
+        // `a` stands on the first land point; `b` overlaps it from due east
+        // at 0.6 of the gap, the swept move's soft contact surface.
+        let a = w.spawn_agent(Vec2::new(304.0, 300.0), g);
+        let b = w.spawn_agent(Vec2::new(304.0 + 0.6 * gap, 300.0), g);
+        resolve_overlaps(&mut w);
+        let (pa, pb) = (w.agents.position[a as usize], w.agents.position[b as usize]);
+        assert!(pa.x >= 304.0, "pinned body pushed into the sea: {pa:?}");
+        assert_ne!(w.biome.sample(pa).terrain, crate::biome::TerrainType::Water);
+        let d = torus_distance(pa, pb, w.world_size);
+        assert!(d >= gap - 1e-4, "pair still overlapping at the coast: d={d} gap={gap}");
+        assert!(pb.x > 304.0 + 0.6 * gap, "the free body did not give way: {pb:?}");
     }
 
     #[test]

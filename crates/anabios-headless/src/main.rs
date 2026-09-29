@@ -1,5 +1,6 @@
 //! Headless runner for anabios scenarios.
 
+mod audit;
 mod autopsy;
 mod demo;
 mod founder;
@@ -220,6 +221,30 @@ enum Command {
         #[arg(long, default_value_t = 1000)]
         report_every: u64,
     },
+    /// Collision audit: run a scenario and check every colliding pair of
+    /// alive agents after every tick against the gap the collision layer
+    /// enforces; report end-of-tick overlaps by depth, swap-throughs,
+    /// shoreline/newborn attribution and the worst pairs seen.
+    Audit {
+        #[arg(long)]
+        scenario: PathBuf,
+        #[arg(long, default_value_t = 1000)]
+        ticks: u64,
+        /// Optional explicit seed; overrides the scenario seed.
+        #[arg(long)]
+        seed: Option<u64>,
+        /// Print a windowed progress line every N ticks (0 = none).
+        #[arg(long, default_value_t = 0)]
+        report_every: u64,
+        /// How many of the worst pairs to list.
+        #[arg(long, default_value_t = 10)]
+        worst: usize,
+        /// Probe (changes the trajectory): after every tick with a pair under
+        /// 0.9 of its gap, run the collision resolve once more and report
+        /// how many such pairs it clears.
+        #[arg(long)]
+        extra_resolve: bool,
+    },
     /// O1 diagnosis: run a scenario, log per-strategy (cultural vs asocial)
     /// aggregates each window to a CSV, and report the invasion fitness of the
     /// chosen rare strategy. Reads the world only; no sim/golden impact.
@@ -253,6 +278,9 @@ fn main() -> Result<()> {
         Command::Info { scenario } => info(scenario),
         Command::Sweep { scenario, seeds, ticks, out, threads, archive } => {
             sweep::run(scenario, seeds, ticks, out, threads, archive)
+        }
+        Command::Audit { scenario, ticks, seed, report_every, worst, extra_resolve } => {
+            audit::run(scenario, ticks, seed, report_every, worst, extra_resolve)
         }
         Command::Demo { scenario, ticks, seed, report_every } => {
             demo::run(scenario, ticks, seed, report_every)
