@@ -18,6 +18,21 @@ pin `minimal` and `grand-theater` as they were before the schema flip
 (inline fixtures: `minimal` with every knob off, `grand-theater` with only
 its own pre-flip flags on).
 
+`gestation_enabled` (default on, like the other feature knobs) makes a birth
+take time: a fertile pair conceives where it would have bred — same
+eligibility, mate choice, energy payment and RNG draws — and the mother
+carries the litter for `reproduce::GESTATION_TICKS` (80 ticks, ~3% of a
+mid lifespan), paying `GESTATION_UPKEEP` (+25%) more basal metabolism,
+moving at `GESTATION_SPEED` (0.85), unable to conceive again and losing the
+litter if she dies; at term she delivers `reproduce::litter_size` children
+(one below Size 0.5, two from 0.5, three at Size 1.0, sharing the one spawn
+energy the parents paid) beside herself, placed and settled like any other
+newborn. With the collision layer on they are placed clear of her body.
+Every sibling is drawn at conception, so a litter of *n* draws *n* times
+what an instant birth draws, all at conception. Set it `false` to restore
+the instant birth; the flag-off path is pinned by the reproduce unit tests
+and the two flag-off trajectory guards.
+
 Four knobs stay off by default everywhere as **experiment levers**, not
 curated-world features: `env_period` (DIT environmental-variability sweep),
 `climate_drift_rate` (secular climate drift on top of it), `payoff_biased_learning`

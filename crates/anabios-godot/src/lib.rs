@@ -2368,6 +2368,7 @@ mod tests {
                 "gait_enabled = false\n",
                 "growth_enabled = false\n",
                 "turning_enabled = false\n",
+                "gestation_enabled = false\n",
             )
         };
     }

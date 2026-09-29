@@ -63,6 +63,7 @@ fn full_stack_but_dimorphism(w: &World) -> bool {
         && w.territory_enabled
         && w.gait_enabled
         && w.turning_enabled
+        && w.gestation_enabled
         && w.disease_enabled
         && w.anthro_race_enabled
         && w.repro_biased_learning
@@ -191,6 +192,60 @@ mod retired_state_fixtures {
         knowledge_ratchet_roundtrip:
             knowledge_ratchet_flag_off(), 300, |w: &World| w.knowledge_enabled, "knowledge_enabled";
     }
+}
+
+/// Gestation: the `gestation_left` countdown and the `pending_litter` store
+/// (the litter's drawn genomes, modules, programs and sexes, plus the father
+/// bookkeeping) are conception RNG output and must survive a snapshot — a
+/// reloaded world that dropped them would deliver nothing where the live one
+/// delivers a litter. Hand-built so the state is provably non-trivial when
+/// saved: a well-fed herd on grass conceives within a few ticks, and the
+/// save lands mid-term. The twelve worlds above round-trip it too (the knob
+/// is on in all of them), but a cap-bound world's warm-up could in principle
+/// end with no pregnancy in flight.
+#[test]
+fn gestation_roundtrip_with_litters_in_flight() {
+    use anabios_core::biome::TerrainType;
+    use anabios_core::genome::{Genome, GenomeSlot};
+    use anabios_core::prelude_test::Vec2;
+    use anabios_core::reproduce::GESTATION_TICKS;
+    let mut w = World::new(11);
+    w.gestation_enabled = true;
+    w.territory_enabled = true;
+    for c in w.biome.cells.iter_mut() {
+        c.terrain = TerrainType::Grass;
+        c.plant_biomass = 1.0;
+    }
+    let mut g = Genome::neutral();
+    g.set(GenomeSlot::ReproductionThreshold, 0.3);
+    g.set(GenomeSlot::Size, 0.8); // litters of two
+    for k in 0..24 {
+        let id =
+            w.spawn_agent(Vec2::new(300.0 + (k % 6) as f32 * 1.2, 300.0 + (k / 6) as f32 * 1.2), g);
+        w.agents.energy[id as usize] = anabios_core::agent::SPAWN_ENERGY * 2.0;
+    }
+    common::run(&mut w, GESTATION_TICKS as u64 / 2);
+    let pregnant =
+        w.agents.iter_alive().filter(|&id| w.agents.gestation_left[id as usize] > 0).count();
+    assert!(pregnant > 0, "warm-up must leave litters in flight (got none)");
+    assert!(
+        w.agents.iter_alive().all(|id| {
+            (w.agents.gestation_left[id as usize] > 0)
+                == w.agents.pending_litter[id as usize].is_some()
+        }),
+        "a countdown and a stored litter go together"
+    );
+    common::assert_roundtrip_world(&mut w, "gestation_enabled with litters in flight");
+    // And the reloaded world delivers them exactly when the live one does.
+    let bytes = anabios_core::snapshot::save_to_bytes(&w).expect("save");
+    let mut reloaded = anabios_core::snapshot::load_from_bytes(&bytes).expect("load");
+    common::run(&mut w, GESTATION_TICKS as u64);
+    common::run(&mut reloaded, GESTATION_TICKS as u64);
+    assert_eq!(
+        anabios_core::snapshot::state_hash(&w),
+        anabios_core::snapshot::state_hash(&reloaded),
+        "births after a reload must match the continuous run"
+    );
 }
 
 /// Territory layer on a NON-default world extent. `collision_spatial` is

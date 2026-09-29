@@ -364,6 +364,19 @@ fn habitat_territories_matches_golden_hashes() {
 /// inline flag-off fixtures in `common::fixtures` (the scenario schema now
 /// defaults every knob on, so the live scenario files no longer reproduce
 /// this configuration), not on the live scenario files.
+///
+/// Re-pinned 2026-09-29 (gestation, FORMAT_VERSION 45): `AgentBuffers`
+/// gained the `gestation_left` and `pending_litter` columns, so the `agents`
+/// sub-state's own layout grew and both pins moved by layout alone. Proven
+/// layout-only the way this comment asks: a column-wise variant of this
+/// hash (each pre-existing `AgentBuffers` column serialized on its own, plus
+/// the other sub-states) is identical at the merge base `a0bc6a1` (where
+/// the pins' previous values, `0xd1133dd8d119e894` /
+/// `0x56819428b6cd2bf0`, still held) and at this head with
+/// `gestation_enabled = false` in `OPT_OUT_ALL` — minimal
+/// `0xa17a54f7d1967ca6`, grand-theater `0xea8d6324b39a6ad7`. (Between
+/// `0533d40` and `8351eea` the grand-theater pin was stale — the hub-pull
+/// arrival zone ran with the collision layer off; `8351eea` gated it.)
 fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
     // The `agents` sub-state is hashed COLUMN BY COLUMN, over the columns
     // that existed when the pins were taken and in their original struct
