@@ -7,7 +7,7 @@
 //
 //   node web/test/body-scale.mjs
 
-import { bodyScale, figureFootprint, Agents } from "../src/layers.js";
+import { bodyScale, figureFootprint, Agents, LEGIBLE_PX, BODY_DRAW } from "../src/layers.js";
 
 function check(cond, msg) {
   if (!cond) {
@@ -44,14 +44,39 @@ check(hunter > grazer && hunter < 3.2, `hunter footprint is longer than the graz
 check(Math.abs(figureFootprint(agents.grazers.geometry) - grazer) < 1e-9, "figureFootprint matches the cached per-kind value");
 
 // The property the clamp exists for: two default-size bodies (physical
-// diameter 1.15) drawn at the close-camera scale span exactly their physical
-// diameter nose to tail, so bodies the resolve keeps 1.15 apart touch on
-// screen instead of overlapping by half a figure.
+// diameter 1.15) drawn at the close-camera scale span BODY_DRAW of their
+// physical diameter nose to tail, so bodies the resolve keeps 1.15 apart
+// show a margin on screen instead of overlapping by half a figure.
 const physDiam = 2 * (0.4 + 0.35 * 0.5);
+check(BODY_DRAW > 0.7 && BODY_DRAW <= 1, `BODY_DRAW is a margin just under the disc (got ${BODY_DRAW})`);
 for (const [name, fp] of [["grazer", grazer], ["hunter", hunter]]) {
-  const sc = bodyScale(2.4, physDiam / fp, 0.2);
-  check(Math.abs(sc * fp - physDiam) < 1e-9, `${name} drawn footprint at close range equals the physical diameter (got ${(sc * fp).toFixed(3)})`);
+  const sc = bodyScale(2.4, BODY_DRAW * physDiam / fp, 0.2);
+  check(Math.abs(sc * fp - BODY_DRAW * physDiam) < 1e-9, `${name} drawn footprint at close range is BODY_DRAW of the physical diameter (got ${(sc * fp).toFixed(3)})`);
   check(sc < physDiam, `${name} close-range scale is below the raw diameter (got ${sc.toFixed(3)})`);
+}
+
+// The legible floor is a floor on the drawn LENGTH (LEGIBLE_PX on screen),
+// not on the instance scale: at 10 px per world unit two touching
+// default-size bodies (1.15 units = 11.5 px apart) are drawn at their
+// physical size and do not overlap, whichever figure they are. With the old
+// scale floor (14 px of scale) they were drawn 28–38 px long at that zoom.
+check(LEGIBLE_PX <= 12, `legible floor is a small figure, not a scale (got ${LEGIBLE_PX})`);
+const unitsPerPixel = 0.1;
+for (const [name, fp] of [["grazer", grazer], ["hunter", hunter]]) {
+  const legible = LEGIBLE_PX * unitsPerPixel / fp;
+  const sc = bodyScale(2.4, BODY_DRAW * physDiam / fp, legible);
+  const drawnPx = sc * fp / unitsPerPixel;
+  check(drawnPx <= physDiam / unitsPerPixel + 1e-9, `${name} at 10 px/unit is drawn no longer than its physical diameter (got ${drawnPx.toFixed(1)} px for ${(physDiam / unitsPerPixel).toFixed(1)} px of spacing)`);
+  check(drawnPx >= LEGIBLE_PX - 1e-9, `${name} at 10 px/unit still spans at least LEGIBLE_PX (got ${drawnPx.toFixed(1)} px)`);
+}
+// Far away (1 px per world unit) the readable size still rules, capped by
+// the legible floor from above: a body is drawn min(readable, LEGIBLE_PX)
+// long — never a sub-pixel dot, never a figure larger than the floor.
+for (const [name, fp] of [["grazer", grazer], ["hunter", hunter]]) {
+  const legible = LEGIBLE_PX * 1.0 / fp;
+  const sc = bodyScale(2.4, BODY_DRAW * physDiam / fp, legible);
+  const want = Math.min(2.4 * fp, LEGIBLE_PX);
+  check(Math.abs(sc * fp - want) < 1e-9, `${name} at 1 px/unit is drawn min(readable, LEGIBLE_PX) long (got ${(sc * fp).toFixed(1)}, want ${want.toFixed(1)})`);
 }
 
 console.log("body-scale test: OK");

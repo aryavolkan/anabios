@@ -14,7 +14,7 @@ export const AGENT = Object.freeze({
   BODY: 16, // physical collision diameter (world units) — a juvenile's under growth
 });
 /** Bits of an agent row's FLAGS column. */
-export const AGENT_FLAG = Object.freeze({ LIVESTOCK: 1, ASLEEP: 2, MALE: 4 });
+export const AGENT_FLAG = Object.freeze({ LIVESTOCK: 1, ASLEEP: 2, MALE: 4, AIR: 8 });
 /** Bits of `flags()` — which opt-in subsystems the loaded world runs. */
 export const WORLD_FLAG = Object.freeze({
   INVENTIONS: 1 << 0, AFFECT: 1 << 1, DISEASE: 1 << 2, DOMESTICATION: 1 << 3,

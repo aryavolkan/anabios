@@ -49,6 +49,7 @@ dependencies = [
  "anabios-core",
  "anyhow",
  "clap",
+ "glam 0.27.0",
  "rayon",
  "serde",
  "serde_json",

@@ -251,6 +251,50 @@ checks, `out-of-africa-saga` 37) and closer only on `habitat-territories`,
 whose shorelines press its Land and Water classes together (526 pair-ticks
 between 60% and 80% of the gap in 500 ticks, 1.9% of agent-ticks).
 
+The audit was run once more on 2026-09-29 after the realism layers, with
+the check widened from "closer than half the gap" to every colliding pair
+under its gap, bucketed by depth, and taken both at the end of the tick
+(what a frame shows) and right after the swept move, before the resolve
+(`anabios-headless audit --scenario <world> --ticks N`; the atlas was also
+watched at the worst pairs' coordinates). It found the residue the earlier
+audits had left: on every world the pairs between 0.6 and 0.9 of their gap
+sat on shorelines (a body pressed against a coast cannot give way, and the
+resolve gave its neighbour only half the overlap — a pair pinned in a cove
+on `habitat-territories` stayed at 0.62 of its gap for a hundred ticks;
+1805 pair-ticks under 0.9 of the gap in 300 ticks, every one on a coast),
+the market crowd of `markets` and `grand-theater` ran out of resolve passes
+(a second full resolve after the tick cleared three quarters of its
+remaining near-touch pairs), and the swept move, which checked each path
+against its neighbours' *full* moves, walked bodies into neighbours a third
+body had already stopped (4–23 pairs per tick closer than half their gap
+before the resolve on the crowded worlds — cleared before the frame, but a
+body could end a tick on the far side of another). Three changes
+(`crates/anabios-core/src/collision.rs`): a body whose neighbour's
+half-push would leave its terrain takes the whole overlap; the resolve
+push is over-relaxed (`RESOLVE_OMEGA` 1.3, which also breaks the
+colinear cancellation of a body pushed from both sides), its settle
+threshold halves and its pass cap doubles; and a second, cut-only sweep
+pass re-walks each path against the moves the first pass actually left the
+neighbours, with both passes querying the fine collision hash instead of
+the 16-unit perception hash (which paid for the second pass: 1000 ticks of
+`markets` on four threads went from 16.2 to 17.5 s, `grand-theater` from
+16.2 to 15.6 s). After, on every curated world (1000 ticks; 300 on
+`sandbox` and `huge-steppe`), no pair ends a tick under 0.9 of its gap
+(one pair-tick on `habitat-territories`), between 0 and 68 pair-ticks per
+world end between 0.9 and 0.95, and the total under the gap fell five- to
+sixteen-fold (`grand-theater` 548k → 128k pair-ticks, `minimal` 72k →
+4k). Before the resolve the crowded worlds still see 3–4 pairs per tick
+closer than half their gap (`markets` 4167, `grand-theater` 3468 per 1000
+ticks, down from ~15 per tick): the second pass is a validation, not a
+fixed point. Movement is not reduced overall (mean step `markets` 0.58 →
+0.62, `grand-theater` 0.69 → 0.63 over 1000 ticks). The atlas, which drew
+every figure 28–38 px long at any zoom until about 30 px per world unit,
+now floors the drawn *length* at 10 px, so from ~9 px per unit on a body
+is drawn at its physical size (0.85 of its disc, a margin), and lifts
+flyers off the ground (the collision layer lets them stand over ground
+bodies: 2–5k such stacks per 1000 ticks on `habitat-territories`, drawn
+as one body before). The validation bar was not re-run for this change.
+
 Predation is a chase (`chase_enabled`, 2026-09-29; on by default like every
 other knob, `chase_enabled = false` opts out): every agent carries a stamina
 bar that drains while it moves faster than a walk (gait's walk, 0.6 of its
