@@ -41,6 +41,7 @@ pub mod resource;
 pub mod rng;
 pub mod scenario;
 pub mod sense;
+mod serde_rows;
 pub mod settlement;
 pub mod snapshot;
 pub mod spatial;

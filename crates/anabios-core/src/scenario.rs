@@ -908,12 +908,30 @@ fn unknown_invention_msg(name: &str) -> String {
     format!("unknown starting invention '{name}' — valid keys: {valid}")
 }
 
+/// Build the fail-fast message for a `starting_inventions` entry seeded
+/// without one of its prerequisites (`missing`: the unseeded prereq bits),
+/// which would atrophy away in play.
+fn unsupported_invention_msg(k: usize, missing: u32) -> String {
+    let mut needs = Vec::new();
+    crate::invention::for_each_set_bit(missing, |p| {
+        needs.push(crate::invention::INVENTIONS[p].key)
+    });
+    format!(
+        "starting invention '{}' is seeded without its prerequisite(s) {} — an invention \
+         whose foundations are missing atrophies away; seed those too",
+        crate::invention::INVENTIONS[k].key,
+        needs.join(", ")
+    )
+}
+
 #[derive(Debug, Error)]
 pub enum ScenarioError {
     #[error("toml parse error: {0}")]
     Toml(#[from] toml::de::Error),
     #[error("{0}")]
     UnknownInvention(String),
+    #[error("{0}")]
+    UnsupportedStartingInvention(String),
     #[error(
         "starting_inventions given but inventions_enabled = false — without the \
          invention tree the seeded meme channels are never read; opt out of \
@@ -1001,6 +1019,26 @@ impl Scenario {
             for name in &spec.starting_inventions {
                 if crate::invention::id_from_name(name).is_none() {
                     return Err(ScenarioError::UnknownInvention(unknown_invention_msg(name)));
+                }
+            }
+        }
+        // A seeded invention must come with its foundations: `invention_step`
+        // atrophies any held tech whose prereqs the holder lacks, so seeding
+        // Hafted Spears without Throwing Stones (the projectile ladder's root)
+        // would silently fade over the first few hundred ticks. Fail at load.
+        for spec in &scenario.agents {
+            let seeded = spec
+                .starting_inventions
+                .iter()
+                .filter_map(|name| crate::invention::id_from_name(name))
+                .fold(0u32, |mask, k| mask | crate::invention::bit(k));
+            for name in &spec.starting_inventions {
+                let k = crate::invention::id_from_name(name).expect("validated just above");
+                let missing = crate::invention::INVENTIONS[k].prereqs & !seeded;
+                if missing != 0 {
+                    return Err(ScenarioError::UnsupportedStartingInvention(
+                        unsupported_invention_msg(k, missing),
+                    ));
                 }
             }
         }
@@ -1969,6 +2007,44 @@ placement = { kind = "uniform" }
         let msg = err.to_string();
         assert!(msg.contains("wheel"), "error should name the bad invention, got: {msg}");
         assert!(msg.contains("husbandry"), "error should list valid keys, got: {msg}");
+    }
+
+    #[test]
+    fn parse_toml_rejects_a_seeded_invention_missing_its_prerequisite() {
+        // Hafted Spears is rooted on Throwing Stones (the projectile ladder);
+        // seeded alone it would atrophy away, so the loader refuses it.
+        let text = r#"
+name = "t"
+seed = 1
+inventions_enabled = true
+[[agents]]
+count = 1
+starting_inventions = ["stone_tools", "hafted_spears"]
+placement = { kind = "uniform" }
+"#;
+        let err = Scenario::parse_toml(text).expect_err("missing prerequisite must be rejected");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("hafted_spears") && msg.contains("throwing_stones"),
+            "error should name the seeded tech and the missing prereq, got: {msg}"
+        );
+        // With the ladder seeded in full the same file loads and holds (on an
+        // ape kit — `enforce_ape_only` strips seeds from any other archetype).
+        let ok = text
+            .replace(
+                "[\"stone_tools\", \"hafted_spears\"]",
+                "[\"stone_tools\", \"throwing_stones\", \"hafted_spears\"]",
+            )
+            .replace("count = 1\n", "count = 1\narchetype = \"innovator\"\n");
+        let w = Scenario::parse_toml(&ok).expect("complete chain parses").instantiate();
+        let id = w.agents.iter_alive().next().expect("one seeded agent");
+        let mask = crate::invention::held_mask(&w.agents.meme_vector[id as usize]);
+        assert_eq!(
+            mask,
+            crate::invention::bit(crate::invention::STONE_TOOLS)
+                | crate::invention::bit(crate::invention::THROWING_STONES)
+                | crate::invention::bit(crate::invention::HAFTED_SPEARS)
+        );
     }
 
     #[test]

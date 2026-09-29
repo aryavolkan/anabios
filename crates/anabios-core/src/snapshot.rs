@@ -208,7 +208,19 @@ use crate::world::World;
 ///     scenario ⇒ trajectories byte-identical (pinned by the
 ///     `*_trajectory_unchanged_by_territory_substrate` guards in
 ///     `tests/determinism.rs`); only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 44;
+/// 45: projectile ladder — Throwing Stones appended to the invention tree
+///     (id 22, `invention::THROWING_STONES`; `INVENTION_COUNT` 22->23) and
+///     Hafted Spears re-rooted onto it; `MEME_CHANNELS` widened 32->33 (an
+///     exact fit, no spare lane), so the practice block moves 30..32 ->
+///     31..33 and the agent meme columns ride the `serde_rows` adapter past
+///     serde's 32-lane derive limit (same bincode layout, one lane wider).
+///     Flag-off worlds draw no extra RNG — the new lane is an invention
+///     channel, jittered only under `inventions_enabled` — so their
+///     trajectories are byte-identical and only the layout grew. Invention
+///     worlds change trajectory: an extra era-1 candidate reweights the
+///     discovery table under the same single draw, each Communicator birth
+///     jitters one more lane, and Hafted Spears now waits on the stone.
+pub const FORMAT_VERSION: u32 = 45;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

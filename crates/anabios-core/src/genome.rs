@@ -69,6 +69,10 @@ pub enum GenomeSlot {
     /// Openness: +1 novelty-seeking, −1 routine (was Curiosity).
     Openness = 12,
     /// Extraversion: +1 social/seeking, −1 solitary (was SocialAffinity).
+    /// Also the gene-tech affinity slot of the projectile ladder's thrown
+    /// rungs — Throwing Stones and Archery — and of Currency in
+    /// `invention::INVENTIONS`, and the requirement slot of the latter two,
+    /// under `gene_tech_coupling` / `gene_requirements`.
     Extraversion = 13,
     /// Reserved; formerly `KinPreference`. No live behavior reads this slot.
     _Reserved14 = 14,

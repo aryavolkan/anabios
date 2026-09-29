@@ -213,7 +213,8 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         if tgt == crate::sense::NO_NEIGHBOR_ID {
             continue;
         }
-        // Archery buff: reach extends past the bare module range (identity
+        // Projectile ladder (Throwing Stones, Hafted Spears, Archery,
+        // Gunpowder): reach extends past the bare module range (identity
         // multiplier when unheld, so pre-branch behavior is bit-identical).
         let mask_i = crate::invention::held_mask(&world.agents.meme_vector[i]);
         if world.sensors[i].nearest_other_dist
@@ -230,7 +231,8 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         if world.domestication_enabled && world.agents.livestock_of[t] == id {
             continue;
         }
-        // Metalworking / military-branch buffs: better weapons deal more damage.
+        // Metalworking / military-branch / projectile-ladder buffs: better
+        // weapons deal more damage.
         let inv_weapon_mult = crate::invention::weapon_multiplier_coupled(
             mask_i,
             &world.agents.genome[i],

@@ -55,10 +55,13 @@ static func advance_animation_time(t: float, delta: float, paused: bool) -> floa
 
 # Invention ids mirrored from the sim's tech tree (invention/mod.rs) — the
 # bits the viewer reads out of `alive_invention_masks()`. Only the three
-# weapon techs matter for posing; everything else keeps the fight cells.
+# weapon techs matter for posing; everything else keeps the fight cells —
+# including Throwing Stones (id 22), the projectile ladder's era-1 root under
+# Hafted Spears, which has no cell of its own yet and brawls bare-handed.
 const INV_HAFTED_SPEARS := 10
 const INV_ARCHERY := 11
 const INV_STEEL_ARMS := 13
+const INV_THROWING_STONES := 22
 
 
 # Atlas pair used for a behavior action. Drinking intentionally shares the

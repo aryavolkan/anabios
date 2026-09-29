@@ -52,7 +52,9 @@ pub struct AgentBuffers {
     /// Per-agent cultural state; transmitted by `culture_step`, read by
     /// `SenseMeme`. Zeroed on spawn; only Communicator agents change it.
     /// Channels `invention::INVENTION_CHANNEL_BASE..` carry the invention
-    /// tree's adoption levels.
+    /// tree's adoption levels. Wider than serde's 32-lane derive limit, so
+    /// it rides the `serde_rows` adapter (same bincode layout as the derive).
+    #[serde(with = "crate::serde_rows::fixed_rows")]
     pub meme_vector: Vec<[f32; crate::program::MEME_CHANNELS]>,
     /// Per-agent trade-good holdings, indexed by `crate::resource::Good::index`.
     /// Zeroed on spawn; only the resource subsystem (harvest/trade/material
@@ -94,6 +96,7 @@ pub struct AgentBuffers {
     /// Meme-variant lineage (E9): the variant id carried per meme channel
     /// (0 = untracked). Assigned at birth (communicator children) and on
     /// band transitions.
+    #[serde(with = "crate::serde_rows::fixed_rows")]
     pub meme_lineage: Vec<[u32; crate::program::MEME_CHANNELS]>,
     /// Thirst drive in `[0,1]` (basic needs): rises each tick, falls while
     /// drinking at a water/river cell. Mutated only by `needs::needs_step`

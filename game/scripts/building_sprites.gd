@@ -36,9 +36,10 @@ enum {
 	FORTIFICATIONS,
 	STEEL_ARMS,
 	WELLS,
-	VACCINATION
+	VACCINATION,
+	THROWING_STONES
 }
-const KIND_COUNT := 24
+const KIND_COUNT := 25
 const NAMES: PackedStringArray = [
 	"Market",
 	"Warehouse",
@@ -63,7 +64,8 @@ const NAMES: PackedStringArray = [
 	"Fortifications",
 	"SteelArms",
 	"Wells",
-	"Vaccination"
+	"Vaccination",
+	"ThrowingStones"
 ]
 
 # Invention key (from invention_catalog / species_stats.adopted_inventions) ->
@@ -93,6 +95,8 @@ const INVENTION_BUILDING := {
 	# Basic-needs / late-era rounds (2026-09).
 	"wells": WELLS,
 	"vaccination": VACCINATION,
+	# Projectile ladder root (2026-09-29): the era-1 rung under Hafted Spears.
+	"throwing_stones": THROWING_STONES,
 }
 
 # 16x16 block lists per kind, indexed by the enum.
@@ -452,6 +456,25 @@ const _BLOCKS: Array = [
 		[12, 10, 1, 2, "R"],
 		[12, 8, 1, 1, "K"],
 		[3, 14, 10, 1, "g"],
+	],
+	# THROWING_STONES — a cairn of fist-sized cobbles heaped on a ground
+	# plank (three-two-one, lit from the upper left), with one stone already
+	# in flight to the upper right and two motion dashes trailing it
+	[
+		[2, 14, 12, 1, "b"],
+		[3, 12, 3, 2, "g"],
+		[6, 12, 3, 2, "G"],
+		[9, 12, 3, 2, "g"],
+		[4, 10, 3, 2, "G"],
+		[7, 10, 3, 2, "s"],
+		[6, 8, 3, 2, "g"],
+		[3, 12, 1, 1, "s"],
+		[7, 8, 1, 1, "s"],
+		[4, 10, 1, 1, "s"],
+		[7, 6, 2, 1, "s"],
+		[9, 5, 1, 1, "s"],
+		[11, 3, 2, 2, "G"],
+		[11, 3, 1, 1, "s"],
 	],
 ]
 

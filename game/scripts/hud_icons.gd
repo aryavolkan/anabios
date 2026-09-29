@@ -73,6 +73,7 @@ const INVENTION_ICONS := {
 	"gunpowder": "gunpowder",
 	"wells": "wells",
 	"vaccination": "vaccination",
+	"throwing_stones": "throwing_stones",
 }
 
 const _ROWS := {
@@ -588,6 +589,25 @@ const _ROWS := {
 		"...tttttttttt...",
 		"................",
 		"................",
+	],
+	"throwing_stones":
+	[
+		"................",
+		"................",
+		"...........ss...",
+		"..........ssSs..",
+		"..........sSSs..",
+		"...........ss...",
+		".......ss.......",
+		"......ss........",
+		"................",
+		"....ss..........",
+		"...ss...........",
+		"................",
+		"......sSSs......",
+		".....sSSSSs.....",
+		".....sSSSSs.....",
+		"......ssss......",
 	],
 	"hafted_spears":
 	[

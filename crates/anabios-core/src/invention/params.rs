@@ -43,10 +43,20 @@ pub const ELECTRICITY_UPKEEP: f32 = 0.005;
 pub const NUCLEAR_INCOME: f32 = 0.06;
 pub const NUCLEAR_MUTATION: f32 = 1.5;
 pub const NUCLEAR_UPKEEP: f32 = 0.012;
+/// Throwing Stones: weapon-reach multiplier bonus — the first standoff
+/// weapon, the root of the projectile ladder (Throwing Stones → Hafted Spears
+/// → Archery → Gunpowder, each rung adding its own term to the same reach
+/// multiplier) — and a small weapon-damage bonus. No upkeep: era-1 entry
+/// tech, like Stone Tools.
+pub const THROWING_STONES_RANGE: f32 = 0.25;
+pub const THROWING_STONES_DAMAGE: f32 = 0.10;
 /// Hafted Spears: weapon-damage bonus; fraction of the final net damage the
-/// attacker recovers as energy (hunt spoils — a transfer, never creation).
+/// attacker recovers as energy (hunt spoils — a transfer, never creation);
+/// weapon-reach multiplier bonus (the thrown javelin — the ladder's second
+/// rung, stacking on Throwing Stones').
 pub const SPEARS_DAMAGE: f32 = 0.25;
 pub const SPEARS_SPOILS: f32 = 0.30;
+pub const SPEARS_RANGE: f32 = 0.15;
 /// Archery: weapon-reach multiplier bonus; weapon-damage bonus; small flat
 /// per-tick upkeep (fletching and staves).
 pub const ARCHERY_RANGE: f32 = 0.50;
