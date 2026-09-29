@@ -60,6 +60,11 @@ mod speciation {
         // The split is genetic, not population-driven — cap population so the run
         // stays fast under the raised 10k default.
         world.max_population = 500;
+        // Nor maturity-driven: under growth the age-0 founders cannot breed
+        // before 0.15 × lifespan (about 530 ticks at `lifespan_bias = 0.7`),
+        // so a 400-tick window holds no offspring for the morphs to diverge
+        // through. The knob's own tests pin it; this check reads the split.
+        world.growth_enabled = false;
         // Every archetype founder already has its own species row (placeholder
         // parent `Some(0)`), so only rows allocated after instantiation are
         // splits. The two body-size morphs share archetype-free species 0.
