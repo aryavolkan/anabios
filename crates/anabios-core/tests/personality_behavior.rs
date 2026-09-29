@@ -55,13 +55,16 @@ fn mean_energy(w: &anabios_core::world::World) -> f32 {
     s / ids.len() as f32
 }
 
-/// The inline scenario with the territory/habitat/collision layer, the gait
-/// and growth off (see `extraversion_increases_clustering` for why each is
-/// out).
+/// The inline scenario with the territory/habitat/collision layer and every
+/// 2026-09-29 realism knob (gait, growth, turning inertia, gestation) off:
+/// each reshapes how bodies move or when they are born, and the check that
+/// uses this reads one personality bias through the crowding those produce
+/// (see `extraversion_increases_clustering`).
 fn without_territory(toml: &str) -> String {
     toml.replacen(
         "seed = 7\n",
-        "seed = 7\nterritory_enabled = false\ngait_enabled = false\ngrowth_enabled = false\n",
+        "seed = 7\nterritory_enabled = false\ngait_enabled = false\ngrowth_enabled = false\n\
+         turning_enabled = false\ngestation_enabled = false\n",
         1,
     )
 }
@@ -117,6 +120,10 @@ fn openness_increases_movement() {
 // Growth (2026-09-29) is out likewise: the 120 founders are juveniles for
 // the whole 300-tick window (no births before 0.15 × lifespan), and the
 // juvenile speed and bite change the crowding phase (9.6 vs 18.9 with it on).
+// Turning inertia and gestation (2026-09-29) are out for the same reason:
+// the first lags the approach behind the intent and the second delays and
+// batches the births that set the crowding phase; the bias itself is a
+// per-tick intent and reads cleanly with all of them off.
 #[test]
 fn extraversion_increases_clustering() {
     let hi = run(&without_territory(&scenario("extraversion = 0.95")), 300);

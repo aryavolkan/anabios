@@ -524,7 +524,17 @@ pub fn sweep_moves(world: &mut World) {
         // habitat gate validated only at half-cell samples, so the cut point
         // can clip the corner of a cell the class cannot occupy. Never end
         // there: stay at the tick's start instead (the resolve still runs).
-        *end = if ci.can_occupy(biome.sample(end_p).terrain) { end_p } else { start };
+        // `start` is recovered as `position − velocity` in f32, which can
+        // round one ulp across a cell edge a coastal start sat on (a Water
+        // agent at 127.99999 read back as 128.0, the land cell); a start
+        // that reads off-habitat keeps the gated full move instead.
+        *end = if ci.can_occupy(biome.sample(end_p).terrain) {
+            end_p
+        } else if ci.can_occupy(biome.sample(start).terrain) {
+            start
+        } else {
+            position[i]
+        };
     });
     let AgentBuffers { position, velocity, energy, genome, age, alive, .. } = &mut world.agents;
     let ends_ref = &ends;
