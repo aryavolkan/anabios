@@ -57,6 +57,63 @@ fleeing prey and hunting pursuers. Opting out is pinned as a no-op by the
 `gait_*` unit tests in `tick.rs` / `integrate.rs` (flag off: unit direction,
 full step, linear move cost) and by the trajectory guards above.
 
+With the collision layer on, gait also yields to the bodies in the way
+(2026-09-29; `gait::crowd_factor`, `collision::contest_ahead`). Before, an
+agent walked at its full pace into the bodies ahead every tick, for the swept
+contact to cut and the resolve to push back — the jostle the collision audits
+below had left. Now `decide_all` scales the pace by one minus the *contest
+ahead*: over the colliding bodies within the separation steer's reach (1.25
+gaps), how far each has come into that margin (0 at the reach, 1 at contact)
+times how squarely it stands in the path the agent is about to take (the
+cosine; nothing for a body beside or behind), down to a creep of
+`gait::CROWD_MIN` (0.05 of the pace) at one body touching dead ahead. A body
+half-way through the margin halves the pace, one touching at 60° off the path
+halves it too, and the hex-packed herd interior walking into its neighbours
+is a jam twice over. It is measured on the direction taken *after* the steer,
+so a sidestep around a body keeps its pace, and every pace yields, sprints
+included: a fleeing herd's interior runs as fast as the bodies ahead of it
+allow, and a hunter is slowed only in the last quarter gap before its prey,
+inside its strike range. There is no knob of its own: it rides `gait_enabled`
+(no pace ladder without gait) and `territory_enabled` (no bodies without the
+layer), is exactly ×1.0 with nothing in the way and is never measured with
+either off, so those paths are bit-identical
+(`tick::tests::gait_on_yields_to_the_bodies_in_the_way_but_not_behind_or_beside`,
+`collision::tests::contest_ahead_counts_the_bodies_in_the_path_by_closeness_and_angle`).
+Measured with `anabios-headless audit` (1000 ticks at the scenario seed)
+against the tree before it:
+
+| World | Mean step | Agent-ticks standing (step < 0.05) | Pairs under half their gap after the sweep | Swap-throughs | Resolve pushes of half a unit or more (largest push) | Pairs at 0.5–0.7 of their gap after the sweep |
+|---|---|---|---|---|---|---|
+| `markets` | 0.62 → 0.28 | 20% → 37% | 4167 → 210 | 5743 → 471 | 32,613 → 458 (1.58 → 0.93) | 427k → 274k |
+| `grand-theater` | 0.63 → 0.35 | 26% → 33% | 3468 → 395 | 5458 → 802 | 13,901 → 750 (1.28 → 0.83) | 429k → 314k |
+| `predator-prey` | 0.32 → 0.21 | 38% → 52% | 87 → 18 | 76 → 13 | 3574 → 150 (1.18 → 0.85) | 120k → 73k |
+| `habitat-territories` | 0.35 → 0.29 | 28% → 39% | 409 → 39 | 291 → 42 | 10,509 → 1974 (1.78 → 1.18) | 121k → 65k |
+| `minimal` | 0.22 → 0.14 | 39% → 48% | 10 → 0 | 11 → 0 | 1556 → 247 (0.81 → 0.68) | 66k → 44k |
+
+Bodies no longer lunge into one another: the pairs closer than half their
+gap before the resolve and the swap-throughs — both what one body passing
+into another looks like between two frames — are down by an order of
+magnitude, and the resolve's big pushes, the visible shove, by one to two.
+As before, no pair ends a tick under 0.9 of its gap on any of the five, and
+a handful sit between 0.9 and 0.95. The pairs still closing to the swept
+contact's soft surface (0.6 of the gap; the last column) are touching pairs
+creeping into each other and walkers that started the tick inside the steer
+margin, which a ramp a quarter of a gap long cannot slow in time: at a creep
+of 0.15 that column hardly moved (`markets` 427k → 419k) and the pushes of
+0.1–0.5 units rose, which is what set the creep at 0.05. A lookahead scaled
+to the agent's own step, against its neighbours' last moves so a hunter still
+closes on a fleeing prey, would take the rest; not done here. The first cut
+of the rule — the steer's own closeness weight, 0.2 at contact, measured on
+the wanted direction — made the crowded worlds slightly *denser* instead
+(`markets` end-of-tick contact pairs 244k → 264k, resolve pushes up): a body
+touching dead ahead cost only a fifth of the pace, and the slowdown scaled
+the sidestep along with the advance, so crowded bodies left a crowd more
+slowly than free ones entered it. Populations hold: `predator-prey` at tick
+1500 on seeds 0–3 ends with 861 / 910 / 1067 / 787 agents against 814 / 902 /
+1042 / 716 before, every founder lineage the `run --lineages` report lists
+alive on every seed. The validation bar and the cost column below were not
+re-run.
+
 `growth_enabled` (on by default, like the feature knobs; 2026-09-28) adds
 growth and juveniles: an agent is born at about a third of its adult size
 and grows to it over the first 15% of its lifespan — its collision body

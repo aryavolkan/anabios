@@ -5,7 +5,10 @@
 //! never pass through one another and end every tick apart, by:
 //!
 //! 1. a separation steering term added in `decide_all` (agents route around
-//!    each other);
+//!    each other) and, with gait on, a yield to the bodies in the way
+//!    (`congestion_ahead`, `gait::crowd_factor`): an agent's pace falls as the
+//!    room ahead of it closes, to a creep at contact, so a crowd is entered
+//!    slowly instead of lunged at;
 //! 2. a swept move (stage 4'', `sweep_moves`): every move is cut back to its
 //!    first contact with another colliding body, relative motion through the
 //!    tick, and continues by sliding along that body's surface — so two
@@ -322,6 +325,59 @@ pub fn separation_steer(
         acc += away_dir(i as u32, oid, d, dist) * ((reach - dist) / reach);
     });
     acc
+}
+
+/// The congestion ahead of agent `i` about to move in the unit direction `dir`
+/// (gait on, `gait::crowd_factor`): Σ over the colliding bodies within the
+/// separation steer's reach, `STEER_MARGIN·(r_i+r_j)`, of `closeness ·
+/// blocking` — `closeness = (reach − d)/(reach − gap)` clamped to `[0, 1]`,
+/// 0 for a body just entering the reach and 1 for one at contact (or
+/// overlapping), and `blocking = max(0, dir · toward)`, the cosine of the
+/// angle at which the body stands in the way. So a body dead ahead at
+/// contact counts 1, one half-way through the margin 0.5, one touching at
+/// 60° off the path 0.5, one beside or behind the agent nothing (the steer
+/// already routes around it, into space nobody holds), and the hex-packed
+/// herd interior walking into its neighbours — the one ahead and the two
+/// at ±60° — 2. Measured on `dir`, the direction the agent is about to
+/// take AFTER the steer, so a sidestep around a body is not slowed by the
+/// body it steps around. Reads the collision hash built at stage 1 this
+/// tick and nothing of its own row but position, genome and age. Radii are
+/// the live (grown) ones when `growth_enabled`, the adult ones otherwise.
+/// RNG-free; identical for any thread count.
+pub fn congestion_ahead(
+    spatial: &UniformSpatialHash,
+    agents: &AgentBuffers,
+    i: usize,
+    ws: f32,
+    growth_enabled: bool,
+    dir: Vec2,
+) -> f32 {
+    let pos = agents.position[i];
+    let ri = live_body_radius(&agents.genome[i], agents.age[i], growth_enabled);
+    let ci = Locomotion::of(&agents.genome[i]);
+    let mut congestion = 0.0f32;
+    spatial.query_bbox(pos, STEER_QUERY_R, |oid| {
+        let j = oid as usize;
+        if j == i || !ci.collides_with(Locomotion::of(&agents.genome[j])) {
+            return;
+        }
+        let gap = ri + live_body_radius(&agents.genome[j], agents.age[j], growth_enabled);
+        let reach = gap * STEER_MARGIN;
+        let d = torus_delta(pos, agents.position[j], ws);
+        let dist = d.length();
+        if dist >= reach {
+            return;
+        }
+        // `away_dir` is unit (or a fixed unit tie direction for a coincident
+        // pair), so its negation is the unit direction toward the body.
+        let blocking = dir.dot(-away_dir(i as u32, oid, d, dist));
+        if blocking <= 0.0 {
+            return;
+        }
+        let closeness = ((reach - dist) / (reach - gap)).min(1.0);
+        congestion += closeness * blocking;
+    });
+    congestion
 }
 
 /// Stage 4': push overlapping colliding pairs apart to their minimum gap.
@@ -1257,6 +1313,74 @@ mod tests {
         let _b = w.spawn_agent(Vec2::new(300.0, 300.0), Genome::neutral());
         resolve_overlaps(&mut w);
         assert_eq!(w.agents.position[a as usize], Vec2::new(300.0, 300.0));
+    }
+
+    /// The congestion ahead counts a colliding body in the path by how far into
+    /// the steer margin it is (1 at contact) and how squarely it stands in
+    /// the way (the cosine) — nothing for a body beside, behind, at or past
+    /// the reach, or of a class that does not collide — and bodies add up.
+    #[test]
+    fn congestion_ahead_counts_the_bodies_in_the_path_by_closeness_and_angle() {
+        let g = Genome::neutral();
+        let gap = 2.0 * body_radius(&g);
+        let east = Vec2::new(1.0, 0.0);
+        let probe = |offsets: &[(Vec2, Genome)], dir: Vec2| -> f32 {
+            let mut w = flat_world();
+            let a = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+            for &(off, og) in offsets {
+                w.spawn_agent(Vec2::new(300.0, 300.0) + off, og);
+            }
+            rebuild_hash(&mut w);
+            congestion_ahead(
+                &w.collision_spatial,
+                &w.agents,
+                a as usize,
+                w.world_size,
+                w.growth_enabled,
+                dir,
+            )
+        };
+        // Touching, dead ahead: a full block.
+        let touching = [(Vec2::new(gap, 0.0), g)];
+        let c = probe(&touching, east);
+        assert!((c - 1.0).abs() < 1e-5, "a body touching dead ahead: {c}");
+        assert_eq!(probe(&touching, Vec2::new(-1.0, 0.0)), 0.0, "the same body, walking away");
+        assert_eq!(probe(&touching, Vec2::new(0.0, 1.0)), 0.0, "the same body, walking past");
+        let diag = Vec2::new(0.70710677, 0.70710677);
+        let c = probe(&touching, diag);
+        assert!((c - 0.70710677).abs() < 1e-5, "half in the way, by the cosine: {c}");
+        // Half-way through the margin: half a block; at the reach, nothing;
+        // beyond it, nothing; overlapping (the swept contact's soft surface):
+        // a full block, not more.
+        let mid = 1.0 + 0.5 * (STEER_MARGIN - 1.0);
+        let c = probe(&[(Vec2::new(mid * gap, 0.0), g)], east);
+        assert!((c - 0.5).abs() < 1e-4, "half-way through the margin: {c}");
+        assert_eq!(probe(&[(Vec2::new(STEER_MARGIN * gap, 0.0), g)], east), 0.0, "at the reach");
+        assert_eq!(probe(&[(Vec2::new(3.0 * gap, 0.0), g)], east), 0.0, "well clear");
+        let c = probe(&[(Vec2::new(SWEEP_DEEP_FRAC * gap, 0.0), g)], east);
+        assert!((c - 1.0).abs() < 1e-5, "overlapping: clamped to a full block, {c}");
+        // Bodies add up: the hex-packed herd interior walking into its
+        // neighbours — one touching dead ahead, two touching at ±60° — is
+        // blocked twice over (a disc cannot pass between two discs touching
+        // it at ±60°).
+        let hex = [
+            (Vec2::new(gap, 0.0), g),
+            (Vec2::new(0.5 * gap, 0.866_025_4 * gap), g),
+            (Vec2::new(0.5 * gap, -0.866_025_4 * gap), g),
+        ];
+        let c = probe(&hex, east);
+        assert!((c - 2.0).abs() < 1e-4, "herd interior: {c}");
+        // A flyer over a land walker does not collide with it, so it is not
+        // in its way.
+        assert_eq!(probe(&[(Vec2::new(gap, 0.0), with_class(0.9))], east), 0.0, "Air over Land");
+        // The steer is untouched by any of this: the body dead ahead still
+        // steers the agent west.
+        let mut w = flat_world();
+        let a = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+        w.spawn_agent(Vec2::new(300.0 + gap, 300.0), g);
+        rebuild_hash(&mut w);
+        let s = separation_steer(&w.collision_spatial, &w.agents, a as usize, w.world_size, false);
+        assert!(s.x < 0.0 && s.y.abs() < 1e-6, "{s:?}");
     }
 
     #[test]

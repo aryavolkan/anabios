@@ -14,16 +14,33 @@
 //!    and
 //! 2. the mood arbiter's winner (`mood.rs`): FLEE, FIGHT and hunting force a
 //!    sprint whatever the intent's size; the seeking moods cap the fraction
-//!    at a walk; CONTENT (grazing, idling) at an amble.
+//!    at a walk; CONTENT (grazing, idling) at an amble; and
+//! 3. with the collision layer on (`World::territory_enabled`), the bodies
+//!    in the way: the congestion ahead (`collision::congestion_ahead`) sums, over
+//!    the colliding bodies within the separation steer's reach, how far
+//!    each has come into that margin (1 at contact) times how squarely it
+//!    stands in the path the agent is about to take (the cosine), and
+//!    `crowd_factor` scales the fraction by it — 1 on a clear path, falling
+//!    linearly to a creep of `CROWD_MIN` at `CROWD_JAM`, one body touching
+//!    dead ahead. An agent decelerates into contact instead of lunging at
+//!    the body ahead for the swept contact to cut and the resolve to push
+//!    back; a herd's interior stands and shuffles while its edge walks; a
+//!    body with a clear way out of a crowd leaves at its full pace, and a
+//!    sidestep the steer adds around a body keeps its pace (the congestion is
+//!    measured on the direction taken, after the steer, not on the one
+//!    wanted). Every pace yields, sprints included: a fleeing herd's
+//!    interior runs as fast as the bodies ahead of it allow.
 //!
 //! `integrate_all` then applies `desired_direction × top_speed` exactly as
 //! before — the shorter vector is the slower move — and multiplies the move
 //! cost by the superlinear `1 + GAIT_SPRINT_COST · frac²`, so sprinting is
 //! expensive per unit distance and ambling nearly free. Every function here
-//! is a pure function of one agent's own row (no RNG, no cross-agent read),
-//! so `decide_all` / `integrate_all` stay index-disjoint under rayon. Flag
-//! off ⇒ none of this runs: the direction stays `v / |v|` and the cost
-//! factor is never applied, byte-identical to a build without the module.
+//! is a pure function of one agent's own row (no RNG, no cross-agent read;
+//! the congestion is measured in `collision.rs` against the stage-1 hash
+//! snapshot, as the steer is), so `decide_all` / `integrate_all` stay
+//! index-disjoint under rayon. Flag off ⇒ none of this runs: the direction
+//! stays `v / |v|`, the congestion is not measured and the cost factor is never
+//! applied, byte-identical to a build without the module.
 
 use crate::mood::{FIGHT, FLEE, SEEK_FOOD, SEEK_MATE, SEEK_WATER};
 use crate::prelude::Vec2;
@@ -59,6 +76,29 @@ pub const GAIT_SPRINT_COST: f32 = 1.0;
 /// omnivore midpoint (`scenario::make_omnivore`), so an armed ape hunts,
 /// while a grazer (0.0) that evolves a weapon fights but never hunts.
 pub const GAIT_HUNT_CARNIVORY: f32 = 0.5;
+/// Congestion ahead (`collision::congestion_ahead`: Σ over the colliding bodies
+/// within the separation steer's reach of `closeness · blocking`, closeness
+/// 0 at the reach and 1 at contact, blocking the cosine of the angle at
+/// which the body stands in the path) at which `crowd_factor` reaches its
+/// floor — the jam: one body touching dead ahead, which nobody can advance
+/// into. A body dead ahead half-way through the margin (1.125 gaps off)
+/// halves the pace, one touching at 60° off the path halves it too, and the
+/// hex-packed herd interior walking into its neighbours (one ahead, two at
+/// ±60°: 2) is a jam twice over.
+pub const CROWD_JAM: f32 = 1.0;
+/// Floor of `crowd_factor`: the creep kept in a jam, so a body pressed
+/// against another still edges forward instead of freezing in place — a
+/// crowd drains through the bodies with a clear path out, which the factor
+/// leaves at full pace. Small, because two touching bodies creeping into
+/// each other are what the swept contact's soft surface (`SWEEP_DEEP_FRAC`)
+/// then has to take and the resolve push back: at 0.15 a walking pair with
+/// ordinary top speeds still closed a third of its gap per tick and the
+/// audit's pairs between half and seven tenths of their gap after the sweep
+/// hardly moved (`markets`, 1000 ticks: 427k → 419k pair-ticks); at 0.05
+/// the creep is a tenth of that.
+pub const CROWD_MIN: f32 = 0.05;
+// A jammed body creeps but never stops, and creeps slower than it ambles.
+const _: () = assert!(CROWD_MIN > 0.0 && CROWD_MIN < GAIT_AMBLE);
 
 /// The speed cap the mood imposes: sprint for FLEE / FIGHT, walk for the
 /// seeking moods, amble for everything else (CONTENT, MATE, SLEEP).
@@ -102,6 +142,17 @@ pub fn speed_fraction(intent_len: f32, mood: u8, hunting: bool) -> f32 {
         return GAIT_SPRINT;
     }
     (intent_len / GAIT_FULL_INTENT).clamp(0.0, 1.0).min(mood_cap(mood))
+}
+
+/// Speed multiplier for the congestion ahead: exactly `1.0` on a clear path
+/// (`congestion == 0`, so a body with nothing in its way — or any agent with
+/// the collision layer off — moves exactly as before), falling linearly to
+/// the creep `CROWD_MIN` at `CROWD_JAM` (one body touching dead ahead) and
+/// held there beyond. `decide_all` multiplies the gait fraction by it,
+/// sprints included.
+#[inline]
+pub fn crowd_factor(congestion: f32) -> f32 {
+    (1.0 - congestion / CROWD_JAM).max(CROWD_MIN)
 }
 
 /// Move-cost multiplier at speed fraction `frac`: `1 + GAIT_SPRINT_COST ·
@@ -187,6 +238,28 @@ mod tests {
         assert!(!is_hunting(1.0, true, intent_away, true, toward));
         // Standing still is not a chase either (the ambusher waiting).
         assert!(!is_hunting(1.0, true, Vec2::ZERO, true, toward));
+    }
+
+    #[test]
+    fn crowd_factor_is_one_on_a_clear_path_falls_linearly_and_floors() {
+        assert_eq!(crowd_factor(0.0), 1.0, "exactly one: a clear path moves as before");
+        // A body dead ahead half-way through the margin (or touching at 60°
+        // off the path): half the pace.
+        let half = crowd_factor(0.5);
+        assert!((half - 0.5).abs() < 1e-6, "half a block halves the pace: {half}");
+        // Linear: a quarter of a block costs half of what half a block does.
+        let quarter = crowd_factor(0.25);
+        assert!(((1.0 - quarter) - 0.5 * (1.0 - half)).abs() < 1e-6, "{quarter} {half}");
+        // Monotone down to the floor, then flat.
+        let mut prev = 1.0;
+        for k in 1..=40 {
+            let f = crowd_factor(k as f32 * 0.05);
+            assert!(f <= prev && f >= CROWD_MIN, "{k}: {prev} -> {f}");
+            prev = f;
+        }
+        // One body touching dead ahead is the jam: the creep, not a stop.
+        assert_eq!(crowd_factor(CROWD_JAM), CROWD_MIN, "the jam is the floor");
+        assert_eq!(crowd_factor(2.0 * CROWD_JAM), CROWD_MIN, "a herd interior: the same creep");
     }
 
     #[test]
