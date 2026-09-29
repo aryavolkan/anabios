@@ -187,21 +187,9 @@ function stallGeometry() {
 // physical diameter is `physDiam / footprint`, not `physDiam`. Clamping the
 // raw scale to the diameter drew every close-up body about twice its
 // physical size and a resolved herd still read as a pile.
-const BODY_R_BASE = 0.4, BODY_R_SIZE = 0.35;
-// crates/anabios-wasm/src/view.rs encodes AGENT.SIZE as `0.5 + 2.5 · Size`
-// (not the raw [0,1] gene) — invert that to recover Size before deriving the
-// physical radius. Under the sim's `growth_enabled` knob the exported value is
-// the GROWN size (adult × the juvenile body scale), so this inversion
-// under-reads a juvenile's Size gene and over-estimates its physical diameter
-// (up to ~2× for a newborn); the clamp below stays conservative — a juvenile
-// still draws smaller than an adult and never smaller than its physics.
-const SIZE_ENC_BASE = 0.5, SIZE_ENC_SPAN = 2.5;
-
-/** Physical body diameter (world units) for an AGENT.SIZE column value. */
-function physicalDiameter(sizeVal) {
-  const gene = (sizeVal - SIZE_ENC_BASE) / SIZE_ENC_SPAN;
-  return 2 * (BODY_R_BASE + BODY_R_SIZE * gene);
-}
+// The physical diameter itself rides in the row (`AGENT.BODY`, the sim's
+// `2 · live_body_radius`): a juvenile's under the sim's `growth_enabled`
+// knob, where the display size can no longer be inverted to it.
 
 /**
  * Pixels of instance scale a body keeps at minimum, regardless of camera
@@ -216,7 +204,7 @@ const LEGIBLE_PX = 14;
 /** Draw scale: readable far away, clamped down to the physical body as the
  *  camera closes in, but never smaller than it or larger than `readable`.
  *  `physScale` is the instance scale at which the figure's footprint equals
- *  its physical diameter (`physicalDiameter(size) / figureFootprint(geo)`). */
+ *  its physical diameter (`AGENT.BODY / figureFootprint(geo)`). */
 export function bodyScale(readable, physScale, legible) {
   return Math.max(physScale, Math.min(readable, legible));
 }
@@ -324,7 +312,7 @@ export class Agents {
       const h = heightAt(x, y);
       const kind = d[o + AGENT.DIET] >= 0.5 ? 1 : 0;
       const readable = this.baseScale * (0.55 + 0.45 * d[o + AGENT.SIZE]);
-      const sc = unitsPerPixel > 0 ? bodyScale(readable, physicalDiameter(d[o + AGENT.SIZE]) / this.footprint[kind], legible) : readable;
+      const sc = unitsPerPixel > 0 ? bodyScale(readable, d[o + AGENT.BODY] / this.footprint[kind], legible) : readable;
       const id = d[o + AGENT.ID] | 0;
       const rot = d[o + AGENT.ROT];
       const asleep = (d[o + AGENT.FLAGS] & AGENT_FLAG.ASLEEP) !== 0;

@@ -14,6 +14,7 @@ use anabios_core::affect::arousal;
 use anabios_core::agent::AGENT_NULL;
 use anabios_core::biome::{cell_color, BiomeCell, TerrainType, SEA_LEVEL};
 use anabios_core::codex::{CodexEvent, EventType};
+use anabios_core::collision::live_body_radius;
 use anabios_core::culture::{SKILL_CHANNEL, TECH_CHANNEL};
 use anabios_core::genome::{GenomeSlot, GENOME_LEN, SLOT_NAMES};
 use anabios_core::growth::body_scale_of;
@@ -33,11 +34,15 @@ use serde_json::{json, Value};
 
 /// Floats per agent in [`fill_agents`]:
 /// `[id, x, y, rot, size, diet, hue, sat, val, dialect_hue, energy,
-///   species_id, mood, flags, arousal, infection]`.
+///   species_id, mood, flags, arousal, infection, body]`.
 ///
 /// `flags` bits: 0 = livestock, 1 = asleep, 2 = male (only meaningful when
-/// the matching scenario flag is on — see [`world_flags`]).
-pub const AGENT_STRIDE: usize = 16;
+/// the matching scenario flag is on — see [`world_flags`]). `body` is the
+/// physical collision diameter in world units (`2 · live_body_radius`, so a
+/// juvenile's under `growth_enabled`): what the atlas clamps a close-up
+/// figure to, and what an overlap audit compares positions against —
+/// `size` is a viewer scale and cannot be inverted to it once growth is on.
+pub const AGENT_STRIDE: usize = 17;
 
 /// Floats per line segment in [`fill_segments`]: `[x1, y1, x2, y2, hue]`.
 pub const SEGMENT_STRIDE: usize = 5;
@@ -171,6 +176,7 @@ pub fn fill_agents(w: &World, out: &mut Vec<f32>) -> usize {
             flags as f32,
             arousal(&w.agents.affect[i]),
             w.agents.infection[i],
+            2.0 * live_body_radius(g, w.agents.age[i], w.growth_enabled),
         ]);
     }
     n
@@ -606,6 +612,13 @@ mod tests {
             assert!((0.0..=w.world_size).contains(&row[2]), "y {}", row[2]);
             assert!((0.0..=1.0).contains(&row[5]), "diet {}", row[5]);
             assert!((0.0..1.0).contains(&row[9]), "dialect hue {}", row[9]);
+            // Physical diameter: twice the live body radius, never above the
+            // adult's and never below the newborn's.
+            let g = &w.agents.genome[id as usize];
+            let adult = 2.0 * anabios_core::collision::body_radius(g);
+            assert!(row[16] > 0.0 && row[16] <= adult + 1e-6, "body {} vs adult {adult}", row[16]);
+            let expect = 2.0 * live_body_radius(g, w.agents.age[id as usize], w.growth_enabled);
+            assert_eq!(row[16], expect, "body column is the live diameter");
         }
     }
 

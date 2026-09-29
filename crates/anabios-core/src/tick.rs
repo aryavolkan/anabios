@@ -51,6 +51,7 @@ pub fn step(world: &mut World) {
         world.gene_tech_coupling,
         world.cognition_enabled,
         world.territory_enabled,
+        world.growth_enabled,
     );
 
     // Stage 2b: subcortical affect — update per-agent Panksepp activations from

@@ -422,6 +422,7 @@ fn metalworking_raises_combat_damage() {
             false,
             w.cognition_enabled,
             false,
+            false,
         );
         w.actions[attacker as usize].fire_intent = 1.0;
         let before = w.agents.energy[target as usize];
