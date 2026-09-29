@@ -94,7 +94,13 @@ export async function openLive(wasmUrl, tomlText, seed) {
 // ---------------------------------------------------------------------------
 // Replay: the `anabios-headless record` format (showcase/replay.js)
 // ---------------------------------------------------------------------------
-const STRIDE = 16;
+// Same width as `view::AGENT_STRIDE` (sim.js's AGENT columns) — replay rows
+// are read by the same layers.
+const STRIDE = 17;
+// A replay frame carries no body: derive the adult collision diameter from
+// the display size the way the sim encodes it (`0.5 + 2.5 · Size`, radius
+// `0.4 + 0.35 · Size`).
+const replayBody = (sizeVal) => 2 * (0.4 + 0.35 * ((sizeVal - 0.5) / 2.5));
 
 export class ReplaySource {
   constructor(R) {
@@ -166,6 +172,7 @@ export class ReplaySource {
       out[o + AGENT.HUE] = speciesHue(sp); out[o + AGENT.SAT] = 0.55 + diet * 0.3; out[o + AGENT.VAL] = 0.85;
       out[o + AGENT.DIALECT_HUE] = 0; out[o + AGENT.ENERGY] = 0; out[o + AGENT.SPECIES] = sp;
       out[o + AGENT.MOOD] = 0; out[o + AGENT.FLAGS] = 0; out[o + AGENT.AROUSAL] = 0; out[o + AGENT.INFECTION] = 0;
+      out[o + AGENT.BODY] = replayBody(out[o + AGENT.SIZE]);
       n++;
     }
     this._lastFrame = A; this._lastFrac = f; this._lastIndex = ai;
