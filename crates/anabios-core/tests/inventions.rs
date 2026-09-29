@@ -1356,9 +1356,10 @@ fn inventions_scenario_matches_golden_hashes() {
 }
 
 // Fixture: `tribes` seeds Stone Tools, so its only Stone Tools "discovery" is
-// the tick-0 seeding latch (the next ones are Pottery at tick 1104 and Fire at
-// 3566 since the projectile ladder); the retired unseeded demo keeps the
-// emergent-first-discovery claim.
+// the tick-0 seeding latch (the next ones, on the merged tree of the realism
+// layers and the projectile ladder, are Throwing Stones at tick 3951 and
+// Hafted Spears at 4634 — the ladder's first two rungs in order); the retired
+// unseeded demo keeps the emergent-first-discovery claim.
 #[test]
 fn innovators_discover_before_traditionalists_in_demo_scenario() {
     // The demo's core promise: with the flag on, the high-Openness culture

@@ -2399,7 +2399,7 @@ mod tests {
     /// projectile ladder's root: innovators seeded with Stone Tools +
     /// Throwing Stones + Hafted Spears beside traditionalists and an
     /// acultural control, only `inventions_enabled` on. (Hafted Spears is
-    /// rooted on Throwing Stones since v45, and the loader refuses a seed
+    /// rooted on Throwing Stones since v46, and the loader refuses a seed
     /// that lacks a prerequisite.)
     const WEAPONS_PRE_FLIP: &str = concat!(
         "name = \"weapons\"\n",

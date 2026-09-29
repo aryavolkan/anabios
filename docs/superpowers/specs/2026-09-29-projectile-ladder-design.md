@@ -4,7 +4,8 @@
 > new invention (**Throwing Stones**, id 22, era 1) roots the existing military
 > line: Hafted Spears is re-rooted onto it, every thrown rung extends weapon
 > reach, and a scenario can no longer seed a rung without its foundations.
-> `INVENTION_COUNT` 22→23, `MEME_CHANNELS` 32→33, `FORMAT_VERSION` 44→45.
+> `INVENTION_COUNT` 22→23, `MEME_CHANNELS` 32→33, `FORMAT_VERSION` 45→46 (it
+> merged after the realism layers took 45).
 > No new flag, no new codex event, no new RNG draw in any flag-off world.
 
 ## Motivation
@@ -108,7 +109,7 @@ the retired `weapons.toml` now seeds `throwing_stones` beside `hafted_spears`.
   only the row width grew. No other serialized field carries a
   `MEME_CHANNELS`-wide array (the action register, evaluator context, codex
   aggregate and culture scan are per-tick scratch).
-- `FORMAT_VERSION` 44→45 with a changelog entry; all eight golden tables and
+- `FORMAT_VERSION` 45→46 with a changelog entry; all eight golden tables and
   the two flag-off trajectory pins are re-pinned at this head. In the same
   change, at the maintainer's request, **golden validation is turned off by
   default**: the ten pinned-hash tests are `#[ignore]`d (run with

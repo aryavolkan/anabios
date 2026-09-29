@@ -239,7 +239,7 @@ fn minimal_scenario_keeps_resources_off() {
 /// The late/early ratio is seed-noisy (the measured late-run freeze,
 /// `docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`): on
 /// `markets` over seeds 424242 and 0–5 it spans 0.16–1.79 before the
-/// projectile ladder (FORMAT_VERSION 45) and 0.23–1.71 after, with the
+/// projectile ladder (FORMAT_VERSION 46) and 0.23–1.71 after, with the
 /// scenario seed moving 0.37 → 0.23. The two runs part at the first
 /// Communicator birth (one more jittered meme lane), not through the ladder:
 /// no projectile invention is discovered within 800 ticks on either side —

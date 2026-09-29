@@ -3,7 +3,7 @@
 //! serde 1.x derives `Serialize`/`Deserialize` for arrays only up to length
 //! 32, and the meme vector (`program::MEME_CHANNELS`) outgrew that when the
 //! projectile ladder appended Throwing Stones to the invention tree
-//! (`FORMAT_VERSION` 45). Rows are written exactly the way the derived array
+//! (`FORMAT_VERSION` 46). Rows are written exactly the way the derived array
 //! impl writes them — a fixed-length tuple with no per-row length prefix —
 //! inside an ordinary length-prefixed sequence, so a column's bincode layout
 //! is what the derive produced at width ≤ 32 (pinned by
