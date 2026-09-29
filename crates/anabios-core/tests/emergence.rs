@@ -843,7 +843,12 @@ mod tg1_selection {
     }
 
     #[test]
-    #[ignore = "re-validate under the swept-move dynamics: at 2500 ticks the differential is -0.02 (both worlds pinned at this fixture's max_population = 400, so births are cap-limited, not fitness-limited); revisit once the population caps are food-limited"]
+    // Re-validated 2026-09-29 under the realism layers (gait, growth,
+    // gestation, turning inertia, the chase): differential +0.033 at 2500
+    // ticks (coupled 0.5068, control 0.4738 from a 0.4962 start, both worlds
+    // at this fixture's 400 cap) against the 0.02 bar. It was ignored under
+    // the swept-move dynamics alone (-0.02), when the growth layer had not
+    // yet stopped the founders breeding off their spawn energy.
     fn coupling_selects_the_affinity_gene_upward() {
         let start = {
             // Both worlds start from the identical seeded state; measure the shared

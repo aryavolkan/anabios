@@ -102,7 +102,10 @@ placement = {{ kind = "habitat", herds = 3, radius = {radius}, max_water_dist = 
 #[test]
 fn habitat_anchors_sit_on_vegetated_ground_beside_water() {
     // Pin `radius = 0` so every agent lands exactly on its anchor: this is the
-    // assertion about the *site choice*, with the scatter removed.
+    // assertion about the *site choice*, with the scatter removed — and the
+    // collision layer off, since under it founders seeded on one point are
+    // settled a body apart at spawn (a scatter of its own: seed 2's third
+    // herd member landed at 32.0 from water, a hair past the bound).
     for seed in 0..6u64 {
         let toml = watered_world(
             seed,
@@ -112,6 +115,11 @@ count = 12
 archetype = "mammal_grazer"
 placement = { kind = "habitat", herds = 4, radius = 0.0, max_water_dist = 32.0 }
 "#,
+        )
+        .replacen(
+            "world_size = 2048.0",
+            "territory_enabled = false\nworld_size = 2048.0",
+            1,
         );
         let w = instantiate(&toml);
         for id in w.agents.iter_alive() {
