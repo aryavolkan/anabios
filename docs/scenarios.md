@@ -117,7 +117,7 @@ technique, tuned seeds, measured caveats; this table is the index.
 | `out-of-africa-earth.toml` | The saga's founders re-anchored onto a real-Earth elevation/temperature/precipitation map (`world_map = "earth"`) | The same DIT/cognition/war/domestication stack, but the exodus runs through the real African corridors (Sinai/Bab-el-Mandeb, Gibraltar); dispersal is emergent, not scripted. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | 6.6 |
 | `sandbox.toml` | 2048² world, a 16k safety cap food never reaches (peak 10,900), no staging; seasons slowed to `season_period = 2500` | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | — | 7 | 11.4 |
 | `riverlands.toml` | 4096² self-siting continent: mountains, rain-shadow, a hydrology-carved river network; seasons slowed to `season_period = 3000` | Terrain-aware placement (`kind = "habitat"`/`"near_spec"`) so herds and a persistent predator pack (`mate_seeking`; the `max_share` ceiling the pack once needed is gone) find water and each other regardless of seed. Absorbed: continental. | — | 7 | 5.9 |
-| `huge-steppe.toml` | 8192² world (biome grid 1024²), a 12k safety cap food is not expected to reach; seasons slowed to `season_period = 5000` | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput. | — | 21 | 12.5 |
+| `huge-steppe.toml` | 8192² world (biome grid 1024²), a 6k population budget that binds by design (the one such world: its food would carry ~80k); seasons slowed to `season_period = 5000` | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput. | — | 21 | 12.5 |
 
 ## Validation
 
@@ -223,13 +223,17 @@ the cap that now stands 1.5× or more above it:
 | `grand-theater` | 2065 (600) | 1240 at 1600 | 3500 (was 3000) |
 | `out-of-africa-earth` | 1175 (600) | 660 at 1600 | 3000 |
 | `sandbox` | 10,900 (2700) | 7700 at 4000 | 16,000 (was 8000) |
-| `huge-steppe` | 7816 at 1600 and still climbing (the 4000-tick run is pending) | — | 12,000 (was 6000) |
+| `huge-steppe` | 78,911 at 4000 and still climbing (2020 at 500, 11,817 at 2000, 31,059 at 3000) | — | 6000, binding by design |
 
 Every `max_share` is gone from the curated worlds (the knob stays for
 authors); the three classes of `habitat-territories` and the predator packs
 of `predator-prey` and `riverlands` coexist on food alone. A cap is a
-safety budget for memory and tick cost, never the limiter; the engine
-default stays 10,000. The `anabios-headless sweep` validation bar has not
+safety budget for memory and tick cost, never the limiter — with one
+deliberate exception: `huge-steppe` is a throughput tier for a 64×-area
+biome field, its steppe would carry some 80,000 grazers (780 ms per tick
+in the atlas at that count), and its 6k budget is the point of the world,
+so there the cap binds and says so in the file. The engine default stays
+10,000. The `anabios-headless sweep` validation bar has not
 been re-run since.
 
 The audit was re-run on 2026-09-29 once the realism layers (gait, growth,
