@@ -186,8 +186,61 @@ function tint(geo, r, g, b) {
   return geo;
 }
 
-/** Hut: mud walls under a pitched thatch roof with a dark doorway. Unit footprint, ~1.1 tall. */
+// ---------------------------------------------------------------------------
+// Seating buildings on slopes. A building is one rigid instance but the ground
+// under its footprint is not level: seated at its centre height, the downhill
+// side hung in the air (up to 0.4 local units — most of a hut's 0.5-tall wall
+// — on tribes hillsides; a stall's whole counter on a steep shore) while the uphill
+// side sank. Each building now stands on an earth plinth reaching `depth`
+// local units below its floor, and is seated as high as that plinth allows:
+// at the highest ground under the footprint (a terrace cut into the hill —
+// walls, doorway and counter stay whole, the plinth shows downhill as a
+// retaining wall), but never so high that the plinth's foot clears the lowest
+// ground. So nothing floats, and only on slopes steeper than the plinth spans
+// does the uphill side dip into the hill. Tilting to the slope was rejected:
+// tipped huts and stalls read as sliding downhill. On flat ground the plinth
+// is buried and the look is unchanged.
+
+/** Slack kept at a plinth's foot for ground the samples miss (the drawn
+ *  terrain is triangulated, not bilinear, and dips between samples). */
+const PLINTH_SLACK = 0.08;
+/** Ground-contact footprints in local (unit-scale) units: half extents, z
+ *  centre, and plinth depth below the floor (a hut's about its wall height, so
+ *  a tall retaining wall never dwarfs it; an open stall gets a deeper deck, as
+ *  markets sit on steeper shores). */
+export const HUT_FOOT = Object.freeze({ hx: 0.52, hz: 0.45, cz: 0, depth: 0.6 });
+export const STALL_FOOT = Object.freeze({ hx: 0.72, hz: 0.55, cz: 0.05, depth: 0.9 });
+
+/**
+ * Floor height for a building at (x, y), turned `ang` about +y at instance
+ * scale `sc` (see the seating note above). Samples the footprint's corners,
+ * edge midpoints and centre: the ground is bilinear per cell and a footprint
+ * is about a cell wide, so a 3×3 grid catches its low and high points.
+ */
+export function seatY(heightAt, x, y, ang, sc, foot) {
+  const c = Math.cos(ang), s = Math.sin(ang);
+  let lo = Infinity, hi = -Infinity;
+  for (let a = -1; a <= 1; a++) {
+    for (let b = -1; b <= 1; b++) {
+      // Local (lx, lz) → world, as `_q.setFromAxisAngle(Y_AXIS, ang)` turns it (three's z is the sim's y).
+      const lx = a * foot.hx * sc, lz = (foot.cz + b * foot.hz) * sc;
+      const h = heightAt(x + c * lx + s * lz, y - s * lx + c * lz);
+      if (h < lo) lo = h;
+      if (h > hi) hi = h;
+    }
+  }
+  return Math.min(hi, lo + (foot.depth - PLINTH_SLACK) * sc);
+}
+
+/** Earth plinth under a footprint: top flush with the floor, `foot.depth` deep. */
+function plinth(foot, r, g, b) {
+  return tint(new THREE.BoxGeometry(foot.hx * 2, foot.depth, foot.hz * 2).translate(0, 0.01 - foot.depth / 2, foot.cz), r, g, b);
+}
+
+/** Hut: mud walls under a pitched thatch roof with a dark doorway, on an earth
+ *  plinth (see `seatY`). Unit footprint, ~1.1 tall above the floor. */
 function hutGeometry() {
+  const base = plinth(HUT_FOOT, 0.58, 0.5, 0.4);
   const wall = tint(new THREE.BoxGeometry(0.9, 0.5, 0.75).translate(0, 0.25, 0), 0.82, 0.72, 0.58);
   const roof = new THREE.CylinderGeometry(0, 0.75, 0.55, 4, 1);
   roof.rotateY(Math.PI / 4);
@@ -195,11 +248,13 @@ function hutGeometry() {
   roof.translate(0, 0.5 + 0.275, 0);
   tint(roof, 0.62, 0.48, 0.26);
   const door = tint(new THREE.BoxGeometry(0.06, 0.32, 0.22).translate(0.44, 0.16, 0), 0.18, 0.13, 0.10);
-  return mergeGeometries([wall, roof, door], false);
+  return mergeGeometries([base, wall, roof, door], false);
 }
 
-/** Market stall: a counter with goods under a sloped awning on four poles, and a pennant. */
+/** Market stall: a counter with goods under a sloped awning on four poles, and
+ *  a pennant, on a trodden-earth plinth (see `seatY`). */
 function stallGeometry() {
+  const base = plinth(STALL_FOOT, 0.5, 0.46, 0.4);
   const counter = tint(new THREE.BoxGeometry(1.2, 0.4, 0.7).translate(0, 0.2, 0), 0.55, 0.38, 0.22);
   const awning = new THREE.BoxGeometry(1.5, 0.06, 1.1);
   awning.rotateX(0.28);
@@ -211,7 +266,7 @@ function stallGeometry() {
     .map(([x, z, r, g, b]) => tint(new THREE.SphereGeometry(0.13, 6, 5).translate(x, 0.5, z), r, g, b));
   const pole = tint(new THREE.CylinderGeometry(0.04, 0.04, 1.9, 5).translate(0.62, 0.95, -0.42), 0.45, 0.32, 0.2);
   const flag = tint(new THREE.BoxGeometry(0.4, 0.22, 0.03).translate(0.82, 1.75, -0.42), 0.9, 0.85, 0.7);
-  return mergeGeometries([counter, awning, ...poles, ...goods, pole, flag], false);
+  return mergeGeometries([base, counter, awning, ...poles, ...goods, pole, flag], false);
 }
 
 // ---------------------------------------------------------------------------
@@ -588,6 +643,12 @@ export class Villages {
       for (let h = v.huts; h < huts; h++) v.hutBorn[h] = v.huts === 0 ? v.born : tick;
       v.huts = huts;
     }
+    this.layout(heightAt);
+  }
+  /** Rebuild the hut instances for the sites held, as of the last tick seen —
+   *  also after the ground changes shape (relief toggled) while paused. */
+  layout(heightAt) {
+    const tick = this.lastTick;
     let i = 0;
     for (const [key, v] of this.sites) {
       let fade;
@@ -610,7 +671,8 @@ export class Villages {
         const g = Math.min(1, Math.max(0, (tick - v.hutBorn[h]) / this.GROW));
         const sc = this.scale * (h === 0 ? 1.35 : 1) * fade * (1 - Math.pow(1 - g, 3));
         if (sc <= 0) continue;
-        _p.set(x, heightAt(x, y), y);
+        _p.set(x, seatY(heightAt, x, y, ang, sc, HUT_FOOT), y);
+        if (h === 0) v.base = _p.y;   // hearth smoke rises from the centre hut's roof
         _q.setFromAxisAngle(Y_AXIS, ang);
         _s.set(sc, sc, sc);
         _m.compose(_p, _q, _s);
@@ -623,7 +685,7 @@ export class Villages {
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
-  /** Live sites for the hearth-smoke emitter: `[{x, y, n, ease}]` (pinned positions). */
+  /** Live sites for the hearth-smoke emitter: `[{x, y, n, ease, base}]` (pinned positions; `base` the centre hut's floor). */
   centers() { return [...this.sites.values()].filter((v) => v.retired < 0 && v.ease > 0.6); }
   /**
    * Footprints the forest should stand back from, `[{x, y, r}]`, or null when
@@ -703,7 +765,8 @@ export class Hubs {
     const dry = (x, y) => !isWater(x, y) && heightAt(x, y) >= 0;
     this.spots = xy.map(([x, y]) => hubSpot(x, y, sc * STALL_FOOTPRINT, dry, cell / 4, cell * 4, worldSize));
     this.spots.forEach(({ x, y }, k) => {
-      _p.set(x, Math.max(0, heightAt(x, y)), y);   // an afloat stall rides the water plane
+      // Terraced on its plinth (seatY); an afloat stall rides the water plane.
+      _p.set(x, Math.max(0, seatY(heightAt, x, y, k * 1.3, sc, STALL_FOOT)), y);
       _q.setFromAxisAngle(Y_AXIS, k * 1.3);
       _s.set(sc, sc, sc);
       this.mesh.setMatrixAt(k, _m.compose(_p, _q, _s));

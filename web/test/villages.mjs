@@ -2,11 +2,13 @@
 // Unit test for layers.js's Villages: a village is pinned where it is founded
 // and does not slide with the wandering anchor centroid; it moves only when
 // the centroid has left for good, leaving the old huts to fade in place; hut
-// counts do not flicker at a band edge; and only hominids build huts.
+// counts do not flicker at a band edge; only hominids build huts; and huts and
+// market stalls are seated on slopes without floating.
 //
 //   node web/test/villages.mjs
 
-import { Villages } from "../src/layers.js";
+import * as THREE from "three";
+import { Villages, Hubs, HUT_FOOT, STALL_FOOT } from "../src/layers.js";
 import { AGENT } from "../src/sim.js";
 
 function check(cond, msg) {
@@ -133,4 +135,86 @@ check(!drift.hominids.has(6), "and 40% is not enough to rejoin");
 drift.update(site(6, 300, 300, 40), 0, flat);
 check(drift.sites.size === 0, "a non-hominid settlement founds no village");
 
-console.log("villages: hominids only; pinned placement, relocation, hysteresis and shoreline ok");
+// Seating on slopes: a building's lowest point (the foot of its plinth) sits
+// at or below the ground everywhere under its footprint — nothing floats —
+// its floor never rises above the highest ground there (no stilts), and on
+// flat ground it sits exactly on the ground. Grounds: flat, a gentle and a
+// steep plane (steeper than any plinth spans), and a bilinear grid like
+// terrain.js's (cell 8, gradients up to ~0.7, the steepest found under a
+// village or market in the shipped scenarios). The footprint is checked on a
+// 9×9 grid, much finer than seatY's own 3×3.
+{
+  const CELL = 8, RES = 32, N = RES + 1, grid = new Float32Array(N * N);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) grid[j * N + i] = 5.5 * Math.sin(i * 0.9 + j * 0.5) + 2.5 * Math.cos(i * 0.4 - j * 1.3);
+  const bilinear = (x, y) => {
+    const fx = ((x / CELL) % RES + RES) % RES, fy = ((y / CELL) % RES + RES) % RES;
+    const i = Math.floor(fx), j = Math.floor(fy), u = fx - i, w = fy - j;
+    return (grid[j * N + i] * (1 - u) + grid[j * N + i + 1] * u) * (1 - w) + (grid[(j + 1) * N + i] * (1 - u) + grid[(j + 1) * N + i + 1] * u) * w;
+  };
+  const grounds = { flat: () => 2, gentle: (x, y) => 0.12 * x - 0.05 * y, steep: (x, y) => -0.7 * x + 0.4 * y, bilinear };
+
+  /** Each instance of `mesh`: its floor, its lowest point, and local → world (x, z). */
+  const placed = (mesh) => {
+    const box = new THREE.Box3().setFromBufferAttribute(mesh.geometry.attributes.position), out = [];
+    for (let i = 0; i < mesh.count; i++) {
+      const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+      mesh.getMatrixAt(i, m);
+      m.decompose(p, q, s);
+      out.push({ floor: p.y, foot: p.y + s.y * box.min.y, at: (lx, lz) => new THREE.Vector3(lx, 0, lz).applyMatrix4(m) });
+    }
+    return out;
+  };
+  const under = (inst, foot, heightAt) => {
+    let lo = Infinity, hi = -Infinity;
+    for (let a = 0; a <= 8; a++) {
+      for (let b = 0; b <= 8; b++) {
+        const w = inst.at(foot.hx * (a / 4 - 1), foot.cz + foot.hz * (b / 4 - 1)), h = heightAt(w.x, w.z);
+        lo = Math.min(lo, h); hi = Math.max(hi, h);
+      }
+    }
+    return { lo, hi };
+  };
+  const seated = (label, list, foot, heightAt, flatGround) => {
+    check(list.length > 0, `${label}: something was placed`);
+    for (const inst of list) {
+      const { lo, hi } = under(inst, foot, heightAt), eps = 1e-4 * Math.max(1, Math.abs(lo));
+      check(inst.foot <= lo + eps, `${label}: plinth foot ${inst.foot.toFixed(3)} above the lowest ground ${lo.toFixed(3)} under it (floating)`);
+      check(inst.floor <= hi + eps, `${label}: floor ${inst.floor.toFixed(3)} above the highest ground ${hi.toFixed(3)} under it (on stilts)`);
+      if (flatGround) check(Math.abs(inst.floor - lo) < eps, `${label}: on flat ground the floor sits on the ground`);
+      // A slope the plinth spans is terraced: the floor meets the uphill ground, so no wall is buried.
+      if (label.endsWith("/gentle")) check(Math.abs(inst.floor - hi) < eps, `${label}: floor ${inst.floor.toFixed(3)} is terraced at the uphill ground ${hi.toFixed(3)}`);
+    }
+  };
+
+  // Six nine-hut villages (different sids → different hut angles), fully grown.
+  const sids = [3, 10, 17, 24, 31, 38];
+  const many = { count: 6, data: new Float32Array(sids.flatMap((sid, k) => [sid, 40 + k * 37, 60 + k * 23, 80])) };
+  for (const [name, heightAt] of Object.entries(grounds)) {
+    const vv = villages(...sids);
+    vv.update(many, 1000, heightAt, 4, true);
+    check(vv.mesh.count === 6 * 9, `seat/${name}: nine huts a site (got ${vv.mesh.count})`);
+    seated(`huts/${name}`, placed(vv.mesh), HUT_FOOT, heightAt, name === "flat");
+    for (const c of vv.centers()) check(Number.isFinite(c.base), `huts/${name}: hearth smoke knows the centre hut's floor`);
+    // Relief toggled while paused: layout() re-seats on the new ground.
+    vv.layout(grounds.flat);
+    seated(`huts/${name}→flat`, placed(vv.mesh), HUT_FOOT, grounds.flat, true);
+  }
+  // Market stalls: the same rule at stall scale.
+  const hubs = { count: 5, data: new Float32Array([30, 200, 0, 75, 169, 0, 120, 138, 0, 165, 107, 0, 210, 76, 0]) };
+  // Lifted clear of the water plane: ground below 0 is lake to the stall
+  // placement (hubSpot), which would move the stall ashore or float it.
+  for (const [name, ground] of Object.entries(grounds)) {
+    const heightAt = (x, y) => ground(x, y) + 200;
+    const hb = new Hubs(16);
+    hb.set(hubs, CELL, heightAt);
+    seated(`stalls/${name}`, placed(hb.mesh), STALL_FOOT, heightAt, name === "flat");
+  }
+  // The check has teeth: a hut seated at its centre height (the old rule) on
+  // the gentle slope clears the downhill ground.
+  const g = grounds.gentle, vv = villages(3);
+  vv.update(site(3, 100, 100, 80), 1000, g, 4, true);
+  const inst = placed(vv.mesh)[4], c = inst.at(0, 0);
+  check(g(c.x, c.z) - under(inst, HUT_FOOT, g).lo > 0.25, "a centre-seated hut would float on the gentle slope");
+}
+
+console.log("villages: hominids only; pinned placement, relocation, hysteresis, shoreline and slope seating ok");

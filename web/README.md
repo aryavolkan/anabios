@@ -23,7 +23,8 @@ nothing; pinned where they are founded, in a clearing the forest shrinks back
 from and grows back into once they are gone, moving only when their people
 have plainly left), awninged market stalls at the trade hubs (a hub that
 falls in a lake has its stall drawn on the nearest dry shore; the sim's hub
-is untouched), the codex streaming "first
+is untouched; huts and stalls terraced into slopes on earth plinths), the
+codex streaming "first
 emergence" events into a feed (with opt-in rings, light pillars and ember
 bursts on the map — the "event markers" layer, off by default), and a
 soft bloom over the hot pixels. The same page also plays the **recorded replay** the showcase deck ships
@@ -164,7 +165,8 @@ seed), so the pinned tick, camera and agent id are the whole recipe.
   clamp; figures (kind by diet band, legs attached, species colours); villages — built by hominid (omnivore)
   lineages only, pinned where they were founded — no sliding with the
   wandering anchor centroid, one fade-out-and-regrow move when the people
-  have really left, no hut flicker at a band edge, no huts on water; the
+  have really left, no hut flicker at a band edge, no huts on water, huts and
+  market stalls terraced on earth plinths so none floats on a slope; the
   forest easing out of a clearing and growing back when it is released
   (only the trees in transition touched, paced by sim ticks within a
   wall-time band, composed with the scarred-bare size, settled at once on a

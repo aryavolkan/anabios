@@ -381,7 +381,7 @@ function loop(now) {
     // Hearth smoke drifts up from every settled village while the world runs.
     if (!state.paused && layers.villages.mesh.visible) {
       for (const v of layers.villages.centers()) {
-        if (Math.random() < dt * 1.8) layers.particles.spawn(KIND.SMOKE, v.x, heightAt(v.x, v.y) + layers.villages.scale * 1.25, v.y, 1);
+        if (Math.random() < dt * 1.8) layers.particles.spawn(KIND.SMOKE, v.x, (v.base ?? heightAt(v.x, v.y)) + layers.villages.scale * 1.25, v.y, 1);
       }
     }
     if (state.follow && layers.agents.selectedPos) {
@@ -584,7 +584,13 @@ function applyLayerToggles() {
     if (cb.dataset.layer === "events" && !state.eventsInit) { cb.checked = params.get("events") === "1"; state.eventsInit = true; }
     const on = cb.checked;
     switch (cb.dataset.layer) {
-      case "relief": state.terrain?.setRelief(on); break;
+      case "relief":
+        if (!state.terrain) break;
+        state.terrain.setRelief(on);
+        // Buildings are seated when placed: re-seat them on the reshaped ground.
+        layers.hubs.layout();   // re-seat on the new heights (and re-check the shore)
+        layers.villages.layout(heightAt);
+        break;
       case "water": if (state.terrain) state.terrain.water.mesh.visible = on && state.terrain.reliefOn; break;
       case "forest": if (state.terrain) state.terrain.forest.group.visible = on; break;
       case "shadows": stage.renderer.shadowMap.enabled = on; stage.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; }); break;
