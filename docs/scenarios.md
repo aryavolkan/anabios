@@ -117,8 +117,13 @@ the first species step (tick 200, seed 4242, the population capped at 500 so
 only a few dozen children are born by then) now see it at the second (tick
 401); on seeds 1–5 and 4242 over 800 ticks the stock splits on four seeds with
 the yield against two without. Both tests now read up to the fifth species
-step and stop at the first split. The validation bar and the cost column
-below were not re-run.
+step and stop at the first split. The extra hash query per agent in
+`decide_all` costs less than the resolve saves once bodies stop lunging:
+`anabios-headless run --ticks 1000` on four threads (best of two, this
+container) takes 23.3 → 19.0 s on `markets` (1233 → 1146 alive at tick 1000;
+−12% per agent-tick) and 20.1 → 18.2 s on `grand-theater` (1760 → 1709 alive;
+−7% per agent-tick). The validation bar and the cost column below were not
+re-run.
 
 `growth_enabled` (on by default, like the feature knobs; 2026-09-28) adds
 growth and juveniles: an agent is born at about a third of its adult size
