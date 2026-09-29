@@ -11,13 +11,22 @@ conifers, grass tufts on the open ground, rock scatter), depth-shaded water
 with sun glints, river sparkle, seabed caustics, wet sand and a foam fringe,
 sun shadows and drifting cloud shadows over everything, a sky dome whose sun
 glow swells as a gentle day cycle sweeps the sun round the plate toward a
-golden dusk, bird flocks circling overhead, every agent as an instanced grazer
-or hunter figure coloured by its genome and walking (or sprinting, when it
+golden dusk, bird flocks circling overhead, every agent as an instanced grazer,
+hunter or upright hominid figure (by diet: below, above or inside the
+0.34–0.66 omnivore band) in its species' colour, shaded per individual by
+its genome, and walking (or sprinting, when it
 flees or fights) on articulated legs, a glimmer where an agent is born and a
 grey puff where one dies, combat volleys and trade lanes as fading light with
-impact sparks, pitched-roof hut villages with hearth smoke at settlement
-sites, awninged market stalls at the trade hubs, the codex streaming "first
-emergence" events as rings, light pillars and ember bursts on the map, and a
+impact sparks, pitched-roof hut villages with hearth smoke at hominid
+settlement sites (omnivore lineages only — a settled herd or pack builds
+nothing; pinned where they are founded, in a clearing the forest shrinks back
+from and grows back into once they are gone, moving only when their people
+have plainly left), awninged market stalls at the trade hubs (a hub that
+falls in a lake has its stall drawn on the nearest dry shore; the sim's hub
+is untouched; huts and stalls terraced into slopes on earth plinths), the
+codex streaming "first
+emergence" events into a feed (with opt-in rings, light pillars and ember
+bursts on the map — the "event markers" layer, off by default), and a
 soft bloom over the hot pixels. The same page also plays the **recorded replay** the showcase deck ships
 (`showcase/replay.js`), so the hosted deep-time story and the live sandbox are
 one product.
@@ -39,7 +48,7 @@ It needs an HTTP server (module scripts and `fetch` don't work from `file://`);
 any static server over `web/` works.
 
 Deep links: `?scenario=tribes&seed=3&speed=4`, `?replay=out-of-africa-saga`,
-`&color=diet`, `&paused=1`.
+`&color=diet`, `&paused=1`, `&events=1` (event markers on).
 
 **Controls:** drag orbits, right-drag pans, wheel zooms · click an agent for its
 inspector (energy, age, diet, mood, body plan, held inventions, genome-driven
@@ -49,10 +58,17 @@ orbit that cuts to each fresh codex event) · **L** follow the selected agent ·
 **H** hide the HUD · click a codex line to fly to the event · click a species
 row to fly to a member.
 
-Colour modes: species (genome hue/sat/val, livestock bleached), diet, dialect
+Framing (**F**, the `frame` button, first load, `?cam=fit`) fits the whole
+plate into the part of the window the HUD leaves free — right of the view rail
+(when the window is wide enough to spare it) and above the transport row — for
+any aspect ratio. While the camera is still at that framed view, resizing the
+window, collapsing the rail or hiding the HUD re-frames it; once you orbit, pan
+or zoom away the camera is left alone until the next **F**.
+
+Colour modes: species (the species list's colour, shaded per individual by the genome's hue/sat/val; livestock bleached), diet, dialect
 hue, energy, and — when the scenario enables the subsystem — mood, arousal and
 infection. Layers: relief, water, forests, shadows, combat, trade, villages,
-markets, events & sparks, wireframe, day cycle, bloom, clouds, birds (forests,
+markets, event markers (off by default), sparks & smoke, wireframe, day cycle, bloom, clouds, birds (forests,
 shadows and bloom are the three to switch off on a weak GPU: up to 60k trees
 and 60k grass tufts, one 2048² shadow cascade and a five-level bloom chain). The day cycle is on when
 viewing live and off under `capture=1` so gallery stills stay at noon; `&day=1`
@@ -142,6 +158,19 @@ seed), so the pinned tick, camera and agent id are the whole recipe.
 
 - `cargo test -p anabios-wasm` — pure view builders (well-formed buffers,
   side-effect-free reads, event/catalog parity) and the C-ABI round trip, natively.
+- `node web/test/body-scale.mjs`, `node web/test/villages.mjs`,
+  `node web/test/forest-clearing.mjs`, `node web/test/hubs.mjs`,
+  `node web/test/figures.mjs` — pure layer logic under node (after
+  `npm --prefix web ci`; CI runs them in the `web` job): the figure-size
+  clamp; figures (kind by diet band, legs attached, species colours); villages — built by hominid (omnivore)
+  lineages only, pinned where they were founded — no sliding with the
+  wandering anchor centroid, one fade-out-and-regrow move when the people
+  have really left, no hut flicker at a band edge, no huts on water, huts and
+  market stalls terraced on earth plinths so none floats on a slope; the
+  forest easing out of a clearing and growing back when it is released
+  (only the trees in transition touched, paced by sim ticks within a
+  wall-time band, composed with the scarred-bare size, settled at once on a
+  time jump or rebuild); and market stalls kept off water.
 - `scripts/web.sh test [scenario] [ticks] [seed]` — builds the module, runs
   `web/test/wasm-smoke.mjs` under node (every export exercised, malformed TOML
   reported, buffers in range), and asserts the wasm fingerprint equals the

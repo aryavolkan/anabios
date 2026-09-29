@@ -12,6 +12,11 @@ const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quatern
 const _c = new THREE.Color();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
+/** Omnivore diet band read as hominid (game/scripts/mammal_sprites.gd HERB_MAX / CARN_MIN): the upright figure, and the lineages that build huts. */
+export const HOMINID_DIET = [0.34, 0.66];
+/** Figure kinds, indexed like `Agents.meshes`. */
+export const FIGURE = Object.freeze({ GRAZER: 0, HUNTER: 1, HOMINID: 2 });
+
 /** Figure part ids baked into `aPart` for the gait shader. */
 const PART = Object.freeze({ BODY: 0, FL: 1, FR: 2, BL: 3, BR: 4, HEAD: 5, TAIL: 6 });
 
@@ -26,13 +31,20 @@ function tag(geo, part, pivot = [0, 0, 0]) {
   return geo;
 }
 
-/** Four legs under a body, each tagged with its corner so diagonal pairs swing together. */
-function legs(spread, len, r = 0.075) {
+/**
+ * Four legs under a body, each tagged with its corner so diagonal pairs swing
+ * together. Each leg runs from the ground up to `top` — inside the body, so
+ * no gap opens between leg and belly at any stride — and swings about its hip
+ * at `hip`. The corners (±`x`, ±`z`) must sit well inside the body's plan
+ * outline: the old legs stood outside the hunter's and below the grazer's
+ * belly, so figures read as bodies floating over loose posts.
+ */
+function legs(x, z, top, hip, r = 0.075) {
   const out = [];
-  for (const [x, z, part] of [[spread, 0.28, PART.FL], [spread, -0.28, PART.FR], [-spread, 0.28, PART.BL], [-spread, -0.28, PART.BR]]) {
-    const l = new THREE.CylinderGeometry(r, r * 0.8, len, 5);
-    l.translate(x, len / 2, z);
-    out.push(tag(l, part, [x, len, z]));
+  for (const [lx, lz, part] of [[x, z, PART.FL], [x, -z, PART.FR], [-x, z, PART.BL], [-x, -z, PART.BR]]) {
+    const l = new THREE.CylinderGeometry(r, r * 0.75, top, 5);
+    l.translate(lx, top / 2, lz);
+    out.push(tag(l, part, [lx, hip, lz]));
   }
   return out;
 }
@@ -69,32 +81,64 @@ function grazerGeometry() {
   const tail = new THREE.SphereGeometry(0.11, 6, 5);
   tail.translate(-0.66, 0.8, 0);
   tag(tail, PART.TAIL, [-0.6, 0.8, 0]);
-  return shade(mergeGeometries([body, neck, head, earL, earR, tail, ...legs(0.42, 0.45)], false));
+  return shade(mergeGeometries([body, neck, head, earL, earR, tail, ...legs(0.38, 0.2, 0.74, 0.55)], false));
 }
 
-/** Hunter facing +x: a long low body, a pointed muzzle, pricked ears, a trailing tail. */
+/** Hunter facing +x: a canine — a lean body, a raised head with a short snout and pricked ears, a drooping brush tail. */
 function hunterGeometry() {
   const body = new THREE.SphereGeometry(0.5, 10, 7);
-  body.scale(1.55, 0.6, 0.62);
-  body.translate(0, 0.62, 0);
+  body.scale(1.4, 0.62, 0.6);
+  body.translate(0, 0.66, 0);
   tag(body, PART.BODY);
-  const head = new THREE.SphereGeometry(0.24, 8, 6);
-  head.scale(1.1, 0.95, 0.9);
-  head.translate(0.78, 0.74, 0);
-  const muzzle = new THREE.ConeGeometry(0.17, 0.5, 6);
-  muzzle.rotateZ(-Math.PI / 2);
-  muzzle.translate(1.08, 0.7, 0);
-  const earL = new THREE.ConeGeometry(0.08, 0.24, 4);
-  earL.translate(0.72, 0.98, 0.13);
+  const neck = new THREE.CylinderGeometry(0.12, 0.17, 0.38, 6);
+  neck.rotateZ(-Math.PI / 3.2);
+  neck.translate(0.62, 0.8, 0);
+  const head = new THREE.SphereGeometry(0.2, 8, 6);
+  head.scale(1.15, 0.95, 0.9);
+  head.translate(0.84, 0.94, 0);
+  const snout = new THREE.ConeGeometry(0.1, 0.3, 6);
+  snout.rotateZ(-Math.PI / 2);
+  snout.translate(1.1, 0.9, 0);
+  const earL = new THREE.ConeGeometry(0.07, 0.2, 4);
+  earL.translate(0.78, 1.14, 0.09);
   const earR = earL.clone();
-  earR.translate(0, 0, -0.26);
-  const neckPivot = [0.6, 0.68, 0];
-  for (const g of [head, muzzle, earL, earR]) tag(g, PART.HEAD, neckPivot);
-  const tail = new THREE.ConeGeometry(0.1, 0.8, 5);
-  tail.rotateZ(Math.PI / 2 + 0.5);
-  tail.translate(-0.98, 0.72, 0);
-  tag(tail, PART.TAIL, [-0.7, 0.66, 0]);
-  return shade(mergeGeometries([body, head, muzzle, earL, earR, tail, ...legs(0.5, 0.42, 0.065)], false));
+  earR.translate(0, 0, -0.18);
+  const neckPivot = [0.55, 0.72, 0];
+  for (const g of [neck, head, snout, earL, earR]) tag(g, PART.HEAD, neckPivot);
+  // Brush tail: thick at the rump, tapering back and down (the cylinder's +y
+  // end is the tip once rotated, hence radiusTop < radiusBottom).
+  const tail = new THREE.CylinderGeometry(0.035, 0.1, 0.6, 5);
+  tail.rotateZ(Math.PI / 2 + 0.45);
+  tail.translate(-0.97, 0.57, 0);
+  tag(tail, PART.TAIL, [-0.68, 0.7, 0]);
+  return shade(mergeGeometries([body, neck, head, snout, earL, earR, tail, ...legs(0.42, 0.15, 0.66, 0.5, 0.065)], false));
+}
+
+/**
+ * Hominid facing +x: an upright biped — legs, a torso broad at the shoulders,
+ * a head, and arms hanging at the sides. It reuses the quadruped part ids so
+ * the same gait shader walks it: arms are the fore pair (FL/FR) and legs the
+ * hind pair (BL/BR), and since diagonal pairs swing together each arm swings
+ * with the opposite leg, as a walking person's do.
+ */
+function hominidGeometry() {
+  const torso = new THREE.CylinderGeometry(0.2, 0.15, 0.62, 7);
+  torso.scale(0.75, 1, 1.1);
+  torso.translate(0, 0.97, 0);
+  tag(torso, PART.BODY);
+  const head = new THREE.SphereGeometry(0.15, 8, 6);
+  head.translate(0.03, 1.45, 0);
+  tag(head, PART.HEAD, [0, 1.3, 0]);
+  const parts = [torso, head];
+  for (const [z, arm, leg] of [[1, PART.FL, PART.BL], [-1, PART.FR, PART.BR]]) {
+    const l = new THREE.CylinderGeometry(0.07, 0.055, 0.74, 5);
+    l.translate(0, 0.37, 0.1 * z);
+    parts.push(tag(l, leg, [0, 0.7, 0.1 * z]));
+    const a = new THREE.CylinderGeometry(0.05, 0.04, 0.6, 5);
+    a.translate(0, 0.96, 0.25 * z);
+    parts.push(tag(a, arm, [0, 1.24, 0.25 * z]));
+  }
+  return shade(mergeGeometries(parts, false));
 }
 
 /**
@@ -142,8 +186,61 @@ function tint(geo, r, g, b) {
   return geo;
 }
 
-/** Hut: mud walls under a pitched thatch roof with a dark doorway. Unit footprint, ~1.1 tall. */
+// ---------------------------------------------------------------------------
+// Seating buildings on slopes. A building is one rigid instance but the ground
+// under its footprint is not level: seated at its centre height, the downhill
+// side hung in the air (up to 0.4 local units — most of a hut's 0.5-tall wall
+// — on tribes hillsides; a stall's whole counter on a steep shore) while the uphill
+// side sank. Each building now stands on an earth plinth reaching `depth`
+// local units below its floor, and is seated as high as that plinth allows:
+// at the highest ground under the footprint (a terrace cut into the hill —
+// walls, doorway and counter stay whole, the plinth shows downhill as a
+// retaining wall), but never so high that the plinth's foot clears the lowest
+// ground. So nothing floats, and only on slopes steeper than the plinth spans
+// does the uphill side dip into the hill. Tilting to the slope was rejected:
+// tipped huts and stalls read as sliding downhill. On flat ground the plinth
+// is buried and the look is unchanged.
+
+/** Slack kept at a plinth's foot for ground the samples miss (the drawn
+ *  terrain is triangulated, not bilinear, and dips between samples). */
+const PLINTH_SLACK = 0.08;
+/** Ground-contact footprints in local (unit-scale) units: half extents, z
+ *  centre, and plinth depth below the floor (a hut's about its wall height, so
+ *  a tall retaining wall never dwarfs it; an open stall gets a deeper deck, as
+ *  markets sit on steeper shores). */
+export const HUT_FOOT = Object.freeze({ hx: 0.52, hz: 0.45, cz: 0, depth: 0.6 });
+export const STALL_FOOT = Object.freeze({ hx: 0.72, hz: 0.55, cz: 0.05, depth: 0.9 });
+
+/**
+ * Floor height for a building at (x, y), turned `ang` about +y at instance
+ * scale `sc` (see the seating note above). Samples the footprint's corners,
+ * edge midpoints and centre: the ground is bilinear per cell and a footprint
+ * is about a cell wide, so a 3×3 grid catches its low and high points.
+ */
+export function seatY(heightAt, x, y, ang, sc, foot) {
+  const c = Math.cos(ang), s = Math.sin(ang);
+  let lo = Infinity, hi = -Infinity;
+  for (let a = -1; a <= 1; a++) {
+    for (let b = -1; b <= 1; b++) {
+      // Local (lx, lz) → world, as `_q.setFromAxisAngle(Y_AXIS, ang)` turns it (three's z is the sim's y).
+      const lx = a * foot.hx * sc, lz = (foot.cz + b * foot.hz) * sc;
+      const h = heightAt(x + c * lx + s * lz, y - s * lx + c * lz);
+      if (h < lo) lo = h;
+      if (h > hi) hi = h;
+    }
+  }
+  return Math.min(hi, lo + (foot.depth - PLINTH_SLACK) * sc);
+}
+
+/** Earth plinth under a footprint: top flush with the floor, `foot.depth` deep. */
+function plinth(foot, r, g, b) {
+  return tint(new THREE.BoxGeometry(foot.hx * 2, foot.depth, foot.hz * 2).translate(0, 0.01 - foot.depth / 2, foot.cz), r, g, b);
+}
+
+/** Hut: mud walls under a pitched thatch roof with a dark doorway, on an earth
+ *  plinth (see `seatY`). Unit footprint, ~1.1 tall above the floor. */
 function hutGeometry() {
+  const base = plinth(HUT_FOOT, 0.58, 0.5, 0.4);
   const wall = tint(new THREE.BoxGeometry(0.9, 0.5, 0.75).translate(0, 0.25, 0), 0.82, 0.72, 0.58);
   const roof = new THREE.CylinderGeometry(0, 0.75, 0.55, 4, 1);
   roof.rotateY(Math.PI / 4);
@@ -151,11 +248,13 @@ function hutGeometry() {
   roof.translate(0, 0.5 + 0.275, 0);
   tint(roof, 0.62, 0.48, 0.26);
   const door = tint(new THREE.BoxGeometry(0.06, 0.32, 0.22).translate(0.44, 0.16, 0), 0.18, 0.13, 0.10);
-  return mergeGeometries([wall, roof, door], false);
+  return mergeGeometries([base, wall, roof, door], false);
 }
 
-/** Market stall: a counter with goods under a sloped awning on four poles, and a pennant. */
+/** Market stall: a counter with goods under a sloped awning on four poles, and
+ *  a pennant, on a trodden-earth plinth (see `seatY`). */
 function stallGeometry() {
+  const base = plinth(STALL_FOOT, 0.5, 0.46, 0.4);
   const counter = tint(new THREE.BoxGeometry(1.2, 0.4, 0.7).translate(0, 0.2, 0), 0.55, 0.38, 0.22);
   const awning = new THREE.BoxGeometry(1.5, 0.06, 1.1);
   awning.rotateX(0.28);
@@ -167,7 +266,7 @@ function stallGeometry() {
     .map(([x, z, r, g, b]) => tint(new THREE.SphereGeometry(0.13, 6, 5).translate(x, 0.5, z), r, g, b));
   const pole = tint(new THREE.CylinderGeometry(0.04, 0.04, 1.9, 5).translate(0.62, 0.95, -0.42), 0.45, 0.32, 0.2);
   const flag = tint(new THREE.BoxGeometry(0.4, 0.22, 0.03).translate(0.82, 1.75, -0.42), 0.9, 0.85, 0.7);
-  return mergeGeometries([counter, awning, ...poles, ...goods, pole, flag], false);
+  return mergeGeometries([base, counter, awning, ...poles, ...goods, pole, flag], false);
 }
 
 // ---------------------------------------------------------------------------
@@ -209,13 +308,20 @@ export function bodyScale(readable, physScale, legible) {
   return Math.max(physScale, Math.min(readable, legible));
 }
 
-/** Horizontal extent (world units at scale 1) of a figure geometry: the larger
- *  of its length (x, the facing axis) and width (z), so a drawn body scaled
- *  by `physDiam / footprint` never reaches past its physical disc. */
+/** Extent (world units at scale 1) of a figure geometry: the larger of its
+ *  length (x, the facing axis) and width (z), so a drawn body scaled by
+ *  `physDiam / footprint` never reaches past its physical disc — or 0.8 of
+ *  its height, so the upright hominid (a small disc under a tall body) is
+ *  not drawn twice a quadruped's height at close range. */
 export function figureFootprint(geometry) {
   geometry.computeBoundingBox();
   const b = geometry.boundingBox;
-  return Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
+  return Math.max(b.max.x - b.min.x, b.max.z - b.min.z, 0.8 * (b.max.y - b.min.y));
+}
+
+/** Figure kind by diet: grazer below the omnivore band, hominid inside it, hunter above (same band as the huts). */
+export function figureKind(diet) {
+  return diet < HOMINID_DIET[0] ? FIGURE.GRAZER : diet < HOMINID_DIET[1] ? FIGURE.HOMINID : FIGURE.HUNTER;
 }
 
 export const COLOR_MODES = ["species", "diet", "dialect", "energy", "mood", "arousal", "infection"];
@@ -230,8 +336,9 @@ export class Agents {
     };
     this.grazers = new THREE.InstancedMesh(withGait(grazerGeometry()), gaitMaterial(this.uniforms), max);
     this.hunters = new THREE.InstancedMesh(withGait(hunterGeometry()), gaitMaterial(this.uniforms), max);
-    /** Both figure meshes; each carries its own `userData.ids` (instance → agent id) for picking. */
-    this.meshes = [this.grazers, this.hunters];
+    this.hominids = new THREE.InstancedMesh(withGait(hominidGeometry()), gaitMaterial(this.uniforms), max);
+    /** The figure meshes, indexed by `FIGURE`; each carries its own `userData.ids` (instance → agent id) for picking. */
+    this.meshes = [this.grazers, this.hunters, this.hominids];
     /** Per-kind footprint at scale 1 (see `figureFootprint`), indexed like `meshes`. */
     this.footprint = this.meshes.map((m) => figureFootprint(m.geometry));
     for (const m of this.meshes) {
@@ -276,7 +383,16 @@ export class Agents {
       case "arousal": return mix(0x4a6b8a, 0xff5a2a, Math.min(1, row[o + AGENT.AROUSAL]));
       case "infection": return mix(0xb7ac98, 0x77d64a, Math.min(1, row[o + AGENT.INFECTION]));
       default: {
-        let c = hsv(row[o + AGENT.HUE], row[o + AGENT.SAT], row[o + AGENT.VAL]);
+        // Live rows: the species' own hue (the swatch the species list shows),
+        // shaded per individual by the genome's colour slots. Those slots sit
+        // at a neutral 0.5 in nearly every archetype, and drawn raw they gave
+        // every species the same dull teal. Replay rows already carry the
+        // species hue in HUE.
+        let c = live
+          ? hsv(speciesHue(row[o + AGENT.SPECIES]) + (row[o + AGENT.HUE] - 0.5) * 0.3,
+            Math.min(0.85, Math.max(0.3, 0.6 + (row[o + AGENT.SAT] - 0.5) * 0.5)),
+            Math.min(1, Math.max(0.5, 0.9 + (row[o + AGENT.VAL] - 0.5) * 0.5)))
+          : hsv(row[o + AGENT.HUE], row[o + AGENT.SAT], row[o + AGENT.VAL]);
         if ((row[o + AGENT.FLAGS] & AGENT_FLAG.LIVESTOCK) !== 0) c = mix(c, 0xf6f2e6, 0.45); // tamed: bleached
         return c;
       }
@@ -301,7 +417,7 @@ export class Agents {
    */
   update(a, heightAt, live, unitsPerPixel = 0) {
     const n = Math.min(a.count, this.max), d = a.data, s = a.stride;
-    const counts = [0, 0];
+    const counts = this.meshes.map(() => 0);
     this.selectedPos = null;
     const gaits = this.meshes.map((m) => m.geometry.attributes.aGait.array);
     const prev = this.prev, cur = this.spare, buf = this.buf, born = this.born, died = this.died;
@@ -310,7 +426,7 @@ export class Agents {
     for (let k = 0; k < n; k++) {
       const o = k * s, x = d[o + AGENT.X], y = d[o + AGENT.Y];
       const h = heightAt(x, y);
-      const kind = d[o + AGENT.DIET] >= 0.5 ? 1 : 0;
+      const kind = figureKind(d[o + AGENT.DIET]);
       const readable = this.baseScale * (0.55 + 0.45 * d[o + AGENT.SIZE]);
       const sc = unitsPerPixel > 0 ? bodyScale(readable, d[o + AGENT.BODY] / this.footprint[kind], legible) : readable;
       const id = d[o + AGENT.ID] | 0;
@@ -335,7 +451,7 @@ export class Agents {
     }
     if (prev) { const pb = this.prevBuf; for (const [id, j] of prev) if (!cur.has(id)) died.push(pb[j * 2], pb[j * 2 + 1]); }
     this.spare = prev || new Map(); this.prev = cur; this.buf = this.prevBuf; this.prevBuf = buf;
-    for (let kind = 0; kind < 2; kind++) {
+    for (let kind = 0; kind < this.meshes.length; kind++) {
       const mesh = this.meshes[kind];
       mesh.count = counts[kind];
       mesh.instanceMatrix.needsUpdate = true;
@@ -406,47 +522,158 @@ export class Segments {
 }
 
 // ---------------------------------------------------------------------------
-/** Hut clusters at settlement sites; villages grow in and linger/fade out. */
+/** Share of a species' members in the band to become / stay a hominid. */
+const HOMINID_IN = 0.5, HOMINID_OUT = 0.3;
+
+/**
+ * Hut clusters at settlement sites; villages grow in and linger/fade out.
+ *
+ * A site's position is the centroid of its members' home anchors, and that
+ * centroid wanders every tick as anchors learn and members are born and die
+ * (tens of world units over a run, with single-sample jumps when a cohort
+ * dies). Drawing the huts at the live centroid slid whole villages across
+ * the ground. A village is therefore pinned where it is founded and only
+ * moves when its people have plainly left: the smoothed centroid has to sit
+ * more than `RELOCATE` village radii away for `DWELL` ticks, and then the old
+ * huts fade out where they stood while a new village grows at the new home.
+ *
+ * Huts belong to hominids only. The core's settlement latch fires for any
+ * species whose home anchors cluster — grazing herds and hunting packs
+ * included — so a site is drawn only while its species reads as a hominid
+ * (see `classify`).
+ */
 export class Villages {
   constructor(max = 1024) {
     this.max = max;
     this.mesh = new THREE.InstancedMesh(hutGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true, vertexColors: true }), max);
     this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.name = "villages";
     this.mesh.castShadow = true; this.mesh.receiveShadow = true;
-    this.sites = new Map(); // sid → {x,y,n,born,seen}
+    // key → {sid, x, y (pinned), lx, ly (smoothed live centroid), n, huts, hutBorn[], born, seen, farSince, retired, ease}
+    // Live villages are keyed by species id; a village left behind by a move is
+    // re-keyed `r<sid>:<tick>` and only fades.
+    this.sites = new Map();
     this.scale = 1;
     this.LINGER = 300; this.FADE = 100; this.GROW = 40;
+    this.RELOCATE = 2.5;     // village radii the smoothed centroid must clear before the village moves
+    this.DWELL = 150;        // ticks it must stay clear (a cohort dying is a jump, not a move)
+    this.SMOOTH = 120;       // time constant (ticks) of the centroid smoothing
+    this.RETIRE = 90;        // ticks an abandoned village takes to fade away
     this.lastTick = -1;
+    this.jumped = false;     // the last update was a time jump (see update)
+    this.isWater = () => false;
+    this.clearingKey = "";
+    this.hominids = new Set();
+  }
+  /**
+   * Which species are hominids, from one frame of agent rows: those whose
+   * members mostly sit in the omnivore diet band the Godot viewer draws as
+   * primates (`MammalSprites.HERB_MAX`..`CARN_MIN`). Every culture-bearing
+   * archetype (innovator, traditionalist, ape_hunter, cultural_forager) runs
+   * at diet ≈ 0.5; grazers sit near 0 and hunters near 1. Body size is left
+   * out: growing juveniles fall under the Godot size split. A species joins
+   * at a `HOMINID_IN` share of its members and leaves below `HOMINID_OUT`,
+   * so a lineage drifting across the band does not flicker its village.
+   */
+  classify(agents) {
+    const { count, data, stride } = agents, tally = new Map();
+    for (let k = 0; k < count; k++) {
+      const o = k * stride, sid = data[o + AGENT.SPECIES], d = data[o + AGENT.DIET];
+      let t = tally.get(sid);
+      if (!t) tally.set(sid, (t = [0, 0]));
+      t[1]++;
+      if (d >= HOMINID_DIET[0] && d < HOMINID_DIET[1]) t[0]++;
+    }
+    const next = new Set();
+    for (const [sid, [inBand, n]] of tally) {
+      const share = inBand / n;
+      if (share >= HOMINID_IN || (this.hominids.has(sid) && share >= HOMINID_OUT)) next.add(sid);
+    }
+    this.hominids = next;
   }
   setWorldSize(ws, cell = ws / 128) { this.scale = Math.max(2.6, cell * 0.58); }
+  /** Outer hut ring radius in world units (huts h ≥ 1 sit at 0.9–2.0 scales out). */
+  get radius() { return this.scale * 2.0; }
+  /** Target hut count for `n` anchored members, with a two-hut hysteresis band on the way down. */
+  static hutsFor(n, shown = 0) {
+    const want = Math.max(1, Math.min(Math.floor(n / 8), 9));
+    return want >= shown || shown - want >= 2 ? want : shown;
+  }
   /** `instant`: sites first seen now are drawn fully grown (the capture harness's fast-forward). */
   update(sites, tick, heightAt, stride = 4, instant = false) {
-    // After a jump in time (a fast-forward, or the first frame of a world) a
-    // site that is already there was not founded this tick: draw it grown.
-    const jump = instant || this.lastTick < 0 || tick - this.lastTick > 8;
+    // After a jump in time (a fast-forward, a seek, or the first frame of a
+    // world) a site that is already there was not founded this tick: draw it
+    // grown, and snap a pinned village straight to where it now is. Plain
+    // play at 64× advances ~64–128 ticks a frame, so only a gap longer than a
+    // village lingers (or any step backwards) counts as a jump.
+    const gap = tick - this.lastTick;
+    const jump = instant || this.lastTick < 0 || gap < 0 || gap > this.LINGER;
+    const reach = this.RELOCATE * this.radius;
     this.lastTick = tick;
+    this.jumped = jump;   // read by the forest clearing: a jump clears at once
     for (let k = 0; k < sites.count; k++) {
-      const o = k * stride, sid = sites.data[o];
-      const v = this.sites.get(sid) || { born: jump ? tick - this.GROW : tick };
-      v.x = sites.data[o + 1]; v.y = sites.data[o + 2]; v.n = sites.data[o + 3]; v.seen = tick;
-      this.sites.set(sid, v);
+      const o = k * stride, sid = sites.data[o], x = sites.data[o + 1], y = sites.data[o + 2], n = sites.data[o + 3];
+      if (!this.hominids.has(sid)) continue;   // not reported ⇒ an existing village lingers and fades
+      let v = this.sites.get(sid);
+      if (!v) {
+        const born = jump ? tick - this.GROW : tick;
+        v = { sid, x, y, lx: x, ly: y, n, huts: 0, hutBorn: [], born, seen: tick, farSince: -1, fx: 0, fy: 0, fn: 0, retired: -1, ease: 0 };
+        this.sites.set(sid, v);
+      }
+      const dt = Math.max(0, tick - v.seen);
+      const k1 = jump ? 1 : 1 - Math.exp(-dt / this.SMOOTH);
+      v.lx += (x - v.lx) * k1; v.ly += (y - v.ly) * k1;
+      v.n = n; v.seen = tick;
+      const far = Math.hypot(v.lx - v.x, v.ly - v.y) > reach;
+      if (!far) v.farSince = -1;
+      else if (jump) { v.x = v.lx; v.y = v.ly; v.farSince = -1; }
+      else {
+        // While away, average the raw centroid: the smoothed one lags a real
+        // move, and the new village belongs where the people were meanwhile.
+        if (v.farSince < 0) { v.farSince = tick; v.fx = v.fy = v.fn = 0; }
+        v.fx += x; v.fy += y; v.fn++;
+        if (tick - v.farSince >= this.DWELL) {
+          // The people have moved on: leave the old huts to fade where they
+          // stand and found the village again at the new home.
+          this.sites.set(`r${sid}:${tick}`, { ...v, hutBorn: v.hutBorn.slice(), retired: tick });
+          v.x = v.lx = v.fx / v.fn; v.y = v.ly = v.fy / v.fn;
+          v.farSince = -1; v.born = tick; v.huts = 0; v.hutBorn.length = 0;
+        }
+      }
+      const huts = Villages.hutsFor(n, v.huts);
+      for (let h = v.huts; h < huts; h++) v.hutBorn[h] = v.huts === 0 ? v.born : tick;
+      v.huts = huts;
     }
+    this.layout(heightAt);
+  }
+  /** Rebuild the hut instances for the sites held, as of the last tick seen —
+   *  also after the ground changes shape (relief toggled) while paused. */
+  layout(heightAt) {
+    const tick = this.lastTick;
     let i = 0;
-    for (const [sid, v] of this.sites) {
-      const stale = tick - v.seen;
-      if (stale > this.LINGER || stale < 0) { this.sites.delete(sid); continue; }
-      const fade = Math.min(1, (this.LINGER - stale) / this.FADE);
+    for (const [key, v] of this.sites) {
+      let fade;
+      if (v.retired >= 0) {
+        const age = tick - v.retired;
+        if (age > this.RETIRE || age < 0) { this.sites.delete(key); continue; }
+        fade = 1 - age / this.RETIRE;
+      } else {
+        const stale = tick - v.seen;
+        if (stale > this.LINGER || stale < 0) { this.sites.delete(key); continue; }
+        fade = Math.min(1, (this.LINGER - stale) / this.FADE);
+      }
       const grow = Math.min(1, Math.max(0, (tick - v.born) / this.GROW));
-      const ease = (1 - Math.pow(1 - grow, 3)) * fade;
-      v.ease = ease;
-      const huts = Math.max(1, Math.min(Math.floor(v.n / 8), 9));
-      _c.setHex(mix(hsv(speciesHue(sid), 0.5, 0.8), 0x8a6a3c, 0.55));
-      for (let h = 0; h < huts && i < this.max; h++) {
-        const ang = sid * 2.39996 + h * 2.39996, r = (0.9 + (h % 3) * 0.55) * this.scale * (h === 0 ? 0 : 1);
+      v.ease = (1 - Math.pow(1 - grow, 3)) * fade;
+      _c.setHex(mix(hsv(speciesHue(v.sid), 0.5, 0.8), 0x8a6a3c, 0.55));
+      for (let h = 0; h < v.huts && i < this.max; h++) {
+        const ang = v.sid * 2.39996 + h * 2.39996, r = (0.9 + (h % 3) * 0.55) * this.scale * (h === 0 ? 0 : 1);
         const x = v.x + Math.cos(ang) * r, y = v.y + Math.sin(ang) * r;
-        _p.set(x, heightAt(x, y), y);
+        if (this.isWater(x, y)) continue;   // a lakeside village keeps its huts on the shore
+        const g = Math.min(1, Math.max(0, (tick - v.hutBorn[h]) / this.GROW));
+        const sc = this.scale * (h === 0 ? 1.35 : 1) * fade * (1 - Math.pow(1 - g, 3));
+        if (sc <= 0) continue;
+        _p.set(x, seatY(heightAt, x, y, ang, sc, HUT_FOOT), y);
+        if (h === 0) v.base = _p.y;   // hearth smoke rises from the centre hut's roof
         _q.setFromAxisAngle(Y_AXIS, ang);
-        const sc = this.scale * (h === 0 ? 1.35 : 1) * ease;
         _s.set(sc, sc, sc);
         _m.compose(_p, _q, _s);
         this.mesh.setMatrixAt(i, _m);
@@ -458,12 +685,57 @@ export class Villages {
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
-  /** Live sites for the hearth-smoke emitter: `[{x, y, n, ease}]`. */
-  centers() { return [...this.sites.values()].filter((v) => v.ease > 0.6); }
-  clear() { this.sites.clear(); this.mesh.count = 0; this.lastTick = -1; }
+  /** Live sites for the hearth-smoke emitter: `[{x, y, n, ease, base}]` (pinned positions; `base` the centre hut's floor). */
+  centers() { return [...this.sites.values()].filter((v) => v.retired < 0 && v.ease > 0.6); }
+  /**
+   * Footprints the forest should stand back from, `[{x, y, r}]`, or null when
+   * they have not changed since the last call (so the caller can skip the
+   * forest update). Abandoned villages keep their clearing while they fade.
+   */
+  clearings() {
+    const out = [], r = this.radius + this.scale * 0.9;
+    for (const v of this.sites.values()) out.push({ x: v.x, y: v.y, r });
+    const key = out.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).sort().join(";") + `|${r}`;
+    if (key === this.clearingKey) return null;
+    this.clearingKey = key;
+    return out;
+  }
+  clear() { this.sites.clear(); this.hominids.clear(); this.mesh.count = 0; this.lastTick = -1; this.clearingKey = ""; }
 }
 
 // ---------------------------------------------------------------------------
+/** Ground radius of a stall at scale 1 (the awning poles sit ~0.8 out). */
+export const STALL_FOOTPRINT = 0.85;
+const RING8 = Array.from({ length: 8 }, (_, a) => [Math.cos((a * Math.PI) / 4), Math.sin((a * Math.PI) / 4)]);
+
+/**
+ * Where to draw the stall of a sim hub at (x, y). Hub positions are the sim's
+ * (fixed at load, never changed here) and some fall in a lake or straddle its
+ * shore, so a hub whose footprint — the point and a ring of radius `r` — is not
+ * all `dry` is drawn at the nearest spot within `reach` (searched on a `step`
+ * grid, first in scan order on ties, so it is deterministic) whose footprint
+ * is. With no dry spot that near the hub keeps its position and comes back
+ * `afloat`: the stall is still a real market, so it rides the water surface as
+ * a raft rather than vanishing or sinking to the lake bed. With `size` (world
+ * units) a moved stall also stays on the plate: the sim's world wraps, the
+ * drawn ground does not.
+ */
+export function hubSpot(x, y, r, dry, step, reach, size = 0) {
+  const clear = (px, py) => dry(px, py) && RING8.every(([c, s]) => dry(px + c * r, py + s * r));
+  if (clear(x, y)) return { x, y, moved: false, afloat: false };
+  const onPlate = (v) => !size || (v >= r && v <= size - r);
+  let best = null, bd = Infinity;
+  const n = Math.ceil(reach / step);
+  for (let j = -n; j <= n; j++) {
+    for (let i = -n; i <= n; i++) {
+      const d = Math.hypot(i, j) * step, px = x + i * step, py = y + j * step;
+      if (d > reach || d >= bd || !onPlate(px) || !onPlate(py)) continue;
+      if (clear(px, py)) { best = { x: px, y: py, moved: true, afloat: false }; bd = d; }
+    }
+  }
+  return best || { x, y, moved: false, afloat: true };
+}
+
 /** Fixed trade hubs (markets) — static after load. */
 export class Hubs {
   constructor(max = 128) {
@@ -471,18 +743,35 @@ export class Hubs {
     this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.name = "hubs";
     this.mesh.castShadow = true; this.mesh.receiveShadow = true;
     this.max = max;
+    /** Drawn stall position per hub, `{x, y, moved, afloat}` (see hubSpot). */
+    this.spots = [];
+    this.src = null;
   }
-  set(hubs, cell, heightAt, stride = 3) {
-    const sc = Math.max(3.5, cell * 0.72);
+  /** `isWater(x, y)` keeps stalls off water cells; it may answer false until the terrain ids are known, so call `layout()` again once they are. */
+  set(hubs, cell, heightAt, isWater = () => false, worldSize = 0, stride = 3) {
     const n = Math.min(hubs.count, this.max);
-    for (let k = 0; k < n; k++) {
-      const x = hubs.data[k * stride], y = hubs.data[k * stride + 1];
-      _p.set(x, heightAt(x, y), y);
+    // Copy: the rows are a view into wasm memory, and layout() may run again later.
+    this.src = { xy: Array.from({ length: n }, (_, k) => [hubs.data[k * stride], hubs.data[k * stride + 1]]), cell, heightAt, isWater, worldSize };
+    this.layout();
+  }
+  layout() {
+    if (!this.src) return;
+    const { xy, cell, heightAt, isWater, worldSize } = this.src;
+    const sc = Math.max(3.5, cell * 0.72);
+    // Dry = not a water cell and not under the water plane: the drawn shore
+    // follows the vertex-averaged heights, which dip below 0 on the edge of a
+    // land cell that borders water. (Flat worlds read 0 everywhere, so only
+    // the cell test bites there.)
+    const dry = (x, y) => !isWater(x, y) && heightAt(x, y) >= 0;
+    this.spots = xy.map(([x, y]) => hubSpot(x, y, sc * STALL_FOOTPRINT, dry, cell / 4, cell * 4, worldSize));
+    this.spots.forEach(({ x, y }, k) => {
+      // Terraced on its plinth (seatY); an afloat stall rides the water plane.
+      _p.set(x, Math.max(0, seatY(heightAt, x, y, k * 1.3, sc, STALL_FOOT)), y);
       _q.setFromAxisAngle(Y_AXIS, k * 1.3);
       _s.set(sc, sc, sc);
       this.mesh.setMatrixAt(k, _m.compose(_p, _q, _s));
-    }
-    this.mesh.count = n;
+    });
+    this.mesh.count = this.spots.length;
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 }

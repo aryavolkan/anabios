@@ -21,6 +21,17 @@ const params = new URLSearchParams(location.search);
 // Stage + layers (built once; the world is swapped underneath them)
 // ---------------------------------------------------------------------------
 const stage = createStage($("view"));
+/** What the HUD covers, for `stage.frame()`: the view rail on the left (unless
+ *  collapsed, or the window is too narrow to give up its width — then the
+ *  plate may pass under it) and the transport buttons along the bottom. The
+ *  corner text (brand, readout, codex) is left to overlap the plate. */
+stage.frameInsets = () => {
+  const m = 16;
+  if (document.body.classList.contains("hide-hud")) return { top: m, right: m, bottom: m, left: m };
+  const rail = $("rail"), railRight = rail.getBoundingClientRect().right + m;
+  const left = !rail.classList.contains("collapsed") && railRight <= window.innerWidth * 0.4 ? railRight : m;
+  return { top: m, right: m, bottom: window.innerHeight - document.querySelector(".transport").getBoundingClientRect().top + m, left };
+};
 const layers = {
   agents: new Agents(),
   streaks: new Segments({ life: 14, sat: 0.75, additive: true, lift: 1.4 }),
@@ -64,9 +75,12 @@ const state = {
   follow: false,
   lastColorTick: -1,
   lastStatsTick: -1,
+  animTick: 0,      // src.tick at the last forest-transition step
+  hubsNeedIds: false,   // market stalls were placed before the terrain ids existed
   fps: 0,
   rate: 0,
   frames: 0,
+  frameNo: 0,      // monotonic frame counter (`frames` resets every FPS window)
   ticksWindow: 0,
   windowStart: performance.now(),
   sinceStep: 0,
@@ -118,12 +132,15 @@ function attach(source, entry) {
   stage.frame();
   for (const l of [layers.agents, layers.villages, layers.fx, layers.particles]) l.setWorldSize(ws, state.terrain.cell);
   layers.streaks.clear(); layers.trades.clear(); layers.villages.clear(); layers.particles.clear();
-  layers.hubs.set(source.hubs(), state.terrain.cell, heightAt);
+  layers.villages.isWater = isWater;
+  layers.hubs.set(source.hubs(), state.terrain.cell, heightAt, isWater, ws);
+  state.hubsNeedIds = !state.terrain.terrainIds;   // placed blind: redo once the ids are classified
   layers.birds.setWorld(ws, source.biomeRes, state.terrain.cell, heightAt);
   layers.agents.reset();
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
   state.lastColorTick = -1; state.lastStatsTick = -1;
   $("codex").innerHTML = "";
+  recentFx.clear(); recentLines.clear();
   applyLayerToggles();
   const isLive = source.kind === "live";
   $("badge").classList.toggle("replay", !isLive);
@@ -135,6 +152,22 @@ function attach(source, entry) {
 }
 
 function heightAt(x, y) { return state.terrain ? state.terrain.heightAt(x, y) : 0; }
+function isWater(x, y) { return state.terrain ? state.terrain.isWater(x, y) : false; }
+
+/** Village update + the forest clearings under the huts (trees stand back from a village while its layer is on). */
+function updateVillages(src, tick, instant = false) {
+  layers.villages.update(src.sites(), tick, heightAt, 4, instant);
+  // A time jump draws its villages grown: their clearings are made at once too.
+  syncClearings(false, instant || layers.villages.jumped);
+}
+/** `force`: the layer was toggled (trees ease back in, or out of the huts' way). */
+function syncClearings(force = false, snap = false) {
+  if (!state.terrain) return;
+  if (!layers.villages.mesh.visible) { if (force) state.terrain.forest.setClearings([]); return; }
+  if (force) layers.villages.clearingKey = "";
+  const circles = layers.villages.clearings();
+  if (circles) state.terrain.forest.setClearings(circles, snap);
+}
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 
@@ -171,7 +204,8 @@ async function prepareShot() {
         if (remaining <= 40) {
           layers.streaks.push(src.streaks(), tick);
           layers.trades.push(src.trades(), tick);
-          layers.villages.update(src.sites(), tick, heightAt, 4, true);
+          layers.villages.classify(src.agents());
+          updateVillages(src, tick, true);
         }
         for (const ev of src.events()) onEvent(ev, performance.now() / 1000);
         if (performance.now() - lastPaint > 250) {
@@ -209,10 +243,13 @@ function applyShotCamera(spec) {
     if (spec.startsWith("site")) {
       for (const v of layers.villages.sites.values()) if (!best || v.n > best.n) best = v;
     } else {
+      // Picked by the sim's hub position, aimed at where its stall is drawn
+      // (a hub in a lake is drawn on the nearest shore).
       const h = src.hubs(), c = src.worldSize / 2;
       for (let k = 0; k < h.count; k++) {
         const hx = h.data[k * 3], hy = h.data[k * 3 + 1], d = Math.hypot(hx - c, hy - c);
-        if (!best || d < best.d) best = { x: hx, y: hy, d };
+        const at = layers.hubs.spots[k] || { x: hx, y: hy };
+        if (!best || d < best.d) best = { x: at.x, y: at.y, d };
       }
     }
     if (!best) { stage.frame(); return; }
@@ -280,9 +317,16 @@ function loop(now) {
       state.ticksWindow += stepped;
     }
     const fractional = src.kind === "replay" || state.speed < 1;
+    // Figure size depends on the zoom (`bodyScale`), so a paused world that is
+    // zoomed into must still re-seat its figures — or a close-up kept the
+    // far-away readable size and bodies piled through each other.
+    const rezoomed = Math.abs(unitsPerPixel / (state.agentsUpp || unitsPerPixel) - 1) > 0.03;
     if (stepped > 0 || fractional || state.sinceStep === 0) {
       const tick = src.tick;
-      layers.agents.update(src.agents(), heightAt, src.kind === "live", unitsPerPixel);
+      const agents = src.agents();
+      layers.agents.update(agents, heightAt, src.kind === "live", unitsPerPixel);
+      state.agentsUpp = unitsPerPixel;
+      layers.villages.classify(agents);   // before the next wasm call can detach the view
       if (stepped > 0 || src.kind === "replay") {
         const streaks = src.streaks();
         layers.streaks.push(streaks, tick);
@@ -299,12 +343,16 @@ function loop(now) {
           for (let k = 0, n = Math.min(died.length, 400); k < n; k += 2) layers.particles.spawn(KIND.SMOKE, died[k], heightAt(died[k], died[k + 1]) + lift, died[k + 1], 2);
         }
         layers.trades.push(src.trades(), tick);
-        layers.villages.update(src.sites(), tick, heightAt);
+        updateVillages(src, tick);
         for (const ev of src.events()) onEvent(ev, now / 1000);
       }
       if (Math.floor(tick / 10) !== Math.floor(state.lastColorTick / 10)) {
-        state.terrain.updateColors(src.biomeRgba());
+        // Refreshes are ≤ 128 ticks apart in play (64×); a wider gap is a
+        // fast-forward or seek, where scarred trees take their size at once.
+        const gap = tick - state.lastColorTick;
+        state.terrain.updateColors(src.biomeRgba(), gap < 0 || gap > 300);
         state.lastColorTick = tick;
+        if (state.hubsNeedIds && state.terrain.terrainIds) { layers.hubs.layout(); state.hubsNeedIds = false; }
       }
       if (Math.floor(tick / 30) !== Math.floor(state.lastStatsTick / 30) || stepped === 0) {
         refreshStats(false);
@@ -315,9 +363,16 @@ function loop(now) {
         applyShotCamera(state.shot.cam);
         applyShotInspect(state.shot.inspect);
         state.shot.stage = 2;
+        state.shot.appliedAt = state.frameNo;
       }
-    } else if (state.shot.stage === 2) {
-      // One frame has been rendered with the camera and selection applied.
+    } else if (rezoomed) {
+      layers.agents.update(src.agents(), heightAt, src.kind === "live", unitsPerPixel);
+      state.agentsUpp = unitsPerPixel;
+    }
+    // One frame has been rendered with the camera and selection applied. Not
+    // an `else` of the update branch above: with `&paused=0` the world steps
+    // every frame, and that branch would starve this one forever.
+    if (state.shot.stage === 2 && state.shot.appliedAt !== state.frameNo) {
       state.shot.stage = 0;
       state.ready = true;
     }
@@ -326,7 +381,7 @@ function loop(now) {
     // Hearth smoke drifts up from every settled village while the world runs.
     if (!state.paused && layers.villages.mesh.visible) {
       for (const v of layers.villages.centers()) {
-        if (Math.random() < dt * 1.8) layers.particles.spawn(KIND.SMOKE, v.x, heightAt(v.x, v.y) + layers.villages.scale * 1.25, v.y, 1);
+        if (Math.random() < dt * 1.8) layers.particles.spawn(KIND.SMOKE, v.x, (v.base ?? heightAt(v.x, v.y)) + layers.villages.scale * 1.25, v.y, 1);
       }
     }
     if (state.follow && layers.agents.selectedPos) {
@@ -341,9 +396,18 @@ function loop(now) {
     }
   }
 
+  // Trees easing into or out of a clearing (or a scar): paced by the ticks
+  // this frame advanced, within a wall-time band (see terrain.js TRANSITION_TICKS).
+  if (state.terrain) {
+    const t = src ? src.tick : 0, dTicks = Math.max(0, t - state.animTick);
+    state.animTick = t;
+    state.terrain.forest.update(reduceMotion ? Infinity : dt, dTicks);
+  }
+
   stage.render();
 
   state.frames++;
+  state.frameNo++;
   const span = now - state.windowStart;
   if (span >= 500) {
     state.fps = state.frames * 1000 / span;
@@ -406,35 +470,77 @@ function renderLegend() {
       L.innerHTML = names.map((n, i) => `<div class="item"><span class="sw" style="background:${cssHex(MOOD_COLORS[i])}"></span>${n}</div>`).join("");
       break;
     }
-    default: L.innerHTML = `<div class="item">body colour from the genome's hue/sat/val slots; livestock bleached</div>`;
+    default: L.innerHTML = `<div class="item">species colour (as in the species list), shaded per individual by the genome's hue/sat/val; livestock bleached</div>`;
   }
+}
+
+/**
+ * Several detectors re-fire every tick while their condition holds (a mass
+ * fright or a dehydration wave is dozens of events a second at 1×, up to ~50
+ * in one tick). Each one used to spawn its own ring, light pillar and burst
+ * of additive particles on the same spot — stacking into a white blow-out
+ * under bloom — and its own feed line, so the feed churned faster than a line
+ * could fade in and read as empty. Now a repeat within `REPEAT_TICKS` of the
+ * last one of its kind (or within `REPEAT_SECS` of wall time, for a slow
+ * machine at 64× where one frame spans more ticks than that) is folded in:
+ * the feed keeps one line per event type, bumping a `×n` count and the
+ * species tally, and a species' effects re-fire at most every
+ * `REPEAT_FX_SECS`, with at most `FX_PER_FRAME` bursts a frame.
+ */
+const REPEAT_TICKS = 120, REPEAT_SECS = 1.5, REPEAT_FX_SECS = 2.5, FX_PER_FRAME = 8;
+const recentFx = new Map();     // `${type}/${sid}` → {tick, fxAt}
+const recentLines = new Map();  // type → {tick, count, sids, line}
+let fxFrame = -1, fxThisFrame = 0;
+
+/** The entry for `key` if its last event is recent (and not in the future: a replay seek starts over), else a fresh one. */
+function recent(map, key, tick, now, fresh) {
+  const prev = map.get(key);
+  const repeat = !!prev && tick >= prev.tick && (tick - prev.tick <= REPEAT_TICKS || now - prev.at <= REPEAT_SECS);
+  const entry = repeat ? prev : fresh();
+  entry.tick = tick; entry.at = now;
+  map.set(key, entry);
+  return [entry, repeat];
 }
 
 function onEvent(ev, now) {
   const kind = kindOf(ev.type);
+  const [fx, repeat] = recent(recentFx, `${ev.type}/${ev.sid}`, ev.tick, now, () => ({ fxAt: -Infinity }));
   if (ev.x || ev.y) {
     state.lastEventLoc = { x: ev.x, y: ev.y };
-    if (state.tour && now - state.lastFlyAt > 3 && !state.fastForwarding) {
+    if (!repeat && state.tour && now - state.lastFlyAt > 3 && !state.fastForwarding) {
       state.lastFlyAt = now;
       stage.flyTo(ev.x, heightAt(ev.x, ev.y), ev.y, state.source.worldSize * (kind === "war" ? 0.12 : 0.18));
     }
   }
-  layers.fx.spawn(ev, now, heightAt);
-  if ((ev.x || ev.y) && layers.fx.enabled) {
+  if (fxFrame !== state.frameNo) { fxFrame = state.frameNo; fxThisFrame = 0; }
+  if ((ev.x || ev.y) && layers.fx.enabled && now - fx.fxAt >= REPEAT_FX_SECS && fxThisFrame < FX_PER_FRAME) {
+    fx.fxAt = now;
+    fxThisFrame++;
+    layers.fx.spawn(ev, now, heightAt);
     const h = heightAt(ev.x, ev.y) + 0.6;
     if (kind === "fire") layers.particles.spawn(KIND.EMBER, ev.x, h, ev.y, 16);
     else if (kind === "war") layers.particles.spawn(KIND.SPARK, ev.x, h, ev.y, 22);
     else layers.particles.spawn(KIND.MOTE, ev.x, h, ev.y, 10, KIND_COLOR[kind]);
   }
-  const line = document.createElement("div");
-  line.className = "codex-line";
-  const who = ev.sid == null ? "" : ` — ${esc(state.source.labels.get(ev.sid) || "species " + ev.sid)}`;
-  line.innerHTML = `<span class="tick">${Math.floor(ev.tick).toLocaleString()}</span> · <span class="sw" style="background:${KIND_CSS[kind]}"></span><span style="color:${KIND_CSS[kind]}">${esc(ev.type.replace(/_/g, " "))}</span><span class="tick">${who}</span>`;
-  if (ev.x || ev.y) line.onclick = () => stage.flyTo(ev.x, heightAt(ev.x, ev.y), ev.y, state.source.worldSize * 0.18);
   const feed = $("codex");
-  feed.prepend(line);
-  requestAnimationFrame(() => line.classList.add("show"));
-  while (feed.children.length > 7) feed.removeChild(feed.lastChild);
+  const [entry] = recent(recentLines, ev.type, ev.tick, now, () => ({ count: 0, sids: new Set(), line: null }));
+  if (!entry.line || entry.line.parentNode !== feed) {
+    const line = document.createElement("div");
+    line.className = "codex-line";
+    line.innerHTML = `<span class="tick"></span> · <span class="sw" style="background:${KIND_CSS[kind]}"></span><span style="color:${KIND_CSS[kind]}">${esc(ev.type.replace(/_/g, " "))}</span><span class="rep"></span><span class="tick who"></span>`;
+    feed.prepend(line);
+    requestAnimationFrame(() => line.classList.add("show"));
+    while (feed.children.length > 7) feed.removeChild(feed.lastChild);
+    entry.line = line; entry.count = 0; entry.sids.clear();
+  }
+  entry.count++;
+  if (ev.sid != null) entry.sids.add(ev.sid);
+  const line = entry.line;
+  line.firstChild.textContent = Math.floor(ev.tick).toLocaleString();
+  line.querySelector(".rep").textContent = entry.count > 1 ? ` ×${entry.count}` : "";
+  const who = entry.sids.size > 1 ? `${entry.sids.size} species` : ev.sid == null ? "" : state.source.labels.get(ev.sid) || `species ${ev.sid}`;
+  line.querySelector(".who").textContent = who ? ` — ${who}` : "";
+  if (ev.x || ev.y) line.onclick = () => stage.flyTo(ev.x, heightAt(ev.x, ev.y), ev.y, state.source.worldSize * 0.18);
 }
 
 function renderCard() {
@@ -475,17 +581,28 @@ function deselect() { state.selected = -1; layers.agents.selected = -1; state.fo
 function applyLayerToggles() {
   for (const cb of document.querySelectorAll("#layers input")) {
     if (cb.dataset.layer === "day" && !state.dayInit) { cb.checked = state.dayCycle; state.dayInit = true; }
+    if (cb.dataset.layer === "events" && !state.eventsInit) { cb.checked = params.get("events") === "1"; state.eventsInit = true; }
     const on = cb.checked;
     switch (cb.dataset.layer) {
-      case "relief": state.terrain?.setRelief(on); break;
+      case "relief":
+        if (!state.terrain) break;
+        state.terrain.setRelief(on);
+        // Buildings are seated when placed: re-seat them on the reshaped ground.
+        layers.hubs.layout();   // re-seat on the new heights (and re-check the shore)
+        layers.villages.layout(heightAt);
+        break;
       case "water": if (state.terrain) state.terrain.water.mesh.visible = on && state.terrain.reliefOn; break;
       case "forest": if (state.terrain) state.terrain.forest.group.visible = on; break;
       case "shadows": stage.renderer.shadowMap.enabled = on; stage.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; }); break;
       case "streaks": layers.streaks.lines.visible = on; break;
       case "trades": layers.trades.lines.visible = on; break;
-      case "villages": layers.villages.mesh.visible = on; break;
+      case "villages": layers.villages.mesh.visible = on; syncClearings(true); break;
       case "hubs": layers.hubs.mesh.visible = on; break;
-      case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
+      // Event markers (a ring, a light pillar and a burst per codex event) are
+      // opt-in: with dozens of events a minute they crowded the map, and the
+      // feed already lists every one (click a line to fly there).
+      case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; break;
+      case "sparks": layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
       case "wire": if (state.terrain) state.terrain.material.wireframe = on; break;
       case "bloom": stage.post = on; break;
       case "clouds": if (state.terrain) state.terrain.uniforms.uCloud.value = on ? 1 : 0; break;
@@ -549,7 +666,7 @@ window.addEventListener("keydown", (e) => {
   switch (e.code) {
     case "Space": e.preventDefault(); setPaused(!state.paused); break;
     case "KeyF": stage.frame(); break;
-    case "KeyH": document.body.classList.toggle("hide-hud"); break;
+    case "KeyH": document.body.classList.toggle("hide-hud"); stage.refit(); break;
     case "KeyC": { const opts = Array.from($("color-mode").options).map((o) => o.value); state.colorMode = opts[(opts.indexOf(state.colorMode) + 1) % opts.length]; $("color-mode").value = state.colorMode; layers.agents.mode = state.colorMode; renderLegend(); break; }
     case "KeyL": if (state.selected >= 0) { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); } break;
     case "KeyV": setTour(!state.tour); break;
@@ -564,7 +681,7 @@ $("tour").onclick = () => setTour(!state.tour);
 for (const b of document.querySelectorAll(".speed")) b.onclick = () => setSpeed(Number(b.dataset.speed));
 $("color-mode").onchange = (e) => { state.colorMode = e.target.value; layers.agents.mode = state.colorMode; renderLegend(); };
 $("layers").addEventListener("change", applyLayerToggles);
-$("rail-toggle").onclick = () => { const r = $("rail"); r.classList.toggle("collapsed"); $("rail-toggle").textContent = r.classList.contains("collapsed") ? "+" : "−"; };
+$("rail-toggle").onclick = () => { const r = $("rail"); r.classList.toggle("collapsed"); $("rail-toggle").textContent = r.classList.contains("collapsed") ? "+" : "−"; stage.refit(); };
 $("card-close").onclick = deselect;
 $("follow").onclick = () => { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); };
 $("card-fly").onclick = () => { const p = layers.agents.selectedPos; if (p) stage.flyTo(p.x, p.y, p.z, state.source.worldSize * 0.1); };

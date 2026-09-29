@@ -117,15 +117,18 @@ export class Terrain {
     this.texture.flipY = false;
     this.texture.needsUpdate = true;
 
-    // Elevation as an 8-bit texture for the water's depth shading.
-    this.elevTexels = new Uint8Array(res * res);
-    if (elevation) for (let i = 0; i < res * res; i++) this.elevTexels[i] = Math.round(Math.min(1, Math.max(0, elevation[i])) * 255);
-    this.elevTexture = new THREE.DataTexture(this.elevTexels, res, res, THREE.RedFormat, THREE.UnsignedByteType);
-    this.elevTexture.magFilter = THREE.LinearFilter;
-    this.elevTexture.minFilter = THREE.LinearFilter;
-    this.elevTexture.generateMipmaps = false;
-    this.elevTexture.flipY = false;
-    this.elevTexture.needsUpdate = true;
+    // The rendered heights again, (res+1)² vertices in world units, for the
+    // water's depth shading. Half float, not 8-bit elevation: one 8-bit step is
+    // ~0.3 units, a third of the foam band, and a res² cell texture disagrees
+    // with the vertex-averaged mesh by more than that on rough ground — foam
+    // then followed the cell grid in blocks instead of the drawn shoreline.
+    // R16F filters linearly in WebGL2 (R32F needs an extension).
+    this.heightTexels = new Uint16Array(n * n);
+    this.heightTexture = new THREE.DataTexture(this.heightTexels, n, n, THREE.RedFormat, THREE.HalfFloatType);
+    this.heightTexture.magFilter = THREE.LinearFilter;
+    this.heightTexture.minFilter = THREE.LinearFilter;
+    this.heightTexture.generateMipmaps = false;
+    this.heightTexture.flipY = false;
 
     this.uniforms = {
       uRes: { value: res },
@@ -196,11 +199,32 @@ export class Terrain {
     slab.position.set(worldSize / 2, -depth / 2 - this.heightScale * seaLevel + 0.5, worldSize / 2);
     this.slab = slab;
 
-    this.water = new Water(worldSize, this.elevTexture, seaLevel, this.heightScale);
+    // The plate's sides: an earth wall from the ground's edge down to the
+    // slab. The terrain is a single sheet and the water plane lies under the
+    // whole map, so an open side showed, through the gap under the land, the
+    // water hidden beneath it — shaded as zero-depth foam, a white speckle
+    // band along the plate edge. The wall's top never drops below the water
+    // line, so a sea running off the edge ends flush against it.
+    this.slabTop = slab.position.y + depth / 2;
+    const skirtGeo = new THREE.BufferGeometry();
+    skirtGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(4 * n * 2 * 3), 3));
+    const sidx = [];
+    for (let e = 0; e < 4; e++) {
+      for (let t = 0; t < res; t++) {
+        const a = (e * n + t) * 2, b = a + 1, c = a + 2, d = a + 3;
+        sidx.push(a, b, c, c, b, d);
+      }
+    }
+    skirtGeo.setIndex(sidx);
+    this.skirt = new THREE.Mesh(skirtGeo, new THREE.MeshStandardMaterial({ color: 0x3a2b1f, roughness: 1, side: THREE.DoubleSide }));
+    this.skirt.receiveShadow = true;
+    this.updateSkirt();
+
+    this.water = new Water(worldSize, res, this.heightTexture);
     this.water.mesh.visible = this.reliefOn;   // flat worlds paint water cells in the ground texture instead
     this.forest = new Forest(this);
     this.group = new THREE.Group();
-    this.group.add(this.mesh, this.slab, this.water.mesh, this.forest.group);
+    this.group.add(this.mesh, this.slab, this.skirt, this.water.mesh, this.forest.group);
   }
 
   /** Recompute vertex heights from the elevation grid (or flatten). */
@@ -220,12 +244,35 @@ export class Terrain {
         }
         heights[j * n + i] = h;
         pos[(j * n + i) * 3 + 1] = h;
+        this.heightTexels[j * n + i] = THREE.DataUtils.toHalfFloat(h);
       }
     }
+    this.heightTexture.needsUpdate = true;
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.computeVertexNormals();
     this.geometry.computeBoundingSphere();
     this.uniforms.uRelief.value = scale > 0 ? 1 : 0;
+    this.updateSkirt();
+  }
+
+  /** Re-seat the side walls on the current edge heights (after a relief change). */
+  updateSkirt() {
+    if (!this.skirt) return;
+    const { res, cell, heights } = this, n = res + 1;
+    const pos = this.skirt.geometry.attributes.position.array;
+    // Edges in order: z = 0, x = max, z = max, x = 0 — each n grid vertices.
+    const vert = [(t) => [t, 0], (t) => [res, t], (t) => [t, res], (t) => [0, t]];
+    for (let e = 0; e < 4; e++) {
+      for (let t = 0; t < n; t++) {
+        const [i, j] = vert[e](t), o = (e * n + t) * 6;
+        const x = i * cell, z = j * cell;
+        pos[o] = x; pos[o + 1] = Math.max(heights[j * n + i], 0); pos[o + 2] = z;
+        pos[o + 3] = x; pos[o + 4] = this.slabTop - 0.05; pos[o + 5] = z;
+      }
+    }
+    this.skirt.geometry.attributes.position.needsUpdate = true;
+    this.skirt.geometry.computeVertexNormals();
+    this.skirt.geometry.computeBoundingSphere();
   }
 
   /** Advance the ground shader's clock (sparkle and caustics). */
@@ -249,35 +296,48 @@ export class Terrain {
     return (h00 * (1 - u) + h10 * u) * (1 - v) + (h01 * (1 - u) + h11 * u) * v;
   }
 
-  /** Push new cell colours (RGBA8, res²; the elevation alpha is forced opaque). */
-  updateColors(rgba) {
+  /** True when world (x, y) falls on a water cell (torus-wrapped); false before the terrain ids are known. */
+  isWater(x, y) {
+    const ids = this.terrainIds;
+    if (!ids) return false;
+    const { res, cell } = this;
+    const i = ((Math.floor(x / cell) % res) + res) % res, j = ((Math.floor(y / cell) % res) + res) % res;
+    return ids[j * res + i] === T.WATER;
+  }
+
+  /** Push new cell colours (RGBA8, res²; the elevation alpha is forced opaque).
+   *  `snap`: after a time jump, bare trees take their new size at once. */
+  updateColors(rgba, snap = false) {
     if (!rgba || rgba.length !== this.texels.length) return;
     const t = this.texels;
     t.set(rgba);
     for (let i = 3; i < t.length; i += 4) t[i] = 255;
     this.texture.needsUpdate = true;
     if (!this.terrainIds) { this.terrainIds = classifyTerrain(rgba, this.res); this.forest.rebuild(); }
-    this.forest.refresh(rgba);
+    this.forest.refresh(rgba, snap);
   }
 
   dispose() {
     this.geometry.dispose();
     this.material.dispose();
     this.texture.dispose();
-    this.elevTexture.dispose();
+    this.heightTexture.dispose();
     this.slab.geometry.dispose();
     this.slab.material.dispose();
+    this.skirt.geometry.dispose();
+    this.skirt.material.dispose();
     this.water.dispose();
     this.forest.dispose();
   }
 }
 
 // ---------------------------------------------------------------------------
-/** Water plane at y = 0: depth-shaded from the elevation texture (turquoise
- *  shallows, navy deeps), animated ripple normals with a sun glint, a foam
- *  fringe along the shore and a fresnel rim. */
+/** Water plane at y = 0: depth-shaded from the terrain's vertex heights
+ *  (turquoise shallows, navy deeps), animated ripple normals with a sun glint,
+ *  a foam fringe along the shore and a fresnel rim. */
 export class Water {
-  constructor(worldSize, elevTexture, seaLevel, heightScale) {
+  /** @param {THREE.Texture} heightTexture  (res+1)² vertex heights, world units above the sea */
+  constructor(worldSize, res, heightTexture) {
     this.uniforms = {
       uTime: { value: 0 },
       // The tuned palette, authored for a raw (unencoded) write: converted a
@@ -286,9 +346,8 @@ export class Water {
       uColor: { value: new THREE.Color(0x1c4a86).convertSRGBToLinear() },
       uDeep: { value: new THREE.Color(0x0c2148).convertSRGBToLinear() },
       uSize: { value: worldSize },
-      uElev: { value: elevTexture },
-      uSea: { value: seaLevel },
-      uHs: { value: heightScale },
+      uRes: { value: res },
+      uHeight: { value: heightTexture },
       uSun: { value: new THREE.Vector3(0.55, 1.0, 0.35).normalize() },
     };
     this.material = new THREE.ShaderMaterial({
@@ -304,18 +363,36 @@ export class Water {
         }`,
       fragmentShader: /* glsl */ `
         uniform float uTime; uniform vec3 uShallow; uniform vec3 uColor; uniform vec3 uDeep; uniform float uSize;
-        uniform sampler2D uElev; uniform float uSea; uniform float uHs; uniform vec3 uSun;
+        uniform float uRes; uniform sampler2D uHeight; uniform vec3 uSun;
         varying vec3 vWorld;
         ${GLSL_NOISE}
         float ripple(vec2 p, float t) {
           return 0.6 * sin(p.x * 0.08 + t * 0.9) * sin(p.y * 0.11 - t * 0.7) + 0.4 * sin((p.x + p.y) * 0.05 + t * 0.5)
                + 0.5 * (atlasNoise(p * 0.06 + vec2(t * 0.05, -t * 0.03)) - 0.5);
         }
+        // Ground height under p exactly as drawn: the mesh's two triangles per
+        // cell (diagonal from (i+1, j) to (i, j+1)) over its own vertex heights,
+        // so depth 0 is precisely where the ground meets the plane.
+        float groundHeight(vec2 p) {
+          vec2 f = clamp(p / uSize, 0.0, 1.0) * uRes;
+          vec2 c = min(floor(f), uRes - 1.0), t = f - c;
+          ivec2 i = ivec2(c);
+          float a = texelFetch(uHeight, i, 0).r, b = texelFetch(uHeight, i + ivec2(1, 0), 0).r;
+          float cc = texelFetch(uHeight, i + ivec2(0, 1), 0).r, d = texelFetch(uHeight, i + ivec2(1, 1), 0).r;
+          return t.x + t.y < 1.0 ? a + (b - a) * t.x + (cc - a) * t.y : d + (cc - d) * (1.0 - t.x) + (b - d) * (1.0 - t.y);
+        }
+        // Filtered height (texel centres are the vertices): smooth enough to difference.
+        float smoothHeight(vec2 p) { return texture2D(uHeight, (p / uSize * uRes + 0.5) / (uRes + 1.0)).r; }
         void main() {
-          vec2 uv = vWorld.xz / uSize;
-          float e = texture2D(uElev, uv).r;
-          float depth = max(0.0, (uSea - e) * uHs);
           vec2 p = vWorld.xz;
+          float depth = max(0.0, -groundHeight(p));
+          // Distance to the shore ≈ depth / slope; the slope from half-cell central
+          // differences of the filtered heights, which vary smoothly (the per-
+          // triangle slope would print the mesh facets into the foam).
+          float k = 0.5 * uSize / uRes;
+          vec2 g = vec2(smoothHeight(p + vec2(k, 0.0)) - smoothHeight(p - vec2(k, 0.0)),
+                        smoothHeight(p + vec2(0.0, k)) - smoothHeight(p - vec2(0.0, k))) / (2.0 * k);
+          float shoreDist = depth / max(length(g), 1e-3);
           float r = ripple(p, uTime);
           float rx = ripple(p + vec2(1.5, 0.0), uTime) - r, rz = ripple(p + vec2(0.0, 1.5), uTime) - r;
           vec3 n = normalize(vec3(-rx * 0.35, 1.0, -rz * 0.35));
@@ -324,11 +401,25 @@ export class Water {
           vec3 col = mix(uShallow, uColor, clamp(depth / 2.5, 0.0, 1.0));
           col = mix(col, uDeep, clamp(depth / 12.0, 0.0, 1.0));
           col *= 0.9 + 0.2 * r;
-          float spec = pow(max(dot(reflect(-uSun, n), viewDir), 0.0), 48.0);
-          col += vec3(1.0, 0.95, 0.85) * spec * 0.55;
+          // Sun glint as sparkle. The ripples barely tilt the surface, so any
+          // smooth lobe mirrored the sun as one solid white disc a few hundred
+          // pixels across whenever the day cycle lined it up with the camera
+          // (exponent 48 whitened whole lakes; 220 still left a disc). Now a
+          // moving glitter mask breaks the lobe into points, with only a faint
+          // core left where the sun sits, and it dims as the sun sinks.
+          float lobe = max(dot(reflect(-uSun, n), viewDir), 0.0);
+          float glitter = smoothstep(0.72, 0.95, atlasNoise(p * 2.6 + vec2(uTime * 0.9, -uTime * 0.7)) * atlasNoise(p * 4.1 - vec2(uTime * 0.6, uTime * 1.1)) * 2.2);
+          float spec = pow(lobe, 400.0) * glitter * 0.9 + pow(lobe, 1500.0) * 0.08;
+          col += vec3(1.0, 0.93, 0.82) * spec * smoothstep(0.08, 0.45, uSun.y);
           col += vec3(0.22, 0.30, 0.34) * fres * 0.7;
-          float foamBand = 1.0 - smoothstep(0.0, 0.9, depth);
-          float foam = foamBand * smoothstep(0.45, 0.75, atlasNoise(p * 0.5 + vec2(uTime * 0.6, uTime * 0.2)) + 0.25 * r);
+          // Foam hugs the shore: shallow AND near it, so a gentle beach keeps a
+          // narrow fringe and a shallow, flat pond does not whiten all over.
+          float foamBand = (1.0 - smoothstep(0.0, 0.9, depth)) * (1.0 - smoothstep(1.5, 4.5, shoreDist));
+          // Lace: two octaves of value noise on rotated axes — one thresholded
+          // octave on the world axes reads as square blobs. Denser at the water line.
+          float lace = 0.6 * atlasNoise(mat2(0.8, -0.6, 0.6, 0.8) * p * 0.5 + vec2(uTime * 0.6, uTime * 0.2))
+                     + 0.4 * atlasNoise(mat2(0.28, 0.96, -0.96, 0.28) * p * 1.3 - vec2(uTime * 0.3, uTime * 0.5));
+          float foam = foamBand * smoothstep(0.45, 0.8, lace + 0.25 * r + 0.1 * foamBand);
           col = mix(col, vec3(0.92, 0.94, 0.96), foam * 0.75);
           float alpha = mix(0.45, 0.88, clamp(depth / 3.0, 0.0, 1.0)) + fres * 0.1 + foam * 0.3;
           gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.96));
@@ -379,7 +470,12 @@ function coniferGeometry() {
   }
   return mergeGeometries([trunk, ...tiers], false);
 }
-/** Grass tuft: three crossed, tapered blades; darker at the root, lighter at the tips. */
+/**
+ * Grass tuft: three crossed, tapered blades; darker at the root, lighter at
+ * the tips. Every normal points up, so a tuft is lit like the ground it grows
+ * from: as vertical planes under flat shading the blades faced away from a
+ * high sun and read as black cut-outs over bright grass.
+ */
 function tuftGeometry() {
   const parts = [];
   for (let i = 0; i < 3; i++) {
@@ -391,8 +487,12 @@ function tuftGeometry() {
     parts.push(g);
   }
   const g = mergeGeometries(parts, false);
-  const n = g.attributes.position.count, pos = g.attributes.position.array, col = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { const v = 0.55 + 0.55 * (pos[i * 3 + 1] / 0.62); col[i * 3] = v; col[i * 3 + 1] = v; col[i * 3 + 2] = v; }
+  const n = g.attributes.position.count, pos = g.attributes.position.array, col = new Float32Array(n * 3), nrm = g.attributes.normal.array;
+  for (let i = 0; i < n; i++) {
+    const v = 0.7 + 0.45 * (pos[i * 3 + 1] / 0.62);
+    col[i * 3] = v; col[i * 3 + 1] = v; col[i * 3 + 2] = v;
+    nrm[i * 3] = 0; nrm[i * 3 + 1] = 1; nrm[i * 3 + 2] = 0;
+  }
   g.setAttribute("color", new THREE.BufferAttribute(col, 3));
   return g;
 }
@@ -423,12 +523,34 @@ const PLANTING = {
   [T.SAVANNA]: [0.16, "leaf", 0x8a8a3c, 0.65],
   [T.TUNDRA]: [0.06, "cone", 0x5c7060, 0.6],
 };
-/** Grass tufts per cell (fractional = probability), with their blade colour. */
-const TUFTS = { [T.GRASS]: 2.4, [T.SAVANNA]: 1.8, [T.FOREST]: 0.6, [T.TUNDRA]: 0.7, [T.RAINFOREST]: 0.4 };
+/** Grass tufts per cell (fractional = probability), with their blade colour.
+ *  Tufts are knee-high to the figures (`TUFT_HEIGHT`), so they are planted
+ *  denser than the old head-high ones to keep the open ground textured. */
+const TUFTS = { [T.GRASS]: 4, [T.SAVANNA]: 3, [T.FOREST]: 1, [T.TUNDRA]: 1.2, [T.RAINFOREST]: 0.7 };
+/** Tuft size factor (× cell): ~0.35–0.65 units tall on the 8-unit grid, under
+ *  a grazer's back at true size. At 0.42 they stood 1.1–2.2 tall, head-high to
+ *  a hominid, and dwarfed every close-up figure. */
+const TUFT_HEIGHT = 0.13;
 const TUFT_COLOR = { [T.GRASS]: 0x78b544, [T.SAVANNA]: 0xb9a94e, [T.FOREST]: 0x5a9a44, [T.TUNDRA]: 0x8c9c72, [T.RAINFOREST]: 0x3f8f4a };
 /** Extra rock scatter on cells whose main planting is something else. */
 const ROCKS = { [T.TUNDRA]: 0.22, [T.DESERT]: 0.05, [T.SAVANNA]: 0.03, [T.GRASS]: 0.015 };
 const hash2 = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+const _fm = new THREE.Matrix4(), _fp = new THREE.Vector3(), _fq = new THREE.Quaternion(), _fs = new THREE.Vector3(), _fe = new THREE.Euler();
+
+/** Scale of a tree on a cell scarred bare, as a fraction of its planted size. */
+const BARE = 0.12;
+/**
+ * Pace of a tree shrinking into a clearing or growing back (and of the
+ * scarred-bare shrink): `TRANSITION_TICKS` of sim time — `Villages.GROW`, so
+ * the forest makes room in step with the huts' own grow-in ease — held
+ * between `TRANSITION_MIN_S` and `TRANSITION_MAX_S` of wall time. Sim time
+ * alone would freeze a layer toggle while paused (no ticks pass) and pop in
+ * one frame at 64× (40 ticks is under a frame); wall time alone would trail a
+ * village founded at 64× by thousands of ticks. At 1× (one tick per 60 Hz
+ * frame) the band does not bind and trees and huts ease together.
+ */
+export const TRANSITION_TICKS = 40, TRANSITION_MIN_S = 0.3, TRANSITION_MAX_S = 0.8;
 
 /** Instanced forests over the terrain's cells. */
 export class Forest {
@@ -439,9 +561,13 @@ export class Forest {
     // Wind: canopies sway with a slow wave keyed on the instance's world
     // position, so a forest ripples instead of nodding in unison. The same
     // cloud shade as the ground passes over the canopies.
-    const mat = (side = THREE.FrontSide) => {
-      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, side });
-      m.customProgramCacheKey = () => `atlas-tree-${side}`;
+    // `flat`: faceted trees and rocks. The grass instead shades with a normal
+    // pinned straight up in world space, so each blade is lit like the ground
+    // it grows from — including its back faces, which a double-sided material
+    // otherwise flips to face down (the tufts read as black specks).
+    const mat = (side = THREE.FrontSide, flat = true) => {
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: flat, side });
+      m.customProgramCacheKey = () => `atlas-tree-${side}-${flat}`;
       m.onBeforeCompile = (shader) => {
         shader.uniforms.uTime = this.uniforms.uTime;
         shader.uniforms.uCloud = this.uniforms.uCloud;
@@ -463,12 +589,16 @@ export class Forest {
         shader.fragmentShader = shader.fragmentShader
           .replace("#include <common>", `#include <common>\nuniform float uTime; uniform float uCloud; varying vec2 vWxz;\n${GLSL_NOISE}\n${GLSL_CLOUD}`)
           .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.22 * atlasCloud(vWxz, uTime) * uCloud;");
+        if (!flat) {
+          shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>",
+            "#include <normal_fragment_begin>\nnormal = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);\nnonPerturbedNormal = normal;");
+        }
       };
       return m;
     };
     this.leaf = new THREE.InstancedMesh(broadleafGeometry(), mat(), maxPerKind);
     this.cone = new THREE.InstancedMesh(coniferGeometry(), mat(), maxPerKind);
-    this.tuft = new THREE.InstancedMesh(tuftGeometry(), mat(THREE.DoubleSide), maxPerKind);
+    this.tuft = new THREE.InstancedMesh(tuftGeometry(), mat(THREE.DoubleSide, false), maxPerKind);
     this.rock = new THREE.InstancedMesh(rockGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), maxPerKind);
     for (const m of [this.leaf, this.cone, this.tuft, this.rock]) {
       m.count = 0; m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; m.name = "forest";
@@ -476,8 +606,21 @@ export class Forest {
     this.tuft.castShadow = false;   // thousands of blades: their shadow is noise, not grounding
     this.group = new THREE.Group();
     this.group.add(this.leaf, this.cone, this.tuft, this.rock);
-    this.items = [];     // {mesh, index, kind, cell, x, z, rot, tx, tz, base}
+    // {mesh, index, kind, cell, x, z, rot, tx, tz, base, bare, cleared,
+    //  sc (drawn scale), to (target scale), from, p (0..1 progress from → to)}
+    this.items = [];
     this.scar = null;    // per-cell 0/1 "bare" flags from the last colour refresh
+    this.byCell = new Map();   // cell → items planted there (clearing lookups)
+    this.clearings = [];       // [{x, y, r}] village footprints the trees stand back from
+    this.clearedCells = new Set();
+    // Only items between two scales are re-seated each frame; a settled
+    // forest costs nothing. Matrix uploads are narrowed to the index span
+    // written since the last flush, unless a whole-buffer upload is pending
+    // (rebuild), which a narrower range would otherwise cancel.
+    this.active = new Set();
+    this.dirty = new Map();    // mesh → [lo, hi] instance indices written
+    this.fullUpload = new Set();
+    for (const m of [this.leaf, this.cone, this.tuft, this.rock]) m.instanceMatrix.onUpload(() => this.fullUpload.delete(m));
     this.rebuild();
   }
 
@@ -485,6 +628,13 @@ export class Forest {
   rebuild() {
     const t = this.terrain, ids = t.terrainIds, res = t.res, cell = t.cell;
     this.items.length = 0;
+    this.byCell.clear();
+    this.clearedCells.clear();
+    this.active.clear();       // the old items' indices are about to be reused
+    this.dirty.clear();
+    // Scars carry over (same grid, same cells): a relief toggle keeps bare
+    // cells bare instead of flashing them full-size until the next refresh.
+    const scar = this.scar;
     const counts = { leaf: 0, cone: 0, tuft: 0, rock: 0 };
     if (ids) {
       // Budget: keep every world under the instance cap by thinning uniformly
@@ -509,10 +659,15 @@ export class Forest {
           // Trees lean a little; grass and rocks sit square.
           const lean = kind === "leaf" || kind === "cone" ? 0.16 : 0;
           const tx = (hash2(k, salt + 700 + i) - 0.5) * lean, tz = (hash2(k, salt + 800 + i) - 0.5) * lean;
-          this.items.push({ mesh, index, kind, cell: k, x, z, rot, tx, tz, base });
+          const bare = scar && kind !== "rock" ? scar[k] : 0;
+          const sc = bare ? base * BARE : base;
+          const item = { mesh, index, kind, cell: k, x, z, rot, tx, tz, base, bare, cleared: false, sc, to: sc, from: sc, p: 1 };
+          this.items.push(item);
+          const list = this.byCell.get(k);
+          if (list) list.push(item); else this.byCell.set(k, [item]);
           p.set(x, t.heightAt(x, z), z);
           q.setFromEuler(e.set(tx, rot, tz));
-          s.set(base, base, base);
+          s.set(sc, sc, sc);
           mesh.setMatrixAt(index, m.compose(p, q, s));
           c.setHex(colour).offsetHSL((hash2(k, salt + 900 + i) - 0.5) * 0.05, (hash2(k, salt + 1000 + i) - 0.5) * 0.18, (hash2(k, salt + 600 + i) - 0.5) * 0.14);
           mesh.setColorAt(index, c);
@@ -525,7 +680,7 @@ export class Forest {
         const rocks = ROCKS[ids[k]];
         if (rocks) plant(k, cx, cy, rocks, "rock", 0x6e6a70, 0.4, 9);
         const tufts = TUFTS[ids[k]];
-        if (tufts) plant(k, cx, cy, tufts, "tuft", TUFT_COLOR[ids[k]], 0.42, 11, keepTuft);
+        if (tufts) plant(k, cx, cy, tufts, "tuft", TUFT_COLOR[ids[k]], TUFT_HEIGHT, 11, keepTuft);
       }
     }
     this.leaf.count = Math.min(counts.leaf, this.max);
@@ -533,15 +688,127 @@ export class Forest {
     this.tuft.count = Math.min(counts.tuft, this.max);
     this.rock.count = Math.min(counts.rock, this.max);
     for (const mesh of [this.leaf, this.cone, this.tuft, this.rock]) {
+      mesh.instanceMatrix.clearUpdateRanges();
       mesh.instanceMatrix.needsUpdate = true;
+      this.fullUpload.add(mesh);
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
-    this.scar = null;
+    if (this.clearings.length) this.setClearings(this.clearings, true);
+  }
+
+  /** Scale an item should settle at: cleared ? 0 : bare ? 0.12·base : base. */
+  _target(it) { return it.cleared ? 0 : it.bare && it.kind !== "rock" ? it.base * BARE : it.base; }
+
+  /** Write one item's matrix at its drawn scale `it.sc` and widen its mesh's upload span. */
+  _place(it) {
+    const sc = it.sc;
+    _fp.set(it.x, this.terrain.heightAt(it.x, it.z), it.z);
+    _fq.setFromEuler(_fe.set(it.tx, it.rot, it.tz));
+    _fs.set(sc, sc, sc);
+    it.mesh.setMatrixAt(it.index, _fm.compose(_fp, _fq, _fs));
+    const span = this.dirty.get(it.mesh);
+    if (!span) this.dirty.set(it.mesh, [it.index, it.index]);
+    else { if (it.index < span[0]) span[0] = it.index; if (it.index > span[1]) span[1] = it.index; }
+  }
+
+  /** Mark the written spans for upload (one range per mesh). */
+  _flush() {
+    for (const [mesh, [lo, hi]] of this.dirty) {
+      const a = mesh.instanceMatrix;
+      // A hidden forest never uploads: stop stacking ranges and send it whole.
+      if (a.updateRanges.length > 64) { a.clearUpdateRanges(); this.fullUpload.add(mesh); }
+      if (!this.fullUpload.has(mesh)) a.addUpdateRange(lo * 16, (hi - lo + 1) * 16);
+      a.needsUpdate = true;
+    }
+    this.dirty.clear();
+  }
+
+  /**
+   * An item's bare/cleared state changed: `snap` seats it at the new target
+   * at once (rebuilds, time jumps, first refresh); otherwise it eases there
+   * from wherever it stands — mid-transition included — as `update` runs.
+   */
+  _retarget(it, snap) {
+    const to = this._target(it);
+    if (snap || to === it.sc) {
+      this.active.delete(it);
+      it.to = it.sc = to; it.p = 1;
+      if (snap) this._place(it);
+      return;
+    }
+    if (to === it.to) return;
+    it.from = it.sc; it.to = to; it.p = 0;
+    this.active.add(it);
+  }
+
+  /**
+   * Advance the transitions by `dt` wall seconds and `dTicks` sim ticks (see
+   * TRANSITION_TICKS for the pace). Pass `dt = Infinity` to finish them now
+   * (reduced motion). Eases out like the huts' grow-in.
+   */
+  update(dt = 0, dTicks = 0) {
+    if (!this.active.size) return;
+    const k = Math.min(dt / TRANSITION_MIN_S, Math.max(dt / TRANSITION_MAX_S, dTicks / TRANSITION_TICKS));
+    if (!(k > 0)) return;
+    for (const it of this.active) {
+      it.p = Math.min(1, it.p + k);
+      it.sc = it.p >= 1 ? it.to : it.from + (it.to - it.from) * (1 - (1 - it.p) ** 3);
+      this._place(it);
+      if (it.p >= 1) this.active.delete(it);
+    }
+    this._flush();
+  }
+
+  /** Finish every transition now. */
+  settle() { this.update(Infinity); }
+
+  /**
+   * Keep trees, grass and rocks off village footprints: `circles` is
+   * `[{x, y, r}]` in world units. Only cells under the old or new clearings
+   * are revisited, so calling this whenever a village appears or moves is cheap.
+   * Trees ease out of (and back into) a clearing; `snap` re-seats every item
+   * under the old and new clearings at once (rebuilds and time jumps).
+   */
+  setClearings(circles, snap = false) {
+    this.clearings = circles;
+    if (!this.items.length) return;
+    const { res, cell } = this.terrain;
+    const cells = new Set();
+    for (const c of circles) {
+      const r = c.r + cell;
+      const i0 = Math.floor((c.x - r) / cell), i1 = Math.floor((c.x + r) / cell);
+      const j0 = Math.floor((c.y - r) / cell), j1 = Math.floor((c.y + r) / cell);
+      for (let j = Math.max(0, j0); j <= Math.min(res - 1, j1); j++) {
+        for (let i = Math.max(0, i0); i <= Math.min(res - 1, i1); i++) cells.add(j * res + i);
+      }
+    }
+    const touched = new Set(cells);
+    for (const k of this.clearedCells) touched.add(k);
+    for (const k of touched) {
+      const list = this.byCell.get(k);
+      if (!list) continue;
+      for (const it of list) {
+        let cleared = false;
+        if (cells.has(k)) {
+          for (const c of circles) {
+            const dx = it.x - c.x, dz = it.z - c.y;
+            if (dx * dx + dz * dz < c.r * c.r) { cleared = true; break; }
+          }
+        }
+        if (cleared === it.cleared && !snap) continue;
+        it.cleared = cleared;
+        this._retarget(it, snap);
+      }
+    }
+    this._flush();
+    this.clearedCells = cells;
   }
 
   /** Shrink trees on cells the biome has scarred bare (succession/pollution),
-   *  restore them as the cell greens again. Cheap: only cells that flipped. */
-  refresh(rgba) {
+   *  restore them as the cell greens again. Cheap: only cells that flipped,
+   *  eased like a clearing; the first refresh after a (re)build and `snap`
+   *  (a time jump) seat them at once. */
+  refresh(rgba, snap = false) {
     if (!this.items.length) return;
     const res = this.terrain.res, n = res * res;
     const scar = new Uint8Array(n);
@@ -550,20 +817,14 @@ export class Forest {
       scar[k] = r > g * 1.05 ? 1 : 0;   // browner than green: bare earth / pioneer brown / pollution smudge
     }
     const prev = this.scar;
-    const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(), e = new THREE.Euler();
-    let dirty = false;
     for (const it of this.items) {
       if (it.kind === "rock") continue;
       const bare = scar[it.cell];
       if (prev && prev[it.cell] === bare) continue;
-      const sc = bare ? it.base * 0.12 : it.base;
-      p.set(it.x, this.terrain.heightAt(it.x, it.z), it.z);
-      q.setFromEuler(e.set(it.tx, it.rot, it.tz));
-      s.set(sc, sc, sc);
-      it.mesh.setMatrixAt(it.index, m.compose(p, q, s));
-      dirty = true;
+      it.bare = bare;
+      this._retarget(it, snap || !prev);
     }
-    if (dirty) for (const mesh of [this.leaf, this.cone, this.tuft]) mesh.instanceMatrix.needsUpdate = true;
+    this._flush();
     this.scar = scar;
   }
 
