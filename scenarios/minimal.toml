@@ -4,7 +4,7 @@
 name = "minimal"
 seed = 12345
 # Pin the cap so the golden-hash determinism test stays fast and stable.
-max_population = 2000
+max_population = 2500
 
 [[agents]]
 count = 200

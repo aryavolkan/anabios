@@ -25,16 +25,15 @@
 # half the founder count; founded over four sites, all three classes
 # survive on 8/8.
 #
-# `max_share` on every spec: each `archetype = "grazer"` line below gets its
-# own fresh species id, so without a per-lineage cap the three classes race
-# for the ONE shared `max_population` — first-come, whichever class breeds up
-# to the cap first sterilizes the other two for the rest of the run (the same
-# global-cap effect documented on `AgentSpec::max_share` and demonstrated in
-# riverlands.toml). Measured on the territory measurement probe
-# (docs/superpowers/specs/2026-09-25-territory-habitat-collision-findings.md):
-# every one of 8 seeds collapsed to a single class at alive ≈ max_population,
-# and Air (fewest founders) never survived. Shares below leave headroom for
-# all three (0.45 + 0.35 + 0.20 = 1.0, roughly the founder-count ratio).
+# No `max_share`, and a `max_population` that never binds (2026-09-29): the
+# three classes used to race for one shared cap — whichever bred up to it
+# first sterilized the other two, so every seed collapsed to a single class
+# at alive ≈ max_population and per-lineage shares (0.45/0.35/0.20) had to
+# reserve room. Food limits them now: with the cap lifted the world peaks at
+# 956 (tick 2800) and holds 800-950 to tick 5000 with Land 395 / Water 333 /
+# Air 228 at the peak, so the 1500 cap is a safety budget 1.5x above the
+# food-limited peak and the shares are gone (see docs/scenarios.md,
+# "Carrying capacity").
 #
 # Opt-out: `sexual_dimorphism_enabled = false`. This is the one curated
 # world that opts out of a default-on subsystem, because dimorphism's female
@@ -49,12 +48,12 @@
 # knowledge requires it, `territory_enabled` and `conserve_goods_on_death`):
 # only dimorphism off lets Air breed (to its 300 cap); disease, disasters and
 # basic needs off each leave Air at zero births. The validation sweep with
-# this opt-out and four Land herds (8 seeds x 5000 ticks): all three classes
-# alive on 8/8 seeds and all three within 1% of their `max_share` caps
-# (675/525/300) on 5/8 (seed 0 ends with Water at 52, seed 2 with Land at
-# 317, seed 4 with Land at 654), zero habitat violations, territory
-# formation on 8/8. Dimorphism itself is exercised on `tribes`. Otherwise
-# the full stack runs (see docs/scenarios.md).
+# this opt-out and four Land herds (8 seeds x 5000 ticks, under the shares
+# since removed): all three classes alive on 8/8 seeds and all three within
+# 1% of their then share caps (675/525/300) on 5/8 (seed 0 ends with Water
+# at 52, seed 2 with Land at 317, seed 4 with Land at 654), zero habitat
+# violations, territory formation on 8/8. Dimorphism itself is exercised on
+# `tribes`. Otherwise the full stack runs (see docs/scenarios.md).
 #
 # seed = 4 stays the showcase seed (in that sweep all three classes are
 # alive at t5000: Water and Air at their caps, Land at 654 of 675). The
@@ -75,7 +74,6 @@ sea_level = 0.45
 count = 150
 archetype = "grazer"
 placement = { kind = "habitat", herds = 4, radius = 80.0 }
-max_share = 0.45
 [agents.traits]
 locomotion = 0.5
 size = 0.5
@@ -86,7 +84,6 @@ reproduction_threshold = 0.5
 count = 100
 archetype = "grazer"
 placement = { kind = "near_spec", spec = 0, radius = 160.0 }
-max_share = 0.35
 [agents.traits]
 locomotion = 0.1
 size = 0.4
@@ -97,7 +94,6 @@ reproduction_threshold = 0.5
 count = 60
 archetype = "grazer"
 placement = { kind = "near_spec", spec = 0, radius = 120.0 }
-max_share = 0.20
 [agents.traits]
 locomotion = 0.9
 size = 0.3

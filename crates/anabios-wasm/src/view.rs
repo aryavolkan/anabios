@@ -14,8 +14,10 @@ use anabios_core::affect::arousal;
 use anabios_core::agent::AGENT_NULL;
 use anabios_core::biome::{cell_color, BiomeCell, TerrainType, SEA_LEVEL};
 use anabios_core::codex::{CodexEvent, EventType};
+use anabios_core::collision::live_body_radius;
 use anabios_core::culture::{SKILL_CHANNEL, TECH_CHANNEL};
 use anabios_core::genome::{GenomeSlot, GENOME_LEN, SLOT_NAMES};
+use anabios_core::growth::body_scale_of;
 use anabios_core::invention::{
     bit, for_each_set_bit, held_mask, level, tech_era, INVENTIONS, INVENTION_CHANNEL_BASE,
     INVENTION_COUNT,
@@ -32,11 +34,17 @@ use serde_json::{json, Value};
 
 /// Floats per agent in [`fill_agents`]:
 /// `[id, x, y, rot, size, diet, hue, sat, val, dialect_hue, energy,
-///   species_id, mood, flags, arousal, infection]`.
+///   species_id, mood, flags, arousal, infection, body]`.
 ///
+/// `rot` is the persistent heading's angle when `turning_enabled` (a resting
+/// body keeps facing where it last went), else the velocity's (0 when still).
 /// `flags` bits: 0 = livestock, 1 = asleep, 2 = male (only meaningful when
-/// the matching scenario flag is on — see [`world_flags`]).
-pub const AGENT_STRIDE: usize = 16;
+/// the matching scenario flag is on — see [`world_flags`]). `body` is the
+/// physical collision diameter in world units (`2 · live_body_radius`, so a
+/// juvenile's under `growth_enabled`): what the atlas clamps a close-up
+/// figure to, and what an overlap audit compares positions against —
+/// `size` is a viewer scale and cannot be inverted to it once growth is on.
+pub const AGENT_STRIDE: usize = 17;
 
 /// Floats per line segment in [`fill_segments`]: `[x1, y1, x2, y2, hue]`.
 pub const SEGMENT_STRIDE: usize = 5;
@@ -118,6 +126,19 @@ pub fn dialect_hue(meme: &[f32]) -> f32 {
     (acc / wsum).rem_euclid(1.0)
 }
 
+/// Viewer body size of agent `i`: `0.5 + 2.5 · Size` (the Godot bridge's
+/// `alive_sizes` scale), times the growth body scale when `growth_enabled`
+/// so juveniles draw small; with growth off exactly the adult value.
+fn view_size(w: &World, i: usize) -> f32 {
+    let g = &w.agents.genome[i];
+    let adult = 0.5 + 2.5 * g.get(GenomeSlot::Size);
+    if w.growth_enabled {
+        adult * body_scale_of(true, w.agents.age[i], g)
+    } else {
+        adult
+    }
+}
+
 /// Fill `out` with [`AGENT_STRIDE`] floats per alive agent, ascending id
 /// order. Returns the agent count.
 pub fn fill_agents(w: &World, out: &mut Vec<f32>) -> usize {
@@ -129,7 +150,14 @@ pub fn fill_agents(w: &World, out: &mut Vec<f32>) -> usize {
         let p = w.agents.position[i];
         let v = w.agents.velocity[i];
         let g = &w.agents.genome[i];
-        let rot = if v.length_squared() > 1e-6 { v.y.atan2(v.x) } else { 0.0 };
+        let rot = if w.turning_enabled {
+            let h = w.agents.heading[i];
+            h.y.atan2(h.x)
+        } else if v.length_squared() > 1e-6 {
+            v.y.atan2(v.x)
+        } else {
+            0.0
+        };
         let mut flags = 0u32;
         if w.domestication_enabled && w.agents.livestock_of[i] != AGENT_NULL {
             flags |= 1;
@@ -145,7 +173,7 @@ pub fn fill_agents(w: &World, out: &mut Vec<f32>) -> usize {
             p.x,
             p.y,
             rot,
-            0.5 + 2.5 * g.get(GenomeSlot::Size),
+            view_size(w, i),
             effective_diet_carnivory(&w.agents.modules[i]).clamp(0.0, 1.0),
             g.get(GenomeSlot::ColorHue),
             g.get(GenomeSlot::ColorSat).clamp(0.4, 1.0),
@@ -157,6 +185,7 @@ pub fn fill_agents(w: &World, out: &mut Vec<f32>) -> usize {
             flags as f32,
             arousal(&w.agents.affect[i]),
             w.agents.infection[i],
+            2.0 * live_body_radius(g, w.agents.age[i], w.growth_enabled),
         ]);
     }
     n
@@ -421,7 +450,7 @@ pub fn agent_json(w: &World, id: u32, labels: &BTreeMap<u32, String>) -> String 
         "lineage_id": w.agents.lineage_id[i],
         "species_id": sid,
         "species": labels.get(&sid).cloned().unwrap_or_else(|| format!("species {sid}")),
-        "size": 0.5 + 2.5 * g.get(GenomeSlot::Size),
+        "size": view_size(w, i),
         "diet_carnivory": effective_diet_carnivory(&w.agents.modules[i]),
         "skill": meme[SKILL_CHANNEL],
         "technique": meme[TECH_CHANNEL],
@@ -592,7 +621,46 @@ mod tests {
             assert!((0.0..=w.world_size).contains(&row[2]), "y {}", row[2]);
             assert!((0.0..=1.0).contains(&row[5]), "diet {}", row[5]);
             assert!((0.0..1.0).contains(&row[9]), "dialect hue {}", row[9]);
+            // Physical diameter: twice the live body radius, never above the
+            // adult's and never below the newborn's.
+            let g = &w.agents.genome[id as usize];
+            let adult = 2.0 * anabios_core::collision::body_radius(g);
+            assert!(row[16] > 0.0 && row[16] <= adult + 1e-6, "body {} vs adult {adult}", row[16]);
+            let expect = 2.0 * live_body_radius(g, w.agents.age[id as usize], w.growth_enabled);
+            assert_eq!(row[16], expect, "body column is the live diameter");
         }
+    }
+
+    /// Growth: with the flag on a newborn's exported size (agent buffer and
+    /// inspector JSON alike) is its adult size times the juvenile body scale,
+    /// so the atlas draws it small; with the flag off it is the bare adult
+    /// value whatever the age.
+    #[test]
+    fn juveniles_export_a_grown_size_only_when_growth_is_on() {
+        use anabios_core::growth::{maturity_ticks, JUVENILE_BODY};
+        let (s, mut w) = world("minimal", 1);
+        let labels = species_labels(&s);
+        let id = w.agents.iter_alive().next().expect("a founder");
+        let i = id as usize;
+        let adult = 0.5 + 2.5 * w.agents.genome[i].get(GenomeSlot::Size);
+        let exported = |w: &World| -> (f32, f32) {
+            let mut out = Vec::new();
+            fill_agents(w, &mut out);
+            let row = out.chunks(AGENT_STRIDE).find(|r| r[0] as u32 == id).expect("row");
+            let v: Value = serde_json::from_str(&agent_json(w, id, &labels)).unwrap();
+            (row[4], v["size"].as_f64().unwrap() as f32)
+        };
+        w.growth_enabled = true;
+        w.agents.age[i] = 0;
+        let (buf, json) = exported(&w);
+        let expected = adult * JUVENILE_BODY;
+        assert!((buf - expected).abs() < 1e-5, "newborn size {buf} vs {expected}");
+        assert_eq!(buf, json, "buffer and inspector agree");
+        w.agents.age[i] = maturity_ticks(anabios_core::age::lifespan_of(&w.agents.genome[i]));
+        assert_eq!(exported(&w), (adult, adult), "grown: the adult size");
+        w.growth_enabled = false;
+        w.agents.age[i] = 0;
+        assert_eq!(exported(&w), (adult, adult), "flag off: age unread");
     }
 
     #[test]

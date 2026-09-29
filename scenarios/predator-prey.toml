@@ -25,7 +25,6 @@ moisture_bias = -0.1
 count = 60
 archetype = "grazer"
 placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
-max_share = 0.25
 [agents.traits]
 size = 0.5
 lifespan_bias = 1.0
@@ -34,7 +33,6 @@ lifespan_bias = 1.0
 count = 10
 archetype = "stalker"
 placement = { kind = "cluster", center_x = 512.0, center_y = 512.0, radius = 120.0 }
-max_share = 0.08
 [agents.traits]
 size = 0.7
 lifespan_bias = 1.0
@@ -43,7 +41,6 @@ lifespan_bias = 1.0
 count = 80
 archetype = "mammal_grazer"
 placement = { kind = "cluster", center_x = 340.0, center_y = 300.0, radius = 70.0 }
-max_share = 0.2
 [agents.traits]
 size = 0.4
 lifespan_bias = 1.0
@@ -61,7 +58,6 @@ mutation_rate = 0.3
 count = 30
 archetype = "mammal_pursuer"
 placement = { kind = "near_spec", spec = 2, radius = 50.0 }
-max_share = 0.1
 [agents.traits]
 size = 0.65
 lifespan_bias = 1.0
@@ -72,7 +68,6 @@ reproduction_threshold = 0.4
 count = 80
 archetype = "reptile_basker"
 placement = { kind = "cluster", center_x = 684.0, center_y = 340.0, radius = 70.0 }
-max_share = 0.2
 [agents.traits]
 size = 0.55
 lifespan_bias = 1.0
@@ -82,7 +77,6 @@ env_affinity = 0.8
 count = 24
 archetype = "reptile_ambusher"
 placement = { kind = "cluster", center_x = 684.0, center_y = 512.0, radius = 50.0 }
-max_share = 0.06
 [agents.traits]
 size = 0.7
 lifespan_bias = 1.0
@@ -91,7 +85,6 @@ env_affinity = 0.8
 [[agents]]
 count = 150
 placement = { kind = "uniform" }
-max_share = 0.15
 [agents.traits]
 lifespan_bias = 0.6
 reproduction_threshold = 0.5

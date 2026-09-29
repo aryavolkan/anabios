@@ -180,30 +180,42 @@ function stallGeometry() {
 // physical diameter as the camera closes in, never below it (bodies never
 // look more overlapped than the physics actually is) and never above the
 // readable size (distant herds stay legible).
-const BODY_R_BASE = 0.4, BODY_R_SIZE = 0.35;
-// crates/anabios-wasm/src/view.rs encodes AGENT.SIZE as `0.5 + 2.5 · Size`
-// (not the raw [0,1] gene) — invert that to recover Size before deriving the
-// physical radius.
-const SIZE_ENC_BASE = 0.5, SIZE_ENC_SPAN = 2.5;
-
-/** Physical body diameter (world units) for an AGENT.SIZE column value. */
-function physicalDiameter(sizeVal) {
-  const gene = (sizeVal - SIZE_ENC_BASE) / SIZE_ENC_SPAN;
-  return 2 * (BODY_R_BASE + BODY_R_SIZE * gene);
-}
+//
+// The clamp is expressed in *footprint* units, not raw instance scale: a
+// figure at scale 1 is ~2 units long (grazer) to ~2.7 (hunter) nose to tail
+// (`figureFootprint`), so the scale at which its drawn body equals the
+// physical diameter is `physDiam / footprint`, not `physDiam`. Clamping the
+// raw scale to the diameter drew every close-up body about twice its
+// physical size and a resolved herd still read as a pile.
+// The physical diameter itself rides in the row (`AGENT.BODY`, the sim's
+// `2 · live_body_radius`): a juvenile's under the sim's `growth_enabled`
+// knob, where the display size can no longer be inverted to it.
 
 /**
- * Pixels a body should stay legible at, at minimum, regardless of camera
- * distance — chosen so the default framing (a whole herd) still reads clearly
- * while, at close range, two bodies 1.1 units apart (two default-size agents'
- * physical radii touching) no longer overlap on screen.
+ * Pixels of instance scale a body keeps at minimum, regardless of camera
+ * distance — chosen so the default framing (a whole herd) still reads
+ * clearly. Below it the physical floor takes over: from roughly 27 px per
+ * world unit on, a figure is drawn exactly its physical diameter long, so two
+ * bodies 1.15 units apart (two default-size agents touching) meet nose to
+ * tail on screen instead of overlapping.
  */
 const LEGIBLE_PX = 14;
 
-/** Draw scale: readable far away, clamped down to the physical diameter as the
- *  camera closes in, but never smaller than it or larger than `readable`. */
-export function bodyScale(readable, physDiam, legible) {
-  return Math.max(physDiam, Math.min(readable, legible));
+/** Draw scale: readable far away, clamped down to the physical body as the
+ *  camera closes in, but never smaller than it or larger than `readable`.
+ *  `physScale` is the instance scale at which the figure's footprint equals
+ *  its physical diameter (`AGENT.BODY / figureFootprint(geo)`). */
+export function bodyScale(readable, physScale, legible) {
+  return Math.max(physScale, Math.min(readable, legible));
+}
+
+/** Horizontal extent (world units at scale 1) of a figure geometry: the larger
+ *  of its length (x, the facing axis) and width (z), so a drawn body scaled
+ *  by `physDiam / footprint` never reaches past its physical disc. */
+export function figureFootprint(geometry) {
+  geometry.computeBoundingBox();
+  const b = geometry.boundingBox;
+  return Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
 }
 
 export const COLOR_MODES = ["species", "diet", "dialect", "energy", "mood", "arousal", "infection"];
@@ -220,6 +232,8 @@ export class Agents {
     this.hunters = new THREE.InstancedMesh(withGait(hunterGeometry()), gaitMaterial(this.uniforms), max);
     /** Both figure meshes; each carries its own `userData.ids` (instance → agent id) for picking. */
     this.meshes = [this.grazers, this.hunters];
+    /** Per-kind footprint at scale 1 (see `figureFootprint`), indexed like `meshes`. */
+    this.footprint = this.meshes.map((m) => figureFootprint(m.geometry));
     for (const m of this.meshes) {
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.count = 0;
@@ -296,8 +310,9 @@ export class Agents {
     for (let k = 0; k < n; k++) {
       const o = k * s, x = d[o + AGENT.X], y = d[o + AGENT.Y];
       const h = heightAt(x, y);
+      const kind = d[o + AGENT.DIET] >= 0.5 ? 1 : 0;
       const readable = this.baseScale * (0.55 + 0.45 * d[o + AGENT.SIZE]);
-      const sc = unitsPerPixel > 0 ? bodyScale(readable, physicalDiameter(d[o + AGENT.SIZE]), legible) : readable;
+      const sc = unitsPerPixel > 0 ? bodyScale(readable, d[o + AGENT.BODY] / this.footprint[kind], legible) : readable;
       const id = d[o + AGENT.ID] | 0;
       const rot = d[o + AGENT.ROT];
       const asleep = (d[o + AGENT.FLAGS] & AGENT_FLAG.ASLEEP) !== 0;
@@ -305,7 +320,6 @@ export class Agents {
       _q.setFromAxisAngle(Y_AXIS, -rot);
       _s.set(sc, asleep ? sc * 0.6 : sc, sc);
       _m.compose(_p, _q, _s);
-      const kind = d[o + AGENT.DIET] >= 0.5 ? 1 : 0;
       const mesh = this.meshes[kind], i = counts[kind]++;
       mesh.setMatrixAt(i, _m);
       mesh.setColorAt(i, _c.setHex(this.color(d, o, live)));
@@ -327,6 +341,13 @@ export class Agents {
       mesh.instanceMatrix.needsUpdate = true;
       mesh.geometry.attributes.aGait.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      // three caches an InstancedMesh's bounding sphere the first time it is
+      // needed and never refreshes it as instance matrices change; here it was
+      // computed over zero instances (an empty sphere) before the first world
+      // was attached, so `InstancedMesh.raycast` rejected every pick and
+      // clicking an agent never opened its card. Drop the cache each update:
+      // the next raycast (a click) recomputes it over the live instances.
+      mesh.boundingSphere = null;
     }
     if (this.selectedPos) {
       this.marker.position.copy(this.selectedPos).setY(this.selectedPos.y + 0.15);

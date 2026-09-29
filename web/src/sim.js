@@ -11,6 +11,7 @@
 export const AGENT = Object.freeze({
   ID: 0, X: 1, Y: 2, ROT: 3, SIZE: 4, DIET: 5, HUE: 6, SAT: 7, VAL: 8,
   DIALECT_HUE: 9, ENERGY: 10, SPECIES: 11, MOOD: 12, FLAGS: 13, AROUSAL: 14, INFECTION: 15,
+  BODY: 16, // physical collision diameter (world units) — a juvenile's under growth
 });
 /** Bits of an agent row's FLAGS column. */
 export const AGENT_FLAG = Object.freeze({ LIVESTOCK: 1, ASLEEP: 2, MALE: 4 });

@@ -261,10 +261,17 @@ pub(super) fn detect_structured_signaling(world: &mut World) {
             let (dx, dy) = (d.x, d.y);
             let len = (dx * dx + dy * dy).sqrt().max(1e-6);
             let (ux, uy) = (dx / len, dy / len);
-            let desired = world.desired_direction[j];
-            let align_now = desired.x * ux + desired.y * uy;
-            let prev =
+            let mut desired = world.desired_direction[j];
+            let mut prev =
                 world.prev_desired_direction.get(j).copied().unwrap_or(crate::prelude::Vec2::ZERO);
+            // Gait folds a speed fraction into the vector's length; the
+            // alignment thresholds below are on headings, so compare unit
+            // vectors when it is on (skipped when off: byte-identical).
+            if world.gait_enabled {
+                desired = crate::gait::heading(desired);
+                prev = crate::gait::heading(prev);
+            }
+            let align_now = desired.x * ux + desired.y * uy;
             let align_prev = prev.x * ux + prev.y * uy;
             if align_now > 0.5 && align_now - align_prev >= 0.5 {
                 converging += 1;

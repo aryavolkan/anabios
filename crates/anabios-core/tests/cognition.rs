@@ -167,13 +167,22 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-27: the collision resolve now runs up to eight Jacobi
     // passes with a per-pass hash rebuild, a coastline slide and a settle exit
     // (was two fixed passes); every full-stack trajectory moves from tick 1.
-    // Refreshed 2026-09-29 (projectile ladder, FORMAT_VERSION 44→45): Throwing
-    // Stones appended (id 22), Hafted Spears re-rooted onto it, MEME_CHANNELS
-    // widened 32→33 — one lane per agent, so every tick's layout hash moves;
-    // with `inventions_enabled` on, each Communicator birth also jitters one
-    // more lane and the discovery table gains an era-1 candidate, so the
-    // trajectory moves too (flag-off worlds draw no extra RNG).
-    &[(0, 0xb3990aab26f453e6), (100, 0x3d25c0361ca3ae68), (300, 0xd55782d9dad49c59)];
+    // Re-pinned 2026-09-28: a newborn is placed clear of both parents' bodies
+    // (collision layer on) instead of on their midpoint; every full-stack
+    // trajectory moves from its first birth.
+    // Refreshed 2026-09-29: the collision audit (swept moves, newborn placement,
+    // the hub and water pulls), the realism layers (gait, growth, turning
+    // inertia, gestation, the chase and its carcass economy) and capacity from
+    // food (no lineage shares, non-binding caps) — every full-stack trajectory
+    // moved from tick 1; see docs/scenarios.md.
+    // Re-pinned 2026-09-29 on the merge of the projectile ladder (FORMAT_VERSION
+    // 45→46): Throwing Stones appended (id 22), Hafted Spears re-rooted onto it,
+    // MEME_CHANNELS 32→33 — one lane per agent moves every layout hash, and
+    // with `inventions_enabled` on each Communicator birth jitters one more
+    // lane and the discovery table gains an era-1 candidate. Ignored by
+    // default (golden validation is off); regenerated on the merged tree with
+    // `UPDATE_HASHES=1 … -- --ignored golden_hashes trajectory_is_pinned`.
+    &[(0, 0x06be2d75627792a5), (100, 0x00d5648403139300), (300, 0xf2613d86f1ff240b)];
 
 #[test]
 #[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
@@ -193,6 +202,14 @@ fn cognitive_scenario_produces_invention_and_practice_events() {
     // and a lower cap only delays it (tick 1159 under a 500 cap set after
     // `instantiate`, 2310 under one set before it, 947 uncapped).
     let mut w = s.instantiate();
+    // Growth (2026-09-29) is off here: `tribes` seeds its founders at age 0
+    // with `lifespan_bias = 1.0`, so under the knob nobody breeds before tick
+    // 750 and the innovator lineage stays at its 30 founders for that long
+    // (about 80-110 afterwards, against 90-175 from tick 250 without it);
+    // discovery is a 3e-5-per-agent-tick draw, so the first climbed
+    // invention moves past the 5000-tick window. The claim under test is
+    // the cognitive layer's, and the knob's own tests pin growth.
+    w.growth_enabled = false;
     let seeded = common::inventions_held(&w);
     let mut saw_invention = false;
     let mut saw_practice = false;

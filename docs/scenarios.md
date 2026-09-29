@@ -10,12 +10,29 @@ split.) To opt a subsystem out for your own run, copy a scenario and set its
 `*_enabled` knob to `false` (or `season_period = 0`). Opting out is meant to
 be a no-op at the engine layer; that is pinned per subsystem by its own
 flag-off tests (for example `tests/disease.rs::flag_off_is_noop`,
-`territory::tests::step_is_a_noop_with_the_flag_off`), and for two whole
+`territory::tests::step_is_a_noop_with_the_flag_off`, and for turning
+inertia `tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column`),
+and for two whole
 worlds by the flag-off trajectory guards in `tests/determinism.rs` (opt-in,
 `--ignored`, since 2026-09-29), which
 pin `minimal` and `grand-theater` as they were before the schema flip
 (inline fixtures: `minimal` with every knob off, `grand-theater` with only
 its own pre-flip flags on).
+
+`gestation_enabled` (default on, like the other feature knobs) makes a birth
+take time: a fertile pair conceives where it would have bred — same
+eligibility, mate choice, energy payment and RNG draws — and the mother
+carries the litter for `reproduce::GESTATION_TICKS` (80 ticks, ~3% of a
+mid lifespan), paying `GESTATION_UPKEEP` (+25%) more basal metabolism,
+moving at `GESTATION_SPEED` (0.85), unable to conceive again and losing the
+litter if she dies; at term she delivers `reproduce::litter_size` children
+(one below Size 0.5, two from 0.5, three at Size 1.0, sharing the one spawn
+energy the parents paid) beside herself, placed and settled like any other
+newborn. With the collision layer on they are placed clear of her body.
+Every sibling is drawn at conception, so a litter of *n* draws *n* times
+what an instant birth draws, all at conception. Set it `false` to restore
+the instant birth; the flag-off path is pinned by the reproduce unit tests
+and the two flag-off trajectory guards.
 
 Four knobs stay off by default everywhere as **experiment levers**, not
 curated-world features: `env_period` (DIT environmental-variability sweep),
@@ -24,6 +41,50 @@ curated-world features: `env_period` (DIT environmental-variability sweep),
 superseded by the current material economy). Three worlds below turn the
 first two on deliberately; none turns on the latter two — see "Retired
 experiments".
+
+One knob changes how every agent moves rather than adding a subsystem:
+`gait_enabled` (on by default like the rest; `crates/anabios-core/src/gait.rs`).
+With it an agent's speed follows its urgency instead of always being its
+Locomotor maximum: fleeing, fighting and hunting agents sprint (a carnivore
+carrying a weapon and closing on another species is hunting), the seeking
+moods walk (0.6×), a content grazer ambles (0.3×) — scaled down further by how
+hard its program pushes — and the move cost carries a superlinear `1 + frac²`
+factor, so a sprint costs twice per unit distance what a crawl does. Measured
+on `predator-prey` (500-agent cap, ticks 300–350, `tests/gait.rs`): the mean
+step over alive agents drops from 1.98 to 0.81 world units, and the share of
+agent-ticks at 90% or more of the agent's top speed from 85% to 14% — the
+fleeing prey and hunting pursuers. Opting out is pinned as a no-op by the
+`gait_*` unit tests in `tick.rs` / `integrate.rs` (flag off: unit direction,
+full step, linear move cost) and by the trajectory guards above.
+
+`growth_enabled` (on by default, like the feature knobs; 2026-09-28) adds
+growth and juveniles: an agent is born at about a third of its adult size
+and grows to it over the first 15% of its lifespan — its collision body
+radius, grazing bite, basal metabolism, move cost and (mildly) speed scale
+with the body, and nobody breeds before maturity
+(`crates/anabios-core/src/growth.rs`). Founders start at age 0, so a world's
+first births come after its founders' maturity window (about 480 ticks for
+`minimal`'s `lifespan_bias = 0.6`). Opt out with `growth_enabled = false`;
+the engine default is off, and flag-off is byte-identical
+(`growth::tests::flag_off_is_exactly_the_adult_identity` and the trajectory
+guards above). The knob postdates every row's validation sweep and cost
+figure below; neither has been re-run under it.
+
+`turning_enabled` (on by default, like the feature knobs; 2026-09-29) adds
+turning inertia: each agent keeps a persistent facing
+(`AgentBuffers::heading`) that `decide_all` turns toward the wanted direction
+by at most 0.6 rad per tick at full speed — a reversal takes six ticks — and
+up to four times as sharply when crawling
+(`crates/anabios-core/src/heading.rs`); the turned heading, at the speed the
+gait chose, is what integrate applies. The heading follows the intent, not
+the move the habitat gate, swept contact or resolve end up allowing, so a
+body pressed sideways by a crowd keeps facing where it wants to go, and the
+viewers draw facing from it. Opt out with `turning_enabled = false`; the
+engine default is off, and flag-off is byte-identical
+(`tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column` and
+the trajectory guards above, which moved only by the column's serialized
+bytes). The knob postdates every row's validation sweep and cost figure
+below; neither has been re-run under it.
 
 Every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate →
 200 ticks) and has a `tests/save_load_roundtrip.rs` round-trip test. The cost
@@ -51,13 +112,13 @@ technique, tuned seeds, measured caveats; this table is the index.
 | `speciation.toml` | One herbivore stock seeded as two body-size morphs at the west/east ends, plus a communicator, a scent-marker, a cooperator and a hunter-prey lineage | Speciation from a founder stock (`Divergence`/`Convergence`), dialect formation between the communicator clusters, pheromone territories between the marker clusters, kin cooperation, and the four DIT learning-strategy pairings. Absorbed: divergent, convergent, cooperation, territories, dialects, gene-culture, gene-culture-skill, gene-culture-hunt, gene-culture-alarm. | — | 4242 | 1.4 |
 | `tribes.toml` | Ape-tier omnivore innovators, traditionalists and a stone-tool hunter band among grazer herds, armoured/spined prey and predator packs | Discovery and adoption of inventions (`Discovery`/`Adoption`; the `KnowledgeRatchet` needs Writing, discovered on 0/8 seeds in 5000 ticks), traditions, IQ-tech coevolution, weapons and war (`War`/`WarEnded`), domestication pens (they need Husbandry, likewise 0/8), sexual dimorphism, epidemics (`Epidemic`; `MedContain` needs Medicine, likewise 0/8), the anthropogenic arms race, the affect layer's moods and play, and thirst/sleep. Absorbed: inventions, tool-users, weapons, weapons-arena, weapons-arms-race, war, traditions, cognitive-coevolution, tech-gene-coupling, knowledge-ratchet, domestication, dimorphism, disease, anthro-race, affect-play, affect-seeking, affect-showcase, affect-social, affect-threat, basic-needs. | — | 60623 | 1.7 |
 | `markets.toml` | Four terrain-affinity forager lineages at a biome junction beside five goods-producing grazer lineages | Home-range anchoring and settlements, resource harvesting, bilateral barter at the predetermined trade hubs, and the trade-flow/market events. Absorbed: settlement, biome-trade, geographic-trade, trade-hubs, unilateral-trade (its lever is exercised by an inline fixture in `tests/trade.rs`, not this world). | — | 424242 | 4.3 |
-| `habitat-territories.toml` | Three grazer species differing only in Locomotion (land/water/air), founded together at four shared sites | Locomotion-gated habitat selection, species territories kept apart by collision-aware separation steering, and per-lineage `max_share` stopping the shared population cap from sterilizing the smaller founders. | `sexual_dimorphism_enabled = false`, the only curated opt-out: female mate choice sterilizes the size-0.3 flyers (display 0.39 against a 0.40 bar), so Air never breeds. Founder tuning: Land founds four habitat herds (as one 150-strong herd, Land dwindles on half the seeds) | 4 | 2.9 |
+| `habitat-territories.toml` | Three grazer species differing only in Locomotion (land/water/air), founded together at four shared sites | Locomotion-gated habitat selection and species territories kept apart by collision-aware separation steering; the three classes coexist on food alone (Land 395 / Water 333 / Air 228 at the 956 peak with the cap lifted), so the per-lineage `max_share` that once stopped a binding cap from sterilizing the smaller founders is gone. | `sexual_dimorphism_enabled = false`, the only curated opt-out: female mate choice sterilizes the size-0.3 flyers (display 0.39 against a 0.40 bar), so Air never breeds. Founder tuning: Land founds four habitat herds (as one 150-strong herd, Land dwindles on half the seeds) | 4 | 2.9 |
 | `grand-theater.toml` | Everything-on staged world at the tuned geographic-trade terrain (seed 424242) | Environment, disturbance, gene-culture, economy, conflict and communication all colliding in one shared world — the strongest save/load round-trip guard. | `env_period = 400`, `climate_drift_rate = 0.00005` | 424242 | 8.8 |
 | `out-of-africa-saga.toml` | The grand-theater cast on a human-dispersal geography (climate-driven worldgen) | The showcase cut: era-3 tech (Stone Tools/Fire/Farming/Writing/Husbandry) seeded on the Quarry innovators from tick 0 so downstream tech and on-camera taming emerge without stalling at era 1. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | 7.8 |
 | `out-of-africa-earth.toml` | The saga's founders re-anchored onto a real-Earth elevation/temperature/precipitation map (`world_map = "earth"`) | The same DIT/cognition/war/domestication stack, but the exodus runs through the real African corridors (Sinai/Bab-el-Mandeb, Gibraltar); dispersal is emergent, not scripted. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | 6.6 |
-| `sandbox.toml` | 2048² world, 8k population cap, no staging; seasons slowed to `season_period = 2500` | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | — | 7 | 11.4 |
-| `riverlands.toml` | 4096² self-siting continent: mountains, rain-shadow, a hydrology-carved river network; seasons slowed to `season_period = 3000` | Terrain-aware placement (`kind = "habitat"`/`"near_spec"`) so herds and a persistent predator pack (`max_share` + `mate_seeking`) find water and each other regardless of seed. Absorbed: continental. | — | 7 | 5.9 |
-| `huge-steppe.toml` | 8192² world (biome grid 1024²), 6k population budget; seasons slowed to `season_period = 5000` | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput at the same population budget as the prior largest world. | — | 21 | 12.5 |
+| `sandbox.toml` | 2048² world, a 16k safety cap food never reaches (peak 10,900), no staging; seasons slowed to `season_period = 2500` | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | — | 7 | 11.4 |
+| `riverlands.toml` | 4096² self-siting continent: mountains, rain-shadow, a hydrology-carved river network; seasons slowed to `season_period = 3000` | Terrain-aware placement (`kind = "habitat"`/`"near_spec"`) so herds and a persistent predator pack (`mate_seeking`; the `max_share` ceiling the pack once needed is gone) find water and each other regardless of seed. Absorbed: continental. | — | 7 | 5.9 |
+| `huge-steppe.toml` | 8192² world (biome grid 1024²), a 6k population budget that binds by design (the one such world: its food would carry ~80k); seasons slowed to `season_period = 5000` | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput. | — | 21 | 12.5 |
 
 ## Validation
 
@@ -65,8 +126,9 @@ The consolidation's bar (spec §5): each world's headline detectors fire on at
 least 5 of 8 seeds, and on at least 5 of 8 seeds no founder kind is extinct and
 the population ends above half its founder count — measured with
 `anabios-headless sweep` over seeds 0–7 at 5000 ticks (seeds 0–3 at 2000 ticks
-for `out-of-africa-earth` and `huge-steppe`). Founder counts, `max_share`,
-placement and `max_population` are the levers, plus one documented opt-out
+for `out-of-africa-earth` and `huge-steppe`). Founder counts and placement
+are the levers (`max_share` and a binding `max_population` were, until the
+2026-09-29 carrying-capacity pass below), plus one documented opt-out
 (`habitat-territories` turns sexual dimorphism off; see its row); no engine
 constant moves. Two limits hold wherever the kinds concerned are founded, and
 one kind depends on the world and seed:
@@ -114,6 +176,113 @@ predator-prey showcase deck's seed moved from 14 to 0 in the same change,
 because seed 14 no longer produces the `PopulationCycleDetected` event its
 PopCycle chapter waits on under the new resolve (seed 0 does, at tick 650).
 The other rows date from the consolidation sweep under the two-pass resolve.
+
+The collision audit of 2026-09-28 (every world, 2000 ticks, every tick
+checked for colliding pairs closer than half their gap — the numbers are in
+the pull request that landed it) moved every trajectory again, through five
+changes that together leave no pair closer than half its gap on any world
+and no pair passing through another: every move is swept to its first
+contact and slides along the body it meets (`collision::sweep_moves`; before
+it two agents stepping two body lengths in opposite directions swapped
+through each other tens of thousands of times per world per 2000 ticks); a
+newborn is placed clear of both parents' bodies and, if that spot holds a
+third body, at the nearest free spot instead of on its parents' midpoint
+(births run after the resolve, so every birth was a stacked pair for a
+tick); the trade-hub pull is off inside `HUB_TRADE_RANGE` and fades in
+beyond it (a constant pull to the hub's centre pressed 225 bodies into a
+6-unit radius on `grand-theater`, a pile no bounded resolve can unpack);
+the water pull stops once the agent can already drink where it stands (it
+pinned shoreline crowds against the coast); and the resolve's pass cap rose
+from eight to thirty-two, which a calm tick never reaches. Herds move less
+freely now that bodies cannot walk through one another (the median step on
+`predator-prey` fell from 2.3 to 0.6 units; the fraction of agents moving
+at all is unchanged), and their populations settle slightly lower. The
+validation bar was not re-run for this change.
+
+### Carrying capacity
+
+Until 2026-09-29 `max_population` bound in several curated worlds — the
+population sat on the cap and reproduction skipped, a culled-birth
+bookkeeping rather than a carrying capacity — and `max_share` reserved
+birth slots per lineage to patch what a binding cap did (the fastest
+breeder filled it and no other lineage was ever born again). Food limits
+every world now. Measured with the cap lifted on the merged tree (every
+realism knob on; 1600 ticks for every world, 5000 for the ones still
+climbing at 1600, 4000 for the two large ones), the food-limited peak and
+the cap that now stands 1.5× or more above it:
+
+| World | Food-limited peak (tick) | Course after the peak | Cap now |
+|---|---|---|---|
+| `minimal` | 1614 (3100) | 1250 by 5000 | 2500 (was 2000) |
+| `predator-prey` | 1184 (2600) | 520 by 5000, pursuers 21–91 throughout | 2000 |
+| `speciation` | 479 (2200) | 126 by 5000 | 2000 |
+| `tribes` | 699 (2000) | 370 by 5000 | 1500 |
+| `markets` | 1780 (600) | 300 by 5000 | 3000 (was 2200) |
+| `habitat-territories` | 956 (2800), Land 395 / Water 333 / Air 228 | 800–950 to 5000 | 1500 |
+| `riverlands` | 1619 (4900), pack 45–112 | 1460 at 5000 | 2500 |
+| `out-of-africa-saga` | 1586 (1000) | 1190 at 1600 | 3000 |
+| `grand-theater` | 2065 (600) | 1240 at 1600 | 3500 (was 3000) |
+| `out-of-africa-earth` | 1175 (600) | 660 at 1600 | 3000 |
+| `sandbox` | 10,900 (2700) | 7700 at 4000 | 16,000 (was 8000) |
+| `huge-steppe` | 78,911 at 4000 and still climbing (2020 at 500, 11,817 at 2000, 31,059 at 3000) | — | 6000, binding by design |
+
+Every `max_share` is gone from the curated worlds (the knob stays for
+authors); the three classes of `habitat-territories` and the predator packs
+of `predator-prey` and `riverlands` coexist on food alone. A cap is a
+safety budget for memory and tick cost, never the limiter — with one
+deliberate exception: `huge-steppe` is a throughput tier for a 64×-area
+biome field, its steppe would carry some 80,000 grazers (780 ms per tick
+in the atlas at that count), and its 6k budget is the point of the world,
+so there the cap binds and says so in the file. The engine default stays
+10,000. The `anabios-headless sweep` validation bar has not
+been re-run since.
+
+The audit was re-run on 2026-09-29 once the realism layers (gait, growth,
+turning inertia, gestation, the chase) had landed on top: every curated
+world, 1500 ticks, every colliding pair every tick. No pair closer than
+half its gap on any world and no newborn placed on a body, with one
+exception the run itself fixed — three founders of one `habitat-territories`
+herd shared a point for the first tick, so founders seeded on one another
+are now settled apart at spawn the way newborns are. The near-touch pairs
+that remain (between half and nine tenths of their gap: the swept contact's
+soft surface lets a herd jostle) sit at 80–90% of the gap on the crowded
+worlds (`grand-theater` 207 pair-ticks in 500 ticks across 4.6 million pair
+checks, `out-of-africa-saga` 37) and closer only on `habitat-territories`,
+whose shorelines press its Land and Water classes together (526 pair-ticks
+between 60% and 80% of the gap in 500 ticks, 1.9% of agent-ticks).
+
+Predation is a chase (`chase_enabled`, 2026-09-29; on by default like every
+other knob, `chase_enabled = false` opts out): every agent carries a stamina
+bar that drains while it moves faster than a walk (gait's walk, 0.6 of its
+own top speed; a full bar lasts 80 ticks flat out) and refills while it
+walks (50 ticks from empty to half) or rests (25), an exhausted agent is
+held to the walk until the bar is half full, and a contact strike
+(`Weapon`/`Jaws`, not a `Spines` volley) lands with a probability set by the
+predator's speed advantage over the prey's escape and by the size ratio —
+equal speed and size land 0.24 of the strikes per tick in range, a prey
+running away 1.7× faster or four times the size is never caught, a standing,
+cornered or exhausted prey is caught on the size term alone, and a miss
+still costs the attacker the lunge. With gait on only fleeing, fighting and
+hunting agents sprint, so grazers never tire and a chase is decided by who
+tires first; with gait off every move is a sprint and herds and hunters
+alike cycle between sprint and walk (moves cut short by the swept contact
+in a crowd read as a walk either way). The same knob makes a kill conserve
+energy: the energy a strike takes from the prey (its HP is its energy) is
+banked on the prey and returned as carcass flesh when it dies, so a fat
+prey is a big meal. Without that a grazer the gait let amble itself to 400
+energy took 25 one-energy strikes to bring down and yielded the same
+32-energy carcass as a lean one. And a hungry carnivore walks to the
+nearest carcass in reach and stands to eat it: a predator used to leave its
+kill the tick it made it — on `predator-prey` the pursuers sat at a carcass
+on 5–10% of their ticks and let 86% of all flesh rot, with every knob on or
+off alike — so the mammal pursuers starved from tick 250 on in every seed
+once the growth layer stopped the founders breeding off their spawn energy
+(mean energy 35 at tick 250, 15 by 750, the lineage gone by 1250; on main
+the guild only ever lived through that founder-energy boom). With both
+(1500 ticks, seeds 0–1) they hold 50–94 energy through the juvenile
+window, breed from maturity on (30 founders → 60 by tick 1500 on seed 0)
+and waste a quarter of the flesh instead. The mechanisms and their
+constants are in `crates/anabios-core/src/chase.rs` and `carcass.rs`.
 
 ## Running
 

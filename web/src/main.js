@@ -586,9 +586,23 @@ $("load").onclick = () => {
 $("reseed").onclick = () => { $("seed").value = Math.floor(Math.random() * 1e6); $("load").click(); };
 $("scenario").onchange = () => {
   const opt = $("scenario").selectedOptions[0];
+  // A replay and a live scenario can share an id (`out-of-africa-saga` does),
+  // so the option's kind decides which manifest to read.
+  if (opt.dataset.kind === "replay") {
+    const r = state.manifest.replays.find((x) => x.id === opt.value);
+    if (r) $("desc").textContent = r.description || r.name;
+    return;
+  }
   const s = state.manifest.scenarios.find((x) => x.id === opt.value);
   if (s) { $("seed").value = s.seed; $("desc").textContent = s.description; }
 };
+/** Select the dropdown entry for `id` of the given kind: `sel.value = id`
+ *  alone would pick the first option with that value, the live one, even
+ *  when the replay of the same name is meant. */
+function selectEntry(sel, kind, id) {
+  const o = Array.from(sel.options).find((x) => x.dataset.kind === kind && x.value === id);
+  if (o) o.selected = true;
+}
 $("terrain-legend").innerHTML = TERRAIN.map(([n, c]) => `<div class="item"><span class="sw" style="background:${c}"></span>${n}</div>`).join("");
 
 // ---------------------------------------------------------------------------
@@ -614,12 +628,12 @@ async function boot() {
   const replayId = params.get("replay");
   if (replayId) {
     const rep = state.manifest.replays.find((x) => x.id === replayId);
-    if (rep) { sel.value = rep.id; await loadReplay(rep); return; }
+    if (rep) { selectEntry(sel, "replay", rep.id); await loadReplay(rep); return; }
   }
   const want = params.get("scenario") || "predator-prey";
   const entry = state.manifest.scenarios.find((s) => s.id === want) || state.manifest.scenarios[0];
   if (!entry) { fail("No scenarios staged", new Error("web/scenarios is empty")); return; }
-  sel.value = entry.id;
+  selectEntry(sel, "live", entry.id);
   const seed = params.has("seed") ? Number(params.get("seed")) : undefined;
   $("seed").value = seed ?? entry.seed; $("desc").textContent = entry.description;
   await loadScenario(entry, seed);

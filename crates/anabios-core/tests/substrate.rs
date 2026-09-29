@@ -60,6 +60,14 @@ mod speciation {
         // The split is genetic, not population-driven — cap population so the run
         // stays fast under the raised 10k default.
         world.max_population = 500;
+        // Nor maturity-driven: under growth the age-0 founders cannot breed
+        // before 0.15 × lifespan (about 530 ticks at `lifespan_bias = 0.7`),
+        // so a 400-tick window holds no offspring for the morphs to diverge
+        // through; gestation delays every litter a further 80 ticks and
+        // batches it. The knobs' own tests pin them; this check reads the
+        // split.
+        world.growth_enabled = false;
+        world.gestation_enabled = false;
         // Every archetype founder already has its own species row (placeholder
         // parent `Some(0)`), so only rows allocated after instantiation are
         // splits. The two body-size morphs share archetype-free species 0.
@@ -258,6 +266,13 @@ mod codex_events {
         // Speciation needs divergence between the two founder clusters, not scale —
         // cap population so the test stays fast under the raised 10k default.
         world.max_population = 500;
+        // Nor maturity: under growth the age-0 founders cannot breed before
+        // 0.15 × lifespan (about 530 ticks at `lifespan_bias = 0.7`), so a
+        // 400-tick window would hold no offspring to diverge, and gestation
+        // delays every litter a further 80 ticks. The knobs' own tests pin
+        // them; this check reads the split.
+        world.growth_enabled = false;
+        world.gestation_enabled = false;
 
         // Only splits of the morph stock (archetype-free species 0) count; the
         // other lineages' splits are not the divergent pair's.

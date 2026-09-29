@@ -26,17 +26,30 @@ pub mod fixed_rows {
         rows: &[[T; N]],
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
-        let mut seq = serializer.serialize_seq(Some(rows.len()))?;
-        for row in rows {
-            seq.serialize_element(&Row(row))?;
-        }
-        seq.end()
+        Rows(rows).serialize(serializer)
     }
 
     pub fn deserialize<'de, T: Deserialize<'de>, const N: usize, D: Deserializer<'de>>(
         deserializer: D,
     ) -> Result<Vec<[T; N]>, D::Error> {
         deserializer.deserialize_seq(RowsVisitor(PhantomData))
+    }
+}
+
+/// A borrowed column of fixed-width rows, serialized as a length-prefixed
+/// sequence of tuples — exactly what the derive emits for `Vec<[T; N]>` while
+/// `N <= 32`. Public so a caller that hashes a column on its own (the
+/// column-wise trajectory guard in `tests/determinism.rs`) gets the same
+/// bytes as the struct field.
+pub struct Rows<'a, T, const N: usize>(pub &'a [[T; N]]);
+
+impl<T: Serialize, const N: usize> Serialize for Rows<'_, T, N> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for row in self.0 {
+            seq.serialize_element(&Row(row))?;
+        }
+        seq.end()
     }
 }
 

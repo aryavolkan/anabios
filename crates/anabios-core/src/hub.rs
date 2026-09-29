@@ -15,6 +15,47 @@ pub const HUB_MAX_COUNT: usize = 6;
 pub const HUB_PULL: f32 = 1.0;
 /// How close (world units) an agent must be to a hub to trade there.
 pub const HUB_TRADE_RANGE: f32 = 30.0;
+/// Arrival zone of the hub pull: inside `HUB_ARRIVE_RANGE` of a hub — the
+/// trade range itself, since an agent anywhere within it can already trade —
+/// the pull is off, and it fades in linearly from there out to
+/// `HUB_PULL_FULL_RANGE`. A constant unit pull all the way to the hub's
+/// centre point drove every trade-motivated agent into the same spot: on
+/// grand-theater 225 bodies pressed into a 6-unit radius that holds about a
+/// hundred, a jam the collision resolve cannot unpack (see
+/// `collision::resolve_overlaps`), and every tick re-formed it. A 15-unit
+/// zone was tried first and still jammed: that world's 962 staged founders
+/// all carry a trade motive, and a crowd of that many bodies at packing
+/// density is ~19 units across, so agents past 15 kept pressing in.
+pub const HUB_ARRIVE_RANGE: f32 = HUB_TRADE_RANGE;
+/// Distance from which the hub pull is at full strength.
+pub const HUB_PULL_FULL_RANGE: f32 = HUB_TRADE_RANGE * 1.5;
+
+/// Hub-pull gain by distance: 0 inside `HUB_ARRIVE_RANGE`, 1 from
+/// `HUB_PULL_FULL_RANGE` out, linear between.
+#[inline]
+pub fn hub_pull_gain(dist: f32) -> f32 {
+    ((dist - HUB_ARRIVE_RANGE) / (HUB_PULL_FULL_RANGE - HUB_ARRIVE_RANGE)).clamp(0.0, 1.0)
+}
+
+/// The hub pull for an agent at `pos`: `best_hub_direction` scaled by
+/// `hub_pull_gain` of the distance to that nearest hub. `Vec2::ZERO` with no
+/// hubs or inside the arrival zone.
+pub fn hub_pull(hubs: &[TradeHub], pos: Vec2, world_size: f32) -> Vec2 {
+    let world = Vec2::splat(world_size);
+    let half = Vec2::splat(world_size * 0.5);
+    let mut best: Option<(f32, Vec2)> = None;
+    for h in hubs {
+        let off = wrap_torus(h.pos - pos + half, world) - half;
+        let d2 = off.length_squared();
+        if best.is_none_or(|(bd, _)| d2 < bd) {
+            best = Some((d2, off));
+        }
+    }
+    match best {
+        Some((d2, off)) => off.normalize_or_zero() * hub_pull_gain(d2.sqrt()),
+        None => Vec2::ZERO,
+    }
+}
 
 /// A predetermined marketplace location, fixed at worldgen. `goods` is the set
 /// of distinct trade goods whose home terrain meets here (for the viewer icons).
@@ -222,6 +263,34 @@ mod tests {
         assert!(dir.x > 0.9, "should steer +x across the wrap toward x=10");
         // No hubs -> zero.
         assert_eq!(best_hub_direction(&[], Vec2::new(1.0, 1.0), ws), Vec2::ZERO);
+    }
+
+    /// The pull is off inside the arrival zone, full from the trade range
+    /// out, and fades linearly between — and `hub_pull` applies it to the
+    /// nearest hub's direction (torus-aware).
+    #[test]
+    fn hub_pull_fades_out_inside_the_arrival_zone() {
+        assert_eq!(hub_pull_gain(0.0), 0.0);
+        assert_eq!(hub_pull_gain(HUB_ARRIVE_RANGE), 0.0);
+        assert_eq!(hub_pull_gain(HUB_TRADE_RANGE), 0.0, "in trade range: no pull");
+        let mid = (HUB_ARRIVE_RANGE + HUB_PULL_FULL_RANGE) * 0.5;
+        assert!((hub_pull_gain(mid) - 0.5).abs() < 1e-6);
+        assert_eq!(hub_pull_gain(HUB_PULL_FULL_RANGE), 1.0);
+        assert_eq!(hub_pull_gain(500.0), 1.0);
+        let ws = 1000.0;
+        let hub = TradeHub { pos: Vec2::new(100.0, 100.0), cell: 0, goods: vec![] };
+        // Far away: a unit pull toward the hub.
+        let far = hub_pull(std::slice::from_ref(&hub), Vec2::new(100.0, 300.0), ws);
+        assert!((far.length() - 1.0).abs() < 1e-6 && far.y < 0.0, "{far:?}");
+        // At the market: no pull at all.
+        assert_eq!(hub_pull(std::slice::from_ref(&hub), Vec2::new(100.0, 110.0), ws), Vec2::ZERO);
+        // Half-way through the fade: half a unit.
+        let half = hub_pull(std::slice::from_ref(&hub), Vec2::new(100.0, 100.0 + mid), ws);
+        assert!((half.length() - 0.5).abs() < 1e-6, "{half:?}");
+        // Across the seam the nearest hub is still found and the gain applies.
+        let seam = hub_pull(&[hub], Vec2::new(100.0, 960.0), ws);
+        assert!((seam.length() - 1.0).abs() < 1e-6 && seam.y > 0.0, "{seam:?}");
+        assert_eq!(hub_pull(&[], Vec2::new(5.0, 5.0), ws), Vec2::ZERO);
     }
 
     #[test]
