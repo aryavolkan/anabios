@@ -117,15 +117,18 @@ export class Terrain {
     this.texture.flipY = false;
     this.texture.needsUpdate = true;
 
-    // Elevation as an 8-bit texture for the water's depth shading.
-    this.elevTexels = new Uint8Array(res * res);
-    if (elevation) for (let i = 0; i < res * res; i++) this.elevTexels[i] = Math.round(Math.min(1, Math.max(0, elevation[i])) * 255);
-    this.elevTexture = new THREE.DataTexture(this.elevTexels, res, res, THREE.RedFormat, THREE.UnsignedByteType);
-    this.elevTexture.magFilter = THREE.LinearFilter;
-    this.elevTexture.minFilter = THREE.LinearFilter;
-    this.elevTexture.generateMipmaps = false;
-    this.elevTexture.flipY = false;
-    this.elevTexture.needsUpdate = true;
+    // The rendered heights again, (res+1)² vertices in world units, for the
+    // water's depth shading. Half float, not 8-bit elevation: one 8-bit step is
+    // ~0.3 units, a third of the foam band, and a res² cell texture disagrees
+    // with the vertex-averaged mesh by more than that on rough ground — foam
+    // then followed the cell grid in blocks instead of the drawn shoreline.
+    // R16F filters linearly in WebGL2 (R32F needs an extension).
+    this.heightTexels = new Uint16Array(n * n);
+    this.heightTexture = new THREE.DataTexture(this.heightTexels, n, n, THREE.RedFormat, THREE.HalfFloatType);
+    this.heightTexture.magFilter = THREE.LinearFilter;
+    this.heightTexture.minFilter = THREE.LinearFilter;
+    this.heightTexture.generateMipmaps = false;
+    this.heightTexture.flipY = false;
 
     this.uniforms = {
       uRes: { value: res },
@@ -196,7 +199,7 @@ export class Terrain {
     slab.position.set(worldSize / 2, -depth / 2 - this.heightScale * seaLevel + 0.5, worldSize / 2);
     this.slab = slab;
 
-    this.water = new Water(worldSize, this.elevTexture, seaLevel, this.heightScale);
+    this.water = new Water(worldSize, res, this.heightTexture);
     this.water.mesh.visible = this.reliefOn;   // flat worlds paint water cells in the ground texture instead
     this.forest = new Forest(this);
     this.group = new THREE.Group();
@@ -220,8 +223,10 @@ export class Terrain {
         }
         heights[j * n + i] = h;
         pos[(j * n + i) * 3 + 1] = h;
+        this.heightTexels[j * n + i] = THREE.DataUtils.toHalfFloat(h);
       }
     }
+    this.heightTexture.needsUpdate = true;
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.computeVertexNormals();
     this.geometry.computeBoundingSphere();
@@ -274,7 +279,7 @@ export class Terrain {
     this.geometry.dispose();
     this.material.dispose();
     this.texture.dispose();
-    this.elevTexture.dispose();
+    this.heightTexture.dispose();
     this.slab.geometry.dispose();
     this.slab.material.dispose();
     this.water.dispose();
@@ -283,11 +288,12 @@ export class Terrain {
 }
 
 // ---------------------------------------------------------------------------
-/** Water plane at y = 0: depth-shaded from the elevation texture (turquoise
- *  shallows, navy deeps), animated ripple normals with a sun glint, a foam
- *  fringe along the shore and a fresnel rim. */
+/** Water plane at y = 0: depth-shaded from the terrain's vertex heights
+ *  (turquoise shallows, navy deeps), animated ripple normals with a sun glint,
+ *  a foam fringe along the shore and a fresnel rim. */
 export class Water {
-  constructor(worldSize, elevTexture, seaLevel, heightScale) {
+  /** @param {THREE.Texture} heightTexture  (res+1)² vertex heights, world units above the sea */
+  constructor(worldSize, res, heightTexture) {
     this.uniforms = {
       uTime: { value: 0 },
       // The tuned palette, authored for a raw (unencoded) write: converted a
@@ -296,9 +302,8 @@ export class Water {
       uColor: { value: new THREE.Color(0x1c4a86).convertSRGBToLinear() },
       uDeep: { value: new THREE.Color(0x0c2148).convertSRGBToLinear() },
       uSize: { value: worldSize },
-      uElev: { value: elevTexture },
-      uSea: { value: seaLevel },
-      uHs: { value: heightScale },
+      uRes: { value: res },
+      uHeight: { value: heightTexture },
       uSun: { value: new THREE.Vector3(0.55, 1.0, 0.35).normalize() },
     };
     this.material = new THREE.ShaderMaterial({
@@ -314,18 +319,36 @@ export class Water {
         }`,
       fragmentShader: /* glsl */ `
         uniform float uTime; uniform vec3 uShallow; uniform vec3 uColor; uniform vec3 uDeep; uniform float uSize;
-        uniform sampler2D uElev; uniform float uSea; uniform float uHs; uniform vec3 uSun;
+        uniform float uRes; uniform sampler2D uHeight; uniform vec3 uSun;
         varying vec3 vWorld;
         ${GLSL_NOISE}
         float ripple(vec2 p, float t) {
           return 0.6 * sin(p.x * 0.08 + t * 0.9) * sin(p.y * 0.11 - t * 0.7) + 0.4 * sin((p.x + p.y) * 0.05 + t * 0.5)
                + 0.5 * (atlasNoise(p * 0.06 + vec2(t * 0.05, -t * 0.03)) - 0.5);
         }
+        // Ground height under p exactly as drawn: the mesh's two triangles per
+        // cell (diagonal from (i+1, j) to (i, j+1)) over its own vertex heights,
+        // so depth 0 is precisely where the ground meets the plane.
+        float groundHeight(vec2 p) {
+          vec2 f = clamp(p / uSize, 0.0, 1.0) * uRes;
+          vec2 c = min(floor(f), uRes - 1.0), t = f - c;
+          ivec2 i = ivec2(c);
+          float a = texelFetch(uHeight, i, 0).r, b = texelFetch(uHeight, i + ivec2(1, 0), 0).r;
+          float cc = texelFetch(uHeight, i + ivec2(0, 1), 0).r, d = texelFetch(uHeight, i + ivec2(1, 1), 0).r;
+          return t.x + t.y < 1.0 ? a + (b - a) * t.x + (cc - a) * t.y : d + (cc - d) * (1.0 - t.x) + (b - d) * (1.0 - t.y);
+        }
+        // Filtered height (texel centres are the vertices): smooth enough to difference.
+        float smoothHeight(vec2 p) { return texture2D(uHeight, (p / uSize * uRes + 0.5) / (uRes + 1.0)).r; }
         void main() {
-          vec2 uv = vWorld.xz / uSize;
-          float e = texture2D(uElev, uv).r;
-          float depth = max(0.0, (uSea - e) * uHs);
           vec2 p = vWorld.xz;
+          float depth = max(0.0, -groundHeight(p));
+          // Distance to the shore ≈ depth / slope; the slope from half-cell central
+          // differences of the filtered heights, which vary smoothly (the per-
+          // triangle slope would print the mesh facets into the foam).
+          float k = 0.5 * uSize / uRes;
+          vec2 g = vec2(smoothHeight(p + vec2(k, 0.0)) - smoothHeight(p - vec2(k, 0.0)),
+                        smoothHeight(p + vec2(0.0, k)) - smoothHeight(p - vec2(0.0, k))) / (2.0 * k);
+          float shoreDist = depth / max(length(g), 1e-3);
           float r = ripple(p, uTime);
           float rx = ripple(p + vec2(1.5, 0.0), uTime) - r, rz = ripple(p + vec2(0.0, 1.5), uTime) - r;
           vec3 n = normalize(vec3(-rx * 0.35, 1.0, -rz * 0.35));
@@ -341,8 +364,14 @@ export class Water {
           float spec = pow(max(dot(reflect(-uSun, n), viewDir), 0.0), 220.0);
           col += vec3(1.0, 0.93, 0.82) * spec * 0.5 * smoothstep(0.08, 0.45, uSun.y);
           col += vec3(0.22, 0.30, 0.34) * fres * 0.7;
-          float foamBand = 1.0 - smoothstep(0.0, 0.9, depth);
-          float foam = foamBand * smoothstep(0.45, 0.75, atlasNoise(p * 0.5 + vec2(uTime * 0.6, uTime * 0.2)) + 0.25 * r);
+          // Foam hugs the shore: shallow AND near it, so a gentle beach keeps a
+          // narrow fringe and a shallow, flat pond does not whiten all over.
+          float foamBand = (1.0 - smoothstep(0.0, 0.9, depth)) * (1.0 - smoothstep(1.5, 4.5, shoreDist));
+          // Lace: two octaves of value noise on rotated axes — one thresholded
+          // octave on the world axes reads as square blobs. Denser at the water line.
+          float lace = 0.6 * atlasNoise(mat2(0.8, -0.6, 0.6, 0.8) * p * 0.5 + vec2(uTime * 0.6, uTime * 0.2))
+                     + 0.4 * atlasNoise(mat2(0.28, 0.96, -0.96, 0.28) * p * 1.3 - vec2(uTime * 0.3, uTime * 0.5));
+          float foam = foamBand * smoothstep(0.45, 0.8, lace + 0.25 * r + 0.1 * foamBand);
           col = mix(col, vec3(0.92, 0.94, 0.96), foam * 0.75);
           float alpha = mix(0.45, 0.88, clamp(depth / 3.0, 0.0, 1.0)) + fres * 0.1 + foam * 0.3;
           gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.96));
