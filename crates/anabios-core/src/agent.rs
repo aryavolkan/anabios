@@ -188,6 +188,13 @@ impl AgentBuffers {
         self.live_count
     }
 
+    /// The recycled-slot stack (ids freed by `kill`, popped by `spawn`),
+    /// bottom to top. Serialized state, read by the flag-off trajectory
+    /// pins in `tests/determinism.rs`.
+    pub fn free_list(&self) -> &[AgentId] {
+        &self.free_list
+    }
+
     /// Total slot capacity (alive + dead). Use only for sizing scratch
     /// buffers — iterate via `iter_alive()` instead of raw indices.
     #[inline]

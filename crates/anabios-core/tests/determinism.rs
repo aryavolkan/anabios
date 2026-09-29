@@ -365,7 +365,57 @@ fn habitat_territories_matches_golden_hashes() {
 /// defaults every knob on, so the live scenario files no longer reproduce
 /// this configuration), not on the live scenario files.
 fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
-    let mut bytes = bincode::serialize(&w.agents).expect("agents serialize");
+    // The `agents` sub-state is hashed COLUMN BY COLUMN, over the columns
+    // that existed when the pins were taken and in their original struct
+    // order — bincode frames nothing, so this is byte-identical to the
+    // whole-struct stream of that layout — and a column added since
+    // (`heading`, the gestation columns, …) never enters the stream. A
+    // realism layer can therefore grow `AgentBuffers` without moving these
+    // pins; only a flag-off behaviour change can. A new column that DOES
+    // carry flag-off state is a behaviour change and belongs in the list
+    // (with a re-pin from the merge base).
+    let a = &w.agents;
+    let mut bytes = Vec::new();
+    macro_rules! column {
+        ($($col:ident),* $(,)?) => {
+            $( bytes.extend(bincode::serialize(&a.$col).expect(stringify!($col))); )*
+        };
+    }
+    column!(
+        position,
+        velocity,
+        energy,
+        age,
+        genome,
+        lineage_id,
+        parent_ids,
+        species_id,
+        modules,
+        program,
+        meme_vector,
+        inventory,
+        iq,
+        iq_enrich_acc,
+        iq_enrich_ticks,
+        affect,
+        affect_prev_crowding,
+        anchor,
+        harvest_exp,
+        meme_lineage,
+        thirst,
+        fatigue,
+        mood,
+        asleep,
+        sex,
+        births_ok,
+        births_failed,
+        livestock_of,
+        infection,
+        alive,
+    );
+    // The two private serialized fields that close the struct.
+    bytes.extend(bincode::serialize(a.free_list()).expect("free_list"));
+    bytes.extend(bincode::serialize(&a.live_count()).expect("live_count"));
     bytes.extend(bincode::serialize(&w.biome).expect("biome serialize"));
     bytes.extend(bincode::serialize(&w.rng).expect("rng serialize"));
     bytes.extend(bincode::serialize(&w.codex).expect("codex serialize"));
@@ -385,15 +435,15 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
     h
 }
 
-// Re-pinned 2026-09-29 (turning inertia, FORMAT_VERSION 44→45): `AgentBuffers`
-// gained the serialized `heading` column, so the `agents` sub-state's own
-// layout changed and both pins moved by layout alone. Behaviour did not: with
-// the column's bytes spliced out of the `agents` bincode, the same runs
-// re-derive the previous pins (0xd1133dd8d119e894 / 0x56819428b6cd2bf0)
-// exactly, and `flag_off_trajectory_ignores_the_heading_column` below pins
-// that the column never influences a flag-off tick.
-const MINIMAL_TRAJECTORY_AT_1000: u64 = 0x50fa28099d13265b;
-const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x74b3c35143094247;
+// The values pinned at the merge base of the territory/habitat/collision
+// layer. 2026-09-29: the hash became column-wise (above) when the realism
+// layers (turning inertia, gestation) added serialized `AgentBuffers`
+// columns — the whole-struct stream moved by layout alone each time and each
+// branch had to re-pin with a proof; over the original columns the same runs
+// re-derive these exact values on the merged tree, so the pins are back to
+// the base and stay there while every layer is off.
+const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xd1133dd8d119e894;
+const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x56819428b6cd2bf0;
 
 fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
     let mut w = common::world(src);
