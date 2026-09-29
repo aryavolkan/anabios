@@ -115,9 +115,9 @@ technique, tuned seeds, measured caveats; this table is the index.
 | `grand-theater.toml` | Everything-on staged world at the tuned geographic-trade terrain (seed 424242) | Environment, disturbance, gene-culture, economy, conflict and communication all colliding in one shared world — the strongest save/load round-trip guard. | `env_period = 400`, `climate_drift_rate = 0.00005` | 424242 | 8.8 |
 | `out-of-africa-saga.toml` | The grand-theater cast on a human-dispersal geography (climate-driven worldgen) | The showcase cut: era-3 tech (Stone Tools/Fire/Farming/Writing/Husbandry) seeded on the Quarry innovators from tick 0 so downstream tech and on-camera taming emerge without stalling at era 1. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | 7.8 |
 | `out-of-africa-earth.toml` | The saga's founders re-anchored onto a real-Earth elevation/temperature/precipitation map (`world_map = "earth"`) | The same DIT/cognition/war/domestication stack, but the exodus runs through the real African corridors (Sinai/Bab-el-Mandeb, Gibraltar); dispersal is emergent, not scripted. | `env_period = 400`, `climate_drift_rate = 0.00005` | 318 | 6.6 |
-| `sandbox.toml` | 2048² world, 8k population cap, no staging; seasons slowed to `season_period = 2500` | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | — | 7 | 11.4 |
+| `sandbox.toml` | 2048² world, a 16k safety cap food never reaches (peak 10,900), no staging; seasons slowed to `season_period = 2500` | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | — | 7 | 11.4 |
 | `riverlands.toml` | 4096² self-siting continent: mountains, rain-shadow, a hydrology-carved river network; seasons slowed to `season_period = 3000` | Terrain-aware placement (`kind = "habitat"`/`"near_spec"`) so herds and a persistent predator pack (`mate_seeking`; the `max_share` ceiling the pack once needed is gone) find water and each other regardless of seed. Absorbed: continental. | — | 7 | 5.9 |
-| `huge-steppe.toml` | 8192² world (biome grid 1024²), 6k population budget; seasons slowed to `season_period = 5000` | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput at the same population budget as the prior largest world. | — | 21 | 12.5 |
+| `huge-steppe.toml` | 8192² world (biome grid 1024²), a 12k safety cap food is not expected to reach; seasons slowed to `season_period = 5000` | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput. | — | 21 | 12.5 |
 
 ## Validation
 
@@ -197,6 +197,40 @@ freely now that bodies cannot walk through one another (the median step on
 `predator-prey` fell from 2.3 to 0.6 units; the fraction of agents moving
 at all is unchanged), and their populations settle slightly lower. The
 validation bar was not re-run for this change.
+
+### Carrying capacity
+
+Until 2026-09-29 `max_population` bound in several curated worlds — the
+population sat on the cap and reproduction skipped, a culled-birth
+bookkeeping rather than a carrying capacity — and `max_share` reserved
+birth slots per lineage to patch what a binding cap did (the fastest
+breeder filled it and no other lineage was ever born again). Food limits
+every world now. Measured with the cap lifted on the merged tree (every
+realism knob on; 1600 ticks for every world, 5000 for the ones still
+climbing at 1600, 4000 for the two large ones), the food-limited peak and
+the cap that now stands 1.5× or more above it:
+
+| World | Food-limited peak (tick) | Course after the peak | Cap now |
+|---|---|---|---|
+| `minimal` | 1614 (3100) | 1250 by 5000 | 2500 (was 2000) |
+| `predator-prey` | 1184 (2600) | 520 by 5000, pursuers 21–91 throughout | 2000 |
+| `speciation` | 479 (2200) | 126 by 5000 | 2000 |
+| `tribes` | 699 (2000) | 370 by 5000 | 1500 |
+| `markets` | 1780 (600) | 300 by 5000 | 3000 (was 2200) |
+| `habitat-territories` | 956 (2800), Land 395 / Water 333 / Air 228 | 800–950 to 5000 | 1500 |
+| `riverlands` | 1619 (4900), pack 45–112 | 1460 at 5000 | 2500 |
+| `out-of-africa-saga` | 1586 (1000) | 1190 at 1600 | 3000 |
+| `grand-theater` | 2065 (600) | 1240 at 1600 | 3500 (was 3000) |
+| `out-of-africa-earth` | 1175 (600) | 660 at 1600 | 3000 |
+| `sandbox` | 10,900 (2700) | 7700 at 4000 | 16,000 (was 8000) |
+| `huge-steppe` | 7816 at 1600 and still climbing (the 4000-tick run is pending) | — | 12,000 (was 6000) |
+
+Every `max_share` is gone from the curated worlds (the knob stays for
+authors); the three classes of `habitat-territories` and the predator packs
+of `predator-prey` and `riverlands` coexist on food alone. A cap is a
+safety budget for memory and tick cost, never the limiter; the engine
+default stays 10,000. The `anabios-headless sweep` validation bar has not
+been re-run since.
 
 The audit was re-run on 2026-09-29 once the realism layers (gait, growth,
 turning inertia, gestation, the chase) had landed on top: every curated

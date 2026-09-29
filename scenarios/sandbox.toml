@@ -1,4 +1,6 @@
-# Sandbox: a 2048-unit world with an 8k cap and no staging — innovators,
+# Sandbox: a 2048-unit world, no staging, a 16k safety cap that food never
+# reaches (peak 10,900 at tick 2700 with the cap lifted, 7,700 by tick 4000;
+# about 210 ms per tick in the atlas at the peak) — innovators,
 # asocial foragers, cultural and skilled foragers, and two predator kinds
 # scattered uniformly. The open-ended run for watching the tech tree, gene vs
 # culture and long ecological cycles at scale. Runs the full stack.
@@ -9,7 +11,7 @@ world_size = 2048.0
 biome_res = 256
 hash_res = 128
 season_period = 2500
-max_population = 8000
+max_population = 16000
 
 [[agents]]
 count = 500
