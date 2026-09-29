@@ -161,6 +161,10 @@ pub fn sense_all(
     // Territory layer: plant sensing only sees terrain the agent's
     // Locomotion class can graze. `false` ⇒ identical to before.
     territory_enabled: bool,
+    // Growth layer: `nearest_rel_size` compares the two bodies as they are
+    // now (juveniles small) instead of the adult genes. `false` ⇒ every
+    // scale is exactly 1.0 and the register is identical to before.
+    growth_enabled: bool,
 ) {
     use rayon::prelude::*;
     debug_assert!(registers.len() >= agents.capacity());
@@ -192,6 +196,7 @@ pub fn sense_all(
             gene_tech_coupling,
             cognition_enabled,
             territory_enabled,
+            growth_enabled,
         );
     });
 }
@@ -296,6 +301,7 @@ fn sense_one(
     gene_tech_coupling: bool,
     cognition_enabled: bool,
     territory_enabled: bool,
+    growth_enabled: bool,
 ) -> SensorRegister {
     let i = id as usize;
     let pos = agents.position[i];
@@ -319,7 +325,11 @@ fn sense_one(
     let plant_direction = best_plant_direction(biome, pos, radius, graze);
 
     let self_species = agents.species_id[i];
-    let self_size = genome.get(GenomeSlot::Size).max(1e-3);
+    // Live body sizes (growth layer): a juvenile is small to its neighbours
+    // and its neighbours large to it. Exactly the gene with the knob off.
+    let self_size = (genome.get(GenomeSlot::Size)
+        * crate::growth::body_scale_of(growth_enabled, agents.age[i], genome))
+    .max(1e-3);
     let self_energy = agents.energy[i].max(1e-3);
 
     // Scan the neighbor ring recording only squared distances + winner ids
@@ -352,7 +362,9 @@ fn sense_one(
         let n = nn.nearest_id as usize;
         (
             torus_direction(pos, nn.nearest_pos, world_size),
-            agents.genome[n].get(GenomeSlot::Size) / self_size,
+            agents.genome[n].get(GenomeSlot::Size)
+                * crate::growth::body_scale_of(growth_enabled, agents.age[n], &agents.genome[n])
+                / self_size,
             agents.energy[n] / self_energy,
         )
     } else {
@@ -540,6 +552,7 @@ mod tests {
             false,
             w.cognition_enabled,
             false,
+            false,
         );
         regs
     }
@@ -605,6 +618,7 @@ mod tests {
             false,
             w.cognition_enabled,
             false,
+            false,
         );
         assert!(!regs[me as usize].has_neighbor, "iq=0 should not see 8 units away");
 
@@ -621,6 +635,7 @@ mod tests {
             w.world_size,
             false,
             w.cognition_enabled,
+            false,
             false,
         );
         assert!(regs[me as usize].has_neighbor, "iq=1 should see 8 units away");
@@ -664,6 +679,7 @@ mod tests {
             w.world_size,
             false,
             w.cognition_enabled,
+            false,
             false,
         );
         assert_eq!(
@@ -784,6 +800,7 @@ mod tests {
                 false,
                 false,
                 on,
+                false,
             );
             w.sensors[id as usize]
         };
@@ -828,6 +845,7 @@ mod tests {
                 false,
                 false,
                 on,
+                false,
             );
             w.sensors[id as usize]
         };

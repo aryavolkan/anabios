@@ -54,18 +54,20 @@ sea_level = 0.45
 # keeps every anchor inside the thirst drive's 96-unit water scan even after
 # the 110-unit scatter pulls a straggler off the anchor.
 #
-# `max_share` is what keeps the predators alive. The population cap is one
-# global number, and the herds breed fast enough to fill it by tick ~200 —
-# after which no predator can be born, and the pack simply ages out. Measured
-# without the share: predators 80 → 73 → 55 → 29 → 6 → 0 by tick 4000, on
-# every seed and at every cap size tried up to 30000 (bigger caps just let
-# the herds eat the biome to zero instead). Reserving 80% for the herds
+# No `max_share` (2026-09-29): the shares reserved birth slots under a
+# population cap the herds filled by tick ~200, after which no predator could
+# be born (measured then: predators 80 → 0 by tick 4000 without the share, at
+# every cap size up to 30000, as the herds ate the biome to zero). Food limits
+# the world now (growth, gestation, the chase and its carcass economy): with
+# the cap lifted it peaks at 1619 (tick 4900) with the herds at 400-440 and
+# the pack at 45-112 through 5000 ticks, so the 2500 cap is a safety budget
+# 1.5x above the food-limited peak. The history below records how the shares
+# were tuned. Reserving 80% for the herds
 # leaves the pack the rest.
 [[agents]]
 count = 560
 archetype = "mammal_grazer"
 placement = { kind = "habitat", herds = 8, radius = 110.0, max_water_dist = 48.0 }
-max_share = 0.8
 [agents.traits]
 size = 0.45
 # Low mutation keeps the prey species coherent enough to keep interbreeding.
@@ -84,17 +86,18 @@ lifespan_bias = 1.0
 # mate seeking, the survivors sit further apart than the 96-unit scan and
 # the lineage fades. A founder pack of 80 at radius 90 dipped under that
 # floor on two of three seeds. 120 at radius 50 starts dense enough to clear
-# the founder dip on every seed. `max_share = 0.15` then caps the pack at
-# 375: without a ceiling it booms past what the herds can feed (200+ by
-# t500), starves back to ~15, and fades. With it the pack saturates and
-# holds — 372-375 on all three seeds at t6000, still there at t9000.
+# the founder dip on every seed. A `max_share` of 0.15 then capped the pack
+# at 375: without a ceiling it boomed past what the herds could feed (200+
+# by t500), starved back to ~15, and faded. With it the pack saturated and
+# held — 372-375 on all three seeds at t6000, still there at t9000. (Under
+# the chase's carcass economy the pack no longer needs the ceiling: 45-112
+# through 5000 ticks with no share at all.)
 # Raising `reproduction_threshold` to damp the boom instead was the one
 # change that reliably killed the pack (it pushed seed 11 under the floor).
 [[agents]]
 count = 120
 archetype = "mammal_pursuer"
 placement = { kind = "near_spec", spec = 0, radius = 50.0 }
-max_share = 0.15
 [agents.traits]
 size = 0.65
 # Ranging hunters drink less often than the herds they follow.
@@ -106,14 +109,12 @@ lifespan_bias = 1.0
 # Absorbed from continental.toml: a small founder cohort on the same
 # river-adjacent forest its densest-patch scout found (cluster center from
 # BiomeField::generate_with(7, 512, 4096.0, this file's climate), a
-# 100%-Forest window with the nearest river cell ~91 units away). `max_share`
-# is the last 5% left after the herds (80%) and the pack (15%), so this
-# archetype-free stock has room to persist rather than losing every slot to
-# the two population-cap-first lineages above.
+# 100%-Forest window with the nearest river cell ~91 units away). It once
+# held the last 5% share after the herds (80%) and the pack (15%); with the
+# shares gone it competes for food like the rest (1074 of the 1619 peak).
 [[agents]]
 count = 120
 placement = { kind = "cluster", center_x = 1492.0, center_y = 1020.0, radius = 120.0 }
-max_share = 0.05
 [agents.traits]
 lifespan_bias = 0.6
 reproduction_threshold = 0.5

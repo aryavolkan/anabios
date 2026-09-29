@@ -32,6 +32,44 @@ pub type SpeciesId = u32;
 /// modelled parent. Stored in `parent_ids` slots to mean "no parent".
 pub const LINEAGE_NONE: LineageId = 0;
 
+/// One unborn member of a gestating litter (`World::gestation_enabled`):
+/// exactly the child `reproduce_all` would have spawned at conception —
+/// its drawn genome, module list, program and sex — held until birth.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PendingChild {
+    pub genome: Genome,
+    pub modules: ModuleList,
+    pub program: Program,
+    /// `dimorphism::FEMALE` / `MALE`; `false` and unread when sexual
+    /// dimorphism is off (the draw is skipped there, as at a flag-off birth).
+    pub sex: bool,
+}
+
+/// A litter conceived under gestation, carried by its mother until
+/// `AgentBuffers::gestation_left` runs out (see `reproduce::conceive` /
+/// `reproduce::deliver_litter`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PendingLitter {
+    /// Siblings still to be born, in conception order. Drained from the
+    /// front at birth: a delivery the population cap (or the lineage's
+    /// share) cuts short keeps the rest here for the next tick.
+    pub children: Vec<PendingChild>,
+    /// Litter size decided at conception (`reproduce::litter_size`); each
+    /// child is seeded with `SPAWN_ENERGY / litter` so the litter as a whole
+    /// carries exactly the spawn energy its parents paid.
+    pub litter: u8,
+    /// The father's slot at conception. Slots are recycled (LIFO free list),
+    /// so at birth he counts as alive only if the slot still carries
+    /// `father_lineage` — lineage ids are never reused.
+    pub father: AgentId,
+    pub father_lineage: LineageId,
+    /// The father's genome at conception, for the inbreeding-closeness term
+    /// of the practice fitness costs at birth (his slot may be gone by then).
+    pub father_genome: Genome,
+    /// Species the children are born into: the parents' at conception.
+    pub species: SpeciesId,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AgentBuffers {
     pub position: Vec<Vec2>,
@@ -41,6 +79,18 @@ pub struct AgentBuffers {
     /// rotation. Included in the persistent snapshot to keep golden hashes
     /// stable across that change.
     pub velocity: Vec<Vec2>,
+    /// Persistent facing (turning inertia): the unit direction the body
+    /// points, turned toward each tick's wanted direction by at most
+    /// `heading::max_turn` in `tick::decide_all` when `World::turning_enabled`.
+    /// Every spawn — founder or newborn — resets it to `heading::SPAWN_HEADING`
+    /// (`(1, 0)`; a fixed constant rather than a parent's heading, so the
+    /// column is a pure function of the spawn sequence: no RNG, no cross-row
+    /// read). With the flag off nothing reads or writes it, so it stays at
+    /// that constant on every slot (pinned by `tests/determinism.rs::
+    /// flag_off_trajectory_ignores_the_heading_column`). Serialized — a
+    /// path-dependent accumulator feeding hashed movement, so it must NOT be
+    /// `#[serde(skip)]` (still-ticks v13 footgun).
+    pub heading: Vec<Vec2>,
     pub energy: Vec<f32>,
     pub age: Vec<u32>,
     pub genome: Vec<Genome>,
@@ -143,6 +193,22 @@ pub struct AgentBuffers {
     /// all-zero otherwise. Serialized (persistent) — path-dependent state,
     /// so it must NOT be `#[serde(skip)]` (still-ticks v13 footgun).
     pub infection: Vec<f32>,
+    /// Gestation (`World::gestation_enabled`): reproduce stages left until
+    /// this mother gives birth; `0` = not pregnant. Set to
+    /// `reproduce::GESTATION_TICKS` at conception, counted down at the top of
+    /// every `reproduce_all` (held at `1` while the population cap leaves no
+    /// room), cleared at birth and in `kill` — a pregnancy dies with its
+    /// mother. Read by `integrate_all` (upkeep + speed) and `is_eligible`.
+    /// All-zero and inert when the flag is off, so flag-off worlds are
+    /// byte-identical but for the layout growth. Serialized (persistent,
+    /// path-dependent state — the v13 still-ticks rule).
+    pub gestation_left: Vec<u32>,
+    /// Gestation: the litter this mother carries — `Some` exactly while
+    /// `gestation_left > 0`, `None` otherwise (and for every agent when the
+    /// flag is off). Drawn in full at conception (every sibling's genome,
+    /// modules, program and sex), so it is RNG output that must survive a
+    /// snapshot: serialized, never `#[serde(skip)]`. Cleared in `kill`.
+    pub pending_litter: Vec<Option<PendingLitter>>,
     pub alive: BitVec,
     free_list: Vec<AgentId>,
     live_count: u32,
@@ -174,6 +240,13 @@ impl AgentBuffers {
     #[inline]
     pub fn live_count(&self) -> u32 {
         self.live_count
+    }
+
+    /// The recycled-slot stack (ids freed by `kill`, popped by `spawn`),
+    /// bottom to top. Serialized state, read by the flag-off trajectory
+    /// pins in `tests/determinism.rs`.
+    pub fn free_list(&self) -> &[AgentId] {
+        &self.free_list
     }
 
     /// Total slot capacity (alive + dead). Use only for sizing scratch
@@ -217,6 +290,7 @@ impl AgentBuffers {
         let i = id as usize;
         self.position[i] = position;
         self.velocity[i] = Vec2::ZERO;
+        self.heading[i] = crate::heading::SPAWN_HEADING;
         self.energy[i] = SPAWN_ENERGY;
         self.age[i] = 0;
         self.genome[i] = genome;
@@ -244,6 +318,8 @@ impl AgentBuffers {
         self.sex.set(i, sex);
         self.livestock_of[i] = AGENT_NULL;
         self.infection[i] = 0.0;
+        self.gestation_left[i] = 0;
+        self.pending_litter[i] = None;
         self.alive.set(i, true);
         self.live_count += 1;
         id
@@ -259,6 +335,7 @@ impl AgentBuffers {
         let id = self.position.len() as AgentId;
         self.position.push(Vec2::ZERO);
         self.velocity.push(Vec2::ZERO);
+        self.heading.push(crate::heading::SPAWN_HEADING);
         self.energy.push(0.0);
         self.age.push(0);
         self.genome.push(Genome::neutral());
@@ -286,6 +363,8 @@ impl AgentBuffers {
         self.sex.push(false);
         self.livestock_of.push(AGENT_NULL);
         self.infection.push(0.0);
+        self.gestation_left.push(0);
+        self.pending_litter.push(None);
         self.alive.push(false);
         id
     }
@@ -313,6 +392,10 @@ impl AgentBuffers {
         self.fatigue[i] = 0.0;
         self.mood[i] = crate::mood::CONTENT;
         self.asleep.set(i, false);
+        // A pregnancy dies with its mother: the litter is dropped here, not
+        // delivered by whoever recycles the slot.
+        self.gestation_left[i] = 0;
+        self.pending_litter[i] = None;
         self.free_list.push(id);
         self.live_count -= 1;
 
@@ -622,6 +705,61 @@ mod tests {
     }
 
     #[test]
+    fn spawn_clears_gestation_and_kill_drops_the_litter() {
+        let mut a = AgentBuffers::new();
+        let id = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            1,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        let i = id as usize;
+        assert_eq!(a.gestation_left[i], 0);
+        assert!(a.pending_litter[i].is_none());
+        assert_eq!(a.gestation_left.len(), a.capacity());
+        assert_eq!(a.pending_litter.len(), a.capacity());
+        let litter = PendingLitter {
+            children: vec![PendingChild {
+                genome: neutral(),
+                modules: crate::module::starter_kit(),
+                program: Program::empty(),
+                sex: false,
+            }],
+            litter: 1,
+            father: 7,
+            father_lineage: 9,
+            father_genome: neutral(),
+            species: 0,
+        };
+        a.gestation_left[i] = 40;
+        a.pending_litter[i] = Some(litter.clone());
+        // Death drops the pregnancy (dead-slot reset)...
+        a.kill(id);
+        assert_eq!(a.gestation_left[i], 0, "dead slot gestation reset");
+        assert!(a.pending_litter[i].is_none(), "dead slot litter dropped");
+        // ...and a reused slot re-initializes to not pregnant.
+        a.gestation_left[i] = 3;
+        a.pending_litter[i] = Some(litter);
+        let id2 = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            2,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        assert_eq!(id2, id, "slot reused");
+        assert_eq!(a.gestation_left[i], 0, "reuse re-init gestation");
+        assert!(a.pending_litter[i].is_none(), "reuse re-init litter");
+    }
+
+    #[test]
     fn spawn_zeroes_affect_prev_crowding_and_kill_resets() {
         let mut a = AgentBuffers::new();
         let id = a.spawn(
@@ -655,5 +793,38 @@ mod tests {
         );
         assert_eq!(id2, id, "slot reused");
         assert_eq!(a.affect_prev_crowding[id as usize], 0.0, "reuse re-init");
+    }
+
+    #[test]
+    fn spawn_sets_the_heading_and_a_reused_slot_resets_it() {
+        use crate::heading::SPAWN_HEADING;
+        let mut a = AgentBuffers::new();
+        let id = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            1,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        assert_eq!(a.heading[id as usize], SPAWN_HEADING);
+        assert_eq!(a.heading.len(), a.capacity(), "heading grows in lockstep with capacity");
+        // A turned heading is not carried over into the slot's next occupant.
+        a.heading[id as usize] = Vec2::new(0.0, 1.0);
+        a.kill(id);
+        let id2 = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            2,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        assert_eq!(id2, id, "LIFO free list reuses slot 0");
+        assert_eq!(a.heading[id as usize], SPAWN_HEADING, "reused slot re-initializes the heading");
     }
 }

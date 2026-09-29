@@ -221,7 +221,19 @@ const GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-27: the collision resolve now runs up to eight Jacobi
     // passes with a per-pass hash rebuild, a coastline slide and a settle exit
     // (was two fixed passes); every full-stack trajectory moves from tick 1.
-    &[(0, 0x75704801cc76d91a), (100, 0x1f7d211ea492d346), (1000, 0x9ae94d341eeaeb88)];
+    // Re-pinned 2026-09-28: a newborn is placed clear of both parents' bodies
+    // (collision layer on) instead of on their midpoint; every full-stack
+    // trajectory moves from its first birth.
+    // Not re-pinned 2026-09-29 (chase): still ignored (see the test); the
+    // `World.{chase_enabled, stamina, exhausted}` fields move the tick-0 hash
+    // by layout, and the chase itself (on in every world) moves the
+    // trajectory from the first sprint — re-pin with the collision work.
+    // Refreshed 2026-09-29: the collision audit (swept moves, newborn placement,
+    // the hub and water pulls), the realism layers (gait, growth, turning
+    // inertia, gestation, the chase and its carcass economy) and capacity from
+    // food (no lineage shares, non-binding caps) — every full-stack trajectory
+    // moved from tick 1; see docs/scenarios.md.
+    &[(0, 0x3651a748bbc86747), (100, 0x4c9cf6641f62b1f9), (1000, 0x515d508cc6d0cb85)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -331,7 +343,18 @@ const HABITAT_GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-27: the collision resolve now runs up to eight Jacobi
     // passes with a per-pass hash rebuild, a coastline slide and a settle exit
     // (was two fixed passes); every full-stack trajectory moves from tick 1.
-    &[(0, 0xabf4cde73a94b777), (100, 0x8ec9a742bfa585a1), (1000, 0xf7d3b4ed3082fb1b)];
+    // Re-pinned 2026-09-28: a newborn is placed clear of both parents' bodies
+    // (collision layer on) instead of on their midpoint; every full-stack
+    // trajectory moves from its first birth.
+    // Not re-pinned 2026-09-29 (chase): still ignored; the new `World`
+    // fields and the chase (on here) move it — re-pin with the collision
+    // work.
+    // Refreshed 2026-09-29: the collision audit (swept moves, newborn placement,
+    // the hub and water pulls), the realism layers (gait, growth, turning
+    // inertia, gestation, the chase and its carcass economy) and capacity from
+    // food (no lineage shares, non-binding caps) — every full-stack trajectory
+    // moved from tick 1; see docs/scenarios.md.
+    &[(0, 0xfdad43976f592443), (100, 0x532148cda698631c), (1000, 0xcbeffa3bda6859d6)];
 
 #[test]
 fn habitat_territories_matches_golden_hashes() {
@@ -356,8 +379,71 @@ fn habitat_territories_matches_golden_hashes() {
 /// inline flag-off fixtures in `common::fixtures` (the scenario schema now
 /// defaults every knob on, so the live scenario files no longer reproduce
 /// this configuration), not on the live scenario files.
+///
+/// Re-pinned 2026-09-29 (gestation, FORMAT_VERSION 45): `AgentBuffers`
+/// gained the `gestation_left` and `pending_litter` columns, so the `agents`
+/// sub-state's own layout grew and both pins moved by layout alone. Proven
+/// layout-only the way this comment asks: a column-wise variant of this
+/// hash (each pre-existing `AgentBuffers` column serialized on its own, plus
+/// the other sub-states) is identical at the merge base `a0bc6a1` (where
+/// the pins' previous values, `0xd1133dd8d119e894` /
+/// `0x56819428b6cd2bf0`, still held) and at this head with
+/// `gestation_enabled = false` in `OPT_OUT_ALL` — minimal
+/// `0xa17a54f7d1967ca6`, grand-theater `0xea8d6324b39a6ad7`. (Between
+/// `0533d40` and `8351eea` the grand-theater pin was stale — the hub-pull
+/// arrival zone ran with the collision layer off; `8351eea` gated it.)
 fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
-    let mut bytes = bincode::serialize(&w.agents).expect("agents serialize");
+    // The `agents` sub-state is hashed COLUMN BY COLUMN, over the columns
+    // that existed when the pins were taken and in their original struct
+    // order — bincode frames nothing, so this is byte-identical to the
+    // whole-struct stream of that layout — and a column added since
+    // (`heading`, the gestation columns, …) never enters the stream. A
+    // realism layer can therefore grow `AgentBuffers` without moving these
+    // pins; only a flag-off behaviour change can. A new column that DOES
+    // carry flag-off state is a behaviour change and belongs in the list
+    // (with a re-pin from the merge base).
+    let a = &w.agents;
+    let mut bytes = Vec::new();
+    macro_rules! column {
+        ($($col:ident),* $(,)?) => {
+            $( bytes.extend(bincode::serialize(&a.$col).expect(stringify!($col))); )*
+        };
+    }
+    column!(
+        position,
+        velocity,
+        energy,
+        age,
+        genome,
+        lineage_id,
+        parent_ids,
+        species_id,
+        modules,
+        program,
+        meme_vector,
+        inventory,
+        iq,
+        iq_enrich_acc,
+        iq_enrich_ticks,
+        affect,
+        affect_prev_crowding,
+        anchor,
+        harvest_exp,
+        meme_lineage,
+        thirst,
+        fatigue,
+        mood,
+        asleep,
+        sex,
+        births_ok,
+        births_failed,
+        livestock_of,
+        infection,
+        alive,
+    );
+    // The two private serialized fields that close the struct.
+    bytes.extend(bincode::serialize(a.free_list()).expect("free_list"));
+    bytes.extend(bincode::serialize(&a.live_count()).expect("live_count"));
     bytes.extend(bincode::serialize(&w.biome).expect("biome serialize"));
     bytes.extend(bincode::serialize(&w.rng).expect("rng serialize"));
     bytes.extend(bincode::serialize(&w.codex).expect("codex serialize"));
@@ -377,6 +463,17 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
     h
 }
 
+// The values pinned at the merge base of the territory/habitat/collision
+// layer. 2026-09-29: the hash became column-wise (above) when the realism
+// layers (turning inertia, gestation) added serialized `AgentBuffers`
+// columns — the whole-struct stream moved by layout alone each time and each
+// branch had to re-pin with a proof; over the original columns the same runs
+// re-derive these exact values on the merged tree, so the pins are back to
+// the base and stay there while every layer is off. The chase keeps its
+// per-slot `stamina`/`exhausted` vectors on `World` (like `still_ticks`),
+// outside this hash either way, and with `chase_enabled = false` (the
+// fixtures' `OPT_OUT_ALL` opts it out) nothing reads them — pinned per
+// vector by `chase::tests::flag_off_columns_never_influence_behaviour`.
 const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xd1133dd8d119e894;
 const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x56819428b6cd2bf0;
 
@@ -409,4 +506,36 @@ fn grand_theater_pre_flip_trajectory_is_pinned() {
         200,
         GRAND_THEATER_TRAJECTORY_AT_200,
     );
+}
+
+/// Turning inertia off (the fixture writes `turning_enabled = false`): the
+/// `heading` column is inert. Two copies of the all-off minimal world, one
+/// with every heading forced to a different constant, must step to identical
+/// positions — and, once the columns are made equal again, identical whole
+/// states — so the layout-only move of the pins above cannot hide a flag-off
+/// behaviour change routed through the column.
+#[test]
+fn flag_off_trajectory_ignores_the_heading_column() {
+    use anabios_core::heading::SPAWN_HEADING;
+    use anabios_core::prelude_test::Vec2;
+    let mut a = common::world(&common::fixtures::minimal_flag_off());
+    assert!(!a.turning_enabled, "fixture must leave turning inertia off");
+    let mut b = a.clone();
+    let forced = Vec2::new(0.0, -1.0);
+    for h in b.agents.heading.iter_mut() {
+        *h = forced;
+    }
+    let ticks = common::ticks(300);
+    common::run(&mut a, ticks);
+    common::run(&mut b, ticks);
+    assert_eq!(a.agents.position, b.agents.position, "positions diverged with the flag off");
+    assert_eq!(a.agents.velocity, b.agents.velocity, "velocities diverged with the flag off");
+    assert_eq!(a.agents.energy, b.agents.energy, "energies diverged with the flag off");
+    // Nothing wrote either column: `a` still carries the spawn constant on
+    // every slot, `b` the forced one except where a birth re-initialised it.
+    assert!(a.agents.heading.iter().all(|&h| h == SPAWN_HEADING));
+    assert!(b.agents.heading.iter().all(|&h| h == forced || h == SPAWN_HEADING));
+    assert!(b.agents.heading.contains(&forced), "the forced column survived the run");
+    b.agents.heading = a.agents.heading.clone();
+    assert_eq!(state_hash(&a), state_hash(&b), "the heading column leaked into a flag-off tick");
 }

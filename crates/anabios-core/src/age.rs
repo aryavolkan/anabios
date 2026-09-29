@@ -36,13 +36,26 @@ pub fn age_and_starve(world: &mut crate::world::World) {
         if died {
             let sid = world.agents.species_id[i];
             let size = world.agents.genome[i].get(GenomeSlot::Size).max(0.1);
+            // A juvenile leaves a juvenile-sized carcass (growth layer; the
+            // scale is exactly 1.0 with the knob off or once grown).
+            let grown = crate::growth::body_scale_of(
+                world.growth_enabled,
+                world.agents.age[i],
+                &world.agents.genome[i],
+            );
             let pos = world.agents.position[i];
-            world.carcasses.push(crate::carcass::Carcass {
-                pos,
-                flesh: crate::carcass::CARCASS_FLESH_PER_SIZE * size,
-                age: 0,
-                species_id: sid,
-            });
+            let mut flesh = crate::carcass::CARCASS_FLESH_PER_SIZE * size * grown;
+            // Chase: the energy combat strikes took from this agent
+            // (`World::wound_bank`) rides in its carcass, so a fat prey is a
+            // big meal and predation conserves energy. Flag off ⇒ the bank
+            // is never read (and holds 0).
+            if world.chase_enabled {
+                if let Some(bank) = world.wound_bank.get_mut(i) {
+                    flesh += *bank / crate::carcass::FLESH_ENERGY_PER_UNIT;
+                    *bank = 0.0;
+                }
+            }
+            world.carcasses.push(crate::carcass::Carcass { pos, flesh, age: 0, species_id: sid });
             if world.combat_damaged.get(i).copied().unwrap_or(false) {
                 let attacker = world.combat_attacker[i];
                 world.codex.record_combat_death(world.tick, sid, attacker, pos.x, pos.y);

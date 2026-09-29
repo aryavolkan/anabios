@@ -61,9 +61,14 @@ fn full_stack_but_dimorphism(w: &World) -> bool {
         && w.basic_needs_enabled
         && w.mate_seeking_enabled
         && w.territory_enabled
+        && w.gait_enabled
+        && w.turning_enabled
+        && w.gestation_enabled
         && w.disease_enabled
         && w.anthro_race_enabled
         && w.repro_biased_learning
+        && w.growth_enabled
+        && w.chase_enabled
 }
 
 // Warm-ups: a world keeps the longest warm-up of the retired rows it absorbed
@@ -111,9 +116,11 @@ roundtrip_tests! {
         // Absorbed living-sandbox-coevolution (400) and sandbox-large (300).
         "../../../scenarios/sandbox.toml", 400, full_stack, "sandbox (full stack)";
     riverlands_roundtrip:
+        // Its lineage shares are gone (capacity from food, 2026-09-29); the
+        // 4096² self-siting continent is what sets it apart now.
         "../../../scenarios/riverlands.toml", 200,
-        |w: &World| full_stack(w) && !w.lineage_caps.is_empty(),
-        "riverlands (full stack + max_share)";
+        |w: &World| full_stack(w) && w.world_size == 4096.0,
+        "riverlands (4096 continent, full stack)";
     huge_steppe_roundtrip:
         "../../../scenarios/huge-steppe.toml", 120,
         |w: &World| full_stack(w) && w.world_size == 8192.0,
@@ -190,6 +197,60 @@ mod retired_state_fixtures {
     }
 }
 
+/// Gestation: the `gestation_left` countdown and the `pending_litter` store
+/// (the litter's drawn genomes, modules, programs and sexes, plus the father
+/// bookkeeping) are conception RNG output and must survive a snapshot — a
+/// reloaded world that dropped them would deliver nothing where the live one
+/// delivers a litter. Hand-built so the state is provably non-trivial when
+/// saved: a well-fed herd on grass conceives within a few ticks, and the
+/// save lands mid-term. The twelve worlds above round-trip it too (the knob
+/// is on in all of them), but a cap-bound world's warm-up could in principle
+/// end with no pregnancy in flight.
+#[test]
+fn gestation_roundtrip_with_litters_in_flight() {
+    use anabios_core::biome::TerrainType;
+    use anabios_core::genome::{Genome, GenomeSlot};
+    use anabios_core::prelude_test::Vec2;
+    use anabios_core::reproduce::GESTATION_TICKS;
+    let mut w = World::new(11);
+    w.gestation_enabled = true;
+    w.territory_enabled = true;
+    for c in w.biome.cells.iter_mut() {
+        c.terrain = TerrainType::Grass;
+        c.plant_biomass = 1.0;
+    }
+    let mut g = Genome::neutral();
+    g.set(GenomeSlot::ReproductionThreshold, 0.3);
+    g.set(GenomeSlot::Size, 0.8); // litters of two
+    for k in 0..24 {
+        let id =
+            w.spawn_agent(Vec2::new(300.0 + (k % 6) as f32 * 1.2, 300.0 + (k / 6) as f32 * 1.2), g);
+        w.agents.energy[id as usize] = anabios_core::agent::SPAWN_ENERGY * 2.0;
+    }
+    common::run(&mut w, GESTATION_TICKS as u64 / 2);
+    let pregnant =
+        w.agents.iter_alive().filter(|&id| w.agents.gestation_left[id as usize] > 0).count();
+    assert!(pregnant > 0, "warm-up must leave litters in flight (got none)");
+    assert!(
+        w.agents.iter_alive().all(|id| {
+            (w.agents.gestation_left[id as usize] > 0)
+                == w.agents.pending_litter[id as usize].is_some()
+        }),
+        "a countdown and a stored litter go together"
+    );
+    common::assert_roundtrip_world(&mut w, "gestation_enabled with litters in flight");
+    // And the reloaded world delivers them exactly when the live one does.
+    let bytes = anabios_core::snapshot::save_to_bytes(&w).expect("save");
+    let mut reloaded = anabios_core::snapshot::load_from_bytes(&bytes).expect("load");
+    common::run(&mut w, GESTATION_TICKS as u64);
+    common::run(&mut reloaded, GESTATION_TICKS as u64);
+    assert_eq!(
+        anabios_core::snapshot::state_hash(&w),
+        anabios_core::snapshot::state_hash(&reloaded),
+        "births after a reload must match the continuous run"
+    );
+}
+
 /// Territory layer on a NON-default world extent. `collision_spatial` is
 /// `#[serde(skip)]`, so a loaded world comes back with serde's `Default` hash
 /// (1024-wide, res 64) — and a 256-wide world's collision grid ALSO resolves
@@ -215,4 +276,37 @@ fn territory_roundtrip_on_a_256_world_heals_the_collision_hash() {
     }
     common::run(&mut w, 30);
     common::assert_roundtrip_world(&mut w, "territory_enabled on a 256-wide world");
+}
+
+/// Turning inertia: the `heading` column is path-dependent state (each tick
+/// turns it from its previous value), so it must be serialized, not skipped —
+/// a reloaded world that forgot its facings would steer differently on the
+/// very next tick. Hand-built with fixed-intent programs and saved mid-turn,
+/// so the column is provably non-trivial (no slot at the spawn constant) when
+/// it round-trips; the twelve worlds above round-trip it under the full stack.
+#[test]
+fn heading_survives_a_roundtrip_and_the_reloaded_world_keeps_turning() {
+    use anabios_core::genome::Genome;
+    use anabios_core::heading::SPAWN_HEADING;
+    use anabios_core::prelude_test::Vec2;
+    use anabios_core::program::{Node, Program};
+    let mut w = World::new(11);
+    w.turning_enabled = true;
+    for k in 0..12u32 {
+        let id = w.spawn_agent(Vec2::new(300.0 + k as f32 * 4.0, 500.0), Genome::neutral());
+        // Half want due west, half due north: every heading leaves +x.
+        let (v, node) =
+            if k % 2 == 0 { (-1.0, Node::MoveTowardX) } else { (1.0, Node::MoveTowardY) };
+        w.agents.program[id as usize] = Program::from_slice(&[Node::Const(v), node]);
+    }
+    // Two ticks: 1.2 rad into a 1.57 / 3.14 rad turn — every facing mid-turn.
+    common::run(&mut w, 2);
+    assert!(
+        w.agents.iter_alive().all(|id| w.agents.heading[id as usize] != SPAWN_HEADING),
+        "warm-up must leave every heading off the spawn constant"
+    );
+    let bytes = anabios_core::snapshot::save_to_bytes(&w).expect("save");
+    let reloaded = anabios_core::snapshot::load_from_bytes(&bytes).expect("load");
+    assert_eq!(w.agents.heading, reloaded.agents.heading, "heading column must persist");
+    common::assert_roundtrip_world(&mut w, "turning_enabled (heading column mid-turn)");
 }

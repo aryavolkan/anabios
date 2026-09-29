@@ -94,7 +94,15 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-27: the collision resolve now runs up to eight Jacobi
     // passes with a per-pass hash rebuild, a coastline slide and a settle exit
     // (was two fixed passes); every full-stack trajectory moves from tick 1.
-    &[(0, 0x808d1ec15075dd36), (100, 0xe4cf42b1b62c735e), (200, 0x9f98547b9bce1df1)];
+    // Re-pinned 2026-09-28: a newborn is placed clear of both parents' bodies
+    // (collision layer on) instead of on their midpoint; every full-stack
+    // trajectory moves from its first birth.
+    // Refreshed 2026-09-29: the collision audit (swept moves, newborn placement,
+    // the hub and water pulls), the realism layers (gait, growth, turning
+    // inertia, gestation, the chase and its carcass economy) and capacity from
+    // food (no lineage shares, non-binding caps) — every full-stack trajectory
+    // moved from tick 1; see docs/scenarios.md.
+    &[(0, 0x06be2d75627792a5), (100, 0x00d5648403139300), (200, 0x8a28e8e7f018b1b5)];
 
 #[test]
 fn affect_play_matches_golden_hashes() {

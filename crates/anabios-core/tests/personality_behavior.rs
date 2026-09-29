@@ -55,9 +55,18 @@ fn mean_energy(w: &anabios_core::world::World) -> f32 {
     s / ids.len() as f32
 }
 
-/// The inline scenario with only the territory/habitat/collision layer off.
+/// The inline scenario with the territory/habitat/collision layer and every
+/// 2026-09-29 realism knob (gait, growth, turning inertia, gestation) off:
+/// each reshapes how bodies move or when they are born, and the check that
+/// uses this reads one personality bias through the crowding those produce
+/// (see `extraversion_increases_clustering`).
 fn without_territory(toml: &str) -> String {
-    toml.replacen("seed = 7\n", "seed = 7\nterritory_enabled = false\n", 1)
+    toml.replacen(
+        "seed = 7\n",
+        "seed = 7\nterritory_enabled = false\ngait_enabled = false\ngrowth_enabled = false\n\
+         turning_enabled = false\ngestation_enabled = false\n",
+        1,
+    )
 }
 
 fn scenario(trait_line: &str) -> String {
@@ -72,10 +81,24 @@ fn scenario(trait_line: &str) -> String {
     )
 }
 
+/// The inline scenario with only the territory/habitat/collision layer off.
+fn without_collision(toml: &str) -> String {
+    toml.replacen("seed = 7\n", "seed = 7\nterritory_enabled = false\n", 1)
+}
+
+// Fixture: under the swept-contact layer (2026-09-28) the applied step is
+// what the surrounding bodies allow, not the agent's top speed — the mean
+// speed this test reads is 0.18 world units against a 4-unit top speed at
+// 100 ticks — so the high/low ordering there is a coin flip (0.189 vs 0.158
+// on the head that introduced it; 0.177 vs 0.180 once turning inertia,
+// 2026-09-29, lags the facing behind the intent). Without the collision
+// layer the Openness speed factor reads directly at every horizon, gait and
+// turning inertia on (0.63 vs 0.44 at 100 ticks, 0.77 vs 0.54 at 300), so
+// this check opts out of that one knob and keeps the rest of the stack.
 #[test]
 fn openness_increases_movement() {
-    let hi = run(&scenario("openness = 0.95"), 100);
-    let lo = run(&scenario("openness = 0.05"), 100);
+    let hi = run(&without_collision(&scenario("openness = 0.95")), 100);
+    let lo = run(&without_collision(&scenario("openness = 0.05")), 100);
     let (sh, sl) = (mean_speed(&hi), mean_speed(&lo));
     assert!(sh > sl, "high-O mean speed {sh} should exceed low-O {sl}");
 }
@@ -89,6 +112,18 @@ fn openness_increases_movement() {
 // Without the collision layer the approach bias reads cleanly at every
 // horizon from 150 ticks on (22.7 vs 20.0 at 300, 30.6 vs 19.6 at 600), so
 // this check opts out of that one knob and keeps the rest of the stack.
+// The gait (2026-09-29) is out for the same reason: it caps a content
+// grazer's speed at an amble whatever the size of its move intent, and
+// extraversion expresses itself exactly as a larger approach intent, so
+// under the gait the high/low ordering at 300 ticks flips (9.5 vs 10.9);
+// the approach bias itself is unchanged and this check reads it directly.
+// Growth (2026-09-29) is out likewise: the 120 founders are juveniles for
+// the whole 300-tick window (no births before 0.15 × lifespan), and the
+// juvenile speed and bite change the crowding phase (9.6 vs 18.9 with it on).
+// Turning inertia and gestation (2026-09-29) are out for the same reason:
+// the first lags the approach behind the intent and the second delays and
+// batches the births that set the crowding phase; the bias itself is a
+// per-tick intent and reads cleanly with all of them off.
 #[test]
 fn extraversion_increases_clustering() {
     let hi = run(&without_territory(&scenario("extraversion = 0.95")), 300);

@@ -102,7 +102,10 @@ placement = {{ kind = "habitat", herds = 3, radius = {radius}, max_water_dist = 
 #[test]
 fn habitat_anchors_sit_on_vegetated_ground_beside_water() {
     // Pin `radius = 0` so every agent lands exactly on its anchor: this is the
-    // assertion about the *site choice*, with the scatter removed.
+    // assertion about the *site choice*, with the scatter removed — and the
+    // collision layer off, since under it founders seeded on one point are
+    // settled a body apart at spawn (a scatter of its own: seed 2's third
+    // herd member landed at 32.0 from water, a hair past the bound).
     for seed in 0..6u64 {
         let toml = watered_world(
             seed,
@@ -112,6 +115,11 @@ count = 12
 archetype = "mammal_grazer"
 placement = { kind = "habitat", herds = 4, radius = 0.0, max_water_dist = 32.0 }
 "#,
+        )
+        .replacen(
+            "world_size = 2048.0",
+            "territory_enabled = false\nworld_size = 2048.0",
+            1,
         );
         let w = instantiate(&toml);
         for id in w.agents.iter_alive() {
@@ -132,7 +140,9 @@ placement = { kind = "habitat", herds = 4, radius = 0.0, max_water_dist = 32.0 }
 #[test]
 fn habitat_default_water_reach_scales_to_the_field() {
     // `max_water_dist` absent => HABITAT_WATER_CELLS cells of the *actual*
-    // field, not a constant in default-world units.
+    // field, not a constant in default-world units. Radius 0 reads the site
+    // choice alone, so the collision layer's founder settle (a scatter of its
+    // own for founders seeded on one point) is off here too.
     let toml = watered_world(
         3,
         r#"
@@ -141,7 +151,8 @@ count = 16
 archetype = "mammal_grazer"
 placement = { kind = "habitat", herds = 2, radius = 0.0 }
 "#,
-    );
+    )
+    .replacen("world_size = 2048.0", "territory_enabled = false\nworld_size = 2048.0", 1);
     let w = instantiate(&toml);
     let reach = HABITAT_WATER_CELLS * w.biome.cell_size;
     for id in w.agents.iter_alive() {

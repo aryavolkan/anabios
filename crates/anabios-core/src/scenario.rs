@@ -224,6 +224,47 @@ pub struct Scenario {
     /// unchanged.
     #[serde(default = "default_true")]
     pub territory_enabled: bool,
+    /// On by default (scenario schema): gestation and litters — a fertile
+    /// pair conceives instead of spawning a child on the spot; the mother
+    /// carries the litter for `reproduce::GESTATION_TICKS` (extra basal
+    /// upkeep, slower, no second conception, the litter lost if she dies)
+    /// and then delivers `reproduce::litter_size` children (one to three,
+    /// rising with her Size gene) beside herself. Set `false` to opt out;
+    /// the engine's own default (`World::new`) stays off, so the flag-off
+    /// byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
+    pub gestation_enabled: bool,
+    /// On by default (scenario schema): growth and juveniles — an agent is
+    /// born at about a third of its adult size and grows to it over the
+    /// first 15% of its lifespan (`growth::MATURITY_FRAC`); body radius,
+    /// bite, basal metabolism, move cost and (mildly) speed scale with the
+    /// body, and nobody breeds before maturity. Founders start at age 0, so
+    /// a fresh world's first births come after its founders' maturity
+    /// window. Set `false` to opt out; the engine's own default
+    /// (`World::new`) stays off, so the flag-off byte-identity guarantee is
+    /// unchanged.
+    #[serde(default = "default_true")]
+    pub growth_enabled: bool,
+    /// On by default (scenario schema): turning inertia — each agent keeps a
+    /// facing (`AgentBuffers::heading`) that turns toward its wanted
+    /// direction by at most `heading::MAX_TURN_RAD` per tick (more when
+    /// slow), so nobody reverses in one tick, herds stop jittering and paths
+    /// come out as arcs. Set `false` to opt out; the engine's own default
+    /// (`World::new`) stays off, so the flag-off byte-identity guarantee is
+    /// unchanged.
+    #[serde(default = "default_true")]
+    pub turning_enabled: bool,
+    /// On by default (scenario schema): predation as a chase — a stamina bar
+    /// per agent (moving faster than a walk drains it, walking or resting
+    /// refills it; an exhausted agent is held to a walk until it is half
+    /// full), and contact strikes (`Weapon`/`Jaws`) that land with a
+    /// probability set by the predator's speed advantage over the prey's
+    /// escape and by the size ratio, so faster and larger prey are rarely
+    /// caught and exhausted prey easily (`chase.rs`). Set `false` to opt out;
+    /// the engine's own default (`World::new`) stays off, so the flag-off
+    /// byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
+    pub chase_enabled: bool,
     /// On by default (scenario schema): O3 reproductive-success payoff bias
     /// — cultural transmission declines a maladaptive-practice channel when
     /// its local holders show a higher observed birth-failure fraction than
@@ -262,6 +303,15 @@ pub struct Scenario {
     /// flag-off byte-identity guarantee is unchanged.
     #[serde(default = "default_true")]
     pub disease_enabled: bool,
+    /// On by default (scenario schema): gait — movement speed follows
+    /// urgency instead of always being the Locomotor maximum: fleeing,
+    /// fighting and hunting agents sprint, the seeking moods walk, content
+    /// grazers amble, and a sprint costs superlinearly more energy per unit
+    /// distance (`gait.rs`). Set `false` to opt out; the engine's own
+    /// default (`World::new`) stays off, so the flag-off byte-identity
+    /// guarantee is unchanged.
+    #[serde(default = "default_true")]
+    pub gait_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -412,10 +462,13 @@ pub struct AgentSpec {
     /// occupy, in `(0, 1]`. Absent (the default) = no per-lineage cap, the
     /// byte-identical behavior every pre-existing scenario has.
     ///
-    /// Without it, the global cap is first-come: the fastest breeder fills
-    /// it and no other lineage is ever born again, which is why the shipped
-    /// predator/prey scenarios all decay to a single lineage. Set a share on
-    /// the prey (e.g. `0.8`) to leave the predators room. The share is
+    /// Without it, a binding global cap is first-come: the fastest breeder
+    /// fills it and no other lineage is ever born again, which is why the
+    /// shipped predator/prey scenarios once decayed to a single lineage and
+    /// set a share on the prey (e.g. `0.8`) to leave the predators room. No
+    /// curated world sets one any more (2026-09-29): their caps are safety
+    /// budgets above the food-limited peak, so the share would only ever be
+    /// bookkeeping (docs/scenarios.md, "Carrying capacity"). The share is
     /// keyed by founder lineage, so speciation splinters keep counting
     /// against it. Specs without an `archetype` all share species 0, and so
     /// share one cap.
@@ -1107,6 +1160,11 @@ impl Scenario {
         w.anthro_race_enabled = self.anthro_race_enabled;
         w.disease_enabled = self.disease_enabled;
         w.territory_enabled = self.territory_enabled;
+        w.gestation_enabled = self.gestation_enabled;
+        w.gait_enabled = self.gait_enabled;
+        w.growth_enabled = self.growth_enabled;
+        w.turning_enabled = self.turning_enabled;
+        w.chase_enabled = self.chase_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
@@ -1314,6 +1372,17 @@ impl Scenario {
                 );
             }
             spec_positions.push(placed_positions);
+        }
+        // Collision layer: founders placed on one another (a cluster of
+        // radius 0, or several herds at one shared site) are settled apart
+        // at spawn, exactly as newborns are (`collision::settle_newborns`,
+        // in id order, each clear of the ones placed before it) — without it
+        // three founders of `habitat-territories` shared one point for the
+        // first rendered tick. Flag off: no-op, so the flag-off trajectory
+        // pins do not move.
+        if w.territory_enabled {
+            let founders: Vec<u32> = w.agents.iter_alive().collect();
+            crate::collision::settle_newborns(&mut w, &founders);
         }
         w
     }
@@ -2186,7 +2255,11 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         assert!(s.sexual_dimorphism_enabled && s.domestication_enabled);
         assert!(s.knowledge_enabled && s.practices_enabled && s.basic_needs_enabled);
         assert!(s.mate_seeking_enabled && s.territory_enabled && s.disease_enabled);
-        assert!(s.anthro_race_enabled && s.repro_biased_learning);
+        assert!(
+            s.anthro_race_enabled && s.repro_biased_learning && s.gait_enabled && s.growth_enabled
+        );
+        assert!(s.gestation_enabled);
+        assert!(s.chase_enabled);
         assert_eq!(s.season_period, 2000);
         assert_eq!(s.env_period, 0);
         assert_eq!(s.climate_drift_rate, 0.0);
@@ -2194,6 +2267,84 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         // The engine layer is untouched: a bare World is still all-off.
         let w = World::new(1);
         assert!(!w.territory_enabled && !w.affect_enabled && !w.cognition_enabled);
+        assert!(!w.gait_enabled && !w.growth_enabled && !w.gestation_enabled);
+    }
+
+    #[test]
+    fn gestation_flag_parses_and_instantiates() {
+        let on = Scenario::parse_toml("name = \"g\"\nseed = 1\n").expect("parse").instantiate();
+        assert!(on.gestation_enabled, "the schema defaults gestation on");
+        let off = Scenario::parse_toml("name = \"g\"\nseed = 1\ngestation_enabled = false\n")
+            .expect("parse")
+            .instantiate();
+        assert!(!off.gestation_enabled, "an explicit opt-out is copied to the world");
+    }
+
+    #[test]
+    fn gait_flag_defaults_on_and_opts_out() {
+        let on = Scenario::parse_toml("name = \"g\"\nseed = 1\n").expect("parse");
+        assert!(on.gait_enabled && on.instantiate().gait_enabled);
+        let off =
+            Scenario::parse_toml("name = \"g\"\nseed = 1\ngait_enabled = false\n").expect("parse");
+        assert!(!off.gait_enabled);
+        let w = off.instantiate();
+        assert!(!w.gait_enabled && w.territory_enabled, "only gait opted out");
+    }
+
+    /// Collision layer: founders seeded on one point are settled apart at
+    /// spawn (no colliding pair closer than its gap); with the layer off
+    /// they stay where the placement put them.
+    #[test]
+    fn coincident_founders_are_settled_apart_when_collision_is_on() {
+        for on in [true, false] {
+            let toml = format!(
+                "name = \"f\"\nseed = 3\nterritory_enabled = {on}\n\n[[agents]]\ncount = 6\n\
+                 placement = {{ kind = \"cluster\", center_x = 300.0, center_y = 300.0, radius = 0.0 }}\n"
+            );
+            let w = Scenario::parse_toml(&toml).expect("parse").instantiate();
+            let ids: Vec<u32> = w.agents.iter_alive().collect();
+            assert_eq!(ids.len(), 6);
+            let mut min_ratio = f32::INFINITY;
+            for (k, &a) in ids.iter().enumerate() {
+                for &b in &ids[k + 1..] {
+                    // Live radii: the schema defaults growth on, so founders
+                    // are juveniles at spawn.
+                    let r = |id: u32| {
+                        crate::collision::live_body_radius(
+                            &w.agents.genome[id as usize],
+                            w.agents.age[id as usize],
+                            w.growth_enabled,
+                        )
+                    };
+                    let gap = r(a) + r(b);
+                    let d = crate::spatial::torus_distance(
+                        w.agents.position[a as usize],
+                        w.agents.position[b as usize],
+                        w.world_size,
+                    );
+                    min_ratio = min_ratio.min(d / gap);
+                }
+            }
+            if on {
+                assert!(
+                    min_ratio >= 1.0 - 1e-4,
+                    "settled apart: closest pair at {min_ratio} of its gap"
+                );
+            } else {
+                assert_eq!(min_ratio, 0.0, "layer off: founders stay coincident");
+            }
+        }
+    }
+
+    #[test]
+    fn growth_flag_defaults_on_and_opts_out() {
+        let on = Scenario::parse_toml("name = \"g\"\nseed = 1\n").expect("parse");
+        assert!(on.growth_enabled);
+        assert!(on.instantiate().growth_enabled);
+        let off = Scenario::parse_toml("name = \"g\"\nseed = 1\ngrowth_enabled = false\n")
+            .expect("parse");
+        assert!(!off.growth_enabled);
+        assert!(!off.instantiate().growth_enabled);
     }
 
     #[test]
@@ -2206,6 +2357,18 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         assert_eq!(s.season_period, 0);
         let w = s.instantiate();
         assert!(!w.territory_enabled && w.affect_enabled);
+    }
+
+    #[test]
+    fn chase_flag_parses_and_instantiates() {
+        let on =
+            Scenario::parse_toml("name = \"c\"\nseed = 1\n[[agents]]\ncount = 2\n").expect("parse");
+        assert!(on.chase_enabled, "on by default in the schema");
+        assert!(on.instantiate().chase_enabled);
+        let off =
+            Scenario::parse_toml("name = \"c\"\nseed = 1\nchase_enabled = false\n").expect("parse");
+        assert!(!off.chase_enabled);
+        assert!(!off.instantiate().chase_enabled);
     }
 
     #[test]

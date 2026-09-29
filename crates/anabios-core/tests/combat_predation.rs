@@ -134,6 +134,46 @@ fn death_forms_carcass_with_flesh_proportional_to_size() {
     assert_eq!(c.species_id, 0);
 }
 
+/// Chase: the energy strikes took from an agent (`World::wound_bank`) rides
+/// in its carcass at `FLESH_ENERGY_PER_UNIT` energy per flesh unit; flag
+/// off, the bank is never read and the carcass carries the Size term alone.
+#[test]
+fn death_returns_the_wound_bank_as_carcass_flesh_under_the_chase() {
+    use anabios_core::carcass::{CARCASS_FLESH_PER_SIZE, FLESH_ENERGY_PER_UNIT};
+    for chase_on in [true, false] {
+        let mut w = World::new(3);
+        w.chase_enabled = chase_on;
+        let mut g = Genome::neutral();
+        g.set(GenomeSlot::Size, 0.5);
+        let id = w.spawn_agent(Vec2::new(300.0, 300.0), g);
+        w.agents.modules[id as usize]
+            .retain(|m| !matches!(m, Module::Locomotor { .. } | Module::Mouth { .. }));
+        w.agents.energy[id as usize] = 0.3;
+        // Ten flesh units' worth of strikes already taken (the tick sizes
+        // the vector; seeded here before the first step).
+        w.wound_bank.resize(w.agents.capacity(), 0.0);
+        w.wound_bank[id as usize] = 40.0;
+        for _ in 0..50 {
+            step(&mut w);
+            if !w.agents.is_alive(id) {
+                break;
+            }
+        }
+        assert!(!w.agents.is_alive(id), "agent should have starved");
+        assert_eq!(w.carcasses.len(), 1);
+        let base = 0.5 * CARCASS_FLESH_PER_SIZE;
+        let expect = if chase_on { base + 40.0 / FLESH_ENERGY_PER_UNIT } else { base };
+        assert!(
+            (w.carcasses[0].flesh - expect).abs() < 1e-3,
+            "chase {chase_on}: flesh {} vs {expect}",
+            w.carcasses[0].flesh
+        );
+        if chase_on {
+            assert_eq!(w.wound_bank[id as usize], 0.0, "the bank is spent at death");
+        }
+    }
+}
+
 #[test]
 fn carcass_decays_and_is_removed_after_decay_ticks() {
     use anabios_core::carcass::{carcass_step, Carcass, CARCASS_DECAY_TICKS};

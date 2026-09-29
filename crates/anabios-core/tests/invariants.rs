@@ -322,7 +322,7 @@ fn assert_habitat_classes_stay_on_their_terrain(seed: u64) {
 #[ignore]
 fn territory_measurement_probe() {
     use anabios_core::biome::TerrainType;
-    use anabios_core::collision::body_radius;
+    use anabios_core::collision::live_body_radius;
     use anabios_core::habitat::Locomotion;
     use anabios_core::scenario::Scenario;
     let base = include_str!("../../../scenarios/habitat-territories.toml");
@@ -372,7 +372,9 @@ fn territory_measurement_probe() {
                 if !Locomotion::of(ga).collides_with(Locomotion::of(gb)) {
                     continue;
                 }
-                let gap = body_radius(ga) + body_radius(gb);
+                // The gap the resolve enforces: grown radii under `growth_enabled`.
+                let gap = live_body_radius(ga, w.agents.age[a as usize], w.growth_enabled)
+                    + live_body_radius(gb, w.agents.age[b as usize], w.growth_enabled);
                 let d = anabios_core::spatial::torus_distance(
                     w.agents.position[a as usize],
                     w.agents.position[b as usize],

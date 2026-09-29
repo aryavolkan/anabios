@@ -259,6 +259,18 @@ pub struct World {
     /// byte-identical trajectories with the flag off.
     #[serde(default)]
     pub territory_enabled: bool,
+    /// When true, predation is a chase (`chase.rs`): every agent carries a
+    /// stamina bar that drains while it moves faster than a walk and refills
+    /// while it walks or rests, an exhausted agent is held to the walk
+    /// (hysteresis), and a contact strike lands with a probability set by
+    /// the predator's speed advantage over the prey's escape and by the size
+    /// ratio (a stateless hash roll — nothing drawn from `rng`). Off by
+    /// default — the stamina stage is a strict no-op, the per-slot
+    /// `stamina`/`exhausted` vectors stay full/clear and unread, and every
+    /// strike lands as before: zero RNG and byte-identical trajectories with
+    /// the flag off (layout growth only).
+    #[serde(default)]
+    pub chase_enabled: bool,
     /// Per-species territory, indexed by species id. Grown lazily by
     /// `territory::territory_step`, ONLY when `territory_enabled` — empty (and
     /// unread) otherwise. Serialized: the centre is a path-dependent EMA, so
@@ -266,6 +278,47 @@ pub struct World {
     /// footgun).
     #[serde(default)]
     pub species_territories: Vec<crate::territory::Territory>,
+    /// When true, births take time: a fertile pair conceives where it would
+    /// have bred (same eligibility, mate choice, energy payment and RNG
+    /// draws), the mother carries the litter for
+    /// `reproduce::GESTATION_TICKS` — paying `GESTATION_UPKEEP` more basal
+    /// metabolism, moving at `GESTATION_SPEED`, unable to conceive again,
+    /// losing the litter if she dies — then delivers `reproduce::litter_size`
+    /// children beside herself. Off by default — the instant-birth path is
+    /// untouched (zero extra RNG draws, byte-identical trajectories).
+    /// Serialized (v45).
+    #[serde(default)]
+    pub gestation_enabled: bool,
+    /// When true, gait is active (`gait.rs`): `decide_all` folds an
+    /// urgency-chosen speed fraction into the LENGTH of `desired_direction`
+    /// — flee, fight and hunt at the Locomotor maximum, the seeking moods
+    /// walk (`gait::GAIT_WALK`), a content grazer ambles
+    /// (`gait::GAIT_AMBLE`), scaled down further by how hard the program
+    /// pushes — and `integrate_all` charges the move cost a superlinear
+    /// `1 + GAIT_SPRINT_COST · frac²` factor. Off by default: the direction
+    /// stays a unit vector and the factor is never applied, so a flag-off
+    /// world is byte-identical (zero RNG either way). Serialized (v45).
+    #[serde(default)]
+    pub gait_enabled: bool,
+    /// When true, growth and juveniles are active (`growth.rs`): an agent is
+    /// born at `growth::JUVENILE_BODY` of its adult size and grows to it over
+    /// the first `growth::MATURITY_FRAC` of its lifespan (a smoothstep of
+    /// `age`), scaling its collision body radius, grazing bite, basal
+    /// metabolism, move cost and (mildly) speed, and it cannot breed before
+    /// maturity. Off by default — every multiplier is then exactly 1.0 and
+    /// the maturity gate inert: zero RNG draws, byte-identical trajectories
+    /// with the flag off. Serialized (v45).
+    #[serde(default)]
+    pub growth_enabled: bool,
+    /// When true, turning inertia is active: each agent carries a persistent
+    /// facing (`AgentBuffers::heading`) that `tick::decide_all` turns toward
+    /// its wanted direction by at most `heading::MAX_TURN_RAD` per tick (more
+    /// when slow), and the turned heading — at the length gait chose — is the
+    /// direction integrate applies, so nobody reverses in one tick. Off by
+    /// default — nothing reads or writes the column, zero RNG draws,
+    /// byte-identical trajectories with the flag off. Serialized (v45).
+    #[serde(default)]
+    pub turning_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -363,6 +416,18 @@ pub struct World {
     /// Scratch, `#[serde(skip)]`.
     #[serde(skip)]
     pub collision_scratch: Vec<crate::prelude::Vec2>,
+    /// This tick's newborn ids, collected by `reproduce_all` for
+    /// `collision::settle_newborns`. Scratch, `#[serde(skip)]`.
+    #[serde(skip)]
+    pub newborn_scratch: Vec<u32>,
+    /// Per-slot "born this tick" marks for `collision::settle_newborns`.
+    /// Scratch, `#[serde(skip)]`.
+    #[serde(skip)]
+    pub newborn_mark: Vec<bool>,
+    /// Per-slot contact times for `collision::sweep_moves`. Scratch,
+    /// `#[serde(skip)]`.
+    #[serde(skip)]
+    pub sweep_scratch: Vec<f32>,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
@@ -425,6 +490,35 @@ pub struct World {
     /// `signal_active`) via `detect_structured_signaling`, so like
     /// `still_ticks` it MUST persist across a snapshot round-trip. Serialized.
     pub prev_desired_direction: Vec<crate::prelude::Vec2>,
+    /// Chase stamina per agent slot (`chase.rs`), in `[0,1]`; a fresh slot
+    /// holds a full bar (`1.0`). Drained by moving faster than a walk,
+    /// refilled by walking or resting, and written only by
+    /// `chase::stamina_step` under `chase_enabled` (which also resets a dead
+    /// slot to full, so the newborn that next reuses it starts fresh); sized
+    /// to agent capacity by `resize_scratch`, never read with the flag off.
+    /// Serialized, like `still_ticks`: a path-dependent accumulator feeding
+    /// hashed movement (the v13 footgun) — and, like it, kept here rather
+    /// than as an `AgentBuffers` column, so the `agents` layout (and the
+    /// flag-off trajectory pins that hash it) is untouched.
+    #[serde(default)]
+    pub stamina: Vec<f32>,
+    /// Exhaustion hysteresis bit per slot (chase): set when `stamina`
+    /// reaches `chase::STAMINA_EXHAUST_AT`, cleared once it climbs back to
+    /// `chase::STAMINA_RECOVER_AT`. While set, `integrate_all` holds the
+    /// agent to a walk and `combat_pass` reads its lunge as a walk. Same
+    /// gating, sizing and serialization as `stamina`.
+    #[serde(default)]
+    pub exhausted: Vec<bool>,
+    /// Wound bank per agent slot (chase): the energy combat strikes have
+    /// taken from this agent that nobody recovered as spoils. A strike
+    /// destroys prey energy (its HP *is* its energy); with `chase_enabled`
+    /// that energy is banked here instead and returned as carcass flesh when
+    /// the agent dies (`age::age_and_starve`), so a fat prey is a big meal
+    /// and predation conserves energy. Written by `interact::combat_pass`
+    /// and zeroed at death and on dead slots (`chase::stamina_step`); sized
+    /// like `stamina`, never read with the flag off. Serialized.
+    #[serde(default)]
+    pub wound_bank: Vec<f32>,
     /// Cumulative count of successful cross-species swaps over the run.
     /// Counts each initiator-side swap: `trade_pass` visits every agent as an
     /// initiator, so a reciprocal pair (each is the other's nearest partner)
@@ -523,7 +617,12 @@ impl World {
             anthro_race_enabled: false,
             disease_enabled: false,
             territory_enabled: false,
+            chase_enabled: false,
             species_territories: Vec::new(),
+            gestation_enabled: false,
+            gait_enabled: false,
+            growth_enabled: false,
+            turning_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
@@ -553,6 +652,9 @@ impl World {
             // Placeholder (3x3); `collision::rebuild_hash` sizes it on first use.
             collision_spatial: UniformSpatialHash::with_dims(crate::biome::WORLD_SIZE_DEFAULT, 3),
             collision_scratch: Vec::new(),
+            newborn_scratch: Vec::new(),
+            newborn_mark: Vec::new(),
+            sweep_scratch: Vec::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),
@@ -565,6 +667,9 @@ impl World {
             hub_trade_tally: Vec::new(),
             still_ticks: Vec::new(),
             prev_desired_direction: Vec::new(),
+            stamina: Vec::new(),
+            exhausted: Vec::new(),
+            wound_bank: Vec::new(),
             total_trades: 0,
             culture_mask: Vec::new(),
         }
@@ -769,6 +874,16 @@ impl World {
         if self.still_ticks.len() < cap {
             self.still_ticks.resize(cap, 0);
         }
+        // Chase: a fresh slot holds a full bar and is not exhausted.
+        if self.stamina.len() < cap {
+            self.stamina.resize(cap, 1.0);
+        }
+        if self.exhausted.len() < cap {
+            self.exhausted.resize(cap, false);
+        }
+        if self.wound_bank.len() < cap {
+            self.wound_bank.resize(cap, 0.0);
+        }
     }
 }
 
@@ -808,5 +923,40 @@ mod tests {
         let w = World::new(1);
         assert!(!w.territory_enabled, "territory layer is opt-in; off by default");
         assert!(w.species_territories.is_empty());
+    }
+
+    #[test]
+    fn gestation_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.gestation_enabled, "gestation is opt-in at the engine layer; off by default");
+    }
+
+    #[test]
+    fn gait_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.gait_enabled, "gait is opt-in; off by default");
+    }
+
+    #[test]
+    fn growth_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.growth_enabled, "growth is opt-in at the engine layer; off by default");
+    }
+
+    #[test]
+    fn turning_inertia_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.turning_enabled, "turning inertia is opt-in; off by default");
+    }
+
+    #[test]
+    fn chase_defaults_off_with_full_stamina() {
+        let mut w = World::new(1);
+        assert!(!w.chase_enabled, "chase predation is opt-in; off by default");
+        let id = w.spawn_agent(Vec2::new(10.0, 10.0), Genome::neutral());
+        w.resize_scratch();
+        assert_eq!(w.stamina.len(), w.agents.capacity(), "sized to capacity like still_ticks");
+        assert_eq!(w.stamina[id as usize], 1.0, "a fresh slot holds a full bar");
+        assert!(!w.exhausted[id as usize]);
     }
 }

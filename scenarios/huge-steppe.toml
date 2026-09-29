@@ -1,8 +1,13 @@
 # Huge steppe: an 8192^2 world (biome grid 1024^2, spatial hash 512^2) — 4x a
-# 4096^2 tier in linear extent (16x the area) — with a 6k population budget,
-# so this scenario exercises world-scale (not population-scale) throughput:
-# how the substrate holds up when the biome field itself gets much bigger
-# while the agent count stays in the existing design budget.
+# 4096^2 tier in linear extent (16x the area) — with a 6k population budget
+# that is a deliberate ceiling, the one curated world whose cap binds: with
+# the cap lifted the steppe's food carried 78,900 grazers at tick 4000 and
+# was still climbing (2,020 at 500, 11,800 at 2000, 31,000 at 3000), at
+# 780 ms per tick in the atlas. The scenario exercises world-scale (not
+# population-scale) throughput — how the substrate holds up when the biome
+# field itself gets much bigger while the agent count stays in the design
+# budget — so the budget stays (see docs/scenarios.md, "Carrying
+# capacity").
 # `biome_step_interval` is left at its default (1, today's every-10-ticks
 # cadence). Runs the full stack (see docs/scenarios.md); opt-outs: none.
 name = "huge-steppe"

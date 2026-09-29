@@ -120,7 +120,15 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-27: the collision resolve now runs up to eight Jacobi
     // passes with a per-pass hash rebuild, a coastline slide and a settle exit
     // (was two fixed passes); every full-stack trajectory moves from tick 1.
-    &[(0, 0x75704801cc76d91a), (100, 0x1f7d211ea492d346), (300, 0x3f5842c8203edb2b)];
+    // Re-pinned 2026-09-28: a newborn is placed clear of both parents' bodies
+    // (collision layer on) instead of on their midpoint; every full-stack
+    // trajectory moves from its first birth.
+    // Refreshed 2026-09-29: the collision audit (swept moves, newborn placement,
+    // the hub and water pulls), the realism layers (gait, growth, turning
+    // inertia, gestation, the chase and its carcass economy) and capacity from
+    // food (no lineage shares, non-binding caps) — every full-stack trajectory
+    // moved from tick 1; see docs/scenarios.md.
+    &[(0, 0x3651a748bbc86747), (100, 0x4c9cf6641f62b1f9), (300, 0xc3968e0ceb81f927)];
 
 #[test]
 fn affect_social_matches_golden_hashes() {
