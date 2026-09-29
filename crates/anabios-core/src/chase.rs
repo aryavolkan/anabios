@@ -32,10 +32,21 @@
 //! the flag-off one only through the chase itself, never through a shifted
 //! RNG stream — the `personality_rng` substream's rationale.
 //!
-//! Flag off ⇒ `stamina_step` early-returns (the vectors stay 1.0 / false and
-//! are never read), `integrate_all` skips the cap and `combat_pass` lands
-//! every strike as before: zero RNG, byte-identical (the flag-off
-//! trajectory pins in `tests/determinism.rs` are unchanged, and
+//! **Wound bank.** A strike takes energy from the prey (its HP *is* its
+//! energy); with the flag on that energy is not destroyed but banked on the
+//! prey (`World::wound_bank`, less any spoils the attacker already
+//! recovered) and returned as carcass flesh when the prey dies
+//! (`age::age_and_starve`, at `carcass::FLESH_ENERGY_PER_UNIT`), so a fat
+//! prey is a big meal and a kill conserves energy. Without it a grazer that
+//! ambled itself to 400 energy took 25 strikes to bring down and yielded
+//! the same 32-energy carcass as a lean one — the predator paid more for
+//! the kill than the carcass returned, and no pursuer lineage fed itself.
+//!
+//! Flag off ⇒ `stamina_step` early-returns (the vectors stay 1.0 / false /
+//! 0 and are never read), `integrate_all` skips the cap, `combat_pass`
+//! lands every strike as before and banks nothing, and a carcass carries
+//! the Size term alone: zero RNG, byte-identical (the flag-off trajectory
+//! pins in `tests/determinism.rs` are unchanged, and
 //! `tests::flag_off_columns_never_influence_behaviour` proves the vectors
 //! are unread).
 
@@ -167,17 +178,23 @@ pub fn stamina_step(world: &mut World) {
     if world.exhausted.len() < cap {
         world.exhausted.resize(cap, false);
     }
+    if world.wound_bank.len() < cap {
+        world.wound_bank.resize(cap, 0.0);
+    }
     let coupling = world.gene_tech_coupling;
     let growth_enabled = world.growth_enabled;
     let agents = &world.agents;
     let stamina = &mut world.stamina;
     let exhausted = &mut world.exhausted;
+    let wound_bank = &mut world.wound_bank;
     for i in 0..cap {
         if !agents.is_alive(i as u32) {
             // A dead slot reads as fresh, so the newborn that next reuses it
-            // (reproduce, stage 6, after this stage) starts with a full bar.
+            // (reproduce, stage 6, after this stage) starts with a full bar
+            // and no wounds.
             stamina[i] = 1.0;
             exhausted[i] = false;
+            wound_bank[i] = 0.0;
             continue;
         }
         let speed = agents.velocity[i].length();
@@ -483,6 +500,7 @@ mod tests {
                 for i in 0..w.agents.capacity() {
                     w.stamina[i] = 0.0;
                     w.exhausted[i] = true;
+                    w.wound_bank[i] = 123.0;
                 }
             }
             w
@@ -495,6 +513,7 @@ mod tests {
         }
         assert!(clean.stamina.iter().all(|&s| s == 1.0), "flag off: stamina untouched");
         assert!(clean.exhausted.iter().all(|&e| !e), "flag off: nobody exhausted");
+        assert!(clean.wound_bank.iter().all(|&b| b == 0.0), "flag off: no wounds banked");
         // The poison survives on every founder still alive (only `kill`
         // resets a dead slot's columns and `spawn` fills a newborn's — the
         // dead-slot / birth convention every column follows; a newborn may
@@ -507,10 +526,12 @@ mod tests {
             }
             assert_eq!(poisoned.stamina[id as usize], 0.0, "flag off: poison untouched");
             assert!(poisoned.exhausted[id as usize], "flag off: poison untouched");
+            assert_eq!(poisoned.wound_bank[id as usize], 123.0, "flag off: poison untouched");
         }
         for i in 0..poisoned.agents.capacity() {
             poisoned.stamina[i] = 1.0;
             poisoned.exhausted[i] = false;
+            poisoned.wound_bank[i] = 0.0;
         }
         assert_eq!(
             state_hash(&clean),

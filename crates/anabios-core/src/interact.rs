@@ -317,6 +317,15 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         if spoils > 0.0 {
             world.agents.energy[i] += spoils * net;
         }
+        // Chase: the energy the strike took from the prey (less any spoils
+        // already transferred) is banked on the prey and comes back as
+        // carcass flesh at its death — a strike moves energy into the
+        // carcass rather than destroying it. Flag off ⇒ untouched.
+        if world.chase_enabled {
+            if let Some(bank) = world.wound_bank.get_mut(t) {
+                *bank += net - spoils * net;
+            }
+        }
         world.agents.energy[i] -= weapon.energy_cost;
         world.combat_damaged[t] = true;
         world.combat_attacker[t] = world.agents.species_id[i];
@@ -1091,6 +1100,29 @@ mod tests {
             } else {
                 assert!(w.combat_damaged[target as usize], "flag off: every strike lands");
                 assert!((lost - 8.0).abs() < 1e-5, "full Weapon damage, as before");
+            }
+        }
+    }
+
+    /// Chase: a landed strike banks the energy it took from the prey
+    /// (`World::wound_bank`) for its carcass; flag off, nothing is banked.
+    #[test]
+    fn chase_strike_banks_the_energy_it_takes_from_the_prey() {
+        for chase_on in [true, false] {
+            let mut w = World::new(13);
+            w.chase_enabled = chase_on;
+            let (attacker, target) = setup_chase_pair(&mut w);
+            w.agents.genome[attacker as usize].set(GenomeSlot::Size, 1.0);
+            w.resize_scratch();
+            let e_tgt = w.agents.energy[target as usize];
+            interact_all(&mut w);
+            let lost = e_tgt - w.agents.energy[target as usize];
+            assert!((lost - 8.0).abs() < 1e-5, "the strike lands: {lost}");
+            let banked = w.wound_bank[target as usize];
+            if chase_on {
+                assert!((banked - lost).abs() < 1e-5, "banked {banked} vs lost {lost}");
+            } else {
+                assert_eq!(banked, 0.0, "flag off: nothing banked");
             }
         }
     }

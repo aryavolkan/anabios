@@ -219,18 +219,19 @@ use crate::world::World;
 ///     `Option<PendingLitter>` per slot: the litter's drawn
 ///     genomes/modules/programs/sexes, father slot + lineage + genome,
 ///     species), and `World.chase_enabled` (bool; `chase.rs`) with the
-///     per-slot `World.{stamina, exhausted}` vectors (the stamina bar, `f32`,
-///     full for a fresh slot; the exhaustion hysteresis bit — serialized
-///     accumulators kept on `World` like `still_ticks`, so they add no agent
-///     column). Growth is a pure function of the existing `age` column and
+///     per-slot `World.{stamina, exhausted, wound_bank}` vectors (the
+///     stamina bar, `f32`, full for a fresh slot; the exhaustion hysteresis
+///     bit; the energy combat strikes took from the slot, returned as
+///     carcass flesh at death — serialized accumulators kept on `World` like
+///     `still_ticks`, so they add no agent column). Growth is a pure function of the existing `age` column and
 ///     the genome lifespan, so it adds no other state. All five knobs off in
 ///     the engine default and in every pre-flip fixture ⇒ zero extra RNG and
 ///     byte-identical trajectories with the flags off: nothing reads or
 ///     writes the heading column (it stays at `heading::SPAWN_HEADING`,
 ///     pinned by `tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column`),
 ///     the gestation columns stay `0`/`None`, the instant-birth path draws
-///     and computes exactly as before, and the stamina vectors stay
-///     1.0/false and unread while every strike lands as before (pinned by
+///     and computes exactly as before, and the chase vectors stay
+///     1.0/false/0 and unread while every strike lands as before (pinned by
 ///     `chase::tests::flag_off_columns_never_influence_behaviour`). The
 ///     flag-off trajectory guards (`*_trajectory_is_pinned` in
 ///     `tests/determinism.rs`) hash the pre-existing agent columns and hold

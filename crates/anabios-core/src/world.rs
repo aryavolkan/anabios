@@ -509,6 +509,16 @@ pub struct World {
     /// gating, sizing and serialization as `stamina`.
     #[serde(default)]
     pub exhausted: Vec<bool>,
+    /// Wound bank per agent slot (chase): the energy combat strikes have
+    /// taken from this agent that nobody recovered as spoils. A strike
+    /// destroys prey energy (its HP *is* its energy); with `chase_enabled`
+    /// that energy is banked here instead and returned as carcass flesh when
+    /// the agent dies (`age::age_and_starve`), so a fat prey is a big meal
+    /// and predation conserves energy. Written by `interact::combat_pass`
+    /// and zeroed at death and on dead slots (`chase::stamina_step`); sized
+    /// like `stamina`, never read with the flag off. Serialized.
+    #[serde(default)]
+    pub wound_bank: Vec<f32>,
     /// Cumulative count of successful cross-species swaps over the run.
     /// Counts each initiator-side swap: `trade_pass` visits every agent as an
     /// initiator, so a reciprocal pair (each is the other's nearest partner)
@@ -659,6 +669,7 @@ impl World {
             prev_desired_direction: Vec::new(),
             stamina: Vec::new(),
             exhausted: Vec::new(),
+            wound_bank: Vec::new(),
             total_trades: 0,
             culture_mask: Vec::new(),
         }
@@ -869,6 +880,9 @@ impl World {
         }
         if self.exhausted.len() < cap {
             self.exhausted.resize(cap, false);
+        }
+        if self.wound_bank.len() < cap {
+            self.wound_bank.resize(cap, 0.0);
         }
     }
 }

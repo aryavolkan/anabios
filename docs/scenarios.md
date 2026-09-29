@@ -212,9 +212,16 @@ still costs the attacker the lunge. With gait on only fleeing, fighting and
 hunting agents sprint, so grazers never tire and a chase is decided by who
 tires first; with gait off every move is a sprint and herds and hunters
 alike cycle between sprint and walk (moves cut short by the swept contact
-in a crowd read as a walk either way). The mechanism and its constants are
-in `crates/anabios-core/src/chase.rs`. The validation bar was not re-run
-for this change.
+in a crowd read as a walk either way). The same knob makes a kill conserve
+energy: the energy a strike takes from the prey (its HP is its energy) is
+banked on the prey and returned as carcass flesh when it dies, so a fat
+prey is a big meal. Without that a grazer the gait let amble itself to 400
+energy took 25 one-energy strikes to bring down and yielded the same
+32-energy carcass as a lean one, and the mammal pursuers of `predator-prey`
+starved from tick 250 on in every seed once the growth layer stopped the
+founders breeding off their spawn energy (mean energy 35 at tick 250, 15
+by 750, the lineage gone by 1250). The mechanism and its constants are in
+`crates/anabios-core/src/chase.rs`.
 
 ## Running
 
