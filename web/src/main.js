@@ -64,6 +64,7 @@ const state = {
   follow: false,
   lastColorTick: -1,
   lastStatsTick: -1,
+  animTick: 0,      // src.tick at the last forest-transition step
   fps: 0,
   rate: 0,
   frames: 0,
@@ -143,14 +144,16 @@ function isWater(x, y) { return state.terrain ? state.terrain.isWater(x, y) : fa
 /** Village update + the forest clearings under the huts (trees stand back from a village while its layer is on). */
 function updateVillages(src, tick, instant = false) {
   layers.villages.update(src.sites(), tick, heightAt, 4, instant);
-  syncClearings();
+  // A time jump draws its villages grown: their clearings are made at once too.
+  syncClearings(false, instant || layers.villages.jumped);
 }
-function syncClearings(force = false) {
+/** `force`: the layer was toggled (trees ease back in, or out of the huts' way). */
+function syncClearings(force = false, snap = false) {
   if (!state.terrain) return;
   if (!layers.villages.mesh.visible) { if (force) state.terrain.forest.setClearings([]); return; }
   if (force) layers.villages.clearingKey = "";
   const circles = layers.villages.clearings();
-  if (circles) state.terrain.forest.setClearings(circles);
+  if (circles) state.terrain.forest.setClearings(circles, snap);
 }
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
@@ -323,7 +326,10 @@ function loop(now) {
         for (const ev of src.events()) onEvent(ev, now / 1000);
       }
       if (Math.floor(tick / 10) !== Math.floor(state.lastColorTick / 10)) {
-        state.terrain.updateColors(src.biomeRgba());
+        // Refreshes are ≤ 128 ticks apart in play (64×); a wider gap is a
+        // fast-forward or seek, where scarred trees take their size at once.
+        const gap = tick - state.lastColorTick;
+        state.terrain.updateColors(src.biomeRgba(), gap < 0 || gap > 300);
         state.lastColorTick = tick;
       }
       if (Math.floor(tick / 30) !== Math.floor(state.lastStatsTick / 30) || stepped === 0) {
@@ -363,6 +369,14 @@ function loop(now) {
       stage.setDaylight((src.tick % state.DAY_TICKS) / state.DAY_TICKS);
       state.terrain.water.uniforms.uSun.value.copy(stage.sunDir);
     }
+  }
+
+  // Trees easing into or out of a clearing (or a scar): paced by the ticks
+  // this frame advanced, within a wall-time band (see terrain.js TRANSITION_TICKS).
+  if (state.terrain) {
+    const t = src ? src.tick : 0, dTicks = Math.max(0, t - state.animTick);
+    state.animTick = t;
+    state.terrain.forest.update(reduceMotion ? Infinity : dt, dTicks);
   }
 
   stage.render();

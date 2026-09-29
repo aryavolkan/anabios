@@ -7,7 +7,7 @@
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
     "manifest": "node scripts/manifest.mjs",
-    "test": "node test/body-scale.mjs && node test/villages.mjs && node test/wasm-smoke.mjs",
+    "test": "node test/body-scale.mjs && node test/villages.mjs && node test/forest-clearing.mjs && node test/wasm-smoke.mjs",
     "serve": "python3 -m http.server 8080 --bind 127.0.0.1"
   },
   "dependencies": {

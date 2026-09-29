@@ -445,6 +445,7 @@ export class Villages {
     this.SMOOTH = 120;       // time constant (ticks) of the centroid smoothing
     this.RETIRE = 90;        // ticks an abandoned village takes to fade away
     this.lastTick = -1;
+    this.jumped = false;     // the last update was a time jump (see update)
     this.isWater = () => false;
     this.clearingKey = "";
     this.hominids = new Set();
@@ -494,6 +495,7 @@ export class Villages {
     const jump = instant || this.lastTick < 0 || gap < 0 || gap > this.LINGER;
     const reach = this.RELOCATE * this.radius;
     this.lastTick = tick;
+    this.jumped = jump;   // read by the forest clearing: a jump clears at once
     for (let k = 0; k < sites.count; k++) {
       const o = k * stride, sid = sites.data[o], x = sites.data[o + 1], y = sites.data[o + 2], n = sites.data[o + 3];
       if (!this.hominids.has(sid)) continue;   // not reported ⇒ an existing village lingers and fades
