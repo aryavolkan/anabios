@@ -266,6 +266,16 @@ pub struct World {
     /// footgun).
     #[serde(default)]
     pub species_territories: Vec<crate::territory::Territory>,
+    /// When true, births take time: a fertile pair conceives where it would
+    /// have bred (same eligibility, mate choice, energy payment and RNG
+    /// draws), the mother carries the litter for
+    /// `reproduce::GESTATION_TICKS` — paying `GESTATION_UPKEEP` more basal
+    /// metabolism, moving at `GESTATION_SPEED`, unable to conceive again,
+    /// losing the litter if she dies — then delivers `reproduce::litter_size`
+    /// children beside herself. Off by default — the instant-birth path is
+    /// untouched (zero extra RNG draws, byte-identical trajectories).
+    #[serde(default)]
+    pub gestation_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -536,6 +546,7 @@ impl World {
             disease_enabled: false,
             territory_enabled: false,
             species_territories: Vec::new(),
+            gestation_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
@@ -823,5 +834,11 @@ mod tests {
         let w = World::new(1);
         assert!(!w.territory_enabled, "territory layer is opt-in; off by default");
         assert!(w.species_territories.is_empty());
+    }
+
+    #[test]
+    fn gestation_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.gestation_enabled, "gestation is opt-in at the engine layer; off by default");
     }
 }

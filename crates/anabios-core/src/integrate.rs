@@ -66,11 +66,22 @@ pub fn integrate_all(
         thirst,
         asleep,
         sex,
+        gestation_left,
         alive,
         ..
     } = agents;
-    let (modules, genome, meme_vector, iq, affect, thirst, asleep, sex, alive) =
-        (&*modules, &*genome, &*meme_vector, &*iq, &*affect, &*thirst, &*asleep, &*sex, &*alive);
+    let (modules, genome, meme_vector, iq, affect, thirst, asleep, sex, gestation_left, alive) = (
+        &*modules,
+        &*genome,
+        &*meme_vector,
+        &*iq,
+        &*affect,
+        &*thirst,
+        &*asleep,
+        &*sex,
+        &*gestation_left,
+        &*alive,
+    );
     position[..cap]
         .par_iter_mut()
         .zip(velocity[..cap].par_iter_mut())
@@ -91,6 +102,12 @@ pub fn integrate_all(
             // thirst 0.0 (the flag-off state), so disabled worlds stay
             // byte-identical — the same identity contract as `affect_speed`.
             let needs_basal = crate::needs::dehydration_metabolism_multiplier(thirst[i]);
+            // Gestation: a mother carrying a litter pays `GESTATION_UPKEEP`
+            // more basal metabolism on every path below and moves at
+            // `GESTATION_SPEED`. `gestation_left` is all-zero unless
+            // `World::gestation_enabled` set it, so a flag-off world takes
+            // neither branch — its arithmetic is literally unchanged.
+            let gestating = gestation_left[i] > 0;
             // Cognition-driven perception cost: scales with the agent's actual
             // sensory radius (sensor + IQ + invention buffs). Zero when
             // cognition is off, so non-cognition worlds stay byte-identical.
@@ -118,12 +135,15 @@ pub fn integrate_all(
             // is off, so this branch never runs there.
             if asleep[i] {
                 *vel = Vec2::ZERO;
-                let basal = BASAL_METABOLISM_COST
+                let mut basal = BASAL_METABOLISM_COST
                     * genome[i].get(GenomeSlot::BasalMetabolism)
                     * crate::invention::metabolism_multiplier(inv_mask)
                     * dimorph_basal
                     * needs_basal
                     * crate::needs::SLEEP_METABOLISM_FACTOR;
+                if gestating {
+                    basal *= 1.0 + crate::reproduce::GESTATION_UPKEEP;
+                }
                 *en -= basal + perception_cost;
                 return;
             }
@@ -132,11 +152,14 @@ pub fn integrate_all(
             if !crate::module::has(&modules[i], crate::module::ModuleType::Locomotor) {
                 *vel = Vec2::ZERO;
                 // Still pay basal metabolism (invention debuffs scale it).
-                let basal = BASAL_METABOLISM_COST
+                let mut basal = BASAL_METABOLISM_COST
                     * genome[i].get(GenomeSlot::BasalMetabolism)
                     * crate::invention::metabolism_multiplier(inv_mask)
                     * dimorph_basal
                     * needs_basal;
+                if gestating {
+                    basal *= 1.0 + crate::reproduce::GESTATION_UPKEEP;
+                }
                 *en -= basal + perception_cost;
                 return;
             }
@@ -156,6 +179,8 @@ pub fn integrate_all(
             );
             let v = direction
                 * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed * affect_speed);
+            // Gestation: the mother is slower for the whole term.
+            let v = if gestating { v * crate::reproduce::GESTATION_SPEED } else { v };
             // Habitat gate (territory layer): the move the agent's Locomotion
             // class allows — full, coastline slide, or none. `None` ⇒ `v`
             // untouched, so flag-off worlds are byte-identical.
@@ -176,11 +201,14 @@ pub fn integrate_all(
             let move_dist = v.length();
             let size = genome[i].get(GenomeSlot::Size).max(0.1);
             let move_cost = MOVE_ENERGY_COST * move_dist * size;
-            let basal = BASAL_METABOLISM_COST
+            let mut basal = BASAL_METABOLISM_COST
                 * genome[i].get(GenomeSlot::BasalMetabolism)
                 * crate::invention::metabolism_multiplier(inv_mask)
                 * dimorph_basal
                 * needs_basal;
+            if gestating {
+                basal *= 1.0 + crate::reproduce::GESTATION_UPKEEP;
+            }
             *en -= move_cost + basal + perception_cost;
         });
 }
@@ -470,6 +498,59 @@ mod tests {
             "asleep drain = discounted basal only: {drain_asleep} vs {expected}"
         );
     }
+
+    /// Gestation: a mother carrying a litter pays `GESTATION_UPKEEP` more
+    /// basal metabolism (standing still: exactly that ratio) and moves at
+    /// `GESTATION_SPEED` of her normal step; a non-pregnant agent is exactly
+    /// as before.
+    #[test]
+    fn gestating_mother_pays_more_basal_and_moves_slower() {
+        use crate::reproduce::{GESTATION_SPEED, GESTATION_UPKEEP};
+        let run = |left: u32, dir: Vec2| -> (f32, f32) {
+            let mut w = World::new(1);
+            let id = spawn_at_unit_speed(&mut w, Vec2::new(500.0, 500.0));
+            w.agents.gestation_left[id as usize] = left;
+            let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
+            desired[id as usize] = dir;
+            let before_pos = w.agents.position[id as usize];
+            let before_en = w.agents.energy[id as usize];
+            integrate_all(
+                &mut w.agents,
+                &desired,
+                w.world_size,
+                false,
+                false,
+                w.cognition_enabled,
+                w.spatial.perception_max_radius(),
+                None,
+            );
+            (
+                (w.agents.position[id as usize] - before_pos).length(),
+                before_en - w.agents.energy[id as usize],
+            )
+        };
+        // Standing still: the drain is basal only, so the ratio is the upkeep.
+        let (_, still_plain) = run(0, Vec2::ZERO);
+        let (_, still_preg) = run(GESTATION_TICKS_FOR_TEST, Vec2::ZERO);
+        // Tolerances: energy sits near 50, where an f32 ulp is ~4e-6, so the
+        // drains carry that much noise (same slack as the drain tests above).
+        assert!((still_plain - BASAL_METABOLISM_COST * 0.5).abs() < 1e-4, "plain basal");
+        assert!(
+            (still_preg / still_plain - (1.0 + GESTATION_UPKEEP)).abs() < 1e-3,
+            "pregnant basal = plain × (1 + upkeep): {still_plain} -> {still_preg}"
+        );
+        // Moving: the step shrinks to GESTATION_SPEED of the normal one.
+        let (step_plain, _) = run(0, Vec2::new(1.0, 0.0));
+        let (step_preg, _) = run(GESTATION_TICKS_FOR_TEST, Vec2::new(1.0, 0.0));
+        assert!((step_plain - SPEED_MAX_CAP).abs() < 1e-3, "plain step is the full speed");
+        assert!(
+            (step_preg / step_plain - GESTATION_SPEED).abs() < 1e-3,
+            "pregnant step = plain × GESTATION_SPEED: {step_plain} -> {step_preg}"
+        );
+    }
+
+    /// Any positive countdown means "pregnant" to the integrate stage.
+    const GESTATION_TICKS_FOR_TEST: u32 = 5;
 
     #[test]
     fn seeking_raises_effective_speed() {

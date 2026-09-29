@@ -208,7 +208,16 @@ use crate::world::World;
 ///     scenario ⇒ trajectories byte-identical (pinned by the
 ///     `*_trajectory_unchanged_by_territory_substrate` guards in
 ///     `tests/determinism.rs`); only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 44;
+/// 45: gestation and litters — `World.gestation_enabled` (bool) and the
+///     `AgentBuffers.{gestation_left, pending_litter}` columns (a `u32`
+///     countdown and an `Option<PendingLitter>` per slot: the litter's drawn
+///     genomes/modules/programs/sexes, father slot + lineage + genome,
+///     species). Flag off ⇒ the columns stay `0`/`None`, the instant-birth
+///     path draws and computes exactly as before — trajectories
+///     byte-identical (the flag-off pins in `tests/determinism.rs` moved by
+///     the agents layout alone, verified column-wise against the base);
+///     only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 45;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

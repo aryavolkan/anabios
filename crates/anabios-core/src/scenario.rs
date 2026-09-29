@@ -224,6 +224,16 @@ pub struct Scenario {
     /// unchanged.
     #[serde(default = "default_true")]
     pub territory_enabled: bool,
+    /// On by default (scenario schema): gestation and litters — a fertile
+    /// pair conceives instead of spawning a child on the spot; the mother
+    /// carries the litter for `reproduce::GESTATION_TICKS` (extra basal
+    /// upkeep, slower, no second conception, the litter lost if she dies)
+    /// and then delivers `reproduce::litter_size` children (one to three,
+    /// rising with her Size gene) beside herself. Set `false` to opt out;
+    /// the engine's own default (`World::new`) stays off, so the flag-off
+    /// byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
+    pub gestation_enabled: bool,
     /// On by default (scenario schema): O3 reproductive-success payoff bias
     /// — cultural transmission declines a maladaptive-practice channel when
     /// its local holders show a higher observed birth-failure fraction than
@@ -1107,6 +1117,7 @@ impl Scenario {
         w.anthro_race_enabled = self.anthro_race_enabled;
         w.disease_enabled = self.disease_enabled;
         w.territory_enabled = self.territory_enabled;
+        w.gestation_enabled = self.gestation_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
@@ -2186,7 +2197,7 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         assert!(s.sexual_dimorphism_enabled && s.domestication_enabled);
         assert!(s.knowledge_enabled && s.practices_enabled && s.basic_needs_enabled);
         assert!(s.mate_seeking_enabled && s.territory_enabled && s.disease_enabled);
-        assert!(s.anthro_race_enabled && s.repro_biased_learning);
+        assert!(s.anthro_race_enabled && s.repro_biased_learning && s.gestation_enabled);
         assert_eq!(s.season_period, 2000);
         assert_eq!(s.env_period, 0);
         assert_eq!(s.climate_drift_rate, 0.0);
@@ -2194,6 +2205,17 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         // The engine layer is untouched: a bare World is still all-off.
         let w = World::new(1);
         assert!(!w.territory_enabled && !w.affect_enabled && !w.cognition_enabled);
+        assert!(!w.gestation_enabled);
+    }
+
+    #[test]
+    fn gestation_flag_parses_and_instantiates() {
+        let on = Scenario::parse_toml("name = \"g\"\nseed = 1\n").expect("parse").instantiate();
+        assert!(on.gestation_enabled, "the schema defaults gestation on");
+        let off = Scenario::parse_toml("name = \"g\"\nseed = 1\ngestation_enabled = false\n")
+            .expect("parse")
+            .instantiate();
+        assert!(!off.gestation_enabled, "an explicit opt-out is copied to the world");
     }
 
     #[test]
