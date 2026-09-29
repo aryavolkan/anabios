@@ -45,7 +45,7 @@ seed = 424242
 # ticks for the full theater; the scoreboard is which lineage holds the
 # most of the tree while the world churns around the cap.
 
-max_population = 3000
+max_population = 3500
 
 env_period = 400
 climate_drift_rate = 0.00005

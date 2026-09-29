@@ -462,10 +462,13 @@ pub struct AgentSpec {
     /// occupy, in `(0, 1]`. Absent (the default) = no per-lineage cap, the
     /// byte-identical behavior every pre-existing scenario has.
     ///
-    /// Without it, the global cap is first-come: the fastest breeder fills
-    /// it and no other lineage is ever born again, which is why the shipped
-    /// predator/prey scenarios all decay to a single lineage. Set a share on
-    /// the prey (e.g. `0.8`) to leave the predators room. The share is
+    /// Without it, a binding global cap is first-come: the fastest breeder
+    /// fills it and no other lineage is ever born again, which is why the
+    /// shipped predator/prey scenarios once decayed to a single lineage and
+    /// set a share on the prey (e.g. `0.8`) to leave the predators room. No
+    /// curated world sets one any more (2026-09-29): their caps are safety
+    /// budgets above the food-limited peak, so the share would only ever be
+    /// bookkeeping (docs/scenarios.md, "Carrying capacity"). The share is
     /// keyed by founder lineage, so speciation splinters keep counting
     /// against it. Specs without an `archetype` all share species 0, and so
     /// share one cap.

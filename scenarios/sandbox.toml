@@ -15,34 +15,28 @@ max_population = 8000
 count = 500
 archetype = "innovator"
 placement = { kind = "uniform" }
-max_share = 0.25
 
 [[agents]]
 count = 700
 archetype = "asocial_forager"
 placement = { kind = "uniform" }
-max_share = 0.3
 
 [[agents]]
 count = 300
 archetype = "cultural_forager"
 placement = { kind = "uniform" }
-max_share = 0.15
 
 [[agents]]
 count = 200
 archetype = "skilled_forager"
 placement = { kind = "uniform" }
-max_share = 0.12
 
 [[agents]]
 count = 100
 archetype = "stalker"
 placement = { kind = "uniform" }
-max_share = 0.1
 
 [[agents]]
 count = 50
 archetype = "pack_hunter"
 placement = { kind = "uniform" }
-max_share = 0.08
