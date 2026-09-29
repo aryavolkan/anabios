@@ -253,6 +253,8 @@ fn decide_all(world: &mut World) {
     let territory_enabled = world.territory_enabled;
     let gait_enabled = world.gait_enabled;
     let growth_enabled = world.growth_enabled;
+    let chase_enabled = world.chase_enabled;
+    let carcasses = &world.carcasses;
     let territories = &world.species_territories;
     let spatial = &world.spatial;
     let collision = &world.collision_spatial;
@@ -449,6 +451,33 @@ fn decide_all(world: &mut World) {
                 let gain = crate::reproduce::MATE_PULL * action.mate_intent.min(1.0);
                 action.move_x += gain * pull.x;
                 action.move_y += gain * pull.y;
+            }
+            // Carcass seeking (chase layer, opt-in): a hungry carnivore walks
+            // to the nearest carcass with flesh in reach and, once within
+            // scavenging range, stands to eat — a predator eats its kill
+            // instead of leaving it to rot the tick it is made. The pull
+            // replaces the program's movement (a hunt intent would otherwise
+            // drag it off the kill it just made); the mood arbiter still
+            // sets the pace and only the survival hijack below still moves
+            // it. Gated on the flag so flag-off stays byte-identical.
+            if chase_enabled && agents.energy[i] < crate::carcass::CARCASS_SEEK_SATIETY {
+                let carn = crate::module::effective_diet_carnivory(&agents.modules[i]);
+                if carn >= crate::carcass::CARCASS_SEEK_CARNIVORY {
+                    if let Some((pull, dist)) = crate::carcass::nearest_carcass(
+                        carcasses,
+                        agents.position[i],
+                        crate::carcass::CARCASS_SEEK_REACH,
+                        ws,
+                    ) {
+                        if dist <= crate::carcass::SCAVENGE_RANGE {
+                            action.move_x = 0.0;
+                            action.move_y = 0.0;
+                        } else {
+                            action.move_x = crate::carcass::CARCASS_PULL * pull.x;
+                            action.move_y = crate::carcass::CARCASS_PULL * pull.y;
+                        }
+                    }
+                }
             }
             // Mood arbiter (mood.rs): the winner-take-all needs/affect state
             // sharpens the action for the dominant drive (suppresses competing
@@ -872,6 +901,46 @@ mod tests {
                 *max_speed = 1.0;
             }
         }
+    }
+
+    /// Chase: a hungry carnivore is pulled toward a carcass in reach, stands
+    /// to eat once within scavenging range, and is left alone when sated or
+    /// with the flag off (its program walks +x either way).
+    #[test]
+    fn hungry_carnivore_seeks_a_carcass_and_stands_to_eat_under_the_chase() {
+        use crate::carcass::{Carcass, CARCASS_SEEK_SATIETY, SCAVENGE_RANGE};
+        use crate::program::{Node, Program};
+        let build = |chase_on: bool, energy: f32, carcass_dx: f32| -> Vec2 {
+            let mut w = World::new(5);
+            w.chase_enabled = chase_on;
+            let a = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+            w.agents.modules[a as usize] = crate::module::predator_kit();
+            w.agents.program[a as usize] =
+                Program::from_slice(&[Node::Const(1000.0), Node::MoveTowardX]);
+            w.agents.energy[a as usize] = energy;
+            w.carcasses.push(Carcass {
+                pos: Vec2::new(500.0, 500.0 + carcass_dx),
+                flesh: 5.0,
+                age: 0,
+                species_id: 0,
+            });
+            w.resize_scratch();
+            decide_all(&mut w);
+            w.desired_direction[a as usize]
+        };
+        // Hungry, carcass 20 units north (+y): the pull replaces the
+        // program's +x walk, however hard that program pushes.
+        let d = build(true, 20.0, 20.0);
+        assert!(d.y > 0.99 && d.x.abs() < 1e-6, "walks to the carcass: {d:?}");
+        // Within scavenging range: stands to eat.
+        let d = build(true, 20.0, 0.5 * SCAVENGE_RANGE);
+        assert_eq!(d, Vec2::ZERO, "stands at the carcass: {d:?}");
+        // Sated: the program's walk, untouched.
+        let d = build(true, CARCASS_SEEK_SATIETY, 20.0);
+        assert!(d.x > 0.99 && d.y.abs() < 1e-6, "sated: walks +x: {d:?}");
+        // Flag off: identical to the sated walk whatever the energy.
+        let d = build(false, 20.0, 20.0);
+        assert!(d.x > 0.99 && d.y.abs() < 1e-6, "flag off: walks +x: {d:?}");
     }
 
     /// `decide_all` then `integrate_all` (no habitat gate): the direction

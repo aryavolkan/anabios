@@ -42,6 +42,20 @@
 //! the same 32-energy carcass as a lean one — the predator paid more for
 //! the kill than the carcass returned, and no pursuer lineage fed itself.
 //!
+//! **Eating the kill.** With the flag on a hungry carnivore (carnivory at
+//! or above `carcass::CARCASS_SEEK_CARNIVORY`, energy below
+//! `carcass::CARCASS_SEEK_SATIETY`) walks to the nearest carcass with flesh
+//! within `carcass::CARCASS_SEEK_REACH` and stands to eat once within
+//! `carcass::SCAVENGE_RANGE` (`tick::decide_all`; the pull replaces the
+//! program's movement, the mood still sets the pace and only the survival
+//! hijack overrides it). Without it a predator left its kill the tick it
+//! made it — on `predator-prey` the pursuers sat at a carcass on 5–10% of
+//! their ticks and let 86% of all flesh rot, with every realism knob on or
+//! off alike — and no pursuer lineage fed itself; with it (2026-09-29,
+//! 1500 ticks, seeds 0–1) they hold 50–94 energy through the juvenile
+//! window, breed from maturity on (30 founders → 60 by tick 1500 on seed
+//! 0) and waste a quarter of the flesh instead.
+//!
 //! Flag off ⇒ `stamina_step` early-returns (the vectors stay 1.0 / false /
 //! 0 and are never read), `integrate_all` skips the cap, `combat_pass`
 //! lands every strike as before and banks nothing, and a carcass carries

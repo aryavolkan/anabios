@@ -217,11 +217,18 @@ energy: the energy a strike takes from the prey (its HP is its energy) is
 banked on the prey and returned as carcass flesh when it dies, so a fat
 prey is a big meal. Without that a grazer the gait let amble itself to 400
 energy took 25 one-energy strikes to bring down and yielded the same
-32-energy carcass as a lean one, and the mammal pursuers of `predator-prey`
-starved from tick 250 on in every seed once the growth layer stopped the
-founders breeding off their spawn energy (mean energy 35 at tick 250, 15
-by 750, the lineage gone by 1250). The mechanism and its constants are in
-`crates/anabios-core/src/chase.rs`.
+32-energy carcass as a lean one. And a hungry carnivore walks to the
+nearest carcass in reach and stands to eat it: a predator used to leave its
+kill the tick it made it — on `predator-prey` the pursuers sat at a carcass
+on 5–10% of their ticks and let 86% of all flesh rot, with every knob on or
+off alike — so the mammal pursuers starved from tick 250 on in every seed
+once the growth layer stopped the founders breeding off their spawn energy
+(mean energy 35 at tick 250, 15 by 750, the lineage gone by 1250; on main
+the guild only ever lived through that founder-energy boom). With both
+(1500 ticks, seeds 0–1) they hold 50–94 energy through the juvenile
+window, breed from maturity on (30 founders → 60 by tick 1500 on seed 0)
+and waste a quarter of the flesh instead. The mechanisms and their
+constants are in `crates/anabios-core/src/chase.rs` and `carcass.rs`.
 
 ## Running
 
