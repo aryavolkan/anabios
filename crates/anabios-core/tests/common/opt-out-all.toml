@@ -32,3 +32,4 @@ gait_enabled = false
 growth_enabled = false
 turning_enabled = false
 gestation_enabled = false
+chase_enabled = false

@@ -224,6 +224,10 @@ const GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-28: a newborn is placed clear of both parents' bodies
     // (collision layer on) instead of on their midpoint; every full-stack
     // trajectory moves from its first birth.
+    // Not re-pinned 2026-09-29 (chase): still ignored (see the test); the
+    // `World.{chase_enabled, stamina, exhausted}` fields move the tick-0 hash
+    // by layout, and the chase itself (on in every world) moves the
+    // trajectory from the first sprint — re-pin with the collision work.
     &[(0, 0x75704801cc76d91a), (100, 0xfcab5035e4583bb2), (1000, 0x0e703c385863d01f)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
@@ -338,6 +342,9 @@ const HABITAT_GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-28: a newborn is placed clear of both parents' bodies
     // (collision layer on) instead of on their midpoint; every full-stack
     // trajectory moves from its first birth.
+    // Not re-pinned 2026-09-29 (chase): still ignored; the new `World`
+    // fields and the chase (on here) move it — re-pin with the collision
+    // work.
     &[(0, 0xabf4cde73a94b777), (100, 0x4d1fda7cb6983a5f), (1000, 0x14a5a5ca326a40c5)];
 
 #[test]
@@ -454,7 +461,11 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
 // columns — the whole-struct stream moved by layout alone each time and each
 // branch had to re-pin with a proof; over the original columns the same runs
 // re-derive these exact values on the merged tree, so the pins are back to
-// the base and stay there while every layer is off.
+// the base and stay there while every layer is off. The chase keeps its
+// per-slot `stamina`/`exhausted` vectors on `World` (like `still_ticks`),
+// outside this hash either way, and with `chase_enabled = false` (the
+// fixtures' `OPT_OUT_ALL` opts it out) nothing reads them — pinned per
+// vector by `chase::tests::flag_off_columns_never_influence_behaviour`.
 const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xd1133dd8d119e894;
 const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x56819428b6cd2bf0;
 

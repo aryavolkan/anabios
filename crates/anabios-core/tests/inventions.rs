@@ -511,6 +511,7 @@ fn fire_holder_pays_extra_metabolism() {
             None,
             false,
             false,
+            None,
         );
         before - w.agents.energy[id as usize]
     };

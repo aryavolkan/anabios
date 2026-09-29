@@ -68,6 +68,7 @@ fn full_stack_but_dimorphism(w: &World) -> bool {
         && w.anthro_race_enabled
         && w.repro_biased_learning
         && w.growth_enabled
+        && w.chase_enabled
 }
 
 // Warm-ups: a world keeps the longest warm-up of the retired rows it absorbed

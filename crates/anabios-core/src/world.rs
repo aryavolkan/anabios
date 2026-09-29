@@ -259,6 +259,18 @@ pub struct World {
     /// byte-identical trajectories with the flag off.
     #[serde(default)]
     pub territory_enabled: bool,
+    /// When true, predation is a chase (`chase.rs`): every agent carries a
+    /// stamina bar that drains while it moves faster than a walk and refills
+    /// while it walks or rests, an exhausted agent is held to the walk
+    /// (hysteresis), and a contact strike lands with a probability set by
+    /// the predator's speed advantage over the prey's escape and by the size
+    /// ratio (a stateless hash roll — nothing drawn from `rng`). Off by
+    /// default — the stamina stage is a strict no-op, the per-slot
+    /// `stamina`/`exhausted` vectors stay full/clear and unread, and every
+    /// strike lands as before: zero RNG and byte-identical trajectories with
+    /// the flag off (layout growth only).
+    #[serde(default)]
+    pub chase_enabled: bool,
     /// Per-species territory, indexed by species id. Grown lazily by
     /// `territory::territory_step`, ONLY when `territory_enabled` — empty (and
     /// unread) otherwise. Serialized: the centre is a path-dependent EMA, so
@@ -478,6 +490,25 @@ pub struct World {
     /// `signal_active`) via `detect_structured_signaling`, so like
     /// `still_ticks` it MUST persist across a snapshot round-trip. Serialized.
     pub prev_desired_direction: Vec<crate::prelude::Vec2>,
+    /// Chase stamina per agent slot (`chase.rs`), in `[0,1]`; a fresh slot
+    /// holds a full bar (`1.0`). Drained by moving faster than a walk,
+    /// refilled by walking or resting, and written only by
+    /// `chase::stamina_step` under `chase_enabled` (which also resets a dead
+    /// slot to full, so the newborn that next reuses it starts fresh); sized
+    /// to agent capacity by `resize_scratch`, never read with the flag off.
+    /// Serialized, like `still_ticks`: a path-dependent accumulator feeding
+    /// hashed movement (the v13 footgun) — and, like it, kept here rather
+    /// than as an `AgentBuffers` column, so the `agents` layout (and the
+    /// flag-off trajectory pins that hash it) is untouched.
+    #[serde(default)]
+    pub stamina: Vec<f32>,
+    /// Exhaustion hysteresis bit per slot (chase): set when `stamina`
+    /// reaches `chase::STAMINA_EXHAUST_AT`, cleared once it climbs back to
+    /// `chase::STAMINA_RECOVER_AT`. While set, `integrate_all` holds the
+    /// agent to a walk and `combat_pass` reads its lunge as a walk. Same
+    /// gating, sizing and serialization as `stamina`.
+    #[serde(default)]
+    pub exhausted: Vec<bool>,
     /// Cumulative count of successful cross-species swaps over the run.
     /// Counts each initiator-side swap: `trade_pass` visits every agent as an
     /// initiator, so a reciprocal pair (each is the other's nearest partner)
@@ -576,6 +607,7 @@ impl World {
             anthro_race_enabled: false,
             disease_enabled: false,
             territory_enabled: false,
+            chase_enabled: false,
             species_territories: Vec::new(),
             gestation_enabled: false,
             gait_enabled: false,
@@ -625,6 +657,8 @@ impl World {
             hub_trade_tally: Vec::new(),
             still_ticks: Vec::new(),
             prev_desired_direction: Vec::new(),
+            stamina: Vec::new(),
+            exhausted: Vec::new(),
             total_trades: 0,
             culture_mask: Vec::new(),
         }
@@ -829,6 +863,13 @@ impl World {
         if self.still_ticks.len() < cap {
             self.still_ticks.resize(cap, 0);
         }
+        // Chase: a fresh slot holds a full bar and is not exhausted.
+        if self.stamina.len() < cap {
+            self.stamina.resize(cap, 1.0);
+        }
+        if self.exhausted.len() < cap {
+            self.exhausted.resize(cap, false);
+        }
     }
 }
 
@@ -892,5 +933,16 @@ mod tests {
     fn turning_inertia_defaults_off() {
         let w = World::new(1);
         assert!(!w.turning_enabled, "turning inertia is opt-in; off by default");
+    }
+
+    #[test]
+    fn chase_defaults_off_with_full_stamina() {
+        let mut w = World::new(1);
+        assert!(!w.chase_enabled, "chase predation is opt-in; off by default");
+        let id = w.spawn_agent(Vec2::new(10.0, 10.0), Genome::neutral());
+        w.resize_scratch();
+        assert_eq!(w.stamina.len(), w.agents.capacity(), "sized to capacity like still_ticks");
+        assert_eq!(w.stamina[id as usize], 1.0, "a fresh slot holds a full bar");
+        assert!(!w.exhausted[id as usize]);
     }
 }

@@ -2369,6 +2369,7 @@ mod tests {
                 "growth_enabled = false\n",
                 "turning_enabled = false\n",
                 "gestation_enabled = false\n",
+                "chase_enabled = false\n",
             )
         };
     }

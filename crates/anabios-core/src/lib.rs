@@ -10,6 +10,7 @@ pub mod agent;
 pub mod behavior;
 pub mod biome;
 pub mod carcass;
+pub mod chase;
 pub mod codex;
 pub mod collision;
 pub mod culture;

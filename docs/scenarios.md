@@ -197,6 +197,25 @@ freely now that bodies cannot walk through one another (the median step on
 at all is unchanged), and their populations settle slightly lower. The
 validation bar was not re-run for this change.
 
+Predation is a chase (`chase_enabled`, 2026-09-29; on by default like every
+other knob, `chase_enabled = false` opts out): every agent carries a stamina
+bar that drains while it moves faster than a walk (gait's walk, 0.6 of its
+own top speed; a full bar lasts 80 ticks flat out) and refills while it
+walks (50 ticks from empty to half) or rests (25), an exhausted agent is
+held to the walk until the bar is half full, and a contact strike
+(`Weapon`/`Jaws`, not a `Spines` volley) lands with a probability set by the
+predator's speed advantage over the prey's escape and by the size ratio —
+equal speed and size land 0.24 of the strikes per tick in range, a prey
+running away 1.7× faster or four times the size is never caught, a standing,
+cornered or exhausted prey is caught on the size term alone, and a miss
+still costs the attacker the lunge. With gait on only fleeing, fighting and
+hunting agents sprint, so grazers never tire and a chase is decided by who
+tires first; with gait off every move is a sprint and herds and hunters
+alike cycle between sprint and walk (moves cut short by the swept contact
+in a crowd read as a walk either way). The mechanism and its constants are
+in `crates/anabios-core/src/chase.rs`. The validation bar was not re-run
+for this change.
+
 ## Running
 
 ```

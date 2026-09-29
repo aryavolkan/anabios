@@ -254,6 +254,17 @@ pub struct Scenario {
     /// unchanged.
     #[serde(default = "default_true")]
     pub turning_enabled: bool,
+    /// On by default (scenario schema): predation as a chase — a stamina bar
+    /// per agent (moving faster than a walk drains it, walking or resting
+    /// refills it; an exhausted agent is held to a walk until it is half
+    /// full), and contact strikes (`Weapon`/`Jaws`) that land with a
+    /// probability set by the predator's speed advantage over the prey's
+    /// escape and by the size ratio, so faster and larger prey are rarely
+    /// caught and exhausted prey easily (`chase.rs`). Set `false` to opt out;
+    /// the engine's own default (`World::new`) stays off, so the flag-off
+    /// byte-identity guarantee is unchanged.
+    #[serde(default = "default_true")]
+    pub chase_enabled: bool,
     /// On by default (scenario schema): O3 reproductive-success payoff bias
     /// — cultural transmission declines a maladaptive-practice channel when
     /// its local holders show a higher observed birth-failure fraction than
@@ -1150,6 +1161,7 @@ impl Scenario {
         w.gait_enabled = self.gait_enabled;
         w.growth_enabled = self.growth_enabled;
         w.turning_enabled = self.turning_enabled;
+        w.chase_enabled = self.chase_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
@@ -2233,6 +2245,7 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
             s.anthro_race_enabled && s.repro_biased_learning && s.gait_enabled && s.growth_enabled
         );
         assert!(s.gestation_enabled);
+        assert!(s.chase_enabled);
         assert_eq!(s.season_period, 2000);
         assert_eq!(s.env_period, 0);
         assert_eq!(s.climate_drift_rate, 0.0);
@@ -2285,6 +2298,18 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         assert_eq!(s.season_period, 0);
         let w = s.instantiate();
         assert!(!w.territory_enabled && w.affect_enabled);
+    }
+
+    #[test]
+    fn chase_flag_parses_and_instantiates() {
+        let on =
+            Scenario::parse_toml("name = \"c\"\nseed = 1\n[[agents]]\ncount = 2\n").expect("parse");
+        assert!(on.chase_enabled, "on by default in the schema");
+        assert!(on.instantiate().chase_enabled);
+        let off =
+            Scenario::parse_toml("name = \"c\"\nseed = 1\nchase_enabled = false\n").expect("parse");
+        assert!(!off.chase_enabled);
+        assert!(!off.instantiate().chase_enabled);
     }
 
     #[test]
