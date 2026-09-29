@@ -95,13 +95,26 @@ impl<'de, T: Deserialize<'de>, const N: usize> Visitor<'de> for RowsVisitor<T, N
     }
 
     fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-        let mut out = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+        // The size hint is the raw length prefix of the byte stream (bincode
+        // hands it through unchecked), so a truncated or corrupt snapshot can
+        // claim billions of rows. Cap the preallocation the way serde's own
+        // derived `Vec` impl does (about 1 MiB) and let the Vec grow past it,
+        // so such a file fails with a clean `Err` at the first missing row
+        // instead of aborting on the allocation.
+        let row_bytes = std::mem::size_of::<[T; N]>().max(1);
+        let cap = seq.size_hint().unwrap_or(0).min(PREALLOC_BYTES / row_bytes);
+        let mut out = Vec::with_capacity(cap);
         while let Some(OwnedRow(row)) = seq.next_element::<OwnedRow<T, N>>()? {
             out.push(row);
         }
         Ok(out)
     }
 }
+
+/// Upper bound on the bytes a column preallocates from its length prefix
+/// before the rows have actually been read (serde's `cautious` size hint uses
+/// the same figure).
+const PREALLOC_BYTES: usize = 1024 * 1024;
 
 #[cfg(test)]
 mod tests {
@@ -141,7 +154,7 @@ mod tests {
         assert_eq!(back, empty);
     }
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Debug, Serialize, Deserialize)]
     struct Adapted {
         #[serde(with = "crate::serde_rows::fixed_rows")]
         rows: Vec<[f32; 4]>,
@@ -166,11 +179,38 @@ mod tests {
         assert_eq!(back.rows[1][2], 0.125);
     }
 
-    /// A truncated row is a hard error, not a silently short array.
+    /// A truncated byte stream is a hard error, not a silently short array.
+    /// (Under bincode rows are fixed-width, so the cut surfaces as end of
+    /// input from the reader; the adapter's own short-row branch is covered
+    /// by `short_row_is_an_invalid_length_error` below.)
     #[test]
     fn rejects_a_truncated_row() {
         let derived = bincode::serialize(&Derived { rows: vec![[1.0f32, 2.0, 3.0, 4.0]] }).unwrap();
         let cut = &derived[..derived.len() - 4];
         assert!(bincode::deserialize::<Adapted>(cut).is_err());
+    }
+
+    /// A row that ends early in a self-delimiting format hits the adapter's
+    /// own short-row branch (`invalid_length`), and a full row still parses.
+    #[test]
+    fn short_row_is_an_invalid_length_error() {
+        let err = serde_json::from_str::<Adapted>(r#"{"rows":[[1.0,2.0,3.0,4.0],[5.0,6.0]]}"#)
+            .expect_err("a two-element row cannot fill a four-wide array");
+        assert!(err.to_string().contains("invalid length"), "{err}");
+        let ok: Adapted = serde_json::from_str(r#"{"rows":[[1.0,2.0,3.0,4.0]]}"#).unwrap();
+        assert_eq!(ok.rows, vec![[1.0, 2.0, 3.0, 4.0]]);
+    }
+
+    /// A corrupt length prefix claiming billions of rows fails cleanly at the
+    /// first missing row instead of aborting on a giant preallocation.
+    #[test]
+    fn rejects_a_forged_length_prefix_without_allocating_it() {
+        let mut bytes = bincode::serialize(&Adapted { rows: Vec::new() }).unwrap();
+        assert_eq!(bytes.len(), 8, "an empty column is just its u64 length prefix");
+        bytes.copy_from_slice(&u64::MAX.to_le_bytes());
+        assert!(bincode::deserialize::<Adapted>(&bytes).is_err());
+        // A plausible-looking but unbacked count fails the same way.
+        bytes.copy_from_slice(&(1u64 << 40).to_le_bytes());
+        assert!(bincode::deserialize::<Adapted>(&bytes).is_err());
     }
 }

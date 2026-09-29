@@ -1744,9 +1744,15 @@ fn hafted_spears_atrophy_without_throwing_stones() {
     assert_eq!(level_of(&w, id, invention::HAFTED_SPEARS), stable, "rooted spears must not decay");
 }
 
-/// Climbing end to end: skilled, open ape communicators seeded with Stone
-/// Tools reach Hafted Spears only THROUGH Throwing Stones — no agent ever
-/// holds the spear without the stone, and the stone is held first.
+/// The re-rooted ladder is climbable end to end under real discovery rolls:
+/// skilled, open ape communicators seeded with Stone Tools reach Hafted
+/// Spears within the horizon, and every holder of the spear reached it
+/// strictly after, and while, holding the stone. The prereq gate itself is a
+/// table property (`prereq_chain_shape` in the crate); what this exercises is
+/// the discovery path over the re-rooted table — that `candidates()` really
+/// offers the spear once the stone is held and the weighted pick can land on
+/// it — so the ordering assertions below are consistency checks on that run,
+/// not the claim.
 #[test]
 fn projectile_ladder_climbs_from_the_stone() {
     let mut w = World::new(37);
@@ -1785,5 +1791,5 @@ fn projectile_ladder_climbs_from_the_stone() {
     }
     let stone = stones_tick.expect("the stone is discovered");
     let spear = spears_tick.expect("the spear follows within the horizon");
-    assert!(stone <= spear, "stone ({stone}) before spear ({spear})");
+    assert!(stone < spear, "the stone is held strictly before the spear ({stone} < {spear})");
 }

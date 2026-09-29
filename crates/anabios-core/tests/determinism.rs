@@ -393,11 +393,14 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
 
 // Re-pinned 2026-09-29 (projectile ladder, FORMAT_VERSION 44→45): the agent
 // meme columns are one lane wider (MEME_CHANNELS 32→33), and `w.agents` is
-// part of this hash, so the pins moved on layout alone — the new lane is an
-// invention channel that is never jittered with `inventions_enabled` off, so
-// neither flag-off fixture draws extra RNG. Pinned at this change's head;
-// the guards are ignored by default since the same date (golden validation
-// is off) and run on request with `--ignored`.
+// part of this hash, so both pins moved on layout. The minimal fixture runs
+// every knob off, so its trajectory is byte-identical (the new lane is an
+// invention channel, never jittered with `inventions_enabled` off). The
+// grand-theater fixture keeps its own pre-flip flags, `inventions_enabled`
+// among them, so its trajectory moved too: each Communicator birth jitters
+// one more lane and the discovery table gains an era-1 candidate. Pinned at
+// this change's head; the guards are ignored by default since the same date
+// (golden validation is off) and run on request with `--ignored`.
 const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xdde8c1942fd69854;
 const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0xf23327e1471c4cd8;
 

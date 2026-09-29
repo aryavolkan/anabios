@@ -110,11 +110,6 @@ const CHARTS := [
 			{"key": "aff_machinery_diff", "label": "Δ machinery", "color": Color(0.9, 0.55, 0.3)},
 			{"key": "aff_hafted_spears_diff", "label": "Δ spears", "color": Color(0.8, 0.6, 0.4)},
 			{"key": "aff_archery_diff", "label": "Δ archery", "color": Color(0.6, 0.85, 0.95)},
-			{
-				"key": "aff_throwing_stones_diff",
-				"label": "Δ stones",
-				"color": Color(0.78, 0.74, 0.62)
-			},
 		],
 	},
 	{
