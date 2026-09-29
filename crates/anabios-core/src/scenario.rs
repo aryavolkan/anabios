@@ -1370,6 +1370,17 @@ impl Scenario {
             }
             spec_positions.push(placed_positions);
         }
+        // Collision layer: founders placed on one another (a cluster of
+        // radius 0, or several herds at one shared site) are settled apart
+        // at spawn, exactly as newborns are (`collision::settle_newborns`,
+        // in id order, each clear of the ones placed before it) — without it
+        // three founders of `habitat-territories` shared one point for the
+        // first rendered tick. Flag off: no-op, so the flag-off trajectory
+        // pins do not move.
+        if w.territory_enabled {
+            let founders: Vec<u32> = w.agents.iter_alive().collect();
+            crate::collision::settle_newborns(&mut w, &founders);
+        }
         w
     }
 }
@@ -2275,6 +2286,51 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         assert!(!off.gait_enabled);
         let w = off.instantiate();
         assert!(!w.gait_enabled && w.territory_enabled, "only gait opted out");
+    }
+
+    /// Collision layer: founders seeded on one point are settled apart at
+    /// spawn (no colliding pair closer than its gap); with the layer off
+    /// they stay where the placement put them.
+    #[test]
+    fn coincident_founders_are_settled_apart_when_collision_is_on() {
+        for on in [true, false] {
+            let toml = format!(
+                "name = \"f\"\nseed = 3\nterritory_enabled = {on}\n\n[[agents]]\ncount = 6\n\
+                 placement = {{ kind = \"cluster\", center_x = 300.0, center_y = 300.0, radius = 0.0 }}\n"
+            );
+            let w = Scenario::parse_toml(&toml).expect("parse").instantiate();
+            let ids: Vec<u32> = w.agents.iter_alive().collect();
+            assert_eq!(ids.len(), 6);
+            let mut min_ratio = f32::INFINITY;
+            for (k, &a) in ids.iter().enumerate() {
+                for &b in &ids[k + 1..] {
+                    // Live radii: the schema defaults growth on, so founders
+                    // are juveniles at spawn.
+                    let r = |id: u32| {
+                        crate::collision::live_body_radius(
+                            &w.agents.genome[id as usize],
+                            w.agents.age[id as usize],
+                            w.growth_enabled,
+                        )
+                    };
+                    let gap = r(a) + r(b);
+                    let d = crate::spatial::torus_distance(
+                        w.agents.position[a as usize],
+                        w.agents.position[b as usize],
+                        w.world_size,
+                    );
+                    min_ratio = min_ratio.min(d / gap);
+                }
+            }
+            if on {
+                assert!(
+                    min_ratio >= 1.0 - 1e-4,
+                    "settled apart: closest pair at {min_ratio} of its gap"
+                );
+            } else {
+                assert_eq!(min_ratio, 0.0, "layer off: founders stay coincident");
+            }
+        }
     }
 
     #[test]
