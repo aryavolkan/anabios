@@ -228,7 +228,12 @@ const GOLDEN: &[(u64, u64)] =
     // `World.{chase_enabled, stamina, exhausted}` fields move the tick-0 hash
     // by layout, and the chase itself (on in every world) moves the
     // trajectory from the first sprint — re-pin with the collision work.
-    &[(0, 0x75704801cc76d91a), (100, 0xfcab5035e4583bb2), (1000, 0x0e703c385863d01f)];
+    // Refreshed 2026-09-29: the collision audit (swept moves, newborn placement,
+    // the hub and water pulls), the realism layers (gait, growth, turning
+    // inertia, gestation, the chase and its carcass economy) and capacity from
+    // food (no lineage shares, non-binding caps) — every full-stack trajectory
+    // moved from tick 1; see docs/scenarios.md.
+    &[(0, 0x3651a748bbc86747), (100, 0x4c9cf6641f62b1f9), (1000, 0x515d508cc6d0cb85)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -317,7 +322,6 @@ mod parallel_matches_serial_across_thread_counts {
 }
 
 #[test]
-#[ignore = "collision / carrying-capacity work in flight: the full-stack goldens are re-pinned once it lands (UPDATE_HASHES=1)"]
 fn minimal_scenario_matches_golden_hashes() {
     common::assert_golden("minimal", SCENARIO, GOLDEN);
 }
@@ -345,10 +349,14 @@ const HABITAT_GOLDEN: &[(u64, u64)] =
     // Not re-pinned 2026-09-29 (chase): still ignored; the new `World`
     // fields and the chase (on here) move it — re-pin with the collision
     // work.
-    &[(0, 0xabf4cde73a94b777), (100, 0x4d1fda7cb6983a5f), (1000, 0x14a5a5ca326a40c5)];
+    // Refreshed 2026-09-29: the collision audit (swept moves, newborn placement,
+    // the hub and water pulls), the realism layers (gait, growth, turning
+    // inertia, gestation, the chase and its carcass economy) and capacity from
+    // food (no lineage shares, non-binding caps) — every full-stack trajectory
+    // moved from tick 1; see docs/scenarios.md.
+    &[(0, 0xfdad43976f592443), (100, 0x532148cda698631c), (1000, 0xcbeffa3bda6859d6)];
 
 #[test]
-#[ignore = "collision / carrying-capacity work in flight: the full-stack goldens are re-pinned once it lands (UPDATE_HASHES=1)"]
 fn habitat_territories_matches_golden_hashes() {
     common::assert_golden("habitat-territories", HABITAT_SCENARIO, HABITAT_GOLDEN);
 }

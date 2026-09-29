@@ -123,10 +123,14 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // Re-pinned 2026-09-28: a newborn is placed clear of both parents' bodies
     // (collision layer on) instead of on their midpoint; every full-stack
     // trajectory moves from its first birth.
-    &[(0, 0x75704801cc76d91a), (100, 0xfcab5035e4583bb2), (300, 0x4f07532b0435d7a3)];
+    // Refreshed 2026-09-29: the collision audit (swept moves, newborn placement,
+    // the hub and water pulls), the realism layers (gait, growth, turning
+    // inertia, gestation, the chase and its carcass economy) and capacity from
+    // food (no lineage shares, non-binding caps) — every full-stack trajectory
+    // moved from tick 1; see docs/scenarios.md.
+    &[(0, 0x3651a748bbc86747), (100, 0x4c9cf6641f62b1f9), (300, 0xc3968e0ceb81f927)];
 
 #[test]
-#[ignore = "collision / carrying-capacity work in flight: the full-stack goldens are re-pinned once it lands (UPDATE_HASHES=1)"]
 fn affect_social_matches_golden_hashes() {
     common::assert_golden("affect-social", AFFECT_SOCIAL, AFFECT_GOLDEN);
 }
