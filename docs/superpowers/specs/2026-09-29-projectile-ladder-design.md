@@ -177,30 +177,35 @@ the retired `weapons.toml` now seeds `throwing_stones` beside `hafted_spears`.
    layout below 32, and rejects a truncated row; the existing save→load→step
    round-trips run at `FORMAT_VERSION` 45.
 
-## Measured (tribes, seed 60623 and seeds 0–7, 5000 ticks, release)
+## Measured (tribes, seeds 60623 and 0–7, 5000 ticks, release)
 
-Measured with `anabios-headless demo` / `sweep` before and after the change
-(same binary configuration otherwise; `runs/` outputs not committed).
+Measured with `anabios-headless demo` / `sweep` (`runs/` outputs not
+committed). Two baselines, because main took the realism layers (gait,
+growth, gestation, turning inertia, the chase; capacity from food) while
+this branch was open.
 
-- **Scenario seed (60623), demo, 5000 ticks.** Before: Stone Tools is the
-  tick-0 seed; the first climbed inventions were Hafted Spears (tick 1903) and
-  Fire (1919), no non-seeded adoption. After: Pottery (1104) and Fire (3566);
-  the trajectory moved for the reasons above, and this seed happens not to
-  roll the stone within the horizon.
-- **Seeds 0–7, sweep, 5000 ticks, first discovery of each non-seeded tech.**
+**On the merged tree (realism layers + projectile ladder) against the
+realism tip alone (`afe9b87`):**
 
-  | | before | after |
-  |---|---|---|
-  | Throwing Stones discovered | — | 5/8 seeds (ticks 121, 210, 286, 382, 850) |
-  | Throwing Stones adopted (≥ half a species) | — | 4/8 seeds |
-  | Hafted Spears discovered | 5/8 (ticks 125–2332) | 2/8 (2035, 4810), both after the stone |
-  | Archery discovered | 1/8 (tick 773) | 0/8 |
-  | Fire discovered | 3/8 | 5/8 |
-  | any non-seeded invention adopted | 2/8 | 4/8 |
+| | realism tip | merged tree |
+|---|---|---|
+| scenario seed: climbed inventions by tick 5000 | none | Throwing Stones (3951), then Hafted Spears (4634) |
+| Throwing Stones discovered / adopted (seeds 0–7) | — | 2/8 (ticks 1293, 2080) / 2/8 |
+| Hafted Spears discovered | 3/8 (ticks 1973, 2425, 3474) | 0/8 |
+| Fire discovered | 2/8 | 2/8 |
+| any non-seeded invention adopted | 3/8 | 2/8 |
+| spiner / bruiser alive at tick 1500 | 7/8 / 6/8 | 8/8 / 6/8 |
 
-  The ladder behaves as designed: the stone is now the common first
-  projectile, cheap enough to be the most frequent first discovery in the
-  world, and the spear waits on it — so within a 5000-tick horizon Archery no
-  longer appears, which is the price of a real first rung. The `tribes` row in
-  `docs/scenarios.md` records the adoption figure (4/8, still under the 5/8
-  bar); the README's tribes paragraph quotes the same numbers.
+**Before the realism layers (the ladder alone on `4de8d1c`, its original
+base):** the stone was discovered on 5/8 seeds (ticks 121–850) and adopted
+on 4/8, Hafted Spears on 2/8 (both after the stone), Archery never (1/8
+before), non-seeded adoption rose from 2/8 to 4/8, and the scenario seed's
+first climbed inventions moved from Hafted Spears (1903) + Fire (1919) to
+Pottery (1104) + Fire (3566).
+
+The ladder behaves as designed on both trees: the stone is the first
+projectile and the spear waits on it — on the merged tree's scenario seed
+the two rungs arrive in order — while the realism layers slow every climb
+(discovery within 5000 ticks is rarer for every tech). The `tribes` row in
+`docs/scenarios.md` records the merged-tree adoption figure; the README's
+tribes paragraph quotes the same numbers.
