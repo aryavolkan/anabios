@@ -31,8 +31,10 @@ pub const SPEED_MAX_CAP: f32 = 4.0;
 /// and affect (SEEKING). `integrate_all` moves `desired_direction × top_speed`;
 /// with gait on the direction's length is the fraction of this actually
 /// used, so a viewer or test can read `|velocity| / top_speed` as the gait.
-/// The product is evaluated in exactly the order `integrate_all` always used,
-/// so factoring it out changed no bit.
+/// `chase::stamina_step` (the walk is a fraction of it) and
+/// `interact::combat_pass` (the predator's attainable speed) read the same
+/// figure. The product is evaluated in exactly the order `integrate_all`
+/// always used, so factoring it out changed no bit.
 #[inline]
 pub fn top_speed(
     modules: &crate::module::ModuleList,
@@ -70,7 +72,11 @@ pub fn top_speed(
 /// `growth_enabled` (`growth.rs`) scales basal metabolism and the move cost
 /// by the agent's growth body scale and its speed by `growth::speed_scale`
 /// (juveniles are smaller, cheaper and slightly slower); pass `false` for
-/// exact identity (every multiplier is then exactly 1.0).
+/// exact identity (every multiplier is then exactly 1.0). `exhausted`
+/// (`chase.rs`) is `Some(&world.exhausted[..cap])` when `chase_enabled`: an
+/// exhausted agent is held to `chase::WALK_FRACTION` of its top speed — a
+/// multiplier on the speed, so it composes with the gait fraction and the
+/// growth speed scale; pass `None` for exact identity (nothing is read).
 #[allow(clippy::too_many_arguments)]
 pub fn integrate_all(
     agents: &mut AgentBuffers,
@@ -83,6 +89,7 @@ pub fn integrate_all(
     habitat: Option<&crate::biome::BiomeField>,
     gait_enabled: bool,
     growth_enabled: bool,
+    exhausted: Option<&[bool]>,
 ) {
     use rayon::prelude::*;
     let cap = agents.capacity();
@@ -214,9 +221,18 @@ pub fn integrate_all(
             // With gait on, `direction` is the unit heading times the speed
             // fraction `decide_all` chose (`gait.rs`); off, a unit vector.
             let direction = desired_direction[i];
-            let v = direction
-                * (top_speed(&modules[i], &genome[i], inv_mask, &affect[i], gene_tech_coupling)
-                    * crate::growth::speed_scale(growth));
+            let top = top_speed(&modules[i], &genome[i], inv_mask, &affect[i], gene_tech_coupling)
+                * crate::growth::speed_scale(growth);
+            // Chase (opt-in): an exhausted agent is held to a walk — a
+            // multiplier on the speed, so it composes with the gait fraction
+            // carried in `direction`'s length, the growth speed scale and
+            // the gestation slowdown below. `None` with the flag off, so `v`
+            // is exactly `direction * top`, the pre-chase product.
+            let top = match exhausted {
+                Some(ex) => top * crate::chase::stamina_speed_multiplier(ex[i]),
+                None => top,
+            };
+            let v = direction * top;
             // Gestation: the mother is slower for the whole term.
             let v = if gestating { v * crate::reproduce::GESTATION_SPEED } else { v };
             // Habitat gate (territory layer): the move the agent's Locomotion
@@ -304,6 +320,7 @@ mod tests {
             None,
             false,
             false,
+            None,
         );
         let p = w.agents.position[id as usize];
         assert!(p.x >= 0.0 && p.x < WORLD_SIZE);
@@ -328,6 +345,7 @@ mod tests {
             None,
             false,
             false,
+            None,
         );
         let after = w.agents.energy[id as usize];
         assert!(after < before);
@@ -366,6 +384,7 @@ mod tests {
             None,
             false,
             false,
+            None,
         );
         let pos_after = w.agents.position[id as usize];
         assert_eq!(pos_before, pos_after, "no Locomotor → no motion");
@@ -392,6 +411,7 @@ mod tests {
                 None,
                 false,
                 false,
+                None,
             );
             before - w.agents.energy[id as usize]
         };
@@ -427,6 +447,7 @@ mod tests {
                 None,
                 false,
                 false,
+                None,
             );
             before - w.agents.energy[id as usize]
         };
@@ -482,6 +503,7 @@ mod tests {
             None,
             false,
             false,
+            None,
         );
         let new_pos = w.agents.position[id as usize];
         // Moved roughly SPEED_MAX_CAP × 1.0 = 4.0 in +x.
@@ -509,6 +531,7 @@ mod tests {
                 None,
                 false,
                 false,
+                None,
             );
             before - w.agents.energy[id as usize]
         };
@@ -542,6 +565,7 @@ mod tests {
                 None,
                 false,
                 false,
+                None,
             );
             (
                 (w.agents.position[id as usize] - before_pos).length(),
@@ -587,6 +611,7 @@ mod tests {
                 None,
                 false,
                 false,
+                None,
             );
             (
                 (w.agents.position[id as usize] - before_pos).length(),
@@ -638,12 +663,69 @@ mod tests {
                 None,
                 false,
                 false,
+                None,
             );
             (w.agents.position[id as usize] - before).length()
         };
         let neutral = displacement(0.0);
         let seeking = displacement(1.0);
         assert!(seeking > neutral, "SEEKING boosts movement speed: {neutral} -> {seeking}");
+    }
+
+    #[test]
+    fn top_speed_is_the_integrate_product() {
+        let mut w = World::new(1);
+        let id = spawn_at_unit_speed(&mut w, Vec2::new(500.0, 500.0));
+        let i = id as usize;
+        let top = |w: &World| {
+            top_speed(
+                &w.agents.modules[i],
+                &w.agents.genome[i],
+                crate::invention::held_mask(&w.agents.meme_vector[i]),
+                &w.agents.affect[i],
+                false,
+            )
+        };
+        assert_eq!(top(&w), SPEED_MAX_CAP, "unit locomotor, neutral genome and affect ⇒ the cap");
+        w.agents.affect[i][crate::affect::SEEK] = 1.0;
+        assert!(top(&w) > SPEED_MAX_CAP, "SEEKING raises the top speed, as it raises the move");
+    }
+
+    #[test]
+    fn exhausted_agent_is_held_to_a_walk_only_with_the_flag_on() {
+        let displacement = |chase_on: bool, exhausted: bool| -> f32 {
+            let mut w = World::new(1);
+            let id = spawn_at_unit_speed(&mut w, Vec2::new(500.0, 500.0));
+            let bits = vec![exhausted; w.agents.capacity()];
+            let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
+            desired[id as usize] = Vec2::new(1.0, 0.0);
+            let before = w.agents.position[id as usize];
+            integrate_all(
+                &mut w.agents,
+                &desired,
+                w.world_size,
+                false,
+                false,
+                w.cognition_enabled,
+                w.spatial.perception_max_radius(),
+                None,
+                false,
+                false,
+                chase_on.then_some(&bits[..]),
+            );
+            (w.agents.position[id as usize] - before).length()
+        };
+        assert!((displacement(true, false) - 4.0).abs() < 1e-4, "fresh ⇒ full speed");
+        assert!(
+            (displacement(true, true) - 4.0 * crate::chase::WALK_FRACTION).abs() < 1e-4,
+            "exhausted ⇒ the walk"
+        );
+        assert_eq!(
+            displacement(false, true),
+            displacement(false, false),
+            "flag off: the exhausted bit is never read"
+        );
+        assert!((displacement(false, true) - 4.0).abs() < 1e-4);
     }
 
     /// 256-unit world, all Grass except Water in columns >= 16 (coast at x=128).
@@ -677,6 +759,7 @@ mod tests {
             Some(&biome),
             false,
             false,
+            None,
         );
         w.agents.position[id as usize]
     }
@@ -722,6 +805,7 @@ mod tests {
             None,
             false,
             false,
+            None,
         );
         assert!((w.agents.position[id as usize].x - 130.0).abs() < 1e-4);
     }
@@ -749,6 +833,7 @@ mod tests {
                 None,
                 gait_on,
                 false,
+                None,
             );
             let dist = (w.agents.position[id as usize] - before_pos).length();
             assert!((dist - frac * SPEED_MAX_CAP).abs() < 1e-4, "step {dist} at fraction {frac}");
@@ -794,6 +879,7 @@ mod tests {
                 None,
                 false,
                 growth_on,
+                None,
             );
             (
                 before_en - w.agents.energy[id as usize],

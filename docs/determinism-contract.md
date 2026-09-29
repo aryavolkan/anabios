@@ -70,6 +70,19 @@ With `turning_enabled` off nothing reads or writes it — every slot stays at
 `heading::SPAWN_HEADING` — which
 `tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column` pins.
 
+`World.{stamina, exhausted}` (chase) are likewise **serialized, not
+skipped**, and kept on `World` like `still_ticks` rather than as
+`AgentBuffers` columns (so the `agents` layout the trajectory guards hash is
+untouched): the stamina bar is a path-dependent accumulator and the
+exhaustion bit its hysteresis state, and both feed hashed movement (the walk
+cap in `integrate_all`) and the catch roll. They are sized to agent capacity
+by `resize_scratch`, written only by `chase::stamina_step` under
+`chase_enabled` (which also resets dead slots, so a reused slot starts
+fresh), and stay 1.0/false, unread, otherwise. The catch roll itself keeps no
+state: it is a hash of the world seed, the tick and the pair of ids, all
+serialized, so it needs nothing re-derived on load and draws nothing from
+`rng`.
+
 Layout-only changes are proven with the **trajectory guards** in
 `tests/determinism.rs` (`*_trajectory_unchanged_by_territory_substrate`): an
 FNV over the bincode of every serialized sub-state that is the trajectory

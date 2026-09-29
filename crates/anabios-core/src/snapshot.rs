@@ -208,27 +208,35 @@ use crate::world::World;
 ///     scenario ⇒ trajectories byte-identical (pinned by the
 ///     `*_trajectory_unchanged_by_territory_substrate` guards in
 ///     `tests/determinism.rs`); only the serialized layout grew.
-/// 45: gait, growth and juveniles, turning inertia, gestation and litters —
-///     `World.gait_enabled` (bool; `gait.rs`), `World.growth_enabled` (bool;
-///     `growth.rs`), `World.turning_enabled` (bool; `heading.rs`) with the
-///     `AgentBuffers.heading` column (one serialized `Vec2` per slot: the
-///     persistent facing `tick::decide_all` turns at a bounded rate), and
-///     `World.gestation_enabled` (bool; `reproduce.rs`) with the
-///     `AgentBuffers.{gestation_left, pending_litter}` columns (a `u32`
-///     countdown and an `Option<PendingLitter>` per slot: the litter's drawn
+/// 45: gait, growth and juveniles, turning inertia, gestation and litters,
+///     predation as a chase — `World.gait_enabled` (bool; `gait.rs`),
+///     `World.growth_enabled` (bool; `growth.rs`), `World.turning_enabled`
+///     (bool; `heading.rs`) with the `AgentBuffers.heading` column (one
+///     serialized `Vec2` per slot: the persistent facing `tick::decide_all`
+///     turns at a bounded rate), `World.gestation_enabled` (bool;
+///     `reproduce.rs`) with the `AgentBuffers.{gestation_left,
+///     pending_litter}` columns (a `u32` countdown and an
+///     `Option<PendingLitter>` per slot: the litter's drawn
 ///     genomes/modules/programs/sexes, father slot + lineage + genome,
-///     species). Growth is a pure function of the existing `age` column and
-///     the genome lifespan, so it adds no other state. All four knobs off in
+///     species), and `World.chase_enabled` (bool; `chase.rs`) with the
+///     per-slot `World.{stamina, exhausted}` vectors (the stamina bar, `f32`,
+///     full for a fresh slot; the exhaustion hysteresis bit — serialized
+///     accumulators kept on `World` like `still_ticks`, so they add no agent
+///     column). Growth is a pure function of the existing `age` column and
+///     the genome lifespan, so it adds no other state. All five knobs off in
 ///     the engine default and in every pre-flip fixture ⇒ zero extra RNG and
 ///     byte-identical trajectories with the flags off: nothing reads or
 ///     writes the heading column (it stays at `heading::SPAWN_HEADING`,
 ///     pinned by `tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column`),
-///     the gestation columns stay `0`/`None`, and the instant-birth path
-///     draws and computes exactly as before. The flag-off trajectory guards
-///     (`*_trajectory_is_pinned` in `tests/determinism.rs`) hash the
-///     pre-existing agent columns and hold their base values; only the
-///     serialized layout grew. The scenario schema defaults all four knobs
-///     on, so every full-stack trajectory moves from tick 1.
+///     the gestation columns stay `0`/`None`, the instant-birth path draws
+///     and computes exactly as before, and the stamina vectors stay
+///     1.0/false and unread while every strike lands as before (pinned by
+///     `chase::tests::flag_off_columns_never_influence_behaviour`). The
+///     flag-off trajectory guards (`*_trajectory_is_pinned` in
+///     `tests/determinism.rs`) hash the pre-existing agent columns and hold
+///     their base values; only the serialized layout grew. The scenario
+///     schema defaults all five knobs on, so every full-stack trajectory
+///     moves from tick 1.
 pub const FORMAT_VERSION: u32 = 45;
 
 #[derive(Debug, Serialize, Deserialize)]

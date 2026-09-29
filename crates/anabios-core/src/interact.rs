@@ -236,6 +236,56 @@ fn combat_pass(world: &mut World, alive_ids: &[u32]) {
         if world.domestication_enabled && world.agents.livestock_of[t] == id {
             continue;
         }
+        // Chase (opt-in): a contact strike (Weapon/Jaws) has to catch its
+        // target. It lands with `chase::catch_probability` of the predator's
+        // attainable speed this tick (its top speed under its own exhaustion
+        // cap — its own applied move is cut at the prey's body by the swept
+        // contact, so it says nothing about the lunge) over the prey's escape
+        // speed (the part of its applied move directed away from the
+        // predator), and of the size ratio; a Spines volley flies regardless.
+        // A miss still costs the lunge and nothing else happens. The roll is a
+        // stateless hash of (seed, tick, attacker, target): this pass never
+        // drew from `world.rng`, and the chase keeps the draw count at zero,
+        // so flag-on worlds diverge only through the chase itself. Flag off ⇒
+        // every strike lands, as before.
+        if world.chase_enabled && weapon.range <= crate::module::WEAPON_RANGE {
+            let away = crate::spatial::torus_delta(
+                world.agents.position[t],
+                world.agents.position[i],
+                world.world_size,
+            )
+            .normalize_or_zero();
+            let prey_escape = crate::chase::escape_speed(world.agents.velocity[t], away);
+            // Growth: a juvenile lunges slower and counts as its grown body
+            // (both exactly ×1.0 with growth off or once mature).
+            let pred_growth = crate::growth::body_scale_of(
+                world.growth_enabled,
+                world.agents.age[i],
+                &world.agents.genome[i],
+            );
+            let prey_growth = crate::growth::body_scale_of(
+                world.growth_enabled,
+                world.agents.age[t],
+                &world.agents.genome[t],
+            );
+            let pred_speed = crate::integrate::top_speed(
+                &world.agents.modules[i],
+                &world.agents.genome[i],
+                mask_i,
+                &world.agents.affect[i],
+                world.gene_tech_coupling,
+            ) * crate::growth::speed_scale(pred_growth)
+                * crate::chase::stamina_speed_multiplier(
+                    world.exhausted.get(i).copied().unwrap_or(false),
+                );
+            let pred_size = world.agents.genome[i].get(GenomeSlot::Size).max(0.1) * pred_growth;
+            let prey_size = world.agents.genome[t].get(GenomeSlot::Size).max(0.1) * prey_growth;
+            let p = crate::chase::catch_probability(pred_speed, prey_escape, pred_size, prey_size);
+            if crate::chase::catch_roll(world.seed, world.tick, id, tgt) >= p {
+                world.agents.energy[i] -= weapon.energy_cost;
+                continue;
+            }
+        }
         // Metalworking / military-branch buffs: better weapons deal more damage.
         let inv_weapon_mult = crate::invention::weapon_multiplier_coupled(
             mask_i,
@@ -1008,6 +1058,88 @@ mod tests {
         refresh_sensors(w);
         w.actions[attacker as usize].fire_intent = 1.0;
         (attacker, target)
+    }
+
+    /// `setup_adjacent_combat_pair` with the target on a carnivore kit too,
+    /// so neither side grazes and every energy delta is the strike's.
+    fn setup_chase_pair(w: &mut World) -> (u32, u32) {
+        let (attacker, target) = setup_adjacent_combat_pair(w);
+        w.agents.modules[target as usize] = crate::module::predator_kit();
+        (attacker, target)
+    }
+
+    #[test]
+    fn chase_miss_costs_the_lunge_and_deals_no_damage() {
+        // The prey's applied move this tick runs directly away (+x, the side
+        // it stands on) at twice the predator's top speed (predator_kit:
+        // 0.7 × SPEED_MAX_CAP = 2.8) ⇒ speed advantage 0.5 ≤ SPEED_ADV_MIN ⇒
+        // the strike cannot land. Flag off: the same strike lands in full.
+        for chase_on in [true, false] {
+            let mut w = World::new(13);
+            w.chase_enabled = chase_on;
+            let (attacker, target) = setup_chase_pair(&mut w);
+            w.agents.velocity[target as usize] = Vec2::new(5.6, 0.0);
+            let e_att = w.agents.energy[attacker as usize];
+            let e_tgt = w.agents.energy[target as usize];
+            interact_all(&mut w);
+            let paid = e_att - w.agents.energy[attacker as usize];
+            assert!((paid - 1.0).abs() < 1e-6, "the lunge costs the weapon energy either way");
+            let lost = e_tgt - w.agents.energy[target as usize];
+            if chase_on {
+                assert!(!w.combat_damaged[target as usize], "flag on: the strike misses");
+                assert_eq!(lost, 0.0, "a miss deals nothing");
+            } else {
+                assert!(w.combat_damaged[target as usize], "flag off: every strike lands");
+                assert!((lost - 8.0).abs() < 1e-5, "full Weapon damage, as before");
+            }
+        }
+    }
+
+    #[test]
+    fn chase_certain_catch_lands_the_full_strike() {
+        // A standing prey half the predator's size: the speed term and the
+        // size term both saturate ⇒ probability 1.0 ⇒ the strike lands with
+        // the weapon's full damage, exactly as a flag-off strike would.
+        let mut w = World::new(13);
+        w.chase_enabled = true;
+        let (attacker, target) = setup_chase_pair(&mut w);
+        w.agents.genome[attacker as usize].set(GenomeSlot::Size, 1.0);
+        let e_tgt = w.agents.energy[target as usize];
+        interact_all(&mut w);
+        assert!(w.combat_damaged[target as usize], "a certain catch");
+        let lost = e_tgt - w.agents.energy[target as usize];
+        assert!((lost - 8.0).abs() < 1e-5, "full Weapon damage: {lost}");
+    }
+
+    #[test]
+    fn exhausted_predator_cannot_catch_a_fleeing_prey() {
+        // Prey fleeing at 3.0; the fresh predator (2.8) closes at 0.93 ⇒ a
+        // real chance, but held to a walk (2.8 × WALK_FRACTION = 1.68) its
+        // advantage falls to 0.56 ≤ SPEED_ADV_MIN ⇒ none.
+        let mut w = World::new(13);
+        w.chase_enabled = true;
+        let (attacker, target) = setup_chase_pair(&mut w);
+        w.agents.velocity[target as usize] = Vec2::new(3.0, 0.0);
+        w.resize_scratch();
+        w.exhausted[attacker as usize] = true;
+        interact_all(&mut w);
+        assert!(!w.combat_damaged[target as usize], "an exhausted predator only lunges at a walk");
+    }
+
+    #[test]
+    fn spines_volley_ignores_the_catch_roll() {
+        // The prey sprints away far faster than the attacker could ever
+        // close — a contact weapon would miss for certain — but a Spines
+        // volley is not a chase: it flies regardless.
+        let mut w = World::new(13);
+        w.chase_enabled = true;
+        let (attacker, target) = setup_chase_pair(&mut w);
+        let kit = &mut w.agents.modules[attacker as usize];
+        kit.retain(|m| !matches!(m, crate::module::Module::Weapon { .. }));
+        kit.push(crate::module::Module::Spines { damage: 4.0, energy_cost: 1.5, range: 0.8 });
+        w.agents.velocity[target as usize] = Vec2::new(100.0, 0.0);
+        interact_all(&mut w);
+        assert!(w.combat_damaged[target as usize], "a volley needs no catch");
     }
 
     #[test]

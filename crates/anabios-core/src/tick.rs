@@ -77,6 +77,7 @@ pub fn step(world: &mut World) {
         world.territory_enabled.then_some(&world.biome),
         world.gait_enabled,
         world.growth_enabled,
+        world.chase_enabled.then_some(&world.exhausted[..cap]),
     );
 
     // Stage 4'': swept contact (territory layer) — every move is cut back to
@@ -97,6 +98,13 @@ pub fn step(world: &mut World) {
     // `basic_needs_enabled` is false). Runs directly after integrate so the
     // activity components read this tick's velocity.
     crate::needs::needs_step(world);
+
+    // Stage 4a'': chase stamina (opt-in) — drain from this tick's applied
+    // move above a walk, recover below it, and the exhaustion hysteresis
+    // that `integrate_all` reads next tick as a speed cap and `combat_pass`
+    // reads this tick as the predator's lunge. Strict no-op and zero RNG
+    // when `chase_enabled` is false.
+    crate::chase::stamina_step(world);
 
     // Stage 4b: E6 ambush instrumentation — consecutive still ticks per
     // agent, read by `combat_pass` in the interact stage. Observability only.
@@ -884,6 +892,7 @@ mod tests {
             None,
             w.gait_enabled,
             w.growth_enabled,
+            None,
         );
         (dir, (w.agents.position[a as usize] - before).length())
     }

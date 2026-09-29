@@ -45,7 +45,7 @@ exactly:
 { printf '%s = false\n' gene_requirements affect_enabled conserve_goods_on_death \
     knowledge_enabled basic_needs_enabled mate_seeking_enabled territory_enabled \
     repro_biased_learning anthro_race_enabled disease_enabled gait_enabled growth_enabled \
-    turning_enabled gestation_enabled
+    turning_enabled gestation_enabled chase_enabled
   git show 16d9731:scenarios/experiments/o1-invasion-cultural-into-asocial.toml
 } > /tmp/o1.toml
 ./target/release/anabios-headless autopsy \
