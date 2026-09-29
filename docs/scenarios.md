@@ -58,10 +58,10 @@ fleeing prey and hunting pursuers. Opting out is pinned as a no-op by the
 full step, linear move cost) and by the trajectory guards above.
 
 With the collision layer on, gait also yields to the bodies in the way
-(2026-09-29; `gait::crowd_factor`, `collision::contest_ahead`). Before, an
+(2026-09-29; `gait::crowd_factor`, `collision::congestion_ahead`). Before, an
 agent walked at its full pace into the bodies ahead every tick, for the swept
 contact to cut and the resolve to push back — the jostle the collision audits
-below had left. Now `decide_all` scales the pace by one minus the *contest
+below had left. Now `decide_all` scales the pace by one minus the *congestion
 ahead*: over the colliding bodies within the separation steer's reach (1.25
 gaps), how far each has come into that margin (0 at the reach, 1 at contact)
 times how squarely it stands in the path the agent is about to take (the
@@ -78,7 +78,7 @@ inside its strike range. There is no knob of its own: it rides `gait_enabled`
 layer), is exactly ×1.0 with nothing in the way and is never measured with
 either off, so those paths are bit-identical
 (`tick::tests::gait_on_yields_to_the_bodies_in_the_way_but_not_behind_or_beside`,
-`collision::tests::contest_ahead_counts_the_bodies_in_the_path_by_closeness_and_angle`).
+`collision::tests::congestion_ahead_counts_the_bodies_in_the_path_by_closeness_and_angle`).
 Measured with `anabios-headless audit` (1000 ticks at the scenario seed)
 against the tree before it:
 
