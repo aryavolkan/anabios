@@ -208,15 +208,22 @@ use crate::world::World;
 ///     scenario ⇒ trajectories byte-identical (pinned by the
 ///     `*_trajectory_unchanged_by_territory_substrate` guards in
 ///     `tests/determinism.rs`); only the serialized layout grew.
-/// 45: turning inertia — `AgentBuffers.heading` (one serialized `Vec2` per
-///     slot: the persistent facing `tick::decide_all` turns at a bounded
-///     rate) and `World.turning_enabled` (bool). Flag absent/off ⇒ nothing
-///     reads or writes the column (it stays at `heading::SPAWN_HEADING` on
-///     every slot), zero RNG — trajectories byte-identical (pinned by
-///     `tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column`;
-///     the flag-off `*_trajectory_is_pinned` guards moved by the column's
-///     bytes alone and re-derive their previous values with those bytes
-///     stripped); only the serialized layout grew.
+/// 45: gait, growth and juveniles, turning inertia — `World.gait_enabled`
+///     (bool; `gait.rs`), `World.growth_enabled` (bool; `growth.rs`),
+///     `World.turning_enabled` (bool; `heading.rs`) and `AgentBuffers.heading`
+///     (one serialized `Vec2` per slot: the persistent facing
+///     `tick::decide_all` turns at a bounded rate). Growth is a pure function
+///     of the existing `age` column and the genome lifespan, so it adds no
+///     other state. All three knobs off in the engine default and in every
+///     pre-flip fixture ⇒ zero RNG and byte-identical trajectories with the
+///     flags off — nothing reads or writes the heading column, which stays
+///     at `heading::SPAWN_HEADING` on every slot (pinned by
+///     `tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column`);
+///     the flag-off trajectory guards (`*_trajectory_is_pinned` in
+///     `tests/determinism.rs`) moved by the heading column's bytes alone and
+///     re-derive their previous values with those bytes stripped. Only the
+///     serialized layout grew. The scenario schema defaults all three knobs
+///     on, so every full-stack trajectory moves from tick 1.
 pub const FORMAT_VERSION: u32 = 45;
 
 #[derive(Debug, Serialize, Deserialize)]

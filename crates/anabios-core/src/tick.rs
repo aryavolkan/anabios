@@ -74,13 +74,21 @@ pub fn step(world: &mut World) {
         world.cognition_enabled,
         world.spatial.perception_max_radius(),
         world.territory_enabled.then_some(&world.biome),
+        world.gait_enabled,
+        world.growth_enabled,
     );
 
-    // Stage 4': collision resolve (territory layer) — colliding bodies are
-    // kept apart (separation steering plus this min-gap resolve: up to
-    // RESOLVE_PASSES Jacobi passes with a settle exit), leaving no deep
-    // overlaps and only sub-tenth-unit residue in dense crowds. Before needs/anchor/interact
-    // so every later stage sees resolved positions. No-op with the flag off.
+    // Stage 4'': swept contact (territory layer) — every move is cut back to
+    // its first contact with another colliding body (relative motion), so
+    // bodies never pass through one another within a tick and a crowd's
+    // edge stops the agents walking into it. No-op with the flag off.
+    crate::collision::sweep_moves(world);
+
+    // Stage 4': collision resolve (territory layer) — the shallow overlaps
+    // the swept move still allows (a pair in contact range may close to half
+    // its gap) are pushed back out: up to RESOLVE_PASSES Jacobi passes with
+    // a settle exit. Before needs/anchor/interact so every later stage sees
+    // resolved positions. No-op with the flag off.
     crate::collision::resolve_overlaps(world);
 
     // Stage 4a': basic needs — thirst/fatigue accumulation, drinking, and the
@@ -234,6 +242,8 @@ fn decide_all(world: &mut World) {
     let basic_needs_enabled = world.basic_needs_enabled;
     let mate_seeking_enabled = world.mate_seeking_enabled;
     let territory_enabled = world.territory_enabled;
+    let gait_enabled = world.gait_enabled;
+    let growth_enabled = world.growth_enabled;
     let territories = &world.species_territories;
     let spatial = &world.spatial;
     let collision = &world.collision_spatial;
@@ -335,7 +345,18 @@ fn decide_all(world: &mut World) {
                 && !trade_hubs.is_empty()
                 && crate::hub::has_trade_motive(&agents.inventory[i])
             {
-                let pull = crate::hub::best_hub_direction(trade_hubs, agents.position[i], ws);
+                // With the collision layer on, off inside the hub's trade
+                // range and fading in beyond it (`hub::hub_pull`): an agent
+                // that can already trade stops pressing toward the hub's
+                // centre point, so a market is a milling crowd, not a pile
+                // the collision resolve has to unpack every tick. Bodies
+                // without volume (layer off) keep the constant pull, so the
+                // pre-flip trajectory pins do not move.
+                let pull = if territory_enabled {
+                    crate::hub::hub_pull(trade_hubs, agents.position[i], ws)
+                } else {
+                    crate::hub::best_hub_direction(trade_hubs, agents.position[i], ws)
+                };
                 action.move_x += crate::hub::HUB_PULL * pull.x;
                 action.move_y += crate::hub::HUB_PULL * pull.y;
             }
@@ -378,9 +399,19 @@ fn decide_all(world: &mut World) {
             // additive pull toward the nearest drinkable cell, scaled by its
             // thirst — the same bias pattern as the habitat/anchor/hub pulls.
             // Gated so flag-off stays byte-identical (thirst is 0.0 there).
+            // With the collision layer on, an agent that can already drink
+            // where it stands (its cell or a 4-neighbour is drinkable —
+            // exactly `needs_step`'s drinking test) gets no pull: a land
+            // agent at the shoreline cannot enter the water cell the pull
+            // points into, so the pull only pinned it (and the crowd behind
+            // it) against the coast every tick. Layer off: unchanged, so the
+            // pre-flip trajectory pins do not move.
             if basic_needs_enabled {
                 let thirst = agents.thirst[i];
-                if thirst > crate::needs::WATER_SEEK_MIN {
+                if thirst > crate::needs::WATER_SEEK_MIN
+                    && !(territory_enabled
+                        && crate::needs::drinkable_near(biome, agents.position[i]))
+                {
                     let pull = crate::needs::best_water_direction(
                         biome,
                         agents.position[i],
@@ -453,7 +484,8 @@ fn decide_all(world: &mut World) {
             // bodies. Last in the stack so it still applies under the pen
             // override and the hijack; the stage-4' resolve backstops it.
             if territory_enabled {
-                let sep = crate::collision::separation_steer(collision, agents, i, ws);
+                let sep =
+                    crate::collision::separation_steer(collision, agents, i, ws, growth_enabled);
                 action.move_x += crate::collision::SEP_PULL * sep.x;
                 action.move_y += crate::collision::SEP_PULL * sep.y;
             }
@@ -464,15 +496,35 @@ fn decide_all(world: &mut World) {
             // no movement.
             let v = Vec2::new(action.move_x, action.move_y);
             let len = v.length();
-            let dir = if len < 1e-4 || !v.is_finite() { Vec2::ZERO } else { v / len };
+            let dir = if len < 1e-4 || !v.is_finite() {
+                Vec2::ZERO
+            } else if gait_enabled {
+                // Gait (opt-in, `gait.rs`): fold the urgency-chosen speed
+                // fraction into the vector's LENGTH — `integrate_all` moves
+                // `desired_direction × top_speed`, so the shorter vector is
+                // the slower move. Own-row reads only (this agent's modules,
+                // mood and sensors), no RNG; `len` is finite here. The flag-
+                // off arm below keeps the unit vector, byte-identical.
+                let hunting = crate::gait::is_hunting(
+                    crate::module::effective_diet_carnivory(&agents.modules[i]),
+                    crate::module::effective_weapon(&agents.modules[i]).is_some(),
+                    v,
+                    sensors[i].nearest_other_id != crate::sense::NO_NEIGHBOR_ID,
+                    sensors[i].nearest_other_dir,
+                );
+                (v / len) * crate::gait::speed_fraction(len, agents.mood[i], hunting)
+            } else {
+                v / len
+            };
             // Turning inertia (opt-in): the body turns toward `dir` by at
             // most `heading::max_turn` this tick, and the direction applied
             // is the turned heading scaled back by `dir`'s length — its speed
-            // fraction (1 for the unit `dir` above; a feature that folds a
-            // fraction into the length keeps it). The heading follows this
-            // intent, not the move the habitat gate / collision resolve end
-            // up applying. Own slot only, no RNG. Flag off ⇒ `dir` is applied
-            // untouched and the column is never read or written.
+            // fraction (1 for the unit vector, the gait fraction when gait
+            // folded one in above; either way the length is kept). The
+            // heading follows this intent, not the move the habitat gate,
+            // swept contact or collision resolve end up applying. Own slot
+            // only, no RNG. Flag off ⇒ `dir` is applied untouched and the
+            // column is never read or written.
             *dir_out =
                 if turning_enabled { crate::heading::apply_turn(heading_out, dir) } else { dir };
             *action_out = action;
@@ -777,11 +829,7 @@ mod tests {
         // 129 lands in the water column.
         let start = Vec2::new(129.0, 100.0);
         let a = w.spawn_agent(start, Genome::neutral());
-        for m in w.agents.modules[a as usize].iter_mut() {
-            if let crate::module::Module::Locomotor { max_speed, .. } = m {
-                *max_speed = 1.0;
-            }
-        }
+        pin_unit_speed(&mut w, a);
         w.agents.program[a as usize] = west_mover();
         let west = Vec2::new(-1.0, 0.0);
         w.agents.heading[a as usize] = west;
@@ -791,5 +839,116 @@ mod tests {
             assert_eq!(w.agents.velocity[a as usize], Vec2::ZERO, "the gate applied no move");
             assert_eq!(w.agents.heading[a as usize], west, "…but the body still faces the sea");
         }
+    }
+
+    /// Gait fixture: one agent at (500, 500) whose program pushes a huge +x
+    /// move intent every tick (an evolved program's magnitude) on a unit-speed
+    /// Locomotor, so a step of `SPEED_MAX_CAP` is its top speed. Affect is off,
+    /// so the mood column stays CONTENT unless a test sets it.
+    fn gait_world(gait_on: bool) -> (World, u32) {
+        use crate::program::{Node, Program};
+        let mut w = World::new(5);
+        w.gait_enabled = gait_on;
+        let a = w.spawn_agent(Vec2::new(500.0, 500.0), Genome::neutral());
+        w.agents.program[a as usize] =
+            Program::from_slice(&[Node::Const(1000.0), Node::MoveTowardX]);
+        pin_unit_speed(&mut w, a);
+        w.resize_scratch();
+        (w, a)
+    }
+
+    fn pin_unit_speed(w: &mut World, a: u32) {
+        for m in w.agents.modules[a as usize].iter_mut() {
+            if let crate::module::Module::Locomotor { max_speed, .. } = m {
+                *max_speed = 1.0;
+            }
+        }
+    }
+
+    /// `decide_all` then `integrate_all` (no habitat gate): the direction
+    /// decide wrote and the step length integrate applied.
+    fn decide_and_step(w: &mut World, a: u32) -> (Vec2, f32) {
+        decide_all(w);
+        let dir = w.desired_direction[a as usize];
+        let before = w.agents.position[a as usize];
+        let cap = w.agents.capacity();
+        crate::integrate::integrate_all(
+            &mut w.agents,
+            &w.desired_direction[..cap],
+            w.world_size,
+            false,
+            false,
+            false,
+            w.spatial.perception_max_radius(),
+            None,
+            w.gait_enabled,
+            w.growth_enabled,
+        );
+        (dir, (w.agents.position[a as usize] - before).length())
+    }
+
+    #[test]
+    fn gait_off_keeps_the_unit_direction_and_the_full_step() {
+        let (mut w, a) = gait_world(false);
+        let (dir, step) = decide_and_step(&mut w, a);
+        assert_eq!(dir, Vec2::new(1.0, 0.0), "flag off: unit direction, got {dir:?}");
+        assert!((step - crate::integrate::SPEED_MAX_CAP).abs() < 1e-4, "full step: {step}");
+    }
+
+    #[test]
+    fn gait_on_a_content_grazer_with_a_huge_intent_only_ambles() {
+        use crate::gait::GAIT_AMBLE;
+        let (mut w, a) = gait_world(true);
+        assert_eq!(w.agents.mood[a as usize], crate::mood::CONTENT);
+        let (dir, step) = decide_and_step(&mut w, a);
+        assert!((dir.length() - GAIT_AMBLE).abs() < 1e-6, "amble fraction: {dir:?}");
+        let amble = GAIT_AMBLE * crate::integrate::SPEED_MAX_CAP;
+        assert!(step > 0.0 && step <= amble + 1e-4, "step {step} must not exceed {amble}");
+    }
+
+    #[test]
+    fn gait_on_a_fleeing_agent_moves_at_full_speed() {
+        let (mut w, a) = gait_world(true);
+        w.agents.mood[a as usize] = crate::mood::FLEE;
+        let (dir, step) = decide_and_step(&mut w, a);
+        assert!((dir.length() - 1.0).abs() < 1e-6, "sprint fraction: {dir:?}");
+        assert!((step - crate::integrate::SPEED_MAX_CAP).abs() < 1e-4, "full step: {step}");
+    }
+
+    #[test]
+    fn gait_on_a_hunting_carnivore_sprints_but_an_armed_grazer_or_retreat_does_not() {
+        use crate::gait::{GAIT_AMBLE, GAIT_SPRINT};
+        use crate::program::{Node, Program};
+        // An other-species agent is perceived 20 units off on +x; the
+        // program pushes along the given axis node.
+        let fraction = |modules: crate::module::ModuleList, push: Node| -> f32 {
+            let (mut w, a) = gait_world(true);
+            w.agents.modules[a as usize] = modules;
+            pin_unit_speed(&mut w, a);
+            w.agents.program[a as usize] = Program::from_slice(&[Node::Const(1000.0), push]);
+            {
+                let s = &mut w.sensors[a as usize];
+                s.nearest_other_id = 42;
+                s.nearest_other_dist = 20.0;
+                s.nearest_other_dir = Vec2::new(1.0, 0.0);
+            }
+            decide_all(&mut w);
+            w.desired_direction[a as usize].length()
+        };
+        let mut armed_grazer = crate::module::starter_kit();
+        armed_grazer.push(crate::module::Module::Weapon { damage: 8.0, energy_cost: 1.0 });
+        let hunter = crate::module::predator_kit();
+        assert!(
+            (fraction(hunter.clone(), Node::MoveTowardX) - GAIT_SPRINT).abs() < 1e-6,
+            "a carnivore closing on prey sprints"
+        );
+        assert!(
+            (fraction(hunter, Node::MoveAwayX) - GAIT_AMBLE).abs() < 1e-6,
+            "a carnivore backing off is not hunting"
+        );
+        assert!(
+            (fraction(armed_grazer, Node::MoveTowardX) - GAIT_AMBLE).abs() < 1e-6,
+            "an armed grazer heading for another species fights at most, it never hunts"
+        );
     }
 }

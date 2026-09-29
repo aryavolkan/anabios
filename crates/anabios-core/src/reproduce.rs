@@ -157,6 +157,8 @@ pub fn reproduce_all(world: &mut World) {
     // alive set via spawn() and we don't want to iterate over newborns
     // this tick.
     let mut alive_ids = std::mem::take(&mut world.agents.scratch_ids);
+    let mut newborns = std::mem::take(&mut world.newborn_scratch);
+    newborns.clear();
     alive_ids.clear();
     alive_ids.extend(world.agents.iter_alive());
 
@@ -181,7 +183,7 @@ pub fn reproduce_all(world: &mut World) {
                 continue;
             }
         }
-        if !is_eligible(&world.agents, a_id) {
+        if !is_eligible(&world.agents, a_id, world.growth_enabled) {
             continue;
         }
 
@@ -205,6 +207,7 @@ pub fn reproduce_all(world: &mut World) {
             kin_seeking,
             &a_genome,
             world.sexual_dimorphism_enabled,
+            world.growth_enabled,
         );
         let Some(b_id) = mate else { continue };
 
@@ -240,8 +243,30 @@ pub fn reproduce_all(world: &mut World) {
         world.reproduced_this_tick.set(i, true);
         world.reproduced_this_tick.set(j, true);
 
-        // Spawn at midpoint of parents on the torus (account for wrap).
-        let child_pos = midpoint_torus(a_pos, b_pos, world.world_size);
+        // Spawn at the midpoint of the parents on the torus (account for
+        // wrap) — or, with the collision layer on, beside it on the
+        // perpendicular bisector, clear of both parents' bodies: births run
+        // after the stage-4' resolve, so a midpoint child would sit stacked
+        // on its parents for a whole tick. `flip` alternates the side by the
+        // initiating parent's id parity (no RNG; flag-off births unchanged).
+        let child_pos = if world.territory_enabled {
+            // Live radii (growth layer): a newborn is born at its juvenile
+            // body, and either parent may still be growing.
+            let growth = world.growth_enabled;
+            let child_r = crate::collision::live_body_radius(&child_genome, 0, growth);
+            let a_r = crate::collision::live_body_radius(&a_genome, world.agents.age[i], growth);
+            let b_r = crate::collision::live_body_radius(&b_genome, world.agents.age[j], growth);
+            crate::collision::offspring_position(
+                a_pos,
+                b_pos,
+                child_r + a_r,
+                child_r + b_r,
+                a_id & 1 == 1,
+                world.world_size,
+            )
+        } else {
+            midpoint_torus(a_pos, b_pos, world.world_size)
+        };
         // Territory layer: a newborn lands on terrain its class can occupy.
         let child_pos = if world.territory_enabled {
             crate::habitat::nearest_valid(
@@ -338,6 +363,9 @@ pub fn reproduce_all(world: &mut World) {
         // Maladaptive-practice fitness costs (cognition-gated; may cull the child).
         let child_lost =
             apply_practice_fitness_costs(world, child_id, i, j, &a_genome, &b_genome, a_species);
+        if !child_lost && world.territory_enabled {
+            newborns.push(child_id);
+        }
         // O3 repro-biased learning: record the birth outcome on both parents.
         // Flag-gated so flag-off worlds keep all-zero counters (byte-identical
         // serialized state modulo the layout growth).
@@ -352,6 +380,12 @@ pub fn reproduce_all(world: &mut World) {
         }
     }
     world.agents.scratch_ids = alive_ids;
+    // Collision layer: a child clear of its parents may still have landed on
+    // a third body — settle this tick's newborns against everyone (only the
+    // newborns move). No-op with the flag off.
+    crate::collision::settle_newborns(world, &newborns);
+    newborns.clear();
+    world.newborn_scratch = newborns;
 }
 
 /// Meme inheritance: child meme = parent average + jitter, ONLY when the child
@@ -460,13 +494,19 @@ fn apply_practice_fitness_costs(
     stillborn || sacrificed
 }
 
-fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
+/// Mate eligibility: alive, a Reproductive module, awake, mature (growth
+/// layer; always true with `growth_enabled` off) and above the energy gate.
+fn is_eligible(agents: &AgentBuffers, id: u32, growth_enabled: bool) -> bool {
     let i = id as usize;
     if !agents.is_alive(id) {
         return false;
     }
     // Action gating: must have Reproductive module to mate.
     if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Reproductive) {
+        return false;
+    }
+    // Growth: no breeding before maturity. Inert with the flag off.
+    if !crate::growth::is_mature(growth_enabled, agents.age[i], &agents.genome[i]) {
         return false;
     }
     // Basic needs: sleepers neither seek nor accept mates — lost mating time
@@ -501,6 +541,7 @@ fn find_mate(
     kin_seeking: bool,
     a_genome: &Genome,
     dimorphism: bool,
+    growth_enabled: bool,
 ) -> Option<u32> {
     let mut best: Option<u32> = None;
     // Genome distance of `best` — only consulted when `kin_seeking`.
@@ -514,7 +555,7 @@ fn find_mate(
         if reproduced[j] {
             return;
         }
-        if !is_eligible(agents, other_id) {
+        if !is_eligible(agents, other_id, growth_enabled) {
             return;
         }
         if agents.species_id[j] != a_species {
@@ -647,6 +688,39 @@ mod tests {
         assert_eq!(w.agents.live_count(), 3, "awake pair reproduces");
     }
 
+    /// Growth: a juvenile is not mate-eligible on either side of the pair;
+    /// the same pair breeds once both are mature. Flag off, age is unread.
+    #[test]
+    fn juveniles_do_not_mate_until_maturity() {
+        use crate::growth::maturity_ticks;
+        let mut w = World::new(13);
+        w.growth_enabled = true;
+        let (a, b) = spawn_fertile_pair(&mut w);
+        let m = maturity_ticks(crate::age::lifespan_of(&fertile_genome()));
+        // Two newborns.
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "a newborn pair must not mate");
+        // One adult, one juvenile a tick short of maturity: still no.
+        w.agents.age[a as usize] = m;
+        w.agents.age[b as usize] = m - 1;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "a juvenile partner blocks mating");
+        w.agents.age[a as usize] = m - 1;
+        w.agents.age[b as usize] = m;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "a juvenile initiator blocks mating");
+        // Both mature: the pair breeds.
+        w.agents.age[a as usize] = m;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 3, "a mature pair reproduces");
+
+        // Flag off: the same newborn pair breeds at once.
+        let mut w = World::new(13);
+        let _ = spawn_fertile_pair(&mut w);
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 3, "flag off: age unread");
+    }
+
     #[test]
     fn two_adjacent_well_fed_agents_produce_offspring() {
         let mut w = World::new(13);
@@ -660,6 +734,42 @@ mod tests {
         // Each parent paid energy.
         assert!(w.agents.energy[id0 as usize] < SPAWN_ENERGY * 2.0);
         assert!(w.agents.energy[id1 as usize] < SPAWN_ENERGY * 2.0);
+    }
+
+    /// Collision layer on: the newborn is placed clear of both parents'
+    /// bodies (births run after the stage-4' resolve, so a midpoint child
+    /// would sit stacked on them for a tick). Flag off: the midpoint, as
+    /// before.
+    #[test]
+    fn newborn_is_placed_clear_of_both_parents_when_collision_is_on() {
+        use crate::collision::body_radius;
+        for territory in [true, false] {
+            let mut w = World::new(13);
+            w.territory_enabled = territory;
+            let (a, b) = spawn_fertile_pair(&mut w);
+            reproduce_all(&mut w);
+            assert_eq!(w.agents.live_count(), 3);
+            let child = 2u32;
+            assert!(w.agents.is_alive(child));
+            let ws = w.world_size;
+            let (pa, pb, pc) = (
+                w.agents.position[a as usize],
+                w.agents.position[b as usize],
+                w.agents.position[child as usize],
+            );
+            let da = torus_distance(pc, pa, ws);
+            let db = torus_distance(pc, pb, ws);
+            if territory {
+                let rc = body_radius(&w.agents.genome[child as usize]);
+                let ga = rc + body_radius(&w.agents.genome[a as usize]);
+                let gb = rc + body_radius(&w.agents.genome[b as usize]);
+                assert!(da >= ga - 1e-4, "child overlaps parent a: {da} < {ga}");
+                assert!(db >= gb - 1e-4, "child overlaps parent b: {db} < {gb}");
+            } else {
+                let mid = midpoint_torus(pa, pb, ws);
+                assert!(torus_distance(pc, mid, ws) < 1e-5, "flag off must keep the midpoint");
+            }
+        }
     }
 
     #[test]

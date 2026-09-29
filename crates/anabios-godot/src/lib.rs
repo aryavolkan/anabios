@@ -487,16 +487,14 @@ impl Simulation {
         out
     }
 
-    /// Each agent's size in world units (used by MultiMesh scale).
+    /// Each agent's size in world units (used by MultiMesh scale): the grown
+    /// size under `growth_enabled`, so juveniles draw small (`view_size_of`).
     #[func]
     fn alive_sizes(&self) -> PackedFloat32Array {
-        use anabios_core::genome::GenomeSlot;
         let mut out = PackedFloat32Array::new();
         if let Some(w) = self.inner.as_ref() {
             for id in w.agents.iter_alive() {
-                let g = &w.agents.genome[id as usize];
-                let s = 0.5 + 2.5 * g.get(GenomeSlot::Size);
-                out.push(s);
+                out.push(view_size_of(w, id as usize));
             }
         }
         out
@@ -751,7 +749,7 @@ impl Simulation {
             "diet_carnivory",
             anabios_core::module::effective_diet_carnivory(&w.agents.modules[i]),
         );
-        d.set("size", 0.5 + 2.5 * g.get(anabios_core::genome::GenomeSlot::Size));
+        d.set("size", view_size_of(w, i));
         d.set("skill", meme[SKILL_CHANNEL]);
         d.set("technique", meme[TECH_CHANNEL]);
         d.set("iq", w.agents.iq[i]);
@@ -1633,7 +1631,6 @@ impl Simulation {
     /// Read-only view — replaces nine separate `module_glyphs(t)` passes.
     #[func]
     fn module_glyphs_all(&self) -> Array<PackedVector2Array> {
-        use anabios_core::genome::GenomeSlot;
         let type_count = 11usize; // matches module_type_count()
         let mut buckets: Vec<PackedVector2Array> =
             (0..type_count).map(|_| PackedVector2Array::new()).collect();
@@ -1641,7 +1638,7 @@ impl Simulation {
             for id in w.agents.iter_alive() {
                 let i = id as usize;
                 let pos = w.agents.position[i];
-                let size = 0.5 + 2.5 * w.agents.genome[i].get(GenomeSlot::Size);
+                let size = view_size_of(w, i);
                 let radius = size * 0.7;
                 for (slot, m) in w.agents.modules[i].iter().enumerate() {
                     let t = m.module_type() as usize;
@@ -1745,6 +1742,22 @@ fn body_tags_of(w: &anabios_core::World) -> Vec<i32> {
             tag
         })
         .collect()
+}
+
+/// Viewer body size of agent `idx`: `0.5 + 2.5 · Size`, times the growth
+/// body scale when `growth_enabled` (juveniles draw small); with growth off
+/// exactly the adult value. Shared by `alive_sizes`, `agent_detail`,
+/// `module_glyphs_all` and `alive_render_state_of` (the wasm view's
+/// `view_size` is the same derivation).
+fn view_size_of(w: &anabios_core::World, idx: usize) -> f32 {
+    use anabios_core::genome::GenomeSlot;
+    let g = &w.agents.genome[idx];
+    let adult = 0.5 + 2.5 * g.get(GenomeSlot::Size);
+    if w.growth_enabled {
+        adult * anabios_core::growth::body_scale_of(true, w.agents.age[idx], g)
+    } else {
+        adult
+    }
 }
 
 /// Locomotion class per alive agent (0 land / 1 water / 2 air), ascending id
@@ -1878,14 +1891,13 @@ fn agent_density_of(w: &anabios_core::World, res: i64) -> Vec<u8> {
 /// `alive_sizes`, `alive_diet`, `livestock_flags_of`,
 /// `alive_moods`/`alive_fire_intent` and `body_tags_of`.
 fn alive_render_state_of(w: &anabios_core::World) -> Vec<f32> {
-    use anabios_core::genome::GenomeSlot;
     let livestock = livestock_flags_of(w);
     let tags = body_tags_of(w);
     let mut out = Vec::with_capacity(w.agents.iter_alive().count() * RENDER_STATE_STRIDE);
     for (i, id) in w.agents.iter_alive().enumerate() {
         let idx = id as usize;
         let p = w.agents.position[idx];
-        let size = 0.5 + 2.5 * w.agents.genome[idx].get(GenomeSlot::Size);
+        let size = view_size_of(w, idx);
         let diet = anabios_core::module::effective_diet_carnivory(&w.agents.modules[idx]);
         out.push(p.x);
         out.push(p.y);
@@ -2353,6 +2365,8 @@ mod tests {
                 "unilateral_trade = false\n",
                 "anthro_race_enabled = false\n",
                 "disease_enabled = false\n",
+                "gait_enabled = false\n",
+                "growth_enabled = false\n",
                 "turning_enabled = false\n",
             )
         };
@@ -2717,13 +2731,8 @@ mod tests {
                 (p.x, p.y)
             })
             .collect();
-        let sizes = {
-            use anabios_core::genome::GenomeSlot;
-            w.agents
-                .iter_alive()
-                .map(|id| 0.5 + 2.5 * w.agents.genome[id as usize].get(GenomeSlot::Size))
-                .collect::<Vec<f32>>()
-        };
+        let sizes: Vec<f32> =
+            w.agents.iter_alive().map(|id| super::view_size_of(&w, id as usize)).collect();
         let diets: Vec<f32> = w
             .agents
             .iter_alive()

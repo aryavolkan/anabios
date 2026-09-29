@@ -266,13 +266,34 @@ pub struct World {
     /// footgun).
     #[serde(default)]
     pub species_territories: Vec<crate::territory::Territory>,
+    /// When true, gait is active (`gait.rs`): `decide_all` folds an
+    /// urgency-chosen speed fraction into the LENGTH of `desired_direction`
+    /// — flee, fight and hunt at the Locomotor maximum, the seeking moods
+    /// walk (`gait::GAIT_WALK`), a content grazer ambles
+    /// (`gait::GAIT_AMBLE`), scaled down further by how hard the program
+    /// pushes — and `integrate_all` charges the move cost a superlinear
+    /// `1 + GAIT_SPRINT_COST · frac²` factor. Off by default: the direction
+    /// stays a unit vector and the factor is never applied, so a flag-off
+    /// world is byte-identical (zero RNG either way). Serialized (v45).
+    #[serde(default)]
+    pub gait_enabled: bool,
+    /// When true, growth and juveniles are active (`growth.rs`): an agent is
+    /// born at `growth::JUVENILE_BODY` of its adult size and grows to it over
+    /// the first `growth::MATURITY_FRAC` of its lifespan (a smoothstep of
+    /// `age`), scaling its collision body radius, grazing bite, basal
+    /// metabolism, move cost and (mildly) speed, and it cannot breed before
+    /// maturity. Off by default — every multiplier is then exactly 1.0 and
+    /// the maturity gate inert: zero RNG draws, byte-identical trajectories
+    /// with the flag off. Serialized (v45).
+    #[serde(default)]
+    pub growth_enabled: bool,
     /// When true, turning inertia is active: each agent carries a persistent
     /// facing (`AgentBuffers::heading`) that `tick::decide_all` turns toward
     /// its wanted direction by at most `heading::MAX_TURN_RAD` per tick (more
-    /// when slow), and the turned heading is the direction integrate applies
-    /// — so nobody reverses in one tick. Off by default — nothing reads or
-    /// writes the column, zero RNG draws, byte-identical trajectories with
-    /// the flag off.
+    /// when slow), and the turned heading — at the length gait chose — is the
+    /// direction integrate applies, so nobody reverses in one tick. Off by
+    /// default — nothing reads or writes the column, zero RNG draws,
+    /// byte-identical trajectories with the flag off. Serialized (v45).
     #[serde(default)]
     pub turning_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
@@ -372,6 +393,18 @@ pub struct World {
     /// Scratch, `#[serde(skip)]`.
     #[serde(skip)]
     pub collision_scratch: Vec<crate::prelude::Vec2>,
+    /// This tick's newborn ids, collected by `reproduce_all` for
+    /// `collision::settle_newborns`. Scratch, `#[serde(skip)]`.
+    #[serde(skip)]
+    pub newborn_scratch: Vec<u32>,
+    /// Per-slot "born this tick" marks for `collision::settle_newborns`.
+    /// Scratch, `#[serde(skip)]`.
+    #[serde(skip)]
+    pub newborn_mark: Vec<bool>,
+    /// Per-slot contact times for `collision::sweep_moves`. Scratch,
+    /// `#[serde(skip)]`.
+    #[serde(skip)]
+    pub sweep_scratch: Vec<f32>,
     #[serde(skip)]
     pub sensors: Vec<crate::sense::SensorRegister>,
     #[serde(skip)]
@@ -533,6 +566,8 @@ impl World {
             disease_enabled: false,
             territory_enabled: false,
             species_territories: Vec::new(),
+            gait_enabled: false,
+            growth_enabled: false,
             turning_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
@@ -563,6 +598,9 @@ impl World {
             // Placeholder (3x3); `collision::rebuild_hash` sizes it on first use.
             collision_spatial: UniformSpatialHash::with_dims(crate::biome::WORLD_SIZE_DEFAULT, 3),
             collision_scratch: Vec::new(),
+            newborn_scratch: Vec::new(),
+            newborn_mark: Vec::new(),
+            sweep_scratch: Vec::new(),
             sensors: Vec::new(),
             desired_direction: Vec::new(),
             actions: Vec::new(),
@@ -818,6 +856,18 @@ mod tests {
         let w = World::new(1);
         assert!(!w.territory_enabled, "territory layer is opt-in; off by default");
         assert!(w.species_territories.is_empty());
+    }
+
+    #[test]
+    fn gait_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.gait_enabled, "gait is opt-in; off by default");
+    }
+
+    #[test]
+    fn growth_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.growth_enabled, "growth is opt-in at the engine layer; off by default");
     }
 
     #[test]

@@ -26,6 +26,50 @@ superseded by the current material economy). Three worlds below turn the
 first two on deliberately; none turns on the latter two — see "Retired
 experiments".
 
+One knob changes how every agent moves rather than adding a subsystem:
+`gait_enabled` (on by default like the rest; `crates/anabios-core/src/gait.rs`).
+With it an agent's speed follows its urgency instead of always being its
+Locomotor maximum: fleeing, fighting and hunting agents sprint (a carnivore
+carrying a weapon and closing on another species is hunting), the seeking
+moods walk (0.6×), a content grazer ambles (0.3×) — scaled down further by how
+hard its program pushes — and the move cost carries a superlinear `1 + frac²`
+factor, so a sprint costs twice per unit distance what a crawl does. Measured
+on `predator-prey` (500-agent cap, ticks 300–350, `tests/gait.rs`): the mean
+step over alive agents drops from 1.98 to 0.81 world units, and the share of
+agent-ticks at 90% or more of the agent's top speed from 85% to 14% — the
+fleeing prey and hunting pursuers. Opting out is pinned as a no-op by the
+`gait_*` unit tests in `tick.rs` / `integrate.rs` (flag off: unit direction,
+full step, linear move cost) and by the trajectory guards above.
+
+`growth_enabled` (on by default, like the feature knobs; 2026-09-28) adds
+growth and juveniles: an agent is born at about a third of its adult size
+and grows to it over the first 15% of its lifespan — its collision body
+radius, grazing bite, basal metabolism, move cost and (mildly) speed scale
+with the body, and nobody breeds before maturity
+(`crates/anabios-core/src/growth.rs`). Founders start at age 0, so a world's
+first births come after its founders' maturity window (about 480 ticks for
+`minimal`'s `lifespan_bias = 0.6`). Opt out with `growth_enabled = false`;
+the engine default is off, and flag-off is byte-identical
+(`growth::tests::flag_off_is_exactly_the_adult_identity` and the trajectory
+guards above). The knob postdates every row's validation sweep and cost
+figure below; neither has been re-run under it.
+
+`turning_enabled` (on by default, like the feature knobs; 2026-09-29) adds
+turning inertia: each agent keeps a persistent facing
+(`AgentBuffers::heading`) that `decide_all` turns toward the wanted direction
+by at most 0.6 rad per tick at full speed — a reversal takes six ticks — and
+up to four times as sharply when crawling
+(`crates/anabios-core/src/heading.rs`); the turned heading, at the speed the
+gait chose, is what integrate applies. The heading follows the intent, not
+the move the habitat gate, swept contact or resolve end up allowing, so a
+body pressed sideways by a crowd keeps facing where it wants to go, and the
+viewers draw facing from it. Opt out with `turning_enabled = false`; the
+engine default is off, and flag-off is byte-identical
+(`tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column` and
+the trajectory guards above, which moved only by the column's serialized
+bytes). The knob postdates every row's validation sweep and cost figure
+below; neither has been re-run under it.
+
 Every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate →
 200 ticks) and has a `tests/save_load_roundtrip.rs` round-trip test. The cost
 column is wall-clock milliseconds per tick of `anabios-headless run --ticks
@@ -115,6 +159,28 @@ predator-prey showcase deck's seed moved from 14 to 0 in the same change,
 because seed 14 no longer produces the `PopulationCycleDetected` event its
 PopCycle chapter waits on under the new resolve (seed 0 does, at tick 650).
 The other rows date from the consolidation sweep under the two-pass resolve.
+
+The collision audit of 2026-09-28 (every world, 2000 ticks, every tick
+checked for colliding pairs closer than half their gap — the numbers are in
+the pull request that landed it) moved every trajectory again, through five
+changes that together leave no pair closer than half its gap on any world
+and no pair passing through another: every move is swept to its first
+contact and slides along the body it meets (`collision::sweep_moves`; before
+it two agents stepping two body lengths in opposite directions swapped
+through each other tens of thousands of times per world per 2000 ticks); a
+newborn is placed clear of both parents' bodies and, if that spot holds a
+third body, at the nearest free spot instead of on its parents' midpoint
+(births run after the resolve, so every birth was a stacked pair for a
+tick); the trade-hub pull is off inside `HUB_TRADE_RANGE` and fades in
+beyond it (a constant pull to the hub's centre pressed 225 bodies into a
+6-unit radius on `grand-theater`, a pile no bounded resolve can unpack);
+the water pull stops once the agent can already drink where it stands (it
+pinned shoreline crowds against the coast); and the resolve's pass cap rose
+from eight to thirty-two, which a calm tick never reaches. Herds move less
+freely now that bodies cannot walk through one another (the median step on
+`predator-prey` fell from 2.3 to 0.6 units; the fraction of agents moving
+at all is unchanged), and their populations settle slightly lower. The
+validation bar was not re-run for this change.
 
 ## Running
 
