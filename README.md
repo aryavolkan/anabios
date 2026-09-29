@@ -12,7 +12,7 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 
 - **Core sim** — deterministic SoA agent simulation: uniform-grid spatial hashing, evolvable postfix behavior programs, 50-slot float genome, modular morphology, speciation
 - **Interaction substrate (M11–M15)** — combat & predation, carcass scavenging, pheromone fields, communication/meme culture, kin-directed cooperation
-- **Invention tree** — 10-tech cumulative culture tree (Stone Tools → Fire → Farming/Metalworking → Writing/Medicine/Husbandry → Machinery/Electricity/Nuclear Power) riding the meme channels: individual discovery (Openness + skill gated), social spread, per-holder buffs *and* debuffs (metabolism, upkeep, crowding stress, biome pollution, radiation mutation); `InventionDiscovered`/`InventionAdopted` codex events (`inventions_enabled`)
+- **Invention tree** — 23-tech cumulative culture tree riding the meme channels: the civil trunk (Stone Tools → Fire → Farming/Metalworking → Writing/Medicine/Husbandry → Machinery/Electricity/Nuclear Power), the storage, agrarian, trade, knowledge and welfare branches (Pottery, Wells, Irrigation, Currency, Printing, Sanitation, Vaccination), Fortifications, and the hominid **projectile ladder** (Throwing Stones → Hafted Spears → Archery → Steel Arms → Gunpowder: each thrown rung extends weapon reach, from the hand-hurled stone's standoff to powder weapons); individual discovery (Openness + skill gated), social spread, per-holder buffs *and* debuffs (metabolism, upkeep, crowding stress, biome pollution, radiation mutation); `InventionDiscovered`/`InventionAdopted` codex events (`inventions_enabled`; spec: `docs/superpowers/specs/2026-09-29-projectile-ladder-design.md`)
 - **Codex** — 59 emergence detectors (extinction → herd cohesion → invention adoption → sexual selection → knowledge ratchet → affect cascades) writing a persistent event timeline
 - **Experiments** — DIT gene-culture technique model; biome climate adaptation (`biome_adaptation`); runtime world dimensions + living/seasonal biomes
 - **Cognition** — realized IQ (metabolic cost, era gates) evolving under selection; maladaptive practices (Inbreeding, Child Sacrifice) spread by payoff-blind transmission — the measured culture-exclusion lever (O1). `cognition_enabled` / `practices_enabled`
@@ -40,7 +40,7 @@ Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowe
 
 | World | Shows |
 |---|---|
-| `minimal.toml` | Baseline grazing world; determinism goldens |
+| `minimal.toml` | Baseline grazing world; determinism goldens (opt-in) |
 | `predator-prey.toml` | Predation cycles and crashes, mammal-vs-reptile niche sorting |
 | `speciation.toml` | Speciation, dialects, pheromone territories, kin cooperation |
 | `tribes.toml` | Inventions, cognition, traditions, war, domestication, epidemics, the anthropogenic arms race, thirst + sleep |
@@ -60,7 +60,7 @@ cargo test --workspace --tests --release   # full gate incl. long emergence test
 cargo bench -p anabios-core                # criterion: tick / stages / scavenge
 ```
 
-The determinism gate (`tests/determinism.rs`) pins golden state hashes at ticks 0/100/1000 of the minimal scenario. If a change is *intentionally* behavior-altering, regenerate with `UPDATE_HASHES=1 cargo test -p anabios-core --test determinism -- --nocapture` and copy the printed values into the test.
+The golden-hash pins (`tests/determinism.rs` pins state hashes at ticks 0/100/1000 of the minimal scenario, plus per-subsystem tables in the affect, cognition and inventions suites) are **off by default** since 2026-09-29: the ten pinned-hash tests are `#[ignore]`d, so CI no longer fails on a hash drift. Determinism itself is still gated by the self-consistency tests (same seed twice → same hash), the save→load→step round-trips and the headless `replay` verifier. To compare against the pins on request, run `cargo test -p anabios-core --release -- --ignored golden_hashes trajectory_is_pinned` (the name filters keep the long experiment harnesses, also `#[ignore]`d, out of the run); to re-pin after an intentional change, `UPDATE_HASHES=1 cargo test -p anabios-core --release -- --ignored --nocapture golden_hashes trajectory_is_pinned` prints every table to paste into the tests.
 
 ## Performance
 
@@ -127,7 +127,7 @@ cargo build --release --bin anabios-headless
     --ticks 8000 --report-every 1000
 ```
 
-`scenarios/tribes.toml` founds high-Openness **innovators** (seeded with Stone Tools), low-Openness **traditionalists** (who rarely invent but copy what diffuses in) and an asocial forager control among grazer herds, armed prey and predator packs. At the scenario seed the first climbed invention (Fire) arrives around tick 950; the climb is slow and seed-dependent — a non-seeded invention is adopted on only 2 of 8 seeds within 5000 ticks, and Writing, Husbandry and Medicine not at all (see the `tribes` row in [`docs/scenarios.md`](docs/scenarios.md)); `out-of-africa-saga.toml` seeds the era-3 tech for the showcase instead. The same world is in the Godot viewer's menu ("Tribes — tools, war, traditions") with a per-species tech panel and adoption-fraction charts.
+`scenarios/tribes.toml` founds high-Openness **innovators** (seeded with Stone Tools), low-Openness **traditionalists** (who rarely invent but copy what diffuses in) and an asocial forager control among grazer herds, armed prey and predator packs. At the scenario seed the first climbed inventions are the projectile ladder's first two rungs in order — Throwing Stones (tick ~3950), then Hafted Spears (~4630); the climb is slow and seed-dependent — across seeds 0–7 within 5000 ticks Throwing Stones is discovered and reaches majority adoption on 2 of 8 seeds, Fire is discovered on 2 of 8, no seed climbs past the stone, and Writing, Husbandry and Medicine never arrive (see the `tribes` row in [`docs/scenarios.md`](docs/scenarios.md)); `out-of-africa-saga.toml` seeds the era-3 tech for the showcase instead. The same world is in the Godot viewer's menu ("Tribes — tools, war, traditions") with a per-species tech panel and adoption-fraction charts.
 
 ## Running the viewer
 

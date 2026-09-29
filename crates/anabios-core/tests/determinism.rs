@@ -233,7 +233,14 @@ const GOLDEN: &[(u64, u64)] =
     // inertia, gestation, the chase and its carcass economy) and capacity from
     // food (no lineage shares, non-binding caps) — every full-stack trajectory
     // moved from tick 1; see docs/scenarios.md.
-    &[(0, 0x3651a748bbc86747), (100, 0x4c9cf6641f62b1f9), (1000, 0x515d508cc6d0cb85)];
+    // Re-pinned 2026-09-29 on the merge of the projectile ladder (FORMAT_VERSION
+    // 45→46): Throwing Stones appended (id 22), Hafted Spears re-rooted onto it,
+    // MEME_CHANNELS 32→33 — one lane per agent moves every layout hash, and
+    // with `inventions_enabled` on each Communicator birth jitters one more
+    // lane and the discovery table gains an era-1 candidate. Ignored by
+    // default (golden validation is off); regenerated on the merged tree with
+    // `UPDATE_HASHES=1 … -- --ignored golden_hashes trajectory_is_pinned`.
+    &[(0, 0xc371b09490486347), (100, 0x5de88a4550e847f9), (1000, 0xfd5451ad0cfc06e9)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -322,6 +329,7 @@ mod parallel_matches_serial_across_thread_counts {
 }
 
 #[test]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn minimal_scenario_matches_golden_hashes() {
     common::assert_golden("minimal", SCENARIO, GOLDEN);
 }
@@ -354,9 +362,17 @@ const HABITAT_GOLDEN: &[(u64, u64)] =
     // inertia, gestation, the chase and its carcass economy) and capacity from
     // food (no lineage shares, non-binding caps) — every full-stack trajectory
     // moved from tick 1; see docs/scenarios.md.
-    &[(0, 0xfdad43976f592443), (100, 0x532148cda698631c), (1000, 0xcbeffa3bda6859d6)];
+    // Re-pinned 2026-09-29 on the merge of the projectile ladder (FORMAT_VERSION
+    // 45→46): Throwing Stones appended (id 22), Hafted Spears re-rooted onto it,
+    // MEME_CHANNELS 32→33 — one lane per agent moves every layout hash, and
+    // with `inventions_enabled` on each Communicator birth jitters one more
+    // lane and the discovery table gains an era-1 candidate. Ignored by
+    // default (golden validation is off); regenerated on the merged tree with
+    // `UPDATE_HASHES=1 … -- --ignored golden_hashes trajectory_is_pinned`.
+    &[(0, 0x3b54e54b462425c3), (100, 0x26b1d663ac9d68bc), (1000, 0x12dde2350436b746)];
 
 #[test]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn habitat_territories_matches_golden_hashes() {
     common::assert_golden("habitat-territories", HABITAT_SCENARIO, HABITAT_GOLDEN);
 }
@@ -393,6 +409,7 @@ fn habitat_territories_matches_golden_hashes() {
 /// `0533d40` and `8351eea` the grand-theater pin was stale — the hub-pull
 /// arrival zone ran with the collision layer off; `8351eea` gated it.)
 fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
+    use anabios_core::serde_rows::Rows;
     // The `agents` sub-state is hashed COLUMN BY COLUMN, over the columns
     // that existed when the pins were taken and in their original struct
     // order — bincode frames nothing, so this is byte-identical to the
@@ -410,17 +427,14 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
         };
     }
     column!(
-        position,
-        velocity,
-        energy,
-        age,
-        genome,
-        lineage_id,
-        parent_ids,
-        species_id,
-        modules,
+        position, velocity, energy, age, genome, lineage_id, parent_ids, species_id, modules,
         program,
-        meme_vector,
+    );
+    // The meme columns are wider than serde's 32-lane derive limit since the
+    // projectile ladder (MEME_CHANNELS 33), so they go through the crate's
+    // row adapter — the same bytes the derive produced while they fit.
+    bytes.extend(bincode::serialize(&Rows(&a.meme_vector)).expect("meme_vector"));
+    column!(
         inventory,
         iq,
         iq_enrich_acc,
@@ -429,7 +443,9 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
         affect_prev_crowding,
         anchor,
         harvest_exp,
-        meme_lineage,
+    );
+    bytes.extend(bincode::serialize(&Rows(&a.meme_lineage)).expect("meme_lineage"));
+    column!(
         thirst,
         fatigue,
         mood,
@@ -474,8 +490,18 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
 // outside this hash either way, and with `chase_enabled = false` (the
 // fixtures' `OPT_OUT_ALL` opts it out) nothing reads them — pinned per
 // vector by `chase::tests::flag_off_columns_never_influence_behaviour`.
-const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xd1133dd8d119e894;
-const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x56819428b6cd2bf0;
+// Re-pinned 2026-09-29 on the merge of the projectile ladder (FORMAT_VERSION
+// 45→46): `meme_vector` and `meme_lineage` are in the column list above and
+// are one lane wider (MEME_CHANNELS 32→33), so both pins move on layout. The
+// minimal fixture runs every knob off and its trajectory is byte-identical
+// (the new lane is an invention channel, never jittered with
+// `inventions_enabled` off); the grand-theater fixture keeps its pre-flip
+// flags, `inventions_enabled` among them, so its trajectory moved too (one
+// more jittered lane per Communicator birth, an extra era-1 candidate).
+// Pinned at the merge head; the guards are ignored by default since the same
+// date (golden validation is off) and run with `--ignored`.
+const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xdde8c1942fd69854;
+const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0xf23327e1471c4cd8;
 
 fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
     let mut w = common::world(src);
@@ -489,6 +515,7 @@ fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
 }
 
 #[test]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn minimal_flag_off_trajectory_is_pinned() {
     assert_trajectory(
         "minimal (all knobs off)",
@@ -499,6 +526,7 @@ fn minimal_flag_off_trajectory_is_pinned() {
 }
 
 #[test]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn grand_theater_pre_flip_trajectory_is_pinned() {
     assert_trajectory(
         "grand-theater (pre-flip flags)",

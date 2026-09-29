@@ -71,9 +71,14 @@ pub fn ticks(full: u64) -> u64 {
 /// the first tick that diverges. Collapses the copy of this loop that each
 /// golden-bearing binary used to carry.
 ///
-/// When a change is deliberate, rerun with `UPDATE_HASHES=1` — the observed
-/// table is printed in source form and the assertion is skipped, so the values
-/// can be pasted straight back into the `golden` constant.
+/// Golden validation is **off by default** since 2026-09-29: every test that
+/// calls this (and the two flag-off trajectory pins in `determinism.rs`) is
+/// `#[ignore]`d, so a behaviour change no longer has to re-pin ten tables in
+/// the same PR. Run them on request with `cargo test -p anabios-core --release
+/// -- --ignored golden_hashes trajectory_is_pinned`; when a change is
+/// deliberate, rerun with `UPDATE_HASHES=1` — the observed table is
+/// printed in source form and the assertion is skipped, so the values can be
+/// pasted straight back into the `golden` constant.
 pub fn assert_golden(label: &str, src: &str, golden: &[(u64, u64)]) {
     let mut w = world(src);
     let max_tick = golden.iter().map(|(t, _)| *t).max().unwrap_or(0);

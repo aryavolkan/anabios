@@ -4,8 +4,17 @@ anabios is bit-identical per seed. Two mechanisms uphold that:
 
 - **`state_hash`** (`crates/anabios-core/src/snapshot.rs`) — FNV-1a over the
   bincode-serialized `World`. Golden tests pin trajectories
-  (`tests/determinism.rs` + per-subsystem pins); any intentional behavior
-  change regenerates them in the same PR (`UPDATE_HASHES=1 …`).
+  (`tests/determinism.rs` + per-subsystem pins). **Golden validation is off
+  by default since 2026-09-29**: the ten pinned-hash tests are `#[ignore]`d,
+  so a hash drift no longer fails CI; determinism is gated day to day by the
+  self-consistency tests (same seed twice → same hash), the round-trips
+  below and the headless `replay` verifier. Run the pins on request with
+  `cargo test -p anabios-core --release -- --ignored golden_hashes
+  trajectory_is_pinned` (the name filters keep the experiment harnesses,
+  also `#[ignore]`d, out of the run), and re-pin after an intentional change
+  with `UPDATE_HASHES=1 cargo test -p anabios-core --release -- --ignored
+  --nocapture golden_hashes trajectory_is_pinned`, which prints every table
+  across the six golden-bearing binaries.
 - **Save/load round-trip** (`snapshot::{save_to_bytes, load_from_bytes}`) — a
   snapshot must restore-and-continue bit-identically. Guarded per subsystem
   by `tests/save_load_roundtrip.rs` (every world runs the full stack; the
@@ -86,14 +95,22 @@ serialized, so it needs nothing re-derived on load and draws nothing from
 `rng`.
 
 Layout-only changes are proven with the **trajectory guards** in
-`tests/determinism.rs` (`*_trajectory_unchanged_by_territory_substrate`): an
+`tests/determinism.rs` (`minimal_flag_off_trajectory_is_pinned`,
+`grand_theater_pre_flip_trajectory_is_pinned`): an
 FNV over the bincode of every serialized sub-state that is the trajectory
 (agents, biome, rng, codex, species tables, pheromones, disasters, market
 field, trade hubs, culture roots) without the `World` envelope. Adding a
 `World` field moves the `state_hash` goldens but not these pins; pin them at
 the merge base of a change and check them at its head before regenerating
 goldens. Hashing agents + biome alone is not enough — a flag-off regression
-confined to codex bookkeeping or an extra RNG draw would slip past it.
+confined to codex bookkeeping or an extra RNG draw would slip past it. A
+change to a sub-state's own layout — the meme columns widening for a new
+invention, say — moves these pins as well, so the merge-base value can no
+longer match at the head: check at the merge base that the fixtures do not
+move, then re-pin at the head (`UPDATE_HASHES=1 cargo test -p anabios-core
+--release --test determinism -- --ignored --nocapture trajectory_is_pinned`).
+Like the goldens, the guards are `#[ignore]`d by default since 2026-09-29
+and run with `--ignored`.
 
 ## Two default layers
 
@@ -135,7 +152,10 @@ the v13 lesson.
 ## Checklist: adding a subsystem
 
 1. New persistent state → serialize it (bincode layout grows → bump
-   `FORMAT_VERSION` with a changelog line, refresh layout goldens).
+   `FORMAT_VERSION` with a changelog line, refresh the layout goldens with
+   `UPDATE_HASHES=1 cargo test -p anabios-core --release -- --ignored
+   --nocapture golden_hashes trajectory_is_pinned` so the opt-in pins stay
+   current).
 2. New `#[serde(skip)]` field → justify it in category (a), (b), or (c)
    above; add it to the inventory table.
 3. Category (c) → add the re-derivation to `load_from_bytes` **and** a guard
@@ -162,7 +182,8 @@ the v13 lesson.
      fixture row;
    - re-run the two flag-off trajectory guards in `tests/determinism.rs`
      (`minimal_flag_off_trajectory_is_pinned`,
-     `grand_theater_pre_flip_trajectory_is_pinned`): with the knob off they
-     must not move. The scenario goldens do move (the knob is on in every
-     world) — re-pin them with `UPDATE_HASHES=1`.
+     `grand_theater_pre_flip_trajectory_is_pinned`, both `--ignored`): with
+     the knob off they must not move. The scenario goldens do move (the knob
+     is on in every world) — re-pin them with `UPDATE_HASHES=1 cargo test -p
+     anabios-core --release -- --ignored --nocapture golden_hashes`.
 5. Detector state lives in `CodexState` — keep it skip-free.

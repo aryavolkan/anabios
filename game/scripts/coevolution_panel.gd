@@ -77,6 +77,11 @@ const CHARTS := [
 		"unit": "01",
 		"series":
 		[
+			{
+				"key": "inv_throwing_stones_frac",
+				"label": "stones",
+				"color": Color(0.78, 0.74, 0.62)
+			},
 			{"key": "inv_hafted_spears_frac", "label": "spears", "color": Color(0.8, 0.6, 0.4)},
 			{"key": "inv_archery_frac", "label": "archery", "color": Color(0.6, 0.85, 0.95)},
 			{

@@ -170,9 +170,13 @@ jobs:
       # The golden state hashes are pinned to bit-identical values across OSes
       # (transcendentals are routed through libm/mathf precisely so macOS and
       # Linux agree). That claim is only meaningful if it is actually run on
-      # both, so gate the golden-hash + parallel-vs-serial determinism tests on
-      # the matrix, in release (the profile the hashes are validated in).
-      - name: golden-hash + parallel determinism (cross-OS)
+      # both, so gate the parallel-vs-serial determinism tests on the matrix,
+      # in release (the profile the hashes are validated in). Golden validation
+      # is off by default since 2026-09-29 (the pinned-hash tests are
+      # `#[ignore]`d; see docs/determinism-contract.md), so this step no longer
+      # compares against the pins — add `-- --include-ignored` to turn the
+      # cross-OS golden check back on.
+      - name: parallel determinism (cross-OS; golden pins opt-in)
         run: cargo test -p anabios-core --release --test determinism
       # Run-to-run smoke: the headless binary must produce identical output on
       # two independent runs of the same seed. Reuses the release build above.

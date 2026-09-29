@@ -32,7 +32,7 @@ mod params;
 pub use params::*;
 
 /// Number of inventions in the tree.
-pub const INVENTION_COUNT: usize = 22;
+pub const INVENTION_COUNT: usize = 23;
 
 /// First meme channel owned by the invention tree. Channels below this keep
 /// their pre-existing meanings (alarm, dialects, cooperation norm, hunt
@@ -71,6 +71,20 @@ pub const GUNPOWDER: usize = 19;
 // append-only rule.
 pub const WELLS: usize = 20;
 pub const VACCINATION: usize = 21;
+// The projectile ladder (appended 2026-09-29): the thrown stone is the FIRST
+// standoff weapon and the root of the hominid projectile line, and Hafted
+// Spears is re-rooted onto it, so the ladder reads Throwing Stones → Hafted
+// Spears → Archery → Steel Arms → Gunpowder. Ids stay append-only, which is
+// why a root sits at the end of the table: an id may be a prereq of a LOWER
+// id — the prereq graph only has to be acyclic (`prereq_chain_shape`).
+pub const THROWING_STONES: usize = 22;
+
+/// The projectile ladder in climbing order: every rung requires the one
+/// below it, and every rung but Steel Arms — the metallurgy step between the
+/// bow and powder weapons, which adds damage rather than reach — extends the
+/// holder's weapon reach (`range_multiplier`).
+pub const PROJECTILE_LADDER: [usize; 5] =
+    [THROWING_STONES, HAFTED_SPEARS, ARCHERY, STEEL_ARMS, GUNPOWDER];
 
 /// Adoption level at/above which an invention is functionally held (buffs and
 /// debuffs apply, prereqs count as satisfied, codex counts it).
@@ -309,10 +323,13 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         name: "Hafted Spears",
         key: "hafted_spears",
         era: 1,
-        prereqs: bit(STONE_TOOLS),
+        // Re-rooted onto Throwing Stones (the projectile ladder): the throw
+        // came before the hafted point, and Stone Tools is implied
+        // transitively through the stone.
+        prereqs: bit(THROWING_STONES),
         // A knapped point lashed to a shaft with resin.
         materials: [0.0, 1.0, 1.0, 0.0],
-        buff: "+25% weapon damage, hunt spoils",
+        buff: "+25% weapon damage, +15% reach, hunt spoils",
         debuff: "none",
         // Hunting weapons pay off for lineages that hold and contest ground:
         // shares Metalworking's Territoriality slot.
@@ -477,6 +494,24 @@ pub const INVENTIONS: [Invention; INVENTION_COUNT] = [
         affinity: Some(GeneAffinity { slot: GenomeSlot::CognitivePotential, coeff: 0.8 }),
         gene_req: Some(GeneReq { slot: GenomeSlot::CognitivePotential, min: 0.60 }),
     },
+    Invention {
+        name: "Throwing Stones",
+        key: "throwing_stones",
+        era: 1,
+        prereqs: bit(STONE_TOOLS),
+        // A fist-sized cobble picked and shaped for the hand — the knapper's
+        // spheroids: one worked stone, the cheapest basket in the tree.
+        materials: [0.0, 1.0, 0.0, 0.0],
+        buff: "+25% weapon reach, +10% damage",
+        debuff: "none",
+        // Mobbing a predator with stones is band work: shares Archery's
+        // Extraversion slot, so the two thrown-projectile rungs select the
+        // same gene, as the melee/metal rungs (Spears, Metalworking, Steel
+        // Arms) share Territoriality.
+        affinity: Some(GeneAffinity { slot: GenomeSlot::Extraversion, coeff: 0.8 }),
+        // Era-1 entry tech stays genetically free (matches Stone Tools).
+        gene_req: None,
+    },
 ];
 
 /// The meme channel carrying invention `inv`'s adoption level.
@@ -562,7 +597,10 @@ pub fn for_each_set_bit(mask: u32, mut f: impl FnMut(usize)) {
 
 /// Inventions the holder of `mask` could work on next: not yet held, with all
 /// prereqs satisfied. Visits ids ascending (ids 0-9 are era-ordered; the
-/// appended military branch sits after them).
+/// appended branches sit after them). Ascending is NOT topological order —
+/// Throwing Stones (id 22) roots Hafted Spears (id 10) — which is harmless
+/// here: the held mask is fixed for the whole walk, so no candidate's
+/// eligibility depends on an earlier visit.
 fn candidates(mask: u32, mut f: impl FnMut(usize)) {
     for (k, inv) in INVENTIONS.iter().enumerate() {
         if mask & bit(k) != 0 {
@@ -781,11 +819,12 @@ pub fn food_energy_multiplier(mask: u32) -> f32 {
     1.0 + FIRE_ENERGY * held_f32(mask, FIRE)
 }
 
-/// Weapon-damage multiplier (Metalworking, Spears, Archery, Steel Arms,
-/// Gunpowder) — `interact::combat_pass`.
+/// Weapon-damage multiplier (Throwing Stones, Metalworking, Spears, Archery,
+/// Steel Arms, Gunpowder) — `interact::combat_pass`.
 #[inline]
 pub fn weapon_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> f32 {
-    1.0 + METALWORKING_DAMAGE * coupled_held_genome(mask, METALWORKING, genome, coupling)
+    1.0 + THROWING_STONES_DAMAGE * coupled_held_genome(mask, THROWING_STONES, genome, coupling)
+        + METALWORKING_DAMAGE * coupled_held_genome(mask, METALWORKING, genome, coupling)
         + SPEARS_DAMAGE * coupled_held_genome(mask, HAFTED_SPEARS, genome, coupling)
         + ARCHERY_DAMAGE * coupled_held_genome(mask, ARCHERY, genome, coupling)
         + STEEL_DAMAGE * coupled_held_genome(mask, STEEL_ARMS, genome, coupling)
@@ -797,7 +836,8 @@ pub fn weapon_multiplier_coupled(mask: u32, genome: &Genome, coupling: bool) -> 
 #[cfg(test)]
 #[inline]
 pub fn weapon_multiplier(mask: u32) -> f32 {
-    1.0 + METALWORKING_DAMAGE * held_f32(mask, METALWORKING)
+    1.0 + THROWING_STONES_DAMAGE * held_f32(mask, THROWING_STONES)
+        + METALWORKING_DAMAGE * held_f32(mask, METALWORKING)
         + SPEARS_DAMAGE * held_f32(mask, HAFTED_SPEARS)
         + ARCHERY_DAMAGE * held_f32(mask, ARCHERY)
         + STEEL_DAMAGE * held_f32(mask, STEEL_ARMS)
@@ -823,12 +863,16 @@ pub fn defense_multiplier(mask: u32) -> f32 {
     1.0 - FORT_DEFENSE * held_f32(mask, FORTIFICATIONS)
 }
 
-/// Weapon-reach multiplier (Archery, Gunpowder) — `interact::combat_pass`
-/// range check only; sense radii and the anthro-race threat register are
-/// untouched.
+/// Weapon-reach multiplier — the projectile ladder (Throwing Stones, Hafted
+/// Spears, Archery, Gunpowder; each held rung adds its term, so reach climbs
+/// monotonically up the ladder) — `interact::combat_pass` range check only;
+/// sense radii and the anthro-race threat register are untouched.
 #[inline]
 pub fn range_multiplier(mask: u32) -> f32 {
-    1.0 + ARCHERY_RANGE * held_f32(mask, ARCHERY) + GUNPOWDER_RANGE * held_f32(mask, GUNPOWDER)
+    1.0 + THROWING_STONES_RANGE * held_f32(mask, THROWING_STONES)
+        + SPEARS_RANGE * held_f32(mask, HAFTED_SPEARS)
+        + ARCHERY_RANGE * held_f32(mask, ARCHERY)
+        + GUNPOWDER_RANGE * held_f32(mask, GUNPOWDER)
 }
 
 /// Effective breeding-threshold multiplier (Fortifications) —
@@ -1160,6 +1204,9 @@ pub fn invention_step(world: &mut World) {
         // --- Knowledge atrophy: an invention whose foundations the agent no
         // longer holds decays away (levels only — `has` drops out as the
         // level crosses the threshold). Prereq-free techs never atrophy.
+        // `mask` is fixed for the whole walk, so id order is irrelevant here
+        // as in `candidates()` (Throwing Stones, id 22, roots Hafted Spears,
+        // id 10).
         let meme = &mut world.agents.meme_vector[i];
         for k in 0..INVENTION_COUNT {
             let lvl = meme[channel(k)];
@@ -1245,6 +1292,7 @@ mod tests {
         assert_eq!(id_from_name("  writing  "), Some(WRITING));
         assert_eq!(id_from_name("hafted_spears"), Some(HAFTED_SPEARS));
         assert_eq!(id_from_name("Steel_Arms"), Some(STEEL_ARMS));
+        assert_eq!(id_from_name("throwing_stones"), Some(THROWING_STONES));
         assert_eq!(id_from_name("wheel"), None);
         assert_eq!(id_from_name(""), None);
     }
@@ -1464,13 +1512,45 @@ mod tests {
         }
     }
 
+    /// Transitive closure of a prereq mask over the table.
+    fn prereq_closure(mut mask: u32) -> u32 {
+        loop {
+            let mut next = mask;
+            for_each_set_bit(mask, |p| next |= INVENTIONS[p].prereqs);
+            if next == mask {
+                return mask;
+            }
+            mask = next;
+        }
+    }
+
     #[test]
     fn prereq_chain_shape() {
         assert_eq!(INVENTIONS[STONE_TOOLS].prereqs, 0);
+        let all = (1u32 << INVENTION_COUNT) - 1;
         for (k, inv) in INVENTIONS.iter().enumerate() {
-            // Prereqs never reference self or later inventions (era order).
+            // Prereqs never reference self or an id outside the table.
             assert_eq!(inv.prereqs & bit(k), 0, "{} prereqs include itself", inv.name);
-            for_each_set_bit(inv.prereqs, |p| assert!(p < k, "{} prereq out of order", inv.name));
+            assert_eq!(inv.prereqs & !all, 0, "{} prereq id out of range", inv.name);
+            // The prereq graph is a DAG: no invention sits in its own
+            // foundations. Ids are append-only, so a LATER id may root an
+            // earlier one (Throwing Stones, id 22, roots Hafted Spears, id
+            // 10) — acyclicity, not id order, is the invariant.
+            assert_eq!(
+                prereq_closure(inv.prereqs) & bit(k),
+                0,
+                "{} sits in its own prereq closure",
+                inv.name
+            );
+            // One root: everything else descends from Stone Tools.
+            if k != STONE_TOOLS {
+                assert_ne!(
+                    prereq_closure(inv.prereqs) & bit(STONE_TOOLS),
+                    0,
+                    "{} does not descend from Stone Tools",
+                    inv.name
+                );
+            }
         }
     }
 
@@ -1483,16 +1563,26 @@ mod tests {
         candidates(0, |k| got.push(k));
         assert_eq!(got, vec![STONE_TOOLS]);
         got.clear();
+        // Stone Tools opens Fire, Pottery and the projectile ladder's root;
+        // Hafted Spears waits on Throwing Stones.
         candidates(bit(STONE_TOOLS), |k| got.push(k));
+        assert_eq!(got, vec![FIRE, POTTERY, THROWING_STONES]);
+        got.clear();
+        candidates(bit(STONE_TOOLS) | bit(THROWING_STONES), |k| got.push(k));
         assert_eq!(got, vec![FIRE, HAFTED_SPEARS, POTTERY]);
         got.clear();
         candidates(bit(STONE_TOOLS) | bit(FIRE), |k| got.push(k));
-        assert_eq!(got, vec![FARMING, METALWORKING, HAFTED_SPEARS, POTTERY]);
+        assert_eq!(got, vec![FARMING, METALWORKING, POTTERY, THROWING_STONES]);
         got.clear();
         // Machinery needs BOTH metalworking and writing; Archery needs Spears.
-        candidates(bit(STONE_TOOLS) | bit(FIRE) | bit(METALWORKING) | bit(HAFTED_SPEARS), |k| {
-            got.push(k)
-        });
+        candidates(
+            bit(STONE_TOOLS)
+                | bit(FIRE)
+                | bit(METALWORKING)
+                | bit(THROWING_STONES)
+                | bit(HAFTED_SPEARS),
+            |k| got.push(k),
+        );
         assert_eq!(got, vec![FARMING, ARCHERY, POTTERY]);
     }
 
@@ -1558,11 +1648,12 @@ mod tests {
         assert!(is_invention_channel(INVENTION_CHANNEL_BASE));
         assert!(is_invention_channel(channel(STEEL_ARMS)));
         // The last invention channel is the top of the tree block — now
-        // Vaccination, the X2 expansion's capstone (append-only ids moved
-        // this past Wells and the X1 capstone Gunpowder); the practice
-        // channels above it (`PRACTICE_CHANNEL_BASE..`) are NOT invention
-        // channels.
-        assert_eq!(channel(VACCINATION), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
+        // Throwing Stones, the projectile ladder's root (append-only ids put
+        // it past the X2 capstone Vaccination even though it is era-1 tech);
+        // the practice channels above it (`PRACTICE_CHANNEL_BASE..`) are NOT
+        // invention channels.
+        assert_eq!(channel(THROWING_STONES), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 1);
+        assert_eq!(channel(VACCINATION), INVENTION_CHANNEL_BASE + INVENTION_COUNT - 2);
         assert!(!is_invention_channel(INVENTION_CHANNEL_BASE + INVENTION_COUNT));
         assert!(!is_invention_channel(MEME_CHANNELS));
     }
@@ -1936,5 +2027,95 @@ mod tests {
                 inv.name
             );
         }
+    }
+
+    // --- Projectile ladder: Throwing Stones ----------------------------------
+
+    #[test]
+    fn throwing_stones_tree_shape() {
+        let inv = &INVENTIONS[THROWING_STONES];
+        assert_eq!(inv.key, "throwing_stones");
+        assert_eq!(inv.prereqs, bit(STONE_TOOLS), "Throwing Stones prereq");
+        assert_eq!(inv.era, 1, "Throwing Stones era");
+        assert_eq!(
+            inv.affinity.map(|a| a.slot as usize),
+            Some(GenomeSlot::Extraversion as usize),
+            "Throwing Stones affinity slot"
+        );
+        assert!(inv.gene_req.is_none(), "era-1 entry tech is genetically free");
+        assert_eq!(inv.materials.iter().sum::<f32>(), 1.0, "the cheapest basket in the tree");
+        // The stone roots the spear — and only the stone: Stone Tools is
+        // implied transitively.
+        assert_eq!(INVENTIONS[HAFTED_SPEARS].prereqs, bit(THROWING_STONES));
+        assert_ne!(prereq_closure(INVENTIONS[HAFTED_SPEARS].prereqs) & bit(STONE_TOOLS), 0);
+    }
+
+    #[test]
+    fn projectile_ladder_is_a_chain_with_monotone_reach() {
+        // Each rung requires the one below it, so a holder climbs in order:
+        // stones → spears → bows → steel → gunpowder.
+        for pair in PROJECTILE_LADDER.windows(2) {
+            let (lower, upper) = (pair[0], pair[1]);
+            assert_ne!(
+                INVENTIONS[upper].prereqs & bit(lower),
+                0,
+                "{} must require {}",
+                INVENTIONS[upper].name,
+                INVENTIONS[lower].name
+            );
+        }
+        // Reach never shrinks as the ladder is climbed and strictly grows on
+        // every projectile rung; Steel Arms is the metallurgy rung.
+        let mut mask = 0u32;
+        let mut prev = range_multiplier(0);
+        assert_eq!(prev, 1.0);
+        for &k in PROJECTILE_LADDER.iter() {
+            mask |= bit(k);
+            let reach = range_multiplier(mask);
+            assert!(reach >= prev, "reach regressed at {}", INVENTIONS[k].name);
+            if k == STEEL_ARMS {
+                assert_eq!(reach, prev, "Steel Arms adds damage, not reach");
+            } else {
+                assert!(reach > prev, "{} must extend reach", INVENTIONS[k].name);
+            }
+            prev = reach;
+        }
+        let full = 1.0 + THROWING_STONES_RANGE + SPEARS_RANGE + ARCHERY_RANGE + GUNPOWDER_RANGE;
+        assert!((prev - full).abs() < 1e-6);
+    }
+
+    #[test]
+    fn throwing_stones_extend_the_weapon_and_range_stacks() {
+        let neutral = Genome::neutral();
+        let stones = bit(THROWING_STONES);
+        assert!((range_multiplier(stones) - (1.0 + THROWING_STONES_RANGE)).abs() < 1e-6);
+        assert!((weapon_multiplier(stones) - (1.0 + THROWING_STONES_DAMAGE)).abs() < 1e-6);
+        assert_eq!(weapon_multiplier_coupled(stones, &neutral, false), weapon_multiplier(stones));
+        // Spears now carry a reach term of their own (the thrown javelin),
+        // stacking on the stone's.
+        assert!((range_multiplier(bit(HAFTED_SPEARS)) - (1.0 + SPEARS_RANGE)).abs() < 1e-6);
+        assert!(
+            (range_multiplier(stones | bit(HAFTED_SPEARS))
+                - (1.0 + THROWING_STONES_RANGE + SPEARS_RANGE))
+                .abs()
+                < 1e-6
+        );
+        // A stone-thrower's hit counts as invention-boosted for the
+        // EvolvedTool detector (`combat_pass` flags `inv_weapon_mult > 1.05`).
+        assert!(weapon_multiplier(stones) > 1.05);
+        // Coupling scales the damage term with Extraversion; neutral = base.
+        let mut social = Genome::neutral();
+        social.set(GenomeSlot::Extraversion, 1.0);
+        assert!(
+            weapon_multiplier_coupled(stones, &social, true)
+                > weapon_multiplier_coupled(stones, &neutral, true)
+        );
+        assert!(
+            (weapon_multiplier_coupled(stones, &neutral, true) - weapon_multiplier(stones)).abs()
+                < 1e-6
+        );
+        // Unrelated bits leave both stacks alone.
+        assert_eq!(range_multiplier(bit(WRITING)), 1.0);
+        assert_eq!(weapon_multiplier(bit(WRITING)), 1.0);
     }
 }

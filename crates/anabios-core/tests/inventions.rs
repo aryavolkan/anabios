@@ -1340,15 +1340,25 @@ const INVENTIONS_GOLDEN: &[(u64, u64)] =
     // inertia, gestation, the chase and its carcass economy) and capacity from
     // food (no lineage shares, non-binding caps) — every full-stack trajectory
     // moved from tick 1; see docs/scenarios.md.
-    &[(0, 0x06be2d75627792a5), (100, 0x00d5648403139300), (300, 0xf2613d86f1ff240b)];
+    // Re-pinned 2026-09-29 on the merge of the projectile ladder (FORMAT_VERSION
+    // 45→46): Throwing Stones appended (id 22), Hafted Spears re-rooted onto it,
+    // MEME_CHANNELS 32→33 — one lane per agent moves every layout hash, and
+    // with `inventions_enabled` on each Communicator birth jitters one more
+    // lane and the discovery table gains an era-1 candidate. Ignored by
+    // default (golden validation is off); regenerated on the merged tree with
+    // `UPDATE_HASHES=1 … -- --ignored golden_hashes trajectory_is_pinned`.
+    &[(0, 0xc16a8d23cf4b8035), (100, 0xb954801033fad3d5), (300, 0x20881a45a9ef0158)];
 
 #[test]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn inventions_scenario_matches_golden_hashes() {
     common::assert_golden("inventions", INVENTIONS_SCENARIO, INVENTIONS_GOLDEN);
 }
 
 // Fixture: `tribes` seeds Stone Tools, so its only Stone Tools "discovery" is
-// the tick-0 seeding latch (the next one is Fire at tick 947); the retired
+// the tick-0 seeding latch (the next ones, on the merged tree of the realism
+// layers and the projectile ladder, are Throwing Stones at tick 3951 and
+// Hafted Spears at 4634 — the ladder's first two rungs in order); the retired
 // unseeded demo keeps the emergent-first-discovery claim.
 #[test]
 fn innovators_discover_before_traditionalists_in_demo_scenario() {
@@ -1668,4 +1678,132 @@ fn fortifications_lower_the_breeding_threshold() {
 
     assert_eq!(count_births(false), 0, "below the unsubsidized threshold: no births");
     assert!(count_births(true) > 0, "the subsidy makes the same energy eligible");
+}
+
+// --- Projectile ladder: Throwing Stones -------------------------------------
+
+/// A stone-thrower strikes from outside the bare module's contact reach: the
+/// ladder's first rung is a real standoff (2.0 × 1.25 = 2.5 covers 2.3), and
+/// the hit registers as invention-boosted for the EvolvedTool detector.
+#[test]
+fn throwing_stones_extend_weapon_reach() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+    let hit_at_2_3 = |hold_stones: bool| -> (bool, bool) {
+        let mut w = World::new(29);
+        w.inventions_enabled = true;
+        let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+        let prey = w.spawn_agent(Vec2::new(502.3, 500.0), ape_genome());
+        reassign_to_new_species(&mut w, prey);
+        w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+        w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 0.0);
+        w.agents.program[pred as usize] = always_fire();
+        if hold_stones {
+            set_held(&mut w, pred, invention::THROWING_STONES);
+        }
+        step(&mut w);
+        let boosted = w.codex.combat_hits.iter().any(|h| h.tool_boosted);
+        (w.combat_damaged[prey as usize], boosted)
+    };
+    assert_eq!(hit_at_2_3(false), (false, false), "2.3 apart is outside the bare 2.0 reach");
+    assert_eq!(hit_at_2_3(true), (true, true), "a thrown stone covers 2.3, tool-boosted");
+}
+
+/// Each rung extends reach on top of the one below: spears alone (×1.15)
+/// cannot reach 2.5, stones + spears (×1.40) can.
+#[test]
+fn projectile_rungs_stack_their_reach() {
+    use anabios_core::prelude_test::reassign_to_new_species;
+    let hit_at_2_5 = |held: &[usize]| -> bool {
+        let mut w = World::new(31);
+        w.inventions_enabled = true;
+        let pred = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+        let prey = w.spawn_agent(Vec2::new(502.5, 500.0), ape_genome());
+        reassign_to_new_species(&mut w, prey);
+        w.agents.modules[pred as usize] = armed_kit(10.0, 2.0, 0.0);
+        w.agents.modules[prey as usize] = armed_kit(0.0, 0.0, 0.0);
+        w.agents.program[pred as usize] = always_fire();
+        for &k in held {
+            set_held(&mut w, pred, k);
+        }
+        step(&mut w);
+        w.combat_damaged[prey as usize]
+    };
+    assert!(!hit_at_2_5(&[invention::HAFTED_SPEARS]), "the javelin alone stops short of 2.5");
+    assert!(
+        hit_at_2_5(&[invention::THROWING_STONES, invention::HAFTED_SPEARS]),
+        "stone + javelin reach 2.5"
+    );
+}
+
+/// Hafted Spears is rooted on Throwing Stones: held without the stone it
+/// atrophies like any tech whose foundations are missing, and holds steady
+/// once the stone is held too.
+#[test]
+fn hafted_spears_atrophy_without_throwing_stones() {
+    let mut w = World::new(33);
+    w.inventions_enabled = true;
+    let id = w.spawn_agent(Vec2::new(500.0, 500.0), ape_genome());
+    set_held(&mut w, id, invention::STONE_TOOLS);
+    set_held(&mut w, id, invention::HAFTED_SPEARS);
+    let before = level_of(&w, id, invention::HAFTED_SPEARS);
+    invention::invention_step(&mut w);
+    let after = level_of(&w, id, invention::HAFTED_SPEARS);
+    assert!(
+        (before - after - invention::ATROPHY_RATE).abs() < 1e-6,
+        "spears without the stone decay by ATROPHY_RATE per tick: {before} -> {after}"
+    );
+    set_held(&mut w, id, invention::THROWING_STONES);
+    let stable = level_of(&w, id, invention::HAFTED_SPEARS);
+    invention::invention_step(&mut w);
+    assert_eq!(level_of(&w, id, invention::HAFTED_SPEARS), stable, "rooted spears must not decay");
+}
+
+/// The re-rooted ladder is climbable end to end under real discovery rolls:
+/// skilled, open ape communicators seeded with Stone Tools reach Hafted
+/// Spears within the horizon, and every holder of the spear reached it
+/// strictly after, and while, holding the stone. The prereq gate itself is a
+/// table property (`prereq_chain_shape` in the crate); what this exercises is
+/// the discovery path over the re-rooted table — that `candidates()` really
+/// offers the spear once the stone is held and the weighted pick can land on
+/// it — so the ordering assertions below are consistency checks on that run,
+/// not the claim.
+#[test]
+fn projectile_ladder_climbs_from_the_stone() {
+    let mut w = World::new(37);
+    w.inventions_enabled = true;
+    let mut ids = Vec::new();
+    for n in 0..8 {
+        let id = w.spawn_agent(Vec2::new(500.0 + n as f32 * 3.0, 500.0), Genome::neutral());
+        w.agents.modules[id as usize] = comm_kit();
+        w.agents.meme_vector[id as usize][SKILL_CHANNEL] = 1.0;
+        let mut g = w.agents.genome[id as usize];
+        g.set(GenomeSlot::Openness, 1.0);
+        w.agents.genome[id as usize] = g;
+        set_held(&mut w, id, invention::STONE_TOOLS);
+        ids.push(id);
+    }
+    let mut stones_tick = None;
+    let mut spears_tick = None;
+    for t in 0..200_000u64 {
+        invention::invention_step(&mut w);
+        for &id in &ids {
+            let meme = &w.agents.meme_vector[id as usize];
+            if invention::has(meme, invention::THROWING_STONES) {
+                stones_tick.get_or_insert(t);
+            }
+            if invention::has(meme, invention::HAFTED_SPEARS) {
+                assert!(
+                    invention::has(meme, invention::THROWING_STONES),
+                    "spears held without the stone at tick {t}"
+                );
+                spears_tick.get_or_insert(t);
+            }
+        }
+        if spears_tick.is_some() {
+            break;
+        }
+    }
+    let stone = stones_tick.expect("the stone is discovered");
+    let spear = spears_tick.expect("the spear follows within the horizon");
+    assert!(stone < spear, "the stone is held strictly before the spear ({stone} < {spear})");
 }

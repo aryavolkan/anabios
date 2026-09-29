@@ -117,6 +117,7 @@ const INVENTION_MOTES := {
 	11: Color(0.6, 0.85, 0.95),  # archery
 	12: Color(0.7, 0.75, 0.55),  # fortifications
 	13: Color(0.85, 0.5, 0.55),  # steel arms
+	22: Color(0.78, 0.74, 0.62),  # throwing stones
 }
 
 

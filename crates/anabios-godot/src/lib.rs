@@ -2395,9 +2395,12 @@ mod tests {
     );
 
     /// The retired `scenarios/weapons.toml` (removed by the scenario
-    /// consolidation; no world seeds the spear line), as it was: innovators
-    /// seeded with Stone Tools + Hafted Spears beside traditionalists and an
-    /// acultural control, only `inventions_enabled` on.
+    /// consolidation; no world seeds the spear line), as it was, plus the
+    /// projectile ladder's root: innovators seeded with Stone Tools +
+    /// Throwing Stones + Hafted Spears beside traditionalists and an
+    /// acultural control, only `inventions_enabled` on. (Hafted Spears is
+    /// rooted on Throwing Stones since v46, and the loader refuses a seed
+    /// that lacks a prerequisite.)
     const WEAPONS_PRE_FLIP: &str = concat!(
         "name = \"weapons\"\n",
         "seed = 0\n",
@@ -2407,7 +2410,7 @@ mod tests {
         "\n[[agents]]\n",
         "count = 24\n",
         "archetype = \"innovator\"\n",
-        "starting_inventions = [\"stone_tools\", \"hafted_spears\"]\n",
+        "starting_inventions = [\"stone_tools\", \"throwing_stones\", \"hafted_spears\"]\n",
         "placement = { kind = \"cluster\", center_x = 300.0, center_y = 512.0, radius = 80.0 }\n",
         "[agents.traits]\n",
         "altruism = 0.3\n",
@@ -2619,10 +2622,10 @@ mod tests {
         assert!(!w.inventions_enabled);
         assert!(masks.iter().all(|&m| m == 0), "inventions off => empty masks");
 
-        // The retired weapons.toml seeds stone_tools + hafted_spears, so at
-        // least one ape must read back the spear bit the viewer keys its
-        // weapon poses on. (`tribes` seeds Stone Tools only — no world seeds
-        // the spear line — so the retired file is inlined.)
+        // The retired weapons.toml seeds stone_tools + throwing_stones +
+        // hafted_spears, so at least one ape must read back the spear bit the
+        // viewer keys its weapon poses on. (`tribes` seeds Stone Tools only —
+        // no world seeds the spear line — so the retired file is inlined.)
         let w = world_after_25(WEAPONS_PRE_FLIP);
         let masks = super::invention_masks_of(&w);
         assert_eq!(masks.len(), w.agents.iter_alive().count());

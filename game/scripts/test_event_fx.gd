@@ -252,7 +252,10 @@ func _check_invention_tint() -> void:
 	_check(EventFx.spec_with_value(17, -1.0) == base, "value-less events keep the default")
 	_check(EventFx.spec_with_value(17, 99.0) == base, "unknown invention keeps the default")
 	_check(EventFx.spec_with_value(38, 11.0) == EventFx.spec(38), "war ignores value")
-	_check(EventFx.INVENTION_MOTES.size() == 14, "every invention has a tint")
+	_check(
+		EventFx.INVENTION_MOTES.size() == 15,
+		"tint table: the ten trunk techs, the military branch and throwing stones"
+	)
 	for t in [17, 18, 22]:
 		for k in EventFx.INVENTION_MOTES:
 			var s: Array = EventFx.spec_with_value(t, float(k))

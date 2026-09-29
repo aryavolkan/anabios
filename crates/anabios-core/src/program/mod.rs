@@ -36,14 +36,17 @@ pub const CONST_SIGMA: f32 = 0.1;
 pub const PHEROMONE_CHANNELS: usize = 4;
 /// Number of meme/broadcast channels (design §3.1). Wired by M14. Channels
 /// 0..8 carry the original culture (alarm, dialects, cooperation norm, hunt
-/// technique, skill, DIT technique); channels 8..30 carry the invention
+/// technique, skill, DIT technique); channels 8..31 carry the invention
 /// tree's adoption levels (`invention::INVENTION_CHANNEL_BASE`); channels
-/// 30..32 carry the maladaptive cultural practices (`practice::PRACTICE_CHANNEL_BASE`).
-/// X2 (Wells + Vaccination) consumed the last of the spare headroom that v41
-/// left at 30..32 — there is no room left before `MEME_CHANNELS`. The next
-/// invention addition needs a `MEME_CHANNELS` bump (and a `FORMAT_VERSION`
-/// bump alongside it).
-pub const MEME_CHANNELS: usize = 32;
+/// 31..33 carry the maladaptive cultural practices (`practice::PRACTICE_CHANNEL_BASE`).
+/// Kept an exact fit on purpose: `culture::inherit_meme` jitters (one RNG
+/// draw each) every channel that is neither an invention nor a practice
+/// channel, so spare headroom would add draws to every Communicator birth in
+/// every world, flag-off ones included. The next invention addition therefore
+/// needs a `MEME_CHANNELS` bump (and a `FORMAT_VERSION` bump alongside it),
+/// as the projectile ladder's Throwing Stones did here (32 -> 33; the agent
+/// columns ride `serde_rows` past serde's 32-lane derive limit).
+pub const MEME_CHANNELS: usize = 33;
 /// Sentinel in `ActionRegister.target_id` meaning "no action target".
 pub const NO_TARGET: u32 = u32::MAX;
 

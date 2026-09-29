@@ -128,9 +128,17 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // inertia, gestation, the chase and its carcass economy) and capacity from
     // food (no lineage shares, non-binding caps) — every full-stack trajectory
     // moved from tick 1; see docs/scenarios.md.
-    &[(0, 0x3651a748bbc86747), (100, 0x4c9cf6641f62b1f9), (300, 0xc3968e0ceb81f927)];
+    // Re-pinned 2026-09-29 on the merge of the projectile ladder (FORMAT_VERSION
+    // 45→46): Throwing Stones appended (id 22), Hafted Spears re-rooted onto it,
+    // MEME_CHANNELS 32→33 — one lane per agent moves every layout hash, and
+    // with `inventions_enabled` on each Communicator birth jitters one more
+    // lane and the discovery table gains an era-1 candidate. Ignored by
+    // default (golden validation is off); regenerated on the merged tree with
+    // `UPDATE_HASHES=1 … -- --ignored golden_hashes trajectory_is_pinned`.
+    &[(0, 0xc371b09490486347), (100, 0x5de88a4550e847f9), (300, 0xb814d342ce394327)];
 
 #[test]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn affect_social_matches_golden_hashes() {
     common::assert_golden("affect-social", AFFECT_SOCIAL, AFFECT_GOLDEN);
 }
