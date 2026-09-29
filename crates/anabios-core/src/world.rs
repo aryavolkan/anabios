@@ -274,8 +274,30 @@ pub struct World {
     /// losing the litter if she dies — then delivers `reproduce::litter_size`
     /// children beside herself. Off by default — the instant-birth path is
     /// untouched (zero extra RNG draws, byte-identical trajectories).
+    /// Serialized (v45).
     #[serde(default)]
     pub gestation_enabled: bool,
+    /// When true, gait is active (`gait.rs`): `decide_all` folds an
+    /// urgency-chosen speed fraction into the LENGTH of `desired_direction`
+    /// — flee, fight and hunt at the Locomotor maximum, the seeking moods
+    /// walk (`gait::GAIT_WALK`), a content grazer ambles
+    /// (`gait::GAIT_AMBLE`), scaled down further by how hard the program
+    /// pushes — and `integrate_all` charges the move cost a superlinear
+    /// `1 + GAIT_SPRINT_COST · frac²` factor. Off by default: the direction
+    /// stays a unit vector and the factor is never applied, so a flag-off
+    /// world is byte-identical (zero RNG either way). Serialized (v45).
+    #[serde(default)]
+    pub gait_enabled: bool,
+    /// When true, growth and juveniles are active (`growth.rs`): an agent is
+    /// born at `growth::JUVENILE_BODY` of its adult size and grows to it over
+    /// the first `growth::MATURITY_FRAC` of its lifespan (a smoothstep of
+    /// `age`), scaling its collision body radius, grazing bite, basal
+    /// metabolism, move cost and (mildly) speed, and it cannot breed before
+    /// maturity. Off by default — every multiplier is then exactly 1.0 and
+    /// the maturity gate inert: zero RNG draws, byte-identical trajectories
+    /// with the flag off. Serialized (v45).
+    #[serde(default)]
+    pub growth_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -547,6 +569,8 @@ impl World {
             territory_enabled: false,
             species_territories: Vec::new(),
             gestation_enabled: false,
+            gait_enabled: false,
+            growth_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
@@ -840,5 +864,17 @@ mod tests {
     fn gestation_defaults_off() {
         let w = World::new(1);
         assert!(!w.gestation_enabled, "gestation is opt-in at the engine layer; off by default");
+    }
+
+    #[test]
+    fn gait_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.gait_enabled, "gait is opt-in; off by default");
+    }
+
+    #[test]
+    fn growth_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.growth_enabled, "growth is opt-in at the engine layer; off by default");
     }
 }

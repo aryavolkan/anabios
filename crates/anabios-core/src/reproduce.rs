@@ -244,7 +244,7 @@ pub fn reproduce_all(world: &mut World) {
                 continue;
             }
         }
-        if !is_eligible(&world.agents, a_id) {
+        if !is_eligible(&world.agents, a_id, world.growth_enabled) {
             continue;
         }
 
@@ -268,6 +268,7 @@ pub fn reproduce_all(world: &mut World) {
             kin_seeking,
             &a_genome,
             world.sexual_dimorphism_enabled,
+            world.growth_enabled,
         );
         let Some(b_id) = mate else { continue };
 
@@ -317,8 +318,13 @@ pub fn reproduce_all(world: &mut World) {
         // after the stage-4' resolve, so a midpoint child would sit stacked
         // on its parents for a whole tick. `flip` alternates the side by the
         // initiating parent's id parity (no RNG; flag-off births unchanged).
-        let child_pos =
-            birth_position(world, a_pos, b_pos, &a_genome, &b_genome, &child_genome, a_id & 1 == 1);
+        let child_pos = birth_position(
+            world,
+            (a_pos, &a_genome, world.agents.age[i]),
+            (b_pos, &b_genome, world.agents.age[j]),
+            &child_genome,
+            a_id & 1 == 1,
+        );
 
         let lineage = world.next_lineage();
         let child_id = world.agents.spawn(
@@ -448,28 +454,31 @@ fn draw_child(
     PendingChild { genome, modules, program, sex }
 }
 
-/// Where a child of parents at `a_pos` / `b_pos` lands: their torus
-/// midpoint, or, with the collision layer on, `offspring_position` (the
-/// perpendicular bisector, clear of both bodies; `flip` picks the side) on
-/// terrain its Locomotion class can occupy. No RNG.
+/// Where a child of parents `a` / `b` — each `(position, genome, age)` —
+/// lands: their torus midpoint, or, with the collision layer on,
+/// `offspring_position` (the perpendicular bisector, clear of both bodies;
+/// `flip` picks the side) on terrain its Locomotion class can occupy. Radii
+/// are the live ones (growth layer): the newborn at its age-0 juvenile body,
+/// either parent possibly still growing. No RNG.
 fn birth_position(
     world: &World,
-    a_pos: Vec2,
-    b_pos: Vec2,
-    a_genome: &Genome,
-    b_genome: &Genome,
+    a: (Vec2, &Genome, u32),
+    b: (Vec2, &Genome, u32),
     child_genome: &Genome,
     flip: bool,
 ) -> Vec2 {
+    let (a_pos, a_genome, a_age) = a;
+    let (b_pos, b_genome, b_age) = b;
     if !world.territory_enabled {
         return midpoint_torus(a_pos, b_pos, world.world_size);
     }
-    let child_r = crate::collision::body_radius(child_genome);
+    let growth = world.growth_enabled;
+    let child_r = crate::collision::live_body_radius(child_genome, 0, growth);
     let pos = crate::collision::offspring_position(
         a_pos,
         b_pos,
-        child_r + crate::collision::body_radius(a_genome),
-        child_r + crate::collision::body_radius(b_genome),
+        child_r + crate::collision::live_body_radius(a_genome, a_age, growth),
+        child_r + crate::collision::live_body_radius(b_genome, b_age, growth),
         flip,
         world.world_size,
     );
@@ -561,8 +570,12 @@ fn deliver_litter(
     // Second parent for everything that follows `spawn`.
     let j = if father_alive { f } else { m };
     let near = father_alive && torus_distance(m_pos, world.agents.position[f], ws) <= MATING_RANGE;
-    let (b_pos, b_genome) =
-        if near { (world.agents.position[f], litter.father_genome) } else { (m_pos, m_genome) };
+    let m_age = world.agents.age[m];
+    let (b_pos, b_genome, b_age) = if near {
+        (world.agents.position[f], litter.father_genome, world.agents.age[f])
+    } else {
+        (m_pos, m_genome, m_age)
+    };
     let energy = SPAWN_ENERGY / litter.litter.max(1) as f32;
     let species = litter.species;
     // Siblings already born (a delivery the cap cut short earlier).
@@ -576,10 +589,8 @@ fn deliver_litter(
         let child = litter.children.remove(0);
         let child_pos = birth_position(
             world,
-            m_pos,
-            b_pos,
-            &m_genome,
-            &b_genome,
+            (m_pos, &m_genome, m_age),
+            (b_pos, &b_genome, b_age),
             &child.genome,
             (m + k) & 1 == 1,
         );
@@ -772,13 +783,19 @@ fn apply_practice_fitness_costs(
     stillborn || sacrificed
 }
 
-fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
+/// Mate eligibility: alive, a Reproductive module, awake, mature (growth
+/// layer; always true with `growth_enabled` off) and above the energy gate.
+fn is_eligible(agents: &AgentBuffers, id: u32, growth_enabled: bool) -> bool {
     let i = id as usize;
     if !agents.is_alive(id) {
         return false;
     }
     // Action gating: must have Reproductive module to mate.
     if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Reproductive) {
+        return false;
+    }
+    // Growth: no breeding before maturity. Inert with the flag off.
+    if !crate::growth::is_mature(growth_enabled, agents.age[i], &agents.genome[i]) {
         return false;
     }
     // Basic needs: sleepers neither seek nor accept mates — lost mating time
@@ -793,9 +810,6 @@ fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
     if agents.gestation_left[i] > 0 {
         return false;
     }
-    // GROWTH HOOK (juveniles / body size from age, separate branch): a
-    // juvenile is not fertile — the maturity gate belongs here, before the
-    // energy bar.
     // Conscientiousness raises the effective breeding threshold;
     // Fortifications lower it (the invention tree's birth-ledger subsidy —
     // exactly ×1.0 when unheld, so inventions-off worlds are byte-identical).
@@ -822,6 +836,7 @@ fn find_mate(
     kin_seeking: bool,
     a_genome: &Genome,
     dimorphism: bool,
+    growth_enabled: bool,
 ) -> Option<u32> {
     let mut best: Option<u32> = None;
     // Genome distance of `best` — only consulted when `kin_seeking`.
@@ -835,7 +850,7 @@ fn find_mate(
         if reproduced[j] {
             return;
         }
-        if !is_eligible(agents, other_id) {
+        if !is_eligible(agents, other_id, growth_enabled) {
             return;
         }
         if agents.species_id[j] != a_species {
@@ -966,6 +981,39 @@ mod tests {
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         reproduce_all(&mut w);
         assert_eq!(w.agents.live_count(), 3, "awake pair reproduces");
+    }
+
+    /// Growth: a juvenile is not mate-eligible on either side of the pair;
+    /// the same pair breeds once both are mature. Flag off, age is unread.
+    #[test]
+    fn juveniles_do_not_mate_until_maturity() {
+        use crate::growth::maturity_ticks;
+        let mut w = World::new(13);
+        w.growth_enabled = true;
+        let (a, b) = spawn_fertile_pair(&mut w);
+        let m = maturity_ticks(crate::age::lifespan_of(&fertile_genome()));
+        // Two newborns.
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "a newborn pair must not mate");
+        // One adult, one juvenile a tick short of maturity: still no.
+        w.agents.age[a as usize] = m;
+        w.agents.age[b as usize] = m - 1;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "a juvenile partner blocks mating");
+        w.agents.age[a as usize] = m - 1;
+        w.agents.age[b as usize] = m;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "a juvenile initiator blocks mating");
+        // Both mature: the pair breeds.
+        w.agents.age[a as usize] = m;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 3, "a mature pair reproduces");
+
+        // Flag off: the same newborn pair breeds at once.
+        let mut w = World::new(13);
+        let _ = spawn_fertile_pair(&mut w);
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 3, "flag off: age unread");
     }
 
     #[test]
@@ -1143,8 +1191,8 @@ mod tests {
         let (a, b) = spawn_fertile_pair(&mut w);
         reproduce_all(&mut w);
         assert_eq!(w.agents.gestation_left[a as usize], GESTATION_TICKS);
-        assert!(!is_eligible(&w.agents, a), "a pregnant mother is not eligible");
-        assert!(is_eligible(&w.agents, b), "the father stays eligible");
+        assert!(!is_eligible(&w.agents, a, false), "a pregnant mother is not eligible");
+        assert!(is_eligible(&w.agents, b, false), "the father stays eligible");
         // A fresh fertile partner beside the pair: the mother's pregnancy is
         // untouched (no second litter, no birth), while the father conceives
         // with the newcomer (he initiates, so he is that litter's carrier).
@@ -1290,7 +1338,7 @@ mod tests {
         assert_eq!(w.agents.live_count(), 2, "no room: no birth");
         assert_eq!(w.agents.gestation_left[a as usize], 1, "held at term");
         assert!(w.agents.pending_litter[a as usize].is_some());
-        assert!(!is_eligible(&w.agents, a), "still pregnant while holding");
+        assert!(!is_eligible(&w.agents, a, false), "still pregnant while holding");
         w.max_population = 3;
         reproduce_all(&mut w);
         assert_eq!(w.agents.live_count(), 3, "delivered on the first tick with room");

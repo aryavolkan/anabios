@@ -39,6 +39,34 @@ superseded by the current material economy). Three worlds below turn the
 first two on deliberately; none turns on the latter two — see "Retired
 experiments".
 
+One knob changes how every agent moves rather than adding a subsystem:
+`gait_enabled` (on by default like the rest; `crates/anabios-core/src/gait.rs`).
+With it an agent's speed follows its urgency instead of always being its
+Locomotor maximum: fleeing, fighting and hunting agents sprint (a carnivore
+carrying a weapon and closing on another species is hunting), the seeking
+moods walk (0.6×), a content grazer ambles (0.3×) — scaled down further by how
+hard its program pushes — and the move cost carries a superlinear `1 + frac²`
+factor, so a sprint costs twice per unit distance what a crawl does. Measured
+on `predator-prey` (500-agent cap, ticks 300–350, `tests/gait.rs`): the mean
+step over alive agents drops from 1.98 to 0.81 world units, and the share of
+agent-ticks at 90% or more of the agent's top speed from 85% to 14% — the
+fleeing prey and hunting pursuers. Opting out is pinned as a no-op by the
+`gait_*` unit tests in `tick.rs` / `integrate.rs` (flag off: unit direction,
+full step, linear move cost) and by the trajectory guards above.
+
+`growth_enabled` (on by default, like the feature knobs; 2026-09-28) adds
+growth and juveniles: an agent is born at about a third of its adult size
+and grows to it over the first 15% of its lifespan — its collision body
+radius, grazing bite, basal metabolism, move cost and (mildly) speed scale
+with the body, and nobody breeds before maturity
+(`crates/anabios-core/src/growth.rs`). Founders start at age 0, so a world's
+first births come after its founders' maturity window (about 480 ticks for
+`minimal`'s `lifespan_bias = 0.6`). Opt out with `growth_enabled = false`;
+the engine default is off, and flag-off is byte-identical
+(`growth::tests::flag_off_is_exactly_the_adult_identity` and the trajectory
+guards above). The knob postdates every row's validation sweep and cost
+figure below; neither has been re-run under it.
+
 Every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate →
 200 ticks) and has a `tests/save_load_roundtrip.rs` round-trip test. The cost
 column is wall-clock milliseconds per tick of `anabios-headless run --ticks

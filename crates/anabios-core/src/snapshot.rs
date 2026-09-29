@@ -208,15 +208,24 @@ use crate::world::World;
 ///     scenario ⇒ trajectories byte-identical (pinned by the
 ///     `*_trajectory_unchanged_by_territory_substrate` guards in
 ///     `tests/determinism.rs`); only the serialized layout grew.
-/// 45: gestation and litters — `World.gestation_enabled` (bool) and the
-///     `AgentBuffers.{gestation_left, pending_litter}` columns (a `u32`
-///     countdown and an `Option<PendingLitter>` per slot: the litter's drawn
-///     genomes/modules/programs/sexes, father slot + lineage + genome,
-///     species). Flag off ⇒ the columns stay `0`/`None`, the instant-birth
-///     path draws and computes exactly as before — trajectories
-///     byte-identical (the flag-off pins in `tests/determinism.rs` moved by
-///     the agents layout alone, verified column-wise against the base);
-///     only the serialized layout grew.
+/// 45: gait, growth and juveniles, gestation and litters —
+///     `World.gait_enabled` (bool; `gait.rs`), `World.growth_enabled`
+///     (bool; `growth.rs`) and `World.gestation_enabled` (bool;
+///     `reproduce.rs`), plus the `AgentBuffers.{gestation_left,
+///     pending_litter}` columns (a `u32` countdown and an
+///     `Option<PendingLitter>` per slot: the litter's drawn genomes/modules/
+///     programs/sexes, father slot + lineage + genome, species). Growth is
+///     a pure function of the existing `age` column and the genome
+///     lifespan, so it adds no other state. All three off in the engine
+///     default and in every pre-flip fixture ⇒ trajectories byte-identical
+///     with the flags off: the gestation columns stay `0`/`None` and the
+///     instant-birth path draws and computes exactly as before. The
+///     flag-off trajectory guards (`*_trajectory_is_pinned` in
+///     `tests/determinism.rs`) do not move for gait/growth, and move by the
+///     `agents` layout alone for the gestation columns (verified
+///     column-wise against the base — see their comment); only the
+///     serialized layout grew. The scenario schema defaults all three
+///     knobs on, so every full-stack trajectory moves from tick 1.
 pub const FORMAT_VERSION: u32 = 45;
 
 #[derive(Debug, Serialize, Deserialize)]

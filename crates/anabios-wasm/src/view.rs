@@ -16,6 +16,7 @@ use anabios_core::biome::{cell_color, BiomeCell, TerrainType, SEA_LEVEL};
 use anabios_core::codex::{CodexEvent, EventType};
 use anabios_core::culture::{SKILL_CHANNEL, TECH_CHANNEL};
 use anabios_core::genome::{GenomeSlot, GENOME_LEN, SLOT_NAMES};
+use anabios_core::growth::body_scale_of;
 use anabios_core::invention::{
     bit, for_each_set_bit, held_mask, level, tech_era, INVENTIONS, INVENTION_CHANNEL_BASE,
     INVENTION_COUNT,
@@ -118,6 +119,19 @@ pub fn dialect_hue(meme: &[f32]) -> f32 {
     (acc / wsum).rem_euclid(1.0)
 }
 
+/// Viewer body size of agent `i`: `0.5 + 2.5 · Size` (the Godot bridge's
+/// `alive_sizes` scale), times the growth body scale when `growth_enabled`
+/// so juveniles draw small; with growth off exactly the adult value.
+fn view_size(w: &World, i: usize) -> f32 {
+    let g = &w.agents.genome[i];
+    let adult = 0.5 + 2.5 * g.get(GenomeSlot::Size);
+    if w.growth_enabled {
+        adult * body_scale_of(true, w.agents.age[i], g)
+    } else {
+        adult
+    }
+}
+
 /// Fill `out` with [`AGENT_STRIDE`] floats per alive agent, ascending id
 /// order. Returns the agent count.
 pub fn fill_agents(w: &World, out: &mut Vec<f32>) -> usize {
@@ -145,7 +159,7 @@ pub fn fill_agents(w: &World, out: &mut Vec<f32>) -> usize {
             p.x,
             p.y,
             rot,
-            0.5 + 2.5 * g.get(GenomeSlot::Size),
+            view_size(w, i),
             effective_diet_carnivory(&w.agents.modules[i]).clamp(0.0, 1.0),
             g.get(GenomeSlot::ColorHue),
             g.get(GenomeSlot::ColorSat).clamp(0.4, 1.0),
@@ -421,7 +435,7 @@ pub fn agent_json(w: &World, id: u32, labels: &BTreeMap<u32, String>) -> String 
         "lineage_id": w.agents.lineage_id[i],
         "species_id": sid,
         "species": labels.get(&sid).cloned().unwrap_or_else(|| format!("species {sid}")),
-        "size": 0.5 + 2.5 * g.get(GenomeSlot::Size),
+        "size": view_size(w, i),
         "diet_carnivory": effective_diet_carnivory(&w.agents.modules[i]),
         "skill": meme[SKILL_CHANNEL],
         "technique": meme[TECH_CHANNEL],
@@ -593,6 +607,38 @@ mod tests {
             assert!((0.0..=1.0).contains(&row[5]), "diet {}", row[5]);
             assert!((0.0..1.0).contains(&row[9]), "dialect hue {}", row[9]);
         }
+    }
+
+    /// Growth: with the flag on a newborn's exported size (agent buffer and
+    /// inspector JSON alike) is its adult size times the juvenile body scale,
+    /// so the atlas draws it small; with the flag off it is the bare adult
+    /// value whatever the age.
+    #[test]
+    fn juveniles_export_a_grown_size_only_when_growth_is_on() {
+        use anabios_core::growth::{maturity_ticks, JUVENILE_BODY};
+        let (s, mut w) = world("minimal", 1);
+        let labels = species_labels(&s);
+        let id = w.agents.iter_alive().next().expect("a founder");
+        let i = id as usize;
+        let adult = 0.5 + 2.5 * w.agents.genome[i].get(GenomeSlot::Size);
+        let exported = |w: &World| -> (f32, f32) {
+            let mut out = Vec::new();
+            fill_agents(w, &mut out);
+            let row = out.chunks(AGENT_STRIDE).find(|r| r[0] as u32 == id).expect("row");
+            let v: Value = serde_json::from_str(&agent_json(w, id, &labels)).unwrap();
+            (row[4], v["size"].as_f64().unwrap() as f32)
+        };
+        w.growth_enabled = true;
+        w.agents.age[i] = 0;
+        let (buf, json) = exported(&w);
+        let expected = adult * JUVENILE_BODY;
+        assert!((buf - expected).abs() < 1e-5, "newborn size {buf} vs {expected}");
+        assert_eq!(buf, json, "buffer and inspector agree");
+        w.agents.age[i] = maturity_ticks(anabios_core::age::lifespan_of(&w.agents.genome[i]));
+        assert_eq!(exported(&w), (adult, adult), "grown: the adult size");
+        w.growth_enabled = false;
+        w.agents.age[i] = 0;
+        assert_eq!(exported(&w), (adult, adult), "flag off: age unread");
     }
 
     #[test]
