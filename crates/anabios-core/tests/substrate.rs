@@ -277,20 +277,30 @@ mod codex_events {
         // Only splits of the morph stock (archetype-free species 0) count; the
         // other lineages' splits are not the divergent pair's.
         let founders = world.species_parents.len();
+        let morph_split = |world: &anabios_core::world::World| {
+            world.codex.events.iter().any(|ev| {
+                ev.event_type == EventType::SpeciationEvent
+                    && ev.species_id as usize >= founders
+                    && world.species_parents[ev.species_id as usize] == Some(0)
+            })
+        };
 
-        // 400 ticks is well past the first species_step (at tick 200).
-        for _ in 0..400 {
+        // The split is read at a species step (every 200 ticks) and needs a
+        // child of one morph cluster to have mutated past the threshold from
+        // the stock's centroid — a matter of which of the few dozen children
+        // the 500 cap admits have been born by then. It came at the first
+        // step (tick 200) until the crowd yield (gait, 2026-09-29) shifted
+        // the trajectory; the claim is that the divergent pair splits, not
+        // that it splits in its first generation, so read up to the fifth
+        // step and stop at the first split.
+        const HORIZON: u64 = 1000;
+        while world.tick < HORIZON && !morph_split(&world) {
             step(&mut world);
         }
-
-        let saw_speciation = world.codex.events.iter().any(|ev| {
-            ev.event_type == EventType::SpeciationEvent
-                && ev.species_id as usize >= founders
-                && world.species_parents[ev.species_id as usize] == Some(0)
-        });
+        eprintln!("morph stock split by tick {}", world.tick);
         assert!(
-            saw_speciation,
-            "expected at least one SpeciationEvent; got {:?}",
+            morph_split(&world),
+            "expected a SpeciationEvent splitting the morph stock within {HORIZON} ticks; got {:?}",
             world.codex.events.iter().map(|e| e.event_type).collect::<Vec<_>>()
         );
     }

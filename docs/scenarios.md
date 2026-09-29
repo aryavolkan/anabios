@@ -111,8 +111,14 @@ the sidestep along with the advance, so crowded bodies left a crowd more
 slowly than free ones entered it. Populations hold: `predator-prey` at tick
 1500 on seeds 0–3 ends with 861 / 910 / 1067 / 787 agents against 814 / 902 /
 1042 / 716 before, every founder lineage the `run --lineages` report lists
-alive on every seed. The validation bar and the cost column below were not
-re-run.
+alive on every seed. Speciation is not slowed, but its timing moves:
+`tests/substrate.rs::divergent_scenario_emits_speciation_event`, which read a
+split of `speciation`'s morph stock at the first species step (tick 200, seed
+4242, the population capped at 500 so only a few dozen children are born by
+then), now sees it at the second (tick 401); on seeds 1–5 and 4242 over 800
+ticks the stock splits on four seeds with the yield against two without. The
+test now reads up to the fifth species step and stops at the first split. The
+validation bar and the cost column below were not re-run.
 
 `growth_enabled` (on by default, like the feature knobs; 2026-09-28) adds
 growth and juveniles: an agent is born at about a third of its adult size
