@@ -1,7 +1,8 @@
 //! Body collision (territory/habitat/collision layer). Each agent is a disc of
-//! `body_radius` (from its Size gene); colliding pairs (see
-//! `Locomotion::collides_with`) never pass through one another and end every
-//! tick apart, by:
+//! `body_radius` (from its Size gene; under `World::growth_enabled` scaled by
+//! its growth body scale, so a juvenile is a smaller disc — see
+//! `live_body_radius`); colliding pairs (see `Locomotion::collides_with`)
+//! never pass through one another and end every tick apart, by:
 //!
 //! 1. a separation steering term added in `decide_all` (agents route around
 //!    each other);
@@ -134,6 +135,7 @@ const TIE_DIRS: [(f32, f32); 8] = [
     (0.707_106_77, -0.707_106_77),
 ];
 
+/// Adult body radius: the flag-off value, and the value every grown agent has.
 #[inline]
 pub fn body_radius(g: &Genome) -> f32 {
     BODY_R_BASE + BODY_R_SIZE * g.get(GenomeSlot::Size)
@@ -166,6 +168,21 @@ pub fn offspring_position(
     let n = if len > 1e-4 { Vec2::new(-d.y, d.x) / len } else { Vec2::new(1.0, 0.0) };
     let off = n * if flip { -h } else { h };
     wrap_torus(mid + off, Vec2::splat(world_size))
+}
+
+/// Body radius at a growth body scale (`growth::body_scale_of`): the adult
+/// radius times `scale`. A scale of exactly `1.0` — every adult, and every
+/// agent with growth off — gives exactly `body_radius(g)`.
+#[inline]
+pub fn body_radius_at(g: &Genome, scale: f32) -> f32 {
+    body_radius(g) * scale
+}
+
+/// The body radius an agent `age` ticks old presents this tick: grown when
+/// `growth_enabled`, the adult `body_radius(g)` otherwise.
+#[inline]
+pub fn live_body_radius(g: &Genome, age: u32, growth_enabled: bool) -> f32 {
+    body_radius_at(g, crate::growth::body_scale_of(growth_enabled, age, g))
 }
 
 /// Unit vector pushing `i` away from `j`, given `d = pos_i − pos_j` (torus)
@@ -230,15 +247,17 @@ pub fn rebuild_hash(world: &mut World) {
 
 /// Separation steering for agent `i`: Σ over colliding neighbours within
 /// `STEER_MARGIN·(r_i+r_j)` of `away · (reach − d)/reach`. Reads the collision
-/// hash built at stage 1 this tick.
+/// hash built at stage 1 this tick. Radii are the live (grown) ones when
+/// `growth_enabled`, the adult ones otherwise.
 pub fn separation_steer(
     spatial: &UniformSpatialHash,
     agents: &AgentBuffers,
     i: usize,
     ws: f32,
+    growth_enabled: bool,
 ) -> Vec2 {
     let pos = agents.position[i];
-    let ri = body_radius(&agents.genome[i]);
+    let ri = live_body_radius(&agents.genome[i], agents.age[i], growth_enabled);
     let ci = Locomotion::of(&agents.genome[i]);
     let mut acc = Vec2::ZERO;
     spatial.query_bbox(pos, STEER_QUERY_R, |oid| {
@@ -246,7 +265,8 @@ pub fn separation_steer(
         if j == i || !ci.collides_with(Locomotion::of(&agents.genome[j])) {
             return;
         }
-        let reach = (ri + body_radius(&agents.genome[j])) * STEER_MARGIN;
+        let rj = live_body_radius(&agents.genome[j], agents.age[j], growth_enabled);
+        let reach = (ri + rj) * STEER_MARGIN;
         let d = torus_delta(pos, agents.position[j], ws);
         let dist = d.length();
         if dist >= reach {
@@ -267,7 +287,8 @@ pub fn separation_steer(
 /// stops after a pass whose largest push is below `RESOLVE_SETTLE`. Without
 /// a rebuild, positions move ≤ `MAX_PUSH` between passes, so a neighbour
 /// within the max gap (1.5) is still within one hash cell (4.0) of the stale
-/// bucket. No-op with the flag off.
+/// bucket. No-op with the flag off. Gaps use the live (grown) radii when
+/// `growth_enabled`, so juveniles pack closer.
 pub fn resolve_overlaps(world: &mut World) {
     use rayon::prelude::*;
     if !world.territory_enabled {
@@ -275,6 +296,7 @@ pub fn resolve_overlaps(world: &mut World) {
     }
     rebuild_hash(world);
     let ws = world.world_size;
+    let growth_enabled = world.growth_enabled;
     let cap = world.agents.capacity();
     for pass in 0..RESOLVE_PASSES {
         if pass > 0 && RESOLVE_REBUILD_EACH_PASS {
@@ -289,8 +311,8 @@ pub fn resolve_overlaps(world: &mut World) {
         snap.extend_from_slice(&world.agents.position[..cap]);
         let spatial = &world.collision_spatial;
         let biome = &world.biome;
-        let AgentBuffers { position, genome, alive, .. } = &mut world.agents;
-        let (genome, alive) = (&*genome, &*alive);
+        let AgentBuffers { position, genome, age, alive, .. } = &mut world.agents;
+        let (genome, age, alive) = (&*genome, &*age, &*alive);
         let snap_ref = &snap;
         // Max over every agent's applied push length — order-independent, so
         // the settle exit below is identical for any rayon thread count.
@@ -303,14 +325,14 @@ pub fn resolve_overlaps(world: &mut World) {
                 }
                 let p = snap_ref[i];
                 let ci = Locomotion::of(&genome[i]);
-                let ri = body_radius(&genome[i]);
+                let ri = live_body_radius(&genome[i], age[i], growth_enabled);
                 let mut push = Vec2::ZERO;
                 spatial.query_bbox(p, query_r, |oid| {
                     let j = oid as usize;
                     if j == i || !ci.collides_with(Locomotion::of(&genome[j])) {
                         return;
                     }
-                    let gap = ri + body_radius(&genome[j]);
+                    let gap = ri + live_body_radius(&genome[j], age[j], growth_enabled);
                     let d = torus_delta(p, snap_ref[j], ws);
                     let dist = d.length();
                     if dist >= gap {
@@ -384,7 +406,9 @@ pub fn sweep_moves(world: &mut World) {
     let spatial = &world.spatial;
     let biome = &world.biome;
     let query_cap = spatial.perception_max_radius();
-    let AgentBuffers { position, velocity, genome, alive, .. } = &world.agents;
+    let (gait_enabled, growth_enabled) = (world.gait_enabled, world.growth_enabled);
+    let desired = &world.desired_direction;
+    let AgentBuffers { position, velocity, genome, age, alive, .. } = &world.agents;
     // Longest move this tick bounds how far any neighbour's start can be from
     // a contact: reach = own remaining move + that + the largest gap.
     let vmax = velocity[..cap]
@@ -405,7 +429,7 @@ pub fn sweep_moves(world: &mut World) {
         }
         let start = wrap_torus(position[i] - v_full, size_v);
         let ci = Locomotion::of(&genome[i]);
-        let ri = body_radius(&genome[i]);
+        let ri = live_body_radius(&genome[i], age[i], growth_enabled);
         // Earliest contact of this agent, at `p` with velocity `v` at elapsed
         // tick fraction `tau`, over the remaining fraction: `(t, normal)`,
         // the normal pointing from the neighbour into this agent at contact.
@@ -417,7 +441,7 @@ pub fn sweep_moves(world: &mut World) {
                 if j == i || !alive[j] || !ci.collides_with(Locomotion::of(&genome[j])) {
                     return;
                 }
-                let gap = ri + body_radius(&genome[j]);
+                let gap = ri + live_body_radius(&genome[j], age[j], growth_enabled);
                 let vj = velocity[j];
                 let start_j = wrap_torus(position[j] - vj, size_v);
                 // The neighbour's position now (it moves linearly through the tick).
@@ -502,9 +526,9 @@ pub fn sweep_moves(world: &mut World) {
         // there: stay at the tick's start instead (the resolve still runs).
         *end = if ci.can_occupy(biome.sample(end_p).terrain) { end_p } else { start };
     });
-    let AgentBuffers { position, velocity, energy, genome, alive, .. } = &mut world.agents;
+    let AgentBuffers { position, velocity, energy, genome, age, alive, .. } = &mut world.agents;
     let ends_ref = &ends;
-    let (genome, alive) = (&*genome, &*alive);
+    let (genome, age, alive) = (&*genome, &*age, &*alive);
     position[..cap]
         .par_iter_mut()
         .zip(velocity[..cap].par_iter_mut())
@@ -523,8 +547,23 @@ pub fn sweep_moves(world: &mut World) {
             let nv = torus_delta(end, start, ws);
             *pos = end;
             *vel = nv;
+            // Refund the cut part of the move at the rate `integrate_all`
+            // charged it: per unit distance, size × growth body scale × the
+            // gait's sprint factor (both exactly 1.0 with their knobs off).
             let size = genome[i].get(GenomeSlot::Size).max(0.1);
-            *en += crate::integrate::MOVE_ENERGY_COST * (v.length() - nv.length()).max(0.0) * size;
+            let growth = crate::growth::body_scale_of(growth_enabled, age[i], &genome[i]);
+            // `desired_direction` is sized to the capacity by the tick; a bare
+            // stage call before any tick reads a full-intent fraction.
+            let gait = if gait_enabled {
+                crate::gait::move_cost_factor(desired.get(i).map_or(1.0, |d| d.length()))
+            } else {
+                1.0
+            };
+            *en += crate::integrate::MOVE_ENERGY_COST
+                * (v.length() - nv.length()).max(0.0)
+                * size
+                * growth
+                * gait;
         });
     world.collision_scratch = ends;
 }
@@ -564,7 +603,8 @@ pub fn settle_newborns(world: &mut World, newborns: &[u32]) {
             continue; // culled at birth (practice fitness costs)
         }
         let ci = Locomotion::of(&world.agents.genome[i]);
-        let ri = body_radius(&world.agents.genome[i]);
+        let ri =
+            live_body_radius(&world.agents.genome[i], world.agents.age[i], world.growth_enabled);
         let air = ci == Locomotion::Air;
         let origin = world.agents.position[i];
         let free = |c: Vec2| -> bool {
@@ -581,7 +621,8 @@ pub fn settle_newborns(world: &mut World, newborns: &[u32]) {
                 if !ci.collides_with(Locomotion::of(&agents.genome[j])) {
                     return;
                 }
-                let gap = ri + body_radius(&agents.genome[j]);
+                let gap =
+                    ri + live_body_radius(&agents.genome[j], agents.age[j], world.growth_enabled);
                 if torus_delta(c, agents.position[j], ws).length_squared() < gap * gap {
                     clear = false;
                 }
@@ -1007,8 +1048,70 @@ mod tests {
         let a = w.spawn_agent(Vec2::new(300.0, 300.0), Genome::neutral());
         let _b = w.spawn_agent(Vec2::new(300.5, 300.0), Genome::neutral());
         rebuild_hash(&mut w);
-        let s = separation_steer(&w.collision_spatial, &w.agents, a as usize, w.world_size);
+        let s = separation_steer(
+            &w.collision_spatial,
+            &w.agents,
+            a as usize,
+            w.world_size,
+            w.growth_enabled,
+        );
         assert!(s.x < 0.0 && s.y.abs() < 1e-6, "steer west, away from b: {s:?}");
+    }
+
+    /// Growth: `body_radius_at` scales the adult radius; with the flag off
+    /// (scale exactly 1.0) it IS `body_radius`, whatever the age. With the
+    /// flag on a newborn is `JUVENILE_BODY` of the adult and exactly the
+    /// adult from maturity on.
+    #[test]
+    fn body_radius_at_scales_the_adult_value_and_is_exact_at_one() {
+        use crate::growth::{body_scale_of, maturity_ticks, JUVENILE_BODY};
+        let g = Genome::neutral();
+        let adult = body_radius(&g);
+        let m = maturity_ticks(crate::age::lifespan_of(&g));
+        for age in [0, 7, m, 5000] {
+            assert_eq!(body_radius_at(&g, body_scale_of(false, age, &g)), adult, "age {age}");
+            assert_eq!(live_body_radius(&g, age, false), adult, "age {age}");
+        }
+        let newborn = live_body_radius(&g, 0, true);
+        let expected = JUVENILE_BODY * adult;
+        assert!((newborn - expected).abs() < 1e-6, "newborn {newborn} vs {expected}");
+        assert!(live_body_radius(&g, m / 2, true) > newborn);
+        assert!(live_body_radius(&g, m - 1, true) < adult);
+        assert_eq!(live_body_radius(&g, m, true), adult);
+        assert_eq!(live_body_radius(&g, m + 1000, true), adult);
+    }
+
+    /// Two coincident newborns resolve to their (smaller) juvenile gap —
+    /// closer than two adults would sit — and, once grown, the same pair is
+    /// pushed out to the adult gap.
+    #[test]
+    fn newborns_resolve_to_their_smaller_gap_and_adults_to_the_full_one() {
+        use crate::growth::maturity_ticks;
+        let mut w = flat_world();
+        w.growth_enabled = true;
+        let a = w.spawn_agent(Vec2::new(300.0, 300.0), Genome::neutral());
+        let b = w.spawn_agent(Vec2::new(300.0, 300.0), Genome::neutral());
+        let (ga, gb) = (w.agents.genome[a as usize], w.agents.genome[b as usize]);
+        let adult_gap = body_radius(&ga) + body_radius(&gb);
+        let gap = live_body_radius(&ga, 0, true) + live_body_radius(&gb, 0, true);
+        assert!(gap < adult_gap);
+        let dist = |w: &World| {
+            crate::spatial::torus_distance(
+                w.agents.position[a as usize],
+                w.agents.position[b as usize],
+                w.world_size,
+            )
+        };
+        resolve_overlaps(&mut w);
+        let d = dist(&w);
+        assert!(d >= gap - 1e-4, "newborns still overlapping: d={d} gap={gap}");
+        assert!(d < adult_gap, "newborns pack closer than adults: d={d} adult gap={adult_gap}");
+        let m = maturity_ticks(crate::age::lifespan_of(&ga));
+        w.agents.age[a as usize] = m;
+        w.agents.age[b as usize] = m;
+        resolve_overlaps(&mut w);
+        let d = dist(&w);
+        assert!(d >= adult_gap - 1e-4, "grown pair not at the adult gap: d={d} gap={adult_gap}");
     }
 
     #[test]

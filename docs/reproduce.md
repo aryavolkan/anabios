@@ -36,14 +36,15 @@ the same scenario+seed the finding used. That scenario,
 (the twelve-world consolidation removed `scenarios/experiments/`); restore
 it from commit `16d9731`, the last commit that carried it. The scenario
 schema has since started defaulting every feature knob on, so the knobs the
-file never mentioned (off by default at that commit) are written off ahead
-of it; the engine is unchanged since `16d9731`, so this replays the file's
-run at that commit exactly:
+file never mentioned (off by default, or not yet existing, at that commit)
+are written off ahead of it; with them off the engine's trajectory is
+unchanged since `16d9731`, so this replays the file's run at that commit
+exactly:
 
 ```sh
 { printf '%s = false\n' gene_requirements affect_enabled conserve_goods_on_death \
     knowledge_enabled basic_needs_enabled mate_seeking_enabled territory_enabled \
-    repro_biased_learning anthro_race_enabled disease_enabled gait_enabled
+    repro_biased_learning anthro_race_enabled disease_enabled gait_enabled growth_enabled
   git show 16d9731:scenarios/experiments/o1-invasion-cultural-into-asocial.toml
 } > /tmp/o1.toml
 ./target/release/anabios-headless autopsy \

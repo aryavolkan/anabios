@@ -224,6 +224,17 @@ pub struct Scenario {
     /// unchanged.
     #[serde(default = "default_true")]
     pub territory_enabled: bool,
+    /// On by default (scenario schema): growth and juveniles — an agent is
+    /// born at about a third of its adult size and grows to it over the
+    /// first 15% of its lifespan (`growth::MATURITY_FRAC`); body radius,
+    /// bite, basal metabolism, move cost and (mildly) speed scale with the
+    /// body, and nobody breeds before maturity. Founders start at age 0, so
+    /// a fresh world's first births come after its founders' maturity
+    /// window. Set `false` to opt out; the engine's own default
+    /// (`World::new`) stays off, so the flag-off byte-identity guarantee is
+    /// unchanged.
+    #[serde(default = "default_true")]
+    pub growth_enabled: bool,
     /// On by default (scenario schema): O3 reproductive-success payoff bias
     /// — cultural transmission declines a maladaptive-practice channel when
     /// its local holders show a higher observed birth-failure fraction than
@@ -1117,6 +1128,7 @@ impl Scenario {
         w.disease_enabled = self.disease_enabled;
         w.territory_enabled = self.territory_enabled;
         w.gait_enabled = self.gait_enabled;
+        w.growth_enabled = self.growth_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
@@ -2196,7 +2208,9 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         assert!(s.sexual_dimorphism_enabled && s.domestication_enabled);
         assert!(s.knowledge_enabled && s.practices_enabled && s.basic_needs_enabled);
         assert!(s.mate_seeking_enabled && s.territory_enabled && s.disease_enabled);
-        assert!(s.anthro_race_enabled && s.repro_biased_learning && s.gait_enabled);
+        assert!(
+            s.anthro_race_enabled && s.repro_biased_learning && s.gait_enabled && s.growth_enabled
+        );
         assert_eq!(s.season_period, 2000);
         assert_eq!(s.env_period, 0);
         assert_eq!(s.climate_drift_rate, 0.0);
@@ -2204,7 +2218,7 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         // The engine layer is untouched: a bare World is still all-off.
         let w = World::new(1);
         assert!(!w.territory_enabled && !w.affect_enabled && !w.cognition_enabled);
-        assert!(!w.gait_enabled);
+        assert!(!w.gait_enabled && !w.growth_enabled);
     }
 
     #[test]
@@ -2216,6 +2230,17 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         assert!(!off.gait_enabled);
         let w = off.instantiate();
         assert!(!w.gait_enabled && w.territory_enabled, "only gait opted out");
+    }
+
+    #[test]
+    fn growth_flag_defaults_on_and_opts_out() {
+        let on = Scenario::parse_toml("name = \"g\"\nseed = 1\n").expect("parse");
+        assert!(on.growth_enabled);
+        assert!(on.instantiate().growth_enabled);
+        let off = Scenario::parse_toml("name = \"g\"\nseed = 1\ngrowth_enabled = false\n")
+            .expect("parse");
+        assert!(!off.growth_enabled);
+        assert!(!off.instantiate().growth_enabled);
     }
 
     #[test]

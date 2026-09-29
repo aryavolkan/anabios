@@ -190,7 +190,11 @@ function stallGeometry() {
 const BODY_R_BASE = 0.4, BODY_R_SIZE = 0.35;
 // crates/anabios-wasm/src/view.rs encodes AGENT.SIZE as `0.5 + 2.5 · Size`
 // (not the raw [0,1] gene) — invert that to recover Size before deriving the
-// physical radius.
+// physical radius. Under the sim's `growth_enabled` knob the exported value is
+// the GROWN size (adult × the juvenile body scale), so this inversion
+// under-reads a juvenile's Size gene and over-estimates its physical diameter
+// (up to ~2× for a newborn); the clamp below stays conservative — a juvenile
+// still draws smaller than an adult and never smaller than its physics.
 const SIZE_ENC_BASE = 0.5, SIZE_ENC_SPAN = 2.5;
 
 /** Physical body diameter (world units) for an AGENT.SIZE column value. */

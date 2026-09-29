@@ -67,6 +67,10 @@ pub fn top_speed(
 /// direction's length and multiplies the move cost by
 /// `gait::move_cost_factor(frac)`; pass `false` for exact identity (the
 /// direction is then a unit vector and the factor is never evaluated).
+/// `growth_enabled` (`growth.rs`) scales basal metabolism and the move cost
+/// by the agent's growth body scale and its speed by `growth::speed_scale`
+/// (juveniles are smaller, cheaper and slightly slower); pass `false` for
+/// exact identity (every multiplier is then exactly 1.0).
 #[allow(clippy::too_many_arguments)]
 pub fn integrate_all(
     agents: &mut AgentBuffers,
@@ -78,6 +82,7 @@ pub fn integrate_all(
     max_radius: f32,
     habitat: Option<&crate::biome::BiomeField>,
     gait_enabled: bool,
+    growth_enabled: bool,
 ) {
     use rayon::prelude::*;
     let cap = agents.capacity();
@@ -99,11 +104,22 @@ pub fn integrate_all(
         thirst,
         asleep,
         sex,
+        age,
         alive,
         ..
     } = agents;
-    let (modules, genome, meme_vector, iq, affect, thirst, asleep, sex, alive) =
-        (&*modules, &*genome, &*meme_vector, &*iq, &*affect, &*thirst, &*asleep, &*sex, &*alive);
+    let (modules, genome, meme_vector, iq, affect, thirst, asleep, sex, age, alive) = (
+        &*modules,
+        &*genome,
+        &*meme_vector,
+        &*iq,
+        &*affect,
+        &*thirst,
+        &*asleep,
+        &*sex,
+        &*age,
+        &*alive,
+    );
     position[..cap]
         .par_iter_mut()
         .zip(velocity[..cap].par_iter_mut())
@@ -124,6 +140,11 @@ pub fn integrate_all(
             // thirst 0.0 (the flag-off state), so disabled worlds stay
             // byte-identical — the same identity contract as `affect_speed`.
             let needs_basal = crate::needs::dehydration_metabolism_multiplier(thirst[i]);
+            // Growth body scale: a juvenile's basal metabolism and move cost
+            // scale with its body and it moves slightly slower
+            // (`growth::speed_scale`). Exactly 1.0 with the flag off (and for
+            // every grown agent), so flag-off worlds stay byte-identical.
+            let growth = crate::growth::body_scale_of(growth_enabled, age[i], &genome[i]);
             // Cognition-driven perception cost: scales with the agent's actual
             // sensory radius (sensor + IQ + invention buffs). Zero when
             // cognition is off, so non-cognition worlds stay byte-identical.
@@ -156,7 +177,8 @@ pub fn integrate_all(
                     * crate::invention::metabolism_multiplier(inv_mask)
                     * dimorph_basal
                     * needs_basal
-                    * crate::needs::SLEEP_METABOLISM_FACTOR;
+                    * crate::needs::SLEEP_METABOLISM_FACTOR
+                    * growth;
                 *en -= basal + perception_cost;
                 return;
             }
@@ -169,7 +191,8 @@ pub fn integrate_all(
                     * genome[i].get(GenomeSlot::BasalMetabolism)
                     * crate::invention::metabolism_multiplier(inv_mask)
                     * dimorph_basal
-                    * needs_basal;
+                    * needs_basal
+                    * growth;
                 *en -= basal + perception_cost;
                 return;
             }
@@ -178,7 +201,8 @@ pub fn integrate_all(
             // fraction `decide_all` chose (`gait.rs`); off, a unit vector.
             let direction = desired_direction[i];
             let v = direction
-                * top_speed(&modules[i], &genome[i], inv_mask, &affect[i], gene_tech_coupling);
+                * (top_speed(&modules[i], &genome[i], inv_mask, &affect[i], gene_tech_coupling)
+                    * crate::growth::speed_scale(growth));
             // Habitat gate (territory layer): the move the agent's Locomotion
             // class allows — full, coastline slide, or none. `None` ⇒ `v`
             // untouched, so flag-off worlds are byte-identical.
@@ -198,7 +222,7 @@ pub fn integrate_all(
 
             let move_dist = v.length();
             let size = genome[i].get(GenomeSlot::Size).max(0.1);
-            let mut move_cost = MOVE_ENERGY_COST * move_dist * size;
+            let mut move_cost = MOVE_ENERGY_COST * move_dist * size * growth;
             if gait_enabled {
                 // Gait: sprinting is superlinearly expensive per unit distance
                 // (`gait::GAIT_SPRINT_COST`). `|direction|` is the speed
@@ -210,7 +234,8 @@ pub fn integrate_all(
                 * genome[i].get(GenomeSlot::BasalMetabolism)
                 * crate::invention::metabolism_multiplier(inv_mask)
                 * dimorph_basal
-                * needs_basal;
+                * needs_basal
+                * growth;
             *en -= move_cost + basal + perception_cost;
         });
 }
@@ -259,6 +284,7 @@ mod tests {
             w.spatial.perception_max_radius(),
             None,
             false,
+            false,
         );
         let p = w.agents.position[id as usize];
         assert!(p.x >= 0.0 && p.x < WORLD_SIZE);
@@ -281,6 +307,7 @@ mod tests {
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
             None,
+            false,
             false,
         );
         let after = w.agents.energy[id as usize];
@@ -319,6 +346,7 @@ mod tests {
             w.spatial.perception_max_radius(),
             None,
             false,
+            false,
         );
         let pos_after = w.agents.position[id as usize];
         assert_eq!(pos_before, pos_after, "no Locomotor → no motion");
@@ -343,6 +371,7 @@ mod tests {
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
                 None,
+                false,
                 false,
             );
             before - w.agents.energy[id as usize]
@@ -377,6 +406,7 @@ mod tests {
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
                 None,
+                false,
                 false,
             );
             before - w.agents.energy[id as usize]
@@ -432,6 +462,7 @@ mod tests {
             w.spatial.perception_max_radius(),
             None,
             false,
+            false,
         );
         let new_pos = w.agents.position[id as usize];
         // Moved roughly SPEED_MAX_CAP × 1.0 = 4.0 in +x.
@@ -457,6 +488,7 @@ mod tests {
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
                 None,
+                false,
                 false,
             );
             before - w.agents.energy[id as usize]
@@ -489,6 +521,7 @@ mod tests {
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
                 None,
+                false,
                 false,
             );
             (
@@ -530,6 +563,7 @@ mod tests {
                 w.spatial.perception_max_radius(),
                 None,
                 false,
+                false,
             );
             (w.agents.position[id as usize] - before).length()
         };
@@ -567,6 +601,7 @@ mod tests {
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
             Some(&biome),
+            false,
             false,
         );
         w.agents.position[id as usize]
@@ -612,6 +647,7 @@ mod tests {
             w.spatial.perception_max_radius(),
             None,
             false,
+            false,
         );
         assert!((w.agents.position[id as usize].x - 130.0).abs() < 1e-4);
     }
@@ -638,6 +674,7 @@ mod tests {
                 w.spatial.perception_max_radius(),
                 None,
                 gait_on,
+                false,
             );
             let dist = (w.agents.position[id as usize] - before_pos).length();
             assert!((dist - frac * SPEED_MAX_CAP).abs() < 1e-4, "step {dist} at fraction {frac}");
@@ -654,5 +691,65 @@ mod tests {
         // Flag off: the plain linear cost, no surcharge.
         let off = per_unit(1.0, false);
         assert!((off - MOVE_ENERGY_COST * 0.5).abs() < 2e-5, "flag off {off}");
+    }
+
+    /// Growth: a newborn pays `JUVENILE_BODY` of an adult's basal + move cost
+    /// and moves at `speed_scale(JUVENILE_BODY)` of its speed; halfway to
+    /// maturity it sits strictly between; from maturity on (and with the flag
+    /// off, whatever the age) the arithmetic is exactly the adult's.
+    #[test]
+    fn juveniles_cost_less_and_move_slower_and_grow_into_adults() {
+        use crate::growth::{maturity_ticks, speed_scale, JUVENILE_BODY};
+        // (energy drained, distance moved) by one unit-speed agent in one tick.
+        let run = |growth_on: bool, age: u32| -> (f32, f32) {
+            let mut w = World::new(1);
+            let id = spawn_at_unit_speed(&mut w, Vec2::new(500.0, 500.0));
+            w.agents.age[id as usize] = age;
+            let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
+            desired[id as usize] = Vec2::new(1.0, 0.0);
+            let before_pos = w.agents.position[id as usize];
+            let before_en = w.agents.energy[id as usize];
+            integrate_all(
+                &mut w.agents,
+                &desired,
+                w.world_size,
+                false,
+                false,
+                w.cognition_enabled,
+                w.spatial.perception_max_radius(),
+                None,
+                false,
+                growth_on,
+            );
+            (
+                before_en - w.agents.energy[id as usize],
+                (w.agents.position[id as usize] - before_pos).length(),
+            )
+        };
+        let m = maturity_ticks(crate::age::lifespan_of(&Genome::neutral()));
+        let (adult_drain, adult_move) = run(false, 0);
+        assert_eq!(run(false, m), (adult_drain, adult_move), "flag off: age unread");
+        assert_eq!(run(true, m), (adult_drain, adult_move), "mature: exactly the adult");
+        assert_eq!(run(true, m + 500), (adult_drain, adult_move));
+
+        let (baby_drain, baby_move) = run(true, 0);
+        let expected_move = adult_move * speed_scale(JUVENILE_BODY);
+        assert!((baby_move - expected_move).abs() < 1e-3, "{baby_move} vs {expected_move}");
+        // Neutral genome: Size 0.5, BasalMetabolism 0.5 — both costs scale
+        // with the newborn body (the move cost also through the shorter step).
+        let expected_drain =
+            (BASAL_METABOLISM_COST * 0.5 + MOVE_ENERGY_COST * baby_move * 0.5) * JUVENILE_BODY;
+        assert!((baby_drain - expected_drain).abs() < 1e-4, "{baby_drain} vs {expected_drain}");
+        assert!(baby_drain < adult_drain);
+
+        let (mid_drain, mid_move) = run(true, m / 2);
+        assert!(
+            baby_drain < mid_drain && mid_drain < adult_drain,
+            "{baby_drain} {mid_drain} {adult_drain}"
+        );
+        assert!(
+            baby_move < mid_move && mid_move < adult_move,
+            "{baby_move} {mid_move} {adult_move}"
+        );
     }
 }

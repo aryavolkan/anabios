@@ -73,6 +73,7 @@ pub fn step(world: &mut World) {
         world.spatial.perception_max_radius(),
         world.territory_enabled.then_some(&world.biome),
         world.gait_enabled,
+        world.growth_enabled,
     );
 
     // Stage 4'': swept contact (territory layer) — every move is cut back to
@@ -229,6 +230,7 @@ fn decide_all(world: &mut World) {
     let mate_seeking_enabled = world.mate_seeking_enabled;
     let territory_enabled = world.territory_enabled;
     let gait_enabled = world.gait_enabled;
+    let growth_enabled = world.growth_enabled;
     let territories = &world.species_territories;
     let spatial = &world.spatial;
     let collision = &world.collision_spatial;
@@ -468,7 +470,8 @@ fn decide_all(world: &mut World) {
             // bodies. Last in the stack so it still applies under the pen
             // override and the hijack; the stage-4' resolve backstops it.
             if territory_enabled {
-                let sep = crate::collision::separation_steer(collision, agents, i, ws);
+                let sep =
+                    crate::collision::separation_steer(collision, agents, i, ws, growth_enabled);
                 action.move_x += crate::collision::SEP_PULL * sep.x;
                 action.move_y += crate::collision::SEP_PULL * sep.y;
             }
@@ -750,6 +753,7 @@ mod tests {
             w.spatial.perception_max_radius(),
             None,
             w.gait_enabled,
+            w.growth_enabled,
         );
         (dir, (w.agents.position[a as usize] - before).length())
     }

@@ -39,6 +39,19 @@ fleeing prey and hunting pursuers. Opting out is pinned as a no-op by the
 `gait_*` unit tests in `tick.rs` / `integrate.rs` (flag off: unit direction,
 full step, linear move cost) and by the trajectory guards above.
 
+`growth_enabled` (on by default, like the feature knobs; 2026-09-28) adds
+growth and juveniles: an agent is born at about a third of its adult size
+and grows to it over the first 15% of its lifespan — its collision body
+radius, grazing bite, basal metabolism, move cost and (mildly) speed scale
+with the body, and nobody breeds before maturity
+(`crates/anabios-core/src/growth.rs`). Founders start at age 0, so a world's
+first births come after its founders' maturity window (about 480 ticks for
+`minimal`'s `lifespan_bias = 0.6`). Opt out with `growth_enabled = false`;
+the engine default is off, and flag-off is byte-identical
+(`growth::tests::flag_off_is_exactly_the_adult_identity` and the trajectory
+guards above). The knob postdates every row's validation sweep and cost
+figure below; neither has been re-run under it.
+
 Every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate →
 200 ticks) and has a `tests/save_load_roundtrip.rs` round-trip test. The cost
 column is wall-clock milliseconds per tick of `anabios-headless run --ticks

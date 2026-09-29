@@ -86,6 +86,12 @@ fn feed_pass(world: &mut World, alive_ids: &[u32]) {
         let pos = world.agents.position[i];
         let size = world.agents.genome[i].get(GenomeSlot::Size).max(0.1);
         let mut desired_bite = BITE_MAX * size * bite_cap * herbivory;
+        // Growth: a juvenile bites in proportion to its body. Skipped with
+        // the flag off (and exactly ×1.0 for every grown agent).
+        if world.growth_enabled {
+            desired_bite *=
+                crate::growth::body_scale_of(true, world.agents.age[i], &world.agents.genome[i]);
+        }
         // Cumulative cultural skill (experiment C): Communicator-capable agents
         // apply a learned foraging-skill multiplier and learn-by-doing. Gated on
         // the module so non-communicator baselines are unchanged.
@@ -743,6 +749,40 @@ mod tests {
             before_fish,
             "a Water agent stranded on Grass must not graze it"
         );
+    }
+
+    /// Growth: a juvenile's bite scales with its body, so it grazes less
+    /// than an adult of the same genome on the same full cell; from
+    /// maturity on (and with the flag off, whatever the age) the bite is
+    /// exactly the adult's.
+    #[test]
+    fn juveniles_bite_less_than_adults() {
+        use crate::growth::{maturity_ticks, JUVENILE_BODY};
+        // Biomass one grazer takes from a full grass cell in one feed pass.
+        let bite = |growth_on: bool, age: u32| -> f32 {
+            let mut w = World::new(5);
+            w.growth_enabled = growth_on;
+            let grass = w.biome.at_mut(0, 0);
+            grass.terrain = crate::biome::TerrainType::Grass;
+            grass.plant_biomass = crate::biome::TerrainType::Grass.carrying_capacity();
+            let pos = Vec2::new(0.5 * w.biome.cell_size, 0.5 * w.biome.cell_size);
+            let id = w.spawn_agent(pos, Genome::neutral());
+            w.agents.age[id as usize] = age;
+            let before = w.biome.sample(pos).plant_biomass;
+            let alive: Vec<u32> = w.agents.iter_alive().collect();
+            feed_pass(&mut w, &alive);
+            before - w.biome.sample(pos).plant_biomass
+        };
+        let adult = bite(false, 0);
+        assert!(adult > 0.0, "the adult control grazes");
+        let m = maturity_ticks(crate::age::lifespan_of(&Genome::neutral()));
+        assert_eq!(bite(false, m), adult, "flag off: age unread");
+        assert_eq!(bite(true, m), adult, "mature: exactly the adult bite");
+        let baby = bite(true, 0);
+        let expected = adult * JUVENILE_BODY;
+        assert!((baby - expected).abs() < 1e-5, "newborn bite {baby} vs {expected}");
+        let mid = bite(true, m / 2);
+        assert!(baby < mid && mid < adult, "{baby} {mid} {adult}");
     }
 
     #[test]
