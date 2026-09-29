@@ -73,37 +73,49 @@ mod speciation {
         // splits. The two body-size morphs share archetype-free species 0.
         let founders = world.species_parents.len();
 
-        // Run past the first speciation event (200 ticks) plus a buffer for
-        // the algorithm to recognize the split.
-        for _ in 0..400 {
-            step(&mut world);
-        }
-
         // The morph stock's family: species 0 plus every row allocated after
         // instantiation whose parent chain reaches 0 before any founder.
-        let from_morph_stock = |sid: usize| {
-            let mut cur = sid;
-            while cur >= founders {
-                match world.species_parents[cur] {
-                    Some(p) => cur = p as usize,
-                    None => return false,
+        let family = |world: &anabios_core::world::World| -> Vec<usize> {
+            let from_morph_stock = |sid: usize| {
+                let mut cur = sid;
+                while cur >= founders {
+                    match world.species_parents[cur] {
+                        Some(p) => cur = p as usize,
+                        None => return false,
+                    }
                 }
-            }
-            cur == 0
+                cur == 0
+            };
+            (0..world.species_parents.len()).filter(|&sid| from_morph_stock(sid)).collect()
         };
-        let family: Vec<usize> =
-            (0..world.species_parents.len()).filter(|&sid| from_morph_stock(sid)).collect();
+        // Split: at least two non-empty species in the family, at least one
+        // of them a recorded split (a non-founder row).
+        let split = |world: &anabios_core::world::World| {
+            let family = family(world);
+            let non_empty =
+                family.iter().filter(|&&sid| world.species_member_counts[sid] > 0).count();
+            non_empty >= 2 && family.iter().any(|&sid| sid >= founders)
+        };
 
-        // At least two non-empty species expected in the morph stock's family.
-        let non_empty = family.iter().filter(|&&sid| world.species_member_counts[sid] > 0).count();
+        // The split is read at a species step (every 200 ticks) and needs a
+        // child of one morph to have mutated past the threshold from the
+        // stock's centroid — a matter of which of the few dozen children the
+        // 500 cap admits have been born by then. It came at the first step
+        // (tick 200) until the crowd yield (gait, 2026-09-29) shifted the
+        // trajectory; the claim is that the morphs split, not that they
+        // split in their first generation, so read up to the fifth step and
+        // stop at the first split.
+        const HORIZON: u64 = 1000;
+        while world.tick < HORIZON && !split(&world) {
+            step(&mut world);
+        }
+        eprintln!("morph stock split by tick {}", world.tick);
         assert!(
-            non_empty >= 2,
-            "expected the morph stock to speciate: family {family:?}, member counts {:?}",
+            split(&world),
+            "expected the morph stock to speciate within {HORIZON} ticks: family {:?}, member counts {:?}",
+            family(&world),
             world.species_member_counts,
         );
-
-        // At least one of them is a recorded split (a non-founder row).
-        assert!(family.iter().any(|&sid| sid >= founders), "no split of the morph stock recorded");
     }
 }
 
