@@ -4,6 +4,7 @@
 //! need their top speed (fleeing prey, hunting pursuers) still reach it. The
 //! same world with the flag off is measured alongside as the "before".
 
+use anabios_core::growth::{body_scale_of, speed_scale};
 use anabios_core::integrate::{top_speed, SPEED_MAX_CAP};
 use anabios_core::invention::held_mask;
 use anabios_core::scenario::Scenario;
@@ -43,13 +44,20 @@ fn measure(gait_on: bool) -> Steps {
         for id in w.agents.iter_alive() {
             let i = id as usize;
             let v = w.agents.velocity[i].length();
+            // The agent's own top speed this tick: the adult value times
+            // its growth speed scale (every founder is still a juvenile in
+            // the sampled window, and reads 0.8 against the adult figure).
             let top = top_speed(
                 &w.agents.modules[i],
                 &w.agents.genome[i],
                 held_mask(&w.agents.meme_vector[i]),
                 &w.agents.affect[i],
                 w.gene_tech_coupling,
-            );
+            ) * speed_scale(body_scale_of(
+                w.growth_enabled,
+                w.agents.age[i],
+                &w.agents.genome[i],
+            ));
             sum += v as f64;
             n += 1;
             if top > 0.0 {

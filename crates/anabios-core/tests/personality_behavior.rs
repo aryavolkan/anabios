@@ -55,10 +55,15 @@ fn mean_energy(w: &anabios_core::world::World) -> f32 {
     s / ids.len() as f32
 }
 
-/// The inline scenario with the territory/habitat/collision layer and the
-/// gait off (see `extraversion_increases_clustering` for why each is out).
+/// The inline scenario with the territory/habitat/collision layer, the gait
+/// and growth off (see `extraversion_increases_clustering` for why each is
+/// out).
 fn without_territory(toml: &str) -> String {
-    toml.replacen("seed = 7\n", "seed = 7\nterritory_enabled = false\ngait_enabled = false\n", 1)
+    toml.replacen(
+        "seed = 7\n",
+        "seed = 7\nterritory_enabled = false\ngait_enabled = false\ngrowth_enabled = false\n",
+        1,
+    )
 }
 
 fn scenario(trait_line: &str) -> String {
@@ -95,6 +100,9 @@ fn openness_increases_movement() {
 // extraversion expresses itself exactly as a larger approach intent, so
 // under the gait the high/low ordering at 300 ticks flips (9.5 vs 10.9);
 // the approach bias itself is unchanged and this check reads it directly.
+// Growth (2026-09-29) is out likewise: the 120 founders are juveniles for
+// the whole 300-tick window (no births before 0.15 × lifespan), and the
+// juvenile speed and bite change the crowding phase (9.6 vs 18.9 with it on).
 #[test]
 fn extraversion_increases_clustering() {
     let hi = run(&without_territory(&scenario("extraversion = 0.95")), 300);

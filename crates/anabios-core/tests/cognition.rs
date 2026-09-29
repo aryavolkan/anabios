@@ -190,6 +190,14 @@ fn cognitive_scenario_produces_invention_and_practice_events() {
     // and a lower cap only delays it (tick 1159 under a 500 cap set after
     // `instantiate`, 2310 under one set before it, 947 uncapped).
     let mut w = s.instantiate();
+    // Growth (2026-09-29) is off here: `tribes` seeds its founders at age 0
+    // with `lifespan_bias = 1.0`, so under the knob nobody breeds before tick
+    // 750 and the innovator lineage stays at its 30 founders for that long
+    // (about 80-110 afterwards, against 90-175 from tick 250 without it);
+    // discovery is a 3e-5-per-agent-tick draw, so the first climbed
+    // invention moves past the 5000-tick window. The claim under test is
+    // the cognitive layer's, and the knob's own tests pin growth.
+    w.growth_enabled = false;
     let seeded = common::inventions_held(&w);
     let mut saw_invention = false;
     let mut saw_practice = false;

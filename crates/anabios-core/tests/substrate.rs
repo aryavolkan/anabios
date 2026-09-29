@@ -258,6 +258,11 @@ mod codex_events {
         // Speciation needs divergence between the two founder clusters, not scale —
         // cap population so the test stays fast under the raised 10k default.
         world.max_population = 500;
+        // Nor maturity: under growth the age-0 founders cannot breed before
+        // 0.15 × lifespan (about 530 ticks at `lifespan_bias = 0.7`), so a
+        // 400-tick window would hold no offspring to diverge. The knob's own
+        // tests pin it; this check reads the split.
+        world.growth_enabled = false;
 
         // Only splits of the morph stock (archetype-free species 0) count; the
         // other lineages' splits are not the divergent pair's.
