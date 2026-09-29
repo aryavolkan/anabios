@@ -103,7 +103,7 @@ const PLAY_GOLDEN: &[(u64, u64)] =
     &[(0, 0xb3990aab26f453e6), (100, 0x3d25c0361ca3ae68), (200, 0x6233ca6ddf2a68b1)];
 
 #[test]
-#[ignore = "golden validation is off (2026-09-29): run with --ignored to compare against the pinned hashes, UPDATE_HASHES=1 to re-pin"]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn affect_play_matches_golden_hashes() {
     common::assert_golden("affect-play", SCENARIO, PLAY_GOLDEN);
 }

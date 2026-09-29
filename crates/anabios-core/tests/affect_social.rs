@@ -129,7 +129,7 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     &[(0, 0x23cd709a5f73851a), (100, 0xcc868ed8d1cbdc46), (300, 0xa26bb2ac189438b8)];
 
 #[test]
-#[ignore = "golden validation is off (2026-09-29): run with --ignored to compare against the pinned hashes, UPDATE_HASHES=1 to re-pin"]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn affect_social_matches_golden_hashes() {
     common::assert_golden("affect-social", AFFECT_SOCIAL, AFFECT_GOLDEN);
 }

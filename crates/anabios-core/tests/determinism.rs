@@ -316,7 +316,7 @@ mod parallel_matches_serial_across_thread_counts {
 }
 
 #[test]
-#[ignore = "golden validation is off (2026-09-29): run with --ignored to compare against the pinned hashes, UPDATE_HASHES=1 to re-pin"]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn minimal_scenario_matches_golden_hashes() {
     common::assert_golden("minimal", SCENARIO, GOLDEN);
 }
@@ -347,7 +347,7 @@ const HABITAT_GOLDEN: &[(u64, u64)] =
     &[(0, 0x82271ece410979b7), (100, 0xdf040175253e05a1), (1000, 0x6e8b2973fb43aba8)];
 
 #[test]
-#[ignore = "golden validation is off (2026-09-29): run with --ignored to compare against the pinned hashes, UPDATE_HASHES=1 to re-pin"]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn habitat_territories_matches_golden_hashes() {
     common::assert_golden("habitat-territories", HABITAT_SCENARIO, HABITAT_GOLDEN);
 }
@@ -416,7 +416,7 @@ fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
 }
 
 #[test]
-#[ignore = "golden validation is off (2026-09-29): run with --ignored to compare against the pinned hashes, UPDATE_HASHES=1 to re-pin"]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn minimal_flag_off_trajectory_is_pinned() {
     assert_trajectory(
         "minimal (all knobs off)",
@@ -427,7 +427,7 @@ fn minimal_flag_off_trajectory_is_pinned() {
 }
 
 #[test]
-#[ignore = "golden validation is off (2026-09-29): run with --ignored to compare against the pinned hashes, UPDATE_HASHES=1 to re-pin"]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn grand_theater_pre_flip_trajectory_is_pinned() {
     assert_trajectory(
         "grand-theater (pre-flip flags)",

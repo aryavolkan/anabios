@@ -240,10 +240,12 @@ fn minimal_scenario_keeps_resources_off() {
 /// `docs/superpowers/specs/2026-08-02-trade-freeze-diagnosis.md`): on
 /// `markets` over seeds 424242 and 0–5 it spans 0.16–1.79 before the
 /// projectile ladder (FORMAT_VERSION 45) and 0.23–1.71 after, with the
-/// scenario seed moving 0.37 → 0.23 on the RNG-stream shift alone (no
-/// invention is discovered within 800 ticks on either side). The old `1/4`
-/// bar was a marginal pin on one seed (seed 1 already sat at 0.16), so the
-/// claim is now the one the paragraph above makes: late trade stays a
+/// scenario seed moving 0.37 → 0.23. The two runs part at the first
+/// Communicator birth (one more jittered meme lane), not through the ladder:
+/// no projectile invention is discovered within 800 ticks on either side —
+/// main rolls a single Stone Tools at tick 524, this branch nothing. The old
+/// `1/4` bar was a marginal pin on one seed (seed 1 already sat at 0.16), so
+/// the claim is now the one the paragraph above makes: late trade stays a
 /// meaningful fraction of early trade (≥ 1/8, margin over every observed
 /// value) AND averages at least half a swap per tick across the late window.
 #[test]

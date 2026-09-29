@@ -55,7 +55,7 @@ cargo test --workspace --tests --release   # full gate incl. long emergence test
 cargo bench -p anabios-core                # criterion: tick / stages / scavenge
 ```
 
-The golden-hash pins (`tests/determinism.rs` pins state hashes at ticks 0/100/1000 of the minimal scenario, plus per-subsystem tables) are **off by default** since 2026-09-29: the ten pinned-hash tests are `#[ignore]`d, so CI no longer fails on a hash drift. Determinism itself is still gated by the self-consistency tests (same seed twice → same hash), the save→load→step round-trips and the headless `replay` verifier. To compare against the pins on request, run `cargo test -p anabios-core --release -- --ignored`; to re-pin after an intentional change, `UPDATE_HASHES=1 cargo test -p anabios-core --release --test determinism -- --ignored --nocapture` prints the new tables to paste into the tests.
+The golden-hash pins (`tests/determinism.rs` pins state hashes at ticks 0/100/1000 of the minimal scenario, plus per-subsystem tables in the affect, cognition and inventions suites) are **off by default** since 2026-09-29: the ten pinned-hash tests are `#[ignore]`d, so CI no longer fails on a hash drift. Determinism itself is still gated by the self-consistency tests (same seed twice → same hash), the save→load→step round-trips and the headless `replay` verifier. To compare against the pins on request, run `cargo test -p anabios-core --release -- --ignored golden_hashes trajectory_is_pinned` (the name filters keep the long experiment harnesses, also `#[ignore]`d, out of the run); to re-pin after an intentional change, `UPDATE_HASHES=1 cargo test -p anabios-core --release -- --ignored --nocapture golden_hashes trajectory_is_pinned` prints every table to paste into the tests.
 
 ## Performance
 

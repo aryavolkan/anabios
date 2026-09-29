@@ -176,7 +176,7 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     &[(0, 0xb3990aab26f453e6), (100, 0x3d25c0361ca3ae68), (300, 0xd55782d9dad49c59)];
 
 #[test]
-#[ignore = "golden validation is off (2026-09-29): run with --ignored to compare against the pinned hashes, UPDATE_HASHES=1 to re-pin"]
+#[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
 fn cognitive_scenario_matches_golden_hashes() {
     common::assert_golden("cognitive", SCENARIO, COGNITIVE_GOLDEN);
 }

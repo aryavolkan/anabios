@@ -118,13 +118,18 @@ the retired `weapons.toml` now seeds `throwing_stones` beside `hafted_spears`.
 
 ### What moves and what does not
 
-- **Flag-off worlds** (`inventions_enabled = false`, and every world with no
-  ape lineage): the new lane is an invention channel, jittered only under the
-  flag, so the RNG draw count and every trajectory are byte-identical. Only
-  the serialized layout grew (one lane per agent), which moves the hashes.
-- **Invention worlds** change trajectory three ways: an extra era-1 candidate
-  reweights the discovery table under the same single draw; each Communicator
-  birth jitters one more lane; and Hafted Spears now waits on the stone.
+- **Worlds with `inventions_enabled = false`** (the flag-off test fixtures;
+  no shipped world, since the schema defaults the knob on): the new lane is
+  an invention channel, jittered only under the flag, so the RNG draw count
+  and the trajectory are byte-identical. Only the serialized layout grew (one
+  lane per agent), which moves the hashes.
+- **Every world with the flag on** changes trajectory: each Communicator
+  birth jitters one more lane (`reproduce::inherit_child_meme` gates on the
+  child's Communicator module, not on apes — the ape strip runs afterwards
+  precisely so the draw count is unchanged), so ape-free worlds such as
+  `predator-prey` and `riverlands` move too. Ape worlds additionally get an
+  extra era-1 candidate reweighting the discovery table under the same
+  single draw, and Hafted Spears now waits on the stone.
 
 ## Explicitly out of scope
 

@@ -1204,6 +1204,9 @@ pub fn invention_step(world: &mut World) {
         // --- Knowledge atrophy: an invention whose foundations the agent no
         // longer holds decays away (levels only — `has` drops out as the
         // level crosses the threshold). Prereq-free techs never atrophy.
+        // `mask` is fixed for the whole walk, so id order is irrelevant here
+        // as in `candidates()` (Throwing Stones, id 22, roots Hafted Spears,
+        // id 10).
         let meme = &mut world.agents.meme_vector[i];
         for k in 0..INVENTION_COUNT {
             let lvl = meme[channel(k)];
