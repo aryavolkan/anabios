@@ -141,13 +141,74 @@ export function createStage(canvas) {
       sky.material.uniforms.uUp.value = up;
     },
     sunDir: new THREE.Vector3(0.55, 1.0, 0.35).normalize(),
-    /** Frame the whole world from a three-quarter view. */
+    /**
+     * CSS px along each canvas edge that the HUD covers ({top,right,bottom,left});
+     * main.js supplies it. `frame()` fits the plate into what is left.
+     */
+    frameInsets: null,
+    /**
+     * Frame the whole plate from the classic three-quarter view: the camera
+     * looks at the plate's centre from a fixed direction, at the distance
+     * where the plate's projected outline fits the free part of the canvas
+     * (minus `frameInsets()`), whatever the aspect ratio. Seen at an angle the
+     * outline isn't centred on the plate's centre (the near corner swings
+     * low), and the HUD isn't symmetric either, so a view offset slides the
+     * picture until the outline sits centred in the free area — the orbit
+     * pivot stays on the plate's centre. The offset persists (it is simply
+     * where the view's centre sits) until a `lookAt()` clears it.
+     */
     frame() {
       const ws = this.worldSize;
-      controls.target.set(ws / 2, 0, ws / 2);
-      camera.position.set(ws / 2 + ws * 0.5, ws * 0.95, ws / 2 + ws * 1.05);
+      this._fly = null;
+      // Drop any orbit/pan still coasting from a drag, or damping would carry
+      // the camera straight off the framed pose.
+      controls.enableDamping = false;
       controls.update();
+      controls.enableDamping = true;
+      camera.clearViewOffset();
+      const { w, h } = this.viewSize();
+      const ins = { top: 16, right: 16, bottom: 16, left: 16, ...this.frameInsets?.() };
+      // Free area in NDC, clamped so a HUD taller/wider than the window can't invert it.
+      const fx0 = Math.min(0.6, (ins.left / w) * 2 - 1), fx1 = Math.max(fx0 + 0.4, 1 - (ins.right / w) * 2);
+      const fy0 = Math.min(0.6, (ins.bottom / h) * 2 - 1), fy1 = Math.max(fy0 + 0.4, 1 - (ins.top / h) * 2);
+      const dir = new THREE.Vector3(0.5, 0.95, 1.05).normalize();   // target → camera
+      const target = new THREE.Vector3(ws / 2, 0, ws / 2), p = new THREE.Vector3();
+      // The plate: ground plus the slab's lip below it and some relief above.
+      const lo = -0.05 * ws, hi = 0.04 * ws;
+      let dist = ws * 1.5, x0, x1, y0, y1;
+      // Size ∝ 1/distance only holds at the target's depth; a few rounds converge.
+      for (let i = 0; i < 8; i++) {
+        camera.position.copy(target).addScaledVector(dir, dist);
+        camera.lookAt(target);
+        camera.updateMatrixWorld();
+        x0 = y0 = Infinity; x1 = y1 = -Infinity;
+        for (const x of [0, ws]) for (const z of [0, ws]) for (const y of [lo, hi]) {
+          p.set(x, y, z).project(camera);
+          x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+        }
+        dist *= Math.max((x1 - x0) / (fx1 - fx0), (y1 - y0) / (fy1 - fy0));
+      }
+      // Tall or narrow windows need to stand further back than the zoom limit.
+      controls.maxDistance = Math.max(ws * 2.2, dist * 1.25);
+      controls.target.copy(target);
+      camera.position.copy(target).addScaledVector(dir, dist);
+      controls.update();
+      // Thin the fog when standing further back than a wide window does, or
+      // a narrow window's framed plate reads as murk.
+      if (scene.fog) scene.fog.density = (0.5 / ws) * Math.min(1, (1.5 * ws) / dist);
+      // NDC shift that moves the outline's centre onto the free area's centre.
+      this._offset = { x: (fx0 + fx1 - x0 - x1) / 2, y: (fy0 + fy1 - y0 - y1) / 2 };
+      this.applyViewOffset();
+      this._framed = { position: camera.position.clone(), target: target.clone() };
     },
+    /** True while the camera still sits where the last `frame()` put it. */
+    isFramed() {
+      const f = this._framed, eps = this.worldSize * 1e-3;
+      return !!f && !this._fly && camera.position.distanceTo(f.position) < eps && controls.target.distanceTo(f.target) < eps;
+    },
+    /** Re-frame after the window or HUD layout changes — only if the user
+     *  hasn't moved the camera since, so an orbited view is never yanked. */
+    refit() { if (this.isFramed()) this.frame(); },
     /**
      * Snap the camera to look at world (x, h, z) from `distance`, at `polar`
      * radians off vertical and `azimuth` radians east of due south. Used by
@@ -155,6 +216,9 @@ export function createStage(canvas) {
      */
     lookAt(x, h, z, distance, polar = 0.85, azimuth = 0.4) {
       this._fly = null;
+      this._offset = null;
+      camera.clearViewOffset();
+      if (scene.fog) scene.fog.density = 0.5 / this.worldSize;
       controls.target.set(x, h, z);
       camera.position.set(
         x + distance * Math.sin(polar) * Math.sin(azimuth),
@@ -193,13 +257,26 @@ export function createStage(canvas) {
       controls.update();
       sky.position.copy(camera.position);
     },
+    viewSize() {
+      return { w: canvas.clientWidth || window.innerWidth, h: canvas.clientHeight || window.innerHeight };
+    },
+    /** (Re)apply the framing's view offset — kept in NDC so it survives resizes. */
+    applyViewOffset() {
+      const { w, h } = this.viewSize(), o = this._offset;
+      if (o) camera.setViewOffset(w, h, (-o.x * w) / 2, (o.y * h) / 2, w, h);
+      else camera.clearViewOffset();
+    },
+    /** Match the canvas size; a camera still at the framed view is re-framed
+     *  for the new aspect, one the user has moved is left where it is. */
     resize() {
-      const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+      const framed = this.isFramed();
+      const { w, h } = this.viewSize();
       renderer.setSize(w, h, false);
       composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      if (framed) this.frame(); else this.applyViewOffset();
     },
   };
   stage.resize();

@@ -57,6 +57,13 @@ orbit that cuts to each fresh codex event) · **L** follow the selected agent ·
 **H** hide the HUD · click a codex line to fly to the event · click a species
 row to fly to a member.
 
+Framing (**F**, the `frame` button, first load, `?cam=fit`) fits the whole
+plate into the part of the window the HUD leaves free — right of the view rail
+(when the window is wide enough to spare it) and above the transport row — for
+any aspect ratio. While the camera is still at that framed view, resizing the
+window, collapsing the rail or hiding the HUD re-frames it; once you orbit, pan
+or zoom away the camera is left alone until the next **F**.
+
 Colour modes: species (the species list's colour, shaded per individual by the genome's hue/sat/val; livestock bleached), diet, dialect
 hue, energy, and — when the scenario enables the subsystem — mood, arousal and
 infection. Layers: relief, water, forests, shadows, combat, trade, villages,

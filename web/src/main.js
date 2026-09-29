@@ -21,6 +21,17 @@ const params = new URLSearchParams(location.search);
 // Stage + layers (built once; the world is swapped underneath them)
 // ---------------------------------------------------------------------------
 const stage = createStage($("view"));
+/** What the HUD covers, for `stage.frame()`: the view rail on the left (unless
+ *  collapsed, or the window is too narrow to give up its width — then the
+ *  plate may pass under it) and the transport buttons along the bottom. The
+ *  corner text (brand, readout, codex) is left to overlap the plate. */
+stage.frameInsets = () => {
+  const m = 16;
+  if (document.body.classList.contains("hide-hud")) return { top: m, right: m, bottom: m, left: m };
+  const rail = $("rail"), railRight = rail.getBoundingClientRect().right + m;
+  const left = !rail.classList.contains("collapsed") && railRight <= window.innerWidth * 0.4 ? railRight : m;
+  return { top: m, right: m, bottom: window.innerHeight - document.querySelector(".transport").getBoundingClientRect().top + m, left };
+};
 const layers = {
   agents: new Agents(),
   streaks: new Segments({ life: 14, sat: 0.75, additive: true, lift: 1.4 }),
@@ -649,7 +660,7 @@ window.addEventListener("keydown", (e) => {
   switch (e.code) {
     case "Space": e.preventDefault(); setPaused(!state.paused); break;
     case "KeyF": stage.frame(); break;
-    case "KeyH": document.body.classList.toggle("hide-hud"); break;
+    case "KeyH": document.body.classList.toggle("hide-hud"); stage.refit(); break;
     case "KeyC": { const opts = Array.from($("color-mode").options).map((o) => o.value); state.colorMode = opts[(opts.indexOf(state.colorMode) + 1) % opts.length]; $("color-mode").value = state.colorMode; layers.agents.mode = state.colorMode; renderLegend(); break; }
     case "KeyL": if (state.selected >= 0) { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); } break;
     case "KeyV": setTour(!state.tour); break;
@@ -664,7 +675,7 @@ $("tour").onclick = () => setTour(!state.tour);
 for (const b of document.querySelectorAll(".speed")) b.onclick = () => setSpeed(Number(b.dataset.speed));
 $("color-mode").onchange = (e) => { state.colorMode = e.target.value; layers.agents.mode = state.colorMode; renderLegend(); };
 $("layers").addEventListener("change", applyLayerToggles);
-$("rail-toggle").onclick = () => { const r = $("rail"); r.classList.toggle("collapsed"); $("rail-toggle").textContent = r.classList.contains("collapsed") ? "+" : "−"; };
+$("rail-toggle").onclick = () => { const r = $("rail"); r.classList.toggle("collapsed"); $("rail-toggle").textContent = r.classList.contains("collapsed") ? "+" : "−"; stage.refit(); };
 $("card-close").onclick = deselect;
 $("follow").onclick = () => { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); };
 $("card-fly").onclick = () => { const p = layers.agents.selectedPos; if (p) stage.flyTo(p.x, p.y, p.z, state.source.worldSize * 0.1); };

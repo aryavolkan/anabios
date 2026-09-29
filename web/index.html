@@ -61,6 +61,8 @@
   body.replay .progress{display:block}
   .hint{color:var(--muted);font-size:10.5px;letter-spacing:.04em;max-width:max(390px,calc(100vw - 60px - var(--codex-w)));line-height:1.5}
   .hint b{color:var(--bone-dim);font-weight:600}
+  /* Each key + label pair is one unit; the &nbsp; keeps a separator from starting a line. */
+  .hint span{white-space:nowrap}
 
   /* bottom-right: codex */
   .codex{bottom:18px;right:18px;width:var(--codex-w)}
@@ -204,7 +206,7 @@
     <button id="tour" title="Event tour: orbit slowly and cut to each fresh codex event (V)">tour</button>
   </div>
   <div class="progress" id="progress"><div class="fill" id="progress-fill"></div></div>
-  <div class="hint"><b>drag</b> orbit · <b>right-drag</b> pan · <b>wheel</b> zoom · <b>click</b> an agent · <b>space</b> pause · <b>1–5</b> speed · <b>C</b> colour · <b>F</b> frame · <b>V</b> tour · <b>H</b> hide HUD</div>
+  <div class="hint"><span><b>drag</b> orbit</span>&nbsp;· <span><b>right-drag</b> pan</span>&nbsp;· <span><b>wheel</b> zoom</span>&nbsp;· <span><b>click</b> an agent</span>&nbsp;· <span><b>space</b> pause</span>&nbsp;· <span><b>1–5</b> speed</span>&nbsp;· <span><b>C</b> colour</span>&nbsp;· <span><b>F</b> frame</span>&nbsp;· <span><b>V</b> tour</span>&nbsp;· <span><b>H</b> hide HUD</span></div>
 </div>
 
 <div class="hud codex">
