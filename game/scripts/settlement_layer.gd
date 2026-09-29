@@ -22,6 +22,7 @@ const StructureTall = preload("res://scripts/structure_tall.gd")
 const SpriteSplit = preload("res://scripts/sprite_split.gd")
 const VillageLayout = preload("res://scripts/village_layout.gd")
 const Clearings = preload("res://scripts/clearings.gd")
+const VillageSites = preload("res://scripts/village_sites.gd")
 
 const REDRAW_EVERY := 20
 # Structure sprites are 32px, drawn at 0.625 scale (huts/structures span 20
@@ -117,19 +118,26 @@ var _frame: int = REDRAW_EVERY - 1  # redraw on the very first frame
 # drawn for LINGER seconds after the sim stops reporting them, fading out.
 const LINGER := 45.0
 const FADE := 10.0
-var _villages: Dictionary = {}  # sid -> {pos, members, born, seen, plan...}
+# Live villages keyed by species id (int); one its people left is re-keyed
+# "r<n>" (String) with a "retired" time and only fades. See found_village.
+var _villages: Dictionary = {}
+var _ghost_seq: int = 0
 # Per-lineage invention-landmark memory, same linger/fade contract as _villages
 # so a landmark eases in when a lineage first earns its tech and lingers/fades
 # when the lineage dies out, instead of popping. sid -> {pos, sig, born, seen}.
 var _lineage_marks: Dictionary = {}
-var _sites: Array = []  # last settlement_sites() result
+var _sites: Array = []  # last settlement_sites() result, hominid species only
 var _now: float = 0.0
-# Wall-clock time of the last redraw, so the village anchor ease can be made
-# independent of frame rate. ANCHOR_TAU is the exponential time constant: at
-# 60 fps a redraw lands every REDRAW_EVERY/60 s, which reproduces the original
-# 0.3-per-redraw drift.
-var _last_ease: float = 0.0
-const ANCHOR_TAU := 0.93
+
+# Village placement rules (pinning, relocation, hominid filter): village_sites.gd.
+# An abandoned village fades for RETIRE seconds; the sim clock advances at most
+# MAX_CLOCK_STEP per redraw.
+const RETIRE := 8.0
+const MAX_CLOCK_STEP := 2.0
+var _sim_clock: float = 0.0
+var _last_clock_at: float = -1.0
+var _last_tick: int = -1
+var _hominids: Dictionary = {}  # sid -> true, see VillageSites.classify_hominids
 # Codex event cursor for the flags poll (Territory/War/Raid), independent of
 # codex_panel's own cursor. sid -> {"territory": tick, "war": tick, "raid": tick}.
 var _event_cursor: int = 0
@@ -271,8 +279,10 @@ func _process(delta: float) -> void:
 	_frame += 1
 	if _frame % REDRAW_EVERY != 0:
 		return
-	_sites = sim.settlement_sites()
-	_redraw()
+	var sp_ids: PackedInt32Array = sim.alive_species_ids()
+	_hominids = VillageSites.classify_hominids(sp_ids, sim.alive_diet(), _hominids)
+	_sites = VillageSites.hominid_sites(sim.settlement_sites(), _hominids)
+	_redraw(sp_ids)
 
 
 # Swap the flame frame on every instance of each animated kind — the origin
@@ -285,10 +295,16 @@ func _tick_landmark_animation() -> void:
 			node.texture = tex
 
 
+# Where a live (not abandoned) village stands — its pinned position, not the
+# wandering centroid, so an ember lands on the huts.
 func random_site_pos() -> Vector2:
-	if _sites.is_empty():
+	var live: Array = []
+	for v in _villages.values():
+		if float(v.get("retired", -1.0)) < 0.0:
+			live.append(v["pos"])
+	if live.is_empty():
 		return Vector2.ZERO
-	return _sites[randi() % _sites.size()]["pos"]
+	return live[randi() % live.size()]
 
 
 func has_sites() -> bool:
@@ -492,29 +508,38 @@ static func merge_sites(sites: Array, radius: float) -> Array:
 	return merged
 
 
-func _redraw() -> void:
+func _redraw(sp_ids: PackedInt32Array) -> void:
 	var tick: int = int(sim.tick())
 	_poll_events()
-	# Fold the live sites into the village memory. Co-located anchors (several
-	# lineages settling the same market square) merge into ONE village under
-	# the largest lineage so footprints never stack on top of each other.
+	# Sim clock: wall time between redraws, counted only while the sim moved
+	# forward in normal play (see VillageSites.SMOOTH_TAU/DWELL).
+	var jump: bool = VillageSites.is_time_jump(_last_tick, tick)
+	if not jump and tick > _last_tick and _last_clock_at >= 0.0:
+		_sim_clock += clampf(_now - _last_clock_at, 0.0, MAX_CLOCK_STEP)
+	_last_clock_at = _now
+	_last_tick = tick
+	# Fold the live (hominid) sites into the village memory. Co-located anchors
+	# (several lineages settling the same market square) merge into ONE village
+	# under the largest lineage so footprints never stack on top of each other.
 	for site in merge_sites(_sites, MERGE_RADIUS):
 		var sid: int = int(site["species_id"])
 		var v: Dictionary = _villages.get(sid, {})
 		if v.is_empty():
-			_villages[sid] = {
-				"pos": site["pos"], "members": int(site["members"]), "born": _now, "seen": _now
-			}
-		else:
-			# Ease the village anchor toward the live site. _redraw runs on a
-			# frame count, not a wall-clock interval, so a bare 0.3 weight
-			# would drift at half speed on a 30 fps machine; go through the
-			# elapsed time instead. ANCHOR_TAU reproduces the old 60 fps feel.
-			var k: float = FxMath.ease_factor(_now - _last_ease, ANCHOR_TAU)
-			v["pos"] = (v["pos"] as Vector2).lerp(site["pos"], k)
-			v["members"] = int(site["members"])
-			v["seen"] = _now
-	_last_ease = _now
+			_villages[sid] = VillageSites.found_village(
+				sid, site["pos"], int(site["members"]), _now, _sim_clock
+			)
+			continue
+		v["members"] = int(site["members"])
+		v["seen"] = _now
+		var reach: float = VillageSites.RELOCATE * float(v.get("radius", VillageLayout.GRID))
+		var ghost: Dictionary = VillageSites.track_site(v, site["pos"], _sim_clock, jump, reach)
+		if not ghost.is_empty():
+			# The people moved on: the old village fades where it stood and
+			# the village is founded again at the new home.
+			ghost["retired"] = _now
+			_ghost_seq += 1
+			_villages["r%d" % _ghost_seq] = ghost
+			v["born"] = _now
 	# One species stats lookup per redraw (adopted inventions drive era/flags).
 	var stats_by_sid: Dictionary = {}
 	for st in sim.species_stats():
@@ -543,13 +568,23 @@ func _redraw() -> void:
 	var shadow_col: Array = []
 	var clearings: Array[Rect2] = []
 	var fire_pos: PackedVector2Array = PackedVector2Array()
-	for sid in _villages.keys():
-		var v: Dictionary = _villages[sid]
-		var stale: float = _now - float(v["seen"])
-		if stale > LINGER:
-			_villages.erase(sid)
-			continue
-		var fade: float = clampf((LINGER - stale) / FADE, 0.0, 1.0)
+	for key in _villages.keys():
+		var v: Dictionary = _villages[key]
+		var sid: int = int(v["sid"])
+		var retired: bool = float(v["retired"]) >= 0.0
+		var fade: float
+		if retired:
+			var age: float = _now - float(v["retired"])
+			if age > RETIRE or age < 0.0:
+				_villages.erase(key)
+				continue
+			fade = 1.0 - age / RETIRE
+		else:
+			var stale: float = _now - float(v["seen"])
+			if stale > LINGER:
+				_villages.erase(key)
+				continue
+			fade = clampf((LINGER - stale) / FADE, 0.0, 1.0)
 		var members: int = v["members"]
 		var pos: Vector2 = v["pos"]
 		var sp: int = MammalSprites.primate_skin_for(sid)
@@ -565,12 +600,14 @@ func _redraw() -> void:
 			era = _demo_era
 			flags |= _demo_flags
 		var sig: String = plan_signature(sid, members, era, flags)
-		if String(v.get("plan_sig", "")) != sig:
+		# An abandoned village keeps the plan it was left with.
+		if not retired and String(v.get("plan_sig", "")) != sig:
 			v["plan"] = VillageLayout.plan(
 				sid, pos, members, era, flags, Callable(biome, "is_water_at")
 			)
 			v["plan_anchor"] = pos
 			v["plan_sig"] = sig
+			v["radius"] = VillageSites.footprint_radius(v["plan"], pos)
 		var plan: Array = v.get("plan", [])
 		var plan_anchor: Vector2 = v.get("plan_anchor", pos)
 		var delta: Vector2 = pos - plan_anchor
@@ -585,7 +622,7 @@ func _redraw() -> void:
 			var ppos: Vector2 = base_pos + delta
 			footprint.append(ppos)
 			# Keyed by kind and grid cell, not by the absolute position: the
-			# anchor eases every redraw and a crowded square re-plans often,
+			# anchor snaps on a time jump and a crowded square re-plans often,
 			# and a key built from the exact position restarted every
 			# structure's pop-in each time, leaving the whole village at
 			# scale zero.
@@ -660,7 +697,15 @@ func _redraw() -> void:
 					build_xf[tkind].append(Transform2D(0.0, Vector2(ts, th), 0.0, tp))
 					build_col[tkind].append(Color(1, 1, 1, fade))
 	_place_invention_landmarks(
-		stats_by_sid, build_xf, build_col, yard_xf, yard_col, shadow_xf, shadow_col, clearings
+		sp_ids,
+		stats_by_sid,
+		build_xf,
+		build_col,
+		yard_xf,
+		yard_col,
+		shadow_xf,
+		shadow_col,
+		clearings
 	)
 	_assign_smoke()
 	_assign_fires(fire_pos)
@@ -685,6 +730,7 @@ func _redraw() -> void:
 # head-count; qualifying lineages fold into the linger/fade memory, then draw
 # below into the shared per-kind build accumulators.
 func _place_invention_landmarks(
+	sp_ids: PackedInt32Array,
 	stats_by_sid: Dictionary,
 	build_xf: Array,
 	build_col: Array,
@@ -694,7 +740,6 @@ func _place_invention_landmarks(
 	shadow_col: Array,
 	clearings: Array[Rect2]
 ) -> void:
-	var sp_ids: PackedInt32Array = sim.alive_species_ids()
 	var sp_pos: PackedVector2Array = sim.alive_positions()
 	var n := sp_ids.size()
 	if n == 0 or sp_pos.size() != n:
@@ -887,12 +932,12 @@ func _assign_smoke() -> void:
 	if _smoke.is_empty():
 		return
 	var live: Array = []
-	for sid in _villages.keys():
-		var v: Dictionary = _villages[sid]
-		# Only villages not yet fading: a plume over a ghost town reads wrong.
-		if _now - float(v["seen"]) <= LINGER - FADE:
+	for v in _villages.values():
+		# Only villages not yet fading: a plume over a ghost town (or over
+		# one its people have left) reads wrong.
+		if float(v["retired"]) < 0.0 and _now - float(v["seen"]) <= LINGER - FADE:
 			var spos: Vector2 = v.get("smoke_pos", v["pos"])
-			live.append([int(v["members"]), int(sid), spos])
+			live.append([int(v["members"]), int(v["sid"]), spos])
 	# Deterministic tiebreak on species id: sort_custom is not stable, and
 	# equal-membership ties would otherwise swap emitters every redraw.
 	live.sort_custom(
