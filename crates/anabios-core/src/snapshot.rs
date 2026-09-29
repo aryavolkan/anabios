@@ -208,7 +208,12 @@ use crate::world::World;
 ///     scenario ⇒ trajectories byte-identical (pinned by the
 ///     `*_trajectory_unchanged_by_territory_substrate` guards in
 ///     `tests/determinism.rs`); only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 44;
+/// 45: gait — `World.gait_enabled` (bool; `gait.rs`). Off in the engine
+///     default and in every pre-flip fixture ⇒ the flag-off trajectory
+///     guards (`*_trajectory_is_pinned`) do not move; only the serialized
+///     layout grew. The scenario schema defaults the knob on, so every
+///     full-stack trajectory moves from tick 1.
+pub const FORMAT_VERSION: u32 = 45;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

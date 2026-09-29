@@ -262,6 +262,15 @@ pub struct Scenario {
     /// flag-off byte-identity guarantee is unchanged.
     #[serde(default = "default_true")]
     pub disease_enabled: bool,
+    /// On by default (scenario schema): gait — movement speed follows
+    /// urgency instead of always being the Locomotor maximum: fleeing,
+    /// fighting and hunting agents sprint, the seeking moods walk, content
+    /// grazers amble, and a sprint costs superlinearly more energy per unit
+    /// distance (`gait.rs`). Set `false` to opt out; the engine's own
+    /// default (`World::new`) stays off, so the flag-off byte-identity
+    /// guarantee is unchanged.
+    #[serde(default = "default_true")]
+    pub gait_enabled: bool,
     /// Opt-in population cap override (`World::max_population`). Absent =
     /// `reproduce::MAX_POPULATION` (10k design budget). Tests pin this lower
     /// to keep long smoke runs fast.
@@ -1107,6 +1116,7 @@ impl Scenario {
         w.anthro_race_enabled = self.anthro_race_enabled;
         w.disease_enabled = self.disease_enabled;
         w.territory_enabled = self.territory_enabled;
+        w.gait_enabled = self.gait_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);
@@ -2186,7 +2196,7 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         assert!(s.sexual_dimorphism_enabled && s.domestication_enabled);
         assert!(s.knowledge_enabled && s.practices_enabled && s.basic_needs_enabled);
         assert!(s.mate_seeking_enabled && s.territory_enabled && s.disease_enabled);
-        assert!(s.anthro_race_enabled && s.repro_biased_learning);
+        assert!(s.anthro_race_enabled && s.repro_biased_learning && s.gait_enabled);
         assert_eq!(s.season_period, 2000);
         assert_eq!(s.env_period, 0);
         assert_eq!(s.climate_drift_rate, 0.0);
@@ -2194,6 +2204,18 @@ placement = { kind = "cluster", center_x = 300.0, center_y = 300.0, radius = 5.0
         // The engine layer is untouched: a bare World is still all-off.
         let w = World::new(1);
         assert!(!w.territory_enabled && !w.affect_enabled && !w.cognition_enabled);
+        assert!(!w.gait_enabled);
+    }
+
+    #[test]
+    fn gait_flag_defaults_on_and_opts_out() {
+        let on = Scenario::parse_toml("name = \"g\"\nseed = 1\n").expect("parse");
+        assert!(on.gait_enabled && on.instantiate().gait_enabled);
+        let off =
+            Scenario::parse_toml("name = \"g\"\nseed = 1\ngait_enabled = false\n").expect("parse");
+        assert!(!off.gait_enabled);
+        let w = off.instantiate();
+        assert!(!w.gait_enabled && w.territory_enabled, "only gait opted out");
     }
 
     #[test]

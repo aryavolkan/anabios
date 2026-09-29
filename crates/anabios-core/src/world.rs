@@ -266,6 +266,17 @@ pub struct World {
     /// footgun).
     #[serde(default)]
     pub species_territories: Vec<crate::territory::Territory>,
+    /// When true, gait is active (`gait.rs`): `decide_all` folds an
+    /// urgency-chosen speed fraction into the LENGTH of `desired_direction`
+    /// — flee, fight and hunt at the Locomotor maximum, the seeking moods
+    /// walk (`gait::GAIT_WALK`), a content grazer ambles
+    /// (`gait::GAIT_AMBLE`), scaled down further by how hard the program
+    /// pushes — and `integrate_all` charges the move cost a superlinear
+    /// `1 + GAIT_SPRINT_COST · frac²` factor. Off by default: the direction
+    /// stays a unit vector and the factor is never applied, so a flag-off
+    /// world is byte-identical (zero RNG either way). Serialized (v45).
+    #[serde(default)]
+    pub gait_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -536,6 +547,7 @@ impl World {
             disease_enabled: false,
             territory_enabled: false,
             species_territories: Vec::new(),
+            gait_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
@@ -823,5 +835,11 @@ mod tests {
         let w = World::new(1);
         assert!(!w.territory_enabled, "territory layer is opt-in; off by default");
         assert!(w.species_territories.is_empty());
+    }
+
+    #[test]
+    fn gait_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.gait_enabled, "gait is opt-in; off by default");
     }
 }
