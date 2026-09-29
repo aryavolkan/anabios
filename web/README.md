@@ -22,7 +22,8 @@ from and grows back into once they are gone, moving only when their people
 have plainly left), awninged market stalls at the trade hubs (a hub that
 falls in a lake has its stall drawn on the nearest dry shore; the sim's hub
 is untouched), the codex streaming "first
-emergence" events as rings, light pillars and ember bursts on the map, and a
+emergence" events into a feed (with opt-in rings, light pillars and ember
+bursts on the map — the "event markers" layer, off by default), and a
 soft bloom over the hot pixels. The same page also plays the **recorded replay** the showcase deck ships
 (`showcase/replay.js`), so the hosted deep-time story and the live sandbox are
 one product.
@@ -44,7 +45,7 @@ It needs an HTTP server (module scripts and `fetch` don't work from `file://`);
 any static server over `web/` works.
 
 Deep links: `?scenario=tribes&seed=3&speed=4`, `?replay=out-of-africa-saga`,
-`&color=diet`, `&paused=1`.
+`&color=diet`, `&paused=1`, `&events=1` (event markers on).
 
 **Controls:** drag orbits, right-drag pans, wheel zooms · click an agent for its
 inspector (energy, age, diet, mood, body plan, held inventions, genome-driven
@@ -57,7 +58,7 @@ row to fly to a member.
 Colour modes: species (genome hue/sat/val, livestock bleached), diet, dialect
 hue, energy, and — when the scenario enables the subsystem — mood, arousal and
 infection. Layers: relief, water, forests, shadows, combat, trade, villages,
-markets, events & sparks, wireframe, day cycle, bloom, clouds, birds (forests,
+markets, event markers (off by default), sparks & smoke, wireframe, day cycle, bloom, clouds, birds (forests,
 shadows and bloom are the three to switch off on a weak GPU: up to 60k trees
 and 60k grass tufts, one 2048² shadow cascade and a five-level bloom chain). The day cycle is on when
 viewing live and off under `capture=1` so gallery stills stay at noon; `&day=1`

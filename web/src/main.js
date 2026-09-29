@@ -562,6 +562,7 @@ function deselect() { state.selected = -1; layers.agents.selected = -1; state.fo
 function applyLayerToggles() {
   for (const cb of document.querySelectorAll("#layers input")) {
     if (cb.dataset.layer === "day" && !state.dayInit) { cb.checked = state.dayCycle; state.dayInit = true; }
+    if (cb.dataset.layer === "events" && !state.eventsInit) { cb.checked = params.get("events") === "1"; state.eventsInit = true; }
     const on = cb.checked;
     switch (cb.dataset.layer) {
       case "relief": state.terrain?.setRelief(on); break;
@@ -572,7 +573,11 @@ function applyLayerToggles() {
       case "trades": layers.trades.lines.visible = on; break;
       case "villages": layers.villages.mesh.visible = on; syncClearings(true); break;
       case "hubs": layers.hubs.mesh.visible = on; break;
-      case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
+      // Event markers (a ring, a light pillar and a burst per codex event) are
+      // opt-in: with dozens of events a minute they crowded the map, and the
+      // feed already lists every one (click a line to fly there).
+      case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; break;
+      case "sparks": layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
       case "wire": if (state.terrain) state.terrain.material.wireframe = on; break;
       case "bloom": stage.post = on; break;
       case "clouds": if (state.terrain) state.terrain.uniforms.uCloud.value = on ? 1 : 0; break;
