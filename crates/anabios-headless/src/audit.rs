@@ -335,10 +335,8 @@ pub fn run(
                         };
                         if worst.len() < worst_n {
                             worst.push(w);
-                        } else if let Some((k, _)) = worst
-                            .iter()
-                            .enumerate()
-                            .max_by(|a, b| a.1.ratio.total_cmp(&b.1.ratio))
+                        } else if let Some((k, _)) =
+                            worst.iter().enumerate().max_by(|a, b| a.1.ratio.total_cmp(&b.1.ratio))
                         {
                             if ratio < worst[k].ratio {
                                 worst[k] = w;
@@ -350,7 +348,9 @@ pub fn run(
                 // path passed closer than half the gap, neither endpoint did.
                 if let (Some(pi0), Some(pj0)) = (prev_pos[i], prev_pos[j]) {
                     let d0 = torus_delta(pi0, pj0, ws);
-                    let ds_len = torus_delta(pi0 + agents.velocity[i], pj0 + agents.velocity[j], ws).length();
+                    let ds_len =
+                        torus_delta(pi0 + agents.velocity[i], pj0 + agents.velocity[j], ws)
+                            .length();
                     if ds_len < gap {
                         post_sweep.add(ds_len / gap);
                     }
