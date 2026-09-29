@@ -19,6 +19,7 @@ pub mod disease;
 pub mod domestication;
 pub mod genome;
 pub mod habitat;
+pub mod heading;
 pub mod hub;
 pub mod integrate;
 pub mod interact;

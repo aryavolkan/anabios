@@ -1453,15 +1453,26 @@ impl Simulation {
         out
     }
 
-    /// Body rotation (radians) per alive agent, from velocity direction.
-    /// Non-moving agents keep rotation 0. Same order as `alive_positions`.
+    /// Body rotation (radians) per alive agent: the persistent heading when
+    /// turning inertia is on (a resting body keeps facing where it last
+    /// went), else the velocity direction with non-moving agents at 0. Same
+    /// order as `alive_positions`.
     #[func]
     fn alive_rotations(&self) -> PackedFloat32Array {
         let mut out = PackedFloat32Array::new();
         if let Some(w) = self.inner.as_ref() {
             for id in w.agents.iter_alive() {
-                let v = w.agents.velocity[id as usize];
-                let r = if v.length_squared() > 1e-6 { v.y.atan2(v.x) } else { 0.0 };
+                let r = if w.turning_enabled {
+                    let h = w.agents.heading[id as usize];
+                    h.y.atan2(h.x)
+                } else {
+                    let v = w.agents.velocity[id as usize];
+                    if v.length_squared() > 1e-6 {
+                        v.y.atan2(v.x)
+                    } else {
+                        0.0
+                    }
+                };
                 out.push(r);
             }
         }
@@ -2342,6 +2353,7 @@ mod tests {
                 "unilateral_trade = false\n",
                 "anthro_race_enabled = false\n",
                 "disease_enabled = false\n",
+                "turning_enabled = false\n",
             )
         };
     }

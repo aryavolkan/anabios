@@ -62,6 +62,14 @@ path-dependent EMA territory state (grown lazily by `territory::territory_step`
 only when `territory_enabled`), so dropping it on load would diverge
 restore-and-continue exactly like the v13 `still_ticks` footgun.
 
+`AgentBuffers.heading` (turning inertia) is likewise **serialized, not
+skipped**: each tick turns it from its previous value, so a reloaded world
+without it would steer differently on the next tick
+(`tests/save_load_roundtrip.rs::heading_survives_a_roundtrip_and_the_reloaded_world_keeps_turning`).
+With `turning_enabled` off nothing reads or writes it — every slot stays at
+`heading::SPAWN_HEADING` — which
+`tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column` pins.
+
 Layout-only changes are proven with the **trajectory guards** in
 `tests/determinism.rs` (`*_trajectory_unchanged_by_territory_substrate`): an
 FNV over the bincode of every serialized sub-state that is the trajectory

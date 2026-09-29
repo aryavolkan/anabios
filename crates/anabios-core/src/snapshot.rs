@@ -208,7 +208,16 @@ use crate::world::World;
 ///     scenario ⇒ trajectories byte-identical (pinned by the
 ///     `*_trajectory_unchanged_by_territory_substrate` guards in
 ///     `tests/determinism.rs`); only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 44;
+/// 45: turning inertia — `AgentBuffers.heading` (one serialized `Vec2` per
+///     slot: the persistent facing `tick::decide_all` turns at a bounded
+///     rate) and `World.turning_enabled` (bool). Flag absent/off ⇒ nothing
+///     reads or writes the column (it stays at `heading::SPAWN_HEADING` on
+///     every slot), zero RNG — trajectories byte-identical (pinned by
+///     `tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column`;
+///     the flag-off `*_trajectory_is_pinned` guards moved by the column's
+///     bytes alone and re-derive their previous values with those bytes
+///     stripped); only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 45;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

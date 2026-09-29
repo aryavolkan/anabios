@@ -10,7 +10,9 @@ split.) To opt a subsystem out for your own run, copy a scenario and set its
 `*_enabled` knob to `false` (or `season_period = 0`). Opting out is meant to
 be a no-op at the engine layer; that is pinned per subsystem by its own
 flag-off tests (for example `tests/disease.rs::flag_off_is_noop`,
-`territory::tests::step_is_a_noop_with_the_flag_off`), and for two whole
+`territory::tests::step_is_a_noop_with_the_flag_off`, and for turning
+inertia `tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column`),
+and for two whole
 worlds by the flag-off trajectory guards in `tests/determinism.rs`, which
 pin `minimal` and `grand-theater` as they were before the schema flip
 (inline fixtures: `minimal` with every knob off, `grand-theater` with only

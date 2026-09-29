@@ -266,6 +266,15 @@ pub struct World {
     /// footgun).
     #[serde(default)]
     pub species_territories: Vec<crate::territory::Territory>,
+    /// When true, turning inertia is active: each agent carries a persistent
+    /// facing (`AgentBuffers::heading`) that `tick::decide_all` turns toward
+    /// its wanted direction by at most `heading::MAX_TURN_RAD` per tick (more
+    /// when slow), and the turned heading is the direction integrate applies
+    /// — so nobody reverses in one tick. Off by default — nothing reads or
+    /// writes the column, zero RNG draws, byte-identical trajectories with
+    /// the flag off.
+    #[serde(default)]
+    pub turning_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -524,6 +533,7 @@ impl World {
             disease_enabled: false,
             territory_enabled: false,
             species_territories: Vec::new(),
+            turning_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
@@ -808,5 +818,11 @@ mod tests {
         let w = World::new(1);
         assert!(!w.territory_enabled, "territory layer is opt-in; off by default");
         assert!(w.species_territories.is_empty());
+    }
+
+    #[test]
+    fn turning_inertia_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.turning_enabled, "turning inertia is opt-in; off by default");
     }
 }
