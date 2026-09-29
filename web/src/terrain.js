@@ -199,11 +199,32 @@ export class Terrain {
     slab.position.set(worldSize / 2, -depth / 2 - this.heightScale * seaLevel + 0.5, worldSize / 2);
     this.slab = slab;
 
+    // The plate's sides: an earth wall from the ground's edge down to the
+    // slab. The terrain is a single sheet and the water plane lies under the
+    // whole map, so an open side showed, through the gap under the land, the
+    // water hidden beneath it — shaded as zero-depth foam, a white speckle
+    // band along the plate edge. The wall's top never drops below the water
+    // line, so a sea running off the edge ends flush against it.
+    this.slabTop = slab.position.y + depth / 2;
+    const skirtGeo = new THREE.BufferGeometry();
+    skirtGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(4 * n * 2 * 3), 3));
+    const sidx = [];
+    for (let e = 0; e < 4; e++) {
+      for (let t = 0; t < res; t++) {
+        const a = (e * n + t) * 2, b = a + 1, c = a + 2, d = a + 3;
+        sidx.push(a, b, c, c, b, d);
+      }
+    }
+    skirtGeo.setIndex(sidx);
+    this.skirt = new THREE.Mesh(skirtGeo, new THREE.MeshStandardMaterial({ color: 0x3a2b1f, roughness: 1, side: THREE.DoubleSide }));
+    this.skirt.receiveShadow = true;
+    this.updateSkirt();
+
     this.water = new Water(worldSize, res, this.heightTexture);
     this.water.mesh.visible = this.reliefOn;   // flat worlds paint water cells in the ground texture instead
     this.forest = new Forest(this);
     this.group = new THREE.Group();
-    this.group.add(this.mesh, this.slab, this.water.mesh, this.forest.group);
+    this.group.add(this.mesh, this.slab, this.skirt, this.water.mesh, this.forest.group);
   }
 
   /** Recompute vertex heights from the elevation grid (or flatten). */
@@ -231,6 +252,27 @@ export class Terrain {
     this.geometry.computeVertexNormals();
     this.geometry.computeBoundingSphere();
     this.uniforms.uRelief.value = scale > 0 ? 1 : 0;
+    this.updateSkirt();
+  }
+
+  /** Re-seat the side walls on the current edge heights (after a relief change). */
+  updateSkirt() {
+    if (!this.skirt) return;
+    const { res, cell, heights } = this, n = res + 1;
+    const pos = this.skirt.geometry.attributes.position.array;
+    // Edges in order: z = 0, x = max, z = max, x = 0 — each n grid vertices.
+    const vert = [(t) => [t, 0], (t) => [res, t], (t) => [t, res], (t) => [0, t]];
+    for (let e = 0; e < 4; e++) {
+      for (let t = 0; t < n; t++) {
+        const [i, j] = vert[e](t), o = (e * n + t) * 6;
+        const x = i * cell, z = j * cell;
+        pos[o] = x; pos[o + 1] = Math.max(heights[j * n + i], 0); pos[o + 2] = z;
+        pos[o + 3] = x; pos[o + 4] = this.slabTop - 0.05; pos[o + 5] = z;
+      }
+    }
+    this.skirt.geometry.attributes.position.needsUpdate = true;
+    this.skirt.geometry.computeVertexNormals();
+    this.skirt.geometry.computeBoundingSphere();
   }
 
   /** Advance the ground shader's clock (sparkle and caustics). */
@@ -282,6 +324,8 @@ export class Terrain {
     this.heightTexture.dispose();
     this.slab.geometry.dispose();
     this.slab.material.dispose();
+    this.skirt.geometry.dispose();
+    this.skirt.material.dispose();
     this.water.dispose();
     this.forest.dispose();
   }
