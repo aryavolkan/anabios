@@ -357,12 +357,16 @@ export class Water {
           vec3 col = mix(uShallow, uColor, clamp(depth / 2.5, 0.0, 1.0));
           col = mix(col, uDeep, clamp(depth / 12.0, 0.0, 1.0));
           col *= 0.9 + 0.2 * r;
-          // Sun glint: a tight lobe so it breaks into sparkle on the ripples. A
-          // broad one (exponent 48) turned a whole lake into one white sheet
-          // under bloom whenever the day cycle lined the sun up with the
-          // camera; it also dims as the sun sinks instead of flaring at dusk.
-          float spec = pow(max(dot(reflect(-uSun, n), viewDir), 0.0), 220.0);
-          col += vec3(1.0, 0.93, 0.82) * spec * 0.5 * smoothstep(0.08, 0.45, uSun.y);
+          // Sun glint as sparkle. The ripples barely tilt the surface, so any
+          // smooth lobe mirrored the sun as one solid white disc a few hundred
+          // pixels across whenever the day cycle lined it up with the camera
+          // (exponent 48 whitened whole lakes; 220 still left a disc). Now a
+          // moving glitter mask breaks the lobe into points, with only a faint
+          // core left where the sun sits, and it dims as the sun sinks.
+          float lobe = max(dot(reflect(-uSun, n), viewDir), 0.0);
+          float glitter = smoothstep(0.72, 0.95, atlasNoise(p * 2.6 + vec2(uTime * 0.9, -uTime * 0.7)) * atlasNoise(p * 4.1 - vec2(uTime * 0.6, uTime * 1.1)) * 2.2);
+          float spec = pow(lobe, 400.0) * glitter * 0.9 + pow(lobe, 1500.0) * 0.08;
+          col += vec3(1.0, 0.93, 0.82) * spec * smoothstep(0.08, 0.45, uSun.y);
           col += vec3(0.22, 0.30, 0.34) * fres * 0.7;
           // Foam hugs the shore: shallow AND near it, so a gentle beach keeps a
           // narrow fringe and a shallow, flat pond does not whiten all over.
@@ -422,7 +426,12 @@ function coniferGeometry() {
   }
   return mergeGeometries([trunk, ...tiers], false);
 }
-/** Grass tuft: three crossed, tapered blades; darker at the root, lighter at the tips. */
+/**
+ * Grass tuft: three crossed, tapered blades; darker at the root, lighter at
+ * the tips. Every normal points up, so a tuft is lit like the ground it grows
+ * from: as vertical planes under flat shading the blades faced away from a
+ * high sun and read as black cut-outs over bright grass.
+ */
 function tuftGeometry() {
   const parts = [];
   for (let i = 0; i < 3; i++) {
@@ -434,8 +443,12 @@ function tuftGeometry() {
     parts.push(g);
   }
   const g = mergeGeometries(parts, false);
-  const n = g.attributes.position.count, pos = g.attributes.position.array, col = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { const v = 0.55 + 0.55 * (pos[i * 3 + 1] / 0.62); col[i * 3] = v; col[i * 3 + 1] = v; col[i * 3 + 2] = v; }
+  const n = g.attributes.position.count, pos = g.attributes.position.array, col = new Float32Array(n * 3), nrm = g.attributes.normal.array;
+  for (let i = 0; i < n; i++) {
+    const v = 0.7 + 0.45 * (pos[i * 3 + 1] / 0.62);
+    col[i * 3] = v; col[i * 3 + 1] = v; col[i * 3 + 2] = v;
+    nrm[i * 3] = 0; nrm[i * 3 + 1] = 1; nrm[i * 3 + 2] = 0;
+  }
   g.setAttribute("color", new THREE.BufferAttribute(col, 3));
   return g;
 }
@@ -466,8 +479,14 @@ const PLANTING = {
   [T.SAVANNA]: [0.16, "leaf", 0x8a8a3c, 0.65],
   [T.TUNDRA]: [0.06, "cone", 0x5c7060, 0.6],
 };
-/** Grass tufts per cell (fractional = probability), with their blade colour. */
-const TUFTS = { [T.GRASS]: 2.4, [T.SAVANNA]: 1.8, [T.FOREST]: 0.6, [T.TUNDRA]: 0.7, [T.RAINFOREST]: 0.4 };
+/** Grass tufts per cell (fractional = probability), with their blade colour.
+ *  Tufts are knee-high to the figures (`TUFT_HEIGHT`), so they are planted
+ *  denser than the old head-high ones to keep the open ground textured. */
+const TUFTS = { [T.GRASS]: 4, [T.SAVANNA]: 3, [T.FOREST]: 1, [T.TUNDRA]: 1.2, [T.RAINFOREST]: 0.7 };
+/** Tuft size factor (× cell): ~0.35–0.65 units tall on the 8-unit grid, under
+ *  a grazer's back at true size. At 0.42 they stood 1.1–2.2 tall, head-high to
+ *  a hominid, and dwarfed every close-up figure. */
+const TUFT_HEIGHT = 0.13;
 const TUFT_COLOR = { [T.GRASS]: 0x78b544, [T.SAVANNA]: 0xb9a94e, [T.FOREST]: 0x5a9a44, [T.TUNDRA]: 0x8c9c72, [T.RAINFOREST]: 0x3f8f4a };
 /** Extra rock scatter on cells whose main planting is something else. */
 const ROCKS = { [T.TUNDRA]: 0.22, [T.DESERT]: 0.05, [T.SAVANNA]: 0.03, [T.GRASS]: 0.015 };
@@ -498,9 +517,13 @@ export class Forest {
     // Wind: canopies sway with a slow wave keyed on the instance's world
     // position, so a forest ripples instead of nodding in unison. The same
     // cloud shade as the ground passes over the canopies.
-    const mat = (side = THREE.FrontSide) => {
-      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true, side });
-      m.customProgramCacheKey = () => `atlas-tree-${side}`;
+    // `flat`: faceted trees and rocks. The grass instead shades with a normal
+    // pinned straight up in world space, so each blade is lit like the ground
+    // it grows from — including its back faces, which a double-sided material
+    // otherwise flips to face down (the tufts read as black specks).
+    const mat = (side = THREE.FrontSide, flat = true) => {
+      const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: flat, side });
+      m.customProgramCacheKey = () => `atlas-tree-${side}-${flat}`;
       m.onBeforeCompile = (shader) => {
         shader.uniforms.uTime = this.uniforms.uTime;
         shader.uniforms.uCloud = this.uniforms.uCloud;
@@ -522,12 +545,16 @@ export class Forest {
         shader.fragmentShader = shader.fragmentShader
           .replace("#include <common>", `#include <common>\nuniform float uTime; uniform float uCloud; varying vec2 vWxz;\n${GLSL_NOISE}\n${GLSL_CLOUD}`)
           .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.22 * atlasCloud(vWxz, uTime) * uCloud;");
+        if (!flat) {
+          shader.fragmentShader = shader.fragmentShader.replace("#include <normal_fragment_begin>",
+            "#include <normal_fragment_begin>\nnormal = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);\nnonPerturbedNormal = normal;");
+        }
       };
       return m;
     };
     this.leaf = new THREE.InstancedMesh(broadleafGeometry(), mat(), maxPerKind);
     this.cone = new THREE.InstancedMesh(coniferGeometry(), mat(), maxPerKind);
-    this.tuft = new THREE.InstancedMesh(tuftGeometry(), mat(THREE.DoubleSide), maxPerKind);
+    this.tuft = new THREE.InstancedMesh(tuftGeometry(), mat(THREE.DoubleSide, false), maxPerKind);
     this.rock = new THREE.InstancedMesh(rockGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true }), maxPerKind);
     for (const m of [this.leaf, this.cone, this.tuft, this.rock]) {
       m.count = 0; m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; m.name = "forest";
@@ -609,7 +636,7 @@ export class Forest {
         const rocks = ROCKS[ids[k]];
         if (rocks) plant(k, cx, cy, rocks, "rock", 0x6e6a70, 0.4, 9);
         const tufts = TUFTS[ids[k]];
-        if (tufts) plant(k, cx, cy, tufts, "tuft", TUFT_COLOR[ids[k]], 0.42, 11, keepTuft);
+        if (tufts) plant(k, cx, cy, tufts, "tuft", TUFT_COLOR[ids[k]], TUFT_HEIGHT, 11, keepTuft);
       }
     }
     this.leaf.count = Math.min(counts.leaf, this.max);
