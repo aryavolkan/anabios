@@ -704,6 +704,7 @@ mod tests {
             false,
             w.cognition_enabled,
             w.territory_enabled,
+            w.growth_enabled,
         );
     }
 

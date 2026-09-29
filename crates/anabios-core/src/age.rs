@@ -36,10 +36,17 @@ pub fn age_and_starve(world: &mut crate::world::World) {
         if died {
             let sid = world.agents.species_id[i];
             let size = world.agents.genome[i].get(GenomeSlot::Size).max(0.1);
+            // A juvenile leaves a juvenile-sized carcass (growth layer; the
+            // scale is exactly 1.0 with the knob off or once grown).
+            let grown = crate::growth::body_scale_of(
+                world.growth_enabled,
+                world.agents.age[i],
+                &world.agents.genome[i],
+            );
             let pos = world.agents.position[i];
             world.carcasses.push(crate::carcass::Carcass {
                 pos,
-                flesh: crate::carcass::CARCASS_FLESH_PER_SIZE * size,
+                flesh: crate::carcass::CARCASS_FLESH_PER_SIZE * size * grown,
                 age: 0,
                 species_id: sid,
             });
