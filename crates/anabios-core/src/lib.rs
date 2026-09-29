@@ -18,6 +18,7 @@ pub mod disaster;
 pub mod disease;
 pub mod domestication;
 pub mod genome;
+pub mod growth;
 pub mod habitat;
 pub mod hub;
 pub mod integrate;

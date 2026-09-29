@@ -266,6 +266,16 @@ pub struct World {
     /// footgun).
     #[serde(default)]
     pub species_territories: Vec<crate::territory::Territory>,
+    /// When true, growth and juveniles are active (`growth.rs`): an agent is
+    /// born at `growth::JUVENILE_BODY` of its adult size and grows to it over
+    /// the first `growth::MATURITY_FRAC` of its lifespan (a smoothstep of
+    /// `age`), scaling its collision body radius, grazing bite, basal
+    /// metabolism, move cost and (mildly) speed, and it cannot breed before
+    /// maturity. Off by default — every multiplier is then exactly 1.0 and
+    /// the maturity gate inert: zero RNG draws, byte-identical trajectories
+    /// with the flag off. Serialized (v45).
+    #[serde(default)]
+    pub growth_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -524,6 +534,7 @@ impl World {
             disease_enabled: false,
             territory_enabled: false,
             species_territories: Vec::new(),
+            growth_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
@@ -808,5 +819,11 @@ mod tests {
         let w = World::new(1);
         assert!(!w.territory_enabled, "territory layer is opt-in; off by default");
         assert!(w.species_territories.is_empty());
+    }
+
+    #[test]
+    fn growth_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.growth_enabled, "growth is opt-in at the engine layer; off by default");
     }
 }

@@ -181,7 +181,7 @@ pub fn reproduce_all(world: &mut World) {
                 continue;
             }
         }
-        if !is_eligible(&world.agents, a_id) {
+        if !is_eligible(&world.agents, a_id, world.growth_enabled) {
             continue;
         }
 
@@ -205,6 +205,7 @@ pub fn reproduce_all(world: &mut World) {
             kin_seeking,
             &a_genome,
             world.sexual_dimorphism_enabled,
+            world.growth_enabled,
         );
         let Some(b_id) = mate else { continue };
 
@@ -460,13 +461,19 @@ fn apply_practice_fitness_costs(
     stillborn || sacrificed
 }
 
-fn is_eligible(agents: &AgentBuffers, id: u32) -> bool {
+/// Mate eligibility: alive, a Reproductive module, awake, mature (growth
+/// layer; always true with `growth_enabled` off) and above the energy gate.
+fn is_eligible(agents: &AgentBuffers, id: u32, growth_enabled: bool) -> bool {
     let i = id as usize;
     if !agents.is_alive(id) {
         return false;
     }
     // Action gating: must have Reproductive module to mate.
     if !crate::module::has(&agents.modules[i], crate::module::ModuleType::Reproductive) {
+        return false;
+    }
+    // Growth: no breeding before maturity. Inert with the flag off.
+    if !crate::growth::is_mature(growth_enabled, agents.age[i], &agents.genome[i]) {
         return false;
     }
     // Basic needs: sleepers neither seek nor accept mates — lost mating time
@@ -501,6 +508,7 @@ fn find_mate(
     kin_seeking: bool,
     a_genome: &Genome,
     dimorphism: bool,
+    growth_enabled: bool,
 ) -> Option<u32> {
     let mut best: Option<u32> = None;
     // Genome distance of `best` — only consulted when `kin_seeking`.
@@ -514,7 +522,7 @@ fn find_mate(
         if reproduced[j] {
             return;
         }
-        if !is_eligible(agents, other_id) {
+        if !is_eligible(agents, other_id, growth_enabled) {
             return;
         }
         if agents.species_id[j] != a_species {
@@ -645,6 +653,39 @@ mod tests {
         w.spatial.rebuild(&w.agents.position, |i| w.agents.is_alive(i as u32));
         reproduce_all(&mut w);
         assert_eq!(w.agents.live_count(), 3, "awake pair reproduces");
+    }
+
+    /// Growth: a juvenile is not mate-eligible on either side of the pair;
+    /// the same pair breeds once both are mature. Flag off, age is unread.
+    #[test]
+    fn juveniles_do_not_mate_until_maturity() {
+        use crate::growth::maturity_ticks;
+        let mut w = World::new(13);
+        w.growth_enabled = true;
+        let (a, b) = spawn_fertile_pair(&mut w);
+        let m = maturity_ticks(crate::age::lifespan_of(&fertile_genome()));
+        // Two newborns.
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "a newborn pair must not mate");
+        // One adult, one juvenile a tick short of maturity: still no.
+        w.agents.age[a as usize] = m;
+        w.agents.age[b as usize] = m - 1;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "a juvenile partner blocks mating");
+        w.agents.age[a as usize] = m - 1;
+        w.agents.age[b as usize] = m;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 2, "a juvenile initiator blocks mating");
+        // Both mature: the pair breeds.
+        w.agents.age[a as usize] = m;
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 3, "a mature pair reproduces");
+
+        // Flag off: the same newborn pair breeds at once.
+        let mut w = World::new(13);
+        let _ = spawn_fertile_pair(&mut w);
+        reproduce_all(&mut w);
+        assert_eq!(w.agents.live_count(), 3, "flag off: age unread");
     }
 
     #[test]

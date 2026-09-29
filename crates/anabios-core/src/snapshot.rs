@@ -208,7 +208,13 @@ use crate::world::World;
 ///     scenario ⇒ trajectories byte-identical (pinned by the
 ///     `*_trajectory_unchanged_by_territory_substrate` guards in
 ///     `tests/determinism.rs`); only the serialized layout grew.
-pub const FORMAT_VERSION: u32 = 44;
+/// 45: growth and juveniles — `World.growth_enabled` (bool). Growth is a
+///     pure function of the existing `age` column and the genome lifespan,
+///     so no other state is added. Flag absent/off ⇒ every growth multiplier
+///     is exactly 1.0 and the maturity gate is inert: trajectories
+///     byte-identical (pinned by the `*_trajectory_is_pinned` guards in
+///     `tests/determinism.rs`); only the serialized layout grew.
+pub const FORMAT_VERSION: u32 = 45;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

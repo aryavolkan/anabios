@@ -72,6 +72,7 @@ pub fn step(world: &mut World) {
         world.cognition_enabled,
         world.spatial.perception_max_radius(),
         world.territory_enabled.then_some(&world.biome),
+        world.growth_enabled,
     );
 
     // Stage 4': collision resolve (territory layer) — colliding bodies are
@@ -221,6 +222,7 @@ fn decide_all(world: &mut World) {
     let basic_needs_enabled = world.basic_needs_enabled;
     let mate_seeking_enabled = world.mate_seeking_enabled;
     let territory_enabled = world.territory_enabled;
+    let growth_enabled = world.growth_enabled;
     let territories = &world.species_territories;
     let spatial = &world.spatial;
     let collision = &world.collision_spatial;
@@ -439,7 +441,8 @@ fn decide_all(world: &mut World) {
             // bodies. Last in the stack so it still applies under the pen
             // override and the hijack; the stage-4' resolve backstops it.
             if territory_enabled {
-                let sep = crate::collision::separation_steer(collision, agents, i, ws);
+                let sep =
+                    crate::collision::separation_steer(collision, agents, i, ws, growth_enabled);
                 action.move_x += crate::collision::SEP_PULL * sep.x;
                 action.move_y += crate::collision::SEP_PULL * sep.y;
             }
