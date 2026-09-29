@@ -843,12 +843,28 @@ mod tg1_selection {
     }
 
     #[test]
-    // Re-validated 2026-09-29 under the realism layers (gait, growth,
-    // gestation, turning inertia, the chase): differential +0.033 at 2500
-    // ticks (coupled 0.5068, control 0.4738 from a 0.4962 start, both worlds
-    // at this fixture's 400 cap) against the 0.02 bar. It was ignored under
-    // the swept-move dynamics alone (-0.02), when the growth layer had not
-    // yet stopped the founders breeding off their spawn energy.
+    // Re-ignored 2026-09-29 (projectile ladder, FORMAT_VERSION 46): the
+    // single-seed differential is drift-dominated. Paired probes at 2500
+    // ticks, release: on this fixture the scenario seed gave +0.033 on the
+    // realism tip alone (seeds 60623, 0-5: 6/7 positive, mean +0.012) and
+    // -0.015 on the merged tree (3/7 positive, mean +0.003, seed sd 0.03).
+    // No fixture variant makes the claim robust at CI cost: apes-only
+    // (innovator + traditionalist, the retired file's shape) is the best,
+    // 14/17 seeds positive here (mean +0.029, sd 0.034) but 11/17 on the
+    // realism tip (mean +0.016, sd 0.042); the tribes 1500 cap, 5000 ticks,
+    // ape_hunters, halved lifespan, metabolism 1.0 and a 0.1/0.9 Openness
+    // contrast are all at or below that. The birth-level selection
+    // differential (newborn Openness minus the ape mean) is +0.012 here and
+    // ~0 on the realism tip. Mechanism: 316 founders live 5000 ticks holding
+    // the forced Fire (232 of them non-apes that never lose it, 64 that
+    // cannot breed), and at the cap births are allocated by ascending id
+    // behind a flat energy threshold, so surplus intake buys nothing.
+    // Revisit with a multi-seed claim once the response is measurable at CI
+    // cost; the coupled multipliers themselves are pinned by the unit tests
+    // (`coupling_is_identity_when_off_and_monotonic_when_on`).
+    #[ignore = "re-validate: the 2500-tick Openness differential is drift-dominated \
+                (merged tree 3/7 seeds positive, best fixture 14/17 here and 11/17 on \
+                main; see the comment above)"]
     fn coupling_selects_the_affinity_gene_upward() {
         let start = {
             // Both worlds start from the identical seeded state; measure the shared
