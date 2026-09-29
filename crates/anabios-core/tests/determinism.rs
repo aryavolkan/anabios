@@ -365,19 +365,18 @@ fn habitat_territories_matches_golden_hashes() {
 /// defaults every knob on, so the live scenario files no longer reproduce
 /// this configuration), not on the live scenario files.
 ///
-/// Re-pinned 2026-09-29 (gestation, FORMAT_VERSION 44→45): `AgentBuffers`
+/// Re-pinned 2026-09-29 (gestation, FORMAT_VERSION 45): `AgentBuffers`
 /// gained the `gestation_left` and `pending_litter` columns, so the `agents`
 /// sub-state's own layout grew and both pins moved by layout alone. Proven
 /// layout-only the way this comment asks: a column-wise variant of this
 /// hash (each pre-existing `AgentBuffers` column serialized on its own, plus
-/// the other sub-states) is identical at the branch base `ad9da6c` and at
-/// this head with `gestation_enabled = false` in `OPT_OUT_ALL` — minimal
-/// `0xa17a54f7d1967ca6`, grand-theater `0xf994ddae7a8f0ee8`. Note that the
-/// grand-theater pin was already stale at `ad9da6c` (observed
-/// `0xe987458ce92274e9` against the pinned `0x56819428b6cd2bf0`): commit
-/// `0533d40` gave the hub pull an arrival zone (`hub::hub_pull`, under
-/// `resources_enabled`, which that fixture turns on) and did not re-pin;
-/// the value below folds that earlier, territory-independent move in.
+/// the other sub-states) is identical at the merge base `a0bc6a1` (where
+/// the pins' previous values, `0xd1133dd8d119e894` /
+/// `0x56819428b6cd2bf0`, still held) and at this head with
+/// `gestation_enabled = false` in `OPT_OUT_ALL` — minimal
+/// `0xa17a54f7d1967ca6`, grand-theater `0xea8d6324b39a6ad7`. (Between
+/// `0533d40` and `8351eea` the grand-theater pin was stale — the hub-pull
+/// arrival zone ran with the collision layer off; `8351eea` gated it.)
 fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
     let mut bytes = bincode::serialize(&w.agents).expect("agents serialize");
     bytes.extend(bincode::serialize(&w.biome).expect("biome serialize"));
@@ -400,7 +399,7 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
 }
 
 const MINIMAL_TRAJECTORY_AT_1000: u64 = 0x80e458dcefa63bb4;
-const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x0843bf9edfa5a469;
+const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x53cc1a4b422cb1c0;
 
 fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
     let mut w = common::world(src);
