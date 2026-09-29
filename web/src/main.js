@@ -306,10 +306,15 @@ function loop(now) {
       state.ticksWindow += stepped;
     }
     const fractional = src.kind === "replay" || state.speed < 1;
+    // Figure size depends on the zoom (`bodyScale`), so a paused world that is
+    // zoomed into must still re-seat its figures — or a close-up kept the
+    // far-away readable size and bodies piled through each other.
+    const rezoomed = Math.abs(unitsPerPixel / (state.agentsUpp || unitsPerPixel) - 1) > 0.03;
     if (stepped > 0 || fractional || state.sinceStep === 0) {
       const tick = src.tick;
       const agents = src.agents();
       layers.agents.update(agents, heightAt, src.kind === "live", unitsPerPixel);
+      state.agentsUpp = unitsPerPixel;
       layers.villages.classify(agents);   // before the next wasm call can detach the view
       if (stepped > 0 || src.kind === "replay") {
         const streaks = src.streaks();
@@ -349,6 +354,9 @@ function loop(now) {
         state.shot.stage = 2;
         state.shot.appliedAt = state.frameNo;
       }
+    } else if (rezoomed) {
+      layers.agents.update(src.agents(), heightAt, src.kind === "live", unitsPerPixel);
+      state.agentsUpp = unitsPerPixel;
     }
     // One frame has been rendered with the camera and selection applied. Not
     // an `else` of the update branch above: with `&paused=0` the world steps
@@ -451,7 +459,7 @@ function renderLegend() {
       L.innerHTML = names.map((n, i) => `<div class="item"><span class="sw" style="background:${cssHex(MOOD_COLORS[i])}"></span>${n}</div>`).join("");
       break;
     }
-    default: L.innerHTML = `<div class="item">body colour from the genome's hue/sat/val slots; livestock bleached</div>`;
+    default: L.innerHTML = `<div class="item">species colour (as in the species list), shaded per individual by the genome's hue/sat/val; livestock bleached</div>`;
   }
 }
 

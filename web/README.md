@@ -11,8 +11,10 @@ conifers, grass tufts on the open ground, rock scatter), depth-shaded water
 with sun glints, river sparkle, seabed caustics, wet sand and a foam fringe,
 sun shadows and drifting cloud shadows over everything, a sky dome whose sun
 glow swells as a gentle day cycle sweeps the sun round the plate toward a
-golden dusk, bird flocks circling overhead, every agent as an instanced grazer
-or hunter figure coloured by its genome and walking (or sprinting, when it
+golden dusk, bird flocks circling overhead, every agent as an instanced grazer,
+hunter or upright hominid figure (by diet: below, above or inside the
+0.34–0.66 omnivore band) in its species' colour, shaded per individual by
+its genome, and walking (or sprinting, when it
 flees or fights) on articulated legs, a glimmer where an agent is born and a
 grey puff where one dies, combat volleys and trade lanes as fading light with
 impact sparks, pitched-roof hut villages with hearth smoke at hominid
@@ -55,7 +57,7 @@ orbit that cuts to each fresh codex event) · **L** follow the selected agent ·
 **H** hide the HUD · click a codex line to fly to the event · click a species
 row to fly to a member.
 
-Colour modes: species (genome hue/sat/val, livestock bleached), diet, dialect
+Colour modes: species (the species list's colour, shaded per individual by the genome's hue/sat/val; livestock bleached), diet, dialect
 hue, energy, and — when the scenario enables the subsystem — mood, arousal and
 infection. Layers: relief, water, forests, shadows, combat, trade, villages,
 markets, event markers (off by default), sparks & smoke, wireframe, day cycle, bloom, clouds, birds (forests,
@@ -149,9 +151,10 @@ seed), so the pinned tick, camera and agent id are the whole recipe.
 - `cargo test -p anabios-wasm` — pure view builders (well-formed buffers,
   side-effect-free reads, event/catalog parity) and the C-ABI round trip, natively.
 - `node web/test/body-scale.mjs`, `node web/test/villages.mjs`,
-  `node web/test/forest-clearing.mjs`, `node web/test/hubs.mjs` — pure layer
-  logic under node (after `npm --prefix web ci`; CI runs them in the `web`
-  job): the figure-size clamp; villages — built by hominid (omnivore)
+  `node web/test/forest-clearing.mjs`, `node web/test/hubs.mjs`,
+  `node web/test/figures.mjs` — pure layer logic under node (after
+  `npm --prefix web ci`; CI runs them in the `web` job): the figure-size
+  clamp; figures (kind by diet band, legs attached, species colours); villages — built by hominid (omnivore)
   lineages only, pinned where they were founded — no sliding with the
   wandering anchor centroid, one fade-out-and-regrow move when the people
   have really left, no hut flicker at a band edge, no huts on water; the

@@ -12,6 +12,11 @@ const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quatern
 const _c = new THREE.Color();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
+/** Omnivore diet band read as hominid (game/scripts/mammal_sprites.gd HERB_MAX / CARN_MIN): the upright figure, and the lineages that build huts. */
+export const HOMINID_DIET = [0.34, 0.66];
+/** Figure kinds, indexed like `Agents.meshes`. */
+export const FIGURE = Object.freeze({ GRAZER: 0, HUNTER: 1, HOMINID: 2 });
+
 /** Figure part ids baked into `aPart` for the gait shader. */
 const PART = Object.freeze({ BODY: 0, FL: 1, FR: 2, BL: 3, BR: 4, HEAD: 5, TAIL: 6 });
 
@@ -26,13 +31,20 @@ function tag(geo, part, pivot = [0, 0, 0]) {
   return geo;
 }
 
-/** Four legs under a body, each tagged with its corner so diagonal pairs swing together. */
-function legs(spread, len, r = 0.075) {
+/**
+ * Four legs under a body, each tagged with its corner so diagonal pairs swing
+ * together. Each leg runs from the ground up to `top` — inside the body, so
+ * no gap opens between leg and belly at any stride — and swings about its hip
+ * at `hip`. The corners (±`x`, ±`z`) must sit well inside the body's plan
+ * outline: the old legs stood outside the hunter's and below the grazer's
+ * belly, so figures read as bodies floating over loose posts.
+ */
+function legs(x, z, top, hip, r = 0.075) {
   const out = [];
-  for (const [x, z, part] of [[spread, 0.28, PART.FL], [spread, -0.28, PART.FR], [-spread, 0.28, PART.BL], [-spread, -0.28, PART.BR]]) {
-    const l = new THREE.CylinderGeometry(r, r * 0.8, len, 5);
-    l.translate(x, len / 2, z);
-    out.push(tag(l, part, [x, len, z]));
+  for (const [lx, lz, part] of [[x, z, PART.FL], [x, -z, PART.FR], [-x, z, PART.BL], [-x, -z, PART.BR]]) {
+    const l = new THREE.CylinderGeometry(r, r * 0.75, top, 5);
+    l.translate(lx, top / 2, lz);
+    out.push(tag(l, part, [lx, hip, lz]));
   }
   return out;
 }
@@ -69,32 +81,64 @@ function grazerGeometry() {
   const tail = new THREE.SphereGeometry(0.11, 6, 5);
   tail.translate(-0.66, 0.8, 0);
   tag(tail, PART.TAIL, [-0.6, 0.8, 0]);
-  return shade(mergeGeometries([body, neck, head, earL, earR, tail, ...legs(0.42, 0.45)], false));
+  return shade(mergeGeometries([body, neck, head, earL, earR, tail, ...legs(0.38, 0.2, 0.74, 0.55)], false));
 }
 
-/** Hunter facing +x: a long low body, a pointed muzzle, pricked ears, a trailing tail. */
+/** Hunter facing +x: a canine — a lean body, a raised head with a short snout and pricked ears, a drooping brush tail. */
 function hunterGeometry() {
   const body = new THREE.SphereGeometry(0.5, 10, 7);
-  body.scale(1.55, 0.6, 0.62);
-  body.translate(0, 0.62, 0);
+  body.scale(1.4, 0.62, 0.6);
+  body.translate(0, 0.66, 0);
   tag(body, PART.BODY);
-  const head = new THREE.SphereGeometry(0.24, 8, 6);
-  head.scale(1.1, 0.95, 0.9);
-  head.translate(0.78, 0.74, 0);
-  const muzzle = new THREE.ConeGeometry(0.17, 0.5, 6);
-  muzzle.rotateZ(-Math.PI / 2);
-  muzzle.translate(1.08, 0.7, 0);
-  const earL = new THREE.ConeGeometry(0.08, 0.24, 4);
-  earL.translate(0.72, 0.98, 0.13);
+  const neck = new THREE.CylinderGeometry(0.12, 0.17, 0.38, 6);
+  neck.rotateZ(-Math.PI / 3.2);
+  neck.translate(0.62, 0.8, 0);
+  const head = new THREE.SphereGeometry(0.2, 8, 6);
+  head.scale(1.15, 0.95, 0.9);
+  head.translate(0.84, 0.94, 0);
+  const snout = new THREE.ConeGeometry(0.1, 0.3, 6);
+  snout.rotateZ(-Math.PI / 2);
+  snout.translate(1.1, 0.9, 0);
+  const earL = new THREE.ConeGeometry(0.07, 0.2, 4);
+  earL.translate(0.78, 1.14, 0.09);
   const earR = earL.clone();
-  earR.translate(0, 0, -0.26);
-  const neckPivot = [0.6, 0.68, 0];
-  for (const g of [head, muzzle, earL, earR]) tag(g, PART.HEAD, neckPivot);
-  const tail = new THREE.ConeGeometry(0.1, 0.8, 5);
-  tail.rotateZ(Math.PI / 2 + 0.5);
-  tail.translate(-0.98, 0.72, 0);
-  tag(tail, PART.TAIL, [-0.7, 0.66, 0]);
-  return shade(mergeGeometries([body, head, muzzle, earL, earR, tail, ...legs(0.5, 0.42, 0.065)], false));
+  earR.translate(0, 0, -0.18);
+  const neckPivot = [0.55, 0.72, 0];
+  for (const g of [neck, head, snout, earL, earR]) tag(g, PART.HEAD, neckPivot);
+  // Brush tail: thick at the rump, tapering back and down (the cylinder's +y
+  // end is the tip once rotated, hence radiusTop < radiusBottom).
+  const tail = new THREE.CylinderGeometry(0.035, 0.1, 0.6, 5);
+  tail.rotateZ(Math.PI / 2 + 0.45);
+  tail.translate(-0.97, 0.57, 0);
+  tag(tail, PART.TAIL, [-0.68, 0.7, 0]);
+  return shade(mergeGeometries([body, neck, head, snout, earL, earR, tail, ...legs(0.42, 0.15, 0.66, 0.5, 0.065)], false));
+}
+
+/**
+ * Hominid facing +x: an upright biped — legs, a torso broad at the shoulders,
+ * a head, and arms hanging at the sides. It reuses the quadruped part ids so
+ * the same gait shader walks it: arms are the fore pair (FL/FR) and legs the
+ * hind pair (BL/BR), and since diagonal pairs swing together each arm swings
+ * with the opposite leg, as a walking person's do.
+ */
+function hominidGeometry() {
+  const torso = new THREE.CylinderGeometry(0.2, 0.15, 0.62, 7);
+  torso.scale(0.75, 1, 1.1);
+  torso.translate(0, 0.97, 0);
+  tag(torso, PART.BODY);
+  const head = new THREE.SphereGeometry(0.15, 8, 6);
+  head.translate(0.03, 1.45, 0);
+  tag(head, PART.HEAD, [0, 1.3, 0]);
+  const parts = [torso, head];
+  for (const [z, arm, leg] of [[1, PART.FL, PART.BL], [-1, PART.FR, PART.BR]]) {
+    const l = new THREE.CylinderGeometry(0.07, 0.055, 0.74, 5);
+    l.translate(0, 0.37, 0.1 * z);
+    parts.push(tag(l, leg, [0, 0.7, 0.1 * z]));
+    const a = new THREE.CylinderGeometry(0.05, 0.04, 0.6, 5);
+    a.translate(0, 0.96, 0.25 * z);
+    parts.push(tag(a, arm, [0, 1.24, 0.25 * z]));
+  }
+  return shade(mergeGeometries(parts, false));
 }
 
 /**
@@ -209,13 +253,20 @@ export function bodyScale(readable, physScale, legible) {
   return Math.max(physScale, Math.min(readable, legible));
 }
 
-/** Horizontal extent (world units at scale 1) of a figure geometry: the larger
- *  of its length (x, the facing axis) and width (z), so a drawn body scaled
- *  by `physDiam / footprint` never reaches past its physical disc. */
+/** Extent (world units at scale 1) of a figure geometry: the larger of its
+ *  length (x, the facing axis) and width (z), so a drawn body scaled by
+ *  `physDiam / footprint` never reaches past its physical disc — or 0.8 of
+ *  its height, so the upright hominid (a small disc under a tall body) is
+ *  not drawn twice a quadruped's height at close range. */
 export function figureFootprint(geometry) {
   geometry.computeBoundingBox();
   const b = geometry.boundingBox;
-  return Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
+  return Math.max(b.max.x - b.min.x, b.max.z - b.min.z, 0.8 * (b.max.y - b.min.y));
+}
+
+/** Figure kind by diet: grazer below the omnivore band, hominid inside it, hunter above (same band as the huts). */
+export function figureKind(diet) {
+  return diet < HOMINID_DIET[0] ? FIGURE.GRAZER : diet < HOMINID_DIET[1] ? FIGURE.HOMINID : FIGURE.HUNTER;
 }
 
 export const COLOR_MODES = ["species", "diet", "dialect", "energy", "mood", "arousal", "infection"];
@@ -230,8 +281,9 @@ export class Agents {
     };
     this.grazers = new THREE.InstancedMesh(withGait(grazerGeometry()), gaitMaterial(this.uniforms), max);
     this.hunters = new THREE.InstancedMesh(withGait(hunterGeometry()), gaitMaterial(this.uniforms), max);
-    /** Both figure meshes; each carries its own `userData.ids` (instance → agent id) for picking. */
-    this.meshes = [this.grazers, this.hunters];
+    this.hominids = new THREE.InstancedMesh(withGait(hominidGeometry()), gaitMaterial(this.uniforms), max);
+    /** The figure meshes, indexed by `FIGURE`; each carries its own `userData.ids` (instance → agent id) for picking. */
+    this.meshes = [this.grazers, this.hunters, this.hominids];
     /** Per-kind footprint at scale 1 (see `figureFootprint`), indexed like `meshes`. */
     this.footprint = this.meshes.map((m) => figureFootprint(m.geometry));
     for (const m of this.meshes) {
@@ -276,7 +328,16 @@ export class Agents {
       case "arousal": return mix(0x4a6b8a, 0xff5a2a, Math.min(1, row[o + AGENT.AROUSAL]));
       case "infection": return mix(0xb7ac98, 0x77d64a, Math.min(1, row[o + AGENT.INFECTION]));
       default: {
-        let c = hsv(row[o + AGENT.HUE], row[o + AGENT.SAT], row[o + AGENT.VAL]);
+        // Live rows: the species' own hue (the swatch the species list shows),
+        // shaded per individual by the genome's colour slots. Those slots sit
+        // at a neutral 0.5 in nearly every archetype, and drawn raw they gave
+        // every species the same dull teal. Replay rows already carry the
+        // species hue in HUE.
+        let c = live
+          ? hsv(speciesHue(row[o + AGENT.SPECIES]) + (row[o + AGENT.HUE] - 0.5) * 0.3,
+            Math.min(0.85, Math.max(0.3, 0.6 + (row[o + AGENT.SAT] - 0.5) * 0.5)),
+            Math.min(1, Math.max(0.5, 0.9 + (row[o + AGENT.VAL] - 0.5) * 0.5)))
+          : hsv(row[o + AGENT.HUE], row[o + AGENT.SAT], row[o + AGENT.VAL]);
         if ((row[o + AGENT.FLAGS] & AGENT_FLAG.LIVESTOCK) !== 0) c = mix(c, 0xf6f2e6, 0.45); // tamed: bleached
         return c;
       }
@@ -301,7 +362,7 @@ export class Agents {
    */
   update(a, heightAt, live, unitsPerPixel = 0) {
     const n = Math.min(a.count, this.max), d = a.data, s = a.stride;
-    const counts = [0, 0];
+    const counts = this.meshes.map(() => 0);
     this.selectedPos = null;
     const gaits = this.meshes.map((m) => m.geometry.attributes.aGait.array);
     const prev = this.prev, cur = this.spare, buf = this.buf, born = this.born, died = this.died;
@@ -310,7 +371,7 @@ export class Agents {
     for (let k = 0; k < n; k++) {
       const o = k * s, x = d[o + AGENT.X], y = d[o + AGENT.Y];
       const h = heightAt(x, y);
-      const kind = d[o + AGENT.DIET] >= 0.5 ? 1 : 0;
+      const kind = figureKind(d[o + AGENT.DIET]);
       const readable = this.baseScale * (0.55 + 0.45 * d[o + AGENT.SIZE]);
       const sc = unitsPerPixel > 0 ? bodyScale(readable, d[o + AGENT.BODY] / this.footprint[kind], legible) : readable;
       const id = d[o + AGENT.ID] | 0;
@@ -335,7 +396,7 @@ export class Agents {
     }
     if (prev) { const pb = this.prevBuf; for (const [id, j] of prev) if (!cur.has(id)) died.push(pb[j * 2], pb[j * 2 + 1]); }
     this.spare = prev || new Map(); this.prev = cur; this.buf = this.prevBuf; this.prevBuf = buf;
-    for (let kind = 0; kind < 2; kind++) {
+    for (let kind = 0; kind < this.meshes.length; kind++) {
       const mesh = this.meshes[kind];
       mesh.count = counts[kind];
       mesh.instanceMatrix.needsUpdate = true;
@@ -406,8 +467,6 @@ export class Segments {
 }
 
 // ---------------------------------------------------------------------------
-/** Omnivore diet band read as hominid (game/scripts/mammal_sprites.gd HERB_MAX / CARN_MIN). */
-export const HOMINID_DIET = [0.34, 0.66];
 /** Share of a species' members in the band to become / stay a hominid. */
 const HOMINID_IN = 0.5, HOMINID_OUT = 0.3;
 
