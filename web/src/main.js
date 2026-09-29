@@ -67,6 +67,7 @@ const state = {
   fps: 0,
   rate: 0,
   frames: 0,
+  frameNo: 0,      // monotonic frame counter (`frames` resets every FPS window)
   ticksWindow: 0,
   windowStart: performance.now(),
   sinceStep: 0,
@@ -118,12 +119,14 @@ function attach(source, entry) {
   stage.frame();
   for (const l of [layers.agents, layers.villages, layers.fx, layers.particles]) l.setWorldSize(ws, state.terrain.cell);
   layers.streaks.clear(); layers.trades.clear(); layers.villages.clear(); layers.particles.clear();
+  layers.villages.isWater = isWater;
   layers.hubs.set(source.hubs(), state.terrain.cell, heightAt);
   layers.birds.setWorld(ws, source.biomeRes, state.terrain.cell, heightAt);
   layers.agents.reset();
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
   state.lastColorTick = -1; state.lastStatsTick = -1;
   $("codex").innerHTML = "";
+  recentFx.clear(); recentLines.clear();
   applyLayerToggles();
   const isLive = source.kind === "live";
   $("badge").classList.toggle("replay", !isLive);
@@ -135,6 +138,20 @@ function attach(source, entry) {
 }
 
 function heightAt(x, y) { return state.terrain ? state.terrain.heightAt(x, y) : 0; }
+function isWater(x, y) { return state.terrain ? state.terrain.isWater(x, y) : false; }
+
+/** Village update + the forest clearings under the huts (trees stand back from a village while its layer is on). */
+function updateVillages(src, tick, instant = false) {
+  layers.villages.update(src.sites(), tick, heightAt, 4, instant);
+  syncClearings();
+}
+function syncClearings(force = false) {
+  if (!state.terrain) return;
+  if (!layers.villages.mesh.visible) { if (force) state.terrain.forest.setClearings([]); return; }
+  if (force) layers.villages.clearingKey = "";
+  const circles = layers.villages.clearings();
+  if (circles) state.terrain.forest.setClearings(circles);
+}
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 
@@ -171,7 +188,7 @@ async function prepareShot() {
         if (remaining <= 40) {
           layers.streaks.push(src.streaks(), tick);
           layers.trades.push(src.trades(), tick);
-          layers.villages.update(src.sites(), tick, heightAt, 4, true);
+          updateVillages(src, tick, true);
         }
         for (const ev of src.events()) onEvent(ev, performance.now() / 1000);
         if (performance.now() - lastPaint > 250) {
@@ -299,7 +316,7 @@ function loop(now) {
           for (let k = 0, n = Math.min(died.length, 400); k < n; k += 2) layers.particles.spawn(KIND.SMOKE, died[k], heightAt(died[k], died[k + 1]) + lift, died[k + 1], 2);
         }
         layers.trades.push(src.trades(), tick);
-        layers.villages.update(src.sites(), tick, heightAt);
+        updateVillages(src, tick);
         for (const ev of src.events()) onEvent(ev, now / 1000);
       }
       if (Math.floor(tick / 10) !== Math.floor(state.lastColorTick / 10)) {
@@ -315,9 +332,13 @@ function loop(now) {
         applyShotCamera(state.shot.cam);
         applyShotInspect(state.shot.inspect);
         state.shot.stage = 2;
+        state.shot.appliedAt = state.frameNo;
       }
-    } else if (state.shot.stage === 2) {
-      // One frame has been rendered with the camera and selection applied.
+    }
+    // One frame has been rendered with the camera and selection applied. Not
+    // an `else` of the update branch above: with `&paused=0` the world steps
+    // every frame, and that branch would starve this one forever.
+    if (state.shot.stage === 2 && state.shot.appliedAt !== state.frameNo) {
       state.shot.stage = 0;
       state.ready = true;
     }
@@ -344,6 +365,7 @@ function loop(now) {
   stage.render();
 
   state.frames++;
+  state.frameNo++;
   const span = now - state.windowStart;
   if (span >= 500) {
     state.fps = state.frames * 1000 / span;
@@ -410,31 +432,73 @@ function renderLegend() {
   }
 }
 
+/**
+ * Several detectors re-fire every tick while their condition holds (a mass
+ * fright or a dehydration wave is dozens of events a second at 1×, up to ~50
+ * in one tick). Each one used to spawn its own ring, light pillar and burst
+ * of additive particles on the same spot — stacking into a white blow-out
+ * under bloom — and its own feed line, so the feed churned faster than a line
+ * could fade in and read as empty. Now a repeat within `REPEAT_TICKS` of the
+ * last one of its kind (or within `REPEAT_SECS` of wall time, for a slow
+ * machine at 64× where one frame spans more ticks than that) is folded in:
+ * the feed keeps one line per event type, bumping a `×n` count and the
+ * species tally, and a species' effects re-fire at most every
+ * `REPEAT_FX_SECS`, with at most `FX_PER_FRAME` bursts a frame.
+ */
+const REPEAT_TICKS = 120, REPEAT_SECS = 1.5, REPEAT_FX_SECS = 2.5, FX_PER_FRAME = 8;
+const recentFx = new Map();     // `${type}/${sid}` → {tick, fxAt}
+const recentLines = new Map();  // type → {tick, count, sids, line}
+let fxFrame = -1, fxThisFrame = 0;
+
+/** The entry for `key` if its last event is recent (and not in the future: a replay seek starts over), else a fresh one. */
+function recent(map, key, tick, now, fresh) {
+  const prev = map.get(key);
+  const repeat = !!prev && tick >= prev.tick && (tick - prev.tick <= REPEAT_TICKS || now - prev.at <= REPEAT_SECS);
+  const entry = repeat ? prev : fresh();
+  entry.tick = tick; entry.at = now;
+  map.set(key, entry);
+  return [entry, repeat];
+}
+
 function onEvent(ev, now) {
   const kind = kindOf(ev.type);
+  const [fx, repeat] = recent(recentFx, `${ev.type}/${ev.sid}`, ev.tick, now, () => ({ fxAt: -Infinity }));
   if (ev.x || ev.y) {
     state.lastEventLoc = { x: ev.x, y: ev.y };
-    if (state.tour && now - state.lastFlyAt > 3 && !state.fastForwarding) {
+    if (!repeat && state.tour && now - state.lastFlyAt > 3 && !state.fastForwarding) {
       state.lastFlyAt = now;
       stage.flyTo(ev.x, heightAt(ev.x, ev.y), ev.y, state.source.worldSize * (kind === "war" ? 0.12 : 0.18));
     }
   }
-  layers.fx.spawn(ev, now, heightAt);
-  if ((ev.x || ev.y) && layers.fx.enabled) {
+  if (fxFrame !== state.frameNo) { fxFrame = state.frameNo; fxThisFrame = 0; }
+  if ((ev.x || ev.y) && layers.fx.enabled && now - fx.fxAt >= REPEAT_FX_SECS && fxThisFrame < FX_PER_FRAME) {
+    fx.fxAt = now;
+    fxThisFrame++;
+    layers.fx.spawn(ev, now, heightAt);
     const h = heightAt(ev.x, ev.y) + 0.6;
     if (kind === "fire") layers.particles.spawn(KIND.EMBER, ev.x, h, ev.y, 16);
     else if (kind === "war") layers.particles.spawn(KIND.SPARK, ev.x, h, ev.y, 22);
     else layers.particles.spawn(KIND.MOTE, ev.x, h, ev.y, 10, KIND_COLOR[kind]);
   }
-  const line = document.createElement("div");
-  line.className = "codex-line";
-  const who = ev.sid == null ? "" : ` — ${esc(state.source.labels.get(ev.sid) || "species " + ev.sid)}`;
-  line.innerHTML = `<span class="tick">${Math.floor(ev.tick).toLocaleString()}</span> · <span class="sw" style="background:${KIND_CSS[kind]}"></span><span style="color:${KIND_CSS[kind]}">${esc(ev.type.replace(/_/g, " "))}</span><span class="tick">${who}</span>`;
-  if (ev.x || ev.y) line.onclick = () => stage.flyTo(ev.x, heightAt(ev.x, ev.y), ev.y, state.source.worldSize * 0.18);
   const feed = $("codex");
-  feed.prepend(line);
-  requestAnimationFrame(() => line.classList.add("show"));
-  while (feed.children.length > 7) feed.removeChild(feed.lastChild);
+  const [entry] = recent(recentLines, ev.type, ev.tick, now, () => ({ count: 0, sids: new Set(), line: null }));
+  if (!entry.line || entry.line.parentNode !== feed) {
+    const line = document.createElement("div");
+    line.className = "codex-line";
+    line.innerHTML = `<span class="tick"></span> · <span class="sw" style="background:${KIND_CSS[kind]}"></span><span style="color:${KIND_CSS[kind]}">${esc(ev.type.replace(/_/g, " "))}</span><span class="rep"></span><span class="tick who"></span>`;
+    feed.prepend(line);
+    requestAnimationFrame(() => line.classList.add("show"));
+    while (feed.children.length > 7) feed.removeChild(feed.lastChild);
+    entry.line = line; entry.count = 0; entry.sids.clear();
+  }
+  entry.count++;
+  if (ev.sid != null) entry.sids.add(ev.sid);
+  const line = entry.line;
+  line.firstChild.textContent = Math.floor(ev.tick).toLocaleString();
+  line.querySelector(".rep").textContent = entry.count > 1 ? ` ×${entry.count}` : "";
+  const who = entry.sids.size > 1 ? `${entry.sids.size} species` : ev.sid == null ? "" : state.source.labels.get(ev.sid) || `species ${ev.sid}`;
+  line.querySelector(".who").textContent = who ? ` — ${who}` : "";
+  if (ev.x || ev.y) line.onclick = () => stage.flyTo(ev.x, heightAt(ev.x, ev.y), ev.y, state.source.worldSize * 0.18);
 }
 
 function renderCard() {
@@ -483,7 +547,7 @@ function applyLayerToggles() {
       case "shadows": stage.renderer.shadowMap.enabled = on; stage.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; }); break;
       case "streaks": layers.streaks.lines.visible = on; break;
       case "trades": layers.trades.lines.visible = on; break;
-      case "villages": layers.villages.mesh.visible = on; break;
+      case "villages": layers.villages.mesh.visible = on; syncClearings(true); break;
       case "hubs": layers.hubs.mesh.visible = on; break;
       case "events": layers.fx.group.visible = on; layers.fx.enabled = on && !reduceMotion; layers.particles.group.visible = on; layers.particles.enabled = on && !reduceMotion; break;
       case "wire": if (state.terrain) state.terrain.material.wireframe = on; break;

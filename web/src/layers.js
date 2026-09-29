@@ -406,47 +406,113 @@ export class Segments {
 }
 
 // ---------------------------------------------------------------------------
-/** Hut clusters at settlement sites; villages grow in and linger/fade out. */
+/**
+ * Hut clusters at settlement sites; villages grow in and linger/fade out.
+ *
+ * A site's position is the centroid of its members' home anchors, and that
+ * centroid wanders every tick as anchors learn and members are born and die
+ * (tens of world units over a run, with single-sample jumps when a cohort
+ * dies). Drawing the huts at the live centroid slid whole villages across
+ * the ground. A village is therefore pinned where it is founded and only
+ * moves when its people have plainly left: the smoothed centroid has to sit
+ * more than `RELOCATE` village radii away for `DWELL` ticks, and then the old
+ * huts fade out where they stood while a new village grows at the new home.
+ */
 export class Villages {
   constructor(max = 1024) {
     this.max = max;
     this.mesh = new THREE.InstancedMesh(hutGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true, vertexColors: true }), max);
     this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.name = "villages";
     this.mesh.castShadow = true; this.mesh.receiveShadow = true;
-    this.sites = new Map(); // sid → {x,y,n,born,seen}
+    // key → {sid, x, y (pinned), lx, ly (smoothed live centroid), n, huts, hutBorn[], born, seen, farSince, retired, ease}
+    // Live villages are keyed by species id; a village left behind by a move is
+    // re-keyed `r<sid>:<tick>` and only fades.
+    this.sites = new Map();
     this.scale = 1;
     this.LINGER = 300; this.FADE = 100; this.GROW = 40;
+    this.RELOCATE = 2.5;     // village radii the smoothed centroid must clear before the village moves
+    this.DWELL = 150;        // ticks it must stay clear (a cohort dying is a jump, not a move)
+    this.SMOOTH = 120;       // time constant (ticks) of the centroid smoothing
+    this.RETIRE = 90;        // ticks an abandoned village takes to fade away
     this.lastTick = -1;
+    this.isWater = () => false;
+    this.clearingKey = "";
   }
   setWorldSize(ws, cell = ws / 128) { this.scale = Math.max(2.6, cell * 0.58); }
+  /** Outer hut ring radius in world units (huts h ≥ 1 sit at 0.9–2.0 scales out). */
+  get radius() { return this.scale * 2.0; }
+  /** Target hut count for `n` anchored members, with a two-hut hysteresis band on the way down. */
+  static hutsFor(n, shown = 0) {
+    const want = Math.max(1, Math.min(Math.floor(n / 8), 9));
+    return want >= shown || shown - want >= 2 ? want : shown;
+  }
   /** `instant`: sites first seen now are drawn fully grown (the capture harness's fast-forward). */
   update(sites, tick, heightAt, stride = 4, instant = false) {
-    // After a jump in time (a fast-forward, or the first frame of a world) a
-    // site that is already there was not founded this tick: draw it grown.
-    const jump = instant || this.lastTick < 0 || tick - this.lastTick > 8;
+    // After a jump in time (a fast-forward, a seek, or the first frame of a
+    // world) a site that is already there was not founded this tick: draw it
+    // grown, and snap a pinned village straight to where it now is. Plain
+    // play at 64× advances ~64–128 ticks a frame, so only a gap longer than a
+    // village lingers (or any step backwards) counts as a jump.
+    const gap = tick - this.lastTick;
+    const jump = instant || this.lastTick < 0 || gap < 0 || gap > this.LINGER;
+    const reach = this.RELOCATE * this.radius;
     this.lastTick = tick;
     for (let k = 0; k < sites.count; k++) {
-      const o = k * stride, sid = sites.data[o];
-      const v = this.sites.get(sid) || { born: jump ? tick - this.GROW : tick };
-      v.x = sites.data[o + 1]; v.y = sites.data[o + 2]; v.n = sites.data[o + 3]; v.seen = tick;
-      this.sites.set(sid, v);
+      const o = k * stride, sid = sites.data[o], x = sites.data[o + 1], y = sites.data[o + 2], n = sites.data[o + 3];
+      let v = this.sites.get(sid);
+      if (!v) {
+        const born = jump ? tick - this.GROW : tick;
+        v = { sid, x, y, lx: x, ly: y, n, huts: 0, hutBorn: [], born, seen: tick, farSince: -1, fx: 0, fy: 0, fn: 0, retired: -1, ease: 0 };
+        this.sites.set(sid, v);
+      }
+      const dt = Math.max(0, tick - v.seen);
+      const k1 = jump ? 1 : 1 - Math.exp(-dt / this.SMOOTH);
+      v.lx += (x - v.lx) * k1; v.ly += (y - v.ly) * k1;
+      v.n = n; v.seen = tick;
+      const far = Math.hypot(v.lx - v.x, v.ly - v.y) > reach;
+      if (!far) v.farSince = -1;
+      else if (jump) { v.x = v.lx; v.y = v.ly; v.farSince = -1; }
+      else {
+        // While away, average the raw centroid: the smoothed one lags a real
+        // move, and the new village belongs where the people were meanwhile.
+        if (v.farSince < 0) { v.farSince = tick; v.fx = v.fy = v.fn = 0; }
+        v.fx += x; v.fy += y; v.fn++;
+        if (tick - v.farSince >= this.DWELL) {
+          // The people have moved on: leave the old huts to fade where they
+          // stand and found the village again at the new home.
+          this.sites.set(`r${sid}:${tick}`, { ...v, hutBorn: v.hutBorn.slice(), retired: tick });
+          v.x = v.lx = v.fx / v.fn; v.y = v.ly = v.fy / v.fn;
+          v.farSince = -1; v.born = tick; v.huts = 0; v.hutBorn.length = 0;
+        }
+      }
+      const huts = Villages.hutsFor(n, v.huts);
+      for (let h = v.huts; h < huts; h++) v.hutBorn[h] = v.huts === 0 ? v.born : tick;
+      v.huts = huts;
     }
     let i = 0;
-    for (const [sid, v] of this.sites) {
-      const stale = tick - v.seen;
-      if (stale > this.LINGER || stale < 0) { this.sites.delete(sid); continue; }
-      const fade = Math.min(1, (this.LINGER - stale) / this.FADE);
+    for (const [key, v] of this.sites) {
+      let fade;
+      if (v.retired >= 0) {
+        const age = tick - v.retired;
+        if (age > this.RETIRE || age < 0) { this.sites.delete(key); continue; }
+        fade = 1 - age / this.RETIRE;
+      } else {
+        const stale = tick - v.seen;
+        if (stale > this.LINGER || stale < 0) { this.sites.delete(key); continue; }
+        fade = Math.min(1, (this.LINGER - stale) / this.FADE);
+      }
       const grow = Math.min(1, Math.max(0, (tick - v.born) / this.GROW));
-      const ease = (1 - Math.pow(1 - grow, 3)) * fade;
-      v.ease = ease;
-      const huts = Math.max(1, Math.min(Math.floor(v.n / 8), 9));
-      _c.setHex(mix(hsv(speciesHue(sid), 0.5, 0.8), 0x8a6a3c, 0.55));
-      for (let h = 0; h < huts && i < this.max; h++) {
-        const ang = sid * 2.39996 + h * 2.39996, r = (0.9 + (h % 3) * 0.55) * this.scale * (h === 0 ? 0 : 1);
+      v.ease = (1 - Math.pow(1 - grow, 3)) * fade;
+      _c.setHex(mix(hsv(speciesHue(v.sid), 0.5, 0.8), 0x8a6a3c, 0.55));
+      for (let h = 0; h < v.huts && i < this.max; h++) {
+        const ang = v.sid * 2.39996 + h * 2.39996, r = (0.9 + (h % 3) * 0.55) * this.scale * (h === 0 ? 0 : 1);
         const x = v.x + Math.cos(ang) * r, y = v.y + Math.sin(ang) * r;
+        if (this.isWater(x, y)) continue;   // a lakeside village keeps its huts on the shore
+        const g = Math.min(1, Math.max(0, (tick - v.hutBorn[h]) / this.GROW));
+        const sc = this.scale * (h === 0 ? 1.35 : 1) * fade * (1 - Math.pow(1 - g, 3));
+        if (sc <= 0) continue;
         _p.set(x, heightAt(x, y), y);
         _q.setFromAxisAngle(Y_AXIS, ang);
-        const sc = this.scale * (h === 0 ? 1.35 : 1) * ease;
         _s.set(sc, sc, sc);
         _m.compose(_p, _q, _s);
         this.mesh.setMatrixAt(i, _m);
@@ -458,9 +524,22 @@ export class Villages {
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
-  /** Live sites for the hearth-smoke emitter: `[{x, y, n, ease}]`. */
-  centers() { return [...this.sites.values()].filter((v) => v.ease > 0.6); }
-  clear() { this.sites.clear(); this.mesh.count = 0; this.lastTick = -1; }
+  /** Live sites for the hearth-smoke emitter: `[{x, y, n, ease}]` (pinned positions). */
+  centers() { return [...this.sites.values()].filter((v) => v.retired < 0 && v.ease > 0.6); }
+  /**
+   * Footprints the forest should stand back from, `[{x, y, r}]`, or null when
+   * they have not changed since the last call (so the caller can skip the
+   * forest update). Abandoned villages keep their clearing while they fade.
+   */
+  clearings() {
+    const out = [], r = this.radius + this.scale * 0.9;
+    for (const v of this.sites.values()) out.push({ x: v.x, y: v.y, r });
+    const key = out.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).sort().join(";") + `|${r}`;
+    if (key === this.clearingKey) return null;
+    this.clearingKey = key;
+    return out;
+  }
+  clear() { this.sites.clear(); this.mesh.count = 0; this.lastTick = -1; this.clearingKey = ""; }
 }
 
 // ---------------------------------------------------------------------------

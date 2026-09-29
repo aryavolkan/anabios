@@ -249,6 +249,15 @@ export class Terrain {
     return (h00 * (1 - u) + h10 * u) * (1 - v) + (h01 * (1 - u) + h11 * u) * v;
   }
 
+  /** True when world (x, y) falls on a water cell (torus-wrapped); false before the terrain ids are known. */
+  isWater(x, y) {
+    const ids = this.terrainIds;
+    if (!ids) return false;
+    const { res, cell } = this;
+    const i = ((Math.floor(x / cell) % res) + res) % res, j = ((Math.floor(y / cell) % res) + res) % res;
+    return ids[j * res + i] === T.WATER;
+  }
+
   /** Push new cell colours (RGBA8, res²; the elevation alpha is forced opaque). */
   updateColors(rgba) {
     if (!rgba || rgba.length !== this.texels.length) return;
@@ -324,8 +333,12 @@ export class Water {
           vec3 col = mix(uShallow, uColor, clamp(depth / 2.5, 0.0, 1.0));
           col = mix(col, uDeep, clamp(depth / 12.0, 0.0, 1.0));
           col *= 0.9 + 0.2 * r;
-          float spec = pow(max(dot(reflect(-uSun, n), viewDir), 0.0), 48.0);
-          col += vec3(1.0, 0.95, 0.85) * spec * 0.55;
+          // Sun glint: a tight lobe so it breaks into sparkle on the ripples. A
+          // broad one (exponent 48) turned a whole lake into one white sheet
+          // under bloom whenever the day cycle lined the sun up with the
+          // camera; it also dims as the sun sinks instead of flaring at dusk.
+          float spec = pow(max(dot(reflect(-uSun, n), viewDir), 0.0), 220.0);
+          col += vec3(1.0, 0.93, 0.82) * spec * 0.5 * smoothstep(0.08, 0.45, uSun.y);
           col += vec3(0.22, 0.30, 0.34) * fres * 0.7;
           float foamBand = 1.0 - smoothstep(0.0, 0.9, depth);
           float foam = foamBand * smoothstep(0.45, 0.75, atlasNoise(p * 0.5 + vec2(uTime * 0.6, uTime * 0.2)) + 0.25 * r);
@@ -430,6 +443,8 @@ const TUFT_COLOR = { [T.GRASS]: 0x78b544, [T.SAVANNA]: 0xb9a94e, [T.FOREST]: 0x5
 const ROCKS = { [T.TUNDRA]: 0.22, [T.DESERT]: 0.05, [T.SAVANNA]: 0.03, [T.GRASS]: 0.015 };
 const hash2 = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 
+const _fm = new THREE.Matrix4(), _fp = new THREE.Vector3(), _fq = new THREE.Quaternion(), _fs = new THREE.Vector3(), _fe = new THREE.Euler();
+
 /** Instanced forests over the terrain's cells. */
 export class Forest {
   constructor(terrain, maxPerKind = 60000) {
@@ -478,6 +493,9 @@ export class Forest {
     this.group.add(this.leaf, this.cone, this.tuft, this.rock);
     this.items = [];     // {mesh, index, kind, cell, x, z, rot, tx, tz, base}
     this.scar = null;    // per-cell 0/1 "bare" flags from the last colour refresh
+    this.byCell = new Map();   // cell → items planted there (clearing lookups)
+    this.clearings = [];       // [{x, y, r}] village footprints the trees stand back from
+    this.clearedCells = new Set();
     this.rebuild();
   }
 
@@ -485,6 +503,8 @@ export class Forest {
   rebuild() {
     const t = this.terrain, ids = t.terrainIds, res = t.res, cell = t.cell;
     this.items.length = 0;
+    this.byCell.clear();
+    this.clearedCells.clear();
     const counts = { leaf: 0, cone: 0, tuft: 0, rock: 0 };
     if (ids) {
       // Budget: keep every world under the instance cap by thinning uniformly
@@ -509,7 +529,10 @@ export class Forest {
           // Trees lean a little; grass and rocks sit square.
           const lean = kind === "leaf" || kind === "cone" ? 0.16 : 0;
           const tx = (hash2(k, salt + 700 + i) - 0.5) * lean, tz = (hash2(k, salt + 800 + i) - 0.5) * lean;
-          this.items.push({ mesh, index, kind, cell: k, x, z, rot, tx, tz, base });
+          const item = { mesh, index, kind, cell: k, x, z, rot, tx, tz, base, bare: 0, cleared: false };
+          this.items.push(item);
+          const list = this.byCell.get(k);
+          if (list) list.push(item); else this.byCell.set(k, [item]);
           p.set(x, t.heightAt(x, z), z);
           q.setFromEuler(e.set(tx, rot, tz));
           s.set(base, base, base);
@@ -537,6 +560,58 @@ export class Forest {
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
     this.scar = null;
+    if (this.clearings.length) this.setClearings(this.clearings, true);
+  }
+
+  /** Re-seat one planted item from its bare/cleared state (matrix only). */
+  _place(it) {
+    const sc = it.cleared ? 0 : it.bare && it.kind !== "rock" ? it.base * 0.12 : it.base;
+    _fp.set(it.x, this.terrain.heightAt(it.x, it.z), it.z);
+    _fq.setFromEuler(_fe.set(it.tx, it.rot, it.tz));
+    _fs.set(sc, sc, sc);
+    it.mesh.setMatrixAt(it.index, _fm.compose(_fp, _fq, _fs));
+  }
+
+  /**
+   * Keep trees, grass and rocks off village footprints: `circles` is
+   * `[{x, y, r}]` in world units. Only cells under the old or new clearings
+   * are revisited, so calling this whenever a village appears or moves is cheap.
+   */
+  setClearings(circles, force = false) {
+    this.clearings = circles;
+    if (!this.items.length) return;
+    const { res, cell } = this.terrain;
+    const cells = new Set();
+    for (const c of circles) {
+      const r = c.r + cell;
+      const i0 = Math.floor((c.x - r) / cell), i1 = Math.floor((c.x + r) / cell);
+      const j0 = Math.floor((c.y - r) / cell), j1 = Math.floor((c.y + r) / cell);
+      for (let j = Math.max(0, j0); j <= Math.min(res - 1, j1); j++) {
+        for (let i = Math.max(0, i0); i <= Math.min(res - 1, i1); i++) cells.add(j * res + i);
+      }
+    }
+    const touched = new Set(cells);
+    for (const k of this.clearedCells) touched.add(k);
+    const dirty = new Set();
+    for (const k of touched) {
+      const list = this.byCell.get(k);
+      if (!list) continue;
+      for (const it of list) {
+        let cleared = false;
+        if (cells.has(k)) {
+          for (const c of circles) {
+            const dx = it.x - c.x, dz = it.z - c.y;
+            if (dx * dx + dz * dz < c.r * c.r) { cleared = true; break; }
+          }
+        }
+        if (cleared === it.cleared && !force) continue;
+        it.cleared = cleared;
+        this._place(it);
+        dirty.add(it.mesh);
+      }
+    }
+    for (const mesh of dirty) mesh.instanceMatrix.needsUpdate = true;
+    this.clearedCells = cells;
   }
 
   /** Shrink trees on cells the biome has scarred bare (succession/pollution),
@@ -550,17 +625,14 @@ export class Forest {
       scar[k] = r > g * 1.05 ? 1 : 0;   // browner than green: bare earth / pioneer brown / pollution smudge
     }
     const prev = this.scar;
-    const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(), e = new THREE.Euler();
     let dirty = false;
     for (const it of this.items) {
       if (it.kind === "rock") continue;
       const bare = scar[it.cell];
       if (prev && prev[it.cell] === bare) continue;
-      const sc = bare ? it.base * 0.12 : it.base;
-      p.set(it.x, this.terrain.heightAt(it.x, it.z), it.z);
-      q.setFromEuler(e.set(it.tx, it.rot, it.tz));
-      s.set(sc, sc, sc);
-      it.mesh.setMatrixAt(it.index, m.compose(p, q, s));
+      it.bare = bare;
+      if (it.cleared) continue;
+      this._place(it);
       dirty = true;
     }
     if (dirty) for (const mesh of [this.leaf, this.cone, this.tuft]) mesh.instanceMatrix.needsUpdate = true;

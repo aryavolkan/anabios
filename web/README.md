@@ -16,7 +16,8 @@ or hunter figure coloured by its genome and walking (or sprinting, when it
 flees or fights) on articulated legs, a glimmer where an agent is born and a
 grey puff where one dies, combat volleys and trade lanes as fading light with
 impact sparks, pitched-roof hut villages with hearth smoke at settlement
-sites, awninged market stalls at the trade hubs, the codex streaming "first
+sites (pinned where they are founded, in a clearing the forest stands back
+from, moving only when their people have plainly left), awninged market stalls at the trade hubs, the codex streaming "first
 emergence" events as rings, light pillars and ember bursts on the map, and a
 soft bloom over the hot pixels. The same page also plays the **recorded replay** the showcase deck ships
 (`showcase/replay.js`), so the hosted deep-time story and the live sandbox are
@@ -142,6 +143,11 @@ seed), so the pinned tick, camera and agent id are the whole recipe.
 
 - `cargo test -p anabios-wasm` — pure view builders (well-formed buffers,
   side-effect-free reads, event/catalog parity) and the C-ABI round trip, natively.
+- `node web/test/body-scale.mjs`, `node web/test/villages.mjs` — pure layer
+  logic under node (after `npm --prefix web ci`): the figure-size clamp, and
+  villages staying pinned where they were founded — no sliding with the
+  wandering anchor centroid, one fade-out-and-regrow move when the people
+  have really left, no hut flicker at a band edge, no huts on water.
 - `scripts/web.sh test [scenario] [ticks] [seed]` — builds the module, runs
   `web/test/wasm-smoke.mjs` under node (every export exercised, malformed TOML
   reported, buffers in range), and asserts the wasm fingerprint equals the

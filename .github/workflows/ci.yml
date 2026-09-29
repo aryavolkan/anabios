@@ -208,6 +208,12 @@ jobs:
         run: scripts/web.sh wasm
       - name: wasm smoke + native/wasm determinism
         run: scripts/web.sh test predator-prey 300 7
+      # Pure-JS unit tests of the atlas layers (need three.js from npm, no GPU).
+      - name: frontend unit tests (body scale, village placement)
+        run: |
+          npm --prefix web ci --no-audit --no-fund
+          node web/test/body-scale.mjs
+          node web/test/villages.mjs
       - name: stage scenarios + manifest
         run: npm --prefix web run manifest
 
