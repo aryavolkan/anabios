@@ -287,6 +287,15 @@ pub struct World {
     /// with the flag off. Serialized (v45).
     #[serde(default)]
     pub growth_enabled: bool,
+    /// When true, turning inertia is active: each agent carries a persistent
+    /// facing (`AgentBuffers::heading`) that `tick::decide_all` turns toward
+    /// its wanted direction by at most `heading::MAX_TURN_RAD` per tick (more
+    /// when slow), and the turned heading — at the length gait chose — is the
+    /// direction integrate applies, so nobody reverses in one tick. Off by
+    /// default — nothing reads or writes the column, zero RNG draws,
+    /// byte-identical trajectories with the flag off. Serialized (v45).
+    #[serde(default)]
+    pub turning_enabled: bool,
     /// Species ids of founders tagged `culture_bearer` in the scenario
     /// (anthropogenic arms race). Membership tests walk to the lineage root,
     /// so speciation splinters of a tagged founder stay tagged. Empty unless
@@ -559,6 +568,7 @@ impl World {
             species_territories: Vec::new(),
             gait_enabled: false,
             growth_enabled: false,
+            turning_enabled: false,
             culture_roots: std::collections::BTreeSet::new(),
             market_field: Vec::new(),
             trade_hubs: Vec::new(),
@@ -858,5 +868,11 @@ mod tests {
     fn growth_defaults_off() {
         let w = World::new(1);
         assert!(!w.growth_enabled, "growth is opt-in at the engine layer; off by default");
+    }
+
+    #[test]
+    fn turning_inertia_defaults_off() {
+        let w = World::new(1);
+        assert!(!w.turning_enabled, "turning inertia is opt-in; off by default");
     }
 }

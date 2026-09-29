@@ -30,3 +30,4 @@ anthro_race_enabled = false
 disease_enabled = false
 gait_enabled = false
 growth_enabled = false
+turning_enabled = false

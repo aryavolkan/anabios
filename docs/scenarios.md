@@ -10,7 +10,9 @@ split.) To opt a subsystem out for your own run, copy a scenario and set its
 `*_enabled` knob to `false` (or `season_period = 0`). Opting out is meant to
 be a no-op at the engine layer; that is pinned per subsystem by its own
 flag-off tests (for example `tests/disease.rs::flag_off_is_noop`,
-`territory::tests::step_is_a_noop_with_the_flag_off`), and for two whole
+`territory::tests::step_is_a_noop_with_the_flag_off`, and for turning
+inertia `tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column`),
+and for two whole
 worlds by the flag-off trajectory guards in `tests/determinism.rs`, which
 pin `minimal` and `grand-theater` as they were before the schema flip
 (inline fixtures: `minimal` with every knob off, `grand-theater` with only
@@ -51,6 +53,22 @@ the engine default is off, and flag-off is byte-identical
 (`growth::tests::flag_off_is_exactly_the_adult_identity` and the trajectory
 guards above). The knob postdates every row's validation sweep and cost
 figure below; neither has been re-run under it.
+
+`turning_enabled` (on by default, like the feature knobs; 2026-09-29) adds
+turning inertia: each agent keeps a persistent facing
+(`AgentBuffers::heading`) that `decide_all` turns toward the wanted direction
+by at most 0.6 rad per tick at full speed — a reversal takes six ticks — and
+up to four times as sharply when crawling
+(`crates/anabios-core/src/heading.rs`); the turned heading, at the speed the
+gait chose, is what integrate applies. The heading follows the intent, not
+the move the habitat gate, swept contact or resolve end up allowing, so a
+body pressed sideways by a crowd keeps facing where it wants to go, and the
+viewers draw facing from it. Opt out with `turning_enabled = false`; the
+engine default is off, and flag-off is byte-identical
+(`tests/determinism.rs::flag_off_trajectory_ignores_the_heading_column` and
+the trajectory guards above, which moved only by the column's serialized
+bytes). The knob postdates every row's validation sweep and cost figure
+below; neither has been re-run under it.
 
 Every file is smoke-tested by `tests/all_scenarios.rs` (parse → instantiate →
 200 ticks) and has a `tests/save_load_roundtrip.rs` round-trip test. The cost

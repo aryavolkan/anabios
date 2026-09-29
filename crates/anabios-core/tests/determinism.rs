@@ -385,8 +385,15 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
     h
 }
 
-const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xd1133dd8d119e894;
-const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x56819428b6cd2bf0;
+// Re-pinned 2026-09-29 (turning inertia, FORMAT_VERSION 44→45): `AgentBuffers`
+// gained the serialized `heading` column, so the `agents` sub-state's own
+// layout changed and both pins moved by layout alone. Behaviour did not: with
+// the column's bytes spliced out of the `agents` bincode, the same runs
+// re-derive the previous pins (0xd1133dd8d119e894 / 0x56819428b6cd2bf0)
+// exactly, and `flag_off_trajectory_ignores_the_heading_column` below pins
+// that the column never influences a flag-off tick.
+const MINIMAL_TRAJECTORY_AT_1000: u64 = 0x50fa28099d13265b;
+const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x74b3c35143094247;
 
 fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
     let mut w = common::world(src);
@@ -417,4 +424,36 @@ fn grand_theater_pre_flip_trajectory_is_pinned() {
         200,
         GRAND_THEATER_TRAJECTORY_AT_200,
     );
+}
+
+/// Turning inertia off (the fixture writes `turning_enabled = false`): the
+/// `heading` column is inert. Two copies of the all-off minimal world, one
+/// with every heading forced to a different constant, must step to identical
+/// positions — and, once the columns are made equal again, identical whole
+/// states — so the layout-only move of the pins above cannot hide a flag-off
+/// behaviour change routed through the column.
+#[test]
+fn flag_off_trajectory_ignores_the_heading_column() {
+    use anabios_core::heading::SPAWN_HEADING;
+    use anabios_core::prelude_test::Vec2;
+    let mut a = common::world(&common::fixtures::minimal_flag_off());
+    assert!(!a.turning_enabled, "fixture must leave turning inertia off");
+    let mut b = a.clone();
+    let forced = Vec2::new(0.0, -1.0);
+    for h in b.agents.heading.iter_mut() {
+        *h = forced;
+    }
+    let ticks = common::ticks(300);
+    common::run(&mut a, ticks);
+    common::run(&mut b, ticks);
+    assert_eq!(a.agents.position, b.agents.position, "positions diverged with the flag off");
+    assert_eq!(a.agents.velocity, b.agents.velocity, "velocities diverged with the flag off");
+    assert_eq!(a.agents.energy, b.agents.energy, "energies diverged with the flag off");
+    // Nothing wrote either column: `a` still carries the spawn constant on
+    // every slot, `b` the forced one except where a birth re-initialised it.
+    assert!(a.agents.heading.iter().all(|&h| h == SPAWN_HEADING));
+    assert!(b.agents.heading.iter().all(|&h| h == forced || h == SPAWN_HEADING));
+    assert!(b.agents.heading.contains(&forced), "the forced column survived the run");
+    b.agents.heading = a.agents.heading.clone();
+    assert_eq!(state_hash(&a), state_hash(&b), "the heading column leaked into a flag-off tick");
 }

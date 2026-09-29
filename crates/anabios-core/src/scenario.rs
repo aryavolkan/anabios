@@ -235,6 +235,15 @@ pub struct Scenario {
     /// unchanged.
     #[serde(default = "default_true")]
     pub growth_enabled: bool,
+    /// On by default (scenario schema): turning inertia — each agent keeps a
+    /// facing (`AgentBuffers::heading`) that turns toward its wanted
+    /// direction by at most `heading::MAX_TURN_RAD` per tick (more when
+    /// slow), so nobody reverses in one tick, herds stop jittering and paths
+    /// come out as arcs. Set `false` to opt out; the engine's own default
+    /// (`World::new`) stays off, so the flag-off byte-identity guarantee is
+    /// unchanged.
+    #[serde(default = "default_true")]
+    pub turning_enabled: bool,
     /// On by default (scenario schema): O3 reproductive-success payoff bias
     /// — cultural transmission declines a maladaptive-practice channel when
     /// its local holders show a higher observed birth-failure fraction than
@@ -1129,6 +1138,7 @@ impl Scenario {
         w.territory_enabled = self.territory_enabled;
         w.gait_enabled = self.gait_enabled;
         w.growth_enabled = self.growth_enabled;
+        w.turning_enabled = self.turning_enabled;
         w.disasters_enabled = self.disasters_enabled;
         if w.disasters_enabled {
             w.disasters = crate::disaster::DisasterState::init(&mut w.rng);

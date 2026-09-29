@@ -60,7 +60,9 @@ pub fn step(world: &mut World) {
     // no-op + zero RNG when `affect_enabled` is false.
     crate::affect::develop_all(world);
 
-    // Stage 3: decide.
+    // Stage 3: decide. With `turning_enabled`, each agent also turns its
+    // persistent heading toward the wanted direction by a bounded angle, and
+    // the turned heading (× the speed fraction) is what stage 4 applies.
     decide_all(world);
 
     // Stage 4: integrate (motion + per-tick metabolism).
@@ -217,6 +219,17 @@ fn decide_all(world: &mut World) {
     // bit-identical to the old serial ascending-id loop. `map_init` gives each
     // rayon worker one reusable eval stack (replacing the former shared
     // `eval_stack` scratch on World).
+    //
+    // Turning inertia (opt-in): each agent turns its own `heading` slot
+    // toward its wanted direction. The column is taken out of `agents` for
+    // the loop — the helpers below read the whole `&AgentBuffers`, which
+    // must not alias a `&mut` column — and restored after it: a pointer
+    // swap, no arithmetic, so the flag-off path is unchanged. It is zipped
+    // in as a third index-disjoint output; `actions`/`desired_direction` are
+    // sized to exactly `cap` by `resize_scratch` (the only thing that sizes
+    // them, and capacity never shrinks), so the zip covers every slot.
+    let turning_enabled = world.turning_enabled;
+    let mut heading = std::mem::take(&mut world.agents.heading);
     let agents = &world.agents;
     let sensors = &world.sensors;
     let biome = &world.biome;
@@ -241,8 +254,9 @@ fn decide_all(world: &mut World) {
         .actions
         .par_iter_mut()
         .zip(world.desired_direction.par_iter_mut())
+        .zip(heading.par_iter_mut())
         .enumerate()
-        .map_init(Vec::new, |stack, (i, (action_out, dir_out))| {
+        .map_init(Vec::new, |stack, (i, ((action_out, dir_out), heading_out))| {
             if i >= cap || !agents.is_alive(i as u32) {
                 // Dead/out-of-range slots get clean scratch, not stale:
                 // `actions`/`desired_direction` are `#[serde(skip)]`, so a
@@ -483,7 +497,7 @@ fn decide_all(world: &mut World) {
             // no movement.
             let v = Vec2::new(action.move_x, action.move_y);
             let len = v.length();
-            *dir_out = if len < 1e-4 || !v.is_finite() {
+            let dir = if len < 1e-4 || !v.is_finite() {
                 Vec2::ZERO
             } else if gait_enabled {
                 // Gait (opt-in, `gait.rs`): fold the urgency-chosen speed
@@ -503,9 +517,21 @@ fn decide_all(world: &mut World) {
             } else {
                 v / len
             };
+            // Turning inertia (opt-in): the body turns toward `dir` by at
+            // most `heading::max_turn` this tick, and the direction applied
+            // is the turned heading scaled back by `dir`'s length — its speed
+            // fraction (1 for the unit vector, the gait fraction when gait
+            // folded one in above; either way the length is kept). The
+            // heading follows this intent, not the move the habitat gate,
+            // swept contact or collision resolve end up applying. Own slot
+            // only, no RNG. Flag off ⇒ `dir` is applied untouched and the
+            // column is never read or written.
+            *dir_out =
+                if turning_enabled { crate::heading::apply_turn(heading_out, dir) } else { dir };
             *action_out = action;
         })
         .count();
+    world.agents.heading = heading;
 }
 
 #[cfg(test)]
@@ -711,6 +737,109 @@ mod tests {
             "desired_direction must net toward home despite a huge outward program \
              intent: dir={dir:?} home={home:?}"
         );
+    }
+
+    /// A program whose only output is a constant move intent due west.
+    fn west_mover() -> crate::program::Program {
+        use crate::program::{Node, Program};
+        Program::from_slice(&[Node::Const(-1.0), Node::MoveTowardX])
+    }
+
+    #[test]
+    fn turning_flag_off_never_touches_the_heading_and_applies_the_raw_direction() {
+        // Engine default (flag off): the column is inert — `decide_all`
+        // neither reads nor writes it, and the applied direction is the raw
+        // wanted one, however far it is from the stored facing.
+        let mut w = World::new(3);
+        let a = w.spawn_agent(Vec2::new(400.0, 400.0), Genome::neutral());
+        w.agents.program[a as usize] = west_mover();
+        let north = Vec2::new(0.0, 1.0);
+        w.agents.heading[a as usize] = north;
+        w.resize_scratch();
+        decide_all(&mut w);
+        assert_eq!(w.desired_direction[a as usize], Vec2::new(-1.0, 0.0));
+        assert_eq!(w.agents.heading[a as usize], north);
+        step(&mut w);
+        assert_eq!(w.agents.heading[a as usize], north, "a full tick leaves it alone too");
+    }
+
+    #[test]
+    fn turning_flag_on_reverses_over_several_ticks_each_bounded_by_max_turn() {
+        use crate::heading::{MAX_TURN_RAD, SPAWN_HEADING};
+        let mut w = World::new(3);
+        w.turning_enabled = true;
+        let a = w.spawn_agent(Vec2::new(400.0, 400.0), Genome::neutral());
+        w.agents.program[a as usize] = west_mover();
+        w.resize_scratch();
+        assert_eq!(w.agents.heading[a as usize], SPAWN_HEADING, "born facing +x");
+        let west = Vec2::new(-1.0, 0.0);
+        let mut ticks = 0;
+        loop {
+            let before = w.agents.heading[a as usize];
+            decide_all(&mut w);
+            ticks += 1;
+            let after = w.agents.heading[a as usize];
+            let turned = before.dot(after).clamp(-1.0, 1.0).acos();
+            assert!(turned <= MAX_TURN_RAD + 1e-5, "tick {ticks}: turned {turned} rad");
+            assert!((after.length() - 1.0).abs() < 1e-5, "heading stays unit: {after:?}");
+            assert_eq!(
+                w.desired_direction[a as usize], after,
+                "the applied direction is the turned heading"
+            );
+            if after == west {
+                break;
+            }
+            assert!(ticks < 20, "never finished reversing: {after:?}");
+        }
+        assert!(ticks > 1, "a reversal must take more than one tick");
+        assert_eq!(ticks, (std::f32::consts::PI / MAX_TURN_RAD).ceil() as u32);
+    }
+
+    #[test]
+    fn turning_flag_on_standing_still_keeps_the_heading() {
+        let mut w = World::new(3);
+        w.turning_enabled = true;
+        let a = w.spawn_agent(Vec2::new(400.0, 400.0), Genome::neutral());
+        w.agents.program[a as usize] = crate::program::Program::empty();
+        let south = Vec2::new(0.0, -1.0);
+        w.agents.heading[a as usize] = south;
+        w.resize_scratch();
+        decide_all(&mut w);
+        assert_eq!(w.desired_direction[a as usize], Vec2::ZERO, "no intent ⇒ no move");
+        assert_eq!(w.agents.heading[a as usize], south, "…and the heading is left alone");
+    }
+
+    #[test]
+    fn heading_follows_the_intended_direction_not_the_gated_move() {
+        // Territory layer on: a land agent one unit inland of a west-facing
+        // shore wants to walk into the sea. The habitat gate blocks the move
+        // every tick (velocity ZERO, position pinned) but the body keeps
+        // facing where it wants to go — the heading follows the intent, not
+        // the resolved displacement.
+        let mut w = World::with_dims(1, 256.0, 32, 16);
+        w.turning_enabled = true;
+        w.territory_enabled = true;
+        let res = w.biome.res;
+        for row in 0..res {
+            for col in 0..res {
+                w.biome.at_mut(col, row).terrain =
+                    if col < 16 { TerrainType::Water } else { TerrainType::Grass };
+            }
+        }
+        // Cell 16 spans x ∈ [128, 136); a full-speed step (4 units) west of
+        // 129 lands in the water column.
+        let start = Vec2::new(129.0, 100.0);
+        let a = w.spawn_agent(start, Genome::neutral());
+        pin_unit_speed(&mut w, a);
+        w.agents.program[a as usize] = west_mover();
+        let west = Vec2::new(-1.0, 0.0);
+        w.agents.heading[a as usize] = west;
+        for _ in 0..5 {
+            step(&mut w);
+            assert_eq!(w.agents.position[a as usize], start, "blocked at the shore");
+            assert_eq!(w.agents.velocity[a as usize], Vec2::ZERO, "the gate applied no move");
+            assert_eq!(w.agents.heading[a as usize], west, "…but the body still faces the sea");
+        }
     }
 
     /// Gait fixture: one agent at (500, 500) whose program pushes a huge +x

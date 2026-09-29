@@ -62,6 +62,7 @@ fn full_stack_but_dimorphism(w: &World) -> bool {
         && w.mate_seeking_enabled
         && w.territory_enabled
         && w.gait_enabled
+        && w.turning_enabled
         && w.disease_enabled
         && w.anthro_race_enabled
         && w.repro_biased_learning
@@ -217,4 +218,37 @@ fn territory_roundtrip_on_a_256_world_heals_the_collision_hash() {
     }
     common::run(&mut w, 30);
     common::assert_roundtrip_world(&mut w, "territory_enabled on a 256-wide world");
+}
+
+/// Turning inertia: the `heading` column is path-dependent state (each tick
+/// turns it from its previous value), so it must be serialized, not skipped —
+/// a reloaded world that forgot its facings would steer differently on the
+/// very next tick. Hand-built with fixed-intent programs and saved mid-turn,
+/// so the column is provably non-trivial (no slot at the spawn constant) when
+/// it round-trips; the twelve worlds above round-trip it under the full stack.
+#[test]
+fn heading_survives_a_roundtrip_and_the_reloaded_world_keeps_turning() {
+    use anabios_core::genome::Genome;
+    use anabios_core::heading::SPAWN_HEADING;
+    use anabios_core::prelude_test::Vec2;
+    use anabios_core::program::{Node, Program};
+    let mut w = World::new(11);
+    w.turning_enabled = true;
+    for k in 0..12u32 {
+        let id = w.spawn_agent(Vec2::new(300.0 + k as f32 * 4.0, 500.0), Genome::neutral());
+        // Half want due west, half due north: every heading leaves +x.
+        let (v, node) =
+            if k % 2 == 0 { (-1.0, Node::MoveTowardX) } else { (1.0, Node::MoveTowardY) };
+        w.agents.program[id as usize] = Program::from_slice(&[Node::Const(v), node]);
+    }
+    // Two ticks: 1.2 rad into a 1.57 / 3.14 rad turn — every facing mid-turn.
+    common::run(&mut w, 2);
+    assert!(
+        w.agents.iter_alive().all(|id| w.agents.heading[id as usize] != SPAWN_HEADING),
+        "warm-up must leave every heading off the spawn constant"
+    );
+    let bytes = anabios_core::snapshot::save_to_bytes(&w).expect("save");
+    let reloaded = anabios_core::snapshot::load_from_bytes(&bytes).expect("load");
+    assert_eq!(w.agents.heading, reloaded.agents.heading, "heading column must persist");
+    common::assert_roundtrip_world(&mut w, "turning_enabled (heading column mid-turn)");
 }

@@ -21,6 +21,7 @@ pub mod gait;
 pub mod genome;
 pub mod growth;
 pub mod habitat;
+pub mod heading;
 pub mod hub;
 pub mod integrate;
 pub mod interact;

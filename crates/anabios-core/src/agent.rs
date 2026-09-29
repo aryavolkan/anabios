@@ -41,6 +41,18 @@ pub struct AgentBuffers {
     /// rotation. Included in the persistent snapshot to keep golden hashes
     /// stable across that change.
     pub velocity: Vec<Vec2>,
+    /// Persistent facing (turning inertia): the unit direction the body
+    /// points, turned toward each tick's wanted direction by at most
+    /// `heading::max_turn` in `tick::decide_all` when `World::turning_enabled`.
+    /// Every spawn — founder or newborn — resets it to `heading::SPAWN_HEADING`
+    /// (`(1, 0)`; a fixed constant rather than a parent's heading, so the
+    /// column is a pure function of the spawn sequence: no RNG, no cross-row
+    /// read). With the flag off nothing reads or writes it, so it stays at
+    /// that constant on every slot (pinned by `tests/determinism.rs::
+    /// flag_off_trajectory_ignores_the_heading_column`). Serialized — a
+    /// path-dependent accumulator feeding hashed movement, so it must NOT be
+    /// `#[serde(skip)]` (still-ticks v13 footgun).
+    pub heading: Vec<Vec2>,
     pub energy: Vec<f32>,
     pub age: Vec<u32>,
     pub genome: Vec<Genome>,
@@ -217,6 +229,7 @@ impl AgentBuffers {
         let i = id as usize;
         self.position[i] = position;
         self.velocity[i] = Vec2::ZERO;
+        self.heading[i] = crate::heading::SPAWN_HEADING;
         self.energy[i] = SPAWN_ENERGY;
         self.age[i] = 0;
         self.genome[i] = genome;
@@ -259,6 +272,7 @@ impl AgentBuffers {
         let id = self.position.len() as AgentId;
         self.position.push(Vec2::ZERO);
         self.velocity.push(Vec2::ZERO);
+        self.heading.push(crate::heading::SPAWN_HEADING);
         self.energy.push(0.0);
         self.age.push(0);
         self.genome.push(Genome::neutral());
@@ -655,5 +669,38 @@ mod tests {
         );
         assert_eq!(id2, id, "slot reused");
         assert_eq!(a.affect_prev_crowding[id as usize], 0.0, "reuse re-init");
+    }
+
+    #[test]
+    fn spawn_sets_the_heading_and_a_reused_slot_resets_it() {
+        use crate::heading::SPAWN_HEADING;
+        let mut a = AgentBuffers::new();
+        let id = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            1,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        assert_eq!(a.heading[id as usize], SPAWN_HEADING);
+        assert_eq!(a.heading.len(), a.capacity(), "heading grows in lockstep with capacity");
+        // A turned heading is not carried over into the slot's next occupant.
+        a.heading[id as usize] = Vec2::new(0.0, 1.0);
+        a.kill(id);
+        let id2 = a.spawn(
+            Vec2::ZERO,
+            neutral(),
+            2,
+            [LINEAGE_NONE; 2],
+            0,
+            crate::module::starter_kit(),
+            Program::empty(),
+            false,
+        );
+        assert_eq!(id2, id, "LIFO free list reuses slot 0");
+        assert_eq!(a.heading[id as usize], SPAWN_HEADING, "reused slot re-initializes the heading");
     }
 }

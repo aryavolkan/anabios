@@ -36,6 +36,8 @@ use serde_json::{json, Value};
 /// `[id, x, y, rot, size, diet, hue, sat, val, dialect_hue, energy,
 ///   species_id, mood, flags, arousal, infection, body]`.
 ///
+/// `rot` is the persistent heading's angle when `turning_enabled` (a resting
+/// body keeps facing where it last went), else the velocity's (0 when still).
 /// `flags` bits: 0 = livestock, 1 = asleep, 2 = male (only meaningful when
 /// the matching scenario flag is on — see [`world_flags`]). `body` is the
 /// physical collision diameter in world units (`2 · live_body_radius`, so a
@@ -148,7 +150,14 @@ pub fn fill_agents(w: &World, out: &mut Vec<f32>) -> usize {
         let p = w.agents.position[i];
         let v = w.agents.velocity[i];
         let g = &w.agents.genome[i];
-        let rot = if v.length_squared() > 1e-6 { v.y.atan2(v.x) } else { 0.0 };
+        let rot = if w.turning_enabled {
+            let h = w.agents.heading[i];
+            h.y.atan2(h.x)
+        } else if v.length_squared() > 1e-6 {
+            v.y.atan2(v.x)
+        } else {
+            0.0
+        };
         let mut flags = 0u32;
         if w.domestication_enabled && w.agents.livestock_of[i] != AGENT_NULL {
             flags |= 1;
