@@ -140,7 +140,9 @@ placement = { kind = "habitat", herds = 4, radius = 0.0, max_water_dist = 32.0 }
 #[test]
 fn habitat_default_water_reach_scales_to_the_field() {
     // `max_water_dist` absent => HABITAT_WATER_CELLS cells of the *actual*
-    // field, not a constant in default-world units.
+    // field, not a constant in default-world units. Radius 0 reads the site
+    // choice alone, so the collision layer's founder settle (a scatter of its
+    // own for founders seeded on one point) is off here too.
     let toml = watered_world(
         3,
         r#"
@@ -149,7 +151,8 @@ count = 16
 archetype = "mammal_grazer"
 placement = { kind = "habitat", herds = 2, radius = 0.0 }
 "#,
-    );
+    )
+    .replacen("world_size = 2048.0", "territory_enabled = false\nworld_size = 2048.0", 1);
     let w = instantiate(&toml);
     let reach = HABITAT_WATER_CELLS * w.biome.cell_size;
     for id in w.agents.iter_alive() {
