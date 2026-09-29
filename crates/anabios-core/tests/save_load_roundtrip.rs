@@ -116,9 +116,11 @@ roundtrip_tests! {
         // Absorbed living-sandbox-coevolution (400) and sandbox-large (300).
         "../../../scenarios/sandbox.toml", 400, full_stack, "sandbox (full stack)";
     riverlands_roundtrip:
+        // Its lineage shares are gone (capacity from food, 2026-09-29); the
+        // 4096² self-siting continent is what sets it apart now.
         "../../../scenarios/riverlands.toml", 200,
-        |w: &World| full_stack(w) && !w.lineage_caps.is_empty(),
-        "riverlands (full stack + max_share)";
+        |w: &World| full_stack(w) && w.world_size == 4096.0,
+        "riverlands (4096 continent, full stack)";
     huge_steppe_roundtrip:
         "../../../scenarios/huge-steppe.toml", 120,
         |w: &World| full_stack(w) && w.world_size == 8192.0,
