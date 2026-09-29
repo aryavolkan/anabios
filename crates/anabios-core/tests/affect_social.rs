@@ -135,7 +135,7 @@ const AFFECT_GOLDEN: &[(u64, u64)] =
     // lane and the discovery table gains an era-1 candidate. Ignored by
     // default (golden validation is off); regenerated on the merged tree with
     // `UPDATE_HASHES=1 … -- --ignored golden_hashes trajectory_is_pinned`.
-    &[(0, 0x3651a748bbc86747), (100, 0x4c9cf6641f62b1f9), (300, 0xc3968e0ceb81f927)];
+    &[(0, 0xc371b09490486347), (100, 0x5de88a4550e847f9), (300, 0xb814d342ce394327)];
 
 #[test]
 #[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]

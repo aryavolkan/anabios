@@ -182,7 +182,7 @@ const COGNITIVE_GOLDEN: &[(u64, u64)] =
     // lane and the discovery table gains an era-1 candidate. Ignored by
     // default (golden validation is off); regenerated on the merged tree with
     // `UPDATE_HASHES=1 … -- --ignored golden_hashes trajectory_is_pinned`.
-    &[(0, 0x06be2d75627792a5), (100, 0x00d5648403139300), (300, 0xf2613d86f1ff240b)];
+    &[(0, 0xc16a8d23cf4b8035), (100, 0xb954801033fad3d5), (300, 0x20881a45a9ef0158)];
 
 #[test]
 #[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]

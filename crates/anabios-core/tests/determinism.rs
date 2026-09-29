@@ -240,7 +240,7 @@ const GOLDEN: &[(u64, u64)] =
     // lane and the discovery table gains an era-1 candidate. Ignored by
     // default (golden validation is off); regenerated on the merged tree with
     // `UPDATE_HASHES=1 … -- --ignored golden_hashes trajectory_is_pinned`.
-    &[(0, 0x3651a748bbc86747), (100, 0x4c9cf6641f62b1f9), (1000, 0x515d508cc6d0cb85)];
+    &[(0, 0xc371b09490486347), (100, 0x5de88a4550e847f9), (1000, 0xfd5451ad0cfc06e9)];
 
 /// The `_all` hot stages (`sense_all`, `decide_all`, `integrate_all`,
 /// `module::upkeep_all`, `iq`, `signatures`) each claim to be "bit-identical to
@@ -369,7 +369,7 @@ const HABITAT_GOLDEN: &[(u64, u64)] =
     // lane and the discovery table gains an era-1 candidate. Ignored by
     // default (golden validation is off); regenerated on the merged tree with
     // `UPDATE_HASHES=1 … -- --ignored golden_hashes trajectory_is_pinned`.
-    &[(0, 0xfdad43976f592443), (100, 0x532148cda698631c), (1000, 0xcbeffa3bda6859d6)];
+    &[(0, 0x3b54e54b462425c3), (100, 0x26b1d663ac9d68bc), (1000, 0x12dde2350436b746)];
 
 #[test]
 #[ignore = "golden validation is off (2026-09-29): run with `-- --ignored golden_hashes trajectory_is_pinned` to compare against the pins, UPDATE_HASHES=1 to re-pin"]
@@ -500,8 +500,8 @@ fn trajectory_hash(w: &anabios_core::world::World) -> u64 {
 // more jittered lane per Communicator birth, an extra era-1 candidate).
 // Pinned at the merge head; the guards are ignored by default since the same
 // date (golden validation is off) and run with `--ignored`.
-const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xd1133dd8d119e894;
-const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0x56819428b6cd2bf0;
+const MINIMAL_TRAJECTORY_AT_1000: u64 = 0xdde8c1942fd69854;
+const GRAND_THEATER_TRAJECTORY_AT_200: u64 = 0xf23327e1471c4cd8;
 
 fn assert_trajectory(label: &str, src: &str, ticks: u64, pinned: u64) {
     let mut w = common::world(src);
