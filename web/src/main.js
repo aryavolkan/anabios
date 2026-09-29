@@ -188,6 +188,7 @@ async function prepareShot() {
         if (remaining <= 40) {
           layers.streaks.push(src.streaks(), tick);
           layers.trades.push(src.trades(), tick);
+          layers.villages.classify(src.agents());
           updateVillages(src, tick, true);
         }
         for (const ev of src.events()) onEvent(ev, performance.now() / 1000);
@@ -299,7 +300,9 @@ function loop(now) {
     const fractional = src.kind === "replay" || state.speed < 1;
     if (stepped > 0 || fractional || state.sinceStep === 0) {
       const tick = src.tick;
-      layers.agents.update(src.agents(), heightAt, src.kind === "live", unitsPerPixel);
+      const agents = src.agents();
+      layers.agents.update(agents, heightAt, src.kind === "live", unitsPerPixel);
+      layers.villages.classify(agents);   // before the next wasm call can detach the view
       if (stepped > 0 || src.kind === "replay") {
         const streaks = src.streaks();
         layers.streaks.push(streaks, tick);

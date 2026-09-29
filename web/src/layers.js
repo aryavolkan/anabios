@@ -406,6 +406,11 @@ export class Segments {
 }
 
 // ---------------------------------------------------------------------------
+/** Omnivore diet band read as hominid (game/scripts/mammal_sprites.gd HERB_MAX / CARN_MIN). */
+export const HOMINID_DIET = [0.34, 0.66];
+/** Share of a species' members in the band to become / stay a hominid. */
+const HOMINID_IN = 0.5, HOMINID_OUT = 0.3;
+
 /**
  * Hut clusters at settlement sites; villages grow in and linger/fade out.
  *
@@ -417,6 +422,11 @@ export class Segments {
  * moves when its people have plainly left: the smoothed centroid has to sit
  * more than `RELOCATE` village radii away for `DWELL` ticks, and then the old
  * huts fade out where they stood while a new village grows at the new home.
+ *
+ * Huts belong to hominids only. The core's settlement latch fires for any
+ * species whose home anchors cluster — grazing herds and hunting packs
+ * included — so a site is drawn only while its species reads as a hominid
+ * (see `classify`).
  */
 export class Villages {
   constructor(max = 1024) {
@@ -437,6 +447,33 @@ export class Villages {
     this.lastTick = -1;
     this.isWater = () => false;
     this.clearingKey = "";
+    this.hominids = new Set();
+  }
+  /**
+   * Which species are hominids, from one frame of agent rows: those whose
+   * members mostly sit in the omnivore diet band the Godot viewer draws as
+   * primates (`MammalSprites.HERB_MAX`..`CARN_MIN`). Every culture-bearing
+   * archetype (innovator, traditionalist, ape_hunter, cultural_forager) runs
+   * at diet ≈ 0.5; grazers sit near 0 and hunters near 1. Body size is left
+   * out: growing juveniles fall under the Godot size split. A species joins
+   * at a `HOMINID_IN` share of its members and leaves below `HOMINID_OUT`,
+   * so a lineage drifting across the band does not flicker its village.
+   */
+  classify(agents) {
+    const { count, data, stride } = agents, tally = new Map();
+    for (let k = 0; k < count; k++) {
+      const o = k * stride, sid = data[o + AGENT.SPECIES], d = data[o + AGENT.DIET];
+      let t = tally.get(sid);
+      if (!t) tally.set(sid, (t = [0, 0]));
+      t[1]++;
+      if (d >= HOMINID_DIET[0] && d < HOMINID_DIET[1]) t[0]++;
+    }
+    const next = new Set();
+    for (const [sid, [inBand, n]] of tally) {
+      const share = inBand / n;
+      if (share >= HOMINID_IN || (this.hominids.has(sid) && share >= HOMINID_OUT)) next.add(sid);
+    }
+    this.hominids = next;
   }
   setWorldSize(ws, cell = ws / 128) { this.scale = Math.max(2.6, cell * 0.58); }
   /** Outer hut ring radius in world units (huts h ≥ 1 sit at 0.9–2.0 scales out). */
@@ -459,6 +496,7 @@ export class Villages {
     this.lastTick = tick;
     for (let k = 0; k < sites.count; k++) {
       const o = k * stride, sid = sites.data[o], x = sites.data[o + 1], y = sites.data[o + 2], n = sites.data[o + 3];
+      if (!this.hominids.has(sid)) continue;   // not reported ⇒ an existing village lingers and fades
       let v = this.sites.get(sid);
       if (!v) {
         const born = jump ? tick - this.GROW : tick;
@@ -539,7 +577,7 @@ export class Villages {
     this.clearingKey = key;
     return out;
   }
-  clear() { this.sites.clear(); this.mesh.count = 0; this.lastTick = -1; this.clearingKey = ""; }
+  clear() { this.sites.clear(); this.hominids.clear(); this.mesh.count = 0; this.lastTick = -1; this.clearingKey = ""; }
 }
 
 // ---------------------------------------------------------------------------

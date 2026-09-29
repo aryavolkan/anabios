@@ -2,11 +2,12 @@
 // Unit test for layers.js's Villages: a village is pinned where it is founded
 // and does not slide with the wandering anchor centroid; it moves only when
 // the centroid has left for good, leaving the old huts to fade in place; hut
-// counts do not flicker at a band edge.
+// counts do not flicker at a band edge; and only hominids build huts.
 //
 //   node web/test/villages.mjs
 
 import { Villages } from "../src/layers.js";
+import { AGENT } from "../src/sim.js";
 
 function check(cond, msg) {
   if (!cond) {
@@ -17,6 +18,19 @@ function check(cond, msg) {
 
 const flat = () => 0;
 const site = (sid, x, y, n) => ({ count: 1, data: new Float32Array([sid, x, y, n]) });
+/** Agent rows (AGENT layout) for `[species, diet]` pairs. */
+function agents(pairs) {
+  const stride = 17, data = new Float32Array(pairs.length * stride);
+  pairs.forEach(([sid, diet], k) => { data[k * stride + AGENT.SPECIES] = sid; data[k * stride + AGENT.DIET] = diet; });
+  return { count: pairs.length, data, stride };
+}
+/** A Villages layer on the 1024-unit / 128² world where `sids` are hominids. */
+function villages(...sids) {
+  const v = new Villages();
+  v.setWorldSize(1024, 8);
+  v.classify(agents(sids.map((sid) => [sid, 0.5])));
+  return v;
+}
 /** World positions of every drawn hut instance (x, z). */
 function huts(v) {
   const out = [], a = v.mesh.instanceMatrix.array;
@@ -25,8 +39,7 @@ function huts(v) {
 }
 
 // World of 1024 units on a 128² grid: cell 8, hut scale 4.64, radius ≈ 9.3.
-const v = new Villages();
-v.setWorldSize(1024, 8);
+const v = villages(3);
 const R = v.radius;
 
 // Founded at (500, 500), then the centroid jitters and wanders inside the
@@ -59,8 +72,7 @@ check(Math.abs(live.x - far) < R, `relocated near the new home (x=${live.x.toFix
 check([...v.sites.keys()].length === 1, "the abandoned copy has faded out by now");
 
 // Relocation leaves a ghost that fades, never a second live village.
-const w = new Villages();
-w.setWorldSize(1024, 8);
+const w = villages(1);
 w.update(site(1, 200, 200, 40), 0, flat);
 let ghostSeen = false;
 for (let t = 1; t < 400; t++) {
@@ -78,26 +90,47 @@ check(Villages.hutsFor(48, 5) === 6, "growth adds a hut at once");
 
 // 64× play advances ~100 ticks a frame: that is not a time jump, so a
 // jittering centroid still leaves the huts where they stand.
-const fast = new Villages();
-fast.setWorldSize(1024, 8);
+const fast = villages(5);
 fast.update(site(5, 300, 300, 40), 0, flat);
 const fastHuts = huts(fast);
 for (let t = 100, k = 0; t <= 3000; t += 100, k++) fast.update(site(5, 300 + (k % 2 ? 1 : -1) * R * 3, 300, 40), t, flat);
 check(huts(fast).every(([x, z], i) => x === fastHuts[i][0] && z === fastHuts[i][1]), "fast play does not drag the huts after the centroid");
 
 // Time jumps (fast-forward / replay seek) snap the village to its current home.
-const j = new Villages();
-j.setWorldSize(1024, 8);
+const j = villages(2);
 j.update(site(2, 100, 100, 16), 0, flat);
 j.update(site(2, 400, 100, 16), 5000, flat);
 check(j.sites.get(2).x === 400, "a time jump snaps the village to the live site");
 
 // Huts never stand on water: a lakeside village drops the huts over the lake.
-const lake = new Villages();
-lake.setWorldSize(1024, 8);
+const lake = villages(4);
 lake.isWater = (x) => x > 600;
 lake.update(site(4, 600, 300, 72), 0, flat);
 check(huts(lake).every(([x]) => x <= 600), "no hut on a water cell");
 check(huts(lake).length > 0 && huts(lake).length < 9, "shore huts kept, lake huts dropped");
 
-console.log("villages: pinned placement, relocation, hysteresis and shoreline ok");
+// Only hominids build huts: an omnivore lineage (diet ≈ 0.5, the culture
+// archetypes) settles into a village, a settled grazing herd (diet ≈ 0) or
+// hunting pack (≈ 1) does not.
+const mixed = new Villages();
+mixed.setWorldSize(1024, 8);
+mixed.classify(agents([[1, 0.5], [1, 0.48], [1, 0.52], [2, 0.01], [2, 0.0], [3, 1.0], [3, 0.99]]));
+const three = { count: 3, data: new Float32Array([1, 100, 100, 40, 2, 500, 500, 40, 3, 800, 800, 40]) };
+mixed.update(three, 0, flat);
+check([...mixed.sites.keys()].join() === "1", `only the hominid species gets a village (got ${[...mixed.sites.keys()]})`);
+check(huts(mixed).every(([x]) => x < 200), "no huts at the herd or pack sites");
+
+// A lineage drifting out of the omnivore band keeps its village until it has
+// clearly left (hysteresis), then the village lingers and fades like any site.
+const drift = villages(6);
+const share = (inBand) => agents(Array.from({ length: 10 }, (_, k) => [6, k < inBand ? 0.5 : 0.05]));
+drift.classify(share(4));
+check(drift.hominids.has(6), "40% in band keeps an existing hominid");
+drift.classify(share(2));
+check(!drift.hominids.has(6), "20% in band drops it");
+drift.classify(share(4));
+check(!drift.hominids.has(6), "and 40% is not enough to rejoin");
+drift.update(site(6, 300, 300, 40), 0, flat);
+check(drift.sites.size === 0, "a non-hominid settlement founds no village");
+
+console.log("villages: hominids only; pinned placement, relocation, hysteresis and shoreline ok");
