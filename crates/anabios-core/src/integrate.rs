@@ -25,6 +25,34 @@ pub const PERCEPTION_ENERGY_COST: f32 = 0.005;
 /// Locomotor modules (their max_speed contributions sum, then we clamp).
 pub const SPEED_MAX_CAP: f32 = 4.0;
 
+/// An agent's top speed this tick, in world units per tick: `SPEED_MAX_CAP`
+/// scaled by its summed Locomotor speed (clamped to 1), Openness, the
+/// Machinery buff (`inv_mask` is the held-invention mask of its meme vector)
+/// and affect (SEEKING). `integrate_all` moves `desired_direction × top_speed`;
+/// with gait on the direction's length is the fraction of this actually
+/// used, so a viewer or test can read `|velocity| / top_speed` as the gait.
+/// The product is evaluated in exactly the order `integrate_all` always used,
+/// so factoring it out changed no bit.
+#[inline]
+pub fn top_speed(
+    modules: &crate::module::ModuleList,
+    genome: &crate::genome::Genome,
+    inv_mask: u32,
+    affect: &crate::affect::AffectState,
+    gene_tech_coupling: bool,
+) -> f32 {
+    let module_speed = crate::module::effective_speed_max(modules).clamp(0.0, 1.0);
+    // Openness scales effective speed (identity at neutral personality).
+    let speed_factor = crate::personality::personality_speed_factor(genome);
+    // Affect movement-speed factor (SEEKING + arousal). Exactly 1.0 at
+    // neutral affect, so a flag-off world stays byte-identical.
+    let affect_speed = crate::affect::affect_speed_factor(affect);
+    // Machinery buff: powered locomotion.
+    let inv_speed =
+        crate::invention::speed_multiplier_coupled(inv_mask, genome, gene_tech_coupling);
+    SPEED_MAX_CAP * module_speed * speed_factor * inv_speed * affect_speed
+}
+
 /// Apply `desired_direction[i]` to each alive agent, scaled by the agent's
 /// effective Locomotor speed. Agents without a Locomotor still pay basal
 /// metabolism but do not move. `dimorphism_enabled` (E12) switches on the
@@ -34,7 +62,11 @@ pub const SPEED_MAX_CAP: f32 = 4.0;
 /// radius-scaled perception-energy cost (zero and byte-identical when false).
 /// `habitat` (territory layer) is `Some(biome)` when `territory_enabled`:
 /// each move passes through `habitat::gate_move` for the agent's Locomotion
-/// class; `None` applies the move ungated (exact identity).
+/// class; `None` applies the move ungated (exact identity). `gait_enabled`
+/// (`gait.rs`) reads the speed fraction `decide_all` folded into the
+/// direction's length and multiplies the move cost by
+/// `gait::move_cost_factor(frac)`; pass `false` for exact identity (the
+/// direction is then a unit vector and the factor is never evaluated).
 #[allow(clippy::too_many_arguments)]
 pub fn integrate_all(
     agents: &mut AgentBuffers,
@@ -45,6 +77,7 @@ pub fn integrate_all(
     cognition_enabled: bool,
     max_radius: f32,
     habitat: Option<&crate::biome::BiomeField>,
+    gait_enabled: bool,
 ) {
     use rayon::prelude::*;
     let cap = agents.capacity();
@@ -141,21 +174,11 @@ pub fn integrate_all(
                 return;
             }
 
+            // With gait on, `direction` is the unit heading times the speed
+            // fraction `decide_all` chose (`gait.rs`); off, a unit vector.
             let direction = desired_direction[i];
-            let module_speed = crate::module::effective_speed_max(&modules[i]).clamp(0.0, 1.0);
-            // Openness scales effective speed (identity at neutral personality).
-            let speed_factor = crate::personality::personality_speed_factor(&genome[i]);
-            // Affect movement-speed factor (SEEKING + arousal). Exactly 1.0 at
-            // neutral affect, so a flag-off world stays byte-identical.
-            let affect_speed = crate::affect::affect_speed_factor(&affect[i]);
-            // Machinery buff: powered locomotion.
-            let inv_speed = crate::invention::speed_multiplier_coupled(
-                inv_mask,
-                &genome[i],
-                gene_tech_coupling,
-            );
             let v = direction
-                * (SPEED_MAX_CAP * module_speed * speed_factor * inv_speed * affect_speed);
+                * top_speed(&modules[i], &genome[i], inv_mask, &affect[i], gene_tech_coupling);
             // Habitat gate (territory layer): the move the agent's Locomotion
             // class allows — full, coastline slide, or none. `None` ⇒ `v`
             // untouched, so flag-off worlds are byte-identical.
@@ -175,7 +198,14 @@ pub fn integrate_all(
 
             let move_dist = v.length();
             let size = genome[i].get(GenomeSlot::Size).max(0.1);
-            let move_cost = MOVE_ENERGY_COST * move_dist * size;
+            let mut move_cost = MOVE_ENERGY_COST * move_dist * size;
+            if gait_enabled {
+                // Gait: sprinting is superlinearly expensive per unit distance
+                // (`gait::GAIT_SPRINT_COST`). `|direction|` is the speed
+                // fraction decide_all folded in. Flag off ⇒ never evaluated,
+                // so the move cost is byte-identical.
+                move_cost *= crate::gait::move_cost_factor(direction.length());
+            }
             let basal = BASAL_METABOLISM_COST
                 * genome[i].get(GenomeSlot::BasalMetabolism)
                 * crate::invention::metabolism_multiplier(inv_mask)
@@ -228,6 +258,7 @@ mod tests {
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
             None,
+            false,
         );
         let p = w.agents.position[id as usize];
         assert!(p.x >= 0.0 && p.x < WORLD_SIZE);
@@ -250,6 +281,7 @@ mod tests {
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
             None,
+            false,
         );
         let after = w.agents.energy[id as usize];
         assert!(after < before);
@@ -286,6 +318,7 @@ mod tests {
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
             None,
+            false,
         );
         let pos_after = w.agents.position[id as usize];
         assert_eq!(pos_before, pos_after, "no Locomotor → no motion");
@@ -310,6 +343,7 @@ mod tests {
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
                 None,
+                false,
             );
             before - w.agents.energy[id as usize]
         };
@@ -343,6 +377,7 @@ mod tests {
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
                 None,
+                false,
             );
             before - w.agents.energy[id as usize]
         };
@@ -396,6 +431,7 @@ mod tests {
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
             None,
+            false,
         );
         let new_pos = w.agents.position[id as usize];
         // Moved roughly SPEED_MAX_CAP × 1.0 = 4.0 in +x.
@@ -421,6 +457,7 @@ mod tests {
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
                 None,
+                false,
             );
             before - w.agents.energy[id as usize]
         };
@@ -452,6 +489,7 @@ mod tests {
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
                 None,
+                false,
             );
             (
                 (w.agents.position[id as usize] - before_pos).length(),
@@ -491,6 +529,7 @@ mod tests {
                 w.cognition_enabled,
                 w.spatial.perception_max_radius(),
                 None,
+                false,
             );
             (w.agents.position[id as usize] - before).length()
         };
@@ -528,6 +567,7 @@ mod tests {
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
             Some(&biome),
+            false,
         );
         w.agents.position[id as usize]
     }
@@ -571,7 +611,48 @@ mod tests {
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
             None,
+            false,
         );
         assert!((w.agents.position[id as usize].x - 130.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn gait_sprint_costs_more_per_unit_distance_than_a_walk() {
+        use crate::gait::{move_cost_factor, GAIT_WALK};
+        // Energy per unit distance for a direction of length `frac` (the
+        // gait fraction) — the drain beyond basal over the distance covered.
+        let per_unit = |frac: f32, gait_on: bool| -> f32 {
+            let mut w = World::new(1);
+            let id = spawn_at_unit_speed(&mut w, Vec2::new(500.0, 500.0));
+            let mut desired = vec![Vec2::ZERO; w.agents.capacity()];
+            desired[id as usize] = Vec2::new(frac, 0.0);
+            let before_pos = w.agents.position[id as usize];
+            let before = w.agents.energy[id as usize];
+            integrate_all(
+                &mut w.agents,
+                &desired,
+                w.world_size,
+                false,
+                false,
+                w.cognition_enabled,
+                w.spatial.perception_max_radius(),
+                None,
+                gait_on,
+            );
+            let dist = (w.agents.position[id as usize] - before_pos).length();
+            assert!((dist - frac * SPEED_MAX_CAP).abs() < 1e-4, "step {dist} at fraction {frac}");
+            let basal = BASAL_METABOLISM_COST * 0.5; // neutral genome
+            (before - w.agents.energy[id as usize] - basal) / dist
+        };
+        let sprint = per_unit(1.0, true);
+        let walk = per_unit(GAIT_WALK, true);
+        assert!(sprint > walk, "sprint {sprint} must cost more per unit distance than walk {walk}");
+        // Exactly the documented surcharge: MOVE_ENERGY_COST × size × (1 + K·frac²).
+        let expect = |f: f32| MOVE_ENERGY_COST * 0.5 * move_cost_factor(f);
+        assert!((sprint - expect(1.0)).abs() < 2e-5, "sprint {sprint} vs {}", expect(1.0));
+        assert!((walk - expect(GAIT_WALK)).abs() < 2e-5, "walk {walk} vs {}", expect(GAIT_WALK));
+        // Flag off: the plain linear cost, no surcharge.
+        let off = per_unit(1.0, false);
+        assert!((off - MOVE_ENERGY_COST * 0.5).abs() < 2e-5, "flag off {off}");
     }
 }

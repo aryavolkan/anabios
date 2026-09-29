@@ -508,6 +508,7 @@ fn fire_holder_pays_extra_metabolism() {
             w.cognition_enabled,
             w.spatial.perception_max_radius(),
             None,
+            false,
         );
         before - w.agents.energy[id as usize]
     };

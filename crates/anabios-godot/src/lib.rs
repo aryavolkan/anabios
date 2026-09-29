@@ -2342,6 +2342,7 @@ mod tests {
                 "unilateral_trade = false\n",
                 "anthro_race_enabled = false\n",
                 "disease_enabled = false\n",
+                "gait_enabled = false\n",
             )
         };
     }

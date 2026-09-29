@@ -17,6 +17,7 @@ pub mod dimorphism;
 pub mod disaster;
 pub mod disease;
 pub mod domestication;
+pub mod gait;
 pub mod genome;
 pub mod habitat;
 pub mod hub;
