@@ -18,7 +18,10 @@ grey puff where one dies, combat volleys and trade lanes as fading light with
 impact sparks, pitched-roof hut villages with hearth smoke at hominid
 settlement sites (omnivore lineages only — a settled herd or pack builds
 nothing; pinned where they are founded, in a clearing the forest shrinks back
-from and grows back into once they are gone, moving only when their people have plainly left), awninged market stalls at the trade hubs, the codex streaming "first
+from and grows back into once they are gone, moving only when their people
+have plainly left), awninged market stalls at the trade hubs (a hub that
+falls in a lake has its stall drawn on the nearest dry shore; the sim's hub
+is untouched), the codex streaming "first
 emergence" events as rings, light pillars and ember bursts on the map, and a
 soft bloom over the hot pixels. The same page also plays the **recorded replay** the showcase deck ships
 (`showcase/replay.js`), so the hosted deep-time story and the live sandbox are
@@ -145,16 +148,16 @@ seed), so the pinned tick, camera and agent id are the whole recipe.
 - `cargo test -p anabios-wasm` — pure view builders (well-formed buffers,
   side-effect-free reads, event/catalog parity) and the C-ABI round trip, natively.
 - `node web/test/body-scale.mjs`, `node web/test/villages.mjs`,
-  `node web/test/forest-clearing.mjs` — pure layer
-  logic under node (after `npm --prefix web ci`): the figure-size clamp, and
-  villages — built by hominid (omnivore) lineages only, pinned where they
-  were founded — no sliding with the
+  `node web/test/forest-clearing.mjs`, `node web/test/hubs.mjs` — pure layer
+  logic under node (after `npm --prefix web ci`; CI runs them in the `web`
+  job): the figure-size clamp; villages — built by hominid (omnivore)
+  lineages only, pinned where they were founded — no sliding with the
   wandering anchor centroid, one fade-out-and-regrow move when the people
-  have really left, no hut flicker at a band edge, no huts on water; and the
+  have really left, no hut flicker at a band edge, no huts on water; the
   forest easing out of a clearing and growing back when it is released
   (only the trees in transition touched, paced by sim ticks within a
   wall-time band, composed with the scarred-bare size, settled at once on a
-  time jump or rebuild).
+  time jump or rebuild); and market stalls kept off water.
 - `scripts/web.sh test [scenario] [ticks] [seed]` — builds the module, runs
   `web/test/wasm-smoke.mjs` under node (every export exercised, malformed TOML
   reported, buffers in range), and asserts the wasm fingerprint equals the

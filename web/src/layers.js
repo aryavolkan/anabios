@@ -583,6 +583,38 @@ export class Villages {
 }
 
 // ---------------------------------------------------------------------------
+/** Ground radius of a stall at scale 1 (the awning poles sit ~0.8 out). */
+export const STALL_FOOTPRINT = 0.85;
+const RING8 = Array.from({ length: 8 }, (_, a) => [Math.cos((a * Math.PI) / 4), Math.sin((a * Math.PI) / 4)]);
+
+/**
+ * Where to draw the stall of a sim hub at (x, y). Hub positions are the sim's
+ * (fixed at load, never changed here) and some fall in a lake or straddle its
+ * shore, so a hub whose footprint — the point and a ring of radius `r` — is not
+ * all `dry` is drawn at the nearest spot within `reach` (searched on a `step`
+ * grid, first in scan order on ties, so it is deterministic) whose footprint
+ * is. With no dry spot that near the hub keeps its position and comes back
+ * `afloat`: the stall is still a real market, so it rides the water surface as
+ * a raft rather than vanishing or sinking to the lake bed. With `size` (world
+ * units) a moved stall also stays on the plate: the sim's world wraps, the
+ * drawn ground does not.
+ */
+export function hubSpot(x, y, r, dry, step, reach, size = 0) {
+  const clear = (px, py) => dry(px, py) && RING8.every(([c, s]) => dry(px + c * r, py + s * r));
+  if (clear(x, y)) return { x, y, moved: false, afloat: false };
+  const onPlate = (v) => !size || (v >= r && v <= size - r);
+  let best = null, bd = Infinity;
+  const n = Math.ceil(reach / step);
+  for (let j = -n; j <= n; j++) {
+    for (let i = -n; i <= n; i++) {
+      const d = Math.hypot(i, j) * step, px = x + i * step, py = y + j * step;
+      if (d > reach || d >= bd || !onPlate(px) || !onPlate(py)) continue;
+      if (clear(px, py)) { best = { x: px, y: py, moved: true, afloat: false }; bd = d; }
+    }
+  }
+  return best || { x, y, moved: false, afloat: true };
+}
+
 /** Fixed trade hubs (markets) — static after load. */
 export class Hubs {
   constructor(max = 128) {
@@ -590,18 +622,34 @@ export class Hubs {
     this.mesh.count = 0; this.mesh.frustumCulled = false; this.mesh.name = "hubs";
     this.mesh.castShadow = true; this.mesh.receiveShadow = true;
     this.max = max;
+    /** Drawn stall position per hub, `{x, y, moved, afloat}` (see hubSpot). */
+    this.spots = [];
+    this.src = null;
   }
-  set(hubs, cell, heightAt, stride = 3) {
-    const sc = Math.max(3.5, cell * 0.72);
+  /** `isWater(x, y)` keeps stalls off water cells; it may answer false until the terrain ids are known, so call `layout()` again once they are. */
+  set(hubs, cell, heightAt, isWater = () => false, worldSize = 0, stride = 3) {
     const n = Math.min(hubs.count, this.max);
-    for (let k = 0; k < n; k++) {
-      const x = hubs.data[k * stride], y = hubs.data[k * stride + 1];
-      _p.set(x, heightAt(x, y), y);
+    // Copy: the rows are a view into wasm memory, and layout() may run again later.
+    this.src = { xy: Array.from({ length: n }, (_, k) => [hubs.data[k * stride], hubs.data[k * stride + 1]]), cell, heightAt, isWater, worldSize };
+    this.layout();
+  }
+  layout() {
+    if (!this.src) return;
+    const { xy, cell, heightAt, isWater, worldSize } = this.src;
+    const sc = Math.max(3.5, cell * 0.72);
+    // Dry = not a water cell and not under the water plane: the drawn shore
+    // follows the vertex-averaged heights, which dip below 0 on the edge of a
+    // land cell that borders water. (Flat worlds read 0 everywhere, so only
+    // the cell test bites there.)
+    const dry = (x, y) => !isWater(x, y) && heightAt(x, y) >= 0;
+    this.spots = xy.map(([x, y]) => hubSpot(x, y, sc * STALL_FOOTPRINT, dry, cell / 4, cell * 4, worldSize));
+    this.spots.forEach(({ x, y }, k) => {
+      _p.set(x, Math.max(0, heightAt(x, y)), y);   // an afloat stall rides the water plane
       _q.setFromAxisAngle(Y_AXIS, k * 1.3);
       _s.set(sc, sc, sc);
       this.mesh.setMatrixAt(k, _m.compose(_p, _q, _s));
-    }
-    this.mesh.count = n;
+    });
+    this.mesh.count = this.spots.length;
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 }

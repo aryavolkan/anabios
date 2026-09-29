@@ -65,6 +65,7 @@ const state = {
   lastColorTick: -1,
   lastStatsTick: -1,
   animTick: 0,      // src.tick at the last forest-transition step
+  hubsNeedIds: false,   // market stalls were placed before the terrain ids existed
   fps: 0,
   rate: 0,
   frames: 0,
@@ -121,7 +122,8 @@ function attach(source, entry) {
   for (const l of [layers.agents, layers.villages, layers.fx, layers.particles]) l.setWorldSize(ws, state.terrain.cell);
   layers.streaks.clear(); layers.trades.clear(); layers.villages.clear(); layers.particles.clear();
   layers.villages.isWater = isWater;
-  layers.hubs.set(source.hubs(), state.terrain.cell, heightAt);
+  layers.hubs.set(source.hubs(), state.terrain.cell, heightAt, isWater, ws);
+  state.hubsNeedIds = !state.terrain.terrainIds;   // placed blind: redo once the ids are classified
   layers.birds.setWorld(ws, source.biomeRes, state.terrain.cell, heightAt);
   layers.agents.reset();
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
@@ -230,10 +232,13 @@ function applyShotCamera(spec) {
     if (spec.startsWith("site")) {
       for (const v of layers.villages.sites.values()) if (!best || v.n > best.n) best = v;
     } else {
+      // Picked by the sim's hub position, aimed at where its stall is drawn
+      // (a hub in a lake is drawn on the nearest shore).
       const h = src.hubs(), c = src.worldSize / 2;
       for (let k = 0; k < h.count; k++) {
         const hx = h.data[k * 3], hy = h.data[k * 3 + 1], d = Math.hypot(hx - c, hy - c);
-        if (!best || d < best.d) best = { x: hx, y: hy, d };
+        const at = layers.hubs.spots[k] || { x: hx, y: hy };
+        if (!best || d < best.d) best = { x: at.x, y: at.y, d };
       }
     }
     if (!best) { stage.frame(); return; }
@@ -331,6 +336,7 @@ function loop(now) {
         const gap = tick - state.lastColorTick;
         state.terrain.updateColors(src.biomeRgba(), gap < 0 || gap > 300);
         state.lastColorTick = tick;
+        if (state.hubsNeedIds && state.terrain.terrainIds) { layers.hubs.layout(); state.hubsNeedIds = false; }
       }
       if (Math.floor(tick / 30) !== Math.floor(state.lastStatsTick / 30) || stepped === 0) {
         refreshStats(false);
