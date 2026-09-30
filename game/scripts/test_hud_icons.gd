@@ -8,6 +8,7 @@ const Codex = preload("res://scripts/codex_panel.gd")
 const EventLog = preload("res://scripts/event_log.gd")
 const Icons = preload("res://scripts/hud_icons.gd")
 const ResearchPanel = preload("res://scripts/research_panel.gd")
+const ReplayManager = preload("res://scripts/replay_manager.gd")
 const SpeciesNames = preload("res://scripts/species_names.gd")
 const EcoMeters = preload("res://scripts/eco_meters.gd")
 const TimeControls = preload("res://scripts/time_controls.gd")
@@ -82,6 +83,16 @@ func _init() -> void:
 		_check(not line.contains("%s"), "chapter %d template is filled" % t)
 	_check(Icons._ROWS.has(EventLog.icon_for(999)), "unknown chapter falls back to an icon")
 	_check(EventLog.line_for(999, 1).begins_with("Event"), "unknown chapter falls back to a title")
+	# The replay / event-camera banner names the event in the log's words, not
+	# the codex's CamelCase chapter id ("PanicCascade").
+	var cascade := {"type": 55, "species_id": 12}
+	_check(
+		ReplayManager.event_title(cascade) == EventLog.line_for(55, 12), "banner uses the log line"
+	)
+	_check(
+		not ReplayManager.event_title(cascade).contains(Codex.CHAPTER_NAMES[55]), "banner not an id"
+	)
+	_check(ReplayManager.event_title({}) == "event", "banner falls back without an event type")
 
 	# --- unit card: HP scale and module pips ---
 	_check(is_equal_approx(UnitCard.hp_fraction(UnitCard.HP_FULL * 3.0), 1.0), "HP caps at full")

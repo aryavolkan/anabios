@@ -170,7 +170,7 @@ order, so the first organic capture would land one tick late).
 
 | File | Tick | What you're seeing |
 |---|---|---|
-| e2-event-camera.png | 271 | `predator-prey`: the event camera mid-tour, parked on the t=113 `Predation` site (banner top-center, "[V]/Esc exit") with the camera eased in to zoom 2.0; the codex panel below shows the event log it cycles through. |
+| e2-event-camera.png | 271 | `predator-prey`: the event camera mid-tour, parked on the t=113 `Predation` site (banner centred under the top bar, naming the event in the log's words, "[V]/Esc exit") with the camera eased in to zoom 2.0; the codex panel below shows the event log it cycles through. |
 | e2-replay-t080.png | 80 | `weapons-arms-race` seed 3: replay of the t=79 `Territory sp=2` event — rewound to the snapshot at tick 79, fast-forwarded exactly one tick (note the HUD: tick 80, paused), camera on the territory centroid with the pulsing gold highlight ring. The codex panel re-accumulated from the rewind and shows the event re-firing (`Territory: 1`) — replay determinism made visible. |
 
 ## geographic-trade (border-seeking terrain pull + marketplace trade reach)
