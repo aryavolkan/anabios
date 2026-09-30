@@ -6,6 +6,9 @@ const UiTheme = preload("res://scripts/ui_theme.gd")
 # draws a vertical stack of small-multiple charts sharing one time axis.
 # Toggle with [Y]. Click a legend label to hide/show a series; click a chart to
 # drop a scrub cursor with a value readout. (Read-only; no World mutation.)
+# main.tscn places it at (430, 56)-(1035, 591): the top edge sits under the top
+# bar (y 10..48). At y=20 this near-opaque chart painted over the bar's day
+# counter, transport buttons and counters for as long as it was open.
 
 @onready var sim = get_node("../../Simulation")
 

@@ -17,6 +17,7 @@ const TimeControls = preload("res://scripts/time_controls.gd")
 const TopBar = preload("res://scripts/top_bar.gd")
 const UnitCard = preload("res://scripts/unit_card.gd")
 const BrandPanel = preload("res://scripts/brand_panel.gd")
+const HelixPanel = preload("res://scripts/helix_panel.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
 var _failed := false
@@ -220,6 +221,14 @@ func _init() -> void:
 	for line in FileAccess.get_file_as_string("res://scripts/main.gd").split("\n"):
 		if line.begins_with("const HUD_BOTTOM"):
 			_check(not line.contains("CodexPanel"), "codex is not a bottom-edge panel")
+	# The [Y] and [X] charts open under the top bar and clear of the event log.
+	var coevo: Rect2 = _rect_of(ui["CoevolutionPanel"])
+	_check(coevo.position.y > top_bar.end.y, "co-evolution chart starts under the top bar")
+	_check(HelixPanel.PANEL_RECT.position.y > top_bar.end.y, "helix starts under the top bar")
+	_check(
+		HelixPanel.PANEL_RECT.position.x > _rect_of(ui["EventLog"]).end.x,
+		"helix clears the event log"
+	)
 
 	if _failed:
 		quit(1)

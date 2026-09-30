@@ -19,6 +19,12 @@ const UiTheme = preload("res://scripts/ui_theme.gd")
 const GENE_SLOTS := [28, 12, 21, 15, 23, 16, 10, 20, 6, 29, 40, 41]
 const INVENTION_CHANNEL_BASE := 8
 
+# The panel's own rect on the HUD (design pixels). Top edge under the top bar
+# (y 10..48), like the co-evolution panel: at y=20 this near-opaque chart
+# painted over the bar's day counter, transport buttons and counters for as
+# long as it was open. The left edge clears the event log (x 10..400); the
+# right edge, 1035, matches the co-evolution panel.
+const PANEL_RECT := Rect2(408, 56, 627, 624)
 const TOP := 64.0
 const BOTTOM_PAD := 46.0
 const TWIST_TURNS := 1.6  # sine turns across the panel height
@@ -50,11 +56,8 @@ var _meme_channels: Array = []
 func _ready() -> void:
 	visible = false
 	_font = UiTheme.font()
-	position = Vector2(392, 20)
-	# Right edge at 1035, matching the co-evolution panel: at 600 wide it stopped
-	# 38px short of the codex panel behind it, leaving a sliver of event buttons
-	# poking out along its edge like a torn seam.
-	size = Vector2(643, 660)
+	position = PANEL_RECT.position
+	size = PANEL_RECT.size
 	_slot_names = sim.genome_slot_catalog()
 	_channel_names = sim.meme_channel_catalog()
 	var inv_cat: Array = sim.invention_catalog()
