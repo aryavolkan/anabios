@@ -525,7 +525,11 @@ function renderLegend() {
  * machine at 64× where one frame spans more ticks than that) is folded in:
  * the feed keeps one line per event type, bumping a `×n` count and the
  * species tally, and a species' effects re-fire at most every
- * `REPEAT_FX_SECS`, with at most `FX_PER_FRAME` bursts a frame.
+ * `REPEAT_FX_SECS`, with at most `FX_PER_FRAME` bursts a frame. A repeat also
+ * moves its line to the newest end of the feed (first child; the feed is
+ * `column-reverse`, so that is the bottom row): the line shows the latest
+ * tick, and left where it was created it sat among older lines, so the feed's
+ * ticks went up and down the list instead of reading chronologically.
  */
 const REPEAT_TICKS = 120, REPEAT_SECS = 1.5, REPEAT_FX_SECS = 2.5, FX_PER_FRAME = 8;
 const recentFx = new Map();     // `${type}/${sid}` → {tick, fxAt}
@@ -576,6 +580,9 @@ function onEvent(ev, now) {
   entry.count++;
   if (ev.sid != null) entry.sids.add(ev.sid);
   const line = entry.line;
+  // A move, not a re-insert: the line keeps its `.show` class, so it does not
+  // fade in again, and the feed's length (the 7-line trim) is unchanged.
+  if (feed.firstChild !== line) feed.prepend(line);
   line.firstChild.textContent = Math.floor(ev.tick).toLocaleString();
   line.querySelector(".rep").textContent = entry.count > 1 ? ` ×${entry.count}` : "";
   const who = entry.sids.size > 1 ? `${entry.sids.size} species` : ev.sid == null ? "" : state.source.labels.get(ev.sid) || `species ${ev.sid}`;
