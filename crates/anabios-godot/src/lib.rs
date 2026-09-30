@@ -643,7 +643,7 @@ impl Simulation {
         let mut out = PackedFloat32Array::new();
         if let Some(w) = self.inner.as_ref() {
             for id in w.agents.iter_alive() {
-                out.push(w.actions[id as usize].fire_intent);
+                out.push(fire_intent_of(w, id as usize));
             }
         }
         out
@@ -1744,6 +1744,18 @@ fn body_tags_of(w: &anabios_core::World) -> Vec<i32> {
         .collect()
 }
 
+/// `fire_intent` of agent `idx`, or 0.0 while the per-tick `actions`
+/// scratch is shorter than the agent arrays. `actions` is `#[serde(skip)]`,
+/// so a world fresh from `restore_snapshot` (the replay rewind, and the
+/// return to live) has it EMPTY until its next tick's `resize_scratch`; the
+/// viewer still redraws that unstepped world every frame (a paused resume
+/// never steps it), and an unguarded index there panicked the whole
+/// `AgentLayer.refresh`. A restored world has no intent yet, so 0.0 (no
+/// hunt pose) is the honest reading until it ticks.
+fn fire_intent_of(w: &anabios_core::World, idx: usize) -> f32 {
+    w.actions.get(idx).map_or(0.0, |a| a.fire_intent)
+}
+
 /// Viewer body size of agent `idx`: `0.5 + 2.5 · Size`, times the growth
 /// body scale when `growth_enabled` (juveniles draw small); with growth off
 /// exactly the adult value. Shared by `alive_sizes`, `agent_detail`,
@@ -1905,7 +1917,7 @@ fn alive_render_state_of(w: &anabios_core::World) -> Vec<f32> {
         out.push(diet);
         out.push(livestock[i] as f32);
         out.push(w.agents.mood[idx] as f32);
-        out.push(w.actions[idx].fire_intent);
+        out.push(fire_intent_of(w, idx));
         out.push(tags[i] as f32);
     }
     out
@@ -2762,6 +2774,31 @@ mod tests {
             assert_eq!(state[base + 5], moods[i] as f32);
             assert_eq!(state[base + 6], fire_intent[i]);
             assert_eq!(state[base + 7], tags[i] as f32);
+        }
+    }
+
+    #[test]
+    fn render_state_survives_a_snapshot_restore_before_its_next_tick() {
+        // The replay rewind (and the return to live) swaps in a world from
+        // `load_from_bytes`, whose serde-skipped `actions` scratch is empty
+        // until the next tick; the viewer redraws it before any step (and
+        // forever while paused). Reading it must not panic: fire intent reads
+        // 0.0 until the world ticks, every other column is unchanged.
+        let live = minimal_world();
+        let bytes = anabios_core::snapshot::save_to_bytes(&live).unwrap();
+        let restored = anabios_core::snapshot::load_from_bytes(&bytes).unwrap();
+        let n = restored.agents.iter_alive().count();
+        assert!(n > 0, "test needs alive agents");
+        assert!(restored.actions.len() < n, "precondition: scratch is empty after a load");
+
+        let state = super::alive_render_state_of(&restored);
+        assert_eq!(state.len(), super::RENDER_STATE_STRIDE * n);
+        let live_state = super::alive_render_state_of(&live);
+        for i in 0..n {
+            let base = i * super::RENDER_STATE_STRIDE;
+            assert_eq!(state[base + 6], 0.0, "no intent before the restored world ticks");
+            assert_eq!(state[base], live_state[base], "positions survive the restore");
+            assert_eq!(state[base + 1], live_state[base + 1]);
         }
     }
 
