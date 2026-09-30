@@ -266,8 +266,11 @@ func set_wrap_offset(offset: Vector2) -> void:
 
 # A node drawing this chunk's props at another torus copy (ground_layer.gd's
 # wrap mirrors): one MultiMeshInstance2D per layer sharing this chunk's
-# multimesh, texture and z, so a rebuild refills the copy too. Call after
-# the first build(); the caller sets the copy's wrap offset as position.
+# multimesh, texture, material and z, so a rebuild refills the copy too.
+# The material matters: the canopy layers draw a packed atlas that only
+# canopy.gdshader cuts into one tree per instance, so without it a copy
+# drew the whole atlas in every tree's quad. Call after the first build();
+# the caller sets the copy's wrap offset as position.
 func make_mirror() -> Node2D:
 	var m := Node2D.new()
 	for child in get_children():
@@ -275,6 +278,7 @@ func make_mirror() -> Node2D:
 		var mmi := MultiMeshInstance2D.new()
 		mmi.multimesh = src.multimesh
 		mmi.texture = src.texture
+		mmi.material = src.material
 		mmi.texture_filter = src.texture_filter
 		mmi.z_index = src.z_index
 		m.add_child(mmi)

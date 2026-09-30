@@ -142,6 +142,20 @@ func _init() -> void:
 	_check(chunk.position == Vector2.ZERO, "chunk starts at the given offset")
 	chunk.set_wrap_offset(Vector2(512.0, -256.0))
 	_check(chunk.position == Vector2(512.0, -256.0), "set_wrap_offset moves the node")
+	# A wrap-copy mirror draws every layer exactly as the chunk does: same
+	# multimesh, texture and material (the canopy's per-tree atlas cell only
+	# exists through canopy.gdshader).
+	_check(chunk._canopy[0].material != null, "canopy layer draws through its shader")
+	var mirror: Node2D = chunk.make_mirror()
+	_check(mirror.get_child_count() == chunk.get_child_count(), "mirror copies every layer")
+	for i in chunk.get_child_count():
+		var src := chunk.get_child(i) as MultiMeshInstance2D
+		var dst := mirror.get_child(i) as MultiMeshInstance2D
+		_check(dst.multimesh == src.multimesh, "mirror shares the multimesh (%s)" % src.name)
+		_check(dst.texture == src.texture, "mirror shares the texture (%s)" % src.name)
+		_check(dst.material == src.material, "mirror keeps the material (%s)" % src.name)
+		_check(dst.z_index == src.z_index, "mirror keeps the z (%s)" % src.name)
+	mirror.free()
 	chunk.free()
 
 	if _failed:
