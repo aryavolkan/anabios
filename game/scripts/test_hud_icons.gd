@@ -19,6 +19,7 @@ const UnitCard = preload("res://scripts/unit_card.gd")
 const BrandPanel = preload("res://scripts/brand_panel.gd")
 const EvolutionPanel = preload("res://scripts/evolution_panel.gd")
 const HelixPanel = preload("res://scripts/helix_panel.gd")
+const LegendPanel = preload("res://scripts/legend_panel.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
 var _failed := false
@@ -233,6 +234,22 @@ func _init() -> void:
 	# The [T] panel opens beside the codex, not on top of it.
 	_check(EvolutionPanel.LEFT_X > codex.end.x, "evolution panel sits right of the codex")
 	_check(EvolutionPanel.TOP_Y > top_bar.end.y, "evolution panel starts under the top bar")
+	# [H] swaps the bottom-left slot with the event log instead of stacking on it.
+	var ui_box := Control.new()
+	var log_panel := Control.new()
+	log_panel.name = "EventLog"
+	ui_box.add_child(log_panel)
+	var legend: Control = LegendPanel.new()
+	ui_box.add_child(legend)
+	legend.visible = false  # as _ready leaves it
+	legend.visibility_changed.connect(legend._swap_with_event_log)
+	legend.visible = true
+	_check(not log_panel.visible, "showing the legend hides the event log")
+	legend.visible = false
+	_check(log_panel.visible, "hiding the legend brings the event log back")
+	ui_box.free()
+	for line in LegendPanel.EMOTES_KEY.split("\n"):
+		_check(line.length() <= 50, "legend emote line fits the slot: " + line)
 
 	if _failed:
 		quit(1)
