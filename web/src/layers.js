@@ -210,6 +210,9 @@ const PLINTH_SLACK = 0.08;
  *  markets sit on steeper shores). */
 export const HUT_FOOT = Object.freeze({ hx: 0.52, hz: 0.45, cz: 0, depth: 0.6 });
 export const STALL_FOOT = Object.freeze({ hx: 0.72, hz: 0.55, cz: 0.05, depth: 0.9 });
+/** Ring slot (×45°) of hut h ≥ 1, filled so a small village stays balanced:
+ *  opposite pairs first, then the diagonals. */
+const HUT_SLOTS = [0, 4, 2, 6, 1, 5, 3, 7];
 
 /**
  * Floor height for a building at (x, y), turned `ang` about +y at instance
@@ -617,7 +620,10 @@ export class Villages {
     this.hominids = next;
   }
   setWorldSize(ws, cell = ws / 128) { this.scale = Math.max(2.6, cell * 0.58); }
-  /** Outer hut ring radius in world units (huts h ≥ 1 sit at 0.9–2.0 scales out). */
+  /** Hut ring radius in world units: huts h ≥ 1 sit on one ring at 2.0 scales
+   *  out, in eight fixed slots 45° apart. A hut's pyramid roof reaches ~0.70
+   *  scales from its centre (0.94 for the 1.35× centre hut), so neighbouring
+   *  slots (chord 1.53) and the centre (2.0 vs 0.94 + 0.70) never overlap. */
   get radius() { return this.scale * 2.0; }
   /** Target hut count for `n` anchored members, with a two-hut hysteresis band on the way down. */
   static hutsFor(n, shown = 0) {
@@ -691,7 +697,7 @@ export class Villages {
       v.ease = (1 - Math.pow(1 - grow, 3)) * fade;
       _c.setHex(mix(hsv(speciesHue(v.sid), 0.5, 0.8), 0x8a6a3c, 0.55));
       for (let h = 0; h < v.huts && i < this.max; h++) {
-        const ang = v.sid * 2.39996 + h * 2.39996, r = (0.9 + (h % 3) * 0.55) * this.scale * (h === 0 ? 0 : 1);
+        const ang = v.sid * 2.39996 + (h === 0 ? 0 : HUT_SLOTS[h - 1] * Math.PI / 4), r = h === 0 ? 0 : this.radius;
         const x = v.x + Math.cos(ang) * r, y = v.y + Math.sin(ang) * r;
         if (this.isWater(x, y)) continue;   // a lakeside village keeps its huts on the shore
         const g = Math.min(1, Math.max(0, (tick - v.hutBorn[h]) / this.GROW));

@@ -169,7 +169,8 @@ seed), so the pinned tick, camera and agent id are the whole recipe.
   clamp; figures (kind by diet band, legs attached, species colours); villages — built by hominid (omnivore)
   lineages only, pinned where they were founded — no sliding with the
   wandering anchor centroid, one fade-out-and-regrow move when the people
-  have really left, no hut flicker at a band edge, no huts on water, huts and
+  have really left, no hut flicker at a band edge, no huts on water, no hut
+  roof piercing the centre hut or a neighbour on the ring, huts and
   market stalls terraced on earth plinths so none floats on a slope; the
   forest easing out of a clearing and growing back when it is released
   (only the trees in transition touched, paced by sim ticks within a

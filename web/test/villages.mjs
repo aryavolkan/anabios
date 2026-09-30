@@ -111,6 +111,24 @@ lake.update(site(4, 600, 300, 72), 0, flat);
 check(huts(lake).every(([x]) => x <= 600), "no hut on a water cell");
 check(huts(lake).length > 0 && huts(lake).length < 9, "shore huts kept, lake huts dropped");
 
+// Huts stand apart: a hut's pyramid roof reaches ~0.70 scales from its
+// centre and the 1.35× centre hut's ~0.94, so ring neighbours need ≥ 1.4
+// scales between centres and the centre and a ring hut ≥ 1.64 (the old
+// three-radius spiral put ring huts 0.9 scales from the centre, inside it).
+for (let sid = 0; sid <= 40; sid++) {
+  const sp = villages(sid);
+  sp.update(site(sid, 500, 500, 80), 1000, flat, 4, true);
+  const [c, ...ring] = huts(sp), S = sp.scale;
+  check(ring.length === 8, `sid ${sid}: nine huts (got ${ring.length + 1})`);
+  for (const [x, z] of ring) check(Math.hypot(x - c[0], z - c[1]) >= 1.64 * S, `sid ${sid}: a ring hut pierces the centre hut`);
+  for (let a = 0; a < ring.length; a++) {
+    for (let b = a + 1; b < ring.length; b++) {
+      const d = Math.hypot(ring[a][0] - ring[b][0], ring[a][1] - ring[b][1]);
+      check(d >= 1.4 * S, `sid ${sid}: ring huts ${a + 1} and ${b + 1} overlap (${(d / S).toFixed(2)} scales apart)`);
+    }
+  }
+}
+
 // Only hominids build huts: an omnivore lineage (diet ≈ 0.5, the culture
 // archetypes) settles into a village, a settled grazing herd (diet ≈ 0) or
 // hunting pack (≈ 1) does not.
@@ -217,4 +235,4 @@ check(drift.sites.size === 0, "a non-hominid settlement founds no village");
   check(g(c.x, c.z) - under(inst, HUT_FOOT, g).lo > 0.25, "a centre-seated hut would float on the gentle slope");
 }
 
-console.log("villages: hominids only; pinned placement, relocation, hysteresis, shoreline and slope seating ok");
+console.log("villages: hominids only; pinned placement, relocation, hysteresis, hut spacing, shoreline and slope seating ok");
