@@ -34,6 +34,7 @@ func _init() -> void:
 	_test_compact_shrinks_and_preserves_values()
 	_test_large_population_and_half_death()
 	_test_interleaved_two_pointer_merge()
+	_test_facing_fresh_until_first_step()
 
 	if _failed:
 		quit(1)
@@ -63,6 +64,7 @@ func _test_initial_sync_allocates_with_defaults() -> void:
 		_check(anim.facing_side[s] == 0, "fresh facing_side defaults to 0 (right)")
 		_check(is_equal_approx(anim.facing_ease[s], 0.0), "fresh facing_ease defaults to 0.0")
 		_check(is_equal_approx(anim.facing_heading[s], 0.0), "fresh facing_heading defaults to 0.0")
+		_check(anim.facing_fresh[s] == 1, "fresh slot's facing awaits its seed")
 		var id: int = [1, 2, 3][i]
 		_check(
 			is_equal_approx(anim.gait[s], FxMath.seed_gait(id)),
@@ -245,3 +247,29 @@ func _test_interleaved_two_pointer_merge() -> void:
 	_check(int(anim.slot_of[3]) == s3, "slot_of agrees with returned slot for id 3")
 	_check(int(anim.slot_of[7]) == s7, "slot_of agrees with returned slot for id 7")
 	_check(slot4 == s1 or slot4 == s3 or slot4 == s7, "id 4's freed slot was reused by a new id")
+
+
+# facing_fresh marks a slot whose facing the caller has not stepped yet, so
+# AgentLayer seeds it from the live heading instead of easing in from the
+# placeholder "right". It must hold at any `now` (the old float32
+# `birth_time == now` test almost never did), stay cleared once the caller
+# clears it, come back for a reused slot, and survive compact().
+func _test_facing_fresh_until_first_step() -> void:
+	var anim := AnimState.new()
+	var slots := anim.sync(_ids([1, 2]), 1.234)
+	_check(anim.facing_fresh[slots[0]] == 1, "newborn at a non-float32 time is fresh")
+	anim.facing_fresh[slots[0]] = 0
+	slots = anim.sync(_ids([1, 2]), 1.251)
+	_check(anim.facing_fresh[slots[0]] == 0, "a stepped slot stays seeded")
+	_check(anim.facing_fresh[slots[1]] == 1, "an unstepped slot stays fresh across syncs")
+	var freed: int = slots[0]
+	slots = anim.sync(_ids([2, 3]), 1.268)
+	_check(slots[1] == freed, "id 3 reuses id 1's slot")
+	_check(anim.facing_fresh[slots[1]] == 1, "a reused slot is fresh again")
+	anim.facing_fresh[slots[1]] = 0
+	anim.sync(_ids([2, 3, 4, 5, 6, 7, 8, 9, 10, 11]), 2.0)
+	anim.sync(_ids([2, 3]), 3.0)
+	anim.compact()
+	_check(anim.capacity() == 2, "the deaths hollowed the store out enough to compact")
+	_check(anim.facing_fresh[int(anim.slot_of[2])] == 1, "compact() keeps a fresh slot fresh")
+	_check(anim.facing_fresh[int(anim.slot_of[3])] == 0, "compact() keeps a seeded slot seeded")

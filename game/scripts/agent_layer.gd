@@ -785,14 +785,16 @@ func refresh(
 		var cx: float = cos(rot)
 		var face_left := 1.0 if cx < 0.0 else 0.0
 		if have_ids:
-			# A slot born this frame seeds from the current heading (the
-			# old Dictionary default) so a newborn never eases in from a
-			# side it never faced.
+			# A slot whose facing has never been stepped (a newborn, or a
+			# figure on screen for the first time) seeds from the current
+			# heading (the old Dictionary default), so it never eases in
+			# from a side it never faced — see AnimState.facing_fresh.
 			var prev_face := Vector3(face_left, face_left, cx)
-			if _anim.birth_time[s] != now:
+			if _anim.facing_fresh[s] == 0:
 				prev_face = Vector3(
 					float(_anim.facing_side[s]), _anim.facing_ease[s], _anim.facing_heading[s]
 				)
+			_anim.facing_fresh[s] = 0
 			var face: Vector3 = FxMath.step_facing(prev_face, cx, walking, delta)
 			_anim.facing_side[s] = int(round(face.x))
 			_anim.facing_ease[s] = face.y
