@@ -177,6 +177,26 @@ func _init() -> void:
 		_check(ev.keycode != KEY_NONE and ev.pressed, "hotbar key %s resolves" % tool[0])
 		_check(int(tool[2]) >= 0 and int(tool[2]) < Icons.KIND_COUNT, "hotbar icon %s" % tool[0])
 	_check(TimeControls.key_event("G").keycode == KEY_G, "G maps to KEY_G")
+	# The pause glyph and speed accent follow main's state whoever set it.
+	var hotbar: HBoxContainer = TimeControls.new()
+	for node_name in ["PauseButton", "Speed1", "Speed16"]:
+		var btn := Button.new()
+		btn.name = node_name
+		hotbar.add_child(btn)
+	hotbar._speed_btns = {1: hotbar.get_node("Speed1"), 16: hotbar.get_node("Speed16")}
+	hotbar.sync_to(false, 1)
+	_check(hotbar.get_node("PauseButton").text == "⏸", "running shows the pause glyph")
+	hotbar.sync_to(true, 16)  # e.g. the top bar's ▶▶ then a focus-loss auto-pause
+	_check(hotbar.get_node("PauseButton").text == "▶", "paused shows the play glyph")
+	_check(
+		hotbar.get_node("Speed16").get_theme_color("font_color") == UiTheme.ACCENT,
+		"the live speed is marked"
+	)
+	_check(
+		hotbar.get_node("Speed1").get_theme_color("font_color") == UiTheme.TEXT,
+		"the old speed is unmarked"
+	)
+	hotbar.free()
 	_check(is_equal_approx(EcoMeters.health_of(50, 200), 0.25), "health is live over peak")
 	_check(is_equal_approx(EcoMeters.health_of(300, 200), 1.0), "health caps at one")
 	_check(is_equal_approx(EcoMeters.health_of(5, 0), 0.0), "no peak yet -> zero")
