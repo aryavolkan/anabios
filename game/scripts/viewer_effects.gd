@@ -453,7 +453,13 @@ func update_fire_lights(delta: float) -> void:
 
 # Ambient weather: faint drifting motes everywhere (depth cue), snow when the
 # camera sits over tundra. Both are children of the camera so the emitter
-# follows the view; the emission box is resized to the visible world rect.
+# follows the view; the emission box is resized to the visible world rect and
+# the flake size to the zoom (see _fit_weather).
+# Flake/mote size range as a scale of the 8 px disc, in SCREEN pixels (4-9 px).
+const AMBIENT_SCALE_MIN := 0.5
+const AMBIENT_SCALE_MAX := 1.1
+
+
 func _make_weather() -> void:
 	_motes = _make_ambient_particles(
 		"Motes", 70, Color(1.0, 0.95, 0.8, 0.10), Vector3(6, 1, 0), 7.0
@@ -484,8 +490,8 @@ func _make_ambient_particles(
 	m.initial_velocity_min = vel.length() * 0.5
 	m.initial_velocity_max = vel.length() * 1.5
 	m.gravity = Vector3.ZERO
-	m.scale_min = 0.5
-	m.scale_max = 1.1
+	m.scale_min = AMBIENT_SCALE_MIN
+	m.scale_max = AMBIENT_SCALE_MAX
 	m.color = col
 	p.process_material = m
 	return p
@@ -495,12 +501,7 @@ func _make_ambient_particles(
 # biome under the camera to toggle snow over tundra (base colour 0.62/0.66/0.62
 # — the only pale, low-chroma land terrain; desert/savanna fail the b test).
 func update_weather(delta: float) -> void:
-	var vp: Vector2 = get_viewport_rect().size / _cam.zoom.x * 0.55
-	for p in [_motes, _snow]:
-		if p != null:
-			(p.process_material as ParticleProcessMaterial).emission_box_extents = Vector3(
-				vp.x, vp.y, 1
-			)
+	_fit_weather(get_viewport_rect().size, _cam.zoom.x)
 	_weather_t += delta
 	if _weather_t < 0.5 or _snow == null:
 		return
@@ -524,6 +525,22 @@ func update_weather(delta: float) -> void:
 	var tundra := c.r > 0.5 and c.g > 0.55 and c.b > 0.5 and absf(c.r - c.b) < 0.08
 	# Tundra always snows; a deep global cold snap snows everywhere.
 	_snow.emitting = tundra or (opt >= 0.0 and opt < 0.2)
+
+
+# Cover the visible world rect with the ambient emitters, and hold the flakes
+# at a fixed on-screen size. The particles live in world space, so a scale set
+# once in world units grew with the zoom: at 8x the snow was 30-70 px soft
+# blobs hazing the whole view and the motes fog smudges. Dividing by the zoom
+# keeps both 4-9 screen px at every step.
+func _fit_weather(view_px: Vector2, zoom: float) -> void:
+	var z: float = maxf(zoom, 0.0001)
+	var half: Vector2 = view_px / z * 0.55
+	for p in [_motes, _snow]:
+		if p != null:
+			var m := p.process_material as ParticleProcessMaterial
+			m.emission_box_extents = Vector3(half.x, half.y, 1)
+			m.scale_min = AMBIENT_SCALE_MIN / z
+			m.scale_max = AMBIENT_SCALE_MAX / z
 
 
 # Codex-driven effects, dispatched through event_fx's spec table. The cursor

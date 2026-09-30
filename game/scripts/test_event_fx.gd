@@ -66,6 +66,7 @@ func _init() -> void:
 	_check_facing()
 	_check_shuttle_and_ease()
 	_check_radial_texture()
+	_check_weather_scale()
 	if _failed:
 		quit(1)
 		return
@@ -575,5 +576,33 @@ func _check_apply_all() -> void:
 	_check(rings_live > 0, "applying ring events activates pooled rings")
 	_check(cam.trauma_total > 0.0, "trauma events reach the camera even without a location")
 	fx.update_rings(0.1)
+	fx.free()
+	cam.free()
+
+
+# Snow and motes are world-space particles: their scale must shrink with the
+# zoom so a flake stays the same few screen pixels at 1x and at 8x (it used to
+# balloon into 30-70 px blobs up close).
+func _check_weather_scale() -> void:
+	var fx: Node2D = ViewerEffects.new()
+	var cam := StubCam.new()
+	var disc := ImageTexture.create_from_image(Image.create(8, 8, false, Image.FORMAT_RGBA8))
+	fx.setup(null, cam, null, disc)
+	for z in [0.25, 1.0, 2.0, 8.0]:
+		fx._fit_weather(Vector2(1280, 800), z)
+		for p in [fx._motes, fx._snow]:
+			var m := (p as GPUParticles2D).process_material as ParticleProcessMaterial
+			_check(
+				is_equal_approx(m.scale_max * z, ViewerEffects.AMBIENT_SCALE_MAX),
+				"%s at %sx keeps its on-screen size" % [p.name, z]
+			)
+			_check(
+				is_equal_approx(m.scale_min * z, ViewerEffects.AMBIENT_SCALE_MIN),
+				"%s at %sx keeps its smallest on-screen size" % [p.name, z]
+			)
+			_check(
+				is_equal_approx(m.emission_box_extents.x, 1280.0 / z * 0.55),
+				"%s covers the view at %sx" % [p.name, z]
+			)
 	fx.free()
 	cam.free()
