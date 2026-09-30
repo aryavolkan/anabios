@@ -189,6 +189,17 @@ func _check_idle_weapon_act() -> void:
 	)
 
 
+func _check_raw_walking() -> void:
+	# Under turning inertia a resting body keeps a non-zero heading: with the
+	# bridge's moving flags the heading must not count as walking, or no
+	# sleeper, drinker or grazer ever reaches its idle pose.
+	_check(not AgentLayer.raw_walking(true, 0, 1.2), "a still body with a heading stands")
+	_check(AgentLayer.raw_walking(true, 1, 0.0), "a moving body walks whatever its heading")
+	# Without the flags (an older bridge) the heading-is-0-at-rest contract.
+	_check(AgentLayer.raw_walking(false, 0, 0.7), "no flags: a non-zero heading walks")
+	_check(not AgentLayer.raw_walking(false, 0, 0.0), "no flags: heading 0 stands")
+
+
 func _check_air_lift() -> void:
 	_check(AgentLayer.air_lift(10.0, false) == Vector2.ZERO, "ground figures are not lifted")
 	var lift: Vector2 = AgentLayer.air_lift(10.0, true)
@@ -318,6 +329,7 @@ func _init() -> void:
 	_check_merge_prev()
 	_check_crowd_cells()
 	_check_idle_weapon_act()
+	_check_raw_walking()
 	_check_air_lift()
 	_check_nearest_drawn()
 	_check_body_diameter()

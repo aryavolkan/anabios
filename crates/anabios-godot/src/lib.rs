@@ -500,6 +500,22 @@ impl Simulation {
         out
     }
 
+    /// 1 per alive agent that moved this tick (velocity above the same
+    /// `1e-6` squared-length floor the flag-off `alive_rotations` uses for
+    /// "not moving"), else 0; same order as `alive_positions`. The viewer's
+    /// walk/idle split reads this: under turning inertia a resting body keeps
+    /// its heading, so the rotation alone no longer says whether it stands.
+    #[func]
+    fn alive_moving(&self) -> PackedByteArray {
+        let mut out = PackedByteArray::new();
+        if let Some(w) = self.inner.as_ref() {
+            for m in moving_of(w) {
+                out.push(m);
+            }
+        }
+        out
+    }
+
     /// Carnivory diet score per alive agent (0 herbivore .. 1 carnivore),
     /// same order as `alive_positions`.
     #[func]
@@ -1772,6 +1788,15 @@ fn view_size_of(w: &anabios_core::World, idx: usize) -> f32 {
     }
 }
 
+/// Per alive agent (ascending id): 1 if its velocity this tick is above the
+/// `1e-6` squared-length "moving" floor, else 0. Backs `alive_moving`.
+fn moving_of(w: &anabios_core::World) -> Vec<u8> {
+    w.agents
+        .iter_alive()
+        .map(|id| u8::from(w.agents.velocity[id as usize].length_squared() > 1e-6))
+        .collect()
+}
+
 /// Locomotion class per alive agent (0 land / 1 water / 2 air), ascending id
 /// order; empty when the territory layer is off.
 fn locomotion_of(w: &anabios_core::World) -> Vec<u8> {
@@ -2730,6 +2755,17 @@ mod tests {
         let counts2 = super::agent_density_of(&w, res);
         let idx = 3 * res as usize + 1;
         assert!(counts2[idx] as usize >= ids.len(), "cluster must land in cell (1,3)");
+    }
+
+    #[test]
+    fn moving_flags_are_the_velocity_floor() {
+        let w = minimal_world();
+        let moving = super::moving_of(&w);
+        assert_eq!(moving.len(), w.agents.iter_alive().count());
+        for (k, id) in w.agents.iter_alive().enumerate() {
+            let v = w.agents.velocity[id as usize];
+            assert_eq!(moving[k] == 1, v.length_squared() > 1e-6, "agent {id}");
+        }
     }
 
     #[test]

@@ -398,6 +398,18 @@ static func idle_weapon_act(act: float, walking: bool, inv_mask: int) -> float:
 	return act
 
 
+# Raw (undebounced) walk flag for one agent: the bridge's per-agent moved-
+# this-tick flag (sim.alive_moving()) when it has one, else the old contract
+# of a heading reported as exactly 0.0 at rest. The heading cannot carry that
+# on its own under turning inertia, which keeps a resting body's facing — so
+# every sleeper, drinker and grazer read as walking and never reached its
+# idle pose or emote. Pure, unit-tested in test_agent_layer.gd.
+static func raw_walking(have_moving: bool, moving: int, rot: float) -> bool:
+	if have_moving:
+		return moving != 0
+	return rot != 0.0
+
+
 # Physical body diameter (world units) for a bridge size export
 # (sim.alive_sizes(), `0.5 + 2.5 * Size`): inverts that back to the genome's
 # Size in [0,1] and doubles the mirrored collision.rs radius
@@ -482,6 +494,11 @@ func refresh(
 	var ids: PackedInt32Array = sim.alive_ids()
 	var sizes: PackedFloat32Array = sim.alive_sizes()
 	var rots: PackedFloat32Array = sim.alive_rotations()
+	# Walk/idle split: 1 while the sim moved the body this tick. The heading
+	# in `rots` is only facing — under turning inertia a resting body keeps
+	# the heading it last walked with, so `rot != 0` no longer means moving.
+	var moving_flags: PackedByteArray = sim.alive_moving()
+	var have_moving: bool = moving_flags.size() == n
 	var sp_ids: PackedInt32Array = sim.alive_species_ids()
 	var energies: PackedFloat32Array = sim.alive_energy()
 	# Pose-driving intent channels: fire_intent is written for every agent
@@ -721,15 +738,15 @@ func refresh(
 		var body_col: Color = body_colors[i]
 		body_col.a = MammalSprites.bucket_alpha(b, wading)
 		mm.set_instance_color(j, body_col)
-		# Per-instance animation state for the field_agent shader. The sim
-		# reports heading exactly 0.0 when velocity ≈ 0, which doubles as
-		# the idle flag; facing is the heading's x-sign.
+		# Per-instance animation state for the field_agent shader. The idle
+		# flag is the sim's moved-this-tick flag (see raw_walking); facing
+		# is the heading's x-sign.
 		var rot: float = rots[i] if have_rots else 0.0
 		# `moving` is the blended 0..1 walk weight the shader mixes its
 		# secondary motion with; `walking` is the debounced state picking
 		# the pose and driving the gait. Splitting them stops the sprite
-		# popping on the sim's flickering heading (~3.5 times a second).
-		var walking: bool = rot != 0.0
+		# popping on the sim's flickering stop/start (~3.5 times a second).
+		var walking: bool = raw_walking(have_moving, moving_flags[i] if have_moving else 0, rot)
 		var moving: float = 1.0 if walking else 0.0
 		if have_ids:
 			var loco: Vector2 = FxMath.step_locomotion(
