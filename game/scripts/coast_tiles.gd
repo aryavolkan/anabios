@@ -116,11 +116,26 @@ static func tile_image(mask: int) -> Image:
 		for x in CELL_PX:
 			var w := water_weight(mask, x, y)
 			var c := band_color(w)
-			# The channel core crosses the two land corners: paint it.
+			# The channel core crosses the two land corners: paint it there
+			# only. In the two water-corner quadrants the cell beneath is
+			# water, and the shader's own water (depth tone, ripples) must
+			# show through as it does under every bilinear mask; a flat
+			# core there used to checker a diagonal river with ripple-free
+			# squares on the half-cell grid.
 			if channel and w >= BAND_SHALLOW:
-				c = CHANNEL_DEEP
+				c = Color(0, 0, 0, 0) if mask & quadrant_bit(x, y) else CHANNEL_DEEP
 			img.set_pixel(x, y, c)
 	return img
+
+
+# The corner bit (mask_of order) of the quadrant pixel (x, y) lies in: a
+# dual-grid tile's quadrant sits over the terrain cell of that corner.
+static func quadrant_bit(x: int, y: int) -> int:
+	var right := x >= CELL_PX / 2
+	var bottom := y >= CELL_PX / 2
+	return mask_of(
+		not right and not bottom, right and not bottom, not right and bottom, right and bottom
+	)
 
 
 static func _blit_cell(atlas: Image, img: Image, cell: int) -> void:
