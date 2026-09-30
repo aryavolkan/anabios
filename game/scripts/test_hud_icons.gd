@@ -17,6 +17,7 @@ const TimeControls = preload("res://scripts/time_controls.gd")
 const TopBar = preload("res://scripts/top_bar.gd")
 const UnitCard = preload("res://scripts/unit_card.gd")
 const BrandPanel = preload("res://scripts/brand_panel.gd")
+const CoevolutionPanel = preload("res://scripts/coevolution_panel.gd")
 const EvolutionPanel = preload("res://scripts/evolution_panel.gd")
 const HelixPanel = preload("res://scripts/helix_panel.gd")
 const LegendPanel = preload("res://scripts/legend_panel.gd")
@@ -270,6 +271,18 @@ func _init() -> void:
 	# The [Y] and [X] charts open under the top bar and clear of the event log.
 	var coevo: Rect2 = _rect_of(ui["CoevolutionPanel"])
 	_check(coevo.position.y > top_bar.end.y, "co-evolution chart starts under the top bar")
+	# Its legend rows never pack tighter than they can be read, however many
+	# series a sub-chart has (as _draw sizes them over the authored height).
+	var coevo_charts: Array = CoevolutionPanel.CHARTS
+	var chart_plot_h: float = (coevo.size.y - 24.0) / float(coevo_charts.size()) - 8.0
+	for chart in coevo_charts:
+		var n_series: int = (chart["series"] as Array).size()
+		var lay: Dictionary = CoevolutionPanel.legend_layout(n_series, chart_plot_h)
+		_check(
+			float(lay["step"]) >= CoevolutionPanel.LEGEND_MIN_STEP,
+			"%s legend rows %.1fpx apart" % [chart["title"], float(lay["step"])]
+		)
+		_check(int(lay["cols"]) * int(lay["rows"]) >= n_series, "every series has a legend slot")
 	_check(HelixPanel.PANEL_RECT.position.y > top_bar.end.y, "helix starts under the top bar")
 	_check(
 		HelixPanel.PANEL_RECT.position.x > _rect_of(ui["EventLog"]).end.x,

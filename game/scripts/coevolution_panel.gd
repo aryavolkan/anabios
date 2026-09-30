@@ -155,6 +155,11 @@ const CHARTS := [
 const PAD_LEFT := 116.0  # left gutter for legend labels
 const PAD_RIGHT := 10.0
 const LEGEND_W := 104.0  # label wrap/clip width inside the gutter
+# Tightest legend row pitch that still reads (the four-series "gene vs
+# culture" rows at size 7 are ~8.7 apart). A chart whose series would pack
+# closer than this lays its legend out in two columns instead.
+const LEGEND_MIN_STEP := 8.5
+const LEGEND_COL_GAP := 4.0
 # Event markers stay full-height rules while they occupy at most this fraction
 # of the plot's pixel columns; past it they collapse into the rug band (see
 # _draw_marks), because wall-to-wall rules hide the curves they annotate.
@@ -326,30 +331,41 @@ func _draw_chart(
 	# Legend rows (left gutter) + polylines. Row step compresses when a chart
 	# has more series than its height would otherwise fit.
 	var cols: int = int(minf(plot_w, float(n)))
-	var row_step: float = minf(13.0, (h - 14.0) / float(maxi(1, c["series"].size())))
-	# Shrink the type with the row step. At a fixed size 10 the six-series charts
-	# ("invention adoption — late", "gene↔tech selection") packed rows ~7px apart
-	# and the labels overprinted each other into an unreadable smear.
+	var series: Array = c["series"]
+	var lay: Dictionary = legend_layout(series.size(), h)
+	var row_step: float = lay["step"]
+	var legend_rows: int = lay["rows"]
+	var legend_cols: int = lay["cols"]
+	var col_w: float = (LEGEND_W - LEGEND_COL_GAP * float(legend_cols - 1)) / float(legend_cols)
+	# Shrink the type with the row step, and in two columns until the widest
+	# label fits its half of the gutter. The five-to-seven-series charts
+	# ("invention adoption — late", "military", "gene↔tech selection") used to
+	# stack one column 5-7px apart, and even at size 7 the labels overprinted
+	# each other into an unreadable smear.
 	var legend_fs: int = int(clampf(row_step - 1.0, 7.0, 10.0))
-	var legend_y: float = top + 12.0
-	for s in c["series"]:
+	while legend_fs > 7 and _widest_label(series, legend_fs) > col_w:
+		legend_fs -= 1
+	for i in series.size():
+		var s: Dictionary = series[i]
 		var key: String = s["key"]
 		var col: Color = s["color"]
 		var off: bool = _hidden_keys.has(key)
 		var draw_col := Color(col.r, col.g, col.b, 0.3) if off else col
+		# Column-major, so the series still read top-down in chart order.
+		var lx: float = 6.0 + floorf(float(i) / float(legend_rows)) * (col_w + LEGEND_COL_GAP)
+		var legend_y: float = top + 12.0 + float(i % legend_rows) * row_step
 		draw_string(
 			_font,
-			Vector2(6, legend_y),
+			Vector2(lx, legend_y),
 			s["label"],
 			HORIZONTAL_ALIGNMENT_LEFT,
-			LEGEND_W,
+			col_w,
 			legend_fs,
 			draw_col
 		)
 		_legend_hitboxes.append(
-			{"rect": Rect2(4, legend_y - row_step + 2.0, LEGEND_W + 4, row_step), "key": key}
+			{"rect": Rect2(lx - 2.0, legend_y - row_step + 2.0, col_w + 4, row_step), "key": key}
 		)
-		legend_y += row_step
 		if off:
 			continue
 		var arr: PackedFloat32Array = cache[key]
@@ -378,6 +394,23 @@ func _draw_chart(
 			pts.push_back(Vector2(px, py_lo))
 		if pts.size() >= 2:
 			draw_polyline(pts, col, 1.5, true)
+
+
+# Legend grid for a chart of `n` series over a plot `h` tall: one column while
+# its rows stay at least LEGEND_MIN_STEP apart, else two (filled column-major).
+# Returns {cols, rows, step}; step is the row pitch, capped at 13.
+static func legend_layout(n: int, h: float) -> Dictionary:
+	var avail: float = h - 14.0
+	var legend_cols: int = 1 if avail / float(maxi(1, n)) >= LEGEND_MIN_STEP else 2
+	var rows: int = maxi(1, ceili(float(n) / float(legend_cols)))
+	return {"cols": legend_cols, "rows": rows, "step": minf(13.0, avail / float(rows))}
+
+
+func _widest_label(series: Array, fs: int) -> float:
+	var w := 0.0
+	for s in series:
+		w = maxf(w, _font.get_string_size(s["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+	return w
 
 
 # Codex events on the shared time axis. Marks are collapsed to one entry per
