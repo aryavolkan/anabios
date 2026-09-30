@@ -88,6 +88,43 @@ func _init() -> void:
 		"an in-world position is left untouched"
 	)
 
+	# --- boot_zoom: the opening shot is never an overview zoom ----------------
+	_check(
+		is_equal_approx(CameraFraming.boot_zoom(800.0, 1024.0), 2.0),
+		"a 1024 world at 800 px opens on the 2x step framing 0.35 of the world"
+	)
+	for world in [4096.0, 8192.0]:
+		_check(
+			CameraFraming.boot_zoom(800.0, world) >= 1.0,
+			"a %d world opens at >= 1x, not in overview where no bodies draw" % int(world)
+		)
+	_check(
+		is_equal_approx(CameraFraming.boot_zoom(1080.0, 4096.0), 1.0),
+		"a large world opens on the 1x step exactly (a table step, crisp texels)"
+	)
+
+	# --- densest_centre: torus-aware, lands on a cluster, not between two ------
+	var world_d := 4096.0
+	var two := PackedVector2Array()
+	for i in 30:
+		two.append(Vector2(400.0 + float(i % 6) * 10.0, 500.0 + float(i / 6) * 10.0))
+	for i in 20:
+		two.append(Vector2(3400.0 + float(i % 5) * 10.0, 3000.0 + float(i / 5) * 10.0))
+	var c := CameraFraming.densest_centre(two, world_d, 800.0)
+	_check(
+		c.distance_to(Vector2(425.0, 520.0)) < 40.0,
+		"two clusters: centre on the bigger one (got %s), not their centroid" % str(c)
+	)
+	var seam := PackedVector2Array()
+	for i in 10:
+		seam.append(Vector2(4090.0 - float(i) * 4.0, 2000.0))
+		seam.append(Vector2(6.0 + float(i) * 4.0, 2000.0))
+	var cs := CameraFraming.densest_centre(seam, world_d, 800.0)
+	_check(
+		minf(cs.x, world_d - cs.x) < 40.0 and absf(cs.y - 2000.0) < 1.0,
+		"a cluster straddling the x seam centres on the seam (got %s), not mid-world" % str(cs)
+	)
+
 	if _failed:
 		quit(1)
 		return
