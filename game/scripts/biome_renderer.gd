@@ -315,6 +315,12 @@ func _refresh_terrain_ids() -> void:
 		_ids_tex.update(img)
 	_terrain_mat.set_shader_parameter("terrain_ids", _ids_tex)
 	_terrain_mat.set_shader_parameter("tiles_enabled", 1.0 if _tiles_on else 0.0)
+	# The water line again, now that the scenario is loaded: _setup ran in
+	# _ready against the unloaded sim's default, and reruns only when the
+	# resolution changes, so a default-resolution world with its own
+	# sea_level (habitat-territories) kept 0.35. The shader's depth cue and
+	# its river test (waterfalls on rivers only) both read it.
+	_terrain_mat.set_shader_parameter("sea_level", sim.sea_level())
 	if _scatter != null:
 		_scatter.rebuild(ids, _res, _res * scale.x)
 

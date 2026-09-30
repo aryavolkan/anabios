@@ -35,8 +35,8 @@ uniform float terrace_levels = 14.0;
 uniform float cliff_strength = 0.75;
 uniform float cliff_band = 0.42;   // fraction of a cell the face occupies
 uniform float height_lift = 0.22;
-// Elevation drop between a water cell and the water cell south of it that
-// paints a waterfall (see the water branch).
+// Elevation drop between two river cells that paints a waterfall (see the
+// water branch).
 uniform float fall_step = 0.0075;
 
 // Pixel-art ground tiles (terrain_sprites.gd atlas), blended into the land
@@ -140,6 +140,18 @@ float land_neighbours(vec2 cell) {
 	}
 	return step(0.5, tid_at(cell + vec2(1.0, 0.0))) + step(0.5, tid_at(cell - vec2(1.0, 0.0)))
 		+ step(0.5, tid_at(cell + vec2(0.0, 1.0))) + step(0.5, tid_at(cell - vec2(0.0, 1.0)));
+}
+
+// True for a river cell among the water cells, from its packed elevation.
+// The id texture reports rivers as Water, but a river is land terrain with
+// flow: it stands at or above the sea line, while every lake, pond and sea
+// cell lies below it (`sea_level` is the highest water elevation, and the
+// RGBA8 packing truncates, so a water cell never packs above it). Waterfalls
+// test this: a pond's bed noise differs by a couple of 8-bit steps from cell
+// to cell, and with only the narrow-channel test every small pond and every
+// concave lake or sea corner used to wear falling streaks and splash foam.
+bool river_elev(float e) {
+	return e > sea_level + 0.001;
 }
 
 // Elevation (packed in alpha) interpolated between the four nearest cell
@@ -267,14 +279,15 @@ void fragment() {
 		// Coast tile on the water side (shallows + foam).
 		outc = mix(outc, coast_tile.rgb, coast_tile.a * detail);
 
-		// Waterfalls: a narrow water cell (a river: at least two land
-		// neighbours) standing a real step above its lowest water neighbour
-		// wears white falling streaks over the half of the cell facing that
-		// neighbour, lanes picked per texel and brightness sliding
-		// downstream with time, plus a foam lip where the drop begins, so a
-		// river coming down off a terrace reads as the reference boards'
-		// falls. The sea is excluded by the neighbour test: its bed keeps
-		// dropping past the shore but it is never a narrow channel.
+		// Waterfalls: a river cell in a narrow channel (at least two land
+		// neighbours) standing a real step above its lowest water neighbour,
+		// itself a river, wears white falling streaks over the half of the
+		// cell facing that neighbour, lanes picked per texel and brightness
+		// sliding downstream with time, plus a foam lip where the drop
+		// begins, so a river coming down off a terrace reads as the
+		// reference boards' falls. Lakes, ponds and the sea are excluded by
+		// river_elev: their beds are bed noise, not a drop, and a pond or a
+		// lake corner is as narrow as any channel.
 		float e_here = texture(TEXTURE, UV).a;
 		float dN = water_cell(cell0 - vec2(0.0, 1.0), cU) ? e_here - texture(TEXTURE, UV - vec2(0.0, px.y)).a : 0.0;
 		float dS = water_cell(cell0 + vec2(0.0, 1.0), cD) ? e_here - texture(TEXTURE, UV + vec2(0.0, px.y)).a : 0.0;
@@ -284,8 +297,10 @@ void fragment() {
 		bool vertical = best == dN || best == dS;
 		bool forward = best == dS || best == dE;
 		vec2 next = cell0 + (vertical ? vec2(0.0, forward ? 1.0 : -1.0) : vec2(forward ? 1.0 : -1.0, 0.0));
-		// Both this cell and the one it pours into must be narrow channels.
+		// Both this cell and the one it pours into must be narrow river
+		// channels.
 		float fall = step(fall_step, best) * step(0.49, coast) * step(1.5, land_neighbours(next));
+		fall *= (river_elev(e_here) && river_elev(e_here - best)) ? 1.0 : 0.0;
 		if (fall > 0.5 && detail > 0.05) {
 			vec2 fc0 = fract(cellf);
 			vec2 texel0 = floor(world_pos / max(texel_w, 1e-4));
@@ -302,17 +317,22 @@ void fragment() {
 		}
 		// Splash pool: the narrow cell a fall pours into churns white in the
 		// half nearest the drop (speckled per texel, flickering with time),
-		// so a fall reads as a two-cell event with foam at its foot.
+		// so a fall reads as a two-cell event with foam at its foot. The
+		// upstream cell passes the fall's own tests (a narrow river cell),
+		// so no pool churns under a lake shore where nothing falls.
 		float uN = water_cell(cell0 - vec2(0.0, 1.0), cU) ? texture(TEXTURE, UV - vec2(0.0, px.y)).a - e_here : 0.0;
 		float uS = water_cell(cell0 + vec2(0.0, 1.0), cD) ? texture(TEXTURE, UV + vec2(0.0, px.y)).a - e_here : 0.0;
 		float uE = water_cell(cell0 + vec2(1.0, 0.0), cR) ? texture(TEXTURE, UV + vec2(px.x, 0.0)).a - e_here : 0.0;
 		float uW = water_cell(cell0 - vec2(1.0, 0.0), cL) ? texture(TEXTURE, UV - vec2(px.x, 0.0)).a - e_here : 0.0;
 		float above = max(max(uN, uS), max(uE, uW));
-		if (above >= fall_step && coast >= 0.49 && detail > 0.05) {
+		bool from_vertical = above == uN || above == uS;
+		bool from_low = above == uS || above == uE;  // the drop comes from the south/east side
+		vec2 up = cell0 + (from_vertical ? vec2(0.0, from_low ? 1.0 : -1.0) : vec2(from_low ? 1.0 : -1.0, 0.0));
+		bool pool = above >= fall_step && coast >= 0.49 && land_neighbours(up) > 1.5
+			&& river_elev(e_here) && river_elev(e_here + above);
+		if (pool && detail > 0.05) {
 			vec2 fc1 = fract(cellf);
 			vec2 texel1 = floor(world_pos / max(texel_w, 1e-4));
-			bool from_vertical = above == uN || above == uS;
-			bool from_low = above == uS || above == uE;  // the drop comes from the south/east side
 			float along1 = from_vertical ? fc1.y : fc1.x;
 			float near = from_low ? step(0.5, along1) : 1.0 - step(0.5, along1);
 			float speck = step(0.62, hash2(texel1 + vec2(floor(TIME * 6.0), 0.0)));
