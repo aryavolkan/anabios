@@ -624,8 +624,27 @@ function renderCard() {
   $("follow").classList.toggle("on", state.follow);
 }
 
-function select(id) { state.selected = id; layers.agents.selected = id; renderCard(); }
-function deselect() { state.selected = -1; layers.agents.selected = -1; state.follow = false; $("card").classList.remove("show"); }
+// The ring, `selectedPos` (follow, fly to) and the figures' colours and seats
+// are written only by the frame loop's agents update, which a paused world
+// skips: every handler that changes what that update reads asks for one pass
+// at the paused tick (`sinceStep = 0`, as a seek does). The pass does not step
+// the sim or push trails, so it is safe to request at any time.
+function select(id) { state.selected = id; layers.agents.selected = id; renderCard(); state.sinceStep = 0; }
+function deselect() {
+  state.selected = -1; layers.agents.selected = -1; state.follow = false; $("card").classList.remove("show");
+  layers.agents.marker.visible = false; state.sinceStep = 0;
+}
+function setColorMode(m) {
+  state.colorMode = m; $("color-mode").value = m; layers.agents.mode = m; renderLegend();
+  state.sinceStep = 0;
+}
+/** Framing asks for the whole plate: a follow left on would drag the camera
+ *  straight back onto the followed agent, so framing releases it (the agent
+ *  stays selected, its card open). */
+function frameWorld() {
+  if (state.follow) { state.follow = false; $("follow").classList.remove("on"); }
+  stage.frame();
+}
 
 function applyLayerToggles() {
   for (const cb of document.querySelectorAll("#layers input")) {
@@ -639,6 +658,7 @@ function applyLayerToggles() {
         // Buildings are seated when placed: re-seat them on the reshaped ground.
         layers.hubs.layout();   // re-seat on the new heights (and re-check the shore)
         layers.villages.layout(heightAt);
+        state.sinceStep = 0;    // and the figures (and the ring) too, even while paused
         break;
       case "water": if (state.terrain) state.terrain.water.mesh.visible = on && state.terrain.reliefOn; break;
       case "forest": if (state.terrain) state.terrain.forest.group.visible = on; break;
@@ -721,9 +741,9 @@ window.addEventListener("keydown", (e) => {
   const speeds = [0.25, 1, 4, 16, 64];
   switch (e.code) {
     case "Space": e.preventDefault(); setPaused(!state.paused); break;
-    case "KeyF": stage.frame(); break;
+    case "KeyF": frameWorld(); break;
     case "KeyH": document.body.classList.toggle("hide-hud"); stage.refit(); break;
-    case "KeyC": { const opts = Array.from($("color-mode").options).map((o) => o.value); state.colorMode = opts[(opts.indexOf(state.colorMode) + 1) % opts.length]; $("color-mode").value = state.colorMode; layers.agents.mode = state.colorMode; renderLegend(); break; }
+    case "KeyC": { const opts = Array.from($("color-mode").options).map((o) => o.value); setColorMode(opts[(opts.indexOf(state.colorMode) + 1) % opts.length]); break; }
     case "KeyL": if (state.selected >= 0) { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); } break;
     case "KeyV": setTour(!state.tour); break;
     case "Escape": deselect(); break;
@@ -732,11 +752,21 @@ window.addEventListener("keydown", (e) => {
 });
 
 $("play").onclick = () => setPaused(!state.paused);
-$("frame").onclick = () => stage.frame();
+$("frame").onclick = frameWorld;
 $("tour").onclick = () => setTour(!state.tour);
 for (const b of document.querySelectorAll(".speed")) b.onclick = () => setSpeed(Number(b.dataset.speed));
-$("color-mode").onchange = (e) => { state.colorMode = e.target.value; layers.agents.mode = state.colorMode; renderLegend(); };
+$("color-mode").onchange = (e) => setColorMode(e.target.value);
 $("layers").addEventListener("change", applyLayerToggles);
+// A clicked checkbox (or its label) keeps keyboard focus, and the shortcut
+// handler ignores keys aimed at inputs: Space then re-toggled the box instead
+// of pausing, and C/F/H/V/L did nothing until the user clicked elsewhere. A
+// pointer click hands focus back to the page; a keyboard toggle (Tab + Space,
+// `detail === 0`) keeps it.
+$("layers").addEventListener("click", (e) => {
+  if (e.detail === 0) return;   // keyboard-driven: leave focus where it is
+  const box = e.target.closest("label")?.querySelector("input[type=checkbox]") ?? (e.target.matches("input[type=checkbox]") ? e.target : null);
+  if (box) setTimeout(() => box.blur(), 0);   // after the label has forwarded focus to its box
+});
 $("rail-toggle").onclick = () => { const r = $("rail"); r.classList.toggle("collapsed"); $("rail-toggle").textContent = r.classList.contains("collapsed") ? "+" : "−"; stage.refit(); };
 $("card-close").onclick = deselect;
 $("follow").onclick = () => { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); };
