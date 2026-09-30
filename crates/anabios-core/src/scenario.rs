@@ -306,9 +306,12 @@ pub struct Scenario {
     /// On by default (scenario schema): gait — movement speed follows
     /// urgency instead of always being the Locomotor maximum: fleeing,
     /// fighting and hunting agents sprint, the seeking moods walk, content
-    /// grazers amble, and a sprint costs superlinearly more energy per unit
-    /// distance (`gait.rs`). Set `false` to opt out; the engine's own
-    /// default (`World::new`) stays off, so the flag-off byte-identity
+    /// grazers amble, every pace yields to the bodies in its way when the
+    /// collision layer is on (an agent decelerates into contact and creeps
+    /// when blocked, `gait::crowd_factor`), and a sprint costs superlinearly
+    /// more energy
+    /// per unit distance (`gait.rs`). Set `false` to opt out; the engine's
+    /// own default (`World::new`) stays off, so the flag-off byte-identity
     /// guarantee is unchanged.
     #[serde(default = "default_true")]
     pub gait_enabled: bool,

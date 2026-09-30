@@ -294,10 +294,15 @@ pub struct World {
     /// — flee, fight and hunt at the Locomotor maximum, the seeking moods
     /// walk (`gait::GAIT_WALK`), a content grazer ambles
     /// (`gait::GAIT_AMBLE`), scaled down further by how hard the program
-    /// pushes — and `integrate_all` charges the move cost a superlinear
+    /// pushes and, with `territory_enabled`, by `gait::crowd_factor` of the
+    /// congestion ahead (the colliding bodies in the path it is about to take,
+    /// `collision::congestion_ahead`), so an agent decelerates into contact
+    /// and creeps when a body blocks its way — and `integrate_all` charges
+    /// the move cost a superlinear
     /// `1 + GAIT_SPRINT_COST · frac²` factor. Off by default: the direction
-    /// stays a unit vector and the factor is never applied, so a flag-off
-    /// world is byte-identical (zero RNG either way). Serialized (v45).
+    /// stays a unit vector, the congestion is not measured and the factor is
+    /// never applied, so a flag-off world is byte-identical (zero RNG either
+    /// way). Serialized (v45).
     #[serde(default)]
     pub gait_enabled: bool,
     /// When true, growth and juveniles are active (`growth.rs`): an agent is

@@ -550,7 +550,28 @@ fn decide_all(world: &mut World) {
                     sensors[i].nearest_other_id != crate::sense::NO_NEIGHBOR_ID,
                     sensors[i].nearest_other_dir,
                 );
-                (v / len) * crate::gait::speed_fraction(len, agents.mood[i], hunting)
+                let unit = v / len;
+                let mut frac = crate::gait::speed_fraction(len, agents.mood[i], hunting);
+                // Yield to the bodies in the way (collision layer on): the
+                // pace falls with the congestion ahead along the direction the
+                // agent is about to take — after the steer, so a sidestep is
+                // not slowed by the body it steps around — to a creep at
+                // contact (`gait::crowd_factor`). Exactly ×1.0 with nothing
+                // in the way, so a clear path is walked exactly as before;
+                // layer off ⇒ never measured. Reads the stage-1 collision
+                // hash, as the steer does; no RNG.
+                if territory_enabled {
+                    let congestion = crate::collision::congestion_ahead(
+                        collision,
+                        agents,
+                        i,
+                        ws,
+                        growth_enabled,
+                        unit,
+                    );
+                    frac *= crate::gait::crowd_factor(congestion);
+                }
+                unit * frac
             } else {
                 v / len
             };
@@ -983,6 +1004,115 @@ mod tests {
         assert!((dir.length() - GAIT_AMBLE).abs() < 1e-6, "amble fraction: {dir:?}");
         let amble = GAIT_AMBLE * crate::integrate::SPEED_MAX_CAP;
         assert!(step > 0.0 && step <= amble + 1e-4, "step {step} must not exceed {amble}");
+    }
+
+    /// Gait yields to the bodies in the way (collision layer on): the same
+    /// grazer ambles at the full amble alone, with a body behind it or with
+    /// one beside it; at half pace with one dead ahead half-way through the
+    /// steer margin; at the creep — never stopped — with one touching dead
+    /// ahead, with the herd interior's three or with a pile; a fleeing
+    /// agent's sprint yields the same way; and a body dead ahead of the
+    /// WANTED direction that the steer carries it clear of does not slow
+    /// the sidestep. The layer off (no bodies) or gait off (a fixed pace)
+    /// leaves the direction untouched.
+    #[test]
+    fn gait_on_yields_to_the_bodies_in_the_way_but_not_behind_or_beside() {
+        use crate::collision::{body_radius, STEER_MARGIN, SWEEP_DEEP_FRAC};
+        use crate::gait::{CROWD_MIN, GAIT_AMBLE, GAIT_SPRINT};
+        // The +x-walking grazer's `desired_direction` with neighbours at the
+        // given offsets (the hash rebuilt as stage 1 does).
+        let dir = |gait_on: bool, territory_on: bool, mood: u8, offsets: &[Vec2]| -> Vec2 {
+            let (mut w, a) = gait_world(gait_on);
+            w.territory_enabled = territory_on;
+            w.agents.mood[a as usize] = mood;
+            for &off in offsets {
+                w.spawn_agent(Vec2::new(500.0, 500.0) + off, Genome::neutral());
+            }
+            w.resize_scratch();
+            crate::collision::rebuild_hash(&mut w);
+            decide_all(&mut w);
+            w.desired_direction[a as usize]
+        };
+        let frac = |gait_on: bool, territory_on: bool, mood: u8, offsets: &[Vec2]| -> f32 {
+            dir(gait_on, territory_on, mood, offsets).length()
+        };
+        let content = crate::mood::CONTENT;
+        let gap = 2.0 * body_radius(&Genome::neutral());
+        let mid = (1.0 + 0.5 * (STEER_MARGIN - 1.0)) * gap;
+        let alone = frac(true, true, content, &[]);
+        assert!((alone - GAIT_AMBLE).abs() < 1e-6, "alone: the full amble, {alone}");
+        let behind = frac(true, true, content, &[Vec2::new(-gap, 0.0)]);
+        assert!((behind - alone).abs() < 1e-6, "a body behind is not in the way: {behind}");
+        let beside = frac(true, true, content, &[Vec2::new(0.0, gap)]);
+        assert!((beside - alone).abs() < 1e-6, "a body beside is not in the way: {beside}");
+        let half = frac(true, true, content, &[Vec2::new(mid, 0.0)]);
+        assert!((half - 0.5 * GAIT_AMBLE).abs() < 1e-4, "half-way through the margin: {half}");
+        let creep = GAIT_AMBLE * CROWD_MIN;
+        let touching = frac(true, true, content, &[Vec2::new(gap, 0.0)]);
+        assert!((touching - creep).abs() < 1e-5 && touching > 0.0, "touching: {touching}");
+        let hex = [
+            Vec2::new(gap, 0.0),
+            Vec2::new(0.5 * gap, 0.866_025_4 * gap),
+            Vec2::new(0.5 * gap, -0.866_025_4 * gap),
+        ];
+        let interior = frac(true, true, content, &hex);
+        assert!((interior - creep).abs() < 1e-5, "herd interior: {interior}");
+        let d = SWEEP_DEEP_FRAC * gap;
+        let pile = [
+            Vec2::new(d, 0.0),
+            Vec2::new(0.866_025_4 * d, 0.5 * d),
+            Vec2::new(0.866_025_4 * d, -0.5 * d),
+        ];
+        let jammed = frac(true, true, content, &pile);
+        assert!((jammed - creep).abs() < 1e-5, "jammed: {jammed}");
+        // A sprint yields the same way.
+        let flee = frac(true, true, crate::mood::FLEE, &[Vec2::new(mid, 0.0)]);
+        assert!((flee - 0.5 * GAIT_SPRINT).abs() < 1e-4, "fleeing at a body: {flee}");
+        // Measured on the direction taken, not the one wanted: with a plain
+        // unit program intent (not the fixture's 1000×) a body ahead but
+        // off to one side turns the agent further from it, and the pace is
+        // set by the body's angle to the turned direction — less
+        // congestion than the wanted direction would have read.
+        {
+            use crate::collision::congestion_ahead;
+            use crate::gait::crowd_factor;
+            let (mut w, a) = gait_world(true);
+            w.territory_enabled = true;
+            w.agents.program[a as usize] = crate::program::Program::from_slice(&[
+                crate::program::Node::Const(1.0),
+                crate::program::Node::MoveTowardX,
+            ]);
+            // 60° off the path, 1.1 gaps away: inside the margin, in the way.
+            let off = Vec2::new(0.5 * 1.1 * gap, 0.866_025_4 * 1.1 * gap);
+            w.spawn_agent(Vec2::new(500.0, 500.0) + off, Genome::neutral());
+            w.resize_scratch();
+            crate::collision::rebuild_hash(&mut w);
+            decide_all(&mut w);
+            let taken = w.desired_direction[a as usize];
+            assert!(taken.x > 0.0 && taken.y < 0.0, "turned away from the body, south: {taken:?}");
+            let congestion_on = |d: Vec2| {
+                congestion_ahead(
+                    &w.collision_spatial,
+                    &w.agents,
+                    a as usize,
+                    w.world_size,
+                    false,
+                    d,
+                )
+            };
+            let on_wanted = congestion_on(Vec2::new(1.0, 0.0));
+            let on_taken = congestion_on(taken.normalize());
+            assert!(0.0 < on_taken && on_taken < on_wanted, "{on_taken} vs {on_wanted}");
+            let expect = GAIT_AMBLE * crowd_factor(on_taken);
+            assert!((taken.length() - expect).abs() < 1e-5, "{} vs {expect}", taken.length());
+            assert!(taken.length() > GAIT_AMBLE * crowd_factor(on_wanted));
+        }
+        // Layer off: no bodies, so no congestion.
+        let no_bodies = frac(true, false, content, &[Vec2::new(gap, 0.0)]);
+        assert!((no_bodies - GAIT_AMBLE).abs() < 1e-6, "layer off: {no_bodies}");
+        // Gait off: a unit direction whatever stands ahead.
+        let fixed = frac(false, true, content, &pile);
+        assert!((fixed - 1.0).abs() < 1e-6, "gait off: {fixed}");
     }
 
     #[test]
