@@ -36,6 +36,24 @@ func _init() -> void:
 		)
 		# Building twice returns the same cached texture (no per-spawn upload).
 		_check(PixelFx.build(kind) == texture, "fx %d texture is cached" % kind)
+		# The MultiMesh copy is the same mark mirrored top to bottom (the
+		# QuadMesh's V axis runs bottom-up), cached apart from the upright one.
+		var mm_image: Image = PixelFx.build_image_for_multimesh(kind)
+		var mirrored := true
+		for y in 16:
+			for x in 16:
+				if mm_image.get_pixel(x, y) != image.get_pixel(x, 15 - y):
+					mirrored = false
+		_check(mirrored, "fx %d multimesh copy is flip_y()-ed" % kind)
+		var mm_texture: ImageTexture = PixelFx.build_for_multimesh(kind)
+		_check(mm_texture != texture, "fx %d multimesh texture is its own" % kind)
+		_check(PixelFx.build_for_multimesh(kind) == mm_texture, "fx %d mm texture cached" % kind)
+	# The bones' shading row sits under the spine in the authored mark
+	# (y=8 below y=7): the carcass MultiMesh must end up showing it that way.
+	var bones: Image = PixelFx.build_image(PixelFx.BONES)
+	_check(bones.get_pixel(4, 8) != bones.get_pixel(4, 7), "bones spine has a shading row")
+	var bones_mm: Image = PixelFx.build_image_for_multimesh(PixelFx.BONES)
+	_check(bones_mm.get_pixel(4, 7) == bones.get_pixel(4, 8), "bones flip for the MultiMesh")
 	if _failed:
 		quit(1)
 		return

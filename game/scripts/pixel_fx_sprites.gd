@@ -6,6 +6,10 @@ extends RefCounted
 # viewer_effects scatter a handful of them per event and tint them via
 # modulate. Not flipped: particles draw the texture upright (the flip_y() in
 # the building/prop registries is the MultiMesh QuadMesh's V convention).
+# The two marks main.gd stamps through plain MultiMeshes instead (carcass
+# bones, combat flashes) take build_for_multimesh(), the flip_y()-ed copy:
+# drawn from build() the bones lay upside-down, the shading row above the
+# spine and the skull's eyes under its nose.
 
 const ApeSprites = preload("res://scripts/ape_sprites.gd")
 
@@ -96,6 +100,7 @@ const _BLOCKS: Array = [
 # One texture per kind, built on first use: a burst is retargeted many times
 # a minute and must not upload a fresh texture per spawn.
 static var _cache: Dictionary = {}
+static var _mm_cache: Dictionary = {}
 
 
 static func build_image(kind: int) -> Image:
@@ -106,6 +111,19 @@ static func build(kind: int) -> ImageTexture:
 	if not _cache.has(kind):
 		_cache[kind] = ImageTexture.create_from_image(build_image(kind))
 	return _cache[kind]
+
+
+# The mark pre-flipped for a QuadMesh MultiMesh, whose V axis runs bottom-up.
+static func build_image_for_multimesh(kind: int) -> Image:
+	var img := build_image(kind)
+	img.flip_y()
+	return img
+
+
+static func build_for_multimesh(kind: int) -> ImageTexture:
+	if not _mm_cache.has(kind):
+		_mm_cache[kind] = ImageTexture.create_from_image(build_image_for_multimesh(kind))
+	return _mm_cache[kind]
 
 
 static func opaque_pixels(image: Image) -> int:

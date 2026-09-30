@@ -81,9 +81,10 @@ func _ready() -> void:
 	var disc := _disc_texture()
 	# Carcasses and combat flashes are pixel marks (bones, the impact
 	# star), unfiltered: the filtered disc was a soft beige blob at 16x.
-	carcasses.texture = PixelFxSprites.build(PixelFxSprites.BONES)
+	# The MultiMesh QuadMesh flips V, so they take the flip_y()-ed copies.
+	carcasses.texture = PixelFxSprites.build_for_multimesh(PixelFxSprites.BONES)
 	carcasses.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	flashes.texture = PixelFxSprites.build(PixelFxSprites.IMPACT)
+	flashes.texture = PixelFxSprites.build_for_multimesh(PixelFxSprites.IMPACT)
 	flashes.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# The agents are the apes of DIT: render each as an 8-bit hominin in its
 	# species' own colours instead of a plain disc, one MultiMesh + pose atlas
