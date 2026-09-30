@@ -307,6 +307,11 @@ Files: `game/scripts/biome_renderer.gd` → `ground_layer.gd` +
    colour + id apron) placed at its view-relative wrapped position (D6).
    Per frame: compute the visible chunk set, evict outside the ring, upload at
    most `UPLOAD_BUDGET = 8` new/dirty chunks (version changed), oldest first.
+   A view wider than a world meets some chunks twice: each further copy is a
+   mirror sharing the resident chunk's textures and prop multimeshes (at most
+   `MAX_WRAP_COPIES`, nearest first). While a chunk under the view itself is
+   still missing, freshly built props stay hidden, and a fill larger than one
+   frame's budget hides them all, so a jump shows its props at once.
 3. **Crisp tiles + autotiling.** Drop `soften` and linear filtering; the
    shader keeps hillshade (from alpha) and water but samples **dual-grid
    transition tiles**: for each half-offset corner the 4 surrounding ids pick

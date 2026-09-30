@@ -56,6 +56,72 @@ static func visible_chunks(
 	return out
 
 
+# The extra torus copies a view needs beyond the one `visible_chunks` placed
+# per chunk index (D6). Once the view is wider or taller than a world minus
+# a chunk, two copies of one chunk can both be on screen — the fit framing
+# of a 1024 world at 1x, 0.25x on a 4096 world, even a camera near a chunk
+# edge at 2x on a two-chunk world — and a chunk drawn once left the other
+# copy to the whole-world sprite: no props or canopy, linear filtering, a
+# hard seam. For every entry of `placed` (as `visible_chunks` returns), each
+# further copy whose rect meets the view itself (no ring: a copy shares its
+# chunk's upload, so nothing needs preloading) is returned as
+# `[cx, cy, offset_x, offset_y]`, nearest the camera first and at most
+# `max_copies` of them (a far zoom-out on a small world would otherwise ask
+# for hundreds; past the cap the whole-world sprite keeps the far copies).
+static func wrap_copies(
+	cam_pos: Vector2,
+	view_size: Vector2,
+	world: float,
+	chunk_world: float,
+	placed: Array,
+	max_copies: int
+) -> Array:
+	var out: Array = []
+	if world <= 0.0 or chunk_world <= 0.0 or max_copies <= 0:
+		return out
+	if view_size.x <= world - chunk_world and view_size.y <= world - chunk_world:
+		return out
+	var v0 := cam_pos - view_size * 0.5
+	var v1 := cam_pos + view_size * 0.5
+	var found: Array = []  # [dist², cx, cy, off_x, off_y]
+	for entry in placed:
+		var ox: float = entry[2]
+		var oy: float = entry[3]
+		var base := Vector2(int(entry[0]) * chunk_world + ox, int(entry[1]) * chunk_world + oy)
+		# Copies k worlds over whose rect overlaps the view on each axis.
+		var kx0 := int(floorf((v0.x - chunk_world - base.x) / world)) + 1
+		var kx1 := int(ceilf((v1.x - base.x) / world)) - 1
+		var ky0 := int(floorf((v0.y - chunk_world - base.y) / world)) + 1
+		var ky1 := int(ceilf((v1.y - base.y) / world)) - 1
+		for ky in range(ky0, ky1 + 1):
+			for kx in range(kx0, kx1 + 1):
+				if kx == 0 and ky == 0:
+					continue
+				var off := Vector2(ox + kx * world, oy + ky * world)
+				var center := (
+					base + Vector2(kx * world, ky * world) + Vector2.ONE * chunk_world * 0.5
+				)
+				found.append(
+					[cam_pos.distance_squared_to(center), entry[0], entry[1], off.x, off.y]
+				)
+	found.sort_custom(func(a, b): return a[0] < b[0])
+	for i in mini(max_copies, found.size()):
+		out.append([found[i][1], found[i][2], found[i][3], found[i][4]])
+	return out
+
+
+# How many of `view_chunks` (the ring-0 `visible_chunks` of the view itself)
+# are not resident yet. The ground layer holds freshly built props back
+# while this is above zero, so a fill after a jump ([F], a minimap click, a
+# zoom-out) shows its props all at once instead of chunk by chunk.
+static func missing_count(resident: Dictionary, view_chunks: Array) -> int:
+	var n := 0
+	for entry in view_chunks:
+		if not resident.has(Vector2i(int(entry[0]), int(entry[1]))):
+			n += 1
+	return n
+
+
 # Diff `wanted` (an array of `[cx, cy, ...]` entries, as `visible_chunks`
 # returns — extra trailing elements are ignored) against `resident`, a
 # `Dictionary` of `Vector2i(cx, cy) -> {"version": int, "age": int}` for the

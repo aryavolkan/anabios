@@ -59,6 +59,10 @@ func _init() -> void:
 	_test_visible_chunks_wraps_negative_offsets()
 	_test_visible_chunks_view_wider_than_world()
 	_test_plan_uploads()
+	_test_wrap_copies_view_wider_than_world()
+	_test_wrap_copies_narrow_view_needs_none()
+	_test_wrap_copies_cap_nearest_first()
+	_test_missing_count()
 
 	if _failed:
 		quit(1)
@@ -191,3 +195,97 @@ func _test_plan_uploads() -> void:
 	_check(
 		keep_all.size() == 1 and keep_all[0] == Vector2i(0, 0), "only the unchanged chunk is kept"
 	)
+
+
+# The fit framing of a 1024 world at 1x on a 1280x800 window: the view is
+# 256 units wider than the world, so the chunks on its left and right edges
+# are on screen twice. Every point of the view must be covered by a placed
+# chunk or one of its copies, and no copy may repeat a placed one.
+func _test_wrap_copies_view_wider_than_world() -> void:
+	var world := 1024.0
+	var chunk_world := 512.0
+	var cam_pos := Vector2(512.0, 512.0)
+	var view_size := Vector2(1280.0, 800.0)
+	var placed := S.visible_chunks(cam_pos, view_size, world, chunk_world, 2, 1)
+	var copies := S.wrap_copies(cam_pos, view_size, world, chunk_world, placed, 96)
+	_check(copies.size() > 0, "a view wider than the world needs wrap copies")
+	var rects: Array = []
+	for c in placed + copies:
+		rects.append(
+			Rect2(
+				Vector2(c[0] * chunk_world + c[2], c[1] * chunk_world + c[3]), Vector2.ONE * 512.0
+			)
+		)
+	for c in copies:
+		for p in placed:
+			if int(p[0]) == int(c[0]) and int(p[1]) == int(c[1]):
+				_check(c[2] != p[2] or c[3] != p[3], "a copy never repeats the placed chunk")
+	var covered := true
+	var x := cam_pos.x - view_size.x * 0.5 + 1.0
+	while x < cam_pos.x + view_size.x * 0.5:
+		var y := cam_pos.y - view_size.y * 0.5 + 1.0
+		while y < cam_pos.y + view_size.y * 0.5:
+			var hit := false
+			for r in rects:
+				if r.has_point(Vector2(x, y)):
+					hit = true
+					break
+			covered = covered and hit
+			y += 37.0
+		x += 37.0
+	_check(covered, "placed chunks plus their copies cover the whole view (no bare seam)")
+	for c in copies:
+		_check(
+			(
+				is_equal_approx(fposmod(c[2], world), 0.0)
+				and is_equal_approx(fposmod(c[3], world), 0.0)
+			),
+			"copy offsets are whole worlds (%s)" % [c]
+		)
+
+
+# A view narrower than a world minus a chunk can never meet two copies of
+# one chunk: no mirrors, whatever the camera.
+func _test_wrap_copies_narrow_view_needs_none() -> void:
+	var world := 4096.0
+	var chunk_world := 512.0
+	var cam_pos := Vector2(4000.0, 30.0)  # near both seams
+	var view_size := Vector2(1280.0, 800.0)
+	var placed := S.visible_chunks(cam_pos, view_size, world, chunk_world, 8, 1)
+	var copies := S.wrap_copies(cam_pos, view_size, world, chunk_world, placed, 96)
+	_check(copies.is_empty(), "a narrow view needs no wrap copies (got %d)" % copies.size())
+
+
+# A far zoom-out on a small world asks for many copies: the cap keeps the
+# ones nearest the camera.
+func _test_wrap_copies_cap_nearest_first() -> void:
+	var world := 128.0
+	var chunk_world := 64.0
+	var cam_pos := Vector2(64.0, 64.0)
+	var view_size := Vector2(2000.0, 2000.0)
+	var placed := S.visible_chunks(cam_pos, view_size, world, chunk_world, 2, 1)
+	var all := S.wrap_copies(cam_pos, view_size, world, chunk_world, placed, 100000)
+	var capped := S.wrap_copies(cam_pos, view_size, world, chunk_world, placed, 10)
+	_check(all.size() > 10, "a far zoom-out asks for many copies (got %d)" % all.size())
+	_check(capped.size() == 10, "the cap limits the copies")
+	var far := 0.0
+	for c in capped:
+		var center := (
+			Vector2(c[0] * chunk_world + c[2], c[1] * chunk_world + c[3]) + Vector2.ONE * 32.0
+		)
+		far = maxf(far, cam_pos.distance_to(center))
+	var nearest_left_out := INF
+	for i in range(10, all.size()):
+		var c: Array = all[i]
+		var center := (
+			Vector2(c[0] * chunk_world + c[2], c[1] * chunk_world + c[3]) + Vector2.ONE * 32.0
+		)
+		nearest_left_out = minf(nearest_left_out, cam_pos.distance_to(center))
+	_check(far <= nearest_left_out, "the capped copies are the ones nearest the camera")
+
+
+func _test_missing_count() -> void:
+	var resident := {Vector2i(0, 0): {"version": 1, "age": 0}}
+	var view := [[0, 0, 0.0, 0.0], [1, 0, 0.0, 0.0], [1, 1, 0.0, 0.0]]
+	_check(S.missing_count(resident, view) == 2, "two of three view chunks are missing")
+	_check(S.missing_count(resident, [[0, 0, 0.0, 0.0]]) == 0, "a complete view is missing none")

@@ -264,6 +264,23 @@ func set_wrap_offset(offset: Vector2) -> void:
 	position = offset
 
 
+# A node drawing this chunk's props at another torus copy (ground_layer.gd's
+# wrap mirrors): one MultiMeshInstance2D per layer sharing this chunk's
+# multimesh, texture and z, so a rebuild refills the copy too. Call after
+# the first build(); the caller sets the copy's wrap offset as position.
+func make_mirror() -> Node2D:
+	var m := Node2D.new()
+	for child in get_children():
+		var src := child as MultiMeshInstance2D
+		var mmi := MultiMeshInstance2D.new()
+		mmi.multimesh = src.multimesh
+		mmi.texture = src.texture
+		mmi.texture_filter = src.texture_filter
+		mmi.z_index = src.z_index
+		m.add_child(mmi)
+	return m
+
+
 func _make_mmis() -> void:
 	for k in TerrainSprites.PROP_COUNT:
 		var mm := MultiMesh.new()
