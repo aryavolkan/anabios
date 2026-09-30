@@ -100,7 +100,7 @@ func rebuild(ids: PackedByteArray, res: int, world: float) -> void:
 	var planned := plan(ids, res, world, PROP_BUDGET)
 	for k in TerrainSprites.PROP_COUNT:
 		# Village clearings: nothing grows on a settlement's footprint.
-		var positions: PackedVector2Array = Clearings.filter(planned[k])
+		var positions: PackedVector2Array = Clearings.filter(planned[k], world)
 		var mm: MultiMesh = _mmis[k].multimesh
 		mm.instance_count = positions.size() * 9
 		var i := 0

@@ -211,7 +211,7 @@ func build(
 	var planned := plan(cx, cy, ids66, res, world)
 	for k in TerrainSprites.PROP_COUNT:
 		# Village clearings: nothing grows on a settlement's footprint.
-		var positions: PackedVector2Array = Clearings.filter(planned[k])
+		var positions: PackedVector2Array = Clearings.filter(planned[k], world)
 		var mm: MultiMesh = _mmis[k].multimesh
 		mm.instance_count = positions.size()
 		var i := 0
@@ -224,7 +224,7 @@ func build(
 		_make_canopy_mmis()
 	var trees := plan_canopy(cx, cy, ids66, res, world)
 	for k in FloraSprites.KIND_COUNT:
-		trees[k] = Clearings.filter(trees[k])
+		trees[k] = Clearings.filter(trees[k], world)
 	var order := canopy_draw_order(trees)
 	var mm: MultiMesh = _canopy[0].multimesh
 	mm.instance_count = order.size()
