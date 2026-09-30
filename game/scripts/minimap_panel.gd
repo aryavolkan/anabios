@@ -199,9 +199,6 @@ func _draw_view_rect(center_px: Vector2, box: Vector2, ms: Vector2) -> void:
 				draw_rect(clipped, VIEWRECT, false, 2.0)
 
 
-# N/E/S/W compass rose in the panel's top-right corner: a 4-point star of thin
-# lines (cardinal spokes plus short diagonal ticks) with the letters at the
-# spoke tips, so the minimap's fixed north-up orientation is explicit.
 # Centre of the compass rose for a panel `ms` in size (top-right corner).
 static func compass_center(ms: Vector2) -> Vector2:
 	var inset: float = COMPASS_MARGIN + COMPASS_R + COMPASS_LABEL
@@ -218,6 +215,9 @@ static func compass_letter_offsets() -> Dictionary:
 	}
 
 
+# N/E/S/W compass rose in the panel's top-right corner: a 4-point star of thin
+# lines (cardinal spokes plus short diagonal ticks) with the letters at the
+# spoke tips, so the minimap's fixed north-up orientation is explicit.
 func _draw_compass(ms: Vector2) -> void:
 	var center := compass_center(ms)
 	for d in [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT]:
