@@ -32,6 +32,9 @@ stage.frameInsets = () => {
   const left = !rail.classList.contains("collapsed") && railRight <= window.innerWidth * 0.4 ? railRight : m;
   return { top: m, right: m, bottom: window.innerHeight - document.querySelector(".transport").getBoundingClientRect().top + m, left };
 };
+/** The narrow (≤860px) layout stacks the codex feed and the agent card on the transport,
+ *  whose height depends on how its buttons and hint wrap: publish it for the stylesheet. */
+new ResizeObserver(([e]) => document.documentElement.style.setProperty("--transport-h", `${e.target.offsetHeight}px`)).observe(document.querySelector(".transport"));
 const layers = {
   agents: new Agents(),
   streaks: new Segments({ life: 14, sat: 0.75, additive: true, lift: 1.4 }),
