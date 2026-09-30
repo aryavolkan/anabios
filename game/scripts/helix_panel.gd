@@ -53,6 +53,14 @@ var _gene_slots: Array = []
 var _meme_channels: Array = []
 
 
+# "<name> <mean>" for a node label. A mean a hair under zero printed as
+# "-0.00", so most of the meme column read "farming -0.00" beside
+# "fire 0.00"; the codex Culture tab already rounds these to zero, and so
+# does this.
+static func value_label(label: String, v: float) -> String:
+	return "%s %.2f" % [label, 0.0 if absf(v) < 0.005 else v]
+
+
 func _ready() -> void:
 	visible = false
 	_font = UiTheme.font()
@@ -229,7 +237,7 @@ func _draw() -> void:
 		draw_string(
 			_font,
 			lp,
-			"%s %.2f" % [_slot_names[slot], v],
+			value_label(_slot_names[slot], v),
 			HORIZONTAL_ALIGNMENT_LEFT,
 			148,
 			9,
@@ -253,7 +261,7 @@ func _draw() -> void:
 		draw_string(
 			_font,
 			lp,
-			"%s %.2f" % [_channel_names[ch], v],
+			value_label(_channel_names[ch], v),
 			HORIZONTAL_ALIGNMENT_LEFT,
 			124,
 			9,

@@ -292,6 +292,8 @@ func _init() -> void:
 		)
 		_check(int(lay["cols"]) * int(lay["rows"]) >= n_series, "every series has a legend slot")
 	_check(HelixPanel.PANEL_RECT.position.y > top_bar.end.y, "helix starts under the top bar")
+	_check(HelixPanel.value_label("farming", -0.0001) == "farming 0.00", "helix: no -0.00")
+	_check(HelixPanel.value_label("fire", -0.25) == "fire -0.25", "helix keeps real negatives")
 	_check(
 		HelixPanel.PANEL_RECT.position.x > _rect_of(ui["EventLog"]).end.x,
 		"helix clears the event log"
