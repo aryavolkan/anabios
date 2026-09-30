@@ -337,6 +337,9 @@ func _make_wrap_clones() -> void:
 	var sources: Array[MultiMeshInstance2D] = _body_mmis.duplicate()
 	sources.append_array(_agent_layer.death_mmis())
 	sources.append(_agent_layer.shadow_mmi())
+	# Emote glyphs ride above bodies at their raw positions, so they need the
+	# same clones or a figure across the seam loses its Zzz / ! / heart.
+	sources.append(_emote_layer.emote_mmi())
 	sources.append_array([carcasses, flashes, streaks, trade_routes, _trail_layer.tracks_mmi()])
 	for src in sources:
 		for gy in range(-1, 2):
