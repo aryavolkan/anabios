@@ -150,6 +150,12 @@ func _init() -> void:
 	)
 	_check(feed.size() == 4, "a repeat after REPEAT_TICKS starts a new row")
 	_check(EventLog.row_text(feed[3]) == EventLog.line_for(54, 3), "a single event has no count")
+	EventLog.fold_event(feed, {"type": 2, "species_id": 3, "tick": 310, "loc": Vector2.ZERO}, 7)
+	_check(feed.size() == 4, "a repeat of an older row folds into it")
+	_check(
+		int(feed[3]["type"]) == 2 and int(feed[3]["count"]) == 2,
+		"a folded row moves to the newest end"
+	)
 	for i in 10:
 		EventLog.fold_event(feed, {"type": i, "species_id": 9, "tick": 500, "loc": Vector2.ZERO}, 7)
 	_check(feed.size() == 7, "the feed keeps MAX_LINES rows")

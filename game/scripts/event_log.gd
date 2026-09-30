@@ -13,7 +13,9 @@ extends PanelContainer
 # out before it could be read. A repeat of a row's event type and species
 # within REPEAT_TICKS of that row's last one now folds into it as a "×n"
 # count, as the web viewer's feed does (web/src/main.js onEvent). The row
-# keeps its place and takes the latest location for the click jump.
+# moves to the newest end, as the web feed's line does, and takes the latest
+# location for the click jump: left in place, a burst still firing read as
+# old news above newer rows, and the cap evicted it first while it lasted.
 
 const Codex = preload("res://scripts/codex_panel.gd")
 const HudIcons = preload("res://scripts/hud_icons.gd")
@@ -170,13 +172,15 @@ static func icon_for(type: int) -> String:
 
 
 # Fold one codex event into the feed rows (oldest first): bump the count of a
-# recent row with the same type and species, else append a row, dropping the
-# oldest past `max_lines`. A row is the event dictionary plus "count".
+# recent row with the same type and species and move it to the newest end,
+# else append a row, dropping the oldest past `max_lines`. A row is the event
+# dictionary plus "count".
 static func fold_event(rows: Array[Dictionary], ev: Dictionary, max_lines: int) -> void:
 	var t: int = int(ev["type"])
 	var sid: int = int(ev["species_id"])
 	var tick: int = int(ev["tick"])
-	for row in rows:
+	for i in rows.size():
+		var row: Dictionary = rows[i]
 		if int(row["type"]) != t or int(row["species_id"]) != sid:
 			continue
 		var gap: int = tick - int(row["tick"])
@@ -184,6 +188,8 @@ static func fold_event(rows: Array[Dictionary], ev: Dictionary, max_lines: int) 
 			row["count"] = int(row["count"]) + 1
 			row["tick"] = tick
 			row["loc"] = ev["loc"]
+			rows.remove_at(i)
+			rows.append(row)
 			return
 	var fresh: Dictionary = ev.duplicate()
 	fresh["count"] = 1
