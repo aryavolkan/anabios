@@ -33,6 +33,9 @@ var _fire_lights: Array = []  # entries: [light: PointLight2D, t: float]
 var _fire_light_idx: int = 0
 var _motes: GPUParticles2D = null
 var _snow: GPUParticles2D = null
+# Camera position last frame: a jump of half a world or more is a torus fold
+# (camera_controller folds the view back into the world), not a pan.
+var _weather_cam: Vector2 = Vector2.INF
 var _weather_t: float = 999.0
 var _dust: Array[GPUParticles2D] = []
 var _dust_idx: int = 0
@@ -502,6 +505,16 @@ func _make_ambient_particles(
 # — the only pale, low-chroma land terrain; desert/savanna fail the b test).
 func update_weather(delta: float) -> void:
 	_fit_weather(get_viewport_rect().size, _cam.zoom.x)
+	# The weather particles live in world space (local_coords off, so drifting
+	# flakes stay put as the view pans), which strands every live flake a whole
+	# world away when the camera folds across the seam: re-emit around the new
+	# view instead of letting the snow blank out and refill over its lifetime.
+	var world_side: float = _sim.world_size()
+	if _weather_cam != Vector2.INF and _cam.position.distance_to(_weather_cam) > world_side * 0.5:
+		for p in [_motes, _snow]:
+			if p != null and p.emitting:
+				p.restart()
+	_weather_cam = _cam.position
 	_weather_t += delta
 	if _weather_t < 0.5 or _snow == null:
 		return

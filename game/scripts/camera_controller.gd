@@ -214,8 +214,19 @@ func _process(delta: float) -> void:
 	# copies only reach +/-1 world from the origin, so an unfolded pan past
 	# about one world showed bare terrain with no creatures or huts, then a
 	# clear-colour void. Runs outside the showcase gate: it is a no-op for an
-	# in-world position, and a fold never changes what is on screen.
+	# in-world position, and a fold changes nothing the layers draw (the
+	# camera-child weather emitters restart on the jump, see
+	# viewer_effects.update_weather).
 	_fold_to_world()
+
+
+# Set the zoom at once, dropping any wheel ease still in flight: a caller
+# that writes `zoom` directly (the [R] replay, its resume) was overridden on
+# the next frame by the ease lerping toward the stale wheel target.
+func snap_zoom(z: float) -> void:
+	zoom = Vector2(z, z)
+	_target_zoom = z
+	_zoom_easing = false
 
 
 func _fold_to_world() -> void:
