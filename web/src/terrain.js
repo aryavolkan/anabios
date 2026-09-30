@@ -9,7 +9,9 @@
 // water line and a darkened seabed — while lighting, shadows and relief come
 // from the mesh. Forests are instanced trees placed from the terrain ids, one
 // deterministic jitter per cell, scaled down where a cell is scarred bare.
-// The torus wraps: the last vertex row/column samples the first cell.
+// The ground does not wrap: the plate is drawn unwrapped (0..worldSize), so
+// the edge vertex rows/columns clamp to the edge cells instead of averaging in
+// the far side of the torus (which put a foam ribbon along the plate edge).
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -290,8 +292,10 @@ export class Terrain {
       for (let i = 0; i < n; i++) {
         let h = 0;
         if (scale > 0) {
-          // average the (up to) four cells meeting at this vertex, torus-wrapped
-          const i0 = (i - 1 + res) % res, i1 = i % res, j0 = (j - 1 + res) % res, j1 = j % res;
+          // average the (up to) four cells meeting at this vertex, clamped at
+          // the plate edge: a wrapped average would pull the far side's sea or
+          // land into the outermost half-cell of the unwrapped plate
+          const i0 = Math.max(i - 1, 0), i1 = Math.min(i, res - 1), j0 = Math.max(j - 1, 0), j1 = Math.min(j, res - 1);
           const e = this.elevation;
           const avg = (e[j0 * res + i0] + e[j0 * res + i1] + e[j1 * res + i0] + e[j1 * res + i1]) / 4;
           h = (avg - this.seaLevel) * scale;
@@ -704,10 +708,16 @@ export class Forest {
         const n = Math.floor(density) + (hash2(k, salt) < density % 1 ? 1 : 0);
         for (let i = 0; i < n; i++) {
           if (hash2(k, salt + 100 + i) > keepK) continue;
+          const x = (cx + hash2(k, salt + 200 + i)) * cell, z = (cy + hash2(k, salt + 300 + i)) * cell;
+          // A shore cell just above sea level can have ground under the water
+          // plane where it meets its sea neighbours (vertex heights average the
+          // four adjoining cells): a tree seated there would stand in open sea.
+          // Skip it before it takes an index, so the instance range stays tight.
+          const y = t.heightAt(x, z);
+          if (t.reliefOn && y < 0) continue;
           const mesh = meshes[kind];
           const index = counts[kind]++;
           if (index >= this.max) continue;
-          const x = (cx + hash2(k, salt + 200 + i)) * cell, z = (cy + hash2(k, salt + 300 + i)) * cell;
           const base = cell * hf * (0.55 + 0.5 * hash2(k, salt + 400 + i));
           const rot = hash2(k, salt + 500 + i) * Math.PI * 2;
           // Trees lean a little; grass and rocks sit square.
@@ -719,7 +729,7 @@ export class Forest {
           this.items.push(item);
           const list = this.byCell.get(k);
           if (list) list.push(item); else this.byCell.set(k, [item]);
-          p.set(x, t.heightAt(x, z), z);
+          p.set(x, y, z);
           q.setFromEuler(e.set(tx, rot, tz));
           s.set(sc, sc, sc);
           mesh.setMatrixAt(index, m.compose(p, q, s));

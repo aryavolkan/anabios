@@ -4,11 +4,13 @@
 // only the items in transition are touched; the pace follows sim ticks within
 // a wall-time band (so a paused toggle still animates and 64× does not pop);
 // the scarred-bare size composes with clearing; time jumps, reduced motion
-// and rebuilds leave a settled, consistent forest.
+// and rebuilds leave a settled, consistent forest. Also: the plate's edge
+// vertices clamp to the edge cells (no torus average with the far side), and
+// no tree is planted where the relief ground lies under the water plane.
 //
 //   node web/test/forest-clearing.mjs
 
-import { Forest, T, TRANSITION_TICKS, TRANSITION_MIN_S, TRANSITION_MAX_S } from "../src/terrain.js";
+import { Forest, Terrain, T, TRANSITION_TICKS, TRANSITION_MIN_S, TRANSITION_MAX_S } from "../src/terrain.js";
 import { Villages } from "../src/layers.js";
 
 function check(cond, msg) {
@@ -176,4 +178,30 @@ check(TRANSITION_TICKS === new Villages().GROW, "the forest eases at the huts' o
   check(m.updateRanges.length === 0 && f.fullUpload.has(f.leaf), "rebuild asks for a full upload again");
 }
 
-console.log("forest-clearing: eased clear/regrow, tick pace in a wall band, bare composition, snaps and rebuild ok");
+// Relief shores and plate edges (a real Terrain): an 8² grid, taiga in
+// columns 0-3 (column 3 barely above the sea), deep sea in columns 4-7.
+{
+  const r = 8, sea = 0.35, el = new Float32Array(r * r), ids = new Uint8Array(r * r);
+  for (let k = 0; k < r * r; k++) {
+    const i = k % r;
+    el[k] = i < 3 ? 0.6 : i === 3 ? sea + 0.001 : 0.0;
+    ids[k] = i < 4 ? T.TAIGA : T.WATER;
+  }
+  const t = new Terrain(r, 64, sea, el, ids), n = r + 1;
+  // The plate is drawn unwrapped: the x = 0 edge is taiga ground, the x = max
+  // edge is sea floor. A torus average would sink the one and raise the other.
+  for (let j = 0; j < n; j++) {
+    check(t.heights[j * n] > 0, `edge vertex (0,${j}) stays land (${t.heights[j * n].toFixed(2)})`);
+    check(t.heights[j * n + r] < 0, `edge vertex (${r},${j}) stays sea floor (${t.heights[j * n + r].toFixed(2)})`);
+  }
+  const trees = t.forest.items;
+  check(trees.length > 0, `the inland taiga is still planted (${trees.length} trees)`);
+  check(trees.every((it) => t.heightAt(it.x, it.z) >= 0), "no tree stands under the water plane");
+  check(t.forest.cone.count === trees.filter((it) => it.kind === "cone").length, "skipped trees leave no holes in the instance range");
+  const onRelief = trees.length;
+  t.setRelief(false);
+  check(t.forest.items.length > onRelief, `a flat world plants the shore column too (${t.forest.items.length} vs ${onRelief})`);
+  t.dispose();
+}
+
+console.log("forest-clearing: eased clear/regrow, tick pace in a wall band, bare composition, snaps, rebuild and shore seating ok");
