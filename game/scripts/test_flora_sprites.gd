@@ -139,11 +139,24 @@ func _init() -> void:
 	var kinds_seen: Dictionary = {}
 	var depth_sorted := true
 	for i in order.size():
-		kinds_seen[int(order[i][1])] = true
-		if i > 0 and (order[i][0] as Vector2).y < (order[i - 1][0] as Vector2).y:
+		kinds_seen[int(order[i][2])] = true
+		if i > 0 and float(order[i][0]) < float(order[i - 1][0]):
 			depth_sorted = false
 	_check(kinds_seen.size() >= 2, "the forest chunk mixes kinds in one order")
 	_check(depth_sorted, "canopy draw order is y-sorted across kinds")
+	var ties: Array = (
+		PropChunk
+		. canopy_draw_order(
+			[
+				PackedVector2Array([Vector2(5, 1), Vector2(3, 1)]),
+				PackedVector2Array([Vector2(3, 1), Vector2(0, 0)]),
+			]
+		)
+	)
+	_check(
+		ties == [[0.0, 0.0, 1], [1.0, 3.0, 0], [1.0, 3.0, 1], [1.0, 5.0, 0]],
+		"draw order breaks y ties by x, then kind: %s" % str(ties)
+	)
 	for k in Flora.KIND_COUNT:
 		_check(
 			PropChunk.kind_from_alpha(PropChunk.kind_alpha(k)) == k,
