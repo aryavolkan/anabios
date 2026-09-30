@@ -27,6 +27,15 @@ const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const Palette = preload("res://scripts/palette.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
 const AnimState = preload("res://scripts/anim_state.gd")
+const UnitCard = preload("res://scripts/unit_card.gd")
+
+# The [C] energy overlay reads energy on the unit card's HP scale, so a body's
+# colour and its card's HP bar agree. It used to divide by 50 (the spawn
+# energy) on the belief that energy runs 0..~50, but fed agents bank far more
+# (predator-prey t215: median 77, max 219; tribes up to ~830): nearly four in
+# five predator-prey bodies clipped to the ramp's top swatch and the legend's
+# low..high ramp showed no spread.
+const ENERGY_FULL: float = UnitCard.HP_FULL
 
 # Bodies are 0.5–3.0 world units across (genome size). Scale them up generously
 # with a floor so the hominin silhouette (head, limbs) reads as a figure at the
@@ -932,7 +941,7 @@ func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) ->
 		_overlay.BODY_DIET:
 			out = _ramp_body_colors(n, Palette.RAMP_DIET, sim.alive_diet(), 1.0)
 		_overlay.BODY_ENERGY:
-			out = _ramp_body_colors(n, Palette.RAMP_ENERGY, sim.alive_energy(), 50.0)
+			out = _ramp_body_colors(n, Palette.RAMP_ENERGY, sim.alive_energy(), ENERGY_FULL)
 		_overlay.BODY_AFFECT:
 			out = _ramp_body_colors(n, Palette.RAMP_AROUSAL, sim.alive_arousal(), 1.0)
 		_overlay.BODY_INFECTION:
@@ -967,7 +976,7 @@ func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) ->
 
 
 # One body colour per agent from a Palette ramp over a per-agent scalar,
-# normalized by `value_scale` (energy runs 0..~50; the rest are already 0..1).
+# normalized by `value_scale` (ENERGY_FULL for energy; the rest are already 0..1).
 func _ramp_body_colors(
 	n: int, ramp: Array, values: PackedFloat32Array, value_scale: float
 ) -> PackedColorArray:

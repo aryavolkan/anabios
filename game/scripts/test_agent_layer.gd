@@ -300,6 +300,18 @@ func _check_sprite_size() -> void:
 		)
 
 
+func _check_energy_scale() -> void:
+	# The energy overlay shares the unit card's HP scale, and a typical fed
+	# body (predator-prey's median energy, 77) sits inside the ramp instead
+	# of clipping to its top swatch as it did when normalised by 50.
+	_check(AgentLayer.ENERGY_FULL == AgentLayer.UnitCard.HP_FULL, "energy ramp = the HP scale")
+	var top: Color = AgentLayer.Palette.ramp(AgentLayer.Palette.RAMP_ENERGY, 1.0)
+	var median: Color = AgentLayer.Palette.ramp(
+		AgentLayer.Palette.RAMP_ENERGY, 77.0 / AgentLayer.ENERGY_FULL
+	)
+	_check(not median.is_equal_approx(top), "a median-energy body is not drawn at the ramp top")
+
+
 func _init() -> void:
 	_check_view_rect()
 	_check_pos_in_rect()
@@ -310,6 +322,7 @@ func _init() -> void:
 	_check_nearest_drawn()
 	_check_body_diameter()
 	_check_sprite_size()
+	_check_energy_scale()
 
 	if _failed:
 		quit(1)
