@@ -386,7 +386,15 @@ static func plan(
 		for corner in corners:
 			var ck := PALISADE_CORNER_N if corner.y < 0 else PALISADE_CORNER
 			_place(corner, ck, corner.x > 0, occupied, anchor, is_water, out)
-		_place(Vector2i(0, r - 1), TOWER, false, occupied, anchor, is_water, out)
+		# The watchtower stands just inside the gate. The wall hugs the
+		# dwellings, so (0, r - 1) is a hut-lattice cell on the outermost
+		# ring and usually already holds a dwelling; the tower then takes
+		# the cell beside it (odd x, never a lattice cell) instead of
+		# silently going missing.
+		var tower_cells: Array[Vector2i] = [
+			Vector2i(0, r - 1), Vector2i(-1, r - 1), Vector2i(1, r - 1)
+		]
+		_place_first_free(tower_cells, TOWER, occupied, anchor, is_water, out, false)
 		if (flags & FLAG_TERRITORY) != 0:
 			_place(Vector2i(-1, r + 1), BANNER, false, occupied, anchor, is_water, out)
 			_place(Vector2i(1, r + 1), BANNER, false, occupied, anchor, is_water, out)

@@ -225,6 +225,27 @@ func _init() -> void:
 		if k3 == L.PALISADE_CORNER_N:
 			_check(_cell_of(Vector2.ZERO, p["pos"]).y < 0, "only the north corners run down")
 
+	# --- every fortified village keeps its watchtower inside the gate ---
+	# (0, r - 1) is a hut-lattice cell and usually holds a dwelling; the
+	# tower must then take a cell beside it, not vanish.
+	for era in [1, 2]:
+		for members in [6, 12, 18, 24, 36, 48, 60, 72, 90]:
+			var fortified := L.plan(21, Vector2.ZERO, members, era, flags_all, no_water)
+			var gate := Vector2i.ZERO
+			for p in fortified:
+				if int(p["kind"]) == L.GATE:
+					gate = _cell_of(Vector2.ZERO, p["pos"])
+			var towers := 0
+			for p in fortified:
+				if int(p["kind"]) == L.TOWER:
+					towers += 1
+					var tc := _cell_of(Vector2.ZERO, p["pos"])
+					_check(
+						tc.y == gate.y - 1 and absi(tc.x) <= 1,
+						"the tower stands just inside the gate (%s, gate %s)" % [tc, gate]
+					)
+			_check(towers == 1, "era %d, %d members: one watchtower (%d)" % [era, members, towers])
+
 	# --- MILL: appears only when a water-adjacent land cell exists in range ---
 	var river := func(pos: Vector2) -> bool: return pos.x >= 3.0 * L.GRID and pos.x < 4.0 * L.GRID
 	var milled := L.plan(9, Vector2.ZERO, 5, 2, L.FLAG_MACHINERY, river)
