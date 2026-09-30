@@ -99,6 +99,22 @@ func _init() -> void:
 	_check(op[0] == 1 and op[6] == 7, "colour bytes untouched")
 	_check(packed[3] == 40, "source bytes untouched")
 
+	# --- compass letters stay inside the panel ---
+	# Each letter's glyph box (baseline minus ascent .. plus descent, advance
+	# wide) in the fallback HUD font must sit inside the 200px minimap.
+	var ms := Vector2(200, 200)
+	var font: Font = ThemeDB.fallback_font
+	var fs: int = MinimapPanel.COMPASS_FONT
+	var c: Vector2 = MinimapPanel.compass_center(ms)
+	var offsets: Dictionary = MinimapPanel.compass_letter_offsets()
+	for letter in offsets:
+		var base: Vector2 = c + offsets[letter]
+		var glyph := Rect2(
+			base - Vector2(0, font.get_ascent(fs)),
+			font.get_string_size(letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+		)
+		_check(Rect2(Vector2.ZERO, ms).encloses(glyph), "compass %s inside: %s" % [letter, glyph])
+
 	if _failed:
 		quit(1)
 		return

@@ -32,6 +32,12 @@ const DENSITY_RES := 128
 
 const COMPASS_MARGIN := 6.0
 const COMPASS_R := 14.0
+# Room the N and E letters take beyond the spoke tips. The rose used to sit
+# only COMPASS_MARGIN + COMPASS_R in from the corner, so the "N" rose half out
+# over the panel's top edge onto the world and the "E" straddled its right
+# border line; the centre is now inset by the letters too.
+const COMPASS_LABEL := 10.0
+const COMPASS_FONT := 10
 
 var _overview_tex: ImageTexture
 var _overview_size: int = 0
@@ -196,8 +202,24 @@ func _draw_view_rect(center_px: Vector2, box: Vector2, ms: Vector2) -> void:
 # N/E/S/W compass rose in the panel's top-right corner: a 4-point star of thin
 # lines (cardinal spokes plus short diagonal ticks) with the letters at the
 # spoke tips, so the minimap's fixed north-up orientation is explicit.
+# Centre of the compass rose for a panel `ms` in size (top-right corner).
+static func compass_center(ms: Vector2) -> Vector2:
+	var inset: float = COMPASS_MARGIN + COMPASS_R + COMPASS_LABEL
+	return Vector2(ms.x - inset, inset)
+
+
+# Baseline of each rose letter, relative to the centre.
+static func compass_letter_offsets() -> Dictionary:
+	return {
+		"N": Vector2(-3, -COMPASS_R - 2),
+		"E": Vector2(COMPASS_R + 2, 4),
+		"S": Vector2(-3, COMPASS_R + 10),
+		"W": Vector2(-COMPASS_R - 10, 4),
+	}
+
+
 func _draw_compass(ms: Vector2) -> void:
-	var center := Vector2(ms.x - COMPASS_MARGIN - COMPASS_R, COMPASS_MARGIN + COMPASS_R)
+	var center := compass_center(ms)
 	for d in [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT]:
 		draw_line(center, center + d * COMPASS_R, BORDER, 1.0)
 	var diag := COMPASS_R * 0.4
@@ -205,18 +227,17 @@ func _draw_compass(ms: Vector2) -> void:
 		draw_line(center, center + d.normalized() * diag, BORDER, 1.0)
 	if _font == null:
 		return
-	draw_string(
-		_font, center + Vector2(-3, -COMPASS_R - 2), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, BORDER
-	)
-	draw_string(
-		_font, center + Vector2(COMPASS_R + 2, 4), "E", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, BORDER
-	)
-	draw_string(
-		_font, center + Vector2(-3, COMPASS_R + 10), "S", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, BORDER
-	)
-	draw_string(
-		_font, center + Vector2(-COMPASS_R - 10, 4), "W", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, BORDER
-	)
+	var letters: Dictionary = compass_letter_offsets()
+	for letter in letters:
+		draw_string(
+			_font,
+			center + letters[letter],
+			letter,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			COMPASS_FONT,
+			BORDER
+		)
 
 
 func _gui_input(event: InputEvent) -> void:
