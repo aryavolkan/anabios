@@ -420,7 +420,9 @@ Files: `ui_theme.gd`, `main.tscn`, new `top_bar.gd`, `research_panel.gd`
    terrain legend with tile thumbnails. Tech/Culture: invention catalogue and
    meme channels. The codex *event* stream moves to the event log.
 5. **Event log.** Icon + text per codex event, coloured as `event_fx.gd`
-   already colours them; click = jump camera (existing `V` behaviour).
+   already colours them; click = jump camera (existing `V` behaviour). A
+   repeat of a row's event and species within 120 ticks folds into that row
+   as a `×n` count, as the web feed does, so a burst cannot flush the log.
 6. **Minimap.** Frame, compass rose, view box, density dots (Phase 2 data).
 7. **Unit card.** Portrait, name (archetype + species), HP ← energy, stamina
    ← sleep/thirst drives when `basic_needs` is on, four pips ← weapon /

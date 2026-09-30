@@ -5,6 +5,15 @@ extends PanelContainer
 # timeline colours them; click a line to jump the camera there (the old codex
 # stream's `V` behaviour). The chapter tables stay in codex_panel.gd, which the
 # replay and showcase scripts already read; this panel only renders them.
+#
+# Several detectors re-fire every tick while their condition holds: a mass
+# fright or a dehydration wave is dozens of events a second for one species.
+# One row per event let a single burst fill all seven rows with the same
+# "Panic among Bracra" and push every other event (a speciation, a settlement)
+# out before it could be read. A repeat of a row's event type and species
+# within REPEAT_TICKS of that row's last one now folds into it as a "×n"
+# count, as the web viewer's feed does (web/src/main.js onEvent). The row
+# keeps its place and takes the latest location for the click jump.
 
 const Codex = preload("res://scripts/codex_panel.gd")
 const HudIcons = preload("res://scripts/hud_icons.gd")
@@ -12,6 +21,7 @@ const SpeciesNames = preload("res://scripts/species_names.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
 const MAX_LINES := 7
+const REPEAT_TICKS := 120  # web/src/main.js REPEAT_TICKS
 const ROW_H := 19
 const ICON := 16
 
@@ -159,6 +169,36 @@ static func icon_for(type: int) -> String:
 	return String(_ICONS.get(type, "book"))
 
 
+# Fold one codex event into the feed rows (oldest first): bump the count of a
+# recent row with the same type and species, else append a row, dropping the
+# oldest past `max_lines`. A row is the event dictionary plus "count".
+static func fold_event(rows: Array[Dictionary], ev: Dictionary, max_lines: int) -> void:
+	var t: int = int(ev["type"])
+	var sid: int = int(ev["species_id"])
+	var tick: int = int(ev["tick"])
+	for row in rows:
+		if int(row["type"]) != t or int(row["species_id"]) != sid:
+			continue
+		var gap: int = tick - int(row["tick"])
+		if gap >= 0 and gap <= REPEAT_TICKS:
+			row["count"] = int(row["count"]) + 1
+			row["tick"] = tick
+			row["loc"] = ev["loc"]
+			return
+	var fresh: Dictionary = ev.duplicate()
+	fresh["count"] = 1
+	rows.append(fresh)
+	while rows.size() > max_lines:
+		rows.pop_front()
+
+
+# The row's sentence with its repeat count ("Panic among Bracra ×12").
+static func row_text(row: Dictionary) -> String:
+	var line: String = line_for(int(row["type"]), int(row["species_id"]))
+	var n: int = int(row.get("count", 1))
+	return line + (" ×%d" % n if n > 1 else "")
+
+
 static func line_for(type: int, species_id: int) -> String:
 	var who: String = SpeciesNames.name_of(species_id)
 	if _LINES.has(type):
@@ -177,9 +217,7 @@ func _process(_delta: float) -> void:
 		return
 	for ev in events:
 		_cursor = int(ev["index"]) + 1
-		_recent.append(ev)
-		while _recent.size() > MAX_LINES:
-			_recent.pop_front()
+		fold_event(_recent, ev, MAX_LINES)
 	_rows.queue_redraw()
 
 
@@ -195,13 +233,7 @@ func _draw_rows() -> void:
 			HudIcons.named_texture(icon_for(t)), Rect2(0, y + 2, ICON, ICON), false
 		)
 		_rows.draw_string(
-			font,
-			Vector2(ICON + 8, y + 14),
-			line_for(t, int(ev["species_id"])),
-			HORIZONTAL_ALIGNMENT_LEFT,
-			330,
-			12,
-			col
+			font, Vector2(ICON + 8, y + 14), row_text(ev), HORIZONTAL_ALIGNMENT_LEFT, 330, 12, col
 		)
 		y += ROW_H
 

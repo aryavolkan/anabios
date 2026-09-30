@@ -128,6 +128,30 @@ func _init() -> void:
 		not ReplayManager.event_title(cascade).contains(Codex.CHAPTER_NAMES[55]), "banner not an id"
 	)
 	_check(ReplayManager.event_title({}) == "event", "banner falls back without an event type")
+	# A burst of one event folds into one "×n" row instead of flooding the feed.
+	var feed: Array[Dictionary] = []
+	for i in 30:
+		EventLog.fold_event(
+			feed,
+			{"type": 54, "species_id": 3, "tick": 300 + floori(i / 10.0), "loc": Vector2(i, 0)},
+			7
+		)
+	_check(feed.size() == 1 and int(feed[0]["count"]) == 30, "a panic burst is one row")
+	_check(EventLog.row_text(feed[0]) == EventLog.line_for(54, 3) + " ×30", "row shows ×n")
+	_check(feed[0]["loc"] == Vector2(29, 0), "a folded row jumps to the latest location")
+	EventLog.fold_event(feed, {"type": 2, "species_id": 3, "tick": 303, "loc": Vector2.ZERO}, 7)
+	EventLog.fold_event(feed, {"type": 54, "species_id": 4, "tick": 303, "loc": Vector2.ZERO}, 7)
+	_check(feed.size() == 3, "another type or species gets its own row")
+	EventLog.fold_event(
+		feed,
+		{"type": 54, "species_id": 3, "tick": 303 + EventLog.REPEAT_TICKS + 1, "loc": Vector2.ZERO},
+		7
+	)
+	_check(feed.size() == 4, "a repeat after REPEAT_TICKS starts a new row")
+	_check(EventLog.row_text(feed[3]) == EventLog.line_for(54, 3), "a single event has no count")
+	for i in 10:
+		EventLog.fold_event(feed, {"type": i, "species_id": 9, "tick": 500, "loc": Vector2.ZERO}, 7)
+	_check(feed.size() == 7, "the feed keeps MAX_LINES rows")
 
 	# --- unit card: HP scale and module pips ---
 	_check(is_equal_approx(UnitCard.hp_fraction(UnitCard.HP_FULL * 3.0), 1.0), "HP caps at full")
