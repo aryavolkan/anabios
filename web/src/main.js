@@ -77,6 +77,7 @@ const state = {
   selected: -1,
   follow: false,
   lastColorTick: -1,
+  replayTick: -1,   // last replay tick drawn: a smaller one means the replay looped back
   lastStatsTick: -1,
   animTick: 0,      // src.tick at the last forest-transition step
   hubsNeedIds: false,   // market stalls were placed before the terrain ids existed
@@ -141,7 +142,7 @@ function attach(source, entry) {
   layers.birds.setWorld(ws, source.biomeRes, state.terrain.cell, heightAt);
   layers.agents.reset();
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
-  state.lastColorTick = -1; state.lastStatsTick = -1;
+  state.lastColorTick = -1; state.lastStatsTick = -1; state.replayTick = -1;
   $("codex").innerHTML = "";
   recentFx.clear(); recentLines.clear();
   applyLayerToggles();
@@ -186,7 +187,8 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 
 /**
  * Capture harness: `?tick=N` fast-forwards the fresh world to exactly tick N
- * (paused there unless `&paused=0`), then `?cam=fit | event | x,y,zoom[,polar]`
+ * (a replay seeks there, clamped short of its end) and pauses there unless
+ * `&paused=0`; then `?cam=fit | event | x,y,zoom[,polar]`
  * frames it and `?inspect=<id> | sp<species>` pins an agent. The loop flips
  * `state.ready` once all of that is on screen; `web/scripts/capture.mjs`
  * waits for it. `zoom` follows the Godot viewer's convention (screen pixels
@@ -200,6 +202,7 @@ async function prepareShot() {
   if (shot.tick !== null) {
     if (src.kind === "replay") {
       src.seek(shot.tick);
+      if (params.get("paused") !== "0") setPaused(true);
     } else {
       setPaused(true);
       const fxWas = layers.fx.enabled;
@@ -336,6 +339,11 @@ function loop(now) {
     const rezoomed = Math.abs(unitsPerPixel / (state.agentsUpp || unitsPerPixel) - 1) > 0.03;
     if (stepped > 0 || fractional || state.sinceStep === 0) {
       const tick = src.tick;
+      // A replay loops back to tick 0 at its end: trails stamped near the end
+      // would sit in the "future" and stay lit at full strength for the whole
+      // first stretch, and every figure would read as a death plus a birth.
+      if (src.kind === "replay" && tick < state.replayTick) { layers.streaks.clear(); layers.trades.clear(); layers.agents.reset(); }
+      state.replayTick = tick;
       const agents = src.agents();
       layers.agents.update(agents, heightAt, src.kind === "live", unitsPerPixel);
       state.agentsUpp = unitsPerPixel;

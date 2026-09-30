@@ -139,7 +139,8 @@ option, which is why the page keeps both sources.
 
 ## Reproducible captures (the gallery harness)
 
-`?tick=N` fast-forwards a fresh world to exactly tick N and pauses there;
+`?tick=N` fast-forwards a fresh world to exactly tick N and pauses there (a
+replay seeks there instead, held short of its last tick; `&paused=0` plays on);
 `?cam=fit | event | x,y,zoom[,polar]` frames it (`zoom` is the Godot viewer's
 pixels-per-world-unit at 1280 px, so `gallery/README.md`'s `ANABIOS_CAM_*`
 values map 1:1); `?inspect=<id> | sp<species>` pins an agent; `&hud=0` hides
