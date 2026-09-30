@@ -31,6 +31,7 @@ const TALL_ROWS: Dictionary = {
 	StructureSprites.TENT_B: 4,
 	StructureSprites.PALISADE_H: 6,
 	StructureSprites.PALISADE_CORNER: 6,
+	StructureSprites.PALISADE_CORNER_N: 6,
 }
 
 

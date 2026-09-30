@@ -209,7 +209,21 @@ func _init() -> void:
 	var war := L.plan(8, Vector2.ZERO, 5, 1, L.FLAG_WAR, no_water)
 	_check(_count_kind(war, L.GATE) == 1, "war village has exactly one gate")
 	_check(_count_kind(war, L.TOWER) >= 1, "war village has at least one tower")
-	_check(_count_kind(war, L.PALISADE_CORNER) == 4, "war village has all four palisade corners")
+	_check(
+		_count_kind(war, L.PALISADE_CORNER) == 2 and _count_kind(war, L.PALISADE_CORNER_N) == 2,
+		"war village has all four palisade corners, the north pair running down to the wall"
+	)
+	# The east side is the west side mirrored (the corner's wall stub runs
+	# east from its post in the art), so no stub pokes out past the wall.
+	for p in war:
+		var k3: int = int(p["kind"])
+		if k3 == L.PALISADE_V or k3 == L.PALISADE_CORNER or k3 == L.PALISADE_CORNER_N:
+			var wc := _cell_of(Vector2.ZERO, p["pos"])
+			_check(
+				bool(p["flip"]) == (wc.x > 0), "palisade %s flips iff it is on the east side" % wc
+			)
+		if k3 == L.PALISADE_CORNER_N:
+			_check(_cell_of(Vector2.ZERO, p["pos"]).y < 0, "only the north corners run down")
 
 	# --- MILL: appears only when a water-adjacent land cell exists in range ---
 	var river := func(pos: Vector2) -> bool: return pos.x >= 3.0 * L.GRID and pos.x < 4.0 * L.GRID

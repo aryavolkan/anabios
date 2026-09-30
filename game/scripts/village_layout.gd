@@ -39,6 +39,9 @@ enum {
 	TENT_B,
 	HOUSE,
 	CATAPULT,
+	MARKET_HALL,
+	WAREHOUSE,
+	PALISADE_CORNER_N,
 }
 # The two tent silhouettes an era-0 dwelling cell may take.
 const TENT_KINDS: PackedInt32Array = [TENT, TENT_B]
@@ -368,14 +371,21 @@ static func plan(
 			else:
 				_place(Vector2i(gx, r), PALISADE_H, false, occupied, anchor, is_water, out)
 			_place(Vector2i(gx, -r), PALISADE_H, false, occupied, anchor, is_water, out)
+		# The east side is the west side mirrored: the corner art's wall
+		# stub runs east from its post, so an unflipped east corner poked
+		# its stub out into the field and left a gap to the wall beside it;
+		# the east posts flip with it so the post column stays unbroken.
 		for gy in range(-r + 1, r):
 			_place(Vector2i(-r, gy), PALISADE_V, false, occupied, anchor, is_water, out)
-			_place(Vector2i(r, gy), PALISADE_V, false, occupied, anchor, is_water, out)
+			_place(Vector2i(r, gy), PALISADE_V, true, occupied, anchor, is_water, out)
+		# North corners take the variant whose post runs down to the side
+		# wall below; the south corners' side wall comes from above.
 		var corners: Array[Vector2i] = [
 			Vector2i(-r, -r), Vector2i(r, -r), Vector2i(-r, r), Vector2i(r, r)
 		]
 		for corner in corners:
-			_place(corner, PALISADE_CORNER, false, occupied, anchor, is_water, out)
+			var ck := PALISADE_CORNER_N if corner.y < 0 else PALISADE_CORNER
+			_place(corner, ck, corner.x > 0, occupied, anchor, is_water, out)
 		_place(Vector2i(0, r - 1), TOWER, false, occupied, anchor, is_water, out)
 		if (flags & FLAG_TERRITORY) != 0:
 			_place(Vector2i(-1, r + 1), BANNER, false, occupied, anchor, is_water, out)

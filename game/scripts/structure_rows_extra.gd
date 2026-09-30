@@ -3,7 +3,7 @@ extends RefCounted
 # (structure_sprites.gd keeps the first twenty; this file holds the rest so
 # neither crosses the lint file-length cap). Indexed by kind - BASE_COUNT,
 # in enum order: HUT_B, HUT_C, STALL, TENT_B, HOUSE, CATAPULT, MARKET_HALL,
-# WAREHOUSE. Same palette, same 32x32
+# WAREHOUSE, PALISADE_CORNER_N. Same palette, same 32x32
 # top-down authoring, same auto-outline pass.
 
 const BASE_COUNT := 20
@@ -294,5 +294,43 @@ const ROWS: Array = [
 		"................................",
 		"................................",
 		"................................",
+	],
+	# PALISADE_CORNER_N -- a corner of the palisade's north side: the
+	# PALISADE_CORNER art with its post run on to the bottom row, so the
+	# side wall below meets it instead of leaving a strip of grass (the
+	# south corners keep the plain art: their side wall runs up, not down)
+	[
+		"...........KBBBBBBbbKkk.........",
+		"...........KBBBBBBbbKkk.........",
+		"...........KTBBBBBbbKkk.........",
+		"...........KBBBBBBbbKkk.........",
+		"...........KBBBBBBbbKkk.........",
+		"...........KTBBBBBbbKkk.........",
+		"...........KBBBBBBbbKkk.........",
+		"...........KBBBBBBbbKkk.........",
+		"...........KTBbKBBbbKkk.........",
+		"...........KTBbKTBbTKkT..T..T..T",
+		"...........KTBbKTBTTKTT.TT.TT.TT",
+		"...........KTBbKTKTTKTTKTTKTTKTT",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKBbBBbBBbBBbBBbBB",
+		"...........KBBbKbbbbbbbbbbbbbbbb",
+		"...........KBBBBBBbbKkkKKKKKKKKK",
+		"...........KTBBBBBbbKkkkkkkkkkkk",
+		"...........KBBBBBBbbKkkkkkkkkkkk",
+		"...........KBBBBBBbbKkk.........",
+		"...........KTBBBBBbbKkk.........",
+		"...........KBBBBBBbbKkk.........",
+		"...........KBBBBBBbbKkk.........",
 	],
 ]
