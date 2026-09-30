@@ -245,7 +245,11 @@ func _ready() -> void:
 # Panels pinned to the right edge / the bottom edge of the design viewport.
 const DESIGN_VP := Vector2(1280.0, 800.0)
 const HUD_RIGHT: PackedStringArray = ["Minimap", "PopulationPanel", "DitPanel", "TechPanel"]
-const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "EventLog", "CodexPanel"]
+# The codex is not here: it hangs under the Brand block in the top-left corner,
+# which never moves. Listing it (a leftover from when it sat bottom-centre)
+# pushed it down by the scale shift and left it floating mid-screen, a few
+# hundred pixels below the title it belongs under, at any UI scale below 1.0.
+const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "EventLog"]
 # Glued to both the right and the bottom edge: the unit card and the meters
 # that share its corner.
 const HUD_CORNER: PackedStringArray = ["Inspector", "EcoMeters"]

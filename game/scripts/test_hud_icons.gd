@@ -16,6 +16,8 @@ const EcoMeters = preload("res://scripts/eco_meters.gd")
 const TimeControls = preload("res://scripts/time_controls.gd")
 const TopBar = preload("res://scripts/top_bar.gd")
 const UnitCard = preload("res://scripts/unit_card.gd")
+const BrandPanel = preload("res://scripts/brand_panel.gd")
+const UiTheme = preload("res://scripts/ui_theme.gd")
 
 var _failed := false
 
@@ -205,6 +207,19 @@ func _init() -> void:
 		"top bar grows leftward"
 	)
 	_check(top_bar.end.x < _rect_of(ui["Minimap"]).position.x, "top bar ends left of the minimap")
+	# The codex hangs under the brand block at the block's real (content) height.
+	var codex: Rect2 = _rect_of(ui["CodexPanel"])
+	var brand := BrandPanel.new()
+	brand.theme = UiTheme.build()
+	brand._ready()  # builds the rows; not in the tree yet at _init time
+	var brand_bottom: float = _rect_of(ui["Brand"]).position.y + brand.get_combined_minimum_size().y
+	brand.free()
+	_check(codex.position.y >= brand_bottom + 4.0, "codex clears the brand (%.0f)" % brand_bottom)
+	# Only bottom-edge panels shift down at UI scale < 1; the codex is top-left.
+	# (main.gd needs the GameConfig autoload to compile, so read its source.)
+	for line in FileAccess.get_file_as_string("res://scripts/main.gd").split("\n"):
+		if line.begins_with("const HUD_BOTTOM"):
+			_check(not line.contains("CodexPanel"), "codex is not a bottom-edge panel")
 
 	if _failed:
 		quit(1)

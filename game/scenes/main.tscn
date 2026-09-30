@@ -233,9 +233,9 @@ script = ExtResource("16_topbar")
 [node name="CodexPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("8_codex")
 offset_left = 10.0
-offset_top = 60.0
+offset_top = 76.0
 offset_right = 300.0
-offset_bottom = 80.0
+offset_bottom = 96.0
 
 [node name="EventLog" type="PanelContainer" parent="UI"]
 script = ExtResource("17_eventlog")
