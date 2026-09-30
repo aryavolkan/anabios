@@ -46,6 +46,12 @@ var _streaks_mm: MultiMesh = null
 var _trade_mm: MultiMesh = null
 var _streak_trail: Array = []  # entries: [from: Vector2, to: Vector2, expiry: float, color]
 var _trade_trail: Array = []  # entries: [from: Vector2, to: Vector2, expiry: float, color]
+# The sim tick whose segments were last appended. The bridge hands back the
+# same last-tick buffer on every read until the next step, and main fetches it
+# every frame — paused included — so appending unconditionally re-stamped the
+# same streaks and lanes each frame: stacked additive copies glowed white-hot
+# (tripping the bloom) and never faded for as long as the pause lasted.
+var _last_seg_tick: int = -1
 
 
 # Wire the authored segment-trail multimeshes and build the tracks MMI.
@@ -100,7 +106,10 @@ static func trade_palette(trade_cols: PackedColorArray, zoom: float) -> PackedCo
 # Per-frame tick, driven from main._process. The walker sample and pause flag
 # live in main (written during the body pass), so they are passed in rather
 # than read back; the segment endpoints/colors are this tick's sim fetch, which
-# main also feeds to the fight/trade hotspot pass.
+# main also feeds to the fight/trade hotspot pass. `tick` is the sim tick they
+# belong to: a tick's segments are appended once, on the first frame that sees
+# it (a replay rewind that steps the sim while paused still appends). -1 (the
+# default) appends every call.
 func update(
 	delta: float,
 	moving_sample: PackedVector2Array,
@@ -110,9 +119,15 @@ func update(
 	trade_segs: PackedVector2Array,
 	trade_cols: PackedColorArray,
 	world: float,
-	zoom: float = 1.0
+	zoom: float = 1.0,
+	tick: int = -1
 ) -> void:
 	var close := zoom >= CLOSE_ZOOM
+	var fresh := tick < 0 or tick != _last_seg_tick
+	_last_seg_tick = tick
+	if not fresh:
+		streak_segs = PackedVector2Array()
+		trade_segs = PackedVector2Array()
 	# Up close a combat streak is a thin, near-white shaft (the boards'
 	# arrows in flight), not a species-hued bar four pixels wide.
 	_update_segment_trail(

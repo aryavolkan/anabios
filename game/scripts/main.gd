@@ -455,7 +455,8 @@ func _process(delta: float) -> void:
 		trade_segs,
 		trade_cols,
 		world,
-		($Camera2D as Camera2D).zoom.x
+		($Camera2D as Camera2D).zoom.x,
+		int(sim.tick())
 	)
 	_effects.update(delta, moving_sample, paused)
 	# Hearth smoke: settled sites breathe an occasional ember wisp.
