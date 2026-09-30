@@ -79,6 +79,7 @@ const state = {
   lastColorTick: -1,
   replayTick: -1,   // last replay tick drawn: a smaller one means the replay looped back
   lastStatsTick: -1,
+  lastCardTick: -1, // src.tick at the last agent-card rebuild (see refreshStats)
   animTick: 0,      // src.tick at the last forest-transition step
   hubsNeedIds: false,   // market stalls were placed before the terrain ids existed
   fps: 0,
@@ -142,7 +143,7 @@ function attach(source, entry) {
   layers.birds.setWorld(ws, source.biomeRes, state.terrain.cell, heightAt);
   layers.agents.reset();
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
-  state.lastColorTick = -1; state.lastStatsTick = -1; state.replayTick = -1;
+  state.lastColorTick = -1; state.lastStatsTick = -1; state.lastCardTick = -1; state.replayTick = -1;
   $("codex").innerHTML = "";
   recentFx.clear(); recentLines.clear();
   applyLayerToggles();
@@ -237,7 +238,7 @@ async function prepareShot() {
   }
   if (params.get("hud") === "0") document.body.classList.add("hide-hud");
   state.sinceStep = 0;          // force one full layer update at this tick
-  state.lastStatsTick = -1;
+  state.lastStatsTick = -1; state.lastCardTick = -1;
   shot.stage = 1;
 }
 
@@ -457,7 +458,16 @@ function refreshStats(full) {
     (meta.fingerprint ? ` · fingerprint <b>${meta.fingerprint}</b>` : "") +
     (meta.state_hash ? `<br>state hash <b>${meta.state_hash}</b>` : "") +
     (src.kind === "live" ? `<br>${src.stepMs.toFixed(1)} ms per step batch · deterministic per seed` : `<br>${meta.ticks?.toLocaleString()} ticks · sampled every ${meta.sample} · stride ${meta.stride}`);
-  if (state.selected >= 0 && (full || Math.floor(src.tick) % 15 === 0)) renderCard();
+  // The card rebuilds when the tick has crossed a 15-tick boundary since its
+  // last rebuild, not when the tick sampled here happens to be a multiple of
+  // 15: at 4×–64× the step batch is a fractional accumulator, so that sample
+  // lands on a multiple only by chance and the card froze for hundreds to
+  // thousands of ticks. Crossing still caps it at one rebuild per 15 ticks
+  // at fractional speeds and in replays, where stats refresh every frame.
+  if (state.selected >= 0 && (full || Math.floor(src.tick / 15) !== Math.floor(state.lastCardTick / 15))) {
+    renderCard();
+    state.lastCardTick = src.tick;
+  }
 }
 
 function buildColorModes(source) {
@@ -567,7 +577,7 @@ function onEvent(ev, now) {
 function renderCard() {
   const src = state.source; if (!src || state.selected < 0) return;
   const a = src.agent(state.selected);
-  if (!a) { deselect(); toast(`agent ${state.selected} died`); return; }
+  if (!a) { toast(`agent ${state.selected} died`); deselect(); return; }   // toast first: deselect clears the id
   $("card-title").textContent = `${a.species} · #${a.id}`;
   const rows = [];
   const row = (k, v) => rows.push(`<dt>${k}</dt><dd>${v}</dd>`);
@@ -640,7 +650,14 @@ function setSpeed(s) {
   for (const b of document.querySelectorAll(".speed")) b.classList.toggle("on", Number(b.dataset.speed) === s);
 }
 
-function setPaused(p) { state.paused = p; $("play").textContent = p ? "▶" : "❚❚"; }
+function setPaused(p) {
+  state.paused = p; $("play").textContent = p ? "▶" : "❚❚";
+  // A paused world skips the frame loop's stats refresh, so bring the card up
+  // to the paused tick now (and report a death in the ticks since its last
+  // rebuild: toast, deselect, release the follow camera) instead of leaving
+  // it frozen on stale values.
+  if (p && state.selected >= 0) { renderCard(); state.lastCardTick = state.source ? state.source.tick : -1; }
+}
 /** Event tour: the camera drifts in a slow orbit and cuts to each fresh codex event. */
 function setTour(on) {
   state.tour = on;
