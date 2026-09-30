@@ -51,7 +51,8 @@ const ROAD_WANDER := 1.5
 const ROAD_ALPHA := 0.8
 var _good_mmis: Array[MultiMeshInstance2D] = []
 var _hubs: Array = []
-var _routes: Array = []  # each: {a, b, pa: Vector2, pb: Vector2, cargo: PackedInt32Array}
+# each: {a, b, pa: Vector2, pb: Vector2, cargo: PackedInt32Array, open: PackedByteArray}
+var _routes: Array = []
 var _t: float = 0.0
 var _frame: int = 0
 var _built: bool = false  # route network built once (hubs are immutable at runtime)
@@ -156,6 +157,7 @@ func _lay_roads() -> void:
 		var pa: Vector2 = r["pa"]
 		var pb: Vector2 = r["pb"]
 		var plan: Dictionary = road_plan(pa, pb, ROAD_STEP, is_water)
+		r["open"] = plan["open"]
 		for p in plan["road"]:
 			xfs.append(Transform2D(0.0, Vector2(ROAD_SCALE, ROAD_SCALE * 0.8), 0.0, p))
 		# Snapped to eighth turns: a plank deck at an arbitrary angle is a
@@ -181,14 +183,17 @@ static func road_steps(
 
 # The road's patches ("road") and, on the line itself with no wander, the
 # bridge steps ("bridge"): water steps in a run of at most BRIDGE_MAX_STEPS
-# with land steps on both sides. Longer water runs are left bare.
+# with land steps on both sides. Longer water runs are left bare. "open"
+# holds one byte per step along the line, pa (index 0) to the last whole
+# step: 1 where a cart has ground or a bridge under it, 0 on open water.
 static func road_plan(pa: Vector2, pb: Vector2, step: float, is_water: Callable) -> Dictionary:
 	var road := PackedVector2Array()
 	var bridge := PackedVector2Array()
+	var open := PackedByteArray()
 	var d := pb - pa
 	var len := d.length()
 	if len < step or step <= 0.0:
-		return {"road": road, "bridge": bridge}
+		return {"road": road, "bridge": bridge, "open": open}
 	var unit := d / len
 	var side := Vector2(-unit.y, unit.x)
 	var n := int(len / step)
@@ -201,6 +206,10 @@ static func road_plan(pa: Vector2, pb: Vector2, step: float, is_water: Callable)
 		line.append(on_line)
 		worn.append(on_line + side * ((h - 0.5) * 2.0 * ROAD_WANDER))
 		wet.append(is_water.is_valid() and bool(is_water.call(on_line)))
+	open.resize(n + 1)
+	for s in n + 1:
+		var dry: bool = not is_water.is_valid() or not bool(is_water.call(pa + unit * (step * s)))
+		open[s] = 1 if dry else 0
 	var i := 0
 	while i < wet.size():
 		if not wet[i]:
@@ -221,8 +230,18 @@ static func road_plan(pa: Vector2, pb: Vector2, step: float, is_water: Callable)
 		if j - i <= BRIDGE_MAX_STEPS and before >= BRIDGE_LAND_STEPS and after >= BRIDGE_LAND_STEPS:
 			for k in range(i, j):
 				bridge.append(line[k])
+				open[k + 1] = 1
 		i = j
-	return {"road": road, "bridge": bridge}
+	return {"road": road, "bridge": bridge, "open": open}
+
+
+# Whether a cart at fraction `f` of a route `len` long has ground under it,
+# from road_plan()'s "open" mask (empty: a route too short to step, all land).
+static func is_open(open: PackedByteArray, len: float, f: float, step: float) -> bool:
+	if open.is_empty():
+		return true
+	var s := clampi(int(round(f * len / step)), 0, open.size() - 1)
+	return open[s] != 0
 
 
 # The route's endpoints pulled in by `margin` from each hub centre (the
@@ -304,6 +323,9 @@ func _process(delta: float) -> void:
 # Place each route's cart convoy along its segment. Carts keep a FIXED even
 # spacing (CART_GAP_FRAC) and the convoy centre ping-pongs within a bounded band,
 # so carts never bunch up against the route ends. Writes per-instance transforms.
+# The road stops at a wide water (road_plan), and so does the cart: one on
+# an open-water stretch of its route is not drawn, goods icon and all, and
+# comes back on the far shore, instead of rolling across the lake.
 func _animate() -> void:
 	var cart_xf: Array = []
 	var good_xf: Array = []
@@ -319,8 +341,12 @@ func _animate() -> void:
 		var pa: Vector2 = r["pa"]
 		var pb: Vector2 = r["pb"]
 		var cargo: PackedInt32Array = r["cargo"]
+		var open: PackedByteArray = r.get("open", PackedByteArray())
+		var len := pa.distance_to(pb)
 		for c in CARTS_PER_ROUTE:
 			var f: float = center + (float(c) - CART_MID) * CART_GAP_FRAC
+			if not is_open(open, len, f, ROAD_STEP):
+				continue
 			var p := pa.lerp(pb, f)
 			cart_xf.append(Transform2D(0.0, Vector2(CART_SCALE, CART_SCALE), 0.0, p))
 			if c < cargo.size():

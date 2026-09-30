@@ -84,6 +84,13 @@ func _init() -> void:
 	_check(
 		(edge["bridge"] as PackedVector2Array).is_empty(), "water at the road's end is not bridged"
 	)
+	# --- carts stop where the road does: none rolls across open water ---
+	var lake_open: PackedByteArray = lake["open"]
+	_check(lake_open.size() == 11, "one open flag per step, both ends included")
+	_check(not CaravanLayer.is_open(lake_open, 60.0, 0.5, 6.0), "a cart mid-lake is not drawn")
+	_check(CaravanLayer.is_open(lake_open, 60.0, 0.1, 6.0), "a cart on the shore road is drawn")
+	_check(CaravanLayer.is_open(crossing["open"], 60.0, 0.5, 6.0), "a bridge carries the cart")
+	_check(CaravanLayer.is_open(PackedByteArray(), 3.0, 0.5, 6.0), "a stepless route is all land")
 	# --- dirt yards: a 32 px earth patch, solid centre, clear corners ---
 	var yard: Image = SettlementLayer.yard_image()
 	_check(yard.get_width() == 32 and yard.get_height() == 32, "yard patch is 32x32")
