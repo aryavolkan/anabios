@@ -162,7 +162,8 @@ seed), so the pinned tick, camera and agent id are the whole recipe.
   side-effect-free reads, event/catalog parity) and the C-ABI round trip, natively.
 - `node web/test/body-scale.mjs`, `node web/test/villages.mjs`,
   `node web/test/forest-clearing.mjs`, `node web/test/hubs.mjs`,
-  `node web/test/figures.mjs` — pure layer logic under node (after
+  `node web/test/figures.mjs`, `node web/test/classify-terrain.mjs` — pure
+  layer logic under node (after
   `npm --prefix web ci`; CI runs them in the `web` job): the figure-size
   clamp; figures (kind by diet band, legs attached, species colours); villages — built by hominid (omnivore)
   lineages only, pinned where they were founded — no sliding with the
@@ -172,7 +173,12 @@ seed), so the pinned tick, camera and agent id are the whole recipe.
   forest easing out of a clearing and growing back when it is released
   (only the trees in transition touched, paced by sim ticks within a
   wall-time band, composed with the scarred-bare size, settled at once on a
-  time jump or rebuild); and market stalls kept off water.
+  time jump or rebuild); market stalls kept off water; and the ground colour
+  read back per terrain from `cell_color`'s own palette — replay colours
+  classified to their terrain at any lushness (the live out-of-africa-saga
+  grid matches the sim's ids exactly once the wasm module is built), and
+  only burn scars and heavy pollution, never healthy savanna straw or
+  pioneer regrowth, shrinking the planting to its scarred-bare size.
 - `scripts/web.sh test [scenario] [ticks] [seed]` — builds the module, runs
   `web/test/wasm-smoke.mjs` under node (every export exercised, malformed TOML
   reported, buffers in range), and asserts the wasm fingerprint equals the

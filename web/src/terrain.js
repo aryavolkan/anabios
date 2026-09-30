@@ -17,27 +17,81 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 /** TerrainType ids (anabios_core::biome::TerrainType). */
 export const T = Object.freeze({ WATER: 0, GRASS: 1, FOREST: 2, DESERT: 3, ROCK: 4, SAVANNA: 5, RAINFOREST: 6, TAIGA: 7, TUNDRA: 8 });
 
-/** Base colours of `cell_color` (linear RGB 0..1), used to classify a colour
- *  back to a terrain id when a source has no id grid (recorded replays). */
+/** Base colours of `cell_color` (linear RGB 0..1) per TerrainType id. With
+ *  `LUSH`, `UMBER`, `PIONEER` and `SMUDGE` below this mirrors
+ *  crates/anabios-core/src/biome.rs `cell_color` — retune them together
+ *  (web/test/classify-terrain.mjs compares against the live sim's ids). */
 const BASE = [
   [0.09, 0.19, 0.44], [0.21, 0.44, 0.19], [0.07, 0.26, 0.11], [0.68, 0.58, 0.33], [0.42, 0.40, 0.45],
   [0.72, 0.66, 0.36], [0.06, 0.34, 0.16], [0.16, 0.34, 0.26], [0.62, 0.66, 0.62],
 ];
+/** `cell_color`'s lushness branch: [target, cap] — the colour moves from BASE
+ *  toward the target by (biomass / capacity) · cap. Only these three terrains
+ *  have one; the rest keep their base colour at any biomass. */
+const LUSH = {
+  [T.GRASS]: [[0.42, 0.80, 0.33], 0.55],
+  [T.FOREST]: [[0.20, 0.55, 0.24], 0.55],
+  [T.DESERT]: [[0.86, 0.78, 0.52], 0.45],
+};
+/** SUCCESSION_BARE's umber and its blend weight, and the pollution smudge at
+ *  POLLUTION_CAP (weight 0.55): the two ways `cell_color` scars a cell.
+ *  SUCCESSION_PIONEER's bright regrowth green is healthy ground, not a scar. */
+const UMBER = [0.36, 0.24, 0.13], UMBER_MIX = 0.65;
+const PIONEER = [0.55, 0.82, 0.30], PIONEER_MIX = 0.45;
+const SMUDGE = [0.32, 0.28, 0.24], SMUDGE_MIX = 0.55;
 
-/** Nearest base-colour terrain id for an sRGB8 cell (lushness moves grass /
- *  forest / desert within their own hue family, so nearest-base still lands). */
+/** A terrain's healthy colour range as a segment `[origin, dir]`: BASE at zero
+ *  biomass to its lush end at carrying capacity (dir = 0 without a lush branch). */
+function healthySegment(t) {
+  const lush = LUSH[t];
+  return [BASE[t], lush ? BASE[t].map((v, i) => (lush[0][i] - v) * lush[1]) : [0, 0, 0]];
+}
+/** The segment pulled `w` of the way toward `to`: lerp is affine, so a cell
+ *  scarred on top of any lushness lies on it. */
+const pulled = ([o, d], to, w) => [o.map((v, i) => v + (to[i] - v) * w), d.map((v) => v * (1 - w))];
+/** Squared distance from linear RGB (r, g, b) to the segment `[o, d]`. */
+function segDist2(r, g, b, [o, d]) {
+  const pr = r - o[0], pg = g - o[1], pb = b - o[2];
+  const dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+  const u = dd > 0 ? Math.min(1, Math.max(0, (pr * d[0] + pg * d[1] + pb * d[2]) / dd)) : 0;
+  return (pr - u * d[0]) ** 2 + (pg - u * d[1]) ** 2 + (pb - u * d[2]) ** 2;
+}
+const HEALTHY = BASE.map((_, t) => healthySegment(t));
+const REGROWN = HEALTHY.map((s) => pulled(s, PIONEER, PIONEER_MIX));
+const SCARRED = HEALTHY.map((s) => [pulled(s, UMBER, UMBER_MIX), pulled(s, SMUDGE, SMUDGE_MIX)]);
+
+/** Terrain id for each sRGB8 cell of a source with no id grid (recorded
+ *  replays), classified once from its first colour grid. Scored against each
+ *  terrain's whole lushness segment, not its base alone: a replay opens at
+ *  carrying capacity, where lush forest (36,107,46) sits nearer the grass
+ *  base than its own and lush desert nearer savanna — nearest-base drew every
+ *  replay forest as grassland for the whole run. */
 export function classifyTerrain(rgba, res) {
   const ids = new Uint8Array(res * res);
   for (let k = 0; k < res * res; k++) {
     const r = rgba[k * 4] / 255, g = rgba[k * 4 + 1] / 255, b = rgba[k * 4 + 2] / 255;
     let best = 0, bd = Infinity;
-    for (let t = 0; t < BASE.length; t++) {
-      const d = (r - BASE[t][0]) ** 2 + (g - BASE[t][1]) ** 2 + (b - BASE[t][2]) ** 2;
+    for (let t = 0; t < HEALTHY.length; t++) {
+      const d = segDist2(r, g, b, HEALTHY[t]);
       if (d < bd) { bd = d; best = t; }
     }
     ids[k] = best;
   }
   return ids;
+}
+
+/** True when an sRGB8 cell colour of terrain `t` reads scarred (succession
+ *  bare, or smudged past about half the pollution cap): nearer that
+ *  terrain's own scarred colours than its own healthy or pioneer-regrowth
+ *  range. Relative to the terrain because no absolute hue test works:
+ *  healthy savanna straw (183,168) is browner than green, while burnt
+ *  forest, taiga, grass and rainforest stay green-leaning (65,62 .. 78,79).
+ *  River-tinted cells need no case: the live id grid reports them as Water
+ *  (nothing planted), and the replay recorder stores untinted `cell_color`. */
+export function scarredBare(r8, g8, b8, t) {
+  const r = r8 / 255, g = g8 / 255, b = b8 / 255;
+  const healthy = Math.min(segDist2(r, g, b, HEALTHY[t]), segDist2(r, g, b, REGROWN[t]));
+  return SCARRED[t].some((s) => segDist2(r, g, b, s) < healthy);
 }
 
 /** Drifting cloud shade over world (x, z) in units: two octaves of slow noise thresholded to soft patches. */
@@ -811,10 +865,12 @@ export class Forest {
   refresh(rgba, snap = false) {
     if (!this.items.length) return;
     const res = this.terrain.res, n = res * res;
-    const scar = new Uint8Array(n);
+    const ids = this.terrain.terrainIds, scar = new Uint8Array(n);
     for (let k = 0; k < n; k++) {
-      const r = rgba[k * 4], g = rgba[k * 4 + 1];
-      scar[k] = r > g * 1.05 ? 1 : 0;   // browner than green: bare earth / pioneer brown / pollution smudge
+      const r = rgba[k * 4], g = rgba[k * 4 + 1], b = rgba[k * 4 + 2];
+      // Against the cell's own terrain (see `scarredBare`); the browner-than-
+      // green hue test only for a grid with no ids yet.
+      scar[k] = (ids ? scarredBare(r, g, b, ids[k]) : r > g * 1.05) ? 1 : 0;
     }
     const prev = this.scar;
     for (const it of this.items) {
