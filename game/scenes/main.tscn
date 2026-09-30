@@ -227,6 +227,7 @@ offset_left = 560.0
 offset_top = 10.0
 offset_right = 1060.0
 offset_bottom = 44.0
+grow_horizontal = 0
 script = ExtResource("16_topbar")
 
 [node name="CodexPanel" type="PanelContainer" parent="UI"]

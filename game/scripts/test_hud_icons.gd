@@ -1,7 +1,9 @@
 extends SceneTree
 # Headless check for the HUD icon set: every HUD glyph and every invention
 # icon is a 16x16 image with a readable mark, and unknown invention keys fall
-# back to the generic era gear instead of erroring. Run with:
+# back to the generic era gear instead of erroring. Also pins the HUD layout
+# (main.tscn's authored rects and the panels that place themselves), so no two
+# panels open on top of each other. Run with:
 #   godot --headless --rendering-driver dummy --path game -s res://scripts/test_hud_icons.gd
 
 const Codex = preload("res://scripts/codex_panel.gd")
@@ -22,6 +24,34 @@ func _check(cond: bool, msg: String) -> void:
 	if not cond:
 		push_error("FAIL: " + msg)
 		_failed = true
+
+
+# The authored numeric properties (offsets, grow directions) of every direct
+# child of UI in main.tscn, by node name. Read as text: loading the scene would
+# compile main.gd and friends, which need the GameConfig autoload that a -s
+# script run does not have.
+static func _ui_props(path: String) -> Dictionary:
+	var out: Dictionary = {}
+	var cur: Dictionary = {}
+	var node_re := RegEx.create_from_string('^\\[node name="(\\w+)"[^\\]]*parent="UI"\\]')
+	var prop_re := RegEx.create_from_string("^(offset_\\w+|grow_\\w+) = (-?[0-9.]+)$")
+	for line in FileAccess.get_file_as_string(path).split("\n"):
+		if line.begins_with("["):
+			var m := node_re.search(line)
+			cur = {}
+			if m != null:
+				out[m.get_string(1)] = cur
+			continue
+		var p := prop_re.search(line)
+		if p != null:
+			cur[p.get_string(1)] = float(p.get_string(2))
+	return out
+
+
+static func _rect_of(props: Dictionary) -> Rect2:
+	var r := Rect2(Vector2(props.get("offset_left", 0.0), props.get("offset_top", 0.0)), Vector2())
+	r.end = Vector2(props.get("offset_right", 0.0), props.get("offset_bottom", 0.0))
+	return r
 
 
 func _init() -> void:
@@ -164,6 +194,17 @@ func _init() -> void:
 		Codex.describe({"speed": 0.0, "count": 2}) == "Steady and solitary.",
 		"field note without habitat"
 	)
+
+	# --- HUD layout: the panels keep out of each other's way ---
+	var ui: Dictionary = _ui_props("res://scenes/main.tscn")
+	var top_bar: Rect2 = _rect_of(ui["TopBar"])
+	# The bar's counters widen it past the authored 500px in a populous world;
+	# it must grow away from the minimap, not into it.
+	_check(
+		int(ui["TopBar"].get("grow_horizontal", 1)) == Control.GROW_DIRECTION_BEGIN,
+		"top bar grows leftward"
+	)
+	_check(top_bar.end.x < _rect_of(ui["Minimap"]).position.x, "top bar ends left of the minimap")
 
 	if _failed:
 		quit(1)

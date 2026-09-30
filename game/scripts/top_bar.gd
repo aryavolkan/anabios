@@ -6,6 +6,11 @@ extends PanelContainer
 # Pure readout over read-only sim queries plus the same speed writes the
 # hotbar makes; the old HUD label stays in the scene (hidden) for the
 # scenario-failed-to-load message.
+# The bar is content-sized: in a populous trading world ("1514 (-253)", "5182")
+# its counters need ~545px against the authored 500. main.tscn sets
+# grow_horizontal to BEGIN so the extra width grows leftward, into the free
+# band beside the codex; growing right, the bar's frame and "era" counter
+# drew over the left ~35px of the minimap.
 
 const HudIcons = preload("res://scripts/hud_icons.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
