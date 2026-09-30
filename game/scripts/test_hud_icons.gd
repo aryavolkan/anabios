@@ -244,6 +244,14 @@ func _init() -> void:
 		Codex.describe({"speed": 0.0, "count": 2}) == "Steady and solitary.",
 		"field note without habitat"
 	)
+	# The adjective and the group sentence agree with the Traits row's label.
+	for n in [2, 5, 6, 10, 11, 12, 40]:
+		var small: String = Codex.describe(
+			{"count": n, "diet": 0.9, "habitat": PackedStringArray(["savanna"])}
+		)
+		var alone: bool = Codex.social_label(n, 0.9) == "Solitary"
+		_check(small.contains("solitary") == alone, "n=%d adjective: %s" % [n, small])
+		_check(small.contains("alone") == alone, "n=%d group sentence: %s" % [n, small])
 
 	# --- HUD layout: the panels keep out of each other's way ---
 	var ui: Dictionary = _ui_props("res://scenes/main.tscn")
