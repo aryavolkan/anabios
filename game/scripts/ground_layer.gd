@@ -149,19 +149,20 @@ func _process(_delta: float) -> void:
 	_place_mirrors(view_size, world, chunk_world, wanted)
 
 	# Props appear together: while a chunk the view itself touches is still
-	# missing, freshly built props stay hidden, and a fill bigger than one
-	# frame's budget (a jump: [F], a minimap click, a far zoom-out) hides the
-	# rest too. Revealing chunk by chunk painted the view as a patchwork of
-	# speckled forest squares beside bare ones for as long as the fill took
-	# (256 chunks at 8 a frame on the huge fit). A pan stays inside the
-	# preloaded ring and never waits.
+	# missing, freshly built props stay hidden (PropChunks start hidden), and
+	# the view's new props appear at once when the last one lands. Revealing
+	# chunk by chunk painted the view as a patchwork of speckled forest
+	# squares beside bare ones for as long as the fill took (256 chunks at 8
+	# a frame on the huge fit). Props already showing stay shown: hiding them
+	# too on a big fill blinked every tree in view off for the fill's length
+	# on a single wheel step out. A pan stays inside the preloaded ring and
+	# never waits.
 	var in_view := GroundStreaming.visible_chunks(
 		_cam.position, view_size, world, chunk_world, chunk_count, 0
 	)
-	var missing := GroundStreaming.missing_count(_resident, in_view)
-	if missing == 0 or missing > UPLOAD_BUDGET:
+	if GroundStreaming.missing_count(_resident, in_view) == 0:
 		for key in _props.keys():
-			_props[key].visible = missing == 0
+			_props[key].visible = true
 	for mkey in _mirrors.keys():
 		var src = _props.get(Vector2i(mkey.x, mkey.y))
 		_mirrors[mkey][1].visible = src != null and src.visible
