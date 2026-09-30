@@ -192,7 +192,10 @@ func _arrive_replay() -> void:
 	# Events without a meaningful location (loc == ZERO) leave the camera be.
 	if _replay_loc != Vector2.ZERO:
 		camera.position = _replay_loc
-		camera.zoom = Vector2(1.5, 1.5)
+		# The event cam's 2x, a step on the camera's zoom table: the 1.5x
+		# used here before put a half-world-unit texel at 0.75 screen px, so
+		# nearest sampling dropped and doubled rows into uneven 1/2 px stripes.
+		camera.zoom = Vector2(EVENT_CAM_ZOOM, EVENT_CAM_ZOOM)
 		_spawn_highlight(_replay_loc)
 	_set_banner("REPLAY t=%d · [R]/Esc resume live" % _replay_target, true)
 
