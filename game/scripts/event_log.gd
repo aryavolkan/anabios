@@ -95,8 +95,10 @@ const _ICONS: Dictionary = {
 	62: "heart",  # MedContain
 }
 
-# Chapter id -> sentence template; %s is the species name. Unlisted chapters
-# read as "<Chapter>: <species>".
+# Chapter id -> sentence template; %s is the species name. Every chapter has
+# one: the "<Chapter>: <species>" fallback printed internal names such as
+# "BadAdopt: Bracra" in the feed and the replay banner. The fallback stays
+# only for a chapter added to the sim before it gets a sentence here.
 const _LINES: Dictionary = {
 	0: "%s has gone extinct",
 	1: "Population crash among %s",
@@ -117,14 +119,21 @@ const _LINES: Dictionary = {
 	16: "Herd behaviour detected (%s)",
 	17: "New technology discovered by %s",
 	18: "%s adopted a technology",
+	19: "%s took up a harmful practice",
+	20: "A harmful practice spread through %s",
 	21: "Trade caravan arrived (%s)",
 	22: "%s learned to work a material",
+	23: "%s rise and fall in cycles",
 	24: "Boom and bust for %s",
 	25: "%s reached carrying capacity",
+	26: "Predators fell, grazers boomed, plants crashed",
 	27: "%s expanded their range",
+	28: "%s keep to themselves",
+	29: "%s follow a migration corridor",
 	30: "New growth where %s graze",
 	31: "A trait fixed in %s",
 	32: "%s adapted rapidly",
+	33: "%s evolved the same trait independently",
 	34: "%s ambushed their prey",
 	35: "%s are using tools",
 	36: "%s fled",
@@ -132,12 +141,16 @@ const _LINES: Dictionary = {
 	38: "War breaks out: %s",
 	39: "The war of %s has ended",
 	40: "An alliance formed with %s",
+	41: "%s stick together as kin",
 	42: "Settlement founded by %s",
 	43: "A market opened among %s",
 	44: "%s trained specialists",
 	45: "A tradition took hold in %s",
 	46: "%s radiated into new forms",
+	47: "%s held on to their era",
 	48: "%s are stranded by change",
+	49: "%s compete to impress mates",
+	50: "%s are running short of one sex",
 	51: "%s domesticated an animal",
 	52: "A herd of livestock for %s",
 	53: "%s preserved their knowledge",
@@ -146,6 +159,7 @@ const _LINES: Dictionary = {
 	56: "A feeding frenzy of %s",
 	57: "Territorial rage: %s",
 	58: "Grief spreads among %s",
+	59: "%s adapted to their hunters",
 	60: "%s are dehydrating",
 	61: "An epidemic among %s",
 	62: "%s contained an epidemic",
@@ -208,7 +222,9 @@ static func row_text(row: Dictionary) -> String:
 static func line_for(type: int, species_id: int) -> String:
 	var who: String = SpeciesNames.name_of(species_id)
 	if _LINES.has(type):
-		return String(_LINES[type]) % who
+		var line := String(_LINES[type])
+		# The trophic cascade is world-scale (species 0): no name to insert.
+		return line % who if line.contains("%s") else line
 	var title: String = Codex.CHAPTER_NAMES[type] if type < Codex.CHAPTER_NAMES.size() else "Event"
 	return "%s: %s" % [title, who]
 

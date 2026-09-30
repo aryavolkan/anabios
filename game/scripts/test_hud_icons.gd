@@ -112,11 +112,18 @@ func _init() -> void:
 	_check(SpeciesNames.name_of(-3) == SpeciesNames.name_of(0), "negative ids clamp to 0")
 
 	# --- event log: every chapter has an icon and a sentence naming the species ---
+	# (26, the trophic cascade, is world-scale: the sim always sends species 0.)
 	for t in Codex.CHAPTER_NAMES.size():
 		_check(Icons._ROWS.has(EventLog.icon_for(t)), "chapter %d icon exists" % t)
 		var line: String = EventLog.line_for(t, 12)
-		_check(line.contains(SpeciesNames.name_of(12)), "chapter %d line names the species" % t)
-		_check(not line.contains("%s"), "chapter %d template is filled" % t)
+		if t != 26:
+			_check(line.contains(SpeciesNames.name_of(12)), "chapter %d line names the species" % t)
+		_check(not line.contains("%"), "chapter %d template is filled" % t)
+		# A sentence, never the internal name ("BadAdopt: Bracra").
+		_check(
+			not line.begins_with(String(Codex.CHAPTER_NAMES[t]) + ":"),
+			"chapter %d has a plain sentence (%s)" % [t, line]
+		)
 	_check(Icons._ROWS.has(EventLog.icon_for(999)), "unknown chapter falls back to an icon")
 	_check(EventLog.line_for(999, 1).begins_with("Event"), "unknown chapter falls back to a title")
 	# The replay / event-camera banner names the event in the log's words, not
