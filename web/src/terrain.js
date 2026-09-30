@@ -443,7 +443,14 @@ export class Water {
         float smoothHeight(vec2 p) { return texture2D(uHeight, (p / uSize * uRes + 0.5) / (uRes + 1.0)).r; }
         void main() {
           vec2 p = vWorld.xz;
-          float depth = max(0.0, -groundHeight(p));
+          // Over dry ground the sheet is hidden by the opaque terrain, but its
+          // depth clamps to 0 there, which reads as full foam: the wireframe
+          // layer showed the whole land as foam lace between its wires. Nothing
+          // is drawn where the ground stands above the plane (the waterline
+          // itself, gh == 0, keeps its foam fringe).
+          float gh = groundHeight(p);
+          if (gh > 0.0) discard;
+          float depth = max(0.0, -gh);
           // Distance to the shore ≈ depth / slope; the slope from half-cell central
           // differences of the filtered heights, which vary smoothly (the per-
           // triangle slope would print the mesh facets into the foam).
