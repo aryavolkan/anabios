@@ -24,6 +24,7 @@ extends Camera2D
 # neither problem. ZOOM_STEPS and next_step/nearest_step_at_most are
 # re-exported here so callers keep using CameraController.* as before.
 const ZoomSteps = preload("res://scripts/zoom_steps.gd")
+const CameraFraming = preload("res://scripts/camera_framing.gd")
 const ZOOM_STEPS: PackedFloat32Array = ZoomSteps.ZOOM_STEPS
 const ZOOM_MIN: float = 0.0625  # ZOOM_STEPS[0]
 const ZOOM_MAX: float = 8.0  # ZOOM_STEPS[ZOOM_STEPS.size() - 1]
@@ -210,3 +211,18 @@ func _process(delta: float) -> void:
 			position += anchor - get_global_mouse_position()
 		elif _zoom_easing:
 			_zoom_easing = false
+	# The world is a torus: fold the camera back into [0, world) every frame,
+	# whoever moved it (key pan, glide, middle-drag, the zoom anchor, or an
+	# external writer such as the screenshot harness). Every layer's torus
+	# copies only reach +/-1 world from the origin, so an unfolded pan past
+	# about one world showed bare terrain with no creatures or huts, then a
+	# clear-colour void. Runs outside the showcase gate: it is a no-op for an
+	# in-world position, and a fold never changes what is on screen.
+	_fold_to_world()
+
+
+func _fold_to_world() -> void:
+	var sim = get_node_or_null("../Simulation")
+	if sim == null:
+		return
+	position = CameraFraming.fold_to_world(position, float(sim.world_size()))

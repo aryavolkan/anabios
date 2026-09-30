@@ -7,12 +7,15 @@ extends SceneTree
 # itself can't be preloaded from a `-s` script (it reads the GameConfig
 # autoload; see test_event_fx.gd's StubCam note), which is why this test
 # targets zoom_steps.gd, the dependency-free module holding the real logic.
+# It also covers camera_framing.gd, the camera's pure torus-framing helpers,
+# split out of camera_controller.gd for the same reason.
 # Run with:
 #   godot --headless --rendering-driver dummy --path game \
 #     -s res://scripts/test_camera_steps.gd
 # Exits 0 on success, 1 on the first failed assertion.
 
 const ZoomSteps = preload("res://scripts/zoom_steps.gd")
+const CameraFraming = preload("res://scripts/camera_framing.gd")
 
 var _failed := false
 
@@ -61,6 +64,28 @@ func _init() -> void:
 	_check(
 		is_equal_approx(ZoomSteps.nearest_step_at_most(8.0), 8.0),
 		"an exact top-of-table value returns itself"
+	)
+
+	# --- fold_to_world: a pan past the world edge wraps back in ----------------
+	# Every layer's torus copies reach only +/-1 world from the origin, so the
+	# camera must stay in [0, world) or a long pan shows a void.
+	_check(
+		CameraFraming.fold_to_world(Vector2(2700.0, 600.0), 1024.0).is_equal_approx(
+			Vector2(652.0, 600.0)
+		),
+		"a camera panned 2.6 worlds right folds back to the same view inside the world"
+	)
+	_check(
+		CameraFraming.fold_to_world(Vector2(-10.0, -1034.0), 1024.0).is_equal_approx(
+			Vector2(1014.0, 1014.0)
+		),
+		"negative positions fold from the far edge"
+	)
+	_check(
+		CameraFraming.fold_to_world(Vector2(300.0, 900.0), 1024.0).is_equal_approx(
+			Vector2(300.0, 900.0)
+		),
+		"an in-world position is left untouched"
 	)
 
 	if _failed:
