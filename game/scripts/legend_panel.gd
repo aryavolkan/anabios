@@ -25,6 +25,10 @@ const CONTROLS_FMT := """[G] ground: %s
 [X] DIT helix · [P] species tables · [F] reset view · [H] hide
 [R] replay event · [U] run to event · [V] event cam
 WASD/drag pan · wheel zoom · click inspect"""
+# Pre-broken for the same 370px slot: on one line it ran 421px wide, and the
+# panel grew past the event log's right edge to hold it.
+const EMOTES_KEY := """emotes (close zoom): Z sleep · heart courtship
+drop thirst · ! flee · star mate"""
 
 @onready var overlay = get_node("../../OverlayManager")
 @onready var module_layers = get_node("../../ModuleLayers")
@@ -42,6 +46,12 @@ func _ready() -> void:
 	for c in get_children():
 		c.queue_free()
 	visible = false
+	# The two share that slot, so showing one hides the other. [H] used to only
+	# flip this panel, which then drew straight over the live event feed: two
+	# translucent panels, the coloured event sentences showing through the key
+	# bindings and neither readable. Following visibility_changed (not the key)
+	# also covers the hotbar's gear tile and the showcase director's switches.
+	visibility_changed.connect(_swap_with_event_log)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 6)
 	add_child(vb)
@@ -61,6 +71,12 @@ func _ready() -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_H:
 		visible = not visible
+
+
+func _swap_with_event_log() -> void:
+	var log_panel: CanvasItem = get_parent().get_node_or_null("EventLog")
+	if log_panel != null:
+		log_panel.visible = not visible
 
 
 func _process(_delta: float) -> void:
@@ -83,9 +99,7 @@ func _rebuild_key(body_mode: int) -> void:
 		_key_box.add_child(_header("modules"))
 		_key_box.add_child(_swatch_wrap(Palette.MODULE_COLORS, Palette.MODULE_NAMES))
 	_key_box.add_child(_header("links: bright brief = combat · thin lingering = trade"))
-	_key_box.add_child(
-		_header("emotes (close zoom): Z sleep · heart courtship · drop thirst · ! flee · star mate")
-	)
+	_key_box.add_child(_header(EMOTES_KEY))
 	match body_mode:
 		1:
 			_key_box.add_child(_header("body: hue = dialect"))
@@ -119,6 +133,9 @@ func _rebuild_key(body_mode: int) -> void:
 func _header(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
+	# Same safety net as the key-binding label: a header that outgrows the slot
+	# wraps instead of widening the panel past the event log's edge.
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.add_theme_font_size_override("font_size", 11)
 	l.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
 	return l

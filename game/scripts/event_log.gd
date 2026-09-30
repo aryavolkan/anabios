@@ -5,6 +5,17 @@ extends PanelContainer
 # timeline colours them; click a line to jump the camera there (the old codex
 # stream's `V` behaviour). The chapter tables stay in codex_panel.gd, which the
 # replay and showcase scripts already read; this panel only renders them.
+#
+# Several detectors re-fire every tick while their condition holds: a mass
+# fright or a dehydration wave is dozens of events a second for one species.
+# One row per event let a single burst fill all seven rows with the same
+# "Panic among Bracra" and push every other event (a speciation, a settlement)
+# out before it could be read. A repeat of a row's event type and species
+# within REPEAT_TICKS of that row's last one now folds into it as a "×n"
+# count, as the web viewer's feed does (web/src/main.js onEvent). The row
+# moves to the newest end, as the web feed's line does, and takes the latest
+# location for the click jump: left in place, a burst still firing read as
+# old news above newer rows, and the cap evicted it first while it lasted.
 
 const Codex = preload("res://scripts/codex_panel.gd")
 const HudIcons = preload("res://scripts/hud_icons.gd")
@@ -12,6 +23,7 @@ const SpeciesNames = preload("res://scripts/species_names.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
 const MAX_LINES := 7
+const REPEAT_TICKS := 120  # web/src/main.js REPEAT_TICKS
 const ROW_H := 19
 const ICON := 16
 
@@ -83,8 +95,10 @@ const _ICONS: Dictionary = {
 	62: "heart",  # MedContain
 }
 
-# Chapter id -> sentence template; %s is the species name. Unlisted chapters
-# read as "<Chapter>: <species>".
+# Chapter id -> sentence template; %s is the species name. Every chapter has
+# one: the "<Chapter>: <species>" fallback printed internal names such as
+# "BadAdopt: Bracra" in the feed and the replay banner. The fallback stays
+# only for a chapter added to the sim before it gets a sentence here.
 const _LINES: Dictionary = {
 	0: "%s has gone extinct",
 	1: "Population crash among %s",
@@ -105,14 +119,21 @@ const _LINES: Dictionary = {
 	16: "Herd behaviour detected (%s)",
 	17: "New technology discovered by %s",
 	18: "%s adopted a technology",
+	19: "%s took up a harmful practice",
+	20: "A harmful practice spread through %s",
 	21: "Trade caravan arrived (%s)",
 	22: "%s learned to work a material",
+	23: "%s rise and fall in cycles",
 	24: "Boom and bust for %s",
 	25: "%s reached carrying capacity",
+	26: "Predators fell, grazers boomed, plants crashed",
 	27: "%s expanded their range",
+	28: "%s keep to themselves",
+	29: "%s follow a migration corridor",
 	30: "New growth where %s graze",
 	31: "A trait fixed in %s",
 	32: "%s adapted rapidly",
+	33: "%s evolved the same trait independently",
 	34: "%s ambushed their prey",
 	35: "%s are using tools",
 	36: "%s fled",
@@ -120,12 +141,16 @@ const _LINES: Dictionary = {
 	38: "War breaks out: %s",
 	39: "The war of %s has ended",
 	40: "An alliance formed with %s",
+	41: "%s stick together as kin",
 	42: "Settlement founded by %s",
 	43: "A market opened among %s",
 	44: "%s trained specialists",
 	45: "A tradition took hold in %s",
 	46: "%s radiated into new forms",
+	47: "%s held on to their era",
 	48: "%s are stranded by change",
+	49: "%s compete to impress mates",
+	50: "%s are running short of one sex",
 	51: "%s domesticated an animal",
 	52: "A herd of livestock for %s",
 	53: "%s preserved their knowledge",
@@ -134,6 +159,7 @@ const _LINES: Dictionary = {
 	56: "A feeding frenzy of %s",
 	57: "Territorial rage: %s",
 	58: "Grief spreads among %s",
+	59: "%s adapted to their hunters",
 	60: "%s are dehydrating",
 	61: "An epidemic among %s",
 	62: "%s contained an epidemic",
@@ -159,10 +185,46 @@ static func icon_for(type: int) -> String:
 	return String(_ICONS.get(type, "book"))
 
 
+# Fold one codex event into the feed rows (oldest first): bump the count of a
+# recent row with the same type and species and move it to the newest end,
+# else append a row, dropping the oldest past `max_lines`. A row is the event
+# dictionary plus "count".
+static func fold_event(rows: Array[Dictionary], ev: Dictionary, max_lines: int) -> void:
+	var t: int = int(ev["type"])
+	var sid: int = int(ev["species_id"])
+	var tick: int = int(ev["tick"])
+	for i in rows.size():
+		var row: Dictionary = rows[i]
+		if int(row["type"]) != t or int(row["species_id"]) != sid:
+			continue
+		var gap: int = tick - int(row["tick"])
+		if gap >= 0 and gap <= REPEAT_TICKS:
+			row["count"] = int(row["count"]) + 1
+			row["tick"] = tick
+			row["loc"] = ev["loc"]
+			rows.remove_at(i)
+			rows.append(row)
+			return
+	var fresh: Dictionary = ev.duplicate()
+	fresh["count"] = 1
+	rows.append(fresh)
+	while rows.size() > max_lines:
+		rows.pop_front()
+
+
+# The row's sentence with its repeat count ("Panic among Bracra ×12").
+static func row_text(row: Dictionary) -> String:
+	var line: String = line_for(int(row["type"]), int(row["species_id"]))
+	var n: int = int(row.get("count", 1))
+	return line + (" ×%d" % n if n > 1 else "")
+
+
 static func line_for(type: int, species_id: int) -> String:
 	var who: String = SpeciesNames.name_of(species_id)
 	if _LINES.has(type):
-		return String(_LINES[type]) % who
+		var line := String(_LINES[type])
+		# The trophic cascade is world-scale (species 0): no name to insert.
+		return line % who if line.contains("%s") else line
 	var title: String = Codex.CHAPTER_NAMES[type] if type < Codex.CHAPTER_NAMES.size() else "Event"
 	return "%s: %s" % [title, who]
 
@@ -177,9 +239,7 @@ func _process(_delta: float) -> void:
 		return
 	for ev in events:
 		_cursor = int(ev["index"]) + 1
-		_recent.append(ev)
-		while _recent.size() > MAX_LINES:
-			_recent.pop_front()
+		fold_event(_recent, ev, MAX_LINES)
 	_rows.queue_redraw()
 
 
@@ -195,13 +255,7 @@ func _draw_rows() -> void:
 			HudIcons.named_texture(icon_for(t)), Rect2(0, y + 2, ICON, ICON), false
 		)
 		_rows.draw_string(
-			font,
-			Vector2(ICON + 8, y + 14),
-			line_for(t, int(ev["species_id"])),
-			HORIZONTAL_ALIGNMENT_LEFT,
-			330,
-			12,
-			col
+			font, Vector2(ICON + 8, y + 14), row_text(ev), HORIZONTAL_ALIGNMENT_LEFT, 330, 12, col
 		)
 		y += ROW_H
 

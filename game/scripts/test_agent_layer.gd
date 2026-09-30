@@ -14,6 +14,7 @@ extends SceneTree
 # Exits 0 on success, 1 on the first failed assertion.
 
 const AgentLayer = preload("res://scripts/agent_layer.gd")
+const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 
 var _failed := false
 
@@ -189,6 +190,34 @@ func _check_idle_weapon_act() -> void:
 	)
 
 
+func _check_raw_walking() -> void:
+	# Under turning inertia a resting body keeps a non-zero heading: with the
+	# bridge's moving flags the heading must not count as walking, or no
+	# sleeper, drinker or grazer ever reaches its idle pose.
+	_check(not AgentLayer.raw_walking(true, 0, 1.2), "a still body with a heading stands")
+	_check(AgentLayer.raw_walking(true, 1, 0.0), "a moving body walks whatever its heading")
+	# Without the flags (an older bridge) the heading-is-0-at-rest contract.
+	_check(AgentLayer.raw_walking(false, 0, 0.7), "no flags: a non-zero heading walks")
+	_check(not AgentLayer.raw_walking(false, 0, 0.0), "no flags: heading 0 stands")
+
+
+func _check_archetype_sizes() -> void:
+	# A deer fawn at a third of its adult size must still be picked as a deer:
+	# the archetype reads the adult size whenever the bridge supplies one.
+	var grown := PackedFloat32Array([0.6, 2.0])
+	var adult := PackedFloat32Array([1.8, 2.0])
+	var picked: PackedFloat32Array = AgentLayer.archetype_sizes(adult, grown)
+	_check(picked == adult, "archetype sizes are the adult sizes")
+	_check(
+		MammalSprites.archetype_for(0.1, picked[0], false) == MammalSprites.DEER,
+		"a herbivore fawn keeps the deer silhouette"
+	)
+	_check(
+		AgentLayer.archetype_sizes(PackedFloat32Array(), grown) == grown,
+		"no adult sizes: fall back to the grown sizes"
+	)
+
+
 func _check_air_lift() -> void:
 	_check(AgentLayer.air_lift(10.0, false) == Vector2.ZERO, "ground figures are not lifted")
 	var lift: Vector2 = AgentLayer.air_lift(10.0, true)
@@ -300,16 +329,31 @@ func _check_sprite_size() -> void:
 		)
 
 
+func _check_energy_scale() -> void:
+	# The energy overlay shares the unit card's HP scale, and a typical fed
+	# body (predator-prey's median energy, 77) sits inside the ramp instead
+	# of clipping to its top swatch as it did when normalised by 50.
+	_check(AgentLayer.ENERGY_FULL == AgentLayer.UnitCard.HP_FULL, "energy ramp = the HP scale")
+	var top: Color = AgentLayer.Palette.ramp(AgentLayer.Palette.RAMP_ENERGY, 1.0)
+	var median: Color = AgentLayer.Palette.ramp(
+		AgentLayer.Palette.RAMP_ENERGY, 77.0 / AgentLayer.ENERGY_FULL
+	)
+	_check(not median.is_equal_approx(top), "a median-energy body is not drawn at the ramp top")
+
+
 func _init() -> void:
 	_check_view_rect()
 	_check_pos_in_rect()
 	_check_merge_prev()
 	_check_crowd_cells()
 	_check_idle_weapon_act()
+	_check_raw_walking()
+	_check_archetype_sizes()
 	_check_air_lift()
 	_check_nearest_drawn()
 	_check_body_diameter()
 	_check_sprite_size()
+	_check_energy_scale()
 
 	if _failed:
 		quit(1)

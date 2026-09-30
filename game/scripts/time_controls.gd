@@ -26,6 +26,9 @@ const TILE_PX := 36
 @onready var main: Node2D = get_node("../..")
 
 var _speed_btns: Dictionary = {}
+# The pause/speed state the buttons last showed; -1 = not drawn yet.
+var _shown_paused: int = -1
+var _shown_rate: int = -1
 
 
 # A pressed key event for a tool's key name ("G" -> KEY_G).
@@ -46,7 +49,7 @@ func _ready() -> void:
 	$Restart.pressed.connect(_on_restart)
 	$Menu.pressed.connect(_on_menu)
 	_speed_btns = {1: $Speed1, 4: $Speed4, 16: $Speed16, 64: $Speed64}
-	_highlight_speed(main.ticks_per_frame)
+	sync_to(main.paused, main.ticks_per_frame)
 	var divider := Label.new()
 	divider.text = "|"
 	divider.add_theme_color_override("font_color", UiTheme.TEXT_DIM)
@@ -73,21 +76,38 @@ func _on_tool(key_name: String) -> void:
 	Input.parse_input_event(key_event(key_name))
 
 
+# The hotbar is not the only writer of main.paused / main.ticks_per_frame: the
+# top bar's transport, the auto-pause on focus loss, replay and run-to-event
+# and the showcase director all set them too. Refreshing only from this
+# panel's own handlers left the pause glyph and the speed accent stale (the
+# hotbar still lit "1×" after the top bar's ▶▶ went to 16×), so the buttons
+# follow main's live state every frame, repainting only on a change.
+func _process(_delta: float) -> void:
+	sync_to(main.paused, main.ticks_per_frame)
+
+
 func _on_pause_pressed() -> void:
 	main.paused = not main.paused
-	$PauseButton.text = "▶" if main.paused else "⏸"
+	sync_to(main.paused, main.ticks_per_frame)
 
 
 func _on_speed(n: int) -> void:
 	main.ticks_per_frame = n
-	_highlight_speed(n)
+	sync_to(main.paused, n)
 
 
-# Mark the active speed with the accent so the current rate is obvious.
-func _highlight_speed(n: int) -> void:
+# Show `paused` on the pause button (▶ to resume, ⏸ to pause) and mark the
+# active speed with the accent so the current rate is obvious. The speed
+# stays marked while paused: it is the rate ▶ resumes at.
+func sync_to(paused: bool, rate: int) -> void:
+	if int(paused) == _shown_paused and rate == _shown_rate:
+		return
+	_shown_paused = int(paused)
+	_shown_rate = rate
+	$PauseButton.text = "▶" if paused else "⏸"
 	for k in _speed_btns:
 		var btn: Button = _speed_btns[k]
-		btn.add_theme_color_override("font_color", UiTheme.ACCENT if k == n else UiTheme.TEXT)
+		btn.add_theme_color_override("font_color", UiTheme.ACCENT if k == rate else UiTheme.TEXT)
 
 
 func _on_restart() -> void:

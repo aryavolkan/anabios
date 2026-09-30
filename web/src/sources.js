@@ -123,14 +123,34 @@ export class ReplaySource {
     this._elev = decodeElevation(R.biome, this.biomeRes);
     this._buf = new Float32Array(0);
     this.stepMs = 0;
+    // Index of the sample frame whose streaks / trades were last handed out.
+    // A frame holds one volley, but the page calls streaks()/trades() every
+    // rendered frame (a replay is always "fractional"), and a trail layer
+    // keeps what it is given: returning the volley once per frame stacked
+    // ~12 copies of it at 1× and piled up without end while paused.
+    this._stIdx = -1;
+    this._trIdx = -1;
   }
+  /** Loops back to tick 0 at the end. Returns the whole ticks played (never
+   *  negative: a count taken across the loop would read as a huge negative
+   *  ticks/s). */
   advance(ticks) {
-    const before = Math.floor(this.tick);
-    this.tick = Math.min(this.endTick, this.tick + ticks);
-    if (this.tick >= this.endTick) { this.tick = 0; this.evPtr = 0; }
-    return Math.floor(this.tick) - before;
+    const before = Math.floor(this.tick), next = this.tick + ticks;
+    if (next >= this.endTick) {
+      this.tick = 0; this.evPtr = 0; this._stIdx = this._trIdx = -1;
+      return Math.max(0, Math.floor(this.endTick) - before);
+    }
+    this.tick = next;
+    return Math.floor(next) - before;
   }
-  seek(tick) { this.tick = Math.max(0, Math.min(this.endTick, tick)); this.evPtr = this.events_.findIndex((e) => e.t >= this.tick); if (this.evPtr < 0) this.evPtr = this.events_.length; }
+  /** Clamped short of `endTick`: landing on it would loop back to tick 0 on
+   *  the next advance, so a link at or past the recording's length (which the
+   *  HUD reports as `ticks`) shows its end, not its start. */
+  seek(tick) {
+    this.tick = Math.max(0, Math.min(this.endTick - 1, tick));
+    this.evPtr = this.events_.findIndex((e) => e.t >= this.tick); if (this.evPtr < 0) this.evPtr = this.events_.length;
+    this._stIdx = this._trIdx = -1;   // a scrub back onto a frame shows its volley again
+  }
 
   _frameIndex(tick) {
     const f = this.frames;
@@ -209,8 +229,21 @@ export class ReplaySource {
     }
     return { count: n, data };
   }
-  streaks() { return this._segments(this._lastFrame?.st); }
-  trades() { const s = this._segments(this._lastFrame?.tr); for (let i = 0; i < s.count; i++) s.data[i * 5 + 4] = 0.58; return s; }
+  // Each sample frame's segments are emitted once (see `_stIdx`), like the
+  // live core's one push per tick; the trail layer fades them from there.
+  streaks() {
+    if (this._lastIndex === this._stIdx) return EMPTY;
+    const s = this._segments(this._lastFrame?.st);
+    if (this._lastFrac <= 0.5) this._stIdx = this._lastIndex;
+    return s;
+  }
+  trades() {
+    if (this._lastIndex === this._trIdx) return EMPTY;
+    const s = this._segments(this._lastFrame?.tr);
+    if (this._lastFrac <= 0.5) this._trIdx = this._lastIndex;
+    for (let i = 0; i < s.count; i++) s.data[i * 5 + 4] = 0.58;
+    return s;
+  }
   sites() {
     const sf = this.R.sites?.[this._lastIndex ?? 0];
     if (!sf || !sf.sid.length) return EMPTY;

@@ -71,3 +71,18 @@ func place(world_pos: Vector2, cell_w: float) -> void:
 	# The LOD fade needs the real cell width; world_size / biome_res would
 	# read the 66-cell apron as a whole world.
 	_mat.set_shader_parameter("cell_world", cell_w)
+
+
+# A sprite drawing this chunk at another torus copy (ground_layer.gd's wrap
+# mirrors): it shares the texture, region and material, so the copy follows
+# every upload and uniform write of this chunk for free. The caller places
+# it (position in world units, scale = one cell).
+func make_mirror() -> Sprite2D:
+	var m := Sprite2D.new()
+	m.centered = false
+	m.region_enabled = true
+	m.region_rect = region_rect
+	m.texture_filter = texture_filter
+	m.texture = texture
+	m.material = _mat
+	return m

@@ -9,6 +9,7 @@ extends Node
 # log / coevo history (view-only buffers), so the codex panel re-accumulates
 # from the resume point — the world itself resumes bit-identically.
 
+const EventLog = preload("res://scripts/event_log.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
 const RING_EVERY: int = 250
@@ -184,7 +185,7 @@ func start_replay() -> void:
 	_replay_arrived = false
 	_replay_target = int(ev["tick"])
 	_replay_loc = ev["loc"]
-	_set_banner("REPLAY t=%d %s — rewinding…" % [_replay_target, _event_name(ev)], true)
+	_set_banner("REPLAY t=%d · %s — rewinding…" % [_replay_target, event_title(ev)], true)
 
 
 func _arrive_replay() -> void:
@@ -192,7 +193,10 @@ func _arrive_replay() -> void:
 	# Events without a meaningful location (loc == ZERO) leave the camera be.
 	if _replay_loc != Vector2.ZERO:
 		camera.position = _replay_loc
-		camera.zoom = Vector2(1.5, 1.5)
+		# The event cam's 2x, a step on the camera's zoom table: the 1.5x
+		# used here before put a half-world-unit texel at 0.75 screen px, so
+		# nearest sampling dropped and doubled rows into uneven 1/2 px stripes.
+		camera.call("snap_zoom", EVENT_CAM_ZOOM)
 		_spawn_highlight(_replay_loc)
 	_set_banner("REPLAY t=%d · [R]/Esc resume live" % _replay_target, true)
 
@@ -208,7 +212,7 @@ func stop_replay() -> void:
 		main.paused = _live_backup["paused"]
 		main.ticks_per_frame = _live_backup["speed"]
 		camera.position = _live_backup["cam_pos"]
-		camera.zoom = _live_backup["cam_zoom"]
+		camera.call("snap_zoom", (_live_backup["cam_zoom"] as Vector2).x)
 		_live_backup = {}
 
 
@@ -235,7 +239,7 @@ func _stop_until(arrived: bool) -> void:
 		if not ev.is_empty() and ev["loc"] != Vector2.ZERO:
 			camera.position = ev["loc"]
 		_set_banner(
-			"event t=%d %s · resume when ready" % [int(ev.get("tick", 0)), _event_name(ev)], true
+			"event t=%d · %s · resume when ready" % [int(ev.get("tick", 0)), event_title(ev)], true
 		)
 	else:
 		_clear_banner()
@@ -276,7 +280,7 @@ func _go_to_cam_event() -> void:
 		. tween_property(camera, "zoom", Vector2(EVENT_CAM_ZOOM, EVENT_CAM_ZOOM), 1.2)
 		. set_trans(Tween.TRANS_SINE)
 	)
-	_set_banner("EVENT CAM t=%d %s · [V]/Esc exit" % [int(ev["tick"]), _event_name(ev)], true)
+	_set_banner("EVENT CAM t=%d · %s · [V]/Esc exit" % [int(ev["tick"]), event_title(ev)], true)
 
 
 func stop_event_cam() -> void:
@@ -293,10 +297,14 @@ func stop_event_cam() -> void:
 # --- chrome ------------------------------------------------------------------
 
 
-func _event_name(ev: Dictionary) -> String:
-	var names: PackedStringArray = preload("res://scripts/codex_panel.gd").CHAPTER_NAMES
+# The event log's sentence for the event ("Panic cascades through Bracra"),
+# not codex_panel's CHAPTER_NAMES entry: those are the core's enum ids
+# ("PanicCascade", "PopCrash"), which read as code in a banner.
+static func event_title(ev: Dictionary) -> String:
 	var t: int = int(ev.get("type", -1))
-	return names[t] if t >= 0 and t < names.size() else "event"
+	if t < 0:
+		return "event"
+	return EventLog.line_for(t, int(ev.get("species_id", 0)))
 
 
 func _set_banner(text: String, _pin: bool) -> void:
@@ -307,9 +315,22 @@ func _set_banner(text: String, _pin: bool) -> void:
 	_banner.add_theme_color_override("font_color", UiTheme.ACCENT)
 	_banner.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.75))
 	_banner.add_theme_constant_override("outline_size", 5)
-	_banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	# Sits just under the top bar (UI/TopBar spans y 10..44) rather than over it.
-	_banner.position.y = 52
+	# Centred on the top bar (UI/TopBar spans y 10..44), just below it rather
+	# than over it. A CENTER_TOP anchor preset alone left the
+	# offsets at 0 with the default END grow, so the text STARTED at the
+	# anchor and ran off to the right; it also ignored the ui_scale transform
+	# on UI (the anchor is the unscaled viewport's middle) and the bar is not
+	# at the screen's middle anyway. Span the bar's own rect instead (it
+	# follows _layout_hud at any scale), centre the text in it, and grow both
+	# ways so a line wider than the bar still stays centred on it.
+	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	var bar := main.get_node_or_null("UI/TopBar") as Control
+	var left: float = bar.position.x if bar != null else 0.0
+	var width: float = bar.size.x if bar != null else get_viewport().get_visible_rect().size.x
+	_banner.offset_left = left
+	_banner.offset_right = left + width
+	_banner.offset_top = 52
 	main.get_node("UI").add_child(_banner)
 
 

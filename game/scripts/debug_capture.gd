@@ -95,6 +95,11 @@ func _run(path: String, wait_frames: int) -> void:
 			if helix != null:
 				helix.set("_shown", true)
 				helix.visible = true
+		# Optionally reveal the [H] controls legend for the capture.
+		if OS.has_environment("ANABIOS_LEGEND"):
+			var legend := main.get_node_or_null("UI/LegendPanel")
+			if legend != null:
+				legend.visible = true
 		# Optionally pin an agent so the inspector panel is visible.
 		if OS.has_environment("ANABIOS_INSPECT"):
 			var sim2 := main.get_node_or_null("Simulation")

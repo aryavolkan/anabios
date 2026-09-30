@@ -72,19 +72,31 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _cycle_ground() -> void:
+	# Step on past every mode whose subsystem is off in this world until one
+	# is live. A gated mode used to reset straight to BIOME instead, so in
+	# every world without the env mechanism [G] went biome -> phero 0..3 ->
+	# biome and never reached the succession, markets or territory overlays
+	# those worlds do run. BIOME and the pheromone modes are always live, so
+	# the loop terminates.
 	ground_mode = (ground_mode + 1) % GROUND_MAX
-	# Skip ENV_OPTIMUM when the env mechanism is inactive.
-	if ground_mode == GROUND_ENV_OPTIMUM and not bool(sim.env_active()):
-		ground_mode = GROUND_BIOME
-	# Skip SUCCESSION when disasters are disabled.
-	if ground_mode == GROUND_SUCCESSION and not bool(sim.disasters_active()):
-		ground_mode = GROUND_BIOME
-	# Skip MARKETS when the trade economy is disabled.
-	if ground_mode == GROUND_MARKETS and not bool(sim.resources_active()):
-		ground_mode = GROUND_BIOME
-	# Skip TERRITORY when the territory layer is disabled.
-	if ground_mode == GROUND_TERRITORY and not bool(sim.territory_active()):
-		ground_mode = GROUND_BIOME
+	while not _ground_mode_live(ground_mode):
+		ground_mode = (ground_mode + 1) % GROUND_MAX
+
+
+# Whether ground mode m has data to show in the loaded world: ENV_OPTIMUM
+# needs the env mechanism, SUCCESSION disasters, MARKETS the trade economy,
+# TERRITORY the territory layer.
+func _ground_mode_live(m: int) -> bool:
+	match m:
+		GROUND_ENV_OPTIMUM:
+			return bool(sim.env_active())
+		GROUND_SUCCESSION:
+			return bool(sim.disasters_active())
+		GROUND_MARKETS:
+			return bool(sim.resources_active())
+		GROUND_TERRITORY:
+			return bool(sim.territory_active())
+	return true
 
 
 func _cycle_body() -> void:
@@ -93,8 +105,8 @@ func _cycle_body() -> void:
 
 
 # Skip the affect-dependent modes when the affect layer is disabled — arousal
-# reads all-calm and mood reads all-content there. Resets to the base mode,
-# same convention as _cycle_ground's gated skips.
+# reads all-calm and mood reads all-content there. Resets to the base mode
+# (it also validates a saved default_body, where BODY_SPECIES is the fallback).
 func _validate_body_mode() -> void:
 	if body_mode == BODY_AFFECT and not bool(sim.affect_active()):
 		body_mode = BODY_SPECIES

@@ -92,8 +92,11 @@ func _portrait() -> Dictionary:
 	var live: bool = (
 		bool(_info.get("domestication_enabled", false)) and int(_info.get("livestock_of", -1)) != -1
 	)
+	# The adult size picks the silhouette (as AgentLayer does), so a pinned
+	# juvenile's portrait is its own species, not a smaller animal's.
+	var arch_size: float = float(_info.get("adult_size", _info.get("size", 1.0)))
 	var arch: int = MammalSprites.archetype_for(
-		float(_info.get("diet_carnivory", 0.5)), float(_info.get("size", 1.0)), live
+		float(_info.get("diet_carnivory", 0.5)), arch_size, live
 	)
 	if arch == MammalSprites.PRIMATE:
 		var ape: int = MammalSprites.primate_skin_for(sp)

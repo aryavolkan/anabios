@@ -81,9 +81,10 @@ func _ready() -> void:
 	var disc := _disc_texture()
 	# Carcasses and combat flashes are pixel marks (bones, the impact
 	# star), unfiltered: the filtered disc was a soft beige blob at 16x.
-	carcasses.texture = PixelFxSprites.build(PixelFxSprites.BONES)
+	# The MultiMesh QuadMesh flips V, so they take the flip_y()-ed copies.
+	carcasses.texture = PixelFxSprites.build_for_multimesh(PixelFxSprites.BONES)
 	carcasses.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	flashes.texture = PixelFxSprites.build(PixelFxSprites.IMPACT)
+	flashes.texture = PixelFxSprites.build_for_multimesh(PixelFxSprites.IMPACT)
 	flashes.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# The agents are the apes of DIT: render each as an 8-bit hominin in its
 	# species' own colours instead of a plain disc, one MultiMesh + pose atlas
@@ -244,7 +245,11 @@ func _ready() -> void:
 # Panels pinned to the right edge / the bottom edge of the design viewport.
 const DESIGN_VP := Vector2(1280.0, 800.0)
 const HUD_RIGHT: PackedStringArray = ["Minimap", "PopulationPanel", "DitPanel", "TechPanel"]
-const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "EventLog", "CodexPanel"]
+# The codex is not here: it hangs under the Brand block in the top-left corner,
+# which never moves. Listing it (a leftover from when it sat bottom-centre)
+# pushed it down by the scale shift and left it floating mid-screen, a few
+# hundred pixels below the title it belongs under, at any UI scale below 1.0.
+const HUD_BOTTOM: PackedStringArray = ["TimeControls", "LegendPanel", "EventLog"]
 # Glued to both the right and the bottom edge: the unit card and the meters
 # that share its corner.
 const HUD_CORNER: PackedStringArray = ["Inspector", "EcoMeters"]
@@ -336,6 +341,9 @@ func _make_wrap_clones() -> void:
 	var sources: Array[MultiMeshInstance2D] = _body_mmis.duplicate()
 	sources.append_array(_agent_layer.death_mmis())
 	sources.append(_agent_layer.shadow_mmi())
+	# Emote glyphs ride above bodies at their raw positions, so they need the
+	# same clones or a figure across the seam loses its Zzz / ! / heart.
+	sources.append(_emote_layer.emote_mmi())
 	sources.append_array([carcasses, flashes, streaks, trade_routes, _trail_layer.tracks_mmi()])
 	for src in sources:
 		for gy in range(-1, 2):
@@ -454,7 +462,8 @@ func _process(delta: float) -> void:
 		trade_segs,
 		trade_cols,
 		world,
-		($Camera2D as Camera2D).zoom.x
+		($Camera2D as Camera2D).zoom.x,
+		int(sim.tick())
 	)
 	_effects.update(delta, moving_sample, paused)
 	# Hearth smoke: settled sites breathe an occasional ember wisp.

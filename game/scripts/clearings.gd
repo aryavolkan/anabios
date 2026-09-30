@@ -87,14 +87,29 @@ static func publish_segments(source: String, segs: Array[PackedVector2Array]) ->
 	version += 1
 
 
-static func contains(p: Vector2) -> bool:
+# True when `p` lies in a clearing. The publishers work in unwrapped world
+# space around positions in [0, world), so a square or village by the world
+# seam spills past 0 or `world` while the planners' props are all in
+# [0, world): with `world` > 0 each rectangle and strip is tested against
+# the torus copy of `p` nearest it (every clearing is far smaller than half
+# a world, and a road is a min-image hop), so the far side of a footprint
+# that straddles the seam clears too.
+static func contains(p: Vector2, world: float = 0.0) -> bool:
 	for r in rects:
-		if r.has_point(p):
+		if r.has_point(_near(p, r.get_center(), world)):
 			return true
 	for s in segments:
-		if _segment_dist_sq(p, s[0], s[1]) < ROAD_HALF * ROAD_HALF:
+		var q := _near(p, (s[0] + s[1]) * 0.5, world)
+		if _segment_dist_sq(q, s[0], s[1]) < ROAD_HALF * ROAD_HALF:
 			return true
 	return false
+
+
+# The torus copy of `p` nearest `c` (`p` itself when `world` <= 0).
+static func _near(p: Vector2, c: Vector2, world: float) -> Vector2:
+	if world <= 0.0:
+		return p
+	return p + Vector2(roundf((c.x - p.x) / world), roundf((c.y - p.y) / world)) * world
 
 
 static func _segment_dist_sq(p: Vector2, a: Vector2, b: Vector2) -> float:
@@ -106,15 +121,16 @@ static func _segment_dist_sq(p: Vector2, a: Vector2, b: Vector2) -> float:
 	return p.distance_squared_to(a + ab * f)
 
 
-# Drop every position that falls inside a clearing. Returns the input
-# unchanged (same object) when nothing is published, so the streaming
-# planners pay nothing on a world without villages.
-static func filter(positions: PackedVector2Array) -> PackedVector2Array:
+# Drop every position that falls inside a clearing, on the torus of side
+# `world` (see `contains`). Returns the input unchanged (same object) when
+# nothing is published, so the streaming planners pay nothing on a world
+# without villages.
+static func filter(positions: PackedVector2Array, world: float = 0.0) -> PackedVector2Array:
 	if rects.is_empty() and segments.is_empty():
 		return positions
 	var out := PackedVector2Array()
 	for p in positions:
-		if not contains(p):
+		if not contains(p, world):
 			out.append(p)
 	return out
 

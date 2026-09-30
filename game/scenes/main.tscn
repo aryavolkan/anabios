@@ -227,14 +227,15 @@ offset_left = 560.0
 offset_top = 10.0
 offset_right = 1060.0
 offset_bottom = 44.0
+grow_horizontal = 0
 script = ExtResource("16_topbar")
 
 [node name="CodexPanel" type="PanelContainer" parent="UI"]
 script = ExtResource("8_codex")
 offset_left = 10.0
-offset_top = 60.0
+offset_top = 76.0
 offset_right = 300.0
-offset_bottom = 80.0
+offset_bottom = 96.0
 
 [node name="EventLog" type="PanelContainer" parent="UI"]
 script = ExtResource("17_eventlog")
@@ -335,7 +336,7 @@ theme_override_font_sizes/font_size = 13
 script = ExtResource("13_coevo")
 visible = false
 offset_left = 430.0
-offset_top = 20.0
+offset_top = 56.0
 offset_right = 1035.0
-offset_bottom = 555.0
+offset_bottom = 591.0
 

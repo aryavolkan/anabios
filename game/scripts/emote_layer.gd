@@ -84,6 +84,13 @@ func setup() -> void:
 	add_child(_mmi)
 
 
+# The glyph MultiMesh, for main.gd's torus wrap clones: glyphs sit at the
+# agents' raw [0, world) positions like the bodies do, so a figure drawn
+# across the world seam by a body clone needs a glyph clone beside it.
+func emote_mmi() -> MultiMeshInstance2D:
+	return _mmi
+
+
 func kind_for_act(act: float) -> int:
 	return _KIND_FOR_ACT.get(int(act), EmoteSprites.NONE)
 

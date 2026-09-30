@@ -48,7 +48,9 @@ It needs an HTTP server (module scripts and `fetch` don't work from `file://`);
 any static server over `web/` works.
 
 Deep links: `?scenario=tribes&seed=3&speed=4`, `?replay=out-of-africa-saga`,
-`&color=diet`, `&paused=1`, `&events=1` (event markers on).
+`&color=diet`, `&paused=1`, `&events=1` (event markers on). A recorded replay
+plays back its one fixed seed, so the seed box and **Random seed** grey out
+while a replay entry is selected.
 
 **Controls:** drag orbits, right-drag pans, wheel zooms · click an agent for its
 inspector (energy, age, diet, mood, body plan, held inventions, genome-driven
@@ -137,7 +139,8 @@ option, which is why the page keeps both sources.
 
 ## Reproducible captures (the gallery harness)
 
-`?tick=N` fast-forwards a fresh world to exactly tick N and pauses there;
+`?tick=N` fast-forwards a fresh world to exactly tick N and pauses there (a
+replay seeks there instead, held short of its last tick; `&paused=0` plays on);
 `?cam=fit | event | x,y,zoom[,polar]` frames it (`zoom` is the Godot viewer's
 pixels-per-world-unit at 1280 px, so `gallery/README.md`'s `ANABIOS_CAM_*`
 values map 1:1); `?inspect=<id> | sp<species>` pins an agent; `&hud=0` hides
@@ -160,17 +163,24 @@ seed), so the pinned tick, camera and agent id are the whole recipe.
   side-effect-free reads, event/catalog parity) and the C-ABI round trip, natively.
 - `node web/test/body-scale.mjs`, `node web/test/villages.mjs`,
   `node web/test/forest-clearing.mjs`, `node web/test/hubs.mjs`,
-  `node web/test/figures.mjs` — pure layer logic under node (after
+  `node web/test/figures.mjs`, `node web/test/classify-terrain.mjs` — pure
+  layer logic under node (after
   `npm --prefix web ci`; CI runs them in the `web` job): the figure-size
   clamp; figures (kind by diet band, legs attached, species colours); villages — built by hominid (omnivore)
   lineages only, pinned where they were founded — no sliding with the
   wandering anchor centroid, one fade-out-and-regrow move when the people
-  have really left, no hut flicker at a band edge, no huts on water, huts and
+  have really left, no hut flicker at a band edge, no huts on water, no hut
+  roof piercing the centre hut or a neighbour on the ring, huts and
   market stalls terraced on earth plinths so none floats on a slope; the
   forest easing out of a clearing and growing back when it is released
   (only the trees in transition touched, paced by sim ticks within a
   wall-time band, composed with the scarred-bare size, settled at once on a
-  time jump or rebuild); and market stalls kept off water.
+  time jump or rebuild); market stalls kept off water; and the ground colour
+  read back per terrain from `cell_color`'s own palette — replay colours
+  classified to their terrain at any lushness (the live out-of-africa-saga
+  grid matches the sim's ids exactly once the wasm module is built), and
+  only burn scars and heavy pollution, never healthy savanna straw or
+  pioneer regrowth, shrinking the planting to its scarred-bare size.
 - `scripts/web.sh test [scenario] [ticks] [seed]` — builds the module, runs
   `web/test/wasm-smoke.mjs` under node (every export exercised, malformed TOML
   reported, buffers in range), and asserts the wasm fingerprint equals the

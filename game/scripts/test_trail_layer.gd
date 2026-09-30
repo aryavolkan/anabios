@@ -146,6 +146,23 @@ func _check_segment_trails() -> void:
 		tiny_mm.visible_instance_count == 4, "segment trail capped at the multimesh instance budget"
 	)
 
+	# A tick's segments are appended once. Paused, main re-reads the same
+	# last-tick buffer every frame; re-appending it stacked additive copies
+	# into a white-hot streak that never faded.
+	var p_streaks := _make_mm()
+	var p_trade := _make_mm()
+	var held := _make_layer(p_streaks, p_trade)
+	for i in 5:
+		held.update(0.016, _no_pts, true, segs, cols, segs, cols, WORLD, 1.0, 7)
+	_check(p_streaks.visible_instance_count == 1, "paused: the tick's streak is drawn once")
+	_check(p_trade.visible_instance_count == 1, "paused: the tick's lane is drawn once")
+	held.update(0.016, _no_pts, false, segs, cols, segs, cols, WORLD, 1.0, 8)
+	_check(p_streaks.visible_instance_count == 2, "the next tick appends its own segments")
+	OS.delay_msec(int(TrailLayer.TRADE_TTL * 1000.0) + 80)
+	held.update(0.016, _no_pts, true, segs, cols, segs, cols, WORLD, 1.0, 8)
+	_check(p_streaks.visible_instance_count == 0, "paused: streaks still fade out")
+	_check(p_trade.visible_instance_count == 0, "paused: lanes still fade out")
+
 
 func _init() -> void:
 	_check_tracks()

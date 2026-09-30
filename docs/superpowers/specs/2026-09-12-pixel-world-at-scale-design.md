@@ -307,6 +307,11 @@ Files: `game/scripts/biome_renderer.gd` → `ground_layer.gd` +
    colour + id apron) placed at its view-relative wrapped position (D6).
    Per frame: compute the visible chunk set, evict outside the ring, upload at
    most `UPLOAD_BUDGET = 8` new/dirty chunks (version changed), oldest first.
+   A view wider than a world meets some chunks twice: each further copy is a
+   mirror sharing the resident chunk's textures and prop multimeshes (at most
+   `MAX_WRAP_COPIES`, nearest first). While a chunk under the view itself is
+   still missing, freshly built props stay hidden and appear together when
+   it lands; props already showing stay shown, so a zoom step never blinks.
 3. **Crisp tiles + autotiling.** Drop `soften` and linear filtering; the
    shader keeps hillshade (from alpha) and water but samples **dual-grid
    transition tiles**: for each half-offset corner the 4 surrounding ids pick
@@ -415,7 +420,9 @@ Files: `ui_theme.gd`, `main.tscn`, new `top_bar.gd`, `research_panel.gd`
    terrain legend with tile thumbnails. Tech/Culture: invention catalogue and
    meme channels. The codex *event* stream moves to the event log.
 5. **Event log.** Icon + text per codex event, coloured as `event_fx.gd`
-   already colours them; click = jump camera (existing `V` behaviour).
+   already colours them; click = jump camera (existing `V` behaviour). A
+   repeat of a row's event and species within 120 ticks folds into that row
+   as a `×n` count, as the web feed does, so a burst cannot flush the log.
 6. **Minimap.** Frame, compass rose, view box, density dots (Phase 2 data).
 7. **Unit card.** Portrait, name (archetype + species), HP ← energy, stamina
    ← sleep/thirst drives when `basic_needs` is on, four pips ← weapon /

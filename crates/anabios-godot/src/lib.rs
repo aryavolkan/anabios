@@ -500,6 +500,40 @@ impl Simulation {
         out
     }
 
+    /// Each agent's ADULT size in world units (`0.5 + 2.5 · Size`, the
+    /// genome value `alive_sizes` grows toward), same order as
+    /// `alive_positions`. The viewer picks the silhouette
+    /// (`MammalSprites.archetype_for`) from this, not from the grown size:
+    /// a juvenile is its species drawn small, not a smaller animal (a fawn
+    /// under `SIZE_SPLIT` would otherwise read as a hare). Equal to
+    /// `alive_sizes` when growth is off.
+    #[func]
+    fn alive_adult_sizes(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(adult_view_size_of(w, id as usize));
+            }
+        }
+        out
+    }
+
+    /// 1 per alive agent that moved this tick (velocity above the same
+    /// `1e-6` squared-length floor the flag-off `alive_rotations` uses for
+    /// "not moving"), else 0; same order as `alive_positions`. The viewer's
+    /// walk/idle split reads this: under turning inertia a resting body keeps
+    /// its heading, so the rotation alone no longer says whether it stands.
+    #[func]
+    fn alive_moving(&self) -> PackedByteArray {
+        let mut out = PackedByteArray::new();
+        if let Some(w) = self.inner.as_ref() {
+            for m in moving_of(w) {
+                out.push(m);
+            }
+        }
+        out
+    }
+
     /// Carnivory diet score per alive agent (0 herbivore .. 1 carnivore),
     /// same order as `alive_positions`.
     #[func]
@@ -643,7 +677,7 @@ impl Simulation {
         let mut out = PackedFloat32Array::new();
         if let Some(w) = self.inner.as_ref() {
             for id in w.agents.iter_alive() {
-                out.push(w.actions[id as usize].fire_intent);
+                out.push(fire_intent_of(w, id as usize));
             }
         }
         out
@@ -750,6 +784,7 @@ impl Simulation {
             anabios_core::module::effective_diet_carnivory(&w.agents.modules[i]),
         );
         d.set("size", view_size_of(w, i));
+        d.set("adult_size", adult_view_size_of(w, i));
         d.set("skill", meme[SKILL_CHANNEL]);
         d.set("technique", meme[TECH_CHANNEL]);
         d.set("iq", w.agents.iq[i]);
@@ -1744,20 +1779,48 @@ fn body_tags_of(w: &anabios_core::World) -> Vec<i32> {
         .collect()
 }
 
+/// `fire_intent` of agent `idx`, or 0.0 while the per-tick `actions`
+/// scratch is shorter than the agent arrays. `actions` is `#[serde(skip)]`,
+/// so a world fresh from `restore_snapshot` (the replay rewind, and the
+/// return to live) has it EMPTY until its next tick's `resize_scratch`; the
+/// viewer still redraws that unstepped world every frame (a paused resume
+/// never steps it), and an unguarded index there panicked the whole
+/// `AgentLayer.refresh`. A restored world has no intent yet, so 0.0 (no
+/// hunt pose) is the honest reading until it ticks.
+fn fire_intent_of(w: &anabios_core::World, idx: usize) -> f32 {
+    w.actions.get(idx).map_or(0.0, |a| a.fire_intent)
+}
+
 /// Viewer body size of agent `idx`: `0.5 + 2.5 · Size`, times the growth
 /// body scale when `growth_enabled` (juveniles draw small); with growth off
 /// exactly the adult value. Shared by `alive_sizes`, `agent_detail`,
 /// `module_glyphs_all` and `alive_render_state_of` (the wasm view's
 /// `view_size` is the same derivation).
 fn view_size_of(w: &anabios_core::World, idx: usize) -> f32 {
-    use anabios_core::genome::GenomeSlot;
-    let g = &w.agents.genome[idx];
-    let adult = 0.5 + 2.5 * g.get(GenomeSlot::Size);
+    let adult = adult_view_size_of(w, idx);
     if w.growth_enabled {
+        let g = &w.agents.genome[idx];
         adult * anabios_core::growth::body_scale_of(true, w.agents.age[idx], g)
     } else {
         adult
     }
+}
+
+/// Adult viewer body size of agent `idx`: `0.5 + 2.5 · Size`, whatever its
+/// age — the value `view_size_of` grows toward. `alive_adult_sizes` and
+/// `agent_detail`'s `adult_size` (the archetype pick) read it.
+fn adult_view_size_of(w: &anabios_core::World, idx: usize) -> f32 {
+    use anabios_core::genome::GenomeSlot;
+    0.5 + 2.5 * w.agents.genome[idx].get(GenomeSlot::Size)
+}
+
+/// Per alive agent (ascending id): 1 if its velocity this tick is above the
+/// `1e-6` squared-length "moving" floor, else 0. Backs `alive_moving`.
+fn moving_of(w: &anabios_core::World) -> Vec<u8> {
+    w.agents
+        .iter_alive()
+        .map(|id| u8::from(w.agents.velocity[id as usize].length_squared() > 1e-6))
+        .collect()
 }
 
 /// Locomotion class per alive agent (0 land / 1 water / 2 air), ascending id
@@ -1905,7 +1968,7 @@ fn alive_render_state_of(w: &anabios_core::World) -> Vec<f32> {
         out.push(diet);
         out.push(livestock[i] as f32);
         out.push(w.agents.mood[idx] as f32);
-        out.push(w.actions[idx].fire_intent);
+        out.push(fire_intent_of(w, idx));
         out.push(tags[i] as f32);
     }
     out
@@ -2721,6 +2784,44 @@ mod tests {
     }
 
     #[test]
+    fn adult_size_is_the_genome_size_the_grown_size_reaches() {
+        // Founders start at age 0 under growth (on by default in the
+        // scenario schema), so 25 ticks in every body is still a juvenile:
+        // the viewer's archetype pick must see the adult size, not this.
+        let w = minimal_world();
+        assert!(w.growth_enabled, "minimal.toml should run with growth on");
+        let mut juveniles = 0;
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            let size_gene = w.agents.genome[i].get(anabios_core::genome::GenomeSlot::Size);
+            let adult = super::adult_view_size_of(&w, i);
+            assert_eq!(adult, 0.5 + 2.5 * size_gene);
+            let grown = super::view_size_of(&w, i);
+            assert!(grown <= adult + 1e-6, "grown {grown} above adult {adult}");
+            if grown < adult - 1e-3 {
+                juveniles += 1;
+            }
+        }
+        assert!(juveniles > 0, "a 25-tick world should hold juveniles");
+        let off = minimal_flag_off_world();
+        for id in off.agents.iter_alive() {
+            let i = id as usize;
+            assert_eq!(super::adult_view_size_of(&off, i), super::view_size_of(&off, i));
+        }
+    }
+
+    #[test]
+    fn moving_flags_are_the_velocity_floor() {
+        let w = minimal_world();
+        let moving = super::moving_of(&w);
+        assert_eq!(moving.len(), w.agents.iter_alive().count());
+        for (k, id) in w.agents.iter_alive().enumerate() {
+            let v = w.agents.velocity[id as usize];
+            assert_eq!(moving[k] == 1, v.length_squared() > 1e-6, "agent {id}");
+        }
+    }
+
+    #[test]
     fn alive_render_state_matches_the_individual_columns() {
         let w = minimal_world();
         let n = w.agents.iter_alive().count();
@@ -2762,6 +2863,31 @@ mod tests {
             assert_eq!(state[base + 5], moods[i] as f32);
             assert_eq!(state[base + 6], fire_intent[i]);
             assert_eq!(state[base + 7], tags[i] as f32);
+        }
+    }
+
+    #[test]
+    fn render_state_survives_a_snapshot_restore_before_its_next_tick() {
+        // The replay rewind (and the return to live) swaps in a world from
+        // `load_from_bytes`, whose serde-skipped `actions` scratch is empty
+        // until the next tick; the viewer redraws it before any step (and
+        // forever while paused). Reading it must not panic: fire intent reads
+        // 0.0 until the world ticks, every other column is unchanged.
+        let live = minimal_world();
+        let bytes = anabios_core::snapshot::save_to_bytes(&live).unwrap();
+        let restored = anabios_core::snapshot::load_from_bytes(&bytes).unwrap();
+        let n = restored.agents.iter_alive().count();
+        assert!(n > 0, "test needs alive agents");
+        assert!(restored.actions.len() < n, "precondition: scratch is empty after a load");
+
+        let state = super::alive_render_state_of(&restored);
+        assert_eq!(state.len(), super::RENDER_STATE_STRIDE * n);
+        let live_state = super::alive_render_state_of(&live);
+        for i in 0..n {
+            let base = i * super::RENDER_STATE_STRIDE;
+            assert_eq!(state[base + 6], 0.0, "no intent before the restored world ticks");
+            assert_eq!(state[base], live_state[base], "positions survive the restore");
+            assert_eq!(state[base + 1], live_state[base + 1]);
         }
     }
 

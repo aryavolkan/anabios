@@ -17,6 +17,10 @@
     color-scheme:dark;
     /* The codex feed takes what the transport row (~400px of buttons) leaves on the bottom edge. */
     --codex-w:clamp(260px,calc(100vw - 460px),460px);
+    /* Height of the transport block (buttons + hint), measured by main.js once it is laid out:
+       one button row plus a three-line hint until then. The narrow layout stacks its bottom
+       sheets on it, since at phone widths the row wraps to two lines and the hint to four. */
+    --transport-h:86px;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--basalt);color:var(--bone);font-family:var(--sans);-webkit-font-smoothing:antialiased}
@@ -26,13 +30,17 @@
   /* HUD text sits straight on the 3D view: a soft dark halo keeps it legible over sand, snow and sun glint. */
   .hud .wordmark,.hud .desc,.hud .stat,.hud .hint,.hud .codex-head,.hud .codex-line{text-shadow:0 1px 2px rgba(6,4,3,.95),0 0 6px rgba(6,4,3,.75),0 0 14px rgba(6,4,3,.5)}
   .hud .badge{background:rgba(22,17,13,.72)}
-  body.hide-hud .hud,body.hide-hud .rail{opacity:0;pointer-events:none}
-  .hud,.rail{transition:opacity .35s ease}
+  /* H / ?hud=0 clears the whole overlay: the agent card and the toast are their own elements, not .hud. */
+  body.hide-hud .hud,body.hide-hud .rail,body.hide-hud .card,body.hide-hud .toast{opacity:0;pointer-events:none}
+  .hud,.rail,.card{transition:opacity .35s ease}
   button,select,input{font:inherit;color:var(--bone);background:var(--basalt-2);border:1px solid var(--line-2);border-radius:3px;padding:5px 9px;cursor:pointer}
   button:hover,select:hover{border-color:var(--ochre)}
   button.on{background:var(--ochre);color:var(--basalt);border-color:var(--ochre);font-weight:600}
-  button:disabled{opacity:.45;cursor:default}
-  input[type=number]{width:10ch;cursor:text}
+  /* The seed box shows a full u32 (ten digits) on top of its 9px side padding and 1px borders;
+     the spin button would eat ~4 of those digits, so it goes, and the numeric keyboard stays. */
+  input[type=number]{width:calc(10ch + 20px);cursor:text;appearance:textfield;-moz-appearance:textfield}
+  input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  button:disabled,input:disabled{opacity:.45;cursor:default}   /* the seed box + Random seed grey out while a replay entry is selected */
   .label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
 
   /* top-left: identity + loader */
@@ -125,7 +133,19 @@
   .toast.show{display:block}
 
   @media (max-width:860px){
-    .readout{display:none}.desc{display:none}.rail{top:120px;width:220px;max-height:calc(100vh - 380px)}.codex{width:calc(100vw - 36px);bottom:112px}.codex-line:nth-child(n+5){display:none}.card{top:auto;bottom:112px;right:18px;max-height:calc(100vh - 240px)}body:has(.card.show) .codex{visibility:hidden}
+    /* The codex feed and the agent card become bottom sheets 8px above the transport (its 18px
+       margin + measured height); the card stands in for the feed while it is open. */
+    :root{--sheet-bottom:calc(var(--transport-h) + 26px)}
+    .readout{display:none}.desc{display:none}.rail{top:120px;width:220px;max-height:calc(100vh - 120px - var(--sheet-bottom) - 148px)}
+    .codex{width:calc(100vw - 36px);bottom:var(--sheet-bottom)}.codex-line:nth-child(n+5){display:none}
+    .card{top:auto;bottom:var(--sheet-bottom);right:18px;max-height:calc(100vh - 128px - var(--sheet-bottom))}
+    body:has(.card.show) .codex{visibility:hidden}
+  }
+  /* Too narrow for the rail (18 + 220px) and the 330px card side by side: the card takes the
+     full width and stands in for the rail as well while it is open. */
+  @media (max-width:600px){
+    .card{left:18px;width:auto}
+    body:has(.card.show) .rail{visibility:hidden}
   }
   @media (prefers-reduced-motion:reduce){.codex-line{transition:none}.codex-head .dot{animation:none}}
 </style>

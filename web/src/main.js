@@ -32,6 +32,9 @@ stage.frameInsets = () => {
   const left = !rail.classList.contains("collapsed") && railRight <= window.innerWidth * 0.4 ? railRight : m;
   return { top: m, right: m, bottom: window.innerHeight - document.querySelector(".transport").getBoundingClientRect().top + m, left };
 };
+/** The narrow (≤860px) layout stacks the codex feed and the agent card on the transport,
+ *  whose height depends on how its buttons and hint wrap: publish it for the stylesheet. */
+new ResizeObserver(([e]) => document.documentElement.style.setProperty("--transport-h", `${e.target.offsetHeight}px`)).observe(document.querySelector(".transport"));
 const layers = {
   agents: new Agents(),
   streaks: new Segments({ life: 14, sat: 0.75, additive: true, lift: 1.4 }),
@@ -74,7 +77,9 @@ const state = {
   selected: -1,
   follow: false,
   lastColorTick: -1,
+  replayTick: -1,   // last replay tick drawn: a smaller one means the replay looped back
   lastStatsTick: -1,
+  lastCardTick: -1, // src.tick at the last agent-card rebuild (see refreshStats)
   animTick: 0,      // src.tick at the last forest-transition step
   hubsNeedIds: false,   // market stalls were placed before the terrain ids existed
   fps: 0,
@@ -138,7 +143,7 @@ function attach(source, entry) {
   layers.birds.setWorld(ws, source.biomeRes, state.terrain.cell, heightAt);
   layers.agents.reset();
   state.selected = -1; state.follow = false; $("card").classList.remove("show");
-  state.lastColorTick = -1; state.lastStatsTick = -1;
+  state.lastColorTick = -1; state.lastStatsTick = -1; state.lastCardTick = -1; state.replayTick = -1;
   $("codex").innerHTML = "";
   recentFx.clear(); recentLines.clear();
   applyLayerToggles();
@@ -147,8 +152,18 @@ function attach(source, entry) {
   $("badge-text").textContent = isLive ? "live · wasm" : "recorded replay";
   $("desc").textContent = entry.description || (isLive ? "" : "A deterministic replay recorded by anabios-headless; the world is played back frame by frame.");
   $("seed").value = source.meta().seed;
+  setSeedControls(isLive);
   buildColorModes(source);
   refreshStats(true);
+}
+
+/** A recorded replay plays back one fixed seed: `Load` ignores the seed box
+ *  for it and `attach` writes the recording's seed back, so `Random seed`
+ *  would only flash a number and restart the replay at tick 0. Both controls
+ *  are disabled while a replay entry is selected (the CSS dims them). */
+function setSeedControls(live) {
+  $("seed").disabled = !live;
+  $("reseed").disabled = !live;
 }
 
 function heightAt(x, y) { return state.terrain ? state.terrain.heightAt(x, y) : 0; }
@@ -173,7 +188,8 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 
 /**
  * Capture harness: `?tick=N` fast-forwards the fresh world to exactly tick N
- * (paused there unless `&paused=0`), then `?cam=fit | event | x,y,zoom[,polar]`
+ * (a replay seeks there, clamped short of its end) and pauses there unless
+ * `&paused=0`; then `?cam=fit | event | x,y,zoom[,polar]`
  * frames it and `?inspect=<id> | sp<species>` pins an agent. The loop flips
  * `state.ready` once all of that is on screen; `web/scripts/capture.mjs`
  * waits for it. `zoom` follows the Godot viewer's convention (screen pixels
@@ -187,6 +203,7 @@ async function prepareShot() {
   if (shot.tick !== null) {
     if (src.kind === "replay") {
       src.seek(shot.tick);
+      if (params.get("paused") !== "0") setPaused(true);
     } else {
       setPaused(true);
       const fxWas = layers.fx.enabled;
@@ -221,7 +238,7 @@ async function prepareShot() {
   }
   if (params.get("hud") === "0") document.body.classList.add("hide-hud");
   state.sinceStep = 0;          // force one full layer update at this tick
-  state.lastStatsTick = -1;
+  state.lastStatsTick = -1; state.lastCardTick = -1;
   shot.stage = 1;
 }
 
@@ -303,7 +320,16 @@ function loop(now) {
   const unitsPerPixel = stage.unitsPerPixel(viewportHeightPx);
   if (layers.agents.marker.visible) {
     const pulse = 0.5 + 0.5 * Math.sin(clock * 5);
-    layers.agents.marker.scale.setScalar(layers.agents.baseScale * (1.3 + 0.25 * pulse));
+    // Sized to the drawn figure, not the world's base scale: close in,
+    // bodyScale shrinks a figure to its physical body (~1.5-2 units) and a
+    // baseScale ring stayed 12-15 units across, a hoop ~7x the figure. At
+    // 0.5 x the drawn length the ring (inner/outer radius 1.25/1.55 at scale
+    // 1) hugs the figure at ~1.6-2.4x its length, and the pixel floor keeps
+    // it >= ~24 px across (inner edge clear of a LEGIBLE_PX figure) however
+    // small the figure is on screen.
+    const extent = layers.agents.selectedExtent;
+    const ringScale = extent > 0 ? Math.max(extent * 0.5, 6 * unitsPerPixel) : layers.agents.baseScale;
+    layers.agents.marker.scale.setScalar(ringScale * (1.3 + 0.25 * pulse));
     layers.agents.marker.material.opacity = 0.55 + 0.4 * pulse;
   }
 
@@ -323,6 +349,11 @@ function loop(now) {
     const rezoomed = Math.abs(unitsPerPixel / (state.agentsUpp || unitsPerPixel) - 1) > 0.03;
     if (stepped > 0 || fractional || state.sinceStep === 0) {
       const tick = src.tick;
+      // A replay loops back to tick 0 at its end: trails stamped near the end
+      // would sit in the "future" and stay lit at full strength for the whole
+      // first stretch, and every figure would read as a death plus a birth.
+      if (src.kind === "replay" && tick < state.replayTick) { layers.streaks.clear(); layers.trades.clear(); layers.agents.reset(); }
+      state.replayTick = tick;
       const agents = src.agents();
       layers.agents.update(agents, heightAt, src.kind === "live", unitsPerPixel);
       state.agentsUpp = unitsPerPixel;
@@ -430,13 +461,22 @@ function refreshStats(full) {
   $("stat-species").textContent = species.length;
   $("stat-era").textContent = species.reduce((m, s) => Math.max(m, s.tech_era || 0), 0);
   const rows = species.slice().sort((a, b) => b.count - a.count).slice(0, 14).map((s) =>
-    `<tr data-sid="${s.id}" title="click: colour by species, fly to a member"><td><span class="sw" style="background:${cssHex(hsv(speciesHue(s.id), 0.6, 0.9))}"></span>${esc(s.name)}</td><td>${s.count.toLocaleString()}</td><td>${s.tech_era ? "era " + s.tech_era : ""}</td></tr>`);
+    `<tr data-sid="${s.id}" title="click: fly to a member"><td><span class="sw" style="background:${cssHex(hsv(speciesHue(s.id), 0.6, 0.9))}"></span>${esc(s.name)}</td><td>${s.count.toLocaleString()}</td><td>${s.tech_era ? "era " + s.tech_era : ""}</td></tr>`);
   $("species").innerHTML = rows.join("");
   $("receipt").innerHTML = `<b>${esc(meta.scenario)}</b> · seed <b>${meta.seed}</b>` +
     (meta.fingerprint ? ` · fingerprint <b>${meta.fingerprint}</b>` : "") +
     (meta.state_hash ? `<br>state hash <b>${meta.state_hash}</b>` : "") +
     (src.kind === "live" ? `<br>${src.stepMs.toFixed(1)} ms per step batch · deterministic per seed` : `<br>${meta.ticks?.toLocaleString()} ticks · sampled every ${meta.sample} · stride ${meta.stride}`);
-  if (state.selected >= 0 && (full || Math.floor(src.tick) % 15 === 0)) renderCard();
+  // The card rebuilds when the tick has crossed a 15-tick boundary since its
+  // last rebuild, not when the tick sampled here happens to be a multiple of
+  // 15: at 4×–64× the step batch is a fractional accumulator, so that sample
+  // lands on a multiple only by chance and the card froze for hundreds to
+  // thousands of ticks. Crossing still caps it at one rebuild per 15 ticks
+  // at fractional speeds and in replays, where stats refresh every frame.
+  if (state.selected >= 0 && (full || Math.floor(src.tick / 15) !== Math.floor(state.lastCardTick / 15))) {
+    renderCard();
+    state.lastCardTick = src.tick;
+  }
 }
 
 function buildColorModes(source) {
@@ -485,7 +525,11 @@ function renderLegend() {
  * machine at 64× where one frame spans more ticks than that) is folded in:
  * the feed keeps one line per event type, bumping a `×n` count and the
  * species tally, and a species' effects re-fire at most every
- * `REPEAT_FX_SECS`, with at most `FX_PER_FRAME` bursts a frame.
+ * `REPEAT_FX_SECS`, with at most `FX_PER_FRAME` bursts a frame. A repeat also
+ * moves its line to the newest end of the feed (first child; the feed is
+ * `column-reverse`, so that is the bottom row): the line shows the latest
+ * tick, and left where it was created it sat among older lines, so the feed's
+ * ticks went up and down the list instead of reading chronologically.
  */
 const REPEAT_TICKS = 120, REPEAT_SECS = 1.5, REPEAT_FX_SECS = 2.5, FX_PER_FRAME = 8;
 const recentFx = new Map();     // `${type}/${sid}` → {tick, fxAt}
@@ -536,6 +580,9 @@ function onEvent(ev, now) {
   entry.count++;
   if (ev.sid != null) entry.sids.add(ev.sid);
   const line = entry.line;
+  // A move, not a re-insert: the line keeps its `.show` class, so it does not
+  // fade in again, and the feed's length (the 7-line trim) is unchanged.
+  if (feed.firstChild !== line) feed.prepend(line);
   line.firstChild.textContent = Math.floor(ev.tick).toLocaleString();
   line.querySelector(".rep").textContent = entry.count > 1 ? ` ×${entry.count}` : "";
   const who = entry.sids.size > 1 ? `${entry.sids.size} species` : ev.sid == null ? "" : state.source.labels.get(ev.sid) || `species ${ev.sid}`;
@@ -546,7 +593,7 @@ function onEvent(ev, now) {
 function renderCard() {
   const src = state.source; if (!src || state.selected < 0) return;
   const a = src.agent(state.selected);
-  if (!a) { deselect(); toast(`agent ${state.selected} died`); return; }
+  if (!a) { toast(`agent ${state.selected} died`); deselect(); return; }   // toast first: deselect clears the id
   $("card-title").textContent = `${a.species} · #${a.id}`;
   const rows = [];
   const row = (k, v) => rows.push(`<dt>${k}</dt><dd>${v}</dd>`);
@@ -559,7 +606,9 @@ function renderCard() {
     row("age", a.age.toLocaleString());
     row("diet", `${(a.diet_carnivory * 100).toFixed(0)}% carnivore`);
     row("size", a.size.toFixed(2));
-    row("mood", a.mood + (a.asleep ? " (asleep)" : ""));
+    // The sleep mood already says it: "sleep (asleep)" was redundant. The
+    // flag still shows when a sleeper's arbiter has moved on to another mood.
+    row("mood", a.mood + (a.asleep && a.mood !== "sleep" ? " (asleep)" : ""));
     if (a.iq > 0) row("iq", a.iq.toFixed(2));
     if (a.infection > 0) row("infection", a.infection.toFixed(2));
     if (a.arousal > 0) row("arousal", a.arousal.toFixed(2));
@@ -575,8 +624,27 @@ function renderCard() {
   $("follow").classList.toggle("on", state.follow);
 }
 
-function select(id) { state.selected = id; layers.agents.selected = id; renderCard(); }
-function deselect() { state.selected = -1; layers.agents.selected = -1; state.follow = false; $("card").classList.remove("show"); }
+// The ring, `selectedPos` (follow, fly to) and the figures' colours and seats
+// are written only by the frame loop's agents update, which a paused world
+// skips: every handler that changes what that update reads asks for one pass
+// at the paused tick (`sinceStep = 0`, as a seek does). The pass does not step
+// the sim or push trails, so it is safe to request at any time.
+function select(id) { state.selected = id; layers.agents.selected = id; renderCard(); state.sinceStep = 0; }
+function deselect() {
+  state.selected = -1; layers.agents.selected = -1; state.follow = false; $("card").classList.remove("show");
+  layers.agents.marker.visible = false; state.sinceStep = 0;
+}
+function setColorMode(m) {
+  state.colorMode = m; $("color-mode").value = m; layers.agents.mode = m; renderLegend();
+  state.sinceStep = 0;
+}
+/** Framing asks for the whole plate: a follow left on would drag the camera
+ *  straight back onto the followed agent, so framing releases it (the agent
+ *  stays selected, its card open). */
+function frameWorld() {
+  if (state.follow) { state.follow = false; $("follow").classList.remove("on"); }
+  stage.frame();
+}
 
 function applyLayerToggles() {
   for (const cb of document.querySelectorAll("#layers input")) {
@@ -590,6 +658,7 @@ function applyLayerToggles() {
         // Buildings are seated when placed: re-seat them on the reshaped ground.
         layers.hubs.layout();   // re-seat on the new heights (and re-check the shore)
         layers.villages.layout(heightAt);
+        state.sinceStep = 0;    // and the figures (and the ring) too, even while paused
         break;
       case "water": if (state.terrain) state.terrain.water.mesh.visible = on && state.terrain.reliefOn; break;
       case "forest": if (state.terrain) state.terrain.forest.group.visible = on; break;
@@ -617,7 +686,14 @@ function setSpeed(s) {
   for (const b of document.querySelectorAll(".speed")) b.classList.toggle("on", Number(b.dataset.speed) === s);
 }
 
-function setPaused(p) { state.paused = p; $("play").textContent = p ? "▶" : "❚❚"; }
+function setPaused(p) {
+  state.paused = p; $("play").textContent = p ? "▶" : "❚❚";
+  // A paused world skips the frame loop's stats refresh, so bring the card up
+  // to the paused tick now (and report a death in the ticks since its last
+  // rebuild: toast, deselect, release the follow camera) instead of leaving
+  // it frozen on stale values.
+  if (p && state.selected >= 0) { renderCard(); state.lastCardTick = state.source ? state.source.tick : -1; }
+}
 /** Event tour: the camera drifts in a slow orbit and cuts to each fresh codex event. */
 function setTour(on) {
   state.tour = on;
@@ -665,9 +741,9 @@ window.addEventListener("keydown", (e) => {
   const speeds = [0.25, 1, 4, 16, 64];
   switch (e.code) {
     case "Space": e.preventDefault(); setPaused(!state.paused); break;
-    case "KeyF": stage.frame(); break;
+    case "KeyF": frameWorld(); break;
     case "KeyH": document.body.classList.toggle("hide-hud"); stage.refit(); break;
-    case "KeyC": { const opts = Array.from($("color-mode").options).map((o) => o.value); state.colorMode = opts[(opts.indexOf(state.colorMode) + 1) % opts.length]; $("color-mode").value = state.colorMode; layers.agents.mode = state.colorMode; renderLegend(); break; }
+    case "KeyC": { const opts = Array.from($("color-mode").options).map((o) => o.value); setColorMode(opts[(opts.indexOf(state.colorMode) + 1) % opts.length]); break; }
     case "KeyL": if (state.selected >= 0) { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); } break;
     case "KeyV": setTour(!state.tour); break;
     case "Escape": deselect(); break;
@@ -676,11 +752,21 @@ window.addEventListener("keydown", (e) => {
 });
 
 $("play").onclick = () => setPaused(!state.paused);
-$("frame").onclick = () => stage.frame();
+$("frame").onclick = frameWorld;
 $("tour").onclick = () => setTour(!state.tour);
 for (const b of document.querySelectorAll(".speed")) b.onclick = () => setSpeed(Number(b.dataset.speed));
-$("color-mode").onchange = (e) => { state.colorMode = e.target.value; layers.agents.mode = state.colorMode; renderLegend(); };
+$("color-mode").onchange = (e) => setColorMode(e.target.value);
 $("layers").addEventListener("change", applyLayerToggles);
+// A clicked checkbox (or its label) keeps keyboard focus, and the shortcut
+// handler ignores keys aimed at inputs: Space then re-toggled the box instead
+// of pausing, and C/F/H/V/L did nothing until the user clicked elsewhere. A
+// pointer click hands focus back to the page; a keyboard toggle (Tab + Space,
+// `detail === 0`) keeps it.
+$("layers").addEventListener("click", (e) => {
+  if (e.detail === 0) return;   // keyboard-driven: leave focus where it is
+  const box = e.target.closest("label")?.querySelector("input[type=checkbox]") ?? (e.target.matches("input[type=checkbox]") ? e.target : null);
+  if (box) setTimeout(() => box.blur(), 0);   // after the label has forwarded focus to its box
+});
 $("rail-toggle").onclick = () => { const r = $("rail"); r.classList.toggle("collapsed"); $("rail-toggle").textContent = r.classList.contains("collapsed") ? "+" : "−"; stage.refit(); };
 $("card-close").onclick = deselect;
 $("follow").onclick = () => { state.follow = !state.follow; $("follow").classList.toggle("on", state.follow); };
@@ -705,6 +791,7 @@ $("scenario").onchange = () => {
   const opt = $("scenario").selectedOptions[0];
   // A replay and a live scenario can share an id (`out-of-africa-saga` does),
   // so the option's kind decides which manifest to read.
+  setSeedControls(opt.dataset.kind !== "replay");   // before Load, so a replay pick greys the seed at once
   if (opt.dataset.kind === "replay") {
     const r = state.manifest.replays.find((x) => x.id === opt.value);
     if (r) $("desc").textContent = r.description || r.name;

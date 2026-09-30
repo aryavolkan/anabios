@@ -34,7 +34,7 @@ func _row_has_opaque(img: Image, y: int) -> bool:
 
 func _init() -> void:
 	# --- enum / NAMES / constants coherence -------------------------------
-	_check(S.KIND_COUNT == 28, "28 structure kinds")
+	_check(S.KIND_COUNT == 29, "29 structure kinds")
 	_check(S.NAMES.size() == S.KIND_COUNT, "NAMES parallels the enum")
 	_check(S.CELL_PX == 32, "cell size is 32px")
 	_check(S.ATLAS_COLS == 8, "atlas is an 8x8 grid")
@@ -116,6 +116,18 @@ func _init() -> void:
 	_check(_row_has_opaque(pal_v, 0), "PalisadeV top row is opaque (tiles)")
 	_check(_row_has_opaque(pal_v, 31), "PalisadeV bottom row is opaque (tiles)")
 
+	# --- palisade corners: the north pair's post runs on to the bottom row,
+	# in the side wall's columns, so the wall below meets it with no gap;
+	# the south pair's side wall comes from above and its base stays clear.
+	var corner_n: Image = images[S.PALISADE_CORNER_N]
+	var corner_s: Image = images[S.PALISADE_CORNER]
+	var post_meets := true
+	for x in 32:
+		post_meets = post_meets and (corner_n.get_pixel(x, 31) == pal_v.get_pixel(x, 31))
+	_check(post_meets, "PalisadeCornerN bottom row continues the PalisadeV post")
+	_check(not _row_has_opaque(corner_s, 31), "PalisadeCorner base row stays clear")
+	_check(_row_has_opaque(corner_n, 0), "PalisadeCornerN keeps the post above the wall")
+
 	# --- animated kinds: hearth, forge, burnt ruin flicker; others don't ---
 	_check(S.is_animated(S.HEARTH), "hearth animates")
 	_check(S.is_animated(S.FORGE), "forge animates")
@@ -165,6 +177,7 @@ func _init() -> void:
 		S.PALISADE_H,
 		S.PALISADE_V,
 		S.PALISADE_CORNER,
+		S.PALISADE_CORNER_N,
 		S.GATE,
 		S.TOWER,
 		S.MILL,

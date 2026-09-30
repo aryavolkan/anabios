@@ -8,6 +8,11 @@ extends Node2D
 # camera, call into that logic, apply the result to actual GroundChunk nodes
 # and bridge calls.
 #
+# A view wider than a world (the fit framing of a small world, far zoom on a
+# big one) sees some chunks twice: each extra copy is a mirror — a sprite
+# and a prop node sharing the resident chunk's textures, material and
+# multimeshes, so a copy costs no upload or prop plan (wrap_copies).
+#
 # Created by biome_renderer.gd as a child of the Biome sprite (like
 # TerrainScatter/BiomeProps), counter-scaled back to world units the same
 # way. Visible only over the biome view, with both [B] (tiles) and [N]
@@ -21,6 +26,9 @@ const Clearings = preload("res://scripts/clearings.gd")
 
 const UPLOAD_BUDGET := 8
 const RING := 1
+# Most wrap-copy mirrors kept at once (see GroundStreaming.wrap_copies): the
+# fit framings of the shipped worlds need a few dozen at most.
+const MAX_WRAP_COPIES := 96
 const CHUNK_CELLS := GroundStreaming.CHUNK_CELLS
 
 var _biome  # biome_renderer.gd — untyped to avoid a preload cycle (biome_renderer preloads this script)
@@ -35,6 +43,9 @@ var _props: Dictionary = {}
 var _resident: Dictionary = {}
 # Clearings.version the resident props were last planned against.
 var _clear_ver: int = -1
+# Vector4i(cx, cy, kx, ky) -> [Sprite2D, Node2D]: the ground and prop mirror
+# of chunk (cx, cy) kx/ky worlds away from its world-space origin.
+var _mirrors: Dictionary = {}
 
 
 func _ready() -> void:
@@ -84,6 +95,7 @@ func _process(_delta: float) -> void:
 	)
 
 	for key in plan["evict"]:
+		_free_mirrors_of(key)
 		if _chunks.has(key):
 			_chunks[key].queue_free()
 			_chunks.erase(key)
@@ -113,6 +125,8 @@ func _process(_delta: float) -> void:
 			if props == null:
 				props = PropChunk.new()
 				props.z_index = 4
+				# Held back until the view is complete (below).
+				props.visible = false
 				add_child(props)
 				_props[key] = props
 			props.build(cx, cy, ids, res, world, Vector2.ZERO)
@@ -132,6 +146,27 @@ func _process(_delta: float) -> void:
 		if props != null:
 			props.set_wrap_offset(Vector2(entry[2], entry[3]))
 
+	_place_mirrors(view_size, world, chunk_world, wanted)
+
+	# Props appear together: while a chunk the view itself touches is still
+	# missing, freshly built props stay hidden (PropChunks start hidden), and
+	# the view's new props appear at once when the last one lands. Revealing
+	# chunk by chunk painted the view as a patchwork of speckled forest
+	# squares beside bare ones for as long as the fill took (256 chunks at 8
+	# a frame on the huge fit). Props already showing stay shown: hiding them
+	# too on a big fill blinked every tree in view off for the fill's length
+	# on a single wheel step out. A pan stays inside the preloaded ring and
+	# never waits.
+	var in_view := GroundStreaming.visible_chunks(
+		_cam.position, view_size, world, chunk_world, chunk_count, 0
+	)
+	if GroundStreaming.missing_count(_resident, in_view) == 0:
+		for key in _props.keys():
+			_props[key].visible = true
+	for mkey in _mirrors.keys():
+		var src = _props.get(Vector2i(mkey.x, mkey.y))
+		_mirrors[mkey][1].visible = src != null and src.visible
+
 	if perf != null:
 		perf.set_resident_chunks(_resident.size())
 
@@ -144,3 +179,51 @@ func _process(_delta: float) -> void:
 			props.build(
 				key.x, key.y, _sim.biome_chunk_ids(key.x, key.y), res, world, props.position
 			)
+
+
+# Keep one mirror per wrap copy the view needs (GroundStreaming.wrap_copies)
+# of every resident chunk, placed at that copy; free the rest.
+func _place_mirrors(view_size: Vector2, world: float, chunk_world: float, wanted: Array) -> void:
+	var placed: Array = []
+	for entry in wanted:
+		if _resident.has(Vector2i(int(entry[0]), int(entry[1]))):
+			placed.append(entry)
+	var copies := GroundStreaming.wrap_copies(
+		_cam.position, view_size, world, chunk_world, placed, MAX_WRAP_COPIES
+	)
+	var cell_w: float = chunk_world / float(CHUNK_CELLS)
+	var keep := {}
+	for entry in copies:
+		var cx: int = entry[0]
+		var cy: int = entry[1]
+		var ox: float = entry[2]
+		var oy: float = entry[3]
+		var mkey := Vector4i(cx, cy, roundi(ox / world), roundi(oy / world))
+		keep[mkey] = true
+		var pair = _mirrors.get(mkey)
+		if pair == null:
+			var ground: Sprite2D = _chunks[Vector2i(cx, cy)].make_mirror()
+			var props: Node2D = _props[Vector2i(cx, cy)].make_mirror()
+			props.z_index = 4
+			add_child(ground)
+			add_child(props)
+			pair = [ground, props]
+			_mirrors[mkey] = pair
+		pair[0].position = Vector2(cx * chunk_world + ox, cy * chunk_world + oy)
+		pair[0].scale = Vector2(cell_w, cell_w)
+		pair[1].position = Vector2(ox, oy)
+	for mkey in _mirrors.keys():
+		if not keep.has(mkey):
+			_free_mirror(mkey)
+
+
+func _free_mirror(mkey: Vector4i) -> void:
+	for node in _mirrors[mkey]:
+		node.queue_free()
+	_mirrors.erase(mkey)
+
+
+func _free_mirrors_of(key: Vector2i) -> void:
+	for mkey in _mirrors.keys():
+		if mkey.x == key.x and mkey.y == key.y:
+			_free_mirror(mkey)

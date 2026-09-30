@@ -129,6 +129,56 @@ func _init() -> void:
 		total += (none[k] as PackedVector2Array).size()
 	_check(total == 0, "water chunk grows no trees")
 
+	# --- one draw order across kinds: a nearer tree never draws first ---
+	# (one MultiMesh per kind drew every OakC crown over the Oak in front)
+	var order: Array = PropChunk.canopy_draw_order(trees)
+	var planted := 0
+	for k in Flora.KIND_COUNT:
+		planted += (trees[k] as PackedVector2Array).size()
+	_check(order.size() == planted, "the draw order holds every planted tree")
+	var kinds_seen: Dictionary = {}
+	var depth_sorted := true
+	for i in order.size():
+		kinds_seen[int(order[i][2])] = true
+		if i > 0 and float(order[i][0]) < float(order[i - 1][0]):
+			depth_sorted = false
+	_check(kinds_seen.size() >= 2, "the forest chunk mixes kinds in one order")
+	_check(depth_sorted, "canopy draw order is y-sorted across kinds")
+	var ties: Array = (
+		PropChunk
+		. canopy_draw_order(
+			[
+				PackedVector2Array([Vector2(5, 1), Vector2(3, 1)]),
+				PackedVector2Array([Vector2(3, 1), Vector2(0, 0)]),
+			]
+		)
+	)
+	_check(
+		ties == [[0.0, 0.0, 1], [1.0, 3.0, 0], [1.0, 3.0, 1], [1.0, 5.0, 0]],
+		"draw order breaks y ties by x, then kind: %s" % str(ties)
+	)
+	for k in Flora.KIND_COUNT:
+		_check(
+			PropChunk.kind_from_alpha(PropChunk.kind_alpha(k)) == k,
+			"%s round-trips through the instance alpha" % Flora.NAMES[k]
+		)
+	_check(
+		Flora.KIND_COUNT <= PropChunk.CANOPY_ATLAS_COLS * PropChunk.CANOPY_ATLAS_COLS,
+		"every kind has a canopy atlas cell"
+	)
+	# Atlas cell k is kind k's crown, pre-flipped for the quad's V axis.
+	var crowns: Image = PropChunk.canopy_atlas_image(true)
+	var crag: Image = Flora.kind_image(Flora.CRAG)
+	var cc := Vector2i(
+		(Flora.CRAG % PropChunk.CANOPY_ATLAS_COLS) * 32,
+		int(Flora.CRAG / float(PropChunk.CANOPY_ATLAS_COLS)) * 32
+	)
+	var top: int = SpriteSplit.opaque_span(crag)[0]
+	_check(
+		crowns.get_pixel(cc.x + 16, cc.y + 31 - top) == crag.get_pixel(16, top),
+		"the crag's cell holds its crown, flipped"
+	)
+
 	# --- sprite_split on the structure set and edge cases ---
 	var tent: Image = StructureSprites.build_variant_image(StructureSprites.TENT, 0)
 	var trow: int = SpriteSplit.split_row(tent)

@@ -24,6 +24,7 @@ extends Camera2D
 # neither problem. ZOOM_STEPS and next_step/nearest_step_at_most are
 # re-exported here so callers keep using CameraController.* as before.
 const ZoomSteps = preload("res://scripts/zoom_steps.gd")
+const CameraFraming = preload("res://scripts/camera_framing.gd")
 const ZOOM_STEPS: PackedFloat32Array = ZoomSteps.ZOOM_STEPS
 const ZOOM_MIN: float = 0.0625  # ZOOM_STEPS[0]
 const ZOOM_MAX: float = 8.0  # ZOOM_STEPS[ZOOM_STEPS.size() - 1]
@@ -95,11 +96,11 @@ func _fit_to_world() -> void:
 	position = Vector2(world * 0.5, world * 0.5)
 
 
-# Frame the living cluster (the bounding box of all agents) instead of the empty
-# whole world, so a run opens on the action — with the agents now little
-# hominins, that's where the 8-bit bodies actually read. [F] still resets to the
-# full world for the overview. Called from Main._ready after the scenario loads
-# (the sim has no agents yet at this node's own _ready).
+# Frame the living cluster instead of the empty whole world, so a run opens on
+# the action — with the agents now little hominins, that's where the 8-bit
+# bodies actually read. [F] still resets to the full world for the overview.
+# Called from Main._ready after the scenario loads (the sim has no agents yet
+# at this node's own _ready).
 func fit_to_agents() -> void:
 	var sim = get_node_or_null("../Simulation")
 	if sim == null:
@@ -108,21 +109,18 @@ func fit_to_agents() -> void:
 	if ps.size() == 0:
 		_fit_to_world()
 		return
-	# Centre on the agent centroid — being count-weighted it lands in the densest
-	# region (e.g. the founding continent), not in empty sea between clusters.
-	var c: Vector2 = Vector2.ZERO
-	for p in ps:
-		c += p
-	c /= float(ps.size())
 	# Frame a slice of the world (not the full extent) so individual hominins are
-	# legible on boot; [F] resets to the whole-world overview.
+	# legible on boot, never below 1x: on the 4096/8192 worlds the slice alone
+	# fell into overview zoom, where no bodies are drawn at all.
 	var world: float = float(sim.world_size())
-	var span: float = maxf(world * 0.35, 1.0)
 	var vp: Vector2 = get_viewport_rect().size
-	var z: float = nearest_step_at_most(clampf(vp.y / span, ZOOM_MIN, ZOOM_MAX))
+	var z: float = CameraFraming.boot_zoom(vp.y, world)
 	zoom = Vector2(z, z)
 	_target_zoom = z
-	position = c
+	# Centre on the densest view-sized patch of agents, found torus-aware. The
+	# plain centroid used here before averaged separate clusters (or one
+	# straddling the seam) into the empty ground between them.
+	position = CameraFraming.densest_centre(ps, world, vp.y / z)
 
 
 # Combat and other high-energy events feed trauma here. Camera shake is
@@ -210,3 +208,29 @@ func _process(delta: float) -> void:
 			position += anchor - get_global_mouse_position()
 		elif _zoom_easing:
 			_zoom_easing = false
+	# The world is a torus: fold the camera back into [0, world) every frame,
+	# whoever moved it (key pan, glide, middle-drag, the zoom anchor, or an
+	# external writer such as the screenshot harness). Every layer's torus
+	# copies only reach +/-1 world from the origin, so an unfolded pan past
+	# about one world showed bare terrain with no creatures or huts, then a
+	# clear-colour void. Runs outside the showcase gate: it is a no-op for an
+	# in-world position, and a fold changes nothing the layers draw (the
+	# camera-child weather emitters restart on the jump, see
+	# viewer_effects.update_weather).
+	_fold_to_world()
+
+
+# Set the zoom at once, dropping any wheel ease still in flight: a caller
+# that writes `zoom` directly (the [R] replay, its resume) was overridden on
+# the next frame by the ease lerping toward the stale wheel target.
+func snap_zoom(z: float) -> void:
+	zoom = Vector2(z, z)
+	_target_zoom = z
+	_zoom_easing = false
+
+
+func _fold_to_world() -> void:
+	var sim = get_node_or_null("../Simulation")
+	if sim == null:
+		return
+	position = CameraFraming.fold_to_world(position, float(sim.world_size()))

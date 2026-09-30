@@ -27,6 +27,15 @@ const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 const Palette = preload("res://scripts/palette.gd")
 const FxMath = preload("res://scripts/fx_math.gd")
 const AnimState = preload("res://scripts/anim_state.gd")
+const UnitCard = preload("res://scripts/unit_card.gd")
+
+# The [C] energy overlay reads energy on the unit card's HP scale, so a body's
+# colour and its card's HP bar agree. It used to divide by 50 (the spawn
+# energy) on the belief that energy runs 0..~50, but fed agents bank far more
+# (predator-prey t215: median 77, max 219; tribes up to ~830): nearly four in
+# five predator-prey bodies clipped to the ramp's top swatch and the legend's
+# low..high ramp showed no spread.
+const ENERGY_FULL: float = UnitCard.HP_FULL
 
 # Bodies are 0.5–3.0 world units across (genome size). Scale them up generously
 # with a floor so the hominin silhouette (head, limbs) reads as a figure at the
@@ -389,6 +398,29 @@ static func idle_weapon_act(act: float, walking: bool, inv_mask: int) -> float:
 	return act
 
 
+# Sizes the archetype pick reads: the bridge's adult sizes
+# (sim.alive_adult_sizes()) when it has one per agent, else the grown `sizes`
+# (the same values whenever growth is off). The grown size stays what the
+# figure is drawn at; only the silhouette must not shrink into another
+# animal's. Pure, unit-tested in test_agent_layer.gd.
+static func archetype_sizes(
+	adult: PackedFloat32Array, sizes: PackedFloat32Array
+) -> PackedFloat32Array:
+	return adult if adult.size() == sizes.size() else sizes
+
+
+# Raw (undebounced) walk flag for one agent: the bridge's per-agent moved-
+# this-tick flag (sim.alive_moving()) when it has one, else the old contract
+# of a heading reported as exactly 0.0 at rest. The heading cannot carry that
+# on its own under turning inertia, which keeps a resting body's facing — so
+# every sleeper, drinker and grazer read as walking and never reached its
+# idle pose or emote. Pure, unit-tested in test_agent_layer.gd.
+static func raw_walking(have_moving: bool, moving: int, rot: float) -> bool:
+	if have_moving:
+		return moving != 0
+	return rot != 0.0
+
+
 # Physical body diameter (world units) for a bridge size export
 # (sim.alive_sizes(), `0.5 + 2.5 * Size`): inverts that back to the genome's
 # Size in [0,1] and doubles the mirrored collision.rs radius
@@ -472,7 +504,19 @@ func refresh(
 	var positions: PackedVector2Array = sim.alive_positions()
 	var ids: PackedInt32Array = sim.alive_ids()
 	var sizes: PackedFloat32Array = sim.alive_sizes()
+	# The silhouette is picked from the ADULT size, never the grown one in
+	# `sizes`: under growth a juvenile starts at about a third of its adult
+	# size, and fed to archetype_for's SIZE_SPLIT that turned fawns into
+	# hares, cubs into foxes and hominin children into boars, each popping
+	# to its own species partway through growing up. `sizes` still sets how
+	# big the figure is drawn.
+	var arch_sizes: PackedFloat32Array = archetype_sizes(sim.alive_adult_sizes(), sizes)
 	var rots: PackedFloat32Array = sim.alive_rotations()
+	# Walk/idle split: 1 while the sim moved the body this tick. The heading
+	# in `rots` is only facing — under turning inertia a resting body keeps
+	# the heading it last walked with, so `rot != 0` no longer means moving.
+	var moving_flags: PackedByteArray = sim.alive_moving()
+	var have_moving: bool = moving_flags.size() == n
 	var sp_ids: PackedInt32Array = sim.alive_species_ids()
 	var energies: PackedFloat32Array = sim.alive_energy()
 	# Pose-driving intent channels: fire_intent is written for every agent
@@ -490,7 +534,7 @@ func refresh(
 	# parse error, not just a shadow warning.
 	var locomotion: PackedByteArray = sim.alive_locomotion()
 	var have_locomotion: bool = locomotion.size() == n
-	var body_colors: PackedColorArray = _body_colors(n, locomotion, have_locomotion)
+	var body_colors: PackedColorArray = _body_colors(n, locomotion, have_locomotion, arch_sizes)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n
 	var have_ids: bool = ids.size() == n
@@ -623,7 +667,7 @@ func refresh(
 			var tags: int = body_tags[i] if have_tags else 0
 			var loco_i: int = locomotion[i] if have_locomotion else 0
 			var arch := (
-				MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags, loco_i)
+				MammalSprites.archetype_for(diet[i], arch_sizes[i], live[i] != 0, tags, loco_i)
 				if have_sp
 				else MammalSprites.PRIMATE
 			)
@@ -643,7 +687,9 @@ func refresh(
 				var tags2: int = body_tags[i] if have_tags else 0
 				var loco_i2: int = locomotion[i] if have_locomotion else 0
 				var arch2 := (
-					MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags2, loco_i2)
+					MammalSprites.archetype_for(
+						diet[i], arch_sizes[i], live[i] != 0, tags2, loco_i2
+					)
 					if have_sp
 					else MammalSprites.PRIMATE
 				)
@@ -712,15 +758,15 @@ func refresh(
 		var body_col: Color = body_colors[i]
 		body_col.a = MammalSprites.bucket_alpha(b, wading)
 		mm.set_instance_color(j, body_col)
-		# Per-instance animation state for the field_agent shader. The sim
-		# reports heading exactly 0.0 when velocity ≈ 0, which doubles as
-		# the idle flag; facing is the heading's x-sign.
+		# Per-instance animation state for the field_agent shader. The idle
+		# flag is the sim's moved-this-tick flag (see raw_walking); facing
+		# is the heading's x-sign.
 		var rot: float = rots[i] if have_rots else 0.0
 		# `moving` is the blended 0..1 walk weight the shader mixes its
 		# secondary motion with; `walking` is the debounced state picking
 		# the pose and driving the gait. Splitting them stops the sprite
-		# popping on the sim's flickering heading (~3.5 times a second).
-		var walking: bool = rot != 0.0
+		# popping on the sim's flickering stop/start (~3.5 times a second).
+		var walking: bool = raw_walking(have_moving, moving_flags[i] if have_moving else 0, rot)
 		var moving: float = 1.0 if walking else 0.0
 		if have_ids:
 			var loco: Vector2 = FxMath.step_locomotion(
@@ -739,14 +785,16 @@ func refresh(
 		var cx: float = cos(rot)
 		var face_left := 1.0 if cx < 0.0 else 0.0
 		if have_ids:
-			# A slot born this frame seeds from the current heading (the
-			# old Dictionary default) so a newborn never eases in from a
-			# side it never faced.
+			# A slot whose facing has never been stepped (a newborn, or a
+			# figure on screen for the first time) seeds from the current
+			# heading (the old Dictionary default), so it never eases in
+			# from a side it never faced — see AnimState.facing_fresh.
 			var prev_face := Vector3(face_left, face_left, cx)
-			if _anim.birth_time[s] != now:
+			if _anim.facing_fresh[s] == 0:
 				prev_face = Vector3(
 					float(_anim.facing_side[s]), _anim.facing_ease[s], _anim.facing_heading[s]
 				)
+			_anim.facing_fresh[s] = 0
 			var face: Vector3 = FxMath.step_facing(prev_face, cx, walking, delta)
 			_anim.facing_side[s] = int(round(face.x))
 			_anim.facing_ease[s] = face.y
@@ -921,7 +969,9 @@ func _refresh_death_effects(delta: float) -> void:
 			mm.set_instance_color(j, c)
 
 
-func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) -> PackedColorArray:
+func _body_colors(
+	n: int, locomotion: PackedByteArray, have_locomotion: bool, arch_sizes: PackedFloat32Array
+) -> PackedColorArray:
 	var out := PackedColorArray()
 	out.resize(n)
 	match _overlay.body_mode:
@@ -932,7 +982,7 @@ func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) ->
 		_overlay.BODY_DIET:
 			out = _ramp_body_colors(n, Palette.RAMP_DIET, sim.alive_diet(), 1.0)
 		_overlay.BODY_ENERGY:
-			out = _ramp_body_colors(n, Palette.RAMP_ENERGY, sim.alive_energy(), 50.0)
+			out = _ramp_body_colors(n, Palette.RAMP_ENERGY, sim.alive_energy(), ENERGY_FULL)
 		_overlay.BODY_AFFECT:
 			out = _ramp_body_colors(n, Palette.RAMP_AROUSAL, sim.alive_arousal(), 1.0)
 		_overlay.BODY_INFECTION:
@@ -949,9 +999,9 @@ func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) ->
 			# by refresh(), which fetches them before calling this) must feed the
 			# SAME archetype_for() call refresh() uses to pick the render bucket —
 			# otherwise a Water/Air agent gets the right silhouette but a stale
-			# land-based coat tint.
+			# land-based coat tint. `arch_sizes` is that call's adult size too,
+			# so a juvenile wears its own species' coat, not a smaller animal's.
 			var diet: PackedFloat32Array = sim.alive_diet()
-			var sizes: PackedFloat32Array = sim.alive_sizes()
 			var sp_ids: PackedInt32Array = sim.alive_species_ids()
 			var live: PackedInt32Array = _livestock_flags(n)
 			var body_tags: PackedInt32Array = sim.alive_body_tags()
@@ -960,14 +1010,14 @@ func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) ->
 				var tags: int = body_tags[i] if have_tags else 0
 				var loco_i: int = locomotion[i] if have_locomotion else 0
 				var arch := MammalSprites.archetype_for(
-					diet[i], sizes[i], live[i] != 0, tags, loco_i
+					diet[i], arch_sizes[i], live[i] != 0, tags, loco_i
 				)
 				out[i] = MammalSprites.coat_hue(arch, sp_ids[i])
 	return out
 
 
 # One body colour per agent from a Palette ramp over a per-agent scalar,
-# normalized by `value_scale` (energy runs 0..~50; the rest are already 0..1).
+# normalized by `value_scale` (ENERGY_FULL for energy; the rest are already 0..1).
 func _ramp_body_colors(
 	n: int, ramp: Array, values: PackedFloat32Array, value_scale: float
 ) -> PackedColorArray:

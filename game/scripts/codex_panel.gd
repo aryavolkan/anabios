@@ -378,7 +378,11 @@ static func describe(p: Dictionary) -> String:
 	if float(p.get("jaws", 0.0)) >= 0.3:
 		adj.append("sharp-jawed")
 	var count: int = int(p.get("count", 0))
-	adj.append("social" if count >= 12 else "solitary")
+	# One threshold with social_label: "social" at 12 but "Solitary" only
+	# under 6 made a species of 6-11 read "Steady and solitary. Often found in
+	# packs near …" over a Traits row saying "Social: Pack".
+	var group: String = social_label(count, float(p.get("diet", 0.5))).to_lower()
+	adj.append("solitary" if group == "solitary" else "social")
 	var first: String
 	if adj.size() == 1:
 		first = adj[0]
@@ -387,7 +391,6 @@ static func describe(p: Dictionary) -> String:
 	var text: String = first + "."
 	var habitat: PackedStringArray = p.get("habitat", PackedStringArray())
 	if not habitat.is_empty():
-		var group: String = social_label(count, float(p.get("diet", 0.5))).to_lower()
 		var where: String = " and ".join(habitat)
 		if group == "solitary":
 			text += " Often found alone near %s." % where
@@ -406,7 +409,10 @@ static func describe(p: Dictionary) -> String:
 func _scan(focus: int) -> Dictionary:
 	var sps: PackedInt32Array = sim.alive_species_ids()
 	var diets: PackedFloat32Array = sim.alive_diet()
-	var sizes: PackedFloat32Array = sim.alive_sizes()
+	# Adult sizes, not the grown ones: a species' size (and so the portrait
+	# archetype_for picks from it) is a trait of its adults — a young herd
+	# would otherwise average under SIZE_SPLIT and show a smaller animal.
+	var sizes: PackedFloat32Array = sim.alive_adult_sizes()
 	var tags: PackedInt32Array = sim.alive_body_tags()
 	var live: PackedInt32Array = sim.alive_livestock_flags()
 	var pos: PackedVector2Array = sim.alive_positions()

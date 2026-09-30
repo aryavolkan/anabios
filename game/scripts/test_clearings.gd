@@ -69,6 +69,23 @@ func _init() -> void:
 	C.publish_segments("roads", [] as Array[PackedVector2Array])
 	_check(not C.contains(Vector2(150, 100)), "roads can be cleared")
 
+	# The torus: a market square by the y = 0 seam spans y -32..40, and the
+	# planners emit props in [0, world); the wrapped side of the square
+	# (world y 1012 is y -12) must clear too, and nothing else may.
+	C.reset()
+	var world := 1024.0
+	C.publish("hubs", [Rect2(912, -32, 40, 72)] as Array[Rect2])
+	_check(not C.contains(Vector2(933, 1012)), "without a world size the seam is a wall")
+	_check(C.contains(Vector2(933, 1012), world), "a clearing wraps across the y seam")
+	_check(C.contains(Vector2(933, 20), world), "the unwrapped side still clears")
+	_check(not C.contains(Vector2(933, 980), world), "the wrap does not grow the clearing")
+	C.publish("hubs", [Rect2(1008, 400, 32, 32)] as Array[Rect2])
+	_check(C.contains(Vector2(4, 410), world), "a clearing wraps across the x seam")
+	C.publish_segments("roads", [PackedVector2Array([Vector2(1000, 300), Vector2(1040, 300)])])
+	_check(C.contains(Vector2(10, 302), world), "a road strip wraps across the seam")
+	var kept_w := C.filter(PackedVector2Array([Vector2(4, 410), Vector2(500, 500)]), world)
+	_check(kept_w == PackedVector2Array([Vector2(500, 500)]), "filter drops wrapped points")
+
 	C.reset()
 	if _failed:
 		quit(1)

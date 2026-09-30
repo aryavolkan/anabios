@@ -30,13 +30,14 @@ const GAIT_FPS_REF := 5.0
 # the poses forward smoothly instead of strobing through them.
 const GAIT_MAX_STEP := 0.34
 
-# Locomotion state. The sim reports a heading of exactly 0.0 whenever an
-# agent's velocity rounds away, and that flickers: measured at 3.5 flips per
-# agent per second, holding each state a mean of 4.2 frames. Fed straight to
-# the shader it pops the sprite between the neutral pose and the walk cycle
-# several times a second. WALK_HOLD is how long a body keeps "recently moving"
-# credit after the heading drops, which bridges those gaps so only a real stop
-# reads as standing.
+# Locomotion state. The raw moving flag (the sim's velocity rounding away —
+# sim.alive_moving(), or a heading of exactly 0.0 in the older contract, see
+# AgentLayer.raw_walking) flickers: measured at 3.5 flips per agent per
+# second, holding each state a mean of 4.2 frames. Fed straight to the shader
+# it pops the sprite between the neutral pose and the walk cycle several
+# times a second. WALK_HOLD is how long a body keeps "recently moving" credit
+# after the flag drops, which bridges those gaps so only a real stop reads as
+# standing.
 const WALK_HOLD := 0.25
 # How fast the blended walk weight chases the held state — quick enough to feel
 # responsive, slow enough that a stride eases in rather than snapping on.

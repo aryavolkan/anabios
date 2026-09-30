@@ -209,7 +209,42 @@ func _init() -> void:
 	var war := L.plan(8, Vector2.ZERO, 5, 1, L.FLAG_WAR, no_water)
 	_check(_count_kind(war, L.GATE) == 1, "war village has exactly one gate")
 	_check(_count_kind(war, L.TOWER) >= 1, "war village has at least one tower")
-	_check(_count_kind(war, L.PALISADE_CORNER) == 4, "war village has all four palisade corners")
+	_check(
+		_count_kind(war, L.PALISADE_CORNER) == 2 and _count_kind(war, L.PALISADE_CORNER_N) == 2,
+		"war village has all four palisade corners, the north pair running down to the wall"
+	)
+	# The east side is the west side mirrored (the corner's wall stub runs
+	# east from its post in the art), so no stub pokes out past the wall.
+	for p in war:
+		var k3: int = int(p["kind"])
+		if k3 == L.PALISADE_V or k3 == L.PALISADE_CORNER or k3 == L.PALISADE_CORNER_N:
+			var wc := _cell_of(Vector2.ZERO, p["pos"])
+			_check(
+				bool(p["flip"]) == (wc.x > 0), "palisade %s flips iff it is on the east side" % wc
+			)
+		if k3 == L.PALISADE_CORNER_N:
+			_check(_cell_of(Vector2.ZERO, p["pos"]).y < 0, "only the north corners run down")
+
+	# --- every fortified village keeps its watchtower inside the gate ---
+	# (0, r - 1) is a hut-lattice cell and usually holds a dwelling; the
+	# tower must then take a cell beside it, not vanish.
+	for era in [1, 2]:
+		for members in [6, 12, 18, 24, 36, 48, 60, 72, 90]:
+			var fortified := L.plan(21, Vector2.ZERO, members, era, flags_all, no_water)
+			var gate := Vector2i.ZERO
+			for p in fortified:
+				if int(p["kind"]) == L.GATE:
+					gate = _cell_of(Vector2.ZERO, p["pos"])
+			var towers := 0
+			for p in fortified:
+				if int(p["kind"]) == L.TOWER:
+					towers += 1
+					var tc := _cell_of(Vector2.ZERO, p["pos"])
+					_check(
+						tc.y == gate.y - 1 and absi(tc.x) <= 1,
+						"the tower stands just inside the gate (%s, gate %s)" % [tc, gate]
+					)
+			_check(towers == 1, "era %d, %d members: one watchtower (%d)" % [era, members, towers])
 
 	# --- MILL: appears only when a water-adjacent land cell exists in range ---
 	var river := func(pos: Vector2) -> bool: return pos.x >= 3.0 * L.GRID and pos.x < 4.0 * L.GRID

@@ -29,12 +29,14 @@ extends RefCounted
 # default in main.gd is dynamic — `Vector3(face_left, face_left, cx)`, built
 # from the agent's *current* heading at the point of the `.get()` call, which
 # only `_refresh_bodies` has (this module's `sync()` runs before that, and
-# only ever sees `ids` and `now`). A freshly allocated slot here seeds facing
-# to (side 0 / right, ease 0.0, heading 0.0) instead; the difference is
-# invisible after the first `step_facing` call on that slot folds the real
-# heading in, so it costs a newborn at most one frame of extra ease-in on its
-# very first facing update. Every other default below is exactly what the
-# Dictionaries use today (see the call sites `sync()`'s doc points at).
+# only ever sees `ids` and `now`). A freshly allocated slot here stores
+# (side 0 / right, ease 0.0, heading 0.0) and raises `facing_fresh`; the
+# caller seeds the real facing from the current heading on the first frame it
+# steps that slot's facing and clears the flag. Without that seed a left-
+# moving newborn (or a figure scrolling on screen for the first time) would
+# start facing right and visibly flip-squash round. Every other default below
+# is exactly what the Dictionaries use today (see the call sites `sync()`'s
+# doc points at).
 
 # Per-id facing: committed side (0 right / 1 left), eased mix value, and the
 # low-passed heading x FxMath.step_facing tracks. Mirrors main.gd's `_facing`
@@ -42,6 +44,11 @@ extends RefCounted
 var facing_side: PackedInt32Array = PackedInt32Array()
 var facing_ease: PackedFloat32Array = PackedFloat32Array()
 var facing_heading: PackedFloat32Array = PackedFloat32Array()
+# 1 until the caller first steps this slot's facing (see the header): the
+# facing above is a placeholder to be seeded from the live heading, not a side
+# the figure ever showed. A flag rather than a `birth_time == now` test —
+# birth_time is float32 and `now` a double, so that equality almost never held.
+var facing_fresh: PackedByteArray = PackedByteArray()
 # Per-id gait cycle position (0..1), seeded by FxMath.seed_gait(id) so a
 # freshly seen crowd spreads around the loop instead of marching in step —
 # exactly the default main.gd's `_gait.get(gid, FxMath.seed_gait(gid))` falls
@@ -134,6 +141,7 @@ func compact() -> void:
 	var new_facing_side := PackedInt32Array()
 	var new_facing_ease := PackedFloat32Array()
 	var new_facing_heading := PackedFloat32Array()
+	var new_facing_fresh := PackedByteArray()
 	var new_gait := PackedFloat32Array()
 	var new_walk_hold := PackedFloat32Array()
 	var new_walk_weight := PackedFloat32Array()
@@ -151,6 +159,7 @@ func compact() -> void:
 		new_facing_side.append(facing_side[old_s])
 		new_facing_ease.append(facing_ease[old_s])
 		new_facing_heading.append(facing_heading[old_s])
+		new_facing_fresh.append(facing_fresh[old_s])
 		new_gait.append(gait[old_s])
 		new_walk_hold.append(walk_hold[old_s])
 		new_walk_weight.append(walk_weight[old_s])
@@ -162,6 +171,7 @@ func compact() -> void:
 	facing_side = new_facing_side
 	facing_ease = new_facing_ease
 	facing_heading = new_facing_heading
+	facing_fresh = new_facing_fresh
 	gait = new_gait
 	walk_hold = new_walk_hold
 	walk_weight = new_walk_weight
@@ -180,6 +190,7 @@ func _acquire(id: int, now: float) -> int:
 		facing_side.append(0)
 		facing_ease.append(0.0)
 		facing_heading.append(0.0)
+		facing_fresh.append(1)
 		gait.append(FxMath.seed_gait(id))
 		walk_hold.append(0.0)
 		walk_weight.append(0.0)
@@ -193,6 +204,7 @@ func _acquire(id: int, now: float) -> int:
 		facing_side[s] = 0
 		facing_ease[s] = 0.0
 		facing_heading[s] = 0.0
+		facing_fresh[s] = 1
 		gait[s] = FxMath.seed_gait(id)
 		walk_hold[s] = 0.0
 		walk_weight[s] = 0.0

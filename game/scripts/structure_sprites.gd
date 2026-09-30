@@ -44,8 +44,9 @@ enum {
 	CATAPULT,
 	MARKET_HALL,
 	WAREHOUSE,
+	PALISADE_CORNER_N,
 }
-const KIND_COUNT := 28
+const KIND_COUNT := 29
 
 # Walled kinds also have a taller 2.5D variant, see structure_tall.gd.
 const ExtraRows = preload("res://scripts/structure_rows_extra.gd")
@@ -81,6 +82,7 @@ const NAMES: PackedStringArray = [
 	"Catapult",
 	"MarketHall",
 	"Warehouse",
+	"PalisadeCornerN",
 ]
 
 # 32x32 row-string pixel maps per kind, indexed by the enum. '.' is
