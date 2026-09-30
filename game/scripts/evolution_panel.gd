@@ -4,6 +4,7 @@ extends PanelContainer
 # living phylogeny. Toggle with [T]. Read-only.
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
+const ChartPanels = preload("res://scripts/chart_panels.gd")
 
 # (slot id, label, color) for the trait-drift chart.
 const TRAIT_SERIES := [
@@ -40,6 +41,7 @@ var _font: Font
 
 func _ready() -> void:
 	visible = false
+	visibility_changed.connect(_on_visibility_changed)
 	_font = UiTheme.font()
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 6)
@@ -168,3 +170,9 @@ func _draw_chart() -> void:
 	_chart.draw_string(
 		_font, Vector2(3, CHART_H - 3), "%.3f" % lo, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, axis
 	)
+
+
+# One chart at a time in the shared column (chart_panels.gd).
+func _on_visibility_changed() -> void:
+	if visible:
+		ChartPanels.close_others(self)

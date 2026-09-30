@@ -17,6 +17,7 @@ const TimeControls = preload("res://scripts/time_controls.gd")
 const TopBar = preload("res://scripts/top_bar.gd")
 const UnitCard = preload("res://scripts/unit_card.gd")
 const BrandPanel = preload("res://scripts/brand_panel.gd")
+const ChartPanels = preload("res://scripts/chart_panels.gd")
 const CoevolutionPanel = preload("res://scripts/coevolution_panel.gd")
 const EvolutionPanel = preload("res://scripts/evolution_panel.gd")
 const HelixPanel = preload("res://scripts/helix_panel.gd")
@@ -330,6 +331,28 @@ func _init() -> void:
 	ui_box.free()
 	for line in LegendPanel.EMOTES_KEY.split("\n"):
 		_check(line.length() <= 50, "legend emote line fits the slot: " + line)
+	# [T], [Y] and [X] share the column right of the codex: one chart at a time.
+	var charts_box := Control.new()
+	var charts: Array[Control] = [EvolutionPanel.new(), CoevolutionPanel.new(), HelixPanel.new()]
+	for k in charts.size():
+		var chart: Control = charts[k]
+		chart.name = ChartPanels.NAMES[k]
+		charts_box.add_child(chart)
+		chart.visible = false  # as _ready leaves it
+		chart.visibility_changed.connect(chart._on_visibility_changed)
+	for k in charts.size():
+		charts[k].set("_shown", true)
+		charts[k].visible = true
+		for j in charts.size():
+			_check(
+				charts[j].visible == (j == k),
+				"opening %s leaves only it open" % ChartPanels.NAMES[k]
+			)
+			if j != k:
+				_check(not charts[j].get("_shown"), "a closed chart's key reopens it")
+	charts[2].visible = false
+	_check(not charts[0].visible and not charts[1].visible, "closing a chart reopens no other")
+	charts_box.free()
 
 	if _failed:
 		quit(1)

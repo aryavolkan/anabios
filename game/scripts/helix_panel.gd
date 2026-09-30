@@ -1,6 +1,7 @@
 extends Control
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
+const ChartPanels = preload("res://scripts/chart_panels.gd")
 
 # Dual-inheritance helix — the two inheritance channels of DIT drawn as a
 # double helix. Left strand: genome slots (population means). Right strand:
@@ -63,6 +64,7 @@ static func value_label(label: String, v: float) -> String:
 
 func _ready() -> void:
 	visible = false
+	visibility_changed.connect(_on_visibility_changed)
 	_font = UiTheme.font()
 	position = PANEL_RECT.position
 	size = PANEL_RECT.size
@@ -308,3 +310,9 @@ func _draw_dashed(a: Vector2, b: Vector2, col: Color) -> void:
 		var p0: Vector2 = a.lerp(b, float(s) / float(segments))
 		var p1: Vector2 = a.lerp(b, float(s + 1) / float(segments))
 		draw_line(p0, p1, col, 1.0, true)
+
+
+# One chart at a time in the shared column (chart_panels.gd).
+func _on_visibility_changed() -> void:
+	if visible:
+		ChartPanels.close_others(self)

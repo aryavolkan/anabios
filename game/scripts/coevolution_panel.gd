@@ -1,6 +1,7 @@
 extends Control
 
 const UiTheme = preload("res://scripts/ui_theme.gd")
+const ChartPanels = preload("res://scripts/chart_panels.gd")
 
 # Gene↔culture co-evolution time-series. Reads the Rust per-tick history and
 # draws a vertical stack of small-multiple charts sharing one time axis.
@@ -193,6 +194,7 @@ var _mark_cursor: int = 0  # own cursor over the shared event log
 
 func _ready() -> void:
 	visible = false
+	visibility_changed.connect(_on_visibility_changed)
 	_font = UiTheme.font()
 
 
@@ -481,3 +483,9 @@ func _draw_readout(index: int) -> void:
 			_font, Vector2(origin.x + 6, y), ln, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE
 		)
 		y += 13
+
+
+# One chart at a time in the shared column (chart_panels.gd).
+func _on_visibility_changed() -> void:
+	if visible:
+		ChartPanels.close_others(self)
