@@ -84,7 +84,9 @@ static func rig_kind(archetype: int) -> int:
 
 
 # Pure archetype selector. `size` in world units (0.5..3.0), `diet` carnivory
-# 0..1. Stable per agent (diet/size fixed at birth) so no per-frame flicker.
+# 0..1. Stable per agent so no per-frame flicker: diet is fixed at birth, and
+# callers pass the ADULT size (sim.alive_adult_sizes()), never the grown one —
+# a juvenile is its species drawn small, not a hare or a boar.
 # `tags` (default 0, see the TAG_* bits above) layers module-keyed families
 # on top of the diet/size table: livestock still wins outright, then armour
 # on a non-carnivore reads as a tortoise, spines as a porcupine at any diet,

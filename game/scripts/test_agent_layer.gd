@@ -14,6 +14,7 @@ extends SceneTree
 # Exits 0 on success, 1 on the first failed assertion.
 
 const AgentLayer = preload("res://scripts/agent_layer.gd")
+const MammalSprites = preload("res://scripts/mammal_sprites.gd")
 
 var _failed := false
 
@@ -200,6 +201,23 @@ func _check_raw_walking() -> void:
 	_check(not AgentLayer.raw_walking(false, 0, 0.0), "no flags: heading 0 stands")
 
 
+func _check_archetype_sizes() -> void:
+	# A deer fawn at a third of its adult size must still be picked as a deer:
+	# the archetype reads the adult size whenever the bridge supplies one.
+	var grown := PackedFloat32Array([0.6, 2.0])
+	var adult := PackedFloat32Array([1.8, 2.0])
+	var picked: PackedFloat32Array = AgentLayer.archetype_sizes(adult, grown)
+	_check(picked == adult, "archetype sizes are the adult sizes")
+	_check(
+		MammalSprites.archetype_for(0.1, picked[0], false) == MammalSprites.DEER,
+		"a herbivore fawn keeps the deer silhouette"
+	)
+	_check(
+		AgentLayer.archetype_sizes(PackedFloat32Array(), grown) == grown,
+		"no adult sizes: fall back to the grown sizes"
+	)
+
+
 func _check_air_lift() -> void:
 	_check(AgentLayer.air_lift(10.0, false) == Vector2.ZERO, "ground figures are not lifted")
 	var lift: Vector2 = AgentLayer.air_lift(10.0, true)
@@ -330,6 +348,7 @@ func _init() -> void:
 	_check_crowd_cells()
 	_check_idle_weapon_act()
 	_check_raw_walking()
+	_check_archetype_sizes()
 	_check_air_lift()
 	_check_nearest_drawn()
 	_check_body_diameter()

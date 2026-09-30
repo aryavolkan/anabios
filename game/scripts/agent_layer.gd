@@ -398,6 +398,17 @@ static func idle_weapon_act(act: float, walking: bool, inv_mask: int) -> float:
 	return act
 
 
+# Sizes the archetype pick reads: the bridge's adult sizes
+# (sim.alive_adult_sizes()) when it has one per agent, else the grown `sizes`
+# (the same values whenever growth is off). The grown size stays what the
+# figure is drawn at; only the silhouette must not shrink into another
+# animal's. Pure, unit-tested in test_agent_layer.gd.
+static func archetype_sizes(
+	adult: PackedFloat32Array, sizes: PackedFloat32Array
+) -> PackedFloat32Array:
+	return adult if adult.size() == sizes.size() else sizes
+
+
 # Raw (undebounced) walk flag for one agent: the bridge's per-agent moved-
 # this-tick flag (sim.alive_moving()) when it has one, else the old contract
 # of a heading reported as exactly 0.0 at rest. The heading cannot carry that
@@ -493,6 +504,13 @@ func refresh(
 	var positions: PackedVector2Array = sim.alive_positions()
 	var ids: PackedInt32Array = sim.alive_ids()
 	var sizes: PackedFloat32Array = sim.alive_sizes()
+	# The silhouette is picked from the ADULT size, never the grown one in
+	# `sizes`: under growth a juvenile starts at about a third of its adult
+	# size, and fed to archetype_for's SIZE_SPLIT that turned fawns into
+	# hares, cubs into foxes and hominin children into boars, each popping
+	# to its own species partway through growing up. `sizes` still sets how
+	# big the figure is drawn.
+	var arch_sizes: PackedFloat32Array = archetype_sizes(sim.alive_adult_sizes(), sizes)
 	var rots: PackedFloat32Array = sim.alive_rotations()
 	# Walk/idle split: 1 while the sim moved the body this tick. The heading
 	# in `rots` is only facing — under turning inertia a resting body keeps
@@ -516,7 +534,7 @@ func refresh(
 	# parse error, not just a shadow warning.
 	var locomotion: PackedByteArray = sim.alive_locomotion()
 	var have_locomotion: bool = locomotion.size() == n
-	var body_colors: PackedColorArray = _body_colors(n, locomotion, have_locomotion)
+	var body_colors: PackedColorArray = _body_colors(n, locomotion, have_locomotion, arch_sizes)
 	var have_rots: bool = rots.size() == n
 	var have_sp: bool = sp_ids.size() == n
 	var have_ids: bool = ids.size() == n
@@ -649,7 +667,7 @@ func refresh(
 			var tags: int = body_tags[i] if have_tags else 0
 			var loco_i: int = locomotion[i] if have_locomotion else 0
 			var arch := (
-				MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags, loco_i)
+				MammalSprites.archetype_for(diet[i], arch_sizes[i], live[i] != 0, tags, loco_i)
 				if have_sp
 				else MammalSprites.PRIMATE
 			)
@@ -669,7 +687,9 @@ func refresh(
 				var tags2: int = body_tags[i] if have_tags else 0
 				var loco_i2: int = locomotion[i] if have_locomotion else 0
 				var arch2 := (
-					MammalSprites.archetype_for(diet[i], sizes[i], live[i] != 0, tags2, loco_i2)
+					MammalSprites.archetype_for(
+						diet[i], arch_sizes[i], live[i] != 0, tags2, loco_i2
+					)
 					if have_sp
 					else MammalSprites.PRIMATE
 				)
@@ -947,7 +967,9 @@ func _refresh_death_effects(delta: float) -> void:
 			mm.set_instance_color(j, c)
 
 
-func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) -> PackedColorArray:
+func _body_colors(
+	n: int, locomotion: PackedByteArray, have_locomotion: bool, arch_sizes: PackedFloat32Array
+) -> PackedColorArray:
 	var out := PackedColorArray()
 	out.resize(n)
 	match _overlay.body_mode:
@@ -975,9 +997,9 @@ func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) ->
 			# by refresh(), which fetches them before calling this) must feed the
 			# SAME archetype_for() call refresh() uses to pick the render bucket —
 			# otherwise a Water/Air agent gets the right silhouette but a stale
-			# land-based coat tint.
+			# land-based coat tint. `arch_sizes` is that call's adult size too,
+			# so a juvenile wears its own species' coat, not a smaller animal's.
 			var diet: PackedFloat32Array = sim.alive_diet()
-			var sizes: PackedFloat32Array = sim.alive_sizes()
 			var sp_ids: PackedInt32Array = sim.alive_species_ids()
 			var live: PackedInt32Array = _livestock_flags(n)
 			var body_tags: PackedInt32Array = sim.alive_body_tags()
@@ -986,7 +1008,7 @@ func _body_colors(n: int, locomotion: PackedByteArray, have_locomotion: bool) ->
 				var tags: int = body_tags[i] if have_tags else 0
 				var loco_i: int = locomotion[i] if have_locomotion else 0
 				var arch := MammalSprites.archetype_for(
-					diet[i], sizes[i], live[i] != 0, tags, loco_i
+					diet[i], arch_sizes[i], live[i] != 0, tags, loco_i
 				)
 				out[i] = MammalSprites.coat_hue(arch, sp_ids[i])
 	return out

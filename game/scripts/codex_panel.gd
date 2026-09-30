@@ -406,7 +406,10 @@ static func describe(p: Dictionary) -> String:
 func _scan(focus: int) -> Dictionary:
 	var sps: PackedInt32Array = sim.alive_species_ids()
 	var diets: PackedFloat32Array = sim.alive_diet()
-	var sizes: PackedFloat32Array = sim.alive_sizes()
+	# Adult sizes, not the grown ones: a species' size (and so the portrait
+	# archetype_for picks from it) is a trait of its adults — a young herd
+	# would otherwise average under SIZE_SPLIT and show a smaller animal.
+	var sizes: PackedFloat32Array = sim.alive_adult_sizes()
 	var tags: PackedInt32Array = sim.alive_body_tags()
 	var live: PackedInt32Array = sim.alive_livestock_flags()
 	var pos: PackedVector2Array = sim.alive_positions()

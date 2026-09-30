@@ -500,6 +500,24 @@ impl Simulation {
         out
     }
 
+    /// Each agent's ADULT size in world units (`0.5 + 2.5 · Size`, the
+    /// genome value `alive_sizes` grows toward), same order as
+    /// `alive_positions`. The viewer picks the silhouette
+    /// (`MammalSprites.archetype_for`) from this, not from the grown size:
+    /// a juvenile is its species drawn small, not a smaller animal (a fawn
+    /// under `SIZE_SPLIT` would otherwise read as a hare). Equal to
+    /// `alive_sizes` when growth is off.
+    #[func]
+    fn alive_adult_sizes(&self) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if let Some(w) = self.inner.as_ref() {
+            for id in w.agents.iter_alive() {
+                out.push(adult_view_size_of(w, id as usize));
+            }
+        }
+        out
+    }
+
     /// 1 per alive agent that moved this tick (velocity above the same
     /// `1e-6` squared-length floor the flag-off `alive_rotations` uses for
     /// "not moving"), else 0; same order as `alive_positions`. The viewer's
@@ -766,6 +784,7 @@ impl Simulation {
             anabios_core::module::effective_diet_carnivory(&w.agents.modules[i]),
         );
         d.set("size", view_size_of(w, i));
+        d.set("adult_size", adult_view_size_of(w, i));
         d.set("skill", meme[SKILL_CHANNEL]);
         d.set("technique", meme[TECH_CHANNEL]);
         d.set("iq", w.agents.iq[i]);
@@ -1778,14 +1797,21 @@ fn fire_intent_of(w: &anabios_core::World, idx: usize) -> f32 {
 /// `module_glyphs_all` and `alive_render_state_of` (the wasm view's
 /// `view_size` is the same derivation).
 fn view_size_of(w: &anabios_core::World, idx: usize) -> f32 {
-    use anabios_core::genome::GenomeSlot;
-    let g = &w.agents.genome[idx];
-    let adult = 0.5 + 2.5 * g.get(GenomeSlot::Size);
+    let adult = adult_view_size_of(w, idx);
     if w.growth_enabled {
+        let g = &w.agents.genome[idx];
         adult * anabios_core::growth::body_scale_of(true, w.agents.age[idx], g)
     } else {
         adult
     }
+}
+
+/// Adult viewer body size of agent `idx`: `0.5 + 2.5 · Size`, whatever its
+/// age — the value `view_size_of` grows toward. `alive_adult_sizes` and
+/// `agent_detail`'s `adult_size` (the archetype pick) read it.
+fn adult_view_size_of(w: &anabios_core::World, idx: usize) -> f32 {
+    use anabios_core::genome::GenomeSlot;
+    0.5 + 2.5 * w.agents.genome[idx].get(GenomeSlot::Size)
 }
 
 /// Per alive agent (ascending id): 1 if its velocity this tick is above the
@@ -2755,6 +2781,33 @@ mod tests {
         let counts2 = super::agent_density_of(&w, res);
         let idx = 3 * res as usize + 1;
         assert!(counts2[idx] as usize >= ids.len(), "cluster must land in cell (1,3)");
+    }
+
+    #[test]
+    fn adult_size_is_the_genome_size_the_grown_size_reaches() {
+        // Founders start at age 0 under growth (on by default in the
+        // scenario schema), so 25 ticks in every body is still a juvenile:
+        // the viewer's archetype pick must see the adult size, not this.
+        let w = minimal_world();
+        assert!(w.growth_enabled, "minimal.toml should run with growth on");
+        let mut juveniles = 0;
+        for id in w.agents.iter_alive() {
+            let i = id as usize;
+            let size_gene = w.agents.genome[i].get(anabios_core::genome::GenomeSlot::Size);
+            let adult = super::adult_view_size_of(&w, i);
+            assert_eq!(adult, 0.5 + 2.5 * size_gene);
+            let grown = super::view_size_of(&w, i);
+            assert!(grown <= adult + 1e-6, "grown {grown} above adult {adult}");
+            if grown < adult - 1e-3 {
+                juveniles += 1;
+            }
+        }
+        assert!(juveniles > 0, "a 25-tick world should hold juveniles");
+        let off = minimal_flag_off_world();
+        for id in off.agents.iter_alive() {
+            let i = id as usize;
+            assert_eq!(super::adult_view_size_of(&off, i), super::view_size_of(&off, i));
+        }
     }
 
     #[test]
