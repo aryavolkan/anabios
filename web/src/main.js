@@ -320,7 +320,16 @@ function loop(now) {
   const unitsPerPixel = stage.unitsPerPixel(viewportHeightPx);
   if (layers.agents.marker.visible) {
     const pulse = 0.5 + 0.5 * Math.sin(clock * 5);
-    layers.agents.marker.scale.setScalar(layers.agents.baseScale * (1.3 + 0.25 * pulse));
+    // Sized to the drawn figure, not the world's base scale: close in,
+    // bodyScale shrinks a figure to its physical body (~1.5-2 units) and a
+    // baseScale ring stayed 12-15 units across, a hoop ~7x the figure. At
+    // 0.5 x the drawn length the ring (inner/outer radius 1.25/1.55 at scale
+    // 1) hugs the figure at ~1.6-2.4x its length, and the pixel floor keeps
+    // it >= ~24 px across (inner edge clear of a LEGIBLE_PX figure) however
+    // small the figure is on screen.
+    const extent = layers.agents.selectedExtent;
+    const ringScale = extent > 0 ? Math.max(extent * 0.5, 6 * unitsPerPixel) : layers.agents.baseScale;
+    layers.agents.marker.scale.setScalar(ringScale * (1.3 + 0.25 * pulse));
     layers.agents.marker.material.opacity = 0.55 + 0.4 * pulse;
   }
 

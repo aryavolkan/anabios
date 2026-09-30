@@ -390,10 +390,18 @@ export class Agents {
     /** Selected agent id, or -1. */
     this.selected = -1;
     this.selectedPos = null;
+    /** Drawn nose-to-tail length (world units) of the selected figure, or 0. */
+    this.selectedExtent = 0;
+    // A flat ring sitting just above the agent's ground point: depth-tested,
+    // every uphill fragment on a slope, bank or beside a rock band lay under
+    // the opaque terrain and the ring drew as a 'C'. It is a selection
+    // highlight, so it draws as an overlay (x-ray through hills and trees)
+    // after the terrain (0) and water (1).
     this.marker = new THREE.Mesh(
       new THREE.RingGeometry(1.25, 1.55, 28).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xe9e1d2, transparent: true, opacity: 0.9, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xe9e1d2, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false }),
     );
+    this.marker.renderOrder = 2;
     this.marker.visible = false;
   }
 
@@ -446,6 +454,7 @@ export class Agents {
     const n = Math.min(a.count, this.max), d = a.data, s = a.stride;
     const counts = this.meshes.map(() => 0);
     this.selectedPos = null;
+    this.selectedExtent = 0;
     const gaits = this.meshes.map((m) => m.geometry.attributes.aGait.array);
     const prev = this.prev, cur = this.spare, buf = this.buf, born = this.born, died = this.died;
     cur.clear(); born.length = 0; died.length = 0;
@@ -474,7 +483,7 @@ export class Agents {
       const mood = d[o + AGENT.MOOD] | 0;
       gaits[kind][i * 2] = (id * 1.7) % 6.283;
       gaits[kind][i * 2 + 1] = asleep || rot === 0 ? 0 : (mood === 4 || mood === 5 ? 1.7 : 1);   // flee / fight: sprint
-      if (id === this.selected) this.selectedPos = _p.clone();
+      if (id === this.selected) { this.selectedPos = _p.clone(); this.selectedExtent = sc * fp; }
       cur.set(id, k); buf[k * 2] = x; buf[k * 2 + 1] = y;
       if (prev && !prev.has(id)) born.push(x, y);
     }
@@ -912,8 +921,11 @@ export class EventFx {
     for (let i = 0; i < pool; i++) {
       const m = new THREE.Mesh(
         new THREE.RingGeometry(0.82, 1.0, 40).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, depthTest: false, side: THREE.DoubleSide }),
       );
+      // Flat and up to ~28 units across: depth-tested, a hillside cut it to
+      // a crescent. Drawn as an overlay after the terrain and water instead.
+      m.renderOrder = 2;
       m.visible = false;
       const pillar = new THREE.Mesh(pillarGeo, pillarMaterial());
       pillar.visible = false;
