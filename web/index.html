@@ -36,11 +36,11 @@
   button,select,input{font:inherit;color:var(--bone);background:var(--basalt-2);border:1px solid var(--line-2);border-radius:3px;padding:5px 9px;cursor:pointer}
   button:hover,select:hover{border-color:var(--ochre)}
   button.on{background:var(--ochre);color:var(--basalt);border-color:var(--ochre);font-weight:600}
-  button:disabled{opacity:.45;cursor:default}
   /* The seed box shows a full u32 (ten digits) on top of its 9px side padding and 1px borders;
      the spin button would eat ~4 of those digits, so it goes, and the numeric keyboard stays. */
   input[type=number]{width:calc(10ch + 20px);cursor:text;appearance:textfield;-moz-appearance:textfield}
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  button:disabled,input:disabled{opacity:.45;cursor:default}   /* the seed box + Random seed grey out while a replay entry is selected */
   .label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
 
   /* top-left: identity + loader */

@@ -48,7 +48,9 @@ It needs an HTTP server (module scripts and `fetch` don't work from `file://`);
 any static server over `web/` works.
 
 Deep links: `?scenario=tribes&seed=3&speed=4`, `?replay=out-of-africa-saga`,
-`&color=diet`, `&paused=1`, `&events=1` (event markers on).
+`&color=diet`, `&paused=1`, `&events=1` (event markers on). A recorded replay
+plays back its one fixed seed, so the seed box and **Random seed** grey out
+while a replay entry is selected.
 
 **Controls:** drag orbits, right-drag pans, wheel zooms · click an agent for its
 inspector (energy, age, diet, mood, body plan, held inventions, genome-driven

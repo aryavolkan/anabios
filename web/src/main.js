@@ -150,8 +150,18 @@ function attach(source, entry) {
   $("badge-text").textContent = isLive ? "live · wasm" : "recorded replay";
   $("desc").textContent = entry.description || (isLive ? "" : "A deterministic replay recorded by anabios-headless; the world is played back frame by frame.");
   $("seed").value = source.meta().seed;
+  setSeedControls(isLive);
   buildColorModes(source);
   refreshStats(true);
+}
+
+/** A recorded replay plays back one fixed seed: `Load` ignores the seed box
+ *  for it and `attach` writes the recording's seed back, so `Random seed`
+ *  would only flash a number and restart the replay at tick 0. Both controls
+ *  are disabled while a replay entry is selected (the CSS dims them). */
+function setSeedControls(live) {
+  $("seed").disabled = !live;
+  $("reseed").disabled = !live;
 }
 
 function heightAt(x, y) { return state.terrain ? state.terrain.heightAt(x, y) : 0; }
@@ -433,7 +443,7 @@ function refreshStats(full) {
   $("stat-species").textContent = species.length;
   $("stat-era").textContent = species.reduce((m, s) => Math.max(m, s.tech_era || 0), 0);
   const rows = species.slice().sort((a, b) => b.count - a.count).slice(0, 14).map((s) =>
-    `<tr data-sid="${s.id}" title="click: colour by species, fly to a member"><td><span class="sw" style="background:${cssHex(hsv(speciesHue(s.id), 0.6, 0.9))}"></span>${esc(s.name)}</td><td>${s.count.toLocaleString()}</td><td>${s.tech_era ? "era " + s.tech_era : ""}</td></tr>`);
+    `<tr data-sid="${s.id}" title="click: fly to a member"><td><span class="sw" style="background:${cssHex(hsv(speciesHue(s.id), 0.6, 0.9))}"></span>${esc(s.name)}</td><td>${s.count.toLocaleString()}</td><td>${s.tech_era ? "era " + s.tech_era : ""}</td></tr>`);
   $("species").innerHTML = rows.join("");
   $("receipt").innerHTML = `<b>${esc(meta.scenario)}</b> · seed <b>${meta.seed}</b>` +
     (meta.fingerprint ? ` · fingerprint <b>${meta.fingerprint}</b>` : "") +
@@ -562,7 +572,9 @@ function renderCard() {
     row("age", a.age.toLocaleString());
     row("diet", `${(a.diet_carnivory * 100).toFixed(0)}% carnivore`);
     row("size", a.size.toFixed(2));
-    row("mood", a.mood + (a.asleep ? " (asleep)" : ""));
+    // The sleep mood already says it: "sleep (asleep)" was redundant. The
+    // flag still shows when a sleeper's arbiter has moved on to another mood.
+    row("mood", a.mood + (a.asleep && a.mood !== "sleep" ? " (asleep)" : ""));
     if (a.iq > 0) row("iq", a.iq.toFixed(2));
     if (a.infection > 0) row("infection", a.infection.toFixed(2));
     if (a.arousal > 0) row("arousal", a.arousal.toFixed(2));
@@ -708,6 +720,7 @@ $("scenario").onchange = () => {
   const opt = $("scenario").selectedOptions[0];
   // A replay and a live scenario can share an id (`out-of-africa-saga` does),
   // so the option's kind decides which manifest to read.
+  setSeedControls(opt.dataset.kind !== "replay");   // before Load, so a replay pick greys the seed at once
   if (opt.dataset.kind === "replay") {
     const r = state.manifest.replays.find((x) => x.id === opt.value);
     if (r) $("desc").textContent = r.description || r.name;
