@@ -14,14 +14,15 @@ const TRAIT_SERIES := [
 ]
 const CHART_W := 300
 const CHART_H := 80
-# 6, not 12: the panel sits between the minimap and the legend panel, and a
-# taller phylogeny list grew it down into the legend.
+# 6, not 12: keeps the panel compact. (A 12-row list once grew it down into the
+# legend panel, back when the two shared the left rail.)
 const PHYLO_MAX := 6
-# Resting top edge — clear of the minimap, which ends at y=270.
-const TOP_Y := 288.0
-# Floor for the slide-up when the legend panel below is unusually tall (clear of
-# the HUD line).
-const MIN_Y := 40.0
+# Top edge just under the top bar (y 10..48), level with the [Y]/[X] charts.
+const TOP_Y := 56.0
+# Gap to the codex book on the left.
+const CODEX_GAP := 10.0
+# Left edge when the scene has no codex (the codex's right edge is x=300).
+const LEFT_X := 310.0
 # Narrowest y-axis window the auto-scale will open to. Genome traits drift
 # inside a few hundredths of each other, so a fixed [0,1] axis drew every series
 # as one flat line through the middle of the chart; this is the floor that keeps
@@ -65,12 +66,8 @@ func _ready() -> void:
 	_phylo = Label.new()
 	_phylo.add_theme_font_size_override("font_size", 12)
 	vb.add_child(_phylo)
-	# Left rail, below the minimap (which ends at y=270) and above the legend
-	# panel: the old y=40 put the panel straight on top of the minimap, so the
-	# world overview showed through it.
 	set_anchors_preset(Control.PRESET_TOP_LEFT)
-	position.y = TOP_Y
-	position.x = 12
+	position = Vector2(LEFT_X, TOP_Y)
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -79,14 +76,18 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		visible = _shown
 
 
-# Keep the panel inside the left rail's free band. The legend panel below grows
-# upward as key rows are added ([M] module swatches, the [C] body ramps), so its
-# top edge is the live floor; only an unusually tall legend pushes this panel up
-# off its resting spot.
+# Sit in the free column right of the codex book, not in the left rail. The
+# rail below the brand block is the codex's now (its Species page runs to about
+# y=470), and this panel used to open at (12, 288) straight on top of it: two
+# translucent panels, the trait chart printed over the codex's traits and
+# related-species portraits. There is no room under the codex either (the
+# event log starts at y=602), so the panel follows the codex's live right edge.
 func _reposition() -> void:
-	var legend: Control = get_parent().get_node_or_null("LegendPanel")
-	var floor_y: float = (legend.position.y - 8.0) if legend != null else 612.0
-	position.y = clampf(floor_y - size.y, MIN_Y, TOP_Y)
+	var codex: Control = get_parent().get_node_or_null("CodexPanel")
+	var x: float = LEFT_X
+	if codex != null and codex.visible:
+		x = codex.position.x + codex.size.x + CODEX_GAP
+	position = Vector2(x, TOP_Y)
 
 
 func _process(_delta: float) -> void:

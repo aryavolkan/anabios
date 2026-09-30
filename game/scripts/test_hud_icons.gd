@@ -17,6 +17,7 @@ const TimeControls = preload("res://scripts/time_controls.gd")
 const TopBar = preload("res://scripts/top_bar.gd")
 const UnitCard = preload("res://scripts/unit_card.gd")
 const BrandPanel = preload("res://scripts/brand_panel.gd")
+const EvolutionPanel = preload("res://scripts/evolution_panel.gd")
 const HelixPanel = preload("res://scripts/helix_panel.gd")
 const UiTheme = preload("res://scripts/ui_theme.gd")
 
@@ -229,6 +230,9 @@ func _init() -> void:
 		HelixPanel.PANEL_RECT.position.x > _rect_of(ui["EventLog"]).end.x,
 		"helix clears the event log"
 	)
+	# The [T] panel opens beside the codex, not on top of it.
+	_check(EvolutionPanel.LEFT_X > codex.end.x, "evolution panel sits right of the codex")
+	_check(EvolutionPanel.TOP_Y > top_bar.end.y, "evolution panel starts under the top bar")
 
 	if _failed:
 		quit(1)
