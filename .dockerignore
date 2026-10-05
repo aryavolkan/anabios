@@ -1,0 +1,7 @@
+# Allow-list: the headless image needs only the Rust workspace and the scenarios.
+*
+!Cargo.toml
+!Cargo.lock
+!crates
+!scenarios
+crates/**/target
