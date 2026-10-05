@@ -226,6 +226,33 @@ jobs:
       - name: stage scenarios + manifest
         run: npm --prefix web run manifest
 
+  docker:
+    name: docker image (build + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      # Build the headless image exactly as `docker build .` does, with the
+      # layer cache in GitHub's cache backend so an unchanged workspace is not
+      # recompiled on every run.
+      - name: build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: anabios:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The image must run a scenario and print the determinism receipt; the
+      # Dockerfile's default command is the same minimal-world run, so this
+      # also checks the documented `docker run --rm anabios` path.
+      - name: smoke run
+        run: |
+          set -euo pipefail
+          out=$(docker run --rm anabios:ci run --scenario scenarios/minimal.toml --ticks 200 | tail -n 1)
+          echo "$out"
+          [[ "$out" == *state_hash=0x* ]] || { echo "::error::no state_hash in the image's output"; exit 1; }
+
   godot:
     name: godot viewer (headless smoke)
     runs-on: ubuntu-latest

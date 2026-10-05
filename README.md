@@ -2,11 +2,125 @@
 
 > Greek *ἀναβίωσις* — life arising.
 
-A discovery-driven evolutionary sandbox where complex ecosystems emerge from simple agent rules. You seed worlds with terrain and starter species, then watch — and catalogue what unfolds.
+[![ci](https://github.com/aryavolkan/anabios/actions/workflows/ci.yml/badge.svg)](https://github.com/aryavolkan/anabios/actions/workflows/ci.yml)
+[![showcase](https://github.com/aryavolkan/anabios/actions/workflows/showcase.yml/badge.svg)](https://github.com/aryavolkan/anabios/actions/workflows/showcase.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+[![Live showcase](https://img.shields.io/badge/live-aryavolkan.github.io%2Fanabios-2ea44f)](https://aryavolkan.github.io/anabios/)
 
-Not a neuroevolution project. Agents have **simple, hand-engineered cognition** (a tiny evolvable behavior program) combined with a **float genome** and a **modular body plan**. Speciation, migration, predator/prey cycles, dialects, and named behaviors (flight, ambush, cooperation) emerge from local interactions; the **codex** records the first time each phenomenon appears in your worlds.
+A deterministic, discovery-driven evolutionary sandbox. You seed a world with
+terrain and starter species, run it, and catalogue what unfolds: speciation,
+predator/prey cycles, dialects, trade, invention, war and disease emerge from
+local agent rules, a **codex** of 63 detectors records the first time each
+phenomenon appears, and every run is bit-identical per seed, so any finding can
+be replayed, verified and shared.
 
-## Status
+![Pixel-art viewer: a settled valley with villages, roads and herds, the species codex open on the left](gallery/scale-settlement-t691-overview.png)
+
+**No install needed:** the [hosted showcase](https://aryavolkan.github.io/anabios/)
+plays a recorded run through deep time, and its `/atlas/` page runs the same
+simulation core *live* in the browser through WebAssembly.
+
+Not a neuroevolution project. Agents have **simple, hand-engineered cognition**
+(a tiny evolvable behavior program) combined with a **float genome** and a
+**modular body plan**; everything above the agent is emergent.
+
+## Why it is interesting as engineering
+
+- **Determinism is a contract, not a hope.** A seeded Xoshiro stream is the only
+  randomness, transcendentals go through `libm` so Linux and macOS agree
+  bit-for-bit, every `#[serde(skip)]` field must be justified against the
+  snapshot hash, and CI runs the same seed on both operating systems and in
+  WebAssembly ([`docs/determinism-contract.md`](docs/determinism-contract.md)).
+- **One core, three front ends.** `anabios-core` does no I/O. It is driven by a
+  headless CLI for batch science, by a Godot 4 viewer through a gdext cdylib, and
+  by a three.js atlas through a hand-rolled C ABI compiled to wasm.
+- **Measured, including the failures.** Criterion benchmarks, a collision audit,
+  per-world validation sweeps with a "met / not met" verdict, and negative results
+  recorded in place rather than deleted ([below](#results)).
+- **CI that earns its badge.** 1,031 tests, a release-mode emergence gate sharded
+  six ways, coverage floors of 82 % (workspace) and 95 % (core) enforced per line,
+  a cross-OS determinism smoke, wasm-vs-native fingerprint equality, headless
+  Godot scene loads, GDScript and Rust lint, and a Docker image build + smoke run.
+
+## At a glance
+
+| | |
+|---|---|
+| Core | `anabios-core`: structure-of-arrays agent simulation, uniform-grid spatial hashing, evolvable postfix behavior programs, 50-slot float genome, modular morphology, speciation, `sense`/`decide` parallel over rayon |
+| Emergence | 63 codex event types, from `Extinction` and `SpeciationEvent` to `InventionAdopted`, `EpidemicOutbreak` and `MedicineContainment` |
+| Worlds | 12 curated scenarios in `scenarios/*.toml`, 1024² to 8192² units, every subsystem on unless a world opts out |
+| Speed | ~0.75 ms per tick at 1k agents, ~2.5 ms at 10k (criterion, 10-core Apple Silicon); 1.4–12.5 ms per tick on the full-stack curated worlds ([`docs/scenarios.md`](docs/scenarios.md)) |
+| Determinism | bit-identical per seed across Linux, macOS and WebAssembly; save → load → step round-trips; a `replay` verifier re-simulates every codex event from snapshots |
+| Tests | 1,031 `#[test]` functions across unit tests and 36 integration suites; coverage floors; Godot viewer and web front-end smoke tests |
+| Size | ~59k lines of Rust, ~29k of GDScript, ~3.7k of JavaScript; 161 locked crates |
+
+## Quickstart
+
+```bash
+git clone https://github.com/aryavolkan/anabios.git && cd anabios
+cargo build --release -p anabios-headless
+./target/release/anabios-headless run --scenario scenarios/tribes.toml --ticks 5000
+# ticks=5000 alive=... biomass=... state_hash=0x...   ← the determinism receipt
+```
+
+Or without a Rust toolchain:
+
+```bash
+docker build -t anabios .
+docker run --rm anabios run --scenario scenarios/minimal.toml --ticks 1000
+docker run --rm -v "$PWD/runs:/runs" anabios sweep \
+    --scenario scenarios/speciation.toml --seeds 8 --ticks 5000 --out /runs/speciation-8
+```
+
+`scripts/emergence.sh run tribes` wraps the same binary and tallies the codex
+events; [`docs/reproduce.md`](docs/reproduce.md) walks from a clean clone to a
+reproduced finding.
+
+## Architecture
+
+```
+scenarios/*.toml ──► anabios-core   pure Rust: deterministic sim, codex detectors, snapshots
+                        │
+        ┌───────────────┼──────────────────────┐
+        ▼               ▼                      ▼
+ anabios-headless   anabios-godot          anabios-wasm
+ CLI: run, sweep,   gdext cdylib for       plain C ABI (no wasm-bindgen)
+ soak, replay,      game/ — Godot 4.7      for web/ — three.js atlas,
+ record, demo,      pixel-art viewer,      live worlds + the showcase/
+ audit, autopsy     codex UI, charts       replay deck (GitHub Pages)
+```
+
+- **`anabios-core`** — pure Rust simulation crate (no Godot, no I/O, deterministic)
+- **`anabios-godot`** — gdext wrapper for use from the Godot project
+- **`anabios-headless`** — CLI for batch runs, sweeps, codex mining and replay verification
+- **`anabios-wasm`** — WebAssembly bridge (plain C ABI, no wasm-bindgen) exposing the core to the browser
+- **`web/`** — three.js frontend: live wasm worlds + recorded replays in one 3D scene (`scripts/web.sh`)
+- **`game/`** — Godot 4.7 project (viewer, codex UI, world setup, scenario authoring)
+- **`showcase/`** — the static replay deck published to GitHub Pages
+
+## Results
+
+- **Throughput.** Full tick at 1k agents ~0.75 ms, at 10k ~2.5 ms (criterion,
+  `crates/anabios-core/benches/tick_bench.rs`); the curated worlds cost 1.4 ms
+  (`speciation`) to 12.5 ms (`huge-steppe`, 8192²) per tick. A profiling pass on
+  the 10k+ path found the cultural-transmission scan dominating and documented
+  why no byte-identical cheap win exists ([`docs/perf-notes.md`](docs/perf-notes.md)).
+- **Validation.** Each world has a bar (which founder kinds persist, which events
+  fire) checked over 4–8 seeds: 8 of the 12 worlds meet it; `tribes`,
+  `grand-theater` and both Out-of-Africa worlds do not, and the table in
+  [`docs/scenarios.md`](docs/scenarios.md) says which kinds die out and which
+  fixture test covers the phenomenon instead.
+- **Negative results, kept.** Culture is competitively excluded because its
+  transmission is payoff-blind (the O1 finding, `r = -0.29`, reproducible from
+  `docs/reproduce.md`); gene-culture coupling measured negative; payoff-biased
+  learning (O2b) shipped and measured negative on the energy proxy; the late-run
+  trade freeze was diagnosed supply-side and its fix kept as an opt-in lever.
+- **Determinism.** The hosted showcase is regenerated from source at publish
+  time and prints its `state_hash`; a native run of the same scenario and seed
+  must match it, and the wasm build's trajectory fingerprint equals the native
+  one in CI.
+
+## What's in the engine
 
 Design at [`docs/superpowers/specs/2026-05-23-anabios-design.md`](docs/superpowers/specs/2026-05-23-anabios-design.md). Shipped to date (git tags `m1`–`m10` plus later batches). Each subsystem below has a knob (`inventions_enabled`, `disease_enabled`, …) that the scenario schema defaults **on** — a curated world lists only what it turns off — while the engine itself (`World::new`) defaults every subsystem off; four experiment levers (`env_period`, `climate_drift_rate`, `payoff_biased_learning`, `unilateral_trade`) stay off unless a file turns them on. See [`docs/scenarios.md`](docs/scenarios.md).
 
@@ -199,13 +313,6 @@ The saga timeline (`game/showcase/out-of-africa-saga.json`) narrates the out-of-
 
 Each event costs its own re-simulation from the nearest snapshot, and the full-stack worlds fire thousands of events over a few thousand ticks — pass `--event <index>` to verify a single one on a long run.
 
-## Stack
-
-- **`anabios-core`** — pure Rust simulation crate (no Godot, no I/O, deterministic)
-- **`anabios-godot`** — gdext wrapper for use from the Godot project
-- **`anabios-headless`** — CLI for batch runs, W&B sweeps, codex mining
-- **`anabios-wasm`** — WebAssembly bridge (plain C ABI, no wasm-bindgen) exposing the core to the browser
-- **`web/`** — three.js frontend: live wasm worlds + recorded replays in one 3D scene (`scripts/web.sh`)
-- **`game/`** — Godot 4.6+ project (viewer, codex UI, world setup, scenario authoring)
+## Roadmap and design docs
 
 See the design doc for the full architecture and agent model. **Roadmap & plans:** [`ROADMAP.md`](ROADMAP.md) (the long-horizon open-ended arc; the Q3 2026 quarterly plan's status record lives in [`docs/superpowers/specs/2026-08-07-detailed-roadmap.md`](docs/superpowers/specs/2026-08-07-detailed-roadmap.md)) + [`docs/superpowers/plans/2026-08-01-roadmap-plans-index.md`](docs/superpowers/plans/2026-08-01-roadmap-plans-index.md) (per-item implementation plans). The milestone arcs: [`docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md`](docs/superpowers/specs/2026-07-22-emergence-roadmap-design.md) (E1–E10, complete) and [`docs/superpowers/specs/2026-08-02-open-ended-complexity-arc-design.md`](docs/superpowers/specs/2026-08-02-open-ended-complexity-arc-design.md) (O1–O8, in progress).
