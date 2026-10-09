@@ -108,7 +108,14 @@ pub fn has(meme: &[f32; MEME_CHANNELS], p: usize) -> bool {
 /// it, mirroring `invention::iq_permits`.
 #[inline]
 pub fn iq_permits(iq: f32, cognition_enabled: bool) -> bool {
-    !cognition_enabled || iq >= PRACTICE_IQ_REQ
+    iq_permits_at(iq, cognition_enabled, PRACTICE_IQ_REQ)
+}
+
+/// `iq_permits` against an explicit bar — the world's `practice_iq_req`. The
+/// sim routes through `World::practice_iq_permits` so a scenario can move it.
+#[inline]
+pub fn iq_permits_at(iq: f32, cognition_enabled: bool, req: f32) -> bool {
+    !cognition_enabled || iq >= req
 }
 
 /// Inbreeding-depression closeness in `[0,1]`: 1 when the parents are
@@ -140,7 +147,7 @@ pub fn discover_step(world: &mut World) {
         if !module::has(&world.agents.modules[i], ModuleType::Communicator) {
             continue;
         }
-        if !iq_permits(world.agents.iq[i], world.cognition_enabled) {
+        if !world.practice_iq_permits(world.agents.iq[i]) {
             continue;
         }
         let openness = world.agents.genome[i].get(GenomeSlot::Openness);

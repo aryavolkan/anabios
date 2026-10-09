@@ -89,6 +89,7 @@ macro_rules! smoke_tests {
 }
 
 smoke_tests! {
+    cognition_threshold: "cognition-threshold.toml";
     grand_theater: "grand-theater.toml";
     habitat_territories: "habitat-territories.toml";
     huge_steppe: "huge-steppe.toml";

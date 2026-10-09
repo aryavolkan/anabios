@@ -1,6 +1,6 @@
 # Scenarios → phenomena
 
-`scenarios/` holds twelve worlds, each named for its setting rather than for a
+`scenarios/` holds thirteen worlds, each named for its setting rather than for a
 single phenomenon. The scenario schema defaults every feature knob **on**
 (`Scenario`, `scenarios/*.toml`) — a curated world only lists what it turns
 **off**, so every file below runs the full engine stack unless its row says
@@ -187,6 +187,7 @@ technique, tuned seeds, measured caveats; this table is the index.
 | `sandbox.toml` | 2048² world, a 16k safety cap food never reaches (peak 10,900), no staging; seasons slowed to `season_period = 2500` | The open-ended run for watching the tech tree, gene-vs-culture and long ecological cycles at scale. Absorbed: sandbox-large, sandbox-coevolution, living-sandbox-coevolution. | — | 7 | 11.4 |
 | `riverlands.toml` | 4096² self-siting continent: mountains, rain-shadow, a hydrology-carved river network; seasons slowed to `season_period = 3000` | Terrain-aware placement (`kind = "habitat"`/`"near_spec"`) so herds and a persistent predator pack (`mate_seeking`; the `max_share` ceiling the pack once needed is gone) find water and each other regardless of seed. Absorbed: continental. | — | 7 | 5.9 |
 | `huge-steppe.toml` | 8192² world (biome grid 1024²), a 6k population budget that binds by design (the one such world: its food would carry ~80k); seasons slowed to `season_period = 5000` | Phase-1 "Huge" scale tier: world-scale (not population-scale) throughput. | — | 21 | 12.5 |
+| `cognition-threshold.toml` | 1024² plains, six ape lineages (the `innovator` kit) that differ only in `cognitive_potential` (0.0 to 1.0 in steps of 0.2), founded together on one habitat anchor and seeded with Stone Tools and Fire | The price of the cognition threshold: realized IQ per tier against the five IQ gates, lifetime offspring by realized-IQ bin, and a gate-height sweep (`anabios-headless cognition`, `scripts/cognition_plot.py`; readings under "Cognition threshold" below). | `resources_enabled`, `gene_requirements`, `gene_tech_coupling`, `disasters_enabled`, `war_enabled`, `disease_enabled`, `domestication_enabled`, `sexual_dimorphism_enabled`, `anthro_race_enabled` all `false`: the other acquisition gates and the noise layers are off so the IQ gates are the only differential between tiers | 1601 | 2.1 (this container, 4 cores, 300–600 agents) |
 
 ## Validation
 
@@ -235,6 +236,7 @@ alive at tick 1500 on `tribes`) is covered by `tests/emergence.rs`
 | `riverlands` | met, 8/8 | — |
 | `out-of-africa-earth` | not met, 0/4 (spiner 0/4, sentinel 1/4, asocial prey 2/4) | Does not reliably keep the sentinel and asocial-prey kinds; no fixture covers their persistence. The tripled-count variant was not probed on this map (it held those kinds on the saga's cast, which this world shares) and was not adopted, because spiner still dies out there. Does not reliably show invention discovery within 2000 ticks (2/4); covered as for `grand-theater`. |
 | `huge-steppe` | met, 4/4 | — |
+| `cognition-threshold` | not held to the bar: the world is an instrument, and one of its six founder kinds (the gene-0 tier) is meant to be able to die out. Every tier is alive at tick 6000 on 8/8 seeds, the gene-0 tier at 1–12 agents (5.6 on average) | — |
 
 The collision resolve's move from two fixed passes to the converging form
 (2026-09-27) shifts every trajectory, so the bar was re-run with the same
@@ -395,6 +397,115 @@ the guild only ever lived through that founder-energy boom). With both
 window, breed from maturity on (30 founders → 60 by tick 1500 on seed 0)
 and waste a quarter of the flesh instead. The mechanisms and their
 constants are in `crates/anabios-core/src/chase.rs` and `carcass.rs`.
+
+## Cognition threshold
+
+`scenarios/cognition-threshold.toml` (2026-10-09) measures what the cognition
+threshold is worth. The cognitive layer (`crates/anabios-core/src/iq.rs`)
+gives every agent a realized IQ in `[0, 1]`, half the heritable
+`CognitivePotential` gene and half the juvenile's enrichment (local food and
+company), and five gates read it: a maladaptive practice needs 0.10, and an
+invention of era 1, 2, 3 or 4 needs 0.15, 0.35, 0.55 or 0.75 to be discovered
+or copied. The ladder is now a scenario knob — `iq_req_by_era = [..]` and
+`practice_iq_req` set `World::iq_req_by_era` / `World::practice_iq_req`,
+defaulting to the constants the gates always read (`invention::IQ_REQ_BY_ERA`,
+`practice::PRACTICE_IQ_REQ`), so every existing world is unchanged — and the
+world founds six lineages of the `innovator` kit that differ in nothing but
+the gene (0.0, 0.2, 0.4, 0.6, 0.8, 1.0; 40 founders each, Openness 1.0,
+Stone Tools and Fire seeded), on one habitat anchor so a discovery by any
+tier reaches every tier whose IQ clears the gate. The material and genome
+gates on the tech and the noise layers (disasters, war, disease,
+domestication, dimorphism, the arms race) are off, so the IQ gates are the
+only thing that separates the tiers; the realism layers stay on.
+
+`anabios-headless cognition --scenario scenarios/cognition-threshold.toml
+--ticks 6000 --seeds 8 --gate-scales 0,0.5,1,1.5,2 --out runs/cognition`
+reads the world without touching it: per window and founder tier (every
+agent takes the tier of its first parent, so speciation splinters stay with
+their founders) the count, births, deaths, mean realized IQ and gene, mean
+energy and tech era, the share of the tier above each gate and the
+discoveries credited to it (`series.csv`); every completed lifetime whose IQ
+had crystallized (age at death ≥ 100) with its offspring credit
+(`births_ok`), lifespan and highest era, folded by 0.05 realized-IQ bin
+(`fitness.csv`) and by tier (`tiers.csv`); and one row per run with the
+ladder in force (`gates.csv`). `--gate-scales` multiplies the whole ladder
+by each factor and runs once per factor — 0 opens every gate, 2 puts the
+era-2 gate at 0.70 and the era-3 and era-4 gates out of reach.
+`scripts/cognition_plot.py runs/cognition` draws the five SVGs below
+(standard library only). 40 runs of 6000 ticks took about six minutes on
+four cores.
+
+Readings, 8 seeds (1601–1608) × 6000 ticks, the default ladder unless the
+row says otherwise:
+
+![Realized IQ by founder tier](../gallery/cognition-threshold-iq-by-tier.svg)
+
+- **The tiers sit where the gene puts them, and sink together.** Realized IQ
+  comes out in gene order on every seed (pinned by
+  `tests/cognition_threshold.rs`), spaced about 0.1 apart: 0.23 / 0.33 /
+  0.43 / 0.54 / 0.64 / 0.75 at maturity. Every tier then drifts down as the
+  shared site is grazed out and juvenile nutrition falls, by 0.10–0.15 over
+  6000 ticks; the gene-0 tier crosses under the era-1 gate near tick 5000
+  and ends on the practice gate (0.10), and the gene-1.0 tier drops from the
+  era-4 gate to 0.60.
+
+![Population by founder tier](../gallery/cognition-threshold-alive-by-tier.svg)
+
+- **The tier under the era-2 gate is excluded.** At tick 6000 the gene-0
+  tier holds 45 agents summed over the eight seeds (1–12 on each) against
+  297–694 for the other five; it is born 436 times against 908–1424. Its
+  realized IQ never clears 0.35, so it never learns Farming (+60% bite) or
+  anything above it, and once its IQ sinks below 0.15 its children cannot
+  even re-learn the Stone Tools and Fire it was seeded with (era-1 share of
+  the tier 85% at tick 1000, 27% at 4000 on the scenario seed). The other
+  tiers are not ordered by gene: gene 0.6 ends highest (694 alive, 1424
+  births), gene 0.2 and 1.0 next (525 / 507), gene 0.4 and 0.8 last (381 /
+  297) — and which of the five leads is a per-seed matter (on most seeds
+  one or two tiers hold the site with 100–290 agents and the rest sit at
+  1–50), so the sums above are dominated by a few seeds each. The gene-0
+  tier's exclusion is the one result every seed shares.
+
+![Lifetime offspring by realized IQ](../gallery/cognition-threshold-fitness-by-iq.svg)
+
+- **Fitness against realized IQ is a hump that peaks between the era-2 and
+  era-3 gates.** Pooling 5596 completed lifetimes, offspring per matured
+  lifetime is 0.55–0.61 below the practice gate (IQ < 0.10: no practice,
+  but no tech either, a perception radius a third of a bright agent's and
+  the shortest lives), 1.2–1.5 between the era-1 and era-2 gates
+  (0.10–0.35), 1.5–2.05 between the era-2 and era-3 gates (0.35–0.55,
+  peaking at 0.45–0.50 with 2.05), and 1.1–1.4 from the era-3 gate to the
+  era-4 gate (0.55–0.75). Lifespans fall the same way (1600–2050 ticks over
+  0.15–0.45, 1300–1400 from 0.50 to 0.70): era-3 and era-4 tech comes
+  with upkeep, extra basal metabolism, crowding stress and pollution
+  (`invention/params.rs`), which in a food-limited world costs more than its
+  buffs return. Above 0.75 there are only 214 lifetimes (1.4–2.1 offspring);
+  the bins past 0.85 are empty.
+
+![Lifetime offspring per tier by gate height](../gallery/cognition-threshold-fitness-by-gate.svg)
+![Births per run by gate height](../gallery/cognition-threshold-births-by-gate.svg)
+
+- **The default ladder is the worst height for the whole population.**
+  Births per run over the sweep: 1159 with every gate open (mean era 3.9 at
+  the end), 1091 at half height (3.8), 766 at the default ladder (2.2), 955
+  at 1.5× (1.6) and 1000 at 2× (1.1); final population 574 / 474 / 306 /
+  431 / 403. A ladder that lets every tier hold the same tech, high or low,
+  carries 25–50% more births than one that splits the population across
+  eras — the gate makes tech a differential advantage, and the mixed
+  population is the smaller one. Per tier, the gene-1.0 lineage leads when
+  nothing separates the tiers but the gene itself: with the gates open it
+  takes 2911 of 11,271 pooled births at 1.74 offspring per lifetime (the
+  gene-0 tier 971 at 1.34 — perception radius scales with IQ, so a bright
+  agent sees and reaches food first), and at 2× it is the only tier that
+  learns any era-2 tech (mean era 1.7) and leads again at 1.88. At the
+  default ladder the lead passes to gene 0.6 (1.65) and gene 1.0 falls to
+  1.32, the era-3 holders' penalty above.
+
+Taken together: a cognition threshold pays exactly where it admits a lineage
+to a bite-multiplying technology its neighbours cannot copy (the era-2 gate
+here), is worth nothing where every tier can clear it, and above the era-3
+gate the realized tech carries its holders backwards in this world. The
+readings are one world, one seed set and the engine's current tech
+constants; the instrument re-runs them in minutes.
 
 ## Running
 

@@ -459,7 +459,7 @@ fn transmit_inventions(
 /// unless its feature flag is on.
 fn receiver_can_learn_invention(world: &World, i: usize, k: usize, self_mask: u32) -> bool {
     crate::invention::INVENTIONS[k].prereqs & !self_mask == 0 // missing foundations
-        && crate::invention::iq_permits(world.agents.iq[i], k, world.cognition_enabled)
+        && world.invention_iq_permits(world.agents.iq[i], k)
         && crate::invention::materials_permit(
             &world.agents.inventory[i],
             k,
@@ -475,9 +475,7 @@ fn receiver_can_learn_invention(world: &World, i: usize, k: usize, self_mask: u3
 /// spread widely. The gate is loop-invariant (one receiver), so it is checked
 /// once rather than per channel.
 fn transmit_practices(world: &mut World, i: usize, scan: &NeighborMemeScan) {
-    if !world.cognition_enabled
-        || !crate::practice::iq_permits(world.agents.iq[i], world.cognition_enabled)
-    {
+    if !world.cognition_enabled || !world.practice_iq_permits(world.agents.iq[i]) {
         return;
     }
     for p in 0..crate::practice::PRACTICE_COUNT {

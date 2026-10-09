@@ -90,6 +90,19 @@ pub struct World {
     /// `0.0` for every agent, so the metabolic multiplier is exact identity.
     #[serde(default)]
     pub cognition_enabled: bool,
+    /// Realized-IQ an agent needs to discover or copy an invention, indexed
+    /// by `era - 1` (the cognition threshold ladder). Defaults to
+    /// `invention::IQ_REQ_BY_ERA`; a scenario moves it with `iq_req_by_era`
+    /// to measure how the threshold's height bears on fitness
+    /// (`scenarios/cognition-threshold.toml`). Read only when
+    /// `cognition_enabled`; inert otherwise.
+    #[serde(default = "default_iq_req_by_era")]
+    pub iq_req_by_era: [f32; 4],
+    /// Realized-IQ an agent needs to catch a maladaptive practice. Defaults
+    /// to `practice::PRACTICE_IQ_REQ`; a scenario moves it with
+    /// `practice_iq_req`. Read only when `cognition_enabled`.
+    #[serde(default = "default_practice_iq_req")]
+    pub practice_iq_req: f32,
     /// When true, the subcortical affect layer is active: `affect::develop_all`
     /// updates per-agent Panksepp activations and the affect bias hooks steer
     /// behavior. Off by default; opt-in per scenario. When false the affect stage
@@ -545,6 +558,16 @@ pub struct World {
     pub culture_mask: Vec<bool>,
 }
 
+/// Serde defaults for the cognition threshold ladder: the constants the gates
+/// read before the ladder became a field (old snapshots lack both).
+fn default_iq_req_by_era() -> [f32; 4] {
+    crate::invention::IQ_REQ_BY_ERA
+}
+
+fn default_practice_iq_req() -> f32 {
+    crate::practice::PRACTICE_IQ_REQ
+}
+
 /// Serde default for `World::max_population` (old snapshots lack the field).
 fn default_max_population() -> u32 {
     crate::reproduce::MAX_POPULATION
@@ -565,6 +588,22 @@ fn default_biome_step_interval() -> u32 {
 }
 
 impl World {
+    /// Whether an agent with realized `iq` may discover or copy invention
+    /// `k` under this world's cognition threshold ladder (`iq_req_by_era`).
+    /// Always true with `cognition_enabled` off.
+    #[inline]
+    pub fn invention_iq_permits(&self, iq: f32, k: usize) -> bool {
+        crate::invention::iq_permits_at(iq, k, self.cognition_enabled, &self.iq_req_by_era)
+    }
+
+    /// Whether an agent with realized `iq` may catch a maladaptive practice
+    /// under this world's `practice_iq_req`. Always true with
+    /// `cognition_enabled` off.
+    #[inline]
+    pub fn practice_iq_permits(&self, iq: f32) -> bool {
+        crate::practice::iq_permits_at(iq, self.cognition_enabled, self.practice_iq_req)
+    }
+
     /// Build a world from a seed: deterministic biome + empty agent
     /// population + fresh spatial hash + tick 0.
     pub fn new(seed: u64) -> Self {
@@ -596,6 +635,8 @@ impl World {
             gene_tech_coupling: false,
             gene_requirements: false,
             cognition_enabled: false,
+            iq_req_by_era: crate::invention::IQ_REQ_BY_ERA,
+            practice_iq_req: crate::practice::PRACTICE_IQ_REQ,
             affect_enabled: false,
             living_biome: false,
             season_period: 0,

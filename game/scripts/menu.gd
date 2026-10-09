@@ -31,6 +31,12 @@ const SCENARIOS: Array[Dictionary] = [
 		"body": 1
 	},
 	{
+		"label": "Cognition threshold — IQ ladder vs fitness",
+		"path": "res://../scenarios/cognition-threshold.toml",
+		"ground": 0,
+		"body": 1
+	},
+	{
 		"label": "Markets — settlements & trade",
 		"path": "res://../scenarios/markets.toml",
 		"ground": 7,

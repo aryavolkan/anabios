@@ -2,6 +2,7 @@
 
 mod audit;
 mod autopsy;
+mod cognition;
 mod demo;
 mod founder;
 mod ledger;
@@ -245,6 +246,41 @@ enum Command {
         #[arg(long)]
         extra_resolve: bool,
     },
+    /// Cognition threshold instrument: run a scenario and write, per founder
+    /// tier and realized-IQ bin, how cognition measured against the invention
+    /// and practice gates bears on fitness (alive counts, gate shares,
+    /// lifetime offspring, discoveries), plus a gate-height sweep. Best with
+    /// `scenarios/cognition-threshold.toml`; draw it with
+    /// `scripts/cognition_plot.py`.
+    Cognition {
+        /// Path to a `.toml` scenario file.
+        #[arg(long)]
+        scenario: PathBuf,
+        /// Ticks per run. Default 6000.
+        #[arg(long, default_value_t = 6000)]
+        ticks: u64,
+        /// Seeds per gate scale, counted up from `--seed` (or the scenario
+        /// seed). Default 1.
+        #[arg(long, default_value_t = 1)]
+        seeds: u64,
+        /// First seed; overrides the scenario seed.
+        #[arg(long)]
+        seed: Option<u64>,
+        /// Ticks between `series.csv` rows. Default 100.
+        #[arg(long, default_value_t = 100)]
+        window: u64,
+        /// Output directory for the four CSVs.
+        #[arg(long)]
+        out: PathBuf,
+        /// Gate-height sweep: multiply the whole IQ gate ladder by each
+        /// factor and run the scenario once per factor (`0` opens every
+        /// gate, `1` is the scenario's own ladder). Default: `1` only.
+        #[arg(long, value_delimiter = ',')]
+        gate_scales: Vec<f32>,
+        /// Override the rayon thread pool size; defaults to logical CPUs.
+        #[arg(long)]
+        threads: Option<usize>,
+    },
     /// O1 diagnosis: run a scenario, log per-strategy (cultural vs asocial)
     /// aggregates each window to a CSV, and report the invasion fitness of the
     /// chosen rare strategy. Reads the world only; no sim/golden impact.
@@ -315,6 +351,9 @@ fn main() -> Result<()> {
                 std::process::exit(1);
             }
             Ok(())
+        }
+        Command::Cognition { scenario, ticks, seeds, seed, window, out, gate_scales, threads } => {
+            cognition::run(scenario, ticks, seeds, seed, window, out, gate_scales, threads)
         }
         Command::Autopsy { scenario, seed, ticks, window, out, mutant, tag } => {
             autopsy::run(scenario, seed, ticks, window, out, mutant.into(), tag.into())

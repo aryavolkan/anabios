@@ -639,7 +639,15 @@ pub fn iq_req(k: usize) -> f32 {
 /// the hard capability *ceiling*.
 #[inline]
 pub fn iq_permits(iq: f32, k: usize, cognition_enabled: bool) -> bool {
-    !cognition_enabled || iq >= iq_req(k)
+    iq_permits_at(iq, k, cognition_enabled, &IQ_REQ_BY_ERA)
+}
+
+/// `iq_permits` against an explicit threshold ladder (`reqs[era - 1]`), the
+/// world's `iq_req_by_era`. The sim routes through `World::invention_iq_permits`
+/// so a scenario can move the ladder; `iq_permits` keeps the default one.
+#[inline]
+pub fn iq_permits_at(iq: f32, k: usize, cognition_enabled: bool, reqs: &[f32; 4]) -> bool {
+    !cognition_enabled || iq >= reqs[(INVENTIONS[k].era - 1) as usize]
 }
 
 /// Whether `genome` clears invention `k`'s hard genetic prerequisite
@@ -1107,6 +1115,7 @@ pub fn invention_step(world: &mut World) {
             // here keeps it out of both the summed probability and the weighted
             // pick below (its `probs` entry stays 0).
             let cognition = world.cognition_enabled;
+            let iq_reqs = world.iq_req_by_era;
             let agent_iq = world.agents.iq[i];
             // Material gate: with the economy on, a discovery also needs its
             // trade-goods basket in hand (no-op when resources are disabled).
@@ -1126,7 +1135,7 @@ pub fn invention_step(world: &mut World) {
             let mut total = 0.0f32;
             let mut probs = [0.0f32; INVENTION_COUNT];
             candidates(mask, |k| {
-                if !iq_permits(agent_iq, k, cognition) {
+                if !iq_permits_at(agent_iq, k, cognition, &iq_reqs) {
                     return;
                 }
                 if !materials_permit(&inventory, k, resources) {
