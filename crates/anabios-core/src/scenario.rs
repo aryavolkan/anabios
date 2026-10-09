@@ -76,6 +76,19 @@ pub struct Scenario {
     /// guarantee is unchanged.
     #[serde(default = "default_true")]
     pub cognition_enabled: bool,
+    /// Cognition threshold ladder: the realized IQ an agent needs to discover
+    /// or copy an invention of era 1..4 (`World::iq_req_by_era`). Absent =
+    /// the engine default `invention::IQ_REQ_BY_ERA` (`[0.15, 0.35, 0.55,
+    /// 0.75]`). Each entry must be finite and in `[0, 1]`. Read only with
+    /// `cognition_enabled`.
+    #[serde(default)]
+    pub iq_req_by_era: Option<[f32; 4]>,
+    /// The realized IQ an agent needs to catch a maladaptive practice
+    /// (`World::practice_iq_req`). Absent = `practice::PRACTICE_IQ_REQ`
+    /// (`0.10`). Must be finite and in `[0, 1]`. Read only with
+    /// `cognition_enabled`.
+    #[serde(default)]
+    pub practice_iq_req: Option<f32>,
     /// On by default (scenario schema): enable the subcortical affect layer
     /// (per-agent Panksepp activations developed each tick; SEEKING biases
     /// foraging in M-A). Set `false` to opt out; the engine's own default
@@ -994,6 +1007,8 @@ pub enum ScenarioError {
          starting_inventions too"
     )]
     InventionsDisabled,
+    #[error("iq_req_by_era / practice_iq_req entries must be finite and in [0, 1]; got {0}")]
+    InvalidIqReq(f32),
     #[error(
         "knowledge_enabled is on but inventions_enabled = false — knowledge accumulation \
          tracks Writing-holding cultures, which don't exist without the invention tree; \
@@ -1117,6 +1132,15 @@ impl Scenario {
         if scenario.biome_step_interval == Some(0) {
             return Err(ScenarioError::InvalidBiomeStepInterval(0));
         }
+        // The cognition thresholds compare against a realized IQ in [0, 1]:
+        // a NaN gate would pass nobody and silently freeze every lineage's
+        // tech, a gate above 1 is the same freeze spelled out.
+        let gates = scenario.iq_req_by_era.into_iter().flatten().chain(scenario.practice_iq_req);
+        for req in gates {
+            if !(req.is_finite() && (0.0..=1.0).contains(&req)) {
+                return Err(ScenarioError::InvalidIqReq(req));
+            }
+        }
         // Disease's spillover probe queries `disease::SPILLOVER_RADIUS`, and a
         // spatial-hash query only reaches one cell (`world_size / hash_res`)
         // out. A narrower cell parses and instantiates cleanly, then trips the
@@ -1175,6 +1199,12 @@ impl Scenario {
         w.gene_tech_coupling = self.gene_tech_coupling;
         w.gene_requirements = self.gene_requirements;
         w.cognition_enabled = self.cognition_enabled;
+        if let Some(reqs) = self.iq_req_by_era {
+            w.iq_req_by_era = reqs;
+        }
+        if let Some(req) = self.practice_iq_req {
+            w.practice_iq_req = req;
+        }
         w.affect_enabled = self.affect_enabled;
         w.living_biome = self.living_biome;
         w.season_period = self.season_period;

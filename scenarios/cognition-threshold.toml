@@ -1,0 +1,125 @@
+# Cognition threshold: six ape lineages that differ in one gene only, the
+# heritable CognitivePotential, founded together on one liveable site and
+# sharing one culture. Each lineage is a rung of the realized-IQ ladder the
+# invention gates read (era 1..4 need 0.15 / 0.35 / 0.55 / 0.75; a bad
+# practice needs 0.10), so a rung either clears a gate or does not, and the
+# fitness difference between rungs is the price of the threshold. Measure it
+# with `anabios-headless cognition --scenario scenarios/cognition-threshold.toml`
+# (per-tier counts, realized-IQ shares above each gate, lifetime offspring by
+# realized-IQ bin, and a gate-height sweep through `--gate-scales`), and draw
+# it with `scripts/cognition_plot.py`; docs/scenarios.md has the readings.
+#
+# Every rung is the `innovator` kit (omnivore grazer with a Communicator,
+# Reproductive kept) at Openness 1.0, seeded with Stone Tools and Fire so the
+# era-2 candidates (Farming, Metalworking, Wells, Archery) are open from tick
+# 0 and the 0.35 gate is live at once. The tiers are founded on one habitat
+# anchor and scattered around it (`near_spec`), so a discovery by one tier
+# reaches every tier whose IQ clears the gate.
+#
+# Opt-outs isolate the cognition gates from the other acquisition gates and
+# from noise that would swamp a six-way comparison: no material baskets
+# (`resources_enabled`), no genome prerequisites or affinity scaling on the
+# tech (`gene_requirements`, `gene_tech_coupling`), no disasters, war,
+# disease, domestication, dimorphism or arms race. The realism layers (gait,
+# growth, gestation, chase, turning, collision, needs, affect, practices,
+# knowledge, settlement) stay on.
+name = "cognition-threshold"
+seed = 1601
+# Safety budget above the food-limited peak; it must not bind, or the
+# fastest rung would take every birth slot.
+max_population = 2500
+
+resources_enabled = false
+conserve_goods_on_death = false
+gene_requirements = false
+gene_tech_coupling = false
+disasters_enabled = false
+war_enabled = false
+disease_enabled = false
+domestication_enabled = false
+sexual_dimorphism_enabled = false
+anthro_race_enabled = false
+
+# The six rungs. Realized IQ = gene + (enrichment - gene) * 0.5, so a rung
+# lands about half way between its gene and the juvenile enrichment it grew
+# up in (0.3-0.6 on a fed, social site): gene 0.0 sits around the era-1 gate,
+# 0.2-0.4 around the era-2 gate, 0.6-0.8 around the era-3 gate and 1.0 at
+# the era-4 gate. `color_hue` tells the rungs apart in the viewers.
+
+[[agents]]
+count = 40
+archetype = "innovator"
+placement = { kind = "habitat", herds = 1, radius = 60.0 }
+starting_inventions = ["stone_tools", "fire"]
+[agents.traits]
+cognitive_potential = 0.0
+openness = 1.0
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+color_hue = 0.0
+
+[[agents]]
+count = 40
+archetype = "innovator"
+placement = { kind = "near_spec", spec = 0, radius = 60.0 }
+starting_inventions = ["stone_tools", "fire"]
+[agents.traits]
+cognitive_potential = 0.2
+openness = 1.0
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+color_hue = 0.1
+
+[[agents]]
+count = 40
+archetype = "innovator"
+placement = { kind = "near_spec", spec = 0, radius = 60.0 }
+starting_inventions = ["stone_tools", "fire"]
+[agents.traits]
+cognitive_potential = 0.4
+openness = 1.0
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+color_hue = 0.2
+
+[[agents]]
+count = 40
+archetype = "innovator"
+placement = { kind = "near_spec", spec = 0, radius = 60.0 }
+starting_inventions = ["stone_tools", "fire"]
+[agents.traits]
+cognitive_potential = 0.6
+openness = 1.0
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+color_hue = 0.45
+
+[[agents]]
+count = 40
+archetype = "innovator"
+placement = { kind = "near_spec", spec = 0, radius = 60.0 }
+starting_inventions = ["stone_tools", "fire"]
+[agents.traits]
+cognitive_potential = 0.8
+openness = 1.0
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+color_hue = 0.6
+
+[[agents]]
+count = 40
+archetype = "innovator"
+placement = { kind = "near_spec", spec = 0, radius = 60.0 }
+starting_inventions = ["stone_tools", "fire"]
+[agents.traits]
+cognitive_potential = 1.0
+openness = 1.0
+altruism = 0.3
+basal_metabolism = 0.6
+lifespan_bias = 1.0
+color_hue = 0.75

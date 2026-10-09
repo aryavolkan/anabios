@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="460" viewBox="0 0 880 460" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="12">
+<title>Lifetime offspring by realized IQ</title>
+<rect width="880" height="460" fill="#fcfcfb"/>
+<text x="24" y="28" font-size="16" font-weight="600" fill="#0b0b0b">Lifetime offspring by realized IQ</text>
+<text x="24" y="46" fill="#52514e">Offspring credited per agent whose IQ had crystallized and that died in the run; 5596 lifetimes over 8 seeds. Hollow bars rest on fewer than 25.</text>
+<line x1="64.0" y1="380.0" x2="840.0" y2="380.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="384.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >0</text>
+<line x1="64.0" y1="318.0" x2="840.0" y2="318.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="322.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >0.5</text>
+<line x1="64.0" y1="256.0" x2="840.0" y2="256.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="260.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >1</text>
+<line x1="64.0" y1="194.0" x2="840.0" y2="194.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="198.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >1.5</text>
+<line x1="64.0" y1="132.0" x2="840.0" y2="132.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="136.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >2</text>
+<line x1="64.0" y1="70.0" x2="840.0" y2="70.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="74.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >2.5</text>
+<line x1="64.0" y1="380.0" x2="840.0" y2="380.0" stroke="#c3c2b7" stroke-width="1" />
+<text x="64.0" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0</text>
+<text x="141.6" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.1</text>
+<text x="219.2" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.2</text>
+<text x="296.8" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.3</text>
+<text x="374.4" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.4</text>
+<text x="452.0" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.5</text>
+<text x="529.6" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.6</text>
+<text x="607.2" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.7</text>
+<text x="684.8" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.8</text>
+<text x="762.4" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.9</text>
+<text x="840.0" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >1</text>
+<text x="452.0" y="416.0" fill="#52514e" text-anchor="middle" font-size="12" font-weight="normal" >realized IQ (0.05 bins)</text>
+<text x="16.0" y="225.0" fill="#52514e" text-anchor="middle" font-size="12" font-weight="normal" transform="rotate(-90 16 225.0)">offspring per matured lifetime</text>
+<line x1="141.6" y1="70.0" x2="141.6" y2="380.0" stroke="#c3c2b7" stroke-width="1" />
+<text x="145.6" y="82.0" fill="#898781" text-anchor="start" font-size="10" font-weight="normal" >practice 0.10</text>
+<line x1="180.4" y1="70.0" x2="180.4" y2="380.0" stroke="#c3c2b7" stroke-width="1" />
+<text x="184.4" y="94.0" fill="#898781" text-anchor="start" font-size="10" font-weight="normal" >era 1 0.15</text>
+<line x1="335.6" y1="70.0" x2="335.6" y2="380.0" stroke="#c3c2b7" stroke-width="1" />
+<text x="339.6" y="82.0" fill="#898781" text-anchor="start" font-size="10" font-weight="normal" >era 2 0.35</text>
+<line x1="490.8" y1="70.0" x2="490.8" y2="380.0" stroke="#c3c2b7" stroke-width="1" />
+<text x="494.8" y="82.0" fill="#898781" text-anchor="start" font-size="10" font-weight="normal" >era 3 0.55</text>
+<line x1="646.0" y1="70.0" x2="646.0" y2="380.0" stroke="#c3c2b7" stroke-width="1" />
+<text x="650.0" y="82.0" fill="#898781" text-anchor="start" font-size="10" font-weight="normal" >era 4 0.75</text>
+<path d="M71.4,380.0 V308.4 Q71.4,304.4 75.4,304.4 H91.4 Q95.4,304.4 95.4,308.4 V380.0 Z" fill="#2a78d6" ><title>IQ 0.00-0.05: 0.61 offspring over 64 lifetimes</title></path>
+<text x="83.4" y="298.4" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >0.61</text>
+<path d="M110.2,380.0 V316.2 Q110.2,312.2 114.2,312.2 H130.2 Q134.2,312.2 134.2,316.2 V380.0 Z" fill="#2a78d6" ><title>IQ 0.05-0.10: 0.55 offspring over 117 lifetimes</title></path>
+<text x="122.2" y="306.2" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >0.55</text>
+<path d="M149.0,380.0 V237.2 Q149.0,233.2 153.0,233.2 H169.0 Q173.0,233.2 173.0,237.2 V380.0 Z" fill="#2a78d6" ><title>IQ 0.10-0.15: 1.18 offspring over 223 lifetimes</title></path>
+<text x="161.0" y="227.2" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.18</text>
+<path d="M187.8,380.0 V193.1 Q187.8,189.1 191.8,189.1 H207.8 Q211.8,189.1 211.8,193.1 V380.0 Z" fill="#2a78d6" ><title>IQ 0.15-0.20: 1.54 offspring over 317 lifetimes</title></path>
+<text x="199.8" y="183.1" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.54</text>
+<path d="M226.6,380.0 V231.9 Q226.6,227.9 230.6,227.9 H246.6 Q250.6,227.9 250.6,231.9 V380.0 Z" fill="#2a78d6" ><title>IQ 0.20-0.25: 1.23 offspring over 357 lifetimes</title></path>
+<text x="238.6" y="221.9" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.23</text>
+<path d="M265.4,380.0 V202.2 Q265.4,198.2 269.4,198.2 H285.4 Q289.4,198.2 289.4,202.2 V380.0 Z" fill="#2a78d6" ><title>IQ 0.25-0.30: 1.47 offspring over 506 lifetimes</title></path>
+<text x="277.4" y="192.2" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.47</text>
+<path d="M304.2,380.0 V209.4 Q304.2,205.4 308.2,205.4 H324.2 Q328.2,205.4 328.2,209.4 V380.0 Z" fill="#2a78d6" ><title>IQ 0.30-0.35: 1.41 offspring over 407 lifetimes</title></path>
+<text x="316.2" y="199.4" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.41</text>
+<path d="M343.0,380.0 V196.9 Q343.0,192.9 347.0,192.9 H363.0 Q367.0,192.9 367.0,196.9 V380.0 Z" fill="#2a78d6" ><title>IQ 0.35-0.40: 1.51 offspring over 485 lifetimes</title></path>
+<text x="355.0" y="186.9" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.51</text>
+<path d="M381.8,380.0 V199.4 Q381.8,195.4 385.8,195.4 H401.8 Q405.8,195.4 405.8,199.4 V380.0 Z" fill="#2a78d6" ><title>IQ 0.40-0.45: 1.49 offspring over 393 lifetimes</title></path>
+<text x="393.8" y="189.4" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.49</text>
+<path d="M420.6,380.0 V129.6 Q420.6,125.6 424.6,125.6 H440.6 Q444.6,125.6 444.6,129.6 V380.0 Z" fill="#2a78d6" ><title>IQ 0.45-0.50: 2.05 offspring over 483 lifetimes</title></path>
+<text x="432.6" y="119.6" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >2.05</text>
+<path d="M459.4,380.0 V188.9 Q459.4,184.9 463.4,184.9 H479.4 Q483.4,184.9 483.4,188.9 V380.0 Z" fill="#2a78d6" ><title>IQ 0.50-0.55: 1.57 offspring over 469 lifetimes</title></path>
+<text x="471.4" y="178.9" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.57</text>
+<path d="M498.2,380.0 V224.5 Q498.2,220.5 502.2,220.5 H518.2 Q522.2,220.5 522.2,224.5 V380.0 Z" fill="#2a78d6" ><title>IQ 0.55-0.60: 1.29 offspring over 472 lifetimes</title></path>
+<text x="510.2" y="214.5" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.29</text>
+<path d="M537.0,380.0 V216.0 Q537.0,212.0 541.0,212.0 H557.0 Q561.0,212.0 561.0,216.0 V380.0 Z" fill="#2a78d6" ><title>IQ 0.60-0.65: 1.36 offspring over 383 lifetimes</title></path>
+<text x="549.0" y="206.0" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.36</text>
+<path d="M575.8,380.0 V217.3 Q575.8,213.3 579.8,213.3 H595.8 Q599.8,213.3 599.8,217.3 V380.0 Z" fill="#2a78d6" ><title>IQ 0.65-0.70: 1.34 offspring over 401 lifetimes</title></path>
+<text x="587.8" y="207.3" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.34</text>
+<path d="M614.6,380.0 V243.3 Q614.6,239.3 618.6,239.3 H634.6 Q638.6,239.3 638.6,243.3 V380.0 Z" fill="#2a78d6" ><title>IQ 0.70-0.75: 1.13 offspring over 305 lifetimes</title></path>
+<text x="626.6" y="233.3" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.13</text>
+<path d="M653.4,380.0 V208.6 Q653.4,204.6 657.4,204.6 H673.4 Q677.4,204.6 677.4,208.6 V380.0 Z" fill="#2a78d6" ><title>IQ 0.75-0.80: 1.41 offspring over 181 lifetimes</title></path>
+<text x="665.4" y="198.6" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >1.41</text>
+<path d="M692.2,380.0 V118.9 Q692.2,114.9 696.2,114.9 H712.2 Q716.2,114.9 716.2,118.9 V380.0 Z" fill="#2a78d6" ><title>IQ 0.80-0.85: 2.14 offspring over 29 lifetimes</title></path>
+<text x="704.2" y="108.9" fill="#52514e" text-anchor="middle" font-size="10" font-weight="normal" >2.14</text>
+<path d="M731.0,380.0 V136.0 Q731.0,132.0 735.0,132.0 H751.0 Q755.0,132.0 755.0,136.0 V380.0 Z" fill="none" stroke="#9ec5f4" stroke-width="1.5"><title>IQ 0.85-0.90: 2.00 offspring over 4 lifetimes</title></path>
+<text x="56.0" y="436.0" fill="#898781" text-anchor="end" font-size="10" font-weight="normal" >lifetimes</text>
+<text x="83.4" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >64</text>
+<text x="122.2" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >117</text>
+<text x="161.0" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >223</text>
+<text x="199.8" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >317</text>
+<text x="238.6" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >357</text>
+<text x="277.4" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >506</text>
+<text x="316.2" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >407</text>
+<text x="355.0" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >485</text>
+<text x="393.8" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >393</text>
+<text x="432.6" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >483</text>
+<text x="471.4" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >469</text>
+<text x="510.2" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >472</text>
+<text x="549.0" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >383</text>
+<text x="587.8" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >401</text>
+<text x="626.6" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >305</text>
+<text x="665.4" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >181</text>
+<text x="704.2" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >29</text>
+<text x="743.0" y="436.0" fill="#898781" text-anchor="middle" font-size="10" font-weight="normal" >4</text>
+</svg>

@@ -251,7 +251,12 @@ use crate::world::World;
 ///     more lane (whether or not the world has apes), ape worlds get an extra
 ///     era-1 candidate reweighting the discovery table under the same single
 ///     draw, and Hafted Spears now waits on the stone.
-pub const FORMAT_VERSION: u32 = 46;
+/// 47: cognition threshold knobs — `World.iq_req_by_era` (`[f32; 4]`) and
+///     `World.practice_iq_req` (`f32`), serialized after `cognition_enabled`.
+///     Both default to the constants the gates read before, so every
+///     trajectory is unchanged and only the layout grew; the headless
+///     `cognition` command and `scenarios/cognition-threshold.toml` move them.
+pub const FORMAT_VERSION: u32 = 47;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Envelope {

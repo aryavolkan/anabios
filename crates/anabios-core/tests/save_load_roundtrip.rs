@@ -125,6 +125,28 @@ roundtrip_tests! {
         "../../../scenarios/huge-steppe.toml", 120,
         |w: &World| full_stack(w) && w.world_size == 8192.0,
         "huge-steppe (8192 world, full stack)";
+    cognition_threshold_roundtrip:
+        // Warm past the IQ maturation window (100 ticks) so realized IQ,
+        // the enrichment accumulators and the gate-shaped meme spread are
+        // all non-trivial when saved. Opts out of the other acquisition
+        // gates (materials, genome) and the noise layers (war, disease,
+        // disasters, dimorphism); its own knob is the default gate ladder.
+        "../../../scenarios/cognition-threshold.toml", 400,
+        |w: &World| {
+            w.cognition_enabled
+                && w.inventions_enabled
+                && w.practices_enabled
+                && !w.resources_enabled
+                && !w.gene_requirements
+                && !w.gene_tech_coupling
+                && !w.war_enabled
+                && !w.disease_enabled
+                && !w.disasters_enabled
+                && !w.sexual_dimorphism_enabled
+                && w.iq_req_by_era == anabios_core::invention::IQ_REQ_BY_ERA
+                && w.practice_iq_req == anabios_core::practice::PRACTICE_IQ_REQ
+        },
+        "cognition-threshold (cognition gates, culture, no material/genome gates)";
 }
 
 /// One `#[test]` per inline fixture, so nextest can shard them: as two tests

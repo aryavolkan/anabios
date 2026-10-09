@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="460" viewBox="0 0 880 460" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="12">
+<title>Lifetime offspring per tier by gate height</title>
+<rect width="880" height="460" fill="#fcfcfb"/>
+<text x="24" y="28" font-size="16" font-weight="600" fill="#0b0b0b">Lifetime offspring per tier by gate height</text>
+<text x="24" y="46" fill="#52514e">The whole IQ ladder scaled by the factor on the x axis (1 = the default gates; 0 = every gate open). Pooled over 8 seeds.</text>
+<line x1="64.0" y1="380.0" x2="780.0" y2="380.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="384.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >0</text>
+<line x1="64.0" y1="318.0" x2="780.0" y2="318.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="322.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >0.5</text>
+<line x1="64.0" y1="256.0" x2="780.0" y2="256.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="260.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >1</text>
+<line x1="64.0" y1="194.0" x2="780.0" y2="194.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="198.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >1.5</text>
+<line x1="64.0" y1="132.0" x2="780.0" y2="132.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="136.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >2</text>
+<line x1="64.0" y1="70.0" x2="780.0" y2="70.0" stroke="#e1e0d9" stroke-width="1" />
+<text x="56.0" y="74.0" fill="#898781" text-anchor="end" font-size="11" font-weight="normal" >2.5</text>
+<line x1="64.0" y1="380.0" x2="780.0" y2="380.0" stroke="#c3c2b7" stroke-width="1" />
+<text x="64.0" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0</text>
+<text x="243.0" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >0.5</text>
+<text x="422.0" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >1</text>
+<text x="601.0" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >1.5</text>
+<text x="780.0" y="396.0" fill="#898781" text-anchor="middle" font-size="11" font-weight="normal" >2</text>
+<text x="422.0" y="416.0" fill="#52514e" text-anchor="middle" font-size="12" font-weight="normal" >gate scale</text>
+<text x="16.0" y="225.0" fill="#52514e" text-anchor="middle" font-size="12" font-weight="normal" transform="rotate(-90 16 225.0)">offspring per matured lifetime</text>
+<polyline points="64.0,214.1 243.0,242.2 422.0,235.6 601.0,232.6 780.0,196.5" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><title>gene 0.0</title></polyline>
+<circle cx="64.0" cy="214.1" r="6" fill="#fcfcfb"/><circle cx="64.0" cy="214.1" r="4" fill="#2a78d6"/>
+<circle cx="243.0" cy="242.2" r="6" fill="#fcfcfb"/><circle cx="243.0" cy="242.2" r="4" fill="#2a78d6"/>
+<circle cx="422.0" cy="235.6" r="6" fill="#fcfcfb"/><circle cx="422.0" cy="235.6" r="4" fill="#2a78d6"/>
+<circle cx="601.0" cy="232.6" r="6" fill="#fcfcfb"/><circle cx="601.0" cy="232.6" r="4" fill="#2a78d6"/>
+<circle cx="780.0" cy="196.5" r="6" fill="#fcfcfb"/><circle cx="780.0" cy="196.5" r="4" fill="#2a78d6"/>
+<polyline points="64.0,211.1 243.0,185.2 422.0,198.4 601.0,189.2 780.0,169.5" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><title>gene 0.2</title></polyline>
+<circle cx="64.0" cy="211.1" r="6" fill="#fcfcfb"/><circle cx="64.0" cy="211.1" r="4" fill="#eb6834"/>
+<circle cx="243.0" cy="185.2" r="6" fill="#fcfcfb"/><circle cx="243.0" cy="185.2" r="4" fill="#eb6834"/>
+<circle cx="422.0" cy="198.4" r="6" fill="#fcfcfb"/><circle cx="422.0" cy="198.4" r="4" fill="#eb6834"/>
+<circle cx="601.0" cy="189.2" r="6" fill="#fcfcfb"/><circle cx="601.0" cy="189.2" r="4" fill="#eb6834"/>
+<circle cx="780.0" cy="169.5" r="6" fill="#fcfcfb"/><circle cx="780.0" cy="169.5" r="4" fill="#eb6834"/>
+<polyline points="64.0,180.1 243.0,195.5 422.0,195.8 601.0,201.8 780.0,205.1" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><title>gene 0.4</title></polyline>
+<circle cx="64.0" cy="180.1" r="6" fill="#fcfcfb"/><circle cx="64.0" cy="180.1" r="4" fill="#1baf7a"/>
+<circle cx="243.0" cy="195.5" r="6" fill="#fcfcfb"/><circle cx="243.0" cy="195.5" r="4" fill="#1baf7a"/>
+<circle cx="422.0" cy="195.8" r="6" fill="#fcfcfb"/><circle cx="422.0" cy="195.8" r="4" fill="#1baf7a"/>
+<circle cx="601.0" cy="201.8" r="6" fill="#fcfcfb"/><circle cx="601.0" cy="201.8" r="4" fill="#1baf7a"/>
+<circle cx="780.0" cy="205.1" r="6" fill="#fcfcfb"/><circle cx="780.0" cy="205.1" r="4" fill="#1baf7a"/>
+<polyline points="64.0,199.7 243.0,171.1 422.0,175.7 601.0,178.4 780.0,189.4" fill="none" stroke="#eda100" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><title>gene 0.6</title></polyline>
+<circle cx="64.0" cy="199.7" r="6" fill="#fcfcfb"/><circle cx="64.0" cy="199.7" r="4" fill="#eda100"/>
+<circle cx="243.0" cy="171.1" r="6" fill="#fcfcfb"/><circle cx="243.0" cy="171.1" r="4" fill="#eda100"/>
+<circle cx="422.0" cy="175.7" r="6" fill="#fcfcfb"/><circle cx="422.0" cy="175.7" r="4" fill="#eda100"/>
+<circle cx="601.0" cy="178.4" r="6" fill="#fcfcfb"/><circle cx="601.0" cy="178.4" r="4" fill="#eda100"/>
+<circle cx="780.0" cy="189.4" r="6" fill="#fcfcfb"/><circle cx="780.0" cy="189.4" r="4" fill="#eda100"/>
+<polyline points="64.0,198.2 243.0,212.2 422.0,206.3 601.0,195.4 780.0,186.4" fill="none" stroke="#e87ba4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><title>gene 0.8</title></polyline>
+<circle cx="64.0" cy="198.2" r="6" fill="#fcfcfb"/><circle cx="64.0" cy="198.2" r="4" fill="#e87ba4"/>
+<circle cx="243.0" cy="212.2" r="6" fill="#fcfcfb"/><circle cx="243.0" cy="212.2" r="4" fill="#e87ba4"/>
+<circle cx="422.0" cy="206.3" r="6" fill="#fcfcfb"/><circle cx="422.0" cy="206.3" r="4" fill="#e87ba4"/>
+<circle cx="601.0" cy="195.4" r="6" fill="#fcfcfb"/><circle cx="601.0" cy="195.4" r="4" fill="#e87ba4"/>
+<circle cx="780.0" cy="186.4" r="6" fill="#fcfcfb"/><circle cx="780.0" cy="186.4" r="4" fill="#e87ba4"/>
+<polyline points="64.0,163.9 243.0,175.0 422.0,216.8 601.0,153.2 780.0,146.8" fill="none" stroke="#008300" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><title>gene 1.0</title></polyline>
+<circle cx="64.0" cy="163.9" r="6" fill="#fcfcfb"/><circle cx="64.0" cy="163.9" r="4" fill="#008300"/>
+<circle cx="243.0" cy="175.0" r="6" fill="#fcfcfb"/><circle cx="243.0" cy="175.0" r="4" fill="#008300"/>
+<circle cx="422.0" cy="216.8" r="6" fill="#fcfcfb"/><circle cx="422.0" cy="216.8" r="4" fill="#008300"/>
+<circle cx="601.0" cy="153.2" r="6" fill="#fcfcfb"/><circle cx="601.0" cy="153.2" r="4" fill="#008300"/>
+<circle cx="780.0" cy="146.8" r="6" fill="#fcfcfb"/><circle cx="780.0" cy="146.8" r="4" fill="#008300"/>
+<text x="790.0" y="150.8" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 1.0</text>
+<text x="790.0" y="173.5" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.2</text>
+<text x="790.0" y="190.4" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.8</text>
+<text x="790.0" y="203.4" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.6</text>
+<text x="790.0" y="216.4" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.0</text>
+<text x="790.0" y="229.4" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.4</text>
+<rect x="64" y="431" width="12" height="12" rx="2" fill="#2a78d6"/>
+<text x="81.0" y="441.0" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.0</text>
+<rect x="155" y="431" width="12" height="12" rx="2" fill="#eb6834"/>
+<text x="172.0" y="441.0" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.2</text>
+<rect x="246" y="431" width="12" height="12" rx="2" fill="#1baf7a"/>
+<text x="263.0" y="441.0" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.4</text>
+<rect x="337" y="431" width="12" height="12" rx="2" fill="#eda100"/>
+<text x="354.0" y="441.0" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.6</text>
+<rect x="428" y="431" width="12" height="12" rx="2" fill="#e87ba4"/>
+<text x="445.0" y="441.0" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 0.8</text>
+<rect x="519" y="431" width="12" height="12" rx="2" fill="#008300"/>
+<text x="536.0" y="441.0" fill="#52514e" text-anchor="start" font-size="11" font-weight="normal" >gene 1.0</text>
+</svg>
